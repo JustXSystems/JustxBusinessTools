@@ -1,0 +1,119 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+
+type RoleKey = "owner" | "admin" | "staff" | "viewer";
+type Capability =
+  | "adminConsole"
+  | "billing"
+  | "writeRecords"
+  | "exportData"
+  | "approveUsers"
+  | "manageBranches"
+  | "manageTools";
+
+type Matrix = Record<RoleKey, Record<Capability, boolean>>;
+
+const ROLES: RoleKey[] = ["owner", "admin", "staff", "viewer"];
+
+export function RoleMatrixPanel() {
+  const [matrix, setMatrix] = useState<Matrix | null>(null);
+  const [labels, setLabels] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  async function reload() {
+    const data = await api<{ matrix: Matrix; labels: Record<string, string> }>("/admin/team/roles/matrix");
+    setMatrix(data.matrix);
+    setLabels(data.labels);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    reload().catch((e: Error) => setMessage(e.message));
+  }, [open]);
+
+  function toggle(role: RoleKey, cap: Capability) {
+    if (!matrix || role === "owner") return;
+    setMatrix({
+      ...matrix,
+      [role]: { ...matrix[role], [cap]: !matrix[role][cap] },
+    });
+  }
+
+  async function save() {
+    if (!matrix) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const data = await api<{ matrix: Matrix }>("/admin/team/roles/matrix", {
+        method: "PUT",
+        body: JSON.stringify({ matrix }),
+      });
+      setMatrix(data.matrix);
+      setMessage("Role matrix saved. Write access is enforced on the next API call.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const caps = matrix ? (Object.keys(matrix.owner) as Capability[]) : [];
+
+  return (
+    <section className="panel admin-card">
+      <div className="analytics-toolbar">
+        <div>
+          <h2>Role permission matrix</h2>
+          <p className="muted">Toggle what each org role can do. Owner always keeps full control.</p>
+        </div>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen((v) => !v)}>
+          {open ? "Hide matrix" : "Edit matrix"}
+        </button>
+      </div>
+      {message ? <p className="muted">{message}</p> : null}
+      {open && matrix ? (
+        <>
+          <div className="admin-role-matrix-wrap">
+            <table className="admin-role-matrix">
+              <thead>
+                <tr>
+                  <th>Capability</th>
+                  {ROLES.map((r) => (
+                    <th key={r}>{r}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {caps.map((cap) => (
+                  <tr key={cap}>
+                    <td>{labels[cap] ?? cap}</td>
+                    {ROLES.map((role) => (
+                      <td key={role}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(matrix[role][cap])}
+                          disabled={role === "owner"}
+                          onChange={() => toggle(role, cap)}
+                          aria-label={`${role} ${cap}`}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="admin-form-row" style={{ marginTop: 12 }}>
+            <button type="button" className="btn btn-primary btn-sm" disabled={saving} onClick={() => void save()}>
+              {saving ? "Saving…" : "Save matrix"}
+            </button>
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { UpiPaymentsPanel } from "@/components/admin/UpiPaymentsPanel";
 import { api } from "@/lib/api";
 
@@ -70,6 +71,13 @@ type PaymentOp = {
   createdAt?: string;
 };
 
+type OverviewPending = {
+  deskOps: number;
+  upiClaims: number;
+  upiAmountInr: number;
+  total: number;
+};
+
 const RANGES = [
   { value: 7, label: "7 days" },
   { value: 30, label: "30 days" },
@@ -134,11 +142,37 @@ function exportCsv(saas: SaasPayload | null, collections: CollectionsPayload | n
 }
 
 export default function AdminPaymentsPage() {
-  const [tab, setTab] = useState<Tab>("overview");
+  return (
+    <Suspense
+      fallback={
+        <div className="admin-page">
+          <p className="muted">Loading payments…</p>
+        </div>
+      }
+    >
+      <AdminPaymentsInner />
+    </Suspense>
+  );
+}
+
+function AdminPaymentsInner() {
+  const searchParams = useSearchParams();
+  const tabFromUrl = useMemo((): Tab => {
+    const t = searchParams.get("tab");
+    if (t === "saas" || t === "collections" || t === "ops" || t === "upi" || t === "overview") return t;
+    return "overview";
+  }, [searchParams]);
+  const [tab, setTab] = useState<Tab>(tabFromUrl);
   const [days, setDays] = useState(90);
   const [saas, setSaas] = useState<SaasPayload | null>(null);
   const [collections, setCollections] = useState<CollectionsPayload | null>(null);
   const [ops, setOps] = useState<PaymentOp[]>([]);
+  const [pendingSummary, setPendingSummary] = useState<OverviewPending>({
+    deskOps: 0,
+    upiClaims: 0,
+    upiAmountInr: 0,
+    total: 0,
+  });
   const [opForm, setOpForm] = useState(emptyOpForm);
   const [txnQuery, setTxnQuery] = useState("");
   const [txnStatus, setTxnStatus] = useState<TxnStatus>("all");
@@ -149,6 +183,10 @@ export default function AdminPaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    setTab(tabFromUrl);
+  }, [tabFromUrl]);
 
   const loadOps = useCallback(async () => {
     const d = await api<{ ops: PaymentOp[] }>("/admin/payments/ops");
@@ -161,13 +199,15 @@ export default function AdminPaymentsPage() {
       setLoading(true);
       setError("");
       try {
-        const [s, c] = await Promise.all([
+        const [s, c, overview] = await Promise.all([
           api<SaasPayload>(`/admin/payments/saas?days=${range}`),
           api<CollectionsPayload>("/admin/payments/collections"),
+          api<{ pending: OverviewPending }>(`/admin/payments/overview?days=${range}`),
           loadOps(),
         ]);
         setSaas(s);
         setCollections(c);
+        setPendingSummary(overview.pending);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not load payments");
       } finally {
@@ -336,13 +376,13 @@ export default function AdminPaymentsPage() {
             <span className="analytics-delta">Payables {inr(ap)}</span>
           </button>
           <button type="button" className={`result-card ${tab === "upi" ? "is-selected" : ""}`} onClick={() => setTab("upi")}>
-            <span>UPI QR (default)</span>
-            <strong>Manual verify</strong>
-            <span className="analytics-delta">JustX company VPA</span>
+            <span>UPI pending</span>
+            <strong>{pendingSummary.upiClaims}</strong>
+            <span className="analytics-delta">{inr(pendingSummary.upiAmountInr)} awaiting verify</span>
           </button>
           <button type="button" className={`result-card ${tab === "ops" ? "is-selected" : ""}`} onClick={() => setTab("ops")}>
             <span>Desk pending</span>
-            <strong>{pendingOps.length}</strong>
+            <strong>{pendingOps.length || pendingSummary.deskOps}</strong>
             <span className="analytics-delta">{ops.length} logged items</span>
           </button>
         </div>
@@ -364,6 +404,7 @@ export default function AdminPaymentsPage() {
           <button key={id} type="button" role="tab" className={tab === id ? "active" : ""} onClick={() => setTab(id)}>
             {label}
             {id === "ops" && pendingOps.length ? ` (${pendingOps.length})` : ""}
+            {id === "upi" && pendingSummary.upiClaims ? ` (${pendingSummary.upiClaims})` : ""}
           </button>
         ))}
       </div>
@@ -460,6 +501,24 @@ export default function AdminPaymentsPage() {
 
             <section className="panel admin-card">
               <h2>Needs attention</h2>
+              <ul className="admin-kv">
+                <li>
+                  <span>UPI claims</span>
+                  <strong>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTab("upi")}>
+                      {pendingSummary.upiClaims} · {inr(pendingSummary.upiAmountInr)}
+                    </button>
+                  </strong>
+                </li>
+                <li>
+                  <span>Payment desk</span>
+                  <strong>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTab("ops")}>
+                      {pendingOps.length || pendingSummary.deskOps} pending
+                    </button>
+                  </strong>
+                </li>
+              </ul>
               {pendingOps.length === 0 ? (
                 <p className="muted">No pending desk approvals.</p>
               ) : (

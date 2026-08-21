@@ -3,9 +3,13 @@
 import { useEffect, useState } from "react";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { ApiHealthBanner } from "@/components/layout/ApiHealthBanner";
+import { SplashScreen } from "@/components/auth/SplashScreen";
+import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
+import { usePlatformBranding } from "@/components/branding/BrandingProvider";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("admin@justx.local");
+  const { branding } = usePlatformBranding();
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,14 +35,32 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: username.trim(), password }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        user?: { isPlatformAdmin?: boolean; role?: string };
+      };
       if (!res.ok) {
         setError(typeof data.error === "string" ? data.error : "Invalid username or password");
         return;
       }
       const params = new URLSearchParams(window.location.search);
       const next = params.get("next");
-      window.location.assign(next && next.startsWith("/") ? next : "/admin");
+      const isOrgAdmin =
+        data.user?.isPlatformAdmin ||
+        data.user?.role === "owner" ||
+        data.user?.role === "admin";
+      const dest =
+        next &&
+        next.startsWith("/") &&
+        !next.startsWith("/login") &&
+        !next.startsWith("/register")
+          ? next
+          : data.user?.isPlatformAdmin
+            ? "/admin"
+            : isOrgAdmin && next?.startsWith("/admin")
+              ? next
+              : "/";
+      window.location.assign(dest);
     } catch {
       setError(
         "Cannot reach the API server. Run npm run dev (web + API) and ensure the API is on port 4000.",
@@ -49,54 +71,57 @@ export default function LoginPage() {
   }
 
   if (!mounted) {
-    return (
-      <div className="login-page">
-        <div className="panel login-panel">
-          <h1>Sign in</h1>
-          <p className="muted">JustX Business Tools</p>
-        </div>
-      </div>
-    );
+    return <SplashScreen><div className="login-page" /></SplashScreen>;
   }
 
   return (
-    <div className="login-page">
-      <ApiHealthBanner />
-      <div className="panel login-panel">
-        <h1>Sign in</h1>
-        <p className="muted">JustX Business Tools</p>
-        <form onSubmit={handleSubmit} className="login-form">
-          <label className="field" htmlFor="login-username">
-            <span className="label">Username</span>
-            <input
-              id="login-username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-            />
-          </label>
-          <label className="field" htmlFor="login-password">
-            <span className="label">Password</span>
-            <input
-              id="login-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </label>
-          {error ? <p className="field-error">{error}</p> : null}
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
+    <SplashScreen>
+      <div className="login-page">
+        <ApiHealthBanner />
+        <div className="panel login-panel">
+          <div className="login-brand">
+            <PlatformBrandMark size="lg" showText={false} />
+            <div>
+              <h1>Sign in</h1>
+              <p className="muted">{branding.appName}</p>
+            </div>
+          </div>
+          <form onSubmit={handleSubmit} className="login-form">
+            <label className="field" htmlFor="login-username">
+              <span className="label">Username</span>
+              <input
+                id="login-username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+            </label>
+            <label className="field" htmlFor="login-password">
+              <span className="label">Password</span>
+              <input
+                id="login-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+            </label>
+            {error ? <p className="field-error">{error}</p> : null}
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+          <p className="muted login-hint">
+            No account? <a href="/register">Register with GSTIN</a>
+          </p>
+        </div>
+        <PoweredByFooter />
       </div>
-      <PoweredByFooter />
-    </div>
+    </SplashScreen>
   );
 }

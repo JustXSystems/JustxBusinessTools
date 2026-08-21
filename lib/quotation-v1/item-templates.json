@@ -1,0 +1,580 @@
+{
+  "solar": {
+    "epc": [
+      {
+        "desc": "Solar PV Modules (Mono-PERC, per Wp installed capacity)",
+        "hsn": "85414011",
+        "unit": "Wp",
+        "qty": 5000,
+        "rate": 14,
+        "gst": 0
+      },
+      {
+        "desc": "Solar Inverter (On-Grid / Off-Grid, as specified)",
+        "hsn": "85044090",
+        "unit": "Nos",
+        "qty": 1,
+        "rate": 35000,
+        "gst": 0
+      },
+      {
+        "desc": "Mounting Structure (GI/Aluminium, wind-load rated)",
+        "hsn": "73089090",
+        "unit": "Set",
+        "qty": 1,
+        "rate": 28000,
+        "gst": 0
+      },
+      {
+        "desc": "DC/AC Cabling, Earthing & Balance of System",
+        "hsn": "85444200",
+        "unit": "Lot",
+        "qty": 1,
+        "rate": 22000,
+        "gst": 0
+      },
+      {
+        "desc": "Installation, Testing & Commissioning Charges",
+        "hsn": "998714",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 18000,
+        "gst": 0
+      },
+      {
+        "desc": "Net Metering Application Assistance",
+        "hsn": "998714",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 5000,
+        "gst": 0
+      }
+    ],
+    "amc": [
+      {
+        "desc": "Scheduled Preventive Maintenance Visits",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 4,
+        "rate": 1500,
+        "gst": 0
+      },
+      {
+        "desc": "Panel Cleaning & Physical Inspection",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 4,
+        "rate": 1000,
+        "gst": 0
+      },
+      {
+        "desc": "Performance Monitoring & Generation Report",
+        "hsn": "998714",
+        "unit": "Year",
+        "qty": 1,
+        "rate": 4000,
+        "gst": 0
+      },
+      {
+        "desc": "Emergency Breakdown Support (covered under AMC)",
+        "hsn": "998719",
+        "unit": "Year",
+        "qty": 1,
+        "rate": 3000,
+        "gst": 0
+      }
+    ],
+    "srv": [
+      {
+        "desc": "Site Visit & Inspection Charges",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 600,
+        "gst": 0
+      },
+      {
+        "desc": "Fault Diagnostic Charges",
+        "hsn": "998719",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 800,
+        "gst": 0
+      },
+      {
+        "desc": "Spare Part Replacement (specify part)",
+        "hsn": "85414011",
+        "unit": "Nos",
+        "qty": 1,
+        "rate": 2500,
+        "gst": 0
+      },
+      {
+        "desc": "Repair Labour Charges",
+        "hsn": "998719",
+        "unit": "Hour",
+        "qty": 2,
+        "rate": 500,
+        "gst": 0
+      }
+    ],
+    "pm": [
+      {
+        "desc": "Preventive Maintenance Visit (one-time)",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 1500,
+        "gst": 0
+      },
+      {
+        "desc": "Panel Cleaning & Physical Inspection",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 1000,
+        "gst": 0
+      },
+      {
+        "desc": "DC/AC Connection Tightness & Earthing Check",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 800,
+        "gst": 0
+      },
+      {
+        "desc": "Performance Check & Health Report",
+        "hsn": "998714",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 1200,
+        "gst": 0
+      }
+    ]
+  },
+  "ups": {
+    "setup": [
+      {
+        "desc": "Online / Line-Interactive UPS System (as specified)",
+        "hsn": "85044010",
+        "unit": "Nos",
+        "qty": 1,
+        "rate": 45000,
+        "gst": 0
+      },
+      {
+        "desc": "Maintenance-Free Batteries (VRLA / Li-ion, per battery)",
+        "hsn": "85072000",
+        "unit": "Nos",
+        "qty": 4,
+        "rate": 6500,
+        "gst": 0
+      },
+      {
+        "desc": "Battery Rack / Cabinet",
+        "hsn": "94032090",
+        "unit": "Set",
+        "qty": 1,
+        "rate": 6000,
+        "gst": 0
+      },
+      {
+        "desc": "Wiring, Cabling & Accessories",
+        "hsn": "85444200",
+        "unit": "Lot",
+        "qty": 1,
+        "rate": 5000,
+        "gst": 0
+      },
+      {
+        "desc": "Installation, Testing & Commissioning",
+        "hsn": "998714",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 6000,
+        "gst": 0
+      }
+    ],
+    "amc": [
+      {
+        "desc": "Scheduled Preventive Maintenance Visits",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 4,
+        "rate": 1200,
+        "gst": 0
+      },
+      {
+        "desc": "Battery Health Check & Load Testing",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 4,
+        "rate": 1000,
+        "gst": 0
+      },
+      {
+        "desc": "Performance & Backup-Time Report",
+        "hsn": "998714",
+        "unit": "Year",
+        "qty": 1,
+        "rate": 3000,
+        "gst": 0
+      },
+      {
+        "desc": "Emergency Breakdown Support (covered under AMC)",
+        "hsn": "998719",
+        "unit": "Year",
+        "qty": 1,
+        "rate": 2500,
+        "gst": 0
+      }
+    ],
+    "srv": [
+      {
+        "desc": "Site Visit & Inspection Charges",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 600,
+        "gst": 0
+      },
+      {
+        "desc": "Fault Diagnostic Charges",
+        "hsn": "998719",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 800,
+        "gst": 0
+      },
+      {
+        "desc": "Spare Part Replacement (specify part)",
+        "hsn": "85044010",
+        "unit": "Nos",
+        "qty": 1,
+        "rate": 3000,
+        "gst": 0
+      },
+      {
+        "desc": "Repair Labour Charges",
+        "hsn": "998719",
+        "unit": "Hour",
+        "qty": 2,
+        "rate": 500,
+        "gst": 0
+      }
+    ],
+    "sale": [
+      {
+        "desc": "Online / Line-Interactive UPS System (as specified)",
+        "hsn": "85044010",
+        "unit": "Nos",
+        "qty": 1,
+        "rate": 45000,
+        "gst": 0
+      },
+      {
+        "desc": "Maintenance-Free Batteries (VRLA / Li-ion, per battery)",
+        "hsn": "85072000",
+        "unit": "Nos",
+        "qty": 4,
+        "rate": 6500,
+        "gst": 0
+      }
+    ],
+    "pm": [
+      {
+        "desc": "Preventive Maintenance Visit (one-time)",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 1200,
+        "gst": 0
+      },
+      {
+        "desc": "Battery Health Check & Load Testing",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 1000,
+        "gst": 0
+      },
+      {
+        "desc": "Connection Tightness & Dust Cleaning",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 600,
+        "gst": 0
+      },
+      {
+        "desc": "Performance Check & Health Report",
+        "hsn": "998714",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 1000,
+        "gst": 0
+      }
+    ],
+    "stin": [
+      {
+        "desc": "Site Inspection & Load Assessment Visit",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 800,
+        "gst": 0
+      },
+      {
+        "desc": "Wiring & Earthing Suitability Check",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 500,
+        "gst": 0
+      },
+      {
+        "desc": "Inspection Report & Recommendations",
+        "hsn": "998714",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 700,
+        "gst": 0
+      }
+    ]
+  },
+  "battery": {
+    "sale": [
+      {
+        "desc": "Battery Bank (specify chemistry & capacity)",
+        "hsn": "85072000",
+        "unit": "Nos",
+        "qty": 8,
+        "rate": 9000,
+        "gst": 0
+      },
+      {
+        "desc": "Battery Management System (BMS)",
+        "hsn": "85044090",
+        "unit": "Set",
+        "qty": 1,
+        "rate": 8000,
+        "gst": 0
+      },
+      {
+        "desc": "Rack / Enclosure & Interconnects",
+        "hsn": "94032090",
+        "unit": "Set",
+        "qty": 1,
+        "rate": 7000,
+        "gst": 0
+      }
+    ],
+    "pm": [
+      {
+        "desc": "Preventive Maintenance Visit (one-time)",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 1200,
+        "gst": 0
+      },
+      {
+        "desc": "Cell Voltage & Health Monitoring",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 1000,
+        "gst": 0
+      },
+      {
+        "desc": "Terminal Cleaning & Tightness Check",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 600,
+        "gst": 0
+      },
+      {
+        "desc": "Performance Check & Health Report",
+        "hsn": "998714",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 1000,
+        "gst": 0
+      }
+    ]
+  },
+  "inverter": {
+    "setup": [
+      {
+        "desc": "Power Inverter Unit (as specified)",
+        "hsn": "85044090",
+        "unit": "Nos",
+        "qty": 1,
+        "rate": 15000,
+        "gst": 0
+      },
+      {
+        "desc": "Compatible Batteries (per battery)",
+        "hsn": "85072000",
+        "unit": "Nos",
+        "qty": 2,
+        "rate": 6000,
+        "gst": 0
+      },
+      {
+        "desc": "Wiring, Cabling & Accessories",
+        "hsn": "85444200",
+        "unit": "Lot",
+        "qty": 1,
+        "rate": 3000,
+        "gst": 0
+      },
+      {
+        "desc": "Installation, Testing & Commissioning",
+        "hsn": "998714",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 3000,
+        "gst": 0
+      }
+    ],
+    "srv": [
+      {
+        "desc": "Site Visit & Inspection Charges",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 600,
+        "gst": 0
+      },
+      {
+        "desc": "Fault Diagnostic Charges",
+        "hsn": "998719",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 800,
+        "gst": 0
+      },
+      {
+        "desc": "Spare Part Replacement (specify part)",
+        "hsn": "85044090",
+        "unit": "Nos",
+        "qty": 1,
+        "rate": 2500,
+        "gst": 0
+      },
+      {
+        "desc": "Repair Labour Charges",
+        "hsn": "998719",
+        "unit": "Hour",
+        "qty": 2,
+        "rate": 500,
+        "gst": 0
+      }
+    ],
+    "sale": [
+      {
+        "desc": "Power Inverter Unit (as specified)",
+        "hsn": "85044090",
+        "unit": "Nos",
+        "qty": 1,
+        "rate": 15000,
+        "gst": 0
+      },
+      {
+        "desc": "Compatible Batteries (per battery)",
+        "hsn": "85072000",
+        "unit": "Nos",
+        "qty": 2,
+        "rate": 6000,
+        "gst": 0
+      }
+    ]
+  },
+  "other": {
+    "sale": [
+      {
+        "desc": "Item / equipment description",
+        "hsn": "",
+        "unit": "Nos",
+        "qty": 1,
+        "rate": 0,
+        "gst": 0
+      }
+    ],
+    "stin": [
+      {
+        "desc": "Site Inspection & Assessment Visit",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 800,
+        "gst": 0
+      },
+      {
+        "desc": "Inspection Report & Recommendations",
+        "hsn": "998714",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 500,
+        "gst": 0
+      }
+    ],
+    "srv": [
+      {
+        "desc": "Site Visit & Inspection Charges",
+        "hsn": "998719",
+        "unit": "Visit",
+        "qty": 1,
+        "rate": 600,
+        "gst": 0
+      },
+      {
+        "desc": "Fault Diagnostic Charges",
+        "hsn": "998719",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 800,
+        "gst": 0
+      },
+      {
+        "desc": "Spare Part Replacement (specify part)",
+        "hsn": "",
+        "unit": "Nos",
+        "qty": 1,
+        "rate": 0,
+        "gst": 0
+      },
+      {
+        "desc": "Repair Labour Charges",
+        "hsn": "998719",
+        "unit": "Hour",
+        "qty": 2,
+        "rate": 500,
+        "gst": 0
+      }
+    ],
+    "misc": [
+      {
+        "desc": "Item / service description",
+        "hsn": "",
+        "unit": "Nos",
+        "qty": 1,
+        "rate": 0,
+        "gst": 0
+      }
+    ],
+    "gsr": [
+      {
+        "desc": "General Service Charges (specify scope)",
+        "hsn": "998719",
+        "unit": "Job",
+        "qty": 1,
+        "rate": 0,
+        "gst": 0
+      }
+    ]
+  }
+}

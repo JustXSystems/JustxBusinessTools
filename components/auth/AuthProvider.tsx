@@ -11,19 +11,35 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api, verifyPhoneOtp as verifyPhoneOtpApi } from "@/lib/api";
+import { canAccessAdmin } from "@/lib/auth-access";
 import type { SessionUser } from "@/lib/types/auth";
+import { SplashMark } from "@/components/auth/SplashScreen";
+import { usePlatformBranding } from "@/components/branding/BrandingProvider";
 
 type AuthContextValue = {
   user: SessionUser | null;
   loading: boolean;
   isAdmin: boolean;
+  isPlatformAdmin: boolean;
   login: (email: string, password: string) => Promise<SessionUser>;
   verifyOtp: (phone: string, code: string) => Promise<SessionUser>;
   register: (input: {
     email: string;
     password: string;
     name?: string;
+    phone?: string;
     organizationName?: string;
+    gstin?: string;
+    businessName?: string;
+    pan?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    state?: string;
+    stateCode?: string;
+    businessPhone?: string;
+    businessEmail?: string;
+    logo?: string;
+    homeToolIds?: string[];
   }) => Promise<void>;
   logout: () => Promise<void>;
   switchBranch: (profileId: number) => Promise<void>;
@@ -32,13 +48,14 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const PUBLIC_PREFIXES = ["/login"];
+const PUBLIC_PREFIXES = ["/login", "/register"];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
+  const { branding, loading: brandingLoading } = usePlatformBranding();
 
   const refresh = useCallback(async () => {
     try {
@@ -56,8 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading) return;
     const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
-    if (!user && !isPublic && pathname.startsWith("/admin")) {
+    if (!user && !isPublic) {
       router.replace("/login?next=" + encodeURIComponent(pathname));
+    } else if (user && !canAccessAdmin(user) && pathname.startsWith("/admin")) {
+      router.replace("/");
     }
   }, [loading, user, pathname, router]);
 
@@ -85,9 +104,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: string;
       password: string;
       name?: string;
+      phone?: string;
       organizationName?: string;
+      gstin?: string;
+      businessName?: string;
+      pan?: string;
+      addressLine1?: string;
+      addressLine2?: string;
+      state?: string;
+      stateCode?: string;
+      businessPhone?: string;
+      businessEmail?: string;
+      logo?: string;
+      homeToolIds?: string[];
     }) => {
-      const data = await api<{ user: SessionUser }>("/auth/register", {
+      const data = await api<{ user: SessionUser; joinedExisting?: boolean }>("/auth/register", {
         method: "POST",
         body: JSON.stringify(input),
       });
@@ -117,7 +148,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
-      isAdmin: user?.role === "owner" || user?.role === "admin",
+      isAdmin: canAccessAdmin(user),
+      isPlatformAdmin: Boolean(user?.isPlatformAdmin),
       login,
       verifyOtp,
       register,
@@ -128,7 +160,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, loading, login, verifyOtp, register, logout, switchBranch, refresh],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
+  const blocking = loading || brandingLoading || (!user && !isPublic);
+
+  return (
+    <AuthContext.Provider value={value}>
+      {blocking && !isPublic ? <SplashMark branding={branding} /> : children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

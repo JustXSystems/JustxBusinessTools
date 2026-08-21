@@ -7,6 +7,7 @@ export type SessionUser = {
   organizationId: number;
   organizationName: string;
   businessProfileId: number;
+  isPlatformAdmin?: boolean;
   branches: Array<{
     id: number;
     businessName: string;

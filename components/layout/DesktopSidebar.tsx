@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { navigationConfig } from "@/config/navigation.config";
 
 export function DesktopSidebar() {
@@ -9,6 +10,9 @@ export function DesktopSidebar() {
 
   return (
     <aside className="desktop-sidebar no-print" aria-label="Sidebar">
+      <div className="desktop-sidebar-brand">
+        <PlatformBrandMark href="/" size="md" layout="stack" />
+      </div>
       <nav className="desktop-sidebar-nav">
         {navigationConfig.primary.map((item) => {
           const active =

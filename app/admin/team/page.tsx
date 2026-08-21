@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
+import { RoleMatrixPanel } from "@/components/admin/RoleMatrixPanel";
 
 type Member = {
   id: number;
@@ -15,6 +16,9 @@ type Member = {
   kycStatus: string;
   emailVerified: boolean;
   phoneVerified: boolean;
+  organizationId?: number | null;
+  organizationName?: string | null;
+  gstin?: string | null;
 };
 
 type Branch = { id: number; businessName: string };
@@ -159,7 +163,7 @@ export default function AdminTeamPage() {
 
   const visible = members.filter((m) => {
     const q = query.trim().toLowerCase();
-    if (q && !`${m.name ?? ""} ${m.email} ${m.phone ?? ""} ${m.role}`.toLowerCase().includes(q)) return false;
+    if (q && !`${m.name ?? ""} ${m.email} ${m.phone ?? ""} ${m.role} ${m.organizationName ?? ""} ${m.gstin ?? ""}`.toLowerCase().includes(q)) return false;
     if (filter === "pending") return m.status === "pending";
     if (filter === "active") return m.status === "active";
     if (filter === "suspended") return m.status === "suspended" || m.status === "rejected";
@@ -230,6 +234,8 @@ export default function AdminTeamPage() {
         </div>
       </section>
 
+      <RoleMatrixPanel />
+
       <div className="team-workspace">
       <section className="panel admin-card">
         <h2>Directory</h2>
@@ -258,7 +264,11 @@ export default function AdminTeamPage() {
             >
               <div className="tracker-row-main">
                 <span className="tracker-row-title">{m.name || m.email}</span>
-                <span className="tracker-row-sub">{m.email} · {m.role}</span>
+                <span className="tracker-row-sub">
+                  {m.email} · {m.role}
+                  {m.organizationName ? ` · ${m.organizationName}` : ""}
+                  {m.gstin ? ` · ${m.gstin}` : ""}
+                </span>
               </div>
               <div className="admin-form-row">
                 <span className={statusClass(m.status)}>{m.status}</span>

@@ -4,9 +4,10 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
-  --bg-0: #0a0b0f;
-  --bg-1: #0e1015;
-  --bg-2: #14161d;
+  /* JustX Electric — deep royal blue surfaces + electric cyan accent */
+  --bg-0: #081018;
+  --bg-1: #0c1829;
+  --bg-2: #122440;
   --glass-1: rgba(255, 255, 255, 0.035);
   --glass-2: rgba(255, 255, 255, 0.055);
   --glass-3: rgba(255, 255, 255, 0.085);
@@ -14,10 +15,11 @@
   --border-hair: rgba(255, 255, 255, 0.09);
   --border-hair-strong: rgba(255, 255, 255, 0.16);
   --accent: #00dfff;
-  --accent-strong: #00b8d4;
+  --accent-rgb: 0, 223, 255;
+  --accent-strong: #1a6fd4;
   --teal: #00dfff;
-  --grad: linear-gradient(135deg, #00b8d4 0%, #00dfff 55%, #6ff0ff 100%);
-  --grad-soft: linear-gradient(135deg, rgba(0, 223, 255, 0.22) 0%, rgba(0, 223, 255, 0.1) 100%);
+  --grad: linear-gradient(135deg, #1a6fd4 0%, #00dfff 55%, #6ff0ff 100%);
+  --grad-soft: linear-gradient(135deg, rgba(var(--accent-rgb), 0.22) 0%, rgba(var(--accent-rgb), 0.1) 100%);
   --text-hi: rgba(255, 255, 255, 0.94);
   --text-mid: rgba(235, 238, 250, 0.62);
   --text-low: rgba(235, 238, 250, 0.38);

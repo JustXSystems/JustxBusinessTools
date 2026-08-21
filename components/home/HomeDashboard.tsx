@@ -6,7 +6,11 @@ import { fetchProfile, greeting } from "@/lib/api";
 import { ToolCard } from "@/components/home/ToolCard";
 import { useDebounce } from "@/hooks/useDebounce";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
-import { mergedHomeTools, homeToolsByCategory } from "@/lib/dynamic-tools";
+import {
+  mergedHomeTools,
+  homeToolsByCategory,
+  filterHomeToolsBySelection,
+} from "@/lib/dynamic-tools";
 import type { ToolDefinition } from "@/config/tools.config";
 
 function filterMergedTools(query: string, tools: ToolDefinition[]): ToolDefinition[] {
@@ -26,15 +30,22 @@ export function HomeDashboard() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 200);
   const [businessName, setBusinessName] = useState("");
+  const [homeToolIds, setHomeToolIds] = useState<string[] | null>(null);
   const [apiError, setApiError] = useState("");
 
   useEffect(() => {
     fetchProfile()
-      .then((p) => setBusinessName(p.businessName || ""))
+      .then((p) => {
+        setBusinessName(p.businessName || "");
+        setHomeToolIds(p.homeToolIds ?? null);
+      })
       .catch((err: Error) => setApiError(err.message));
   }, []);
 
-  const allTools = useMemo(() => mergedHomeTools(platformTools), [platformTools]);
+  const allTools = useMemo(
+    () => filterHomeToolsBySelection(mergedHomeTools(platformTools), homeToolIds),
+    [platformTools, homeToolIds],
+  );
   const filtered = useMemo(() => filterMergedTools(debouncedSearch, allTools), [debouncedSearch, allTools]);
   const categorized = useMemo(() => homeToolsByCategory(allTools), [allTools]);
   const isSearching = debouncedSearch.trim().length > 0;
@@ -72,6 +83,13 @@ export function HomeDashboard() {
             </Link>
           </div>
         ) : null}
+        {homeToolIds && homeToolIds.length === 0 ? (
+          <div className="quick-row">
+            <Link href="/profile" className="quick-chip">
+              Choose tools to show on home →
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       {isSearching ? (
@@ -92,6 +110,14 @@ export function HomeDashboard() {
             </div>
           )}
         </>
+      ) : categorized.length === 0 ? (
+        <div className="empty-state">
+          <div className="es-icon">🧰</div>
+          <div className="es-title">No tools selected for home</div>
+          <div className="es-sub">
+            Pick tools in <Link href="/profile">Business Profile</Link>. Billing still lists every tool.
+          </div>
+        </div>
       ) : (
         categorized.map((group) => (
           <section key={group.category} className="category-block">

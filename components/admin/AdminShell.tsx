@@ -4,23 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { ConfigProvider } from "@/components/config/ConfigProvider";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 
 const NAV = [
   { href: "/admin", label: "Dashboard", exact: true },
+  { href: "/admin/approvals", label: "Approvals" },
   { href: "/admin/analytics", label: "Analytics" },
-  { href: "/admin/profiles", label: "Profiles" },
+  { href: "/admin/profiles", label: "Business profiles" },
   { href: "/admin/tools", label: "Tools" },
-  { href: "/admin/skus", label: "SKU pricing" },
-  { href: "/admin/team", label: "Team" },
-  { href: "/admin/subscriptions", label: "Subscriptions" },
+  { href: "/admin/team", label: "Users" },
+  { href: "/admin/subscriptions", label: "Plans & entitlements" },
   { href: "/admin/payments", label: "Payments" },
-  { href: "/admin/upi", label: "UPI verify" },
   { href: "/admin/gateways", label: "Gateways" },
-  { href: "/admin/theme", label: "Theme" },
+  { href: "/admin/experience", label: "Experience" },
   { href: "/admin/audit", label: "Audit" },
-  { href: "/admin/config", label: "Schema" },
 ];
 
 export function AdminShell({ children }: { children: ReactNode }) {
@@ -32,8 +31,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <div className="admin-shell">
       <aside className="admin-sidebar no-print">
         <div className="admin-brand">
-          <span className="brand-name">JBT Admin</span>
-          <span className="brand-sub">{user?.organizationName}</span>
+          <PlatformBrandMark href="/admin" size="md" layout="stack" />
+          <span className="brand-sub admin-brand-role">
+            {user?.isPlatformAdmin ? "Platform super admin" : user?.organizationName}
+          </span>
         </div>
         <nav className="admin-nav">
           {NAV.map((item) => {
@@ -57,7 +58,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       </aside>
       <div className="admin-main">
         <header className="admin-topbar no-print">
-          <h1>Administration</h1>
+          <h1>Platform administration</h1>
           <span className="admin-user">{user?.email}</span>
         </header>
         <div className="admin-content">{children}</div>

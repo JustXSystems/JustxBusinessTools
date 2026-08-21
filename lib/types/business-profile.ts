@@ -16,6 +16,8 @@ export type BusinessProfile = {
   bankIfsc: string | null;
   bankUpi: string | null;
   terms: string | null;
+  /** Tools shown on home. null = all tools (legacy profiles). */
+  homeToolIds: string[] | null;
 };
 
 export const EMPTY_PROFILE: BusinessProfile = {
@@ -36,6 +38,7 @@ export const EMPTY_PROFILE: BusinessProfile = {
   bankIfsc: null,
   bankUpi: null,
   terms: null,
+  homeToolIds: null,
 };
 
 export const INDIAN_STATES: Array<[string, string]> = [

@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
+import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { INDIAN_STATES } from "@/lib/types/business-profile";
 import { api } from "@/lib/api";
+import { mergedHomeTools } from "@/lib/dynamic-tools";
 
 type Profile = {
   id: number;
@@ -31,6 +34,9 @@ type Profile = {
   recordCount: number;
   documentCount: number;
   completeness: number;
+  organizationId?: number | null;
+  organizationName?: string | null;
+  homeToolIds?: string[] | null;
 };
 
 type Person = {
@@ -42,7 +48,7 @@ type Person = {
   implicit: boolean;
 };
 
-type Tab = "identity" | "address" | "bank" | "access" | "lifecycle";
+type Tab = "identity" | "address" | "bank" | "home" | "access" | "lifecycle";
 type Filter = "all" | "pending" | "approved" | "archived" | "incomplete";
 
 const emptyForm = {
@@ -91,6 +97,12 @@ function fromProfile(p: Profile) {
 }
 
 export default function AdminProfilesPage() {
+  const { config } = usePlatformConfig();
+  const platformTools = config?.tools ?? [];
+  const catalogIds = useMemo(
+    () => mergedHomeTools(platformTools).map((t) => t.id),
+    [platformTools],
+  );
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [summary, setSummary] = useState({ total: 0, pending: 0, approved: 0, archived: 0, incomplete: 0 });
   const [query, setQuery] = useState("");
@@ -99,6 +111,7 @@ export default function AdminProfilesPage() {
   const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<Tab>("identity");
   const [form, setForm] = useState(emptyForm);
+  const [homeToolIds, setHomeToolIds] = useState<string[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [rejectNote, setRejectNote] = useState("");
   const [message, setMessage] = useState("");
@@ -123,13 +136,14 @@ export default function AdminProfilesPage() {
     setError("");
     const data = await api<{ profile: Profile; people: Person[] }>(`/admin/profiles/${id}`);
     setForm(fromProfile(data.profile));
+    setHomeToolIds(data.profile.homeToolIds ?? catalogIds);
     setPeople(data.people);
     setRejectNote(data.profile.reviewNote ?? "");
   }
 
   const visible = profiles.filter((p) => {
     const q = query.trim().toLowerCase();
-    if (q && !`${p.businessName} ${p.gstin ?? ""} ${p.state ?? ""} ${p.email ?? ""}`.toLowerCase().includes(q)) {
+    if (q && !`${p.businessName} ${p.gstin ?? ""} ${p.state ?? ""} ${p.email ?? ""} ${p.organizationName ?? ""}`.toLowerCase().includes(q)) {
       return false;
     }
     if (filter === "pending") return p.approvalStatus === "pending";
@@ -176,12 +190,15 @@ export default function AdminProfilesPage() {
       if (creating || !selectedId) {
         const created = await api<{ id: number }>("/admin/profiles", {
           method: "POST",
-          body: JSON.stringify(form),
+          body: JSON.stringify({ ...form, homeToolIds }),
         });
         setCreating(false);
         return created.id;
       }
-      await api(`/admin/profiles/${selectedId}`, { method: "PUT", body: JSON.stringify(form) });
+      await api(`/admin/profiles/${selectedId}`, {
+        method: "PUT",
+        body: JSON.stringify({ ...form, homeToolIds }),
+      });
     });
   }
 
@@ -200,6 +217,7 @@ export default function AdminProfilesPage() {
               setCreating(true);
               setSelectedId(null);
               setForm(emptyForm);
+              setHomeToolIds(catalogIds);
               setPeople([]);
               setTab("identity");
               setMessage("");
@@ -248,7 +266,10 @@ export default function AdminProfilesPage() {
               >
                 <div className="tracker-row-main">
                   <span className="tracker-row-title">{p.businessName}</span>
-                  <span className="tracker-row-sub">{p.gstin || "No GSTIN"} · {p.state || "No state"}</span>
+                  <span className="tracker-row-sub">
+                    {p.organizationName ? `${p.organizationName} · ` : ""}
+                    {p.gstin || "No GSTIN"} · {p.state || "No state"}
+                  </span>
                   <div className="usage-bar" aria-hidden>
                     <span style={{ width: `${p.completeness}%` }} />
                   </div>
@@ -276,7 +297,7 @@ export default function AdminProfilesPage() {
                 <p className="muted">New branches stay pending until an owner/admin approves them.</p>
               )}
               <div className="admin-tabs">
-                {(["identity", "address", "bank", "access", "lifecycle"] as Tab[]).map((t) => (
+                {(["identity", "address", "bank", "home", "access", "lifecycle"] as Tab[]).map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -284,7 +305,7 @@ export default function AdminProfilesPage() {
                     onClick={() => setTab(t)}
                     disabled={creating && (t === "access" || t === "lifecycle")}
                   >
-                    {t[0].toUpperCase() + t.slice(1)}
+                    {t === "home" ? "Home tools" : t[0].toUpperCase() + t.slice(1)}
                   </button>
                 ))}
               </div>
@@ -355,7 +376,20 @@ export default function AdminProfilesPage() {
                   </div>
                 ) : null}
 
-                {tab === "identity" || tab === "address" || tab === "bank" ? (
+                {tab === "home" ? (
+                  <div className="admin-stack">
+                    <p className="section-note">
+                      Tools shown on the operator home screen for this branch. Subscription catalog is unchanged.
+                    </p>
+                    <HomeToolPicker
+                      selectedIds={homeToolIds}
+                      onChange={setHomeToolIds}
+                      platformTools={platformTools}
+                    />
+                  </div>
+                ) : null}
+
+                {tab === "identity" || tab === "address" || tab === "bank" || tab === "home" ? (
                   <div className="admin-form-row">
                     <button type="submit" className="btn btn-primary">
                       {creating || !selectedId ? "Create (pending approval)" : "Save profile"}

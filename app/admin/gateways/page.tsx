@@ -16,7 +16,14 @@ type Gateway = {
   lastHealthAt: string | null;
 };
 
-type GwEvent = { id: number; eventType: string; message: string | null; createdAt: string };
+type GwEvent = {
+  id: number;
+  eventType: string;
+  message: string | null;
+  createdAt: string;
+  hasPayload?: boolean;
+  payload?: unknown;
+};
 type Plan = { id: string; name: string; available: boolean };
 type Filter = "all" | "live" | "test" | "enabled" | "off" | "unhealthy";
 type Pane = "health" | "config" | "plans" | "trace";
@@ -68,7 +75,8 @@ function relativeAgo(value: string | null) {
 }
 
 function eventClass(type: string) {
-  if (type === "health_check" || type === "created") return "pill-success";
+  if (type === "health_check" || type === "created" || type === "webhook.replay") return "pill-success";
+  if (type.startsWith("webhook.")) return "pill-warning";
   if (type === "updated") return "pill-warning";
   if (type.includes("fail") || type.includes("error")) return "pill-danger";
   return "";
@@ -214,6 +222,32 @@ export default function AdminGatewaysPage() {
     await run("Health check passed (sandbox).", async () => {
       await api(`/admin/gateways/${g.id}/test`, { method: "POST" });
       await load(g.id);
+      await loadEvents(g.id);
+      setPane("trace");
+    });
+  }
+
+  async function replayEvent(g: Gateway, ev: GwEvent) {
+    await run(`Replayed event #${ev.id}.`, async () => {
+      await api(`/admin/gateways/${g.id}/events/${ev.id}/replay`, { method: "POST", body: "{}" });
+      await loadEvents(g.id);
+      setPane("trace");
+    });
+  }
+
+  async function injectSampleWebhook(g: Gateway) {
+    const sample = {
+      type: "subscription.activated",
+      profileId: 1,
+      planId: "pro",
+      sessionId: `replay_${Date.now()}`,
+      periodEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    await run("Sample webhook processed.", async () => {
+      await api(`/admin/gateways/${g.id}/events/0/replay`, {
+        method: "POST",
+        body: JSON.stringify({ payload: sample }),
+      });
       await loadEvents(g.id);
       setPane("trace");
     });
@@ -657,21 +691,46 @@ export default function AdminGatewaysPage() {
               ) : null}
 
               {pane === "trace" ? (
-                <ul className="gw-timeline">
-                  {events.length === 0 ? (
-                    <li className="muted">No events yet. Run a health check to start the trace.</li>
-                  ) : (
-                    events.map((ev) => (
-                      <li key={ev.id}>
-                        <span className={`pill ${eventClass(ev.eventType)}`}>{ev.eventType.replace(/_/g, " ")}</span>
-                        <div>
-                          <strong>{ev.message || ev.eventType}</strong>
-                          <span className="muted">{fmtWhen(ev.createdAt)}</span>
-                        </div>
-                      </li>
-                    ))
-                  )}
-                </ul>
+                <div>
+                  <div className="admin-form-row" style={{ marginBottom: 12 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={Boolean(busy)}
+                      onClick={() => void injectSampleWebhook(selected)}
+                    >
+                      Inject sample webhook
+                    </button>
+                    <p className="muted" style={{ margin: 0, fontSize: 12 }}>
+                      Replays skip signature checks. Use for mock / recovery only.
+                    </p>
+                  </div>
+                  <ul className="gw-timeline">
+                    {events.length === 0 ? (
+                      <li className="muted">No events yet. Run a health check or inject a sample webhook.</li>
+                    ) : (
+                      events.map((ev) => (
+                        <li key={ev.id}>
+                          <span className={`pill ${eventClass(ev.eventType)}`}>{ev.eventType.replace(/_/g, " ")}</span>
+                          <div>
+                            <strong>{ev.message || ev.eventType}</strong>
+                            <span className="muted">{fmtWhen(ev.createdAt)}</span>
+                          </div>
+                          {ev.hasPayload ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              disabled={Boolean(busy)}
+                              onClick={() => void replayEvent(selected, ev)}
+                            >
+                              Replay
+                            </button>
+                          ) : null}
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </div>
               ) : null}
             </section>
           ) : (

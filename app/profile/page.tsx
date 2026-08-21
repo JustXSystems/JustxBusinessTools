@@ -1,11 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
+import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { INDIAN_STATES, EMPTY_PROFILE, type BusinessProfile } from "@/lib/types/business-profile";
 import { fetchProfile, saveProfile } from "@/lib/api";
+import { mergedHomeTools } from "@/lib/dynamic-tools";
 
 export default function ProfilePage() {
+  const { config } = usePlatformConfig();
+  const platformTools = config?.tools ?? [];
+  const catalogIds = useMemo(
+    () => mergedHomeTools(platformTools).map((t) => t.id),
+    [platformTools],
+  );
   const [profile, setProfile] = useState<BusinessProfile>(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -14,9 +23,15 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfile()
-      .then(setProfile)
+      .then((p) => {
+        setProfile({
+          ...p,
+          homeToolIds: p.homeToolIds ?? catalogIds,
+        });
+      })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSave() {
@@ -25,8 +40,11 @@ export default function ProfilePage() {
     setError("");
     try {
       const saved = await saveProfile(profile);
-      setProfile(saved);
-      setMessage("Business profile saved.");
+      setProfile({
+        ...saved,
+        homeToolIds: saved.homeToolIds ?? catalogIds,
+      });
+      setMessage("Business profile saved. Return to Home to see your tool list.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -105,6 +123,18 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="panel">
+        <h3 className="panel-title">Tools on home</h3>
+        <p className="section-note">
+          Only selected tools appear on Home after login. Subscription / billing always shows the full catalog.
+        </p>
+        <HomeToolPicker
+          selectedIds={profile.homeToolIds ?? []}
+          platformTools={platformTools}
+          onChange={(ids) => setProfile({ ...profile, homeToolIds: ids })}
+        />
       </div>
 
       <div className="panel">

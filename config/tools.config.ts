@@ -29,6 +29,7 @@ export const TOOL_CATEGORIES = [
 /** Raw catalog (may contain duplicate ids across categories). */
 export const TOOL_CATALOG: ToolCatalogEntry[] = [
   { id: "quotation", name: "Quotation Creator", category: "Sales & Business", icon: "📝", desc: "Send professional quotes fast" },
+  { id: "quotationv1", name: "Quotation Generator V1", category: "Sales & Business", icon: "📑", desc: "Category-based quotes with GST, PDF & approval" },
   { id: "salesorder", name: "Sales Order Creator", category: "Sales & Business", icon: "🧾", desc: "Confirm orders with customers" },
   { id: "invoice", name: "Invoice Creator", category: "Sales & Business", icon: "🧮", desc: "GST-ready tax invoices" },
   { id: "paymenttracker", name: "Payment Tracker", category: "Sales & Business", icon: "💰", desc: "Receivables & payables in one list" },
@@ -61,6 +62,7 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
 
 const TOOL_TYPES: Record<string, ToolType> = {
   quotation: "document",
+  quotationv1: "utility",
   salesorder: "document",
   invoice: "document",
   po: "document",
@@ -102,7 +104,9 @@ export function getToolDefinition(id: string): ToolDefinition | undefined {
   const entry = uniqueTools().find((t) => t.id === id);
   if (!entry) return undefined;
   const type = TOOL_TYPES[id] ?? "utility";
-  const subscriptionExempt = type === "calculator" || type === "utility" || id === "notifications";
+  const subscriptionExempt =
+    id !== "quotationv1" &&
+    (type === "calculator" || type === "utility" || id === "notifications");
   return {
     ...entry,
     type,
@@ -176,7 +180,7 @@ export const DOCUMENT_CONFIGS: Record<DocumentToolId, DocumentConfig> = {
   },
 };
 
-export type TrackerFieldType = "text" | "number" | "date" | "select" | "textarea";
+export type TrackerFieldType = "text" | "number" | "date" | "select" | "textarea" | "computed";
 
 export type TrackerField = {
   key: string;
@@ -185,6 +189,8 @@ export type TrackerField = {
   required?: boolean;
   placeholder?: string;
   options?: string[];
+  /** For type === "computed" */
+  formula?: string;
 };
 
 export type TrackerConfig = {

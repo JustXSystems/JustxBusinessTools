@@ -10,6 +10,12 @@ import {
   type ReactNode,
 } from "react";
 import { api } from "@/lib/api";
+import {
+  DEFAULT_BRANDING,
+  DEFAULT_POWERED_BY,
+  type PlatformBranding,
+} from "@/components/branding/BrandingProvider";
+import { applyThemeTokens, type ThemeTokens } from "@/lib/theme";
 
 export type PlatformToolDefinition = {
   id: string;
@@ -19,9 +25,10 @@ export type PlatformToolDefinition = {
 
 export type EffectiveConfig = {
   poweredBy: { text: string; locked: boolean };
+  branding: PlatformBranding;
   configVersion: number;
   tools: PlatformToolDefinition[];
-  theme?: Record<string, string> | null;
+  theme?: ThemeTokens | Record<string, string> | null;
 };
 
 type ConfigContextValue = {
@@ -30,8 +37,6 @@ type ConfigContextValue = {
   refresh: () => Promise<void>;
   getToolDefinition: (toolId: string) => PlatformToolDefinition | undefined;
 };
-
-const DEFAULT_POWERED_BY = { text: "Powered by JustX Systems LLP", locked: true };
 
 const ConfigContext = createContext<ConfigContextValue | null>(null);
 
@@ -42,10 +47,14 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const data = await api<EffectiveConfig>("/config/effective");
-      setConfig(data);
+      setConfig({
+        ...data,
+        branding: data.branding ?? DEFAULT_BRANDING,
+      });
     } catch {
       setConfig({
         poweredBy: DEFAULT_POWERED_BY,
+        branding: DEFAULT_BRANDING,
         configVersion: 1,
         tools: [],
       });
@@ -59,16 +68,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   useEffect(() => {
-    const tokens = config?.theme;
-    const root = document.documentElement;
-    if (!tokens) return;
-    if (tokens.accent) root.style.setProperty("--accent", tokens.accent);
-    if (tokens.teal) root.style.setProperty("--teal", tokens.teal);
-    if (tokens.bg0) root.style.setProperty("--bg-0", tokens.bg0);
-    if (tokens.bg1) root.style.setProperty("--bg-1", tokens.bg1);
-    if (tokens.bg2) root.style.setProperty("--bg-2", tokens.bg2);
-    if (tokens.radius) root.style.setProperty("--radius", tokens.radius);
-    if (tokens.font) root.style.setProperty("--font-sans", tokens.font);
+    applyThemeTokens(config?.theme as ThemeTokens | null | undefined);
   }, [config?.theme]);
 
   const getToolDefinition = useCallback(

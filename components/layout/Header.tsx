@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { navigationConfig } from "@/config/navigation.config";
 import { NotificationDot } from "@/components/layout/NotificationDot";
@@ -23,12 +24,7 @@ export function Header() {
   return (
     <header className="app-topbar no-print">
       <div className="app-topbar-inner">
-        <Link href="/" className="brand">
-          <div className="brand-text">
-            <span className="brand-name">JustX Business Tools</span>
-            <span className="brand-sub">JBT</span>
-          </div>
-        </Link>
+        <PlatformBrandMark href="/" size="md" />
         <div className="topbar-spacer" />
         <BranchSwitcher />
         <Link href="/profile" className="topbar-btn">

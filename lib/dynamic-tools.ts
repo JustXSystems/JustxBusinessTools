@@ -13,6 +13,7 @@ const BUILTIN_IDS = new Set(
   Object.keys(TRACKER_CONFIGS).concat(
     [
       "quotation",
+      "quotationv1",
       "salesorder",
       "invoice",
       "po",
@@ -146,6 +147,16 @@ export function mergedHomeTools(platformTools: PlatformToolDefinition[]): ToolDe
   }
 
   return out;
+}
+
+/** Filter home tools by business-profile selection. null/undefined = show all (legacy). */
+export function filterHomeToolsBySelection(
+  tools: ToolDefinition[],
+  homeToolIds: string[] | null | undefined,
+): ToolDefinition[] {
+  if (homeToolIds == null) return tools;
+  const allow = new Set(homeToolIds);
+  return tools.filter((t) => allow.has(t.id));
 }
 
 export function homeToolsByCategory(tools: ToolDefinition[]): Array<{

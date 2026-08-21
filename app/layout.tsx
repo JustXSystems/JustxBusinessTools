@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ClientInit } from "@/components/ClientInit";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { BrandingProvider } from "@/components/branding/BrandingProvider";
 import { ShellRouter } from "@/components/ShellRouter";
 
 export const metadata: Metadata = {
@@ -30,9 +31,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className="h-full">
       <body className="min-h-full">
         <ClientInit />
-        <AuthProvider>
-          <ShellRouter>{children}</ShellRouter>
-        </AuthProvider>
+        <BrandingProvider>
+          <AuthProvider>
+            <ShellRouter>{children}</ShellRouter>
+          </AuthProvider>
+        </BrandingProvider>
       </body>
     </html>
   );

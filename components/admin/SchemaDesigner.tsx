@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { TrackerField } from "@/config/tools.config";
 import { TRACKER_CONFIGS } from "@/config/tools.config";
+import { evaluateFormula, validateFormula } from "@jbt/shared";
 
 type TrackerDefinition = {
   type: "tracker";
@@ -16,7 +17,14 @@ type TrackerDefinition = {
   statusField?: string | null;
 };
 
-const FIELD_TYPES: TrackerField["type"][] = ["text", "number", "date", "select", "textarea"];
+const FIELD_TYPES: TrackerField["type"][] = [
+  "text",
+  "number",
+  "date",
+  "select",
+  "textarea",
+  "computed",
+];
 
 function emptyField(): TrackerField {
   return { key: "", label: "", type: "text", required: false };
@@ -60,9 +68,21 @@ export function TrackerSchemaDesigner({ toolId, jsonText, onChange }: Props) {
   const [def, setDef] = useState<TrackerDefinition>(() => parseDefinition(jsonText, toolId));
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [draft, setDraft] = useState<TrackerField>(emptyField());
+  const [testVars, setTestVars] = useState<Record<string, string>>({});
+  const [testMsg, setTestMsg] = useState("");
 
   useEffect(() => {
-    setDef(parseDefinition(jsonText, toolId));
+    const next = parseDefinition(jsonText, toolId);
+    setDef(next);
+    try {
+      const raw = JSON.parse(jsonText) as { fields?: unknown };
+      if (!Array.isArray(raw.fields) && next.fields.length > 0) {
+        onChange(JSON.stringify(next, null, 2));
+      }
+    } catch {
+      /* keep local parse */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolId, jsonText]);
 
   function emit(next: TrackerDefinition) {
@@ -72,30 +92,73 @@ export function TrackerSchemaDesigner({ toolId, jsonText, onChange }: Props) {
 
   function saveField() {
     if (!draft.key.trim() || !draft.label.trim()) return;
-    const fields = [...def.fields];
-    if (editIdx != null) {
-      fields[editIdx] = { ...draft, key: draft.key.trim(), label: draft.label.trim() };
-    } else {
-      fields.push({ ...draft, key: draft.key.trim(), label: draft.label.trim() });
+    if (draft.type === "computed") {
+      const allowed = def.fields
+        .map((f) => f.key)
+        .filter((k) => k && k !== draft.key.trim());
+      const err = validateFormula(String(draft.formula ?? ""), allowed);
+      if (err) {
+        setTestMsg(err);
+        return;
+      }
     }
+    const cleaned: TrackerField = {
+      ...draft,
+      key: draft.key.trim(),
+      label: draft.label.trim(),
+      required: draft.type === "computed" ? false : draft.required,
+      formula: draft.type === "computed" ? String(draft.formula ?? "").trim() : undefined,
+    };
+    const fields = [...def.fields];
+    if (editIdx != null) fields[editIdx] = cleaned;
+    else fields.push(cleaned);
     emit({ ...def, fields });
     setEditIdx(null);
     setDraft(emptyField());
+    setTestMsg("");
   }
 
   function removeField(idx: number) {
-    const fields = def.fields.filter((_, i) => i !== idx);
-    emit({ ...def, fields });
+    emit({ ...def, fields: def.fields.filter((_, i) => i !== idx) });
   }
 
   function editField(idx: number) {
     setEditIdx(idx);
     setDraft({ ...def.fields[idx] });
+    setTestMsg("");
+  }
+
+  const numberKeys = useMemo(
+    () =>
+      def.fields
+        .filter((f) => f.type === "number" || f.type === "computed")
+        .map((f) => f.key)
+        .filter(Boolean),
+    [def.fields],
+  );
+
+  function runFormulaTest() {
+    const expr = String(draft.formula ?? "").trim();
+    if (!expr) {
+      setTestMsg("Enter a formula first.");
+      return;
+    }
+    const vars: Record<string, number> = {};
+    for (const k of numberKeys) {
+      if (k === draft.key.trim()) continue;
+      const n = Number(testVars[k] ?? "0");
+      vars[k] = Number.isFinite(n) ? n : 0;
+    }
+    const result = evaluateFormula(expr, vars);
+    setTestMsg(result.ok ? `Result: ${result.value}` : result.error);
   }
 
   return (
     <div className="schema-designer">
-      <p className="muted">Visual editor for tracker fields. Changes sync to JSON below.</p>
+      <p className="muted">
+        Visual editor for tracker fields. Use type <strong>computed</strong> with formulas like{" "}
+        <code>qty * rate * (1 + gst / 100)</code>. Functions: abs, min, max, round.
+      </p>
 
       <ul className="schema-field-list">
         {def.fields.map((field, idx) => (
@@ -105,6 +168,7 @@ export function TrackerSchemaDesigner({ toolId, jsonText, onChange }: Props) {
               <span className="muted">
                 {field.key} · {field.type}
                 {field.required ? " · required" : ""}
+                {field.type === "computed" && field.formula ? ` · ${field.formula}` : ""}
               </span>
             </div>
             <div className="admin-form-row">
@@ -127,7 +191,7 @@ export function TrackerSchemaDesigner({ toolId, jsonText, onChange }: Props) {
             <input
               value={draft.key}
               onChange={(e) => setDraft({ ...draft, key: e.target.value })}
-              placeholder="e.g. party"
+              placeholder="e.g. amount"
             />
           </label>
           <label className="field">
@@ -142,39 +206,93 @@ export function TrackerSchemaDesigner({ toolId, jsonText, onChange }: Props) {
             <span>Type</span>
             <select
               value={draft.type}
-              onChange={(e) => setDraft({ ...draft, type: e.target.value as TrackerField["type"] })}
+              onChange={(e) => {
+                const type = e.target.value as TrackerField["type"];
+                setDraft({
+                  ...draft,
+                  type,
+                  required: type === "computed" ? false : draft.required,
+                  formula: type === "computed" ? draft.formula ?? "qty * rate" : undefined,
+                });
+              }}
             >
               {FIELD_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </select>
           </label>
-          <label className="field">
-            <span>Required</span>
-            <select
-              value={draft.required ? "yes" : "no"}
-              onChange={(e) => setDraft({ ...draft, required: e.target.value === "yes" })}
-            >
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </select>
-          </label>
-          {draft.type === "select" ? (
+          {draft.type !== "computed" ? (
             <label className="field">
+              <span>Required</span>
+              <select
+                value={draft.required ? "yes" : "no"}
+                onChange={(e) => setDraft({ ...draft, required: e.target.value === "yes" })}
+              >
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </label>
+          ) : null}
+          {draft.type === "select" ? (
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
               <span>Options (comma-separated)</span>
               <input
                 value={(draft.options ?? []).join(", ")}
                 onChange={(e) =>
                   setDraft({
                     ...draft,
-                    options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                    options: e.target.value
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean),
                   })
                 }
               />
             </label>
           ) : null}
+          {draft.type === "computed" ? (
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span>Formula</span>
+              <input
+                value={draft.formula ?? ""}
+                onChange={(e) => setDraft({ ...draft, formula: e.target.value })}
+                placeholder="qty * rate * (1 + gst / 100)"
+              />
+            </label>
+          ) : null}
         </div>
-        <div className="admin-form-row">
+
+        {draft.type === "computed" ? (
+          <div className="admin-stack" style={{ marginTop: 12 }}>
+            <h4>Test harness</h4>
+            <p className="muted">Sample values for number/computed siblings.</p>
+            <div className="admin-form-grid">
+              {numberKeys
+                .filter((k) => k !== draft.key.trim())
+                .map((k) => (
+                  <label key={k} className="field">
+                    <span>{k}</span>
+                    <input
+                      type="number"
+                      value={testVars[k] ?? ""}
+                      onChange={(e) => setTestVars({ ...testVars, [k]: e.target.value })}
+                      placeholder="0"
+                    />
+                  </label>
+                ))}
+            </div>
+            <div className="admin-form-row">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={runFormulaTest}>
+                Test formula
+              </button>
+              {testMsg ? <span className="muted">{testMsg}</span> : null}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="admin-form-row" style={{ marginTop: 12 }}>
           <button type="button" className="btn btn-secondary btn-sm" onClick={saveField}>
             {editIdx != null ? "Update field" : "Add field"}
           </button>
@@ -185,6 +303,7 @@ export function TrackerSchemaDesigner({ toolId, jsonText, onChange }: Props) {
               onClick={() => {
                 setEditIdx(null);
                 setDraft(emptyField());
+                setTestMsg("");
               }}
             >
               Cancel edit
