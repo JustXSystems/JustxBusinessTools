@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeTotals, DEFAULT_COMPANY, newQuotationDraft } from "@/lib/quotation-v1";
+import {
+  computeTotals,
+  DEFAULT_COMPANY,
+  mergeCompanyFromBusinessProfile,
+  newQuotationDraft,
+} from "@/lib/quotation-v1";
 
 describe("quotation-v1 computeTotals", () => {
   it("splits CGST/SGST for intra-state and keeps extra charge separate", () => {
@@ -31,5 +36,23 @@ describe("quotation-v1 computeTotals", () => {
     expect(t.interState).toBe(true);
     expect(t.igst).toBeCloseTo(180, 5);
     expect(t.cgst).toBe(0);
+  });
+});
+
+describe("mergeCompanyFromBusinessProfile", () => {
+  it("always applies Business Profile name and logo", () => {
+    const merged = mergeCompanyFromBusinessProfile(
+      { ...DEFAULT_COMPANY, name: "Old Letterhead", logo: null, phone: "999" },
+      {
+        businessName: "Acme Solar",
+        logo: "/uploads/logo.png",
+        phone: "111",
+        addressLine1: "12 Main St",
+      },
+    );
+    expect(merged.name).toBe("Acme Solar");
+    expect(merged.logo).toBe("/uploads/logo.png");
+    expect(merged.phone).toBe("999");
+    expect(merged.address).toBe("12 Main St");
   });
 });

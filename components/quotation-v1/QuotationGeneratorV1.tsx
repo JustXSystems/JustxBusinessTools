@@ -13,6 +13,7 @@ import {
   engMeta,
   getMissingRequiredFields,
   INDIAN_STATES,
+  mergeCompanyFromBusinessProfile,
   money,
   newQuotationDraft,
   numToWordsIndian,
@@ -55,7 +56,6 @@ export function QuotationGeneratorV1() {
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; kind: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [approvalLink, setApprovalLink] = useState<string | null>(null);
@@ -71,13 +71,15 @@ export function QuotationGeneratorV1() {
   }, []);
 
   const reloadMeta = useCallback(async () => {
-    const [c, h, n, q] = await Promise.all([
+    const [c, h, n, q, profile] = await Promise.all([
       api<{ company: CompanyProfileV1 | null }>("/quotation-v1/company"),
       api<{ history: QuoteHistoryRow[] }>("/quotation-v1/history"),
       api<{ notifications: QuoteNotification[] }>("/quotation-v1/notifications"),
       api<{ quotations: QuotationV1[] }>("/quotation-v1"),
+      fetchProfile().catch(() => null),
     ]);
-    if (c.company) setCompany({ ...DEFAULT_COMPANY, ...c.company });
+    const stored = c.company ? { ...DEFAULT_COMPANY, ...c.company, logo: c.company.logo ?? null } : { ...DEFAULT_COMPANY };
+    setCompany(mergeCompanyFromBusinessProfile(stored, profile));
     setHistory(h.history ?? []);
     setNotifications(n.notifications ?? []);
     setList((q.quotations ?? []) as QuotationV1[]);
@@ -87,29 +89,11 @@ export function QuotationGeneratorV1() {
     (async () => {
       try {
         await reloadMeta();
-        const profile = await fetchProfile().catch(() => null);
-        setCompany((prev) => {
-          if (prev.name !== DEFAULT_COMPANY.name) return prev;
-          if (!profile) return prev;
-          return {
-            ...prev,
-            name: profile.businessName || prev.name,
-            address: [profile.addressLine1, profile.addressLine2].filter(Boolean).join("\n"),
-            state: profile.state || prev.state,
-            gstin: profile.gstin || prev.gstin,
-            phone: profile.phone || prev.phone,
-            email: profile.email || prev.email,
-            quotePrefix: (profile.businessName || "QT")
-              .replace(/[^A-Za-z0-9]/g, "")
-              .slice(0, 3)
-              .toUpperCase() || "QT",
-          };
-        });
       } catch (e) {
         flash(e instanceof Error ? e.message : "Failed to load", "err");
       }
     })();
-  }, [flash, reloadMeta]);
+  }, [flash, reloadMeta, user?.businessProfileId]);
 
   function patch(updater: (q: QuotationV1) => QuotationV1) {
     setCurrent((q) => updater({ ...q }));
@@ -148,6 +132,7 @@ export function QuotationGeneratorV1() {
       const payload: QuotationV1 = {
         ...current,
         status: markStatus ?? current.status,
+        companySnapshot: company,
         history: markStatus
           ? [...current.history, { ts: new Date().toISOString(), event: `Status set to ${markStatus}` }]
           : current.history,
@@ -179,39 +164,44 @@ export function QuotationGeneratorV1() {
 
   async function exportPdf(q: QuotationV1) {
     if (!validateSaved(q)) return;
-    setShowPreview(true);
     setBusy(true);
     try {
-      await new Promise((r) => setTimeout(r, 80));
+      await new Promise((r) => setTimeout(r, 40));
       const node = document.getElementById("quote-sheet");
       if (!node) throw new Error("Preview not ready");
-      const html2canvas = (await import("html2canvas")).default;
-      const { jsPDF } = await import("jspdf");
-      const canvas = await html2canvas(node, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        ignoreElements: (el) => el.classList?.contains("page-break-marker"),
-      });
-      const pdf = new jsPDF("p", "pt", "a4");
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      const imgW = pageW;
-      const imgH = (canvas.height * imgW) / canvas.width;
-      let heightLeft = imgH;
-      let position = 0;
-      const img = canvas.toDataURL("image/png");
-      pdf.addImage(img, "PNG", 0, position, imgW, imgH);
-      heightLeft -= pageH;
-      while (heightLeft > 0) {
-        position -= pageH;
-        pdf.addPage();
+      const fit = node.closest(".qgv1-preview-fit");
+      fit?.classList.add("is-exporting");
+      try {
+        const html2canvas = (await import("html2canvas")).default;
+        const { jsPDF } = await import("jspdf");
+        const canvas = await html2canvas(node, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          ignoreElements: (el) => el.classList?.contains("page-break-marker"),
+        });
+        const pdf = new jsPDF("p", "pt", "a4");
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const imgW = pageW;
+        const imgH = (canvas.height * imgW) / canvas.width;
+        let heightLeft = imgH;
+        let position = 0;
+        const img = canvas.toDataURL("image/png");
         pdf.addImage(img, "PNG", 0, position, imgW, imgH);
         heightLeft -= pageH;
+        while (heightLeft > 0) {
+          position -= pageH;
+          pdf.addPage();
+          pdf.addImage(img, "PNG", 0, position, imgW, imgH);
+          heightLeft -= pageH;
+        }
+        const filename = `${(q.quoteNo || "Quotation").replace(/[^\w.-]+/g, "_")}.pdf`;
+        pdf.save(filename);
+        flash("PDF downloaded — check your Downloads folder.");
+      } finally {
+        fit?.classList.remove("is-exporting");
       }
-      const filename = `${(q.quoteNo || "Quotation").replace(/[^\w.-]+/g, "_")}.pdf`;
-      pdf.save(filename);
-      flash("PDF downloaded — check your Downloads folder.");
     } catch (e) {
       flash(e instanceof Error ? e.message : "PDF export failed", "err");
     } finally {
@@ -306,7 +296,6 @@ ${company.phone}`;
             onClick={() => {
               setCurrent(newQuotationDraft());
               setLastSaved(null);
-              setShowPreview(false);
             }}
           >
             New draft
@@ -329,7 +318,6 @@ ${company.phone}`;
               className={`qgv1-seg-item ${route === item.id ? "active" : ""}`}
               onClick={() => {
                 setRoute(item.id);
-                if (item.id === "new" && !current.quoteNo) setShowPreview(false);
               }}
             >
               <span className="qgv1-seg-label">{item.label}</span>
@@ -342,11 +330,12 @@ ${company.phone}`;
 
       <main className="qgv1-main">
         {route === "new" ? (
-          <>
+          <div className="qgv1-workspace preview-workspace">
+            <div className="qgv1-editor preview-editor">
             <div className="qgv1-page-head">
               <div>
                 <h1>Compose quotation</h1>
-                <p>Fill required fields, save, then preview PDF or send for approval.</p>
+                <p>Edit on the left — the quotation updates live on the right. Save, then download PDF or send.</p>
               </div>
             </div>
 
@@ -790,7 +779,7 @@ ${company.phone}`;
               />
             </section>
 
-            <div className="qgv1-btn-row" style={{ marginBottom: 20 }}>
+            <div className="qgv1-btn-row qgv1-editor-actions">
               <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void saveQuote()}>
                 Save
               </button>
@@ -798,12 +787,9 @@ ${company.phone}`;
                 type="button"
                 className="btn btn-secondary"
                 disabled={busy}
-                onClick={() => {
-                  setShowPreview(true);
-                  void exportPdf(current);
-                }}
+                onClick={() => void exportPdf(current)}
               >
-                Preview / Download PDF
+                Download PDF
               </button>
               <button
                 type="button"
@@ -834,16 +820,30 @@ ${company.phone}`;
                 <span className="pill pill-warning">Unsaved changes</span>
               ) : null}
             </div>
+            </div>
 
-            {showPreview ? (
-              <section className="qgv1-card" ref={sheetRef}>
-                <h3>Preview</h3>
-                <div className="qgv1-sheet-scroll">
+            <aside className="qgv1-preview-pane preview-pane" aria-label="Live quotation preview">
+              <div className="qgv1-preview-toolbar preview-pane-toolbar">
+                <div>
+                  <span className="qgv1-preview-title preview-pane-title">Live preview</span>
+                  <span className="qgv1-preview-sub preview-pane-sub">Updates as you type</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={busy}
+                  onClick={() => void exportPdf(current)}
+                >
+                  Download PDF
+                </button>
+              </div>
+              <div className="qgv1-preview-scroll preview-pane-scroll" ref={sheetRef}>
+                <div className="qgv1-preview-fit">
                   <QuoteSheet quote={current} company={company} />
                 </div>
-              </section>
-            ) : null}
-          </>
+              </div>
+            </aside>
+          </div>
         ) : null}
 
         {route === "list" ? (
@@ -879,7 +879,6 @@ ${company.phone}`;
                           setCurrent(q);
                           setLastSaved(snapshotOf(q));
                           setRoute("new");
-                          setShowPreview(true);
                         }}
                       >
                         Open
@@ -975,13 +974,29 @@ ${company.phone}`;
             <div className="qgv1-page-head">
               <div>
                 <h1>Letterhead</h1>
-                <p>Company details printed on every quotation PDF.</p>
+                <p>
+                  Brand name and logo come from{" "}
+                  <Link href="/profile">Business Profile</Link>. Other letterhead fields below print on
+                  every quotation PDF.
+                </p>
+              </div>
+            </div>
+            <div className="qgv1-brand-sync">
+              {company.logo ? (
+                <img className="qgv1-brand-sync-logo" src={company.logo} alt="" />
+              ) : (
+                <div className="qgv1-brand-sync-logo is-empty">No logo</div>
+              )}
+              <div>
+                <div className="qgv1-brand-sync-name">{company.name}</div>
+                <p className="muted" style={{ margin: "4px 0 0" }}>
+                  Edit name &amp; logo in Business Profile — they update here automatically.
+                </p>
               </div>
             </div>
             <div className="qgv1-grid2">
               {(
                 [
-                  ["name", "Company Name"],
                   ["tagline", "Tagline"],
                   ["gstin", "GSTIN"],
                   ["state", "State"],
@@ -1028,9 +1043,12 @@ ${company.phone}`;
               className="btn btn-primary"
               style={{ marginTop: 12 }}
               onClick={async () => {
+                const profile = await fetchProfile().catch(() => null);
+                const next = mergeCompanyFromBusinessProfile(company, profile);
+                setCompany(next);
                 await api("/quotation-v1/company", {
                   method: "PUT",
-                  body: JSON.stringify({ company }),
+                  body: JSON.stringify({ company: next }),
                 });
                 flash("Company profile saved.");
               }}

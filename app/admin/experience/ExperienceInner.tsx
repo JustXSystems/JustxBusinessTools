@@ -53,8 +53,16 @@ export default function ExperienceInner() {
         ))}
       </div>
 
-      {tab === "theme" ? <ThemeStudioPanel /> : null}
-      {tab === "branding" ? <BrandingPanel /> : null}
+      {tab === "theme" ? (
+        <div className="admin-page-body">
+          <ThemeStudioPanel />
+        </div>
+      ) : null}
+      {tab === "branding" ? (
+        <div className="admin-page-body">
+          <BrandingPanel />
+        </div>
+      ) : null}
     </div>
   );
 }

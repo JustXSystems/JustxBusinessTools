@@ -189,6 +189,7 @@ export const INDIAN_STATES = [
 
 export const DEFAULT_COMPANY: CompanyProfileV1 = {
   name: "Your Company",
+  logo: null,
   tagline: "Quotations · Service · Sales",
   address: "",
   state: "Karnataka",
@@ -202,3 +203,49 @@ export const DEFAULT_COMPANY: CompanyProfileV1 = {
   quotePrefix: "QT",
   place: "Bengaluru",
 };
+
+/** Fields we pull from the operator Business Profile for letterhead branding. */
+export type BusinessProfileBrandSource = {
+  businessName?: string | null;
+  logo?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  state?: string | null;
+  gstin?: string | null;
+  phone?: string | null;
+  email?: string | null;
+};
+
+/**
+ * Business Profile name + logo always win. Other letterhead fields fill from
+ * the profile only when the quotation company record still has blanks.
+ */
+export function mergeCompanyFromBusinessProfile(
+  company: CompanyProfileV1,
+  profile: BusinessProfileBrandSource | null | undefined,
+): CompanyProfileV1 {
+  if (!profile) return { ...DEFAULT_COMPANY, ...company, logo: company.logo ?? null };
+
+  const base = { ...DEFAULT_COMPANY, ...company, logo: company.logo ?? null };
+  const addressFromProfile = [profile.addressLine1, profile.addressLine2]
+    .map((s) => (s ?? "").trim())
+    .filter(Boolean)
+    .join("\n");
+  const name = (profile.businessName ?? "").trim();
+  const prefixFromName = name.replace(/[^A-Za-z0-9]/g, "").slice(0, 3).toUpperCase();
+
+  return {
+    ...base,
+    name: name || base.name,
+    logo: profile.logo || base.logo || null,
+    address: base.address.trim() ? base.address : addressFromProfile || base.address,
+    state: base.state.trim() && base.state !== DEFAULT_COMPANY.state ? base.state : profile.state || base.state,
+    gstin: base.gstin.trim() ? base.gstin : profile.gstin || base.gstin,
+    phone: base.phone.trim() ? base.phone : profile.phone || base.phone,
+    email: base.email.trim() ? base.email : profile.email || base.email,
+    quotePrefix:
+      base.quotePrefix && base.quotePrefix !== DEFAULT_COMPANY.quotePrefix
+        ? base.quotePrefix
+        : prefixFromName || base.quotePrefix,
+  };
+}

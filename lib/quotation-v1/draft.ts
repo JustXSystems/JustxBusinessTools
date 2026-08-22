@@ -88,6 +88,6 @@ export function getMissingRequiredFields(q: QuotationV1): string[] {
 }
 
 export function snapshotOf(q: QuotationV1): string {
-  const { updatedAt: _u, history: _h, ...rest } = q;
+  const { updatedAt: _u, history: _h, companySnapshot: _c, ...rest } = q;
   return JSON.stringify(rest);
 }

@@ -114,60 +114,48 @@ export function BrandingPanel() {
   const previewLogo = logoDraft || form.logoUrl;
 
   return (
-    <div className="admin-split">
-      <section className="panel admin-card">
-        <h2>Platform branding</h2>
-        <p className="muted">Logo, app name, tagline, and splash duration used across operator and admin.</p>
-        {message ? <p className="muted">{message}</p> : null}
-        <div className="admin-form-grid">
-          <label className="field">
-            <span>App name</span>
-            <input value={form.appName} onChange={(e) => setForm({ ...form, appName: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Tagline</span>
-            <input value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Splash duration (ms)</span>
-            <input
-              type="number"
-              min={0}
-              max={15000}
-              step={100}
-              value={form.splashDurationMs}
-              onChange={(e) => setForm({ ...form, splashDurationMs: e.target.value })}
-            />
-          </label>
-          <label className="field" style={{ gridColumn: "1 / -1" }}>
-            <span>Logo upload</span>
-            <input type="file" accept="image/*" onChange={(e) => void onLogoFile(e.target.files?.[0] ?? null)} />
-          </label>
-        </div>
-        <div className="admin-form-row">
-          <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void saveBranding(false)}>
-            {saving ? "Saving…" : "Save branding"}
-          </button>
-          <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => void saveBranding(true)}>
-            Reset logo
-          </button>
-        </div>
-      </section>
-
-      <div className="admin-pane-stack">
+    <div className="preview-workspace">
+      <div className="preview-editor">
         <section className="panel admin-card">
-          <h2>Preview</h2>
-          <div className="admin-form-row" style={{ alignItems: "center" }}>
-            <PlatformBrandMark
-              size="lg"
-              layout="stack"
-              logoUrl={previewLogo}
-              appName={form.appName || DEFAULT_BRANDING.appName}
-              tagline={form.tagline || DEFAULT_BRANDING.tagline}
-            />
+          <h2>Platform branding</h2>
+          <p className="muted">Logo, app name, tagline, and splash duration used across operator and admin.</p>
+          {message ? <p className="muted">{message}</p> : null}
+          <div className="admin-form-grid">
+            <label className="field">
+              <span>App name</span>
+              <input value={form.appName} onChange={(e) => setForm({ ...form, appName: e.target.value })} />
+            </label>
+            <label className="field">
+              <span>Tagline</span>
+              <input value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} />
+            </label>
+            <label className="field">
+              <span>Splash duration (ms)</span>
+              <input
+                type="number"
+                min={0}
+                max={15000}
+                step={100}
+                value={form.splashDurationMs}
+                onChange={(e) => setForm({ ...form, splashDurationMs: e.target.value })}
+              />
+            </label>
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span>Logo upload</span>
+              <input type="file" accept="image/*" onChange={(e) => void onLogoFile(e.target.files?.[0] ?? null)} />
+            </label>
+          </div>
+          <div className="admin-form-row">
+            <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void saveBranding(false)}>
+              {saving ? "Saving…" : "Save branding"}
+            </button>
+            <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => void saveBranding(true)}>
+              Reset logo
+            </button>
           </div>
         </section>
-        <section className="panel admin-card">
+
+        <section className="panel admin-card" style={{ marginTop: 16 }}>
           <h2>Operator footer</h2>
           <p className="muted">Shown at the bottom of the operator app (Powered by…).</p>
           <label className="field">
@@ -179,6 +167,26 @@ export function BrandingPanel() {
           </button>
         </section>
       </div>
+
+      <aside className="preview-pane" aria-label="Branding preview">
+        <div className="preview-pane-toolbar">
+          <div>
+            <span className="preview-pane-title">Live preview</span>
+            <span className="preview-pane-sub">Brand mark as operators will see it</span>
+          </div>
+        </div>
+        <div className="preview-pane-scroll">
+          <div className="preview-brand-stage">
+            <PlatformBrandMark
+              size="xl"
+              layout="stack"
+              logoUrl={previewLogo}
+              appName={form.appName || DEFAULT_BRANDING.appName}
+              tagline={form.tagline || DEFAULT_BRANDING.tagline}
+            />
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }

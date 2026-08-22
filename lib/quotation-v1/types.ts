@@ -70,10 +70,14 @@ export type QuotationV1 = {
   financeSent: boolean;
   approvedAt?: string;
   rejectedAt?: string;
+  /** Letterhead frozen at save/send — used on public approve / PDF history. */
+  companySnapshot?: CompanyProfileV1;
 };
 
 export type CompanyProfileV1 = {
   name: string;
+  /** Business Profile logo URL (source of truth for brand mark). */
+  logo: string | null;
   tagline: string;
   address: string;
   state: string;

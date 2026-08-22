@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmModal, Modal } from "@/components/common/Modal";
 import { useToast } from "@/components/common/ToastProvider";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
 import { DocumentPreview } from "@/components/documents/DocumentPreview";
 import { DocumentSavedList } from "@/components/documents/DocumentSavedList";
@@ -51,6 +52,7 @@ type Props = { tool: ToolDefinition };
 
 export function DocumentTool({ tool }: Props) {
   const { getToolDefinition } = usePlatformConfig();
+  const { user } = useAuth();
   const baseConfig = DOCUMENT_CONFIGS[tool.id as DocumentToolId];
   const config = mergeDocumentConfig(baseConfig, getToolDefinition(tool.id));
   const router = useRouter();
@@ -136,7 +138,7 @@ export function DocumentTool({ tool }: Props) {
       return;
     }
     initNewDocument();
-  }, [viewList, editId, loadList, loadExisting, initNewDocument]);
+  }, [viewList, editId, loadList, loadExisting, initNewDocument, user?.businessProfileId]);
 
   function goList() {
     router.push(`${toolPath}?view=list`);
@@ -295,11 +297,24 @@ export function DocumentTool({ tool }: Props) {
           <div className="es-title">Loading…</div>
         </div>
       ) : (
-        <div className="wrap-2col">
-          <DocumentEditor config={config} state={state} onChange={setState} />
-          <div className="col-right">
-            <DocumentPreview config={config} state={state} profile={profile} />
-            <div className="panel no-print mt-14">
+        <div className="preview-workspace">
+          <div className="preview-editor">
+            <DocumentEditor config={config} state={state} onChange={setState} />
+          </div>
+          <aside className="preview-pane" aria-label="Live document preview">
+            <div className="preview-pane-toolbar">
+              <div>
+                <span className="preview-pane-title">Live preview</span>
+                <span className="preview-pane-sub">Updates as you edit</span>
+              </div>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={handlePrint}>
+                Print / PDF
+              </button>
+            </div>
+            <div className="preview-pane-scroll">
+              <DocumentPreview config={config} state={state} profile={profile} />
+            </div>
+            <div className="preview-pane-actions no-print">
               {canWrite ? (
                 <>
                   <button
@@ -323,17 +338,8 @@ export function DocumentTool({ tool }: Props) {
               ) : (
                 <p className="muted">Read-only access — you can view and print but not save changes.</p>
               )}
-              <div className="btn-row mt-10">
-                <button
-                  type="button"
-                  className="btn btn-secondary flex-1"
-                  onClick={handlePrint}
-                >
-                  🖶 Print / PDF
-                </button>
-              </div>
             </div>
-          </div>
+          </aside>
         </div>
       )}
 

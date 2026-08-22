@@ -3,15 +3,22 @@
 import { usePoweredByText } from "@/components/config/ConfigProvider";
 import { usePlatformBranding } from "@/components/branding/BrandingProvider";
 
-export function PoweredByFooter() {
+type Props = {
+  /** Fixed slim bar for app chrome (operator/admin). Default for auth pages. */
+  variant?: "bar" | "inline";
+};
+
+export function PoweredByFooter({ variant = "inline" }: Props) {
   const fromConfig = usePoweredByText();
   const { poweredBy } = usePlatformBranding();
-  // Prefer live branding (works on login without ConfigProvider); fall back to effective config.
   const text = poweredBy?.text || fromConfig;
 
   return (
-    <footer className="powered-by-footer no-print" aria-label="Platform branding">
-      <span>{text}</span>
+    <footer
+      className={`powered-by-footer powered-by-footer--${variant} no-print`}
+      aria-label="Platform branding"
+    >
+      <span className="powered-by-footer-text">{text}</span>
     </footer>
   );
 }

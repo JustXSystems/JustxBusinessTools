@@ -25,10 +25,12 @@ export function ExperiencePreviewFrames({
 
   return (
     <section className="panel admin-card xp-preview">
-      <div className="analytics-toolbar">
+      <div className="analytics-toolbar preview-pane-toolbar">
         <div>
-          <h2>Live preview</h2>
-          <p className="muted">Operator surfaces with the draft tokens (scoped — not saved until you activate).</p>
+          <span className="preview-pane-title">Live preview</span>
+          <p className="muted preview-pane-sub" style={{ margin: "2px 0 0" }}>
+            Draft tokens — not saved until you activate
+          </p>
         </div>
         <div className="admin-tabs xp-preview-tabs" role="tablist">
           {(

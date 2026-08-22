@@ -2,52 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { useAuth } from "@/components/auth/AuthProvider";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
+import { NavIcon } from "@/components/layout/NavIcon";
 import { navigationConfig } from "@/config/navigation.config";
-import { NotificationDot } from "@/components/layout/NotificationDot";
-import { fetchProfile } from "@/lib/api";
 
+/** Mobile-only chrome. Desktop navigation lives in the left sidebar. */
 export function Header() {
-  const pathname = usePathname();
-  const { user, isAdmin } = useAuth();
-  const [businessName, setBusinessName] = useState("");
-
-  useEffect(() => {
-    fetchProfile()
-      .then((p) => setBusinessName(p.businessName || ""))
-      .catch(() => setBusinessName(""));
-  }, [pathname, user?.businessProfileId]);
-
   return (
-    <header className="app-topbar no-print">
+    <header className="app-topbar app-topbar-mobile no-print">
       <div className="app-topbar-inner">
-        <PlatformBrandMark href="/" size="md" />
+        <PlatformBrandMark href="/" size="sm" />
         <div className="topbar-spacer" />
         <BranchSwitcher />
-        <Link href="/profile" className="topbar-btn">
-          <span>🏢</span>
-          <span>{businessName || "Business Profile"}</span>
-        </Link>
-        <Link href="/subscription" className="topbar-icon-btn" aria-label="Subscribe">
-          🛒
-        </Link>
-        {isAdmin ? (
-          <Link href="/admin" className="topbar-icon-btn" aria-label="Admin">
-            ⚙️
-          </Link>
-        ) : null}
-        <Link
-          href="/notifications"
-          className="topbar-icon-btn"
-          aria-label="Notifications"
-          suppressHydrationWarning
-        >
-          🔔
-          <NotificationDot />
-        </Link>
       </div>
     </header>
   );
@@ -63,7 +30,9 @@ export function BottomNavigation() {
           item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
         return (
           <Link key={item.href} href={item.href} className={active ? "active" : ""}>
-            <span>{item.icon}</span>
+            <span className="bottom-nav-icon">
+              <NavIcon id={item.icon} />
+            </span>
             <span>{item.label}</span>
           </Link>
         );

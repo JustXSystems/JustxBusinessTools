@@ -53,7 +53,7 @@ export function QrTool() {
         const QRCode = await import("qrcode");
         if (cancelled || !canvasRef.current) return;
         await QRCode.toCanvas(canvasRef.current, text || " ", {
-          width: 200,
+          width: 280,
           margin: 1,
           errorCorrectionLevel: "M",
         });

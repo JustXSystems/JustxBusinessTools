@@ -92,6 +92,54 @@
   padding: 0 0 32px;
 }
 
+.qgv1-editor {
+  min-width: 0;
+}
+
+.qgv1-editor-actions {
+  position: sticky;
+  bottom: 36px;
+  z-index: 5;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-1) 88%, transparent);
+  border: 1px solid var(--border-hair);
+  backdrop-filter: blur(12px);
+}
+
+.qgv1-preview-scroll {
+  /* inherits .preview-pane-scroll; keep mild QGV1 padding tweak */
+  padding-bottom: 20px;
+}
+
+.qgv1-preview-fit {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.qgv1-preview-pane .qgv1-sheet {
+  width: 100%;
+  max-width: 794px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+
+.qgv1-preview-fit.is-exporting .qgv1-sheet {
+  width: 794px;
+  max-width: 794px;
+}
+
+@media (max-width: 1100px) {
+  .qgv1-editor {
+    order: 1;
+  }
+
+  .qgv1-preview-pane {
+    order: 2;
+  }
+}
+
 .qgv1-page-head {
   display: flex;
   align-items: flex-end;
@@ -146,17 +194,24 @@
   min-width: 220px;
   max-width: 360px;
   width: 100%;
-  background: rgba(var(--accent-rgb), 0.1);
+  background: var(--glass-2);
   border: 1px solid rgba(var(--accent-rgb), 0.32);
   color: var(--text-hi);
   font-weight: 600;
   padding: 10px 14px;
   border-radius: var(--radius-sm);
   outline: none;
+  color-scheme: dark;
+}
+
+.qgv1-cat option {
+  background: var(--bg-2);
+  color: var(--text-hi);
 }
 
 .qgv1-cat:focus {
   box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.12);
+  border-color: rgba(var(--accent-rgb), 0.55);
 }
 
 .qgv1-btn-row {
@@ -393,6 +448,57 @@
   color: var(--q-teal-800);
 }
 
+.qgv1-qs-logo {
+  display: block;
+  height: 48px;
+  width: auto;
+  max-width: 180px;
+  object-fit: contain;
+  object-position: left center;
+  margin-bottom: 8px;
+}
+
+.qgv1-brand-sync {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-hair);
+  background: color-mix(in srgb, var(--bg-1) 70%, transparent);
+}
+
+.qgv1-brand-sync-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--border-hair);
+  flex-shrink: 0;
+}
+
+.qgv1-brand-sync-logo.is-empty {
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  color: var(--text-low);
+}
+
+.qgv1-brand-sync-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+
+.qgv1-qs-brand .tagline {
+  font-size: 10px;
+  color: var(--q-soft);
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+
 .qgv1-qs-brand .line {
   font-size: 10.5px;
   color: var(--q-soft);
@@ -623,7 +729,13 @@
   color: var(--text-hi);
   border: 1px solid var(--border-hair);
   border-radius: var(--radius-sm);
-  color-scheme: inherit;
+  color-scheme: dark;
+}
+
+.qgv1-root .field select option,
+.qgv1-root select option {
+  background: var(--bg-2);
+  color: var(--text-hi);
 }
 
 .qgv1-root .field input:focus,
@@ -632,6 +744,21 @@
   border-color: rgba(var(--accent-rgb), 0.55);
   background: var(--glass-3);
   box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.12);
+}
+
+html[data-scheme="light"] .qgv1-cat,
+html[data-scheme="light"] .qgv1-root .field input,
+html[data-scheme="light"] .qgv1-root .field select,
+html[data-scheme="light"] .qgv1-root .field textarea,
+html[data-scheme="light"] .qgv1-input {
+  color-scheme: light;
+}
+
+html[data-scheme="light"] .qgv1-cat option,
+html[data-scheme="light"] .qgv1-root .field select option,
+html[data-scheme="light"] .qgv1-root select option {
+  background: var(--bg-2);
+  color: var(--text-hi);
 }
 
 .qgv1-root .mono {

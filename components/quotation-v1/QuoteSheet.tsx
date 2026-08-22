@@ -35,7 +35,9 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
 
       <div className="qgv1-qs-head">
         <div className="qgv1-qs-brand">
+          {c.logo ? <img className="qgv1-qs-logo" src={c.logo} alt="" /> : null}
           <div className="name">{c.name}</div>
+          {c.tagline ? <div className="tagline">{c.tagline}</div> : null}
           <div className="line">
             {(c.address || "").split("\n").map((l, i) => (
               <span key={i}>
@@ -43,9 +45,17 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
                 <br />
               </span>
             ))}
-            Mobile: {c.phone}
-            <br />
-            GSTIN: <b>{c.gstin || ""}</b>
+            {c.phone ? (
+              <>
+                Mobile: {c.phone}
+                <br />
+              </>
+            ) : null}
+            {c.gstin ? (
+              <>
+                GSTIN: <b>{c.gstin}</b>
+              </>
+            ) : null}
           </div>
         </div>
         <div className="qgv1-qs-meta">

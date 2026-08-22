@@ -12,9 +12,9 @@ export default function PublicQuoteApprovePage() {
   const params = useParams();
   const token = String(params?.token ?? "");
   const [quote, setQuote] = useState<QuotationV1 | null>(null);
+  const [company, setCompany] = useState<CompanyProfileV1>({ ...DEFAULT_COMPANY });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const company = DEFAULT_COMPANY;
 
   useEffect(() => {
     if (!token) return;
@@ -23,6 +23,8 @@ export default function PublicQuoteApprovePage() {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || "Not found");
         setQuote(data.quotation);
+        const c = (data.company ?? data.quotation?.companySnapshot ?? null) as CompanyProfileV1 | null;
+        if (c) setCompany({ ...DEFAULT_COMPANY, ...c, logo: c.logo ?? null });
       })
       .catch((e: Error) => setError(e.message));
   }, [token]);
@@ -38,6 +40,9 @@ export default function PublicQuoteApprovePage() {
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "Failed");
       setQuote(data.quotation);
+      if (data.company) {
+        setCompany({ ...DEFAULT_COMPANY, ...data.company, logo: data.company.logo ?? null });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -46,8 +51,8 @@ export default function PublicQuoteApprovePage() {
   }
 
   return (
-    <div className="qgv1-root" style={{ minHeight: "100vh", padding: "24px 16px" }}>
-      <main className="qgv1-main" style={{ maxWidth: 900, margin: "0 auto" }}>
+    <div className="qgv1-root" style={{ minHeight: "100vh", padding: "20px 16px 32px" }}>
+      <main className="qgv1-main preview-solo">
         <div className="qgv1-card" style={{ textAlign: "center" }}>
           <h1 className="tool-header-title" style={{ margin: 0 }}>
             Review Your Quotation
@@ -67,8 +72,16 @@ export default function PublicQuoteApprovePage() {
             {quote.status === "rejected" ? (
               <div className="error-banner">You rejected this quotation.</div>
             ) : null}
-            <div className="qgv1-sheet-scroll">
-              <QuoteSheet quote={quote} company={company as CompanyProfileV1} />
+            <div className="preview-pane">
+              <div className="preview-pane-toolbar">
+                <div>
+                  <span className="preview-pane-title">Quotation</span>
+                  <span className="preview-pane-sub">{quote.quoteNo}</span>
+                </div>
+              </div>
+              <div className="preview-pane-scroll qgv1-sheet-scroll">
+                <QuoteSheet quote={quote} company={company} />
+              </div>
             </div>
             {quote.status === "sent" ? (
               <div className="qgv1-card" style={{ textAlign: "center" }}>

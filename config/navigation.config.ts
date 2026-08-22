@@ -1,13 +1,48 @@
+export type NavIconId =
+  | "home"
+  | "profile"
+  | "notifications"
+  | "subscription"
+  | "settings"
+  | "admin"
+  | "dashboard"
+  | "approvals"
+  | "analytics"
+  | "tools"
+  | "users"
+  | "payments"
+  | "gateways"
+  | "experience"
+  | "audit"
+  | "logout"
+  | "arrowLeft";
+
+export type NavItem = {
+  href: string;
+  label: string;
+  icon: NavIconId;
+};
+
 export const navigationConfig = {
+  workspace: [
+    { href: "/", label: "Home", icon: "home" as const },
+    { href: "/profile", label: "Business Profile", icon: "profile" as const },
+    { href: "/notifications", label: "Notifications", icon: "notifications" as const },
+  ],
+  account: [
+    { href: "/subscription", label: "Subscription", icon: "subscription" as const },
+    { href: "/settings", label: "Settings", icon: "settings" as const },
+  ],
+  /** Alias for workspace — Home / Profile / Notifications */
   primary: [
-    { href: "/", label: "Home", icon: "🏠" },
-    { href: "/profile", label: "Business Profile", icon: "🏢" },
-    { href: "/notifications", label: "Notifications", icon: "🔔" },
+    { href: "/", label: "Home", icon: "home" as const },
+    { href: "/profile", label: "Business Profile", icon: "profile" as const },
+    { href: "/notifications", label: "Notifications", icon: "notifications" as const },
   ],
   mobileBottom: [
-    { href: "/", label: "Home", icon: "🏠" },
-    { href: "/profile", label: "Profile", icon: "🏢" },
-    { href: "/settings", label: "Settings", icon: "⚙️" },
-    { href: "/notifications", label: "Alerts", icon: "🔔" },
+    { href: "/", label: "Home", icon: "home" as const },
+    { href: "/profile", label: "Profile", icon: "profile" as const },
+    { href: "/settings", label: "Settings", icon: "settings" as const },
+    { href: "/notifications", label: "Alerts", icon: "notifications" as const },
   ],
 } as const;
