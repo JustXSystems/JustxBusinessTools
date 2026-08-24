@@ -10,12 +10,21 @@ import {
   type ReactNode,
 } from "react";
 import { apiUrl } from "@/lib/api-base";
+import {
+  parseSplashAnimation,
+  parseSplashIntensity,
+  type SplashAnimation,
+  type SplashIntensity,
+} from "@/lib/splash-animation";
 
 export type PlatformBranding = {
   logoUrl: string;
   appName: string;
   tagline: string;
   splashDurationMs: number;
+  splashAnimation: SplashAnimation;
+  splashIntensity: SplashIntensity;
+  splashShowProgress: boolean;
 };
 
 export type PoweredByConfig = {
@@ -27,7 +36,10 @@ export const DEFAULT_BRANDING: PlatformBranding = {
   logoUrl: "/icons/jbt-icon.svg",
   appName: "JustXSystems",
   tagline: "JustXSystems",
-  splashDurationMs: 1800,
+  splashDurationMs: 2200,
+  splashAnimation: "dash",
+  splashIntensity: "balanced",
+  splashShowProgress: true,
 };
 
 export const DEFAULT_POWERED_BY: PoweredByConfig = {
@@ -39,7 +51,15 @@ export const SPLASH_SEEN_KEY = "jbt.splash.seen";
 export const BRANDING_STORAGE_KEY = "jbt.branding.payload";
 
 export function splashFingerprint(b: PlatformBranding): string {
-  return [b.logoUrl, b.appName, b.tagline, String(b.splashDurationMs)].join("\u0001");
+  return [
+    b.logoUrl,
+    b.appName,
+    b.tagline,
+    String(b.splashDurationMs),
+    b.splashAnimation,
+    b.splashIntensity,
+    b.splashShowProgress ? "1" : "0",
+  ].join("\u0001");
 }
 
 type BrandingContextValue = {
@@ -73,6 +93,12 @@ function normalizePayload(data: {
       splashDurationMs: Number.isFinite(Number(b.splashDurationMs))
         ? Math.max(0, Math.round(Number(b.splashDurationMs)))
         : DEFAULT_BRANDING.splashDurationMs,
+      splashAnimation: parseSplashAnimation(b.splashAnimation ?? DEFAULT_BRANDING.splashAnimation),
+      splashIntensity: parseSplashIntensity(b.splashIntensity ?? DEFAULT_BRANDING.splashIntensity),
+      splashShowProgress:
+        b.splashShowProgress == null
+          ? DEFAULT_BRANDING.splashShowProgress
+          : Boolean(b.splashShowProgress),
     },
     poweredBy: {
       text: String(p.text || DEFAULT_POWERED_BY.text),

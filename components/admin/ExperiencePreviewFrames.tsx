@@ -58,13 +58,27 @@ export function ExperiencePreviewFrames({
           <div className="xp-phone-notch" aria-hidden />
           <div className="xp-phone-screen">
             {activeFrame === "splash" ? (
-              <div className="xp-frame xp-splash">
-                <div className="xp-splash-mark">
+              <div
+                className={`xp-frame xp-splash splash-anim-${b.splashAnimation || "elegant"} splash-intensity-${b.splashIntensity || "balanced"}`}
+                style={{ ["--splash-ms" as string]: `${Math.max(b.splashDurationMs || 1800, 600)}ms` }}
+              >
+                <div className="splash-atmosphere" aria-hidden>
+                  <span className="splash-orb splash-orb-a" />
+                  <span className="splash-orb splash-orb-b" />
+                </div>
+                <div className="xp-splash-mark splash-logo-core">
                   <img src={b.logoUrl} alt="" width={56} height={56} />
                 </div>
-                <strong className="xp-splash-name">{b.appName}</strong>
-                <span className="xp-splash-tag">{b.tagline}</span>
-                <span className="xp-splash-ms">{b.splashDurationMs} ms</span>
+                <strong className="xp-splash-name splash-name">{b.appName}</strong>
+                <span className="xp-splash-tag splash-tagline">{b.tagline}</span>
+                <span className="xp-splash-ms">
+                  {b.splashAnimation || "elegant"} · {b.splashIntensity || "balanced"} · {b.splashDurationMs} ms
+                </span>
+                {b.splashShowProgress !== false ? (
+                  <div className="splash-progress xp-splash-progress" aria-hidden>
+                    <span className="splash-progress-bar" />
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

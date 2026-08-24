@@ -1907,22 +1907,1414 @@ a {
 }
 
 .splash-screen {
+  position: relative;
+  isolation: isolate;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   background:
-    radial-gradient(900px 560px at 12% -8%, rgba(var(--accent-rgb), 0.16) 0%, transparent 60%),
-    radial-gradient(800px 520px at 108% 6%, rgba(var(--accent-rgb), 0.1) 0%, transparent 55%),
-    var(--bg-0);
+    radial-gradient(1100px 680px at 50% 38%, rgba(var(--accent-rgb), 0.14) 0%, transparent 58%),
+    radial-gradient(900px 560px at 8% -10%, rgba(var(--accent-rgb), 0.2) 0%, transparent 58%),
+    radial-gradient(860px 540px at 110% 8%, rgba(var(--accent-rgb), 0.12) 0%, transparent 55%),
+    linear-gradient(165deg, color-mix(in srgb, var(--bg-0) 88%, #000) 0%, var(--bg-0) 48%, color-mix(in srgb, var(--bg-0) 92%, var(--accent)) 100%);
+  --splash-rise: 22px;
+  --splash-scale: 0.88;
+  --splash-ring-opacity: 0.55;
+  --splash-orb-opacity: 0.65;
+  --splash-speed: 1;
+  --splash-glow: 0.55;
 }
 
+.splash-screen.splash-preview {
+  min-height: 420px;
+  height: 100%;
+  border-radius: 14px;
+}
+
+.splash-intensity-subtle {
+  --splash-rise: 12px;
+  --splash-scale: 0.94;
+  --splash-ring-opacity: 0.32;
+  --splash-orb-opacity: 0.4;
+  --splash-speed: 1.12;
+  --splash-glow: 0.35;
+}
+
+.splash-intensity-balanced {
+  --splash-rise: 22px;
+  --splash-scale: 0.88;
+  --splash-ring-opacity: 0.55;
+  --splash-orb-opacity: 0.65;
+  --splash-speed: 1;
+  --splash-glow: 0.55;
+}
+
+.splash-intensity-bold {
+  --splash-rise: 34px;
+  --splash-scale: 0.78;
+  --splash-ring-opacity: 0.85;
+  --splash-orb-opacity: 0.9;
+  --splash-speed: 0.82;
+  --splash-glow: 0.85;
+}
+
+.splash-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.splash-vignette {
+  position: absolute;
+  inset: -8%;
+  background:
+    radial-gradient(circle at 50% 42%, transparent 18%, rgba(0, 0, 0, 0.42) 78%),
+    radial-gradient(circle at 50% 50%, rgba(var(--accent-rgb), 0.08), transparent 55%);
+  opacity: 0.9;
+}
+
+.splash-aurora {
+  position: absolute;
+  inset: -30% -10%;
+  background:
+    conic-gradient(
+      from 210deg at 50% 45%,
+      transparent 0deg,
+      rgba(var(--accent-rgb), 0.16) 55deg,
+      transparent 110deg,
+      rgba(var(--accent-rgb), 0.1) 190deg,
+      transparent 260deg,
+      rgba(255, 255, 255, 0.05) 320deg,
+      transparent 360deg
+    );
+  filter: blur(28px);
+  opacity: 0;
+  mix-blend-mode: screen;
+}
+
+.splash-beam {
+  position: absolute;
+  top: -20%;
+  left: -30%;
+  width: 45%;
+  height: 160%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.02) 38%,
+    rgba(var(--accent-rgb), 0.22) 50%,
+    rgba(255, 255, 255, 0.04) 58%,
+    transparent 100%
+  );
+  transform: translateX(-120%) skewX(-18deg);
+  opacity: 0;
+  filter: blur(1px);
+}
+
+.splash-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 28%;
+  top: -30%;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(var(--accent-rgb), 0.07),
+    transparent
+  );
+  opacity: 0;
+}
+
+.splash-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(34px);
+  opacity: var(--splash-orb-opacity);
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.55) 0%, transparent 70%);
+  will-change: transform, opacity;
+}
+
+.splash-orb-a {
+  width: min(48vw, 380px);
+  height: min(48vw, 380px);
+  top: -12%;
+  left: -10%;
+}
+
+.splash-orb-b {
+  width: min(54vw, 440px);
+  height: min(54vw, 440px);
+  right: -14%;
+  bottom: -4%;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.32) 0%, transparent 72%);
+}
+
+.splash-orb-c {
+  width: min(32vw, 260px);
+  height: min(32vw, 260px);
+  left: 40%;
+  top: 56%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+}
+
+.splash-grid {
+  position: absolute;
+  inset: -25%;
+  opacity: 0.09;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at 50% 42%, #000 12%, transparent 70%);
+  transform: perspective(900px) rotateX(58deg) scale(1.35);
+  transform-origin: 50% 30%;
+}
+
+.splash-streak {
+  position: absolute;
+  height: 2px;
+  width: 18%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.95), transparent);
+  box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.55);
+  opacity: 0;
+  filter: blur(0.2px);
+}
+
+.splash-streak-1 { top: 24%; left: 8%; width: 22%; }
+.splash-streak-2 { top: 46%; right: 6%; width: 26%; transform: scaleX(-1); }
+.splash-streak-3 { top: 68%; left: 18%; width: 16%; }
+
+.splash-spark {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(var(--accent-rgb), 0.95);
+  box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.7);
+  opacity: 0;
+}
+
+.splash-spark-1 { left: 16%; top: 74%; }
+.splash-spark-2 { left: 26%; top: 62%; }
+.splash-spark-3 { left: 68%; top: 70%; }
+.splash-spark-4 { left: 78%; top: 56%; }
+.splash-spark-5 { left: 50%; top: 80%; }
+.splash-spark-6 { left: 38%; top: 28%; }
+.splash-spark-7 { left: 62%; top: 22%; }
+.splash-spark-8 { left: 12%; top: 40%; }
+
 .splash-mark {
+  position: relative;
+  z-index: 1;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 22px;
+}
+
+.splash-logo-stage {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  display: grid;
+  place-items: center;
+}
+
+.splash-halo {
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), calc(var(--splash-glow) * 0.55)) 0%, transparent 68%);
+  opacity: 0;
+  filter: blur(8px);
+}
+
+.splash-burst {
+  position: absolute;
+  inset: -8%;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      rgba(var(--accent-rgb), 0.35) 12deg,
+      transparent 28deg,
+      transparent 90deg,
+      rgba(255, 255, 255, 0.18) 102deg,
+      transparent 120deg,
+      transparent 180deg,
+      rgba(var(--accent-rgb), 0.28) 196deg,
+      transparent 220deg,
+      transparent 270deg,
+      rgba(255, 255, 255, 0.12) 286deg,
+      transparent 310deg
+    );
+  opacity: 0;
+  mix-blend-mode: screen;
+  filter: blur(1px);
+}
+
+.splash-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(var(--accent-rgb), var(--splash-ring-opacity));
+  opacity: 0;
+  box-shadow: 0 0 24px rgba(var(--accent-rgb), 0.12);
+}
+
+.splash-ring-mid {
+  inset: 10px;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, calc(var(--splash-ring-opacity) * 0.35));
+  border-top-color: rgba(var(--accent-rgb), calc(var(--splash-ring-opacity) * 0.95));
+  border-bottom-color: transparent;
+}
+
+.splash-ring-inner {
+  inset: 22px;
+  border-style: dashed;
+  border-color: rgba(var(--accent-rgb), calc(var(--splash-ring-opacity) * 0.7));
+}
+
+.splash-tick {
+  position: absolute;
+  width: 2px;
+  height: 12px;
+  border-radius: 2px;
+  background: rgba(var(--accent-rgb), 0.9);
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.55);
+  opacity: 0;
+}
+
+.splash-tick-n { top: 2px; left: calc(50% - 1px); }
+.splash-tick-s { bottom: 2px; left: calc(50% - 1px); }
+.splash-tick-e { right: 2px; top: calc(50% - 6px); transform: rotate(90deg); }
+.splash-tick-w { left: 2px; top: calc(50% - 6px); transform: rotate(90deg); }
+
+.splash-logo-core {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  border-radius: 28px;
+}
+
+.splash-logo-core .platform-brand-logo-frame {
+  position: relative;
+  z-index: 1;
+  background: color-mix(in srgb, var(--bg-1) 88%, #fff 12%);
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.28),
+    0 16px 48px rgba(0, 0, 0, 0.4),
+    0 0 36px rgba(var(--accent-rgb), calc(var(--splash-glow) * 0.28));
+}
+
+.splash-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 8px;
+  max-width: min(92vw, 440px);
+}
+
+.splash-name {
+  font-size: clamp(22px, 4.6vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  line-height: 1.15;
+  text-shadow: 0 0 40px rgba(var(--accent-rgb), calc(var(--splash-glow) * 0.25));
+}
+
+.splash-underline {
+  display: block;
+  width: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.55);
+  opacity: 0.95;
+}
+
+.splash-tagline {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.splash-progress {
+  position: absolute;
+  left: 50%;
+  bottom: max(28px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(240px, 56vw);
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  z-index: 2;
+}
+
+.splash-progress-glow {
+  position: absolute;
+  inset: -6px -10%;
+  background: radial-gradient(ellipse at center, rgba(var(--accent-rgb), 0.35), transparent 70%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.splash-progress-bar {
+  position: relative;
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.25), var(--accent) 55%, #fff);
+  box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.65);
+}
+
+/* —— JustXSystems nexus: any systems ? integrate ? X multiply ? inspire —— */
+.splash-nexus {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+}
+
+.splash-anim-nexus .splash-nexus {
+  display: block;
+}
+
+.splash-nexus-links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.splash-link {
+  fill: none;
+  stroke: rgba(var(--accent-rgb), 0.55);
+  stroke-width: 0.35;
+  stroke-linecap: round;
+  stroke-dasharray: 80;
+  stroke-dashoffset: 80;
+  opacity: 0;
+  filter: drop-shadow(0 0 2px rgba(var(--accent-rgb), 0.45));
+}
+
+.splash-node {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow:
+    0 0 0 2px rgba(var(--accent-rgb), 0.2),
+    0 0 16px rgba(var(--accent-rgb), 0.75);
+  opacity: 0;
+  transform: scale(0.3);
+}
+
+.splash-node-1 { left: 14%; top: 20%; }
+.splash-node-2 { left: 86%; top: 18%; }
+.splash-node-3 { left: 10%; top: 58%; }
+.splash-node-4 { left: 90%; top: 62%; }
+.splash-node-5 { left: 28%; top: 86%; }
+.splash-node-6 { left: 74%; top: 84%; }
+.splash-node-7 { left: 48%; top: 8%; }
+.splash-node-8 { left: 62%; top: 40%; }
+
+.splash-xbeam {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 140%;
+  height: 2px;
+  margin-left: -70%;
+  margin-top: -1px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(var(--accent-rgb), 0.15) 18%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(var(--accent-rgb), 0.15) 82%,
+    transparent 100%
+  );
+  box-shadow: 0 0 22px rgba(var(--accent-rgb), 0.55);
+  opacity: 0;
+  transform-origin: center;
+}
+
+.splash-xbeam-a { transform: rotate(32deg) scaleX(0.2); }
+.splash-xbeam-b { transform: rotate(-32deg) scaleX(0.2); }
+
+.splash-exp {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(var(--accent-rgb), 0.55);
+  opacity: 0;
+  box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.25);
+}
+
+.splash-story {
+  display: none;
+  margin-top: 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text) 55%, var(--accent));
+  font-weight: 600;
+  opacity: 0;
+}
+
+.splash-anim-nexus .splash-story {
+  display: block;
+}
+
+/* —— Animation presets —— */
+.splash-anim-none .splash-ring,
+.splash-anim-none .splash-spark,
+.splash-anim-none .splash-streak,
+.splash-anim-none .splash-beam,
+.splash-anim-none .splash-scan,
+.splash-anim-none .splash-aurora,
+.splash-anim-none .splash-burst,
+.splash-anim-none .splash-halo,
+.splash-anim-none .splash-tick,
+.splash-anim-none .splash-underline,
+.splash-anim-none .splash-story {
+  display: none;
+}
+
+.splash-anim-elegant .splash-logo-core {
+  animation: splash-rise-in calc(760ms * var(--splash-speed)) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.splash-anim-elegant .splash-halo {
+  animation: splash-halo-breathe calc(2.8s * var(--splash-speed)) ease-in-out 200ms infinite;
+}
+
+.splash-anim-elegant .splash-ring-outer {
+  animation: splash-ring-bloom calc(1100ms * var(--splash-speed)) ease-out both;
+}
+
+.splash-anim-elegant .splash-ring-mid {
+  animation: splash-orbit-spin calc(14s * var(--splash-speed)) linear 200ms infinite;
+  opacity: 0.55;
+}
+
+.splash-anim-elegant .splash-ring-inner {
+  animation: splash-ring-bloom calc(1100ms * var(--splash-speed)) ease-out 120ms both;
+}
+
+.splash-anim-elegant .splash-name {
+  animation: splash-rise-in calc(820ms * var(--splash-speed)) cubic-bezier(0.16, 1, 0.3, 1) 140ms both;
+}
+
+.splash-anim-elegant .splash-underline {
+  animation: splash-underline-draw calc(700ms * var(--splash-speed)) ease-out 320ms both;
+}
+
+.splash-anim-elegant .splash-tagline {
+  animation: splash-rise-in calc(820ms * var(--splash-speed)) cubic-bezier(0.16, 1, 0.3, 1) 260ms both;
+}
+
+.splash-anim-elegant .splash-aurora {
+  animation: splash-aurora-spin calc(18s * var(--splash-speed)) linear infinite;
+  opacity: 0.7;
+}
+
+.splash-anim-elegant .splash-orb-a {
+  animation: splash-orb-drift calc(6.5s * var(--splash-speed)) ease-in-out infinite alternate;
+}
+
+.splash-anim-elegant .splash-orb-b {
+  animation: splash-orb-drift-alt calc(8.5s * var(--splash-speed)) ease-in-out infinite alternate;
+}
+
+.splash-anim-elegant .splash-grid {
+  animation: splash-grid-drift calc(16s * var(--splash-speed)) linear infinite;
+}
+
+.splash-anim-elegant .splash-progress-bar {
+  animation: splash-progress-fill var(--splash-ms, 2200ms) linear forwards;
+}
+
+.splash-anim-orbit .splash-logo-core {
+  animation: splash-pop-in calc(680ms * var(--splash-speed)) cubic-bezier(0.34, 1.45, 0.64, 1) both;
+}
+
+.splash-anim-orbit .splash-halo {
+  animation: splash-halo-breathe calc(2.2s * var(--splash-speed)) ease-in-out infinite;
+}
+
+.splash-anim-orbit .splash-burst {
+  animation: splash-burst-spin calc(9s * var(--splash-speed)) linear infinite;
+  opacity: 0.55;
+}
+
+.splash-anim-orbit .splash-ring-outer {
+  opacity: 1;
+  animation: splash-orbit-spin calc(8s * var(--splash-speed)) linear infinite;
+}
+
+.splash-anim-orbit .splash-ring-mid {
+  opacity: 0.85;
+  animation: splash-orbit-spin-rev calc(5.5s * var(--splash-speed)) linear infinite;
+}
+
+.splash-anim-orbit .splash-ring-inner {
+  opacity: 1;
+  animation: splash-orbit-spin calc(11s * var(--splash-speed)) linear infinite;
+}
+
+.splash-anim-orbit .splash-tick {
+  opacity: 1;
+  animation: splash-tick-pulse calc(1.6s * var(--splash-speed)) ease-in-out infinite;
+}
+
+.splash-anim-orbit .splash-name,
+.splash-anim-orbit .splash-tagline {
+  animation: splash-fade-up calc(720ms * var(--splash-speed)) ease-out both;
+}
+
+.splash-anim-orbit .splash-tagline { animation-delay: 100ms; }
+
+.splash-anim-orbit .splash-underline {
+  animation: splash-underline-draw calc(650ms * var(--splash-speed)) ease-out 220ms both;
+}
+
+.splash-anim-orbit .splash-orb-a,
+.splash-anim-orbit .splash-orb-b {
+  animation: splash-orb-pulse calc(3.8s * var(--splash-speed)) ease-in-out infinite;
+}
+
+.splash-anim-orbit .splash-scan {
+  animation: splash-scan-sweep calc(2.8s * var(--splash-speed)) ease-in-out infinite;
+  opacity: 1;
+}
+
+.splash-anim-orbit .splash-progress-bar {
+  animation: splash-progress-fill var(--splash-ms, 2200ms) linear forwards;
+}
+
+.splash-anim-spark .splash-logo-core {
+  animation: splash-pop-in calc(560ms * var(--splash-speed)) cubic-bezier(0.34, 1.5, 0.64, 1) both;
+}
+
+.splash-anim-spark .splash-halo {
+  animation: splash-halo-flash calc(900ms * var(--splash-speed)) ease-out both;
+}
+
+.splash-anim-spark .splash-burst {
+  animation: splash-burst-pop calc(900ms * var(--splash-speed)) ease-out both;
+}
+
+.splash-anim-spark .splash-ring-outer {
+  animation: splash-ring-bloom calc(900ms * var(--splash-speed)) ease-out both;
+}
+
+.splash-anim-spark .splash-ring-mid {
+  animation: splash-orbit-spin calc(10s * var(--splash-speed)) linear 150ms infinite;
+  opacity: 0.7;
+}
+
+.splash-anim-spark .splash-ring-inner {
+  animation: splash-ring-bloom calc(900ms * var(--splash-speed)) ease-out 80ms both;
+}
+
+.splash-anim-spark .splash-name {
+  animation: splash-shimmer-in calc(900ms * var(--splash-speed)) ease-out 80ms both;
+}
+
+.splash-anim-spark .splash-underline {
+  animation: splash-underline-draw calc(600ms * var(--splash-speed)) ease-out 260ms both;
+}
+
+.splash-anim-spark .splash-tagline {
+  animation: splash-rise-in calc(700ms * var(--splash-speed)) ease-out 180ms both;
+}
+
+.splash-anim-spark .splash-spark {
+  animation: splash-spark-fly calc(1500ms * var(--splash-speed)) ease-out both;
+}
+
+.splash-anim-spark .splash-spark-1 { animation-delay: 140ms; }
+.splash-anim-spark .splash-spark-2 { animation-delay: 220ms; }
+.splash-anim-spark .splash-spark-3 { animation-delay: 180ms; }
+.splash-anim-spark .splash-spark-4 { animation-delay: 280ms; }
+.splash-anim-spark .splash-spark-5 { animation-delay: 240ms; }
+.splash-anim-spark .splash-spark-6 { animation-delay: 200ms; }
+.splash-anim-spark .splash-spark-7 { animation-delay: 300ms; }
+.splash-anim-spark .splash-spark-8 { animation-delay: 160ms; }
+
+.splash-anim-spark .splash-streak {
+  animation: splash-streak-slash calc(900ms * var(--splash-speed)) cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.splash-anim-spark .splash-streak-1 { animation-delay: 80ms; }
+.splash-anim-spark .splash-streak-2 { animation-delay: 140ms; }
+.splash-anim-spark .splash-streak-3 { animation-delay: 200ms; }
+
+.splash-anim-spark .splash-grid {
+  animation: splash-grid-drift calc(10s * var(--splash-speed)) linear infinite;
+}
+
+.splash-anim-spark .splash-progress-bar {
+  animation: splash-progress-fill var(--splash-ms, 2200ms) linear forwards;
+}
+
+/* Dash cinema — most dynamic default */
+.splash-anim-dash .splash-beam {
+  animation: splash-beam-slash calc(980ms * var(--splash-speed)) cubic-bezier(0.2, 0.85, 0.2, 1) both;
+}
+
+.splash-anim-dash .splash-aurora {
+  animation: splash-aurora-spin calc(12s * var(--splash-speed)) linear infinite;
+  opacity: 0.85;
+}
+
+.splash-anim-dash .splash-scan {
+  animation: splash-scan-sweep calc(2.2s * var(--splash-speed)) ease-in-out 300ms infinite;
+  opacity: 1;
+}
+
+.splash-anim-dash .splash-logo-core {
+  animation:
+    splash-dash-in calc(780ms * var(--splash-speed)) cubic-bezier(0.16, 1, 0.3, 1) 80ms both,
+    splash-logo-float calc(3.4s * var(--splash-speed)) ease-in-out 900ms infinite;
+}
+
+.splash-anim-dash .splash-halo {
+  animation:
+    splash-halo-flash calc(900ms * var(--splash-speed)) ease-out both,
+    splash-halo-breathe calc(2.4s * var(--splash-speed)) ease-in-out 700ms infinite;
+}
+
+.splash-anim-dash .splash-burst {
+  animation:
+    splash-burst-pop calc(950ms * var(--splash-speed)) ease-out both,
+    splash-burst-spin calc(8s * var(--splash-speed)) linear 500ms infinite;
+}
+
+.splash-anim-dash .splash-ring-outer {
+  animation:
+    splash-ring-bloom calc(950ms * var(--splash-speed)) ease-out both,
+    splash-orbit-spin calc(9s * var(--splash-speed)) linear 400ms infinite;
+}
+
+.splash-anim-dash .splash-ring-mid {
+  opacity: 0.9;
+  animation: splash-orbit-spin-rev calc(5s * var(--splash-speed)) linear 200ms infinite;
+}
+
+.splash-anim-dash .splash-ring-inner {
+  animation:
+    splash-ring-bloom calc(950ms * var(--splash-speed)) ease-out 90ms both,
+    splash-orbit-spin calc(12s * var(--splash-speed)) linear 350ms infinite;
+}
+
+.splash-anim-dash .splash-tick {
+  animation: splash-tick-in calc(700ms * var(--splash-speed)) ease-out 180ms both;
+}
+
+.splash-anim-dash .splash-tick-e { animation-delay: 240ms; }
+.splash-anim-dash .splash-tick-s { animation-delay: 300ms; }
+.splash-anim-dash .splash-tick-w { animation-delay: 360ms; }
+
+.splash-anim-dash .splash-name {
+  animation: splash-shimmer-in calc(860ms * var(--splash-speed)) ease-out 160ms both;
+}
+
+.splash-anim-dash .splash-underline {
+  animation: splash-underline-draw calc(620ms * var(--splash-speed)) cubic-bezier(0.2, 0.9, 0.2, 1) 360ms both;
+}
+
+.splash-anim-dash .splash-tagline {
+  animation: splash-fade-up calc(700ms * var(--splash-speed)) ease-out 280ms both;
+}
+
+.splash-anim-dash .splash-streak {
+  animation: splash-streak-slash calc(860ms * var(--splash-speed)) cubic-bezier(0.15, 0.85, 0.2, 1) both;
+}
+
+.splash-anim-dash .splash-streak-1 { animation-delay: 40ms; }
+.splash-anim-dash .splash-streak-2 { animation-delay: 110ms; }
+.splash-anim-dash .splash-streak-3 { animation-delay: 180ms; }
+
+.splash-anim-dash .splash-spark {
+  animation: splash-spark-fly calc(1600ms * var(--splash-speed)) ease-out both;
+}
+
+.splash-anim-dash .splash-spark-1 { animation-delay: 220ms; }
+.splash-anim-dash .splash-spark-2 { animation-delay: 300ms; }
+.splash-anim-dash .splash-spark-3 { animation-delay: 260ms; }
+.splash-anim-dash .splash-spark-4 { animation-delay: 340ms; }
+.splash-anim-dash .splash-spark-5 { animation-delay: 280ms; }
+.splash-anim-dash .splash-spark-6 { animation-delay: 200ms; }
+.splash-anim-dash .splash-spark-7 { animation-delay: 360ms; }
+.splash-anim-dash .splash-spark-8 { animation-delay: 240ms; }
+
+.splash-anim-dash .splash-orb-a {
+  animation: splash-orb-drift calc(5.5s * var(--splash-speed)) ease-in-out infinite alternate;
+}
+
+.splash-anim-dash .splash-orb-b {
+  animation: splash-orb-drift-alt calc(7s * var(--splash-speed)) ease-in-out infinite alternate;
+}
+
+.splash-anim-dash .splash-orb-c {
+  animation: splash-orb-pulse calc(4s * var(--splash-speed)) ease-in-out infinite;
+}
+
+.splash-anim-dash .splash-grid {
+  animation: splash-grid-rush calc(9s * var(--splash-speed)) linear infinite;
+}
+
+.splash-anim-dash .splash-progress-bar {
+  animation: splash-progress-fill var(--splash-ms, 2200ms) linear forwards;
+}
+
+/* JustXSystems nexus — systems connect, X multiplies, inspiration expands */
+.splash-anim-nexus .splash-beam,
+.splash-anim-nexus .splash-streak {
+  display: none;
+}
+
+.splash-anim-nexus .splash-grid {
+  animation: splash-grid-rush calc(11s * var(--splash-speed)) linear infinite;
+  opacity: 0.11;
+}
+
+.splash-anim-nexus .splash-aurora {
+  animation: splash-aurora-spin calc(16s * var(--splash-speed)) linear infinite;
+  opacity: 0.75;
+}
+
+.splash-anim-nexus .splash-orb-a {
+  animation: splash-orb-drift calc(6s * var(--splash-speed)) ease-in-out infinite alternate;
+}
+
+.splash-anim-nexus .splash-orb-b {
+  animation: splash-orb-drift-alt calc(7.5s * var(--splash-speed)) ease-in-out infinite alternate;
+}
+
+.splash-anim-nexus .splash-link {
+  animation: splash-link-draw calc(780ms * var(--splash-speed)) ease-out both;
+}
+
+.splash-anim-nexus .splash-link-1 { animation-delay: 220ms; }
+.splash-anim-nexus .splash-link-2 { animation-delay: 260ms; }
+.splash-anim-nexus .splash-link-3 { animation-delay: 300ms; }
+.splash-anim-nexus .splash-link-4 { animation-delay: 340ms; }
+.splash-anim-nexus .splash-link-5 { animation-delay: 380ms; }
+.splash-anim-nexus .splash-link-6 { animation-delay: 420ms; }
+.splash-anim-nexus .splash-link-7 { animation-delay: 280ms; }
+.splash-anim-nexus .splash-link-8 { animation-delay: 360ms; }
+
+.splash-anim-nexus .splash-node-1,
+.splash-anim-nexus .splash-node-2,
+.splash-anim-nexus .splash-node-3,
+.splash-anim-nexus .splash-node-4,
+.splash-anim-nexus .splash-node-5,
+.splash-anim-nexus .splash-node-6,
+.splash-anim-nexus .splash-node-7,
+.splash-anim-nexus .splash-node-8 {
+  animation:
+    splash-node-awaken calc(700ms * var(--splash-speed)) cubic-bezier(0.2, 0.9, 0.2, 1) both,
+    splash-node-converge calc(900ms * var(--splash-speed)) cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.splash-anim-nexus .splash-node-1 {
+  animation-delay: 40ms, 720ms;
+  --nx: 36%;
+  --ny: 22%;
+}
+.splash-anim-nexus .splash-node-2 {
+  animation-delay: 90ms, 740ms;
+  --nx: -36%;
+  --ny: 24%;
+}
+.splash-anim-nexus .splash-node-3 {
+  animation-delay: 130ms, 760ms;
+  --nx: 40%;
+  --ny: -6%;
+}
+.splash-anim-nexus .splash-node-4 {
+  animation-delay: 170ms, 780ms;
+  --nx: -40%;
+  --ny: -8%;
+}
+.splash-anim-nexus .splash-node-5 {
+  animation-delay: 210ms, 800ms;
+  --nx: 22%;
+  --ny: -34%;
+}
+.splash-anim-nexus .splash-node-6 {
+  animation-delay: 250ms, 820ms;
+  --nx: -24%;
+  --ny: -32%;
+}
+.splash-anim-nexus .splash-node-7 {
+  animation-delay: 70ms, 750ms;
+  --nx: 2%;
+  --ny: 34%;
+}
+.splash-anim-nexus .splash-node-8 {
+  animation-delay: 190ms, 790ms;
+  --nx: -12%;
+  --ny: 8%;
+}
+
+.splash-anim-nexus .splash-xbeam-a {
+  animation: splash-x-slash-a calc(700ms * var(--splash-speed)) cubic-bezier(0.15, 0.85, 0.2, 1) 880ms both;
+}
+
+.splash-anim-nexus .splash-xbeam-b {
+  animation: splash-x-slash-b calc(700ms * var(--splash-speed)) cubic-bezier(0.15, 0.85, 0.2, 1) 940ms both;
+}
+
+.splash-anim-nexus .splash-exp-1 {
+  animation: splash-exp-ring calc(1200ms * var(--splash-speed)) ease-out 980ms both;
+}
+
+.splash-anim-nexus .splash-exp-2 {
+  animation: splash-exp-ring calc(1400ms * var(--splash-speed)) ease-out 1080ms both;
+}
+
+.splash-anim-nexus .splash-exp-3 {
+  animation: splash-exp-ring calc(1600ms * var(--splash-speed)) ease-out 1180ms both;
+}
+
+.splash-anim-nexus .splash-logo-core {
+  animation:
+    splash-nexus-arrive calc(820ms * var(--splash-speed)) cubic-bezier(0.16, 1, 0.3, 1) 860ms both,
+    splash-logo-float calc(3.6s * var(--splash-speed)) ease-in-out 1700ms infinite;
+}
+
+.splash-anim-nexus .splash-halo {
+  animation:
+    splash-halo-flash calc(900ms * var(--splash-speed)) ease-out 900ms both,
+    splash-halo-breathe calc(2.6s * var(--splash-speed)) ease-in-out 1600ms infinite;
+}
+
+.splash-anim-nexus .splash-burst {
+  animation:
+    splash-burst-pop calc(900ms * var(--splash-speed)) ease-out 920ms both,
+    splash-burst-spin calc(10s * var(--splash-speed)) linear 1400ms infinite;
+}
+
+.splash-anim-nexus .splash-ring-outer {
+  animation:
+    splash-ring-bloom calc(900ms * var(--splash-speed)) ease-out 940ms both,
+    splash-orbit-spin calc(11s * var(--splash-speed)) linear 1300ms infinite;
+}
+
+.splash-anim-nexus .splash-ring-mid {
+  opacity: 0.85;
+  animation: splash-orbit-spin-rev calc(6s * var(--splash-speed)) linear 1100ms infinite;
+}
+
+.splash-anim-nexus .splash-ring-inner {
+  animation:
+    splash-ring-bloom calc(900ms * var(--splash-speed)) ease-out 1000ms both,
+    splash-orbit-spin calc(14s * var(--splash-speed)) linear 1300ms infinite;
+}
+
+.splash-anim-nexus .splash-tick {
+  animation: splash-tick-in calc(600ms * var(--splash-speed)) ease-out 1100ms both;
+}
+
+.splash-anim-nexus .splash-tick-e { animation-delay: 1160ms; }
+.splash-anim-nexus .splash-tick-s { animation-delay: 1220ms; }
+.splash-anim-nexus .splash-tick-w { animation-delay: 1280ms; }
+
+.splash-anim-nexus .splash-name {
+  animation: splash-shimmer-in calc(900ms * var(--splash-speed)) ease-out 1180ms both;
+}
+
+.splash-anim-nexus .splash-underline {
+  animation: splash-underline-draw calc(650ms * var(--splash-speed)) cubic-bezier(0.2, 0.9, 0.2, 1) 1380ms both;
+}
+
+.splash-anim-nexus .splash-tagline {
+  animation: splash-fade-up calc(700ms * var(--splash-speed)) ease-out 1320ms both;
+}
+
+.splash-anim-nexus .splash-story {
+  animation: splash-story-in calc(900ms * var(--splash-speed)) ease-out 1480ms both;
+}
+
+.splash-anim-nexus .splash-spark {
+  animation: splash-spark-fly calc(1500ms * var(--splash-speed)) ease-out both;
+}
+
+.splash-anim-nexus .splash-spark-1 { animation-delay: 1200ms; }
+.splash-anim-nexus .splash-spark-2 { animation-delay: 1280ms; }
+.splash-anim-nexus .splash-spark-3 { animation-delay: 1240ms; }
+.splash-anim-nexus .splash-spark-4 { animation-delay: 1320ms; }
+.splash-anim-nexus .splash-spark-5 { animation-delay: 1360ms; }
+.splash-anim-nexus .splash-spark-6 { animation-delay: 1220ms; }
+.splash-anim-nexus .splash-spark-7 { animation-delay: 1400ms; }
+.splash-anim-nexus .splash-spark-8 { animation-delay: 1300ms; }
+
+.splash-anim-nexus .splash-progress-bar {
+  animation: splash-progress-fill var(--splash-ms, 2600ms) linear forwards;
+}
+
+.splash-anim-none .splash-progress-bar {
+  animation: splash-progress-fill var(--splash-ms, 2200ms) linear forwards;
+}
+
+@keyframes splash-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--splash-rise)) scale(var(--splash-scale));
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes splash-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes splash-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.62);
+    filter: blur(8px);
+  }
+  68% {
+    transform: scale(1.06);
+    filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes splash-dash-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(-28px, 18px, 0) scale(0.72) rotate(-4deg);
+    filter: blur(10px);
+  }
+  55% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  78% {
+    transform: translate3d(4px, -2px, 0) scale(1.05) rotate(1deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes splash-logo-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes splash-ring-bloom {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  40% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.42;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes splash-orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes splash-orbit-spin-rev {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes splash-orb-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(32px, 22px, 0) scale(1.12); }
+}
+
+@keyframes splash-orb-drift-alt {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-28px, -18px, 0) scale(1.1); }
+}
+
+@keyframes splash-orb-pulse {
+  0%, 100% { opacity: calc(var(--splash-orb-opacity) * 0.65); transform: scale(1); }
+  50% { opacity: var(--splash-orb-opacity); transform: scale(1.12); }
+}
+
+@keyframes splash-progress-fill {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+@keyframes splash-spark-fly {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0) scale(0.3);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--sx, 8px), -110px, 0) scale(1.15);
+  }
+}
+
+.splash-spark-1 { --sx: -18px; }
+.splash-spark-2 { --sx: 12px; }
+.splash-spark-3 { --sx: 22px; }
+.splash-spark-4 { --sx: -10px; }
+.splash-spark-5 { --sx: 4px; }
+.splash-spark-6 { --sx: -24px; }
+.splash-spark-7 { --sx: 16px; }
+.splash-spark-8 { --sx: 28px; }
+
+@keyframes splash-shimmer-in {
+  from {
+    opacity: 0;
+    letter-spacing: 0.18em;
+    filter: blur(8px);
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    letter-spacing: -0.03em;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes splash-grid-drift {
+  from { transform: perspective(900px) rotateX(58deg) scale(1.35) translate3d(0, 0, 0); }
+  to { transform: perspective(900px) rotateX(58deg) scale(1.35) translate3d(28px, 20px, 0); }
+}
+
+@keyframes splash-grid-rush {
+  from { transform: perspective(900px) rotateX(58deg) scale(1.35) translate3d(0, 40px, 0); }
+  to { transform: perspective(900px) rotateX(58deg) scale(1.35) translate3d(0, -40px, 0); }
+}
+
+@keyframes splash-beam-slash {
+  0% {
+    opacity: 0;
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(240%) skewX(-18deg);
+  }
+}
+
+@keyframes splash-scan-sweep {
+  0% { top: -30%; opacity: 0; }
+  15% { opacity: 0.9; }
+  85% { opacity: 0.55; }
+  100% { top: 105%; opacity: 0; }
+}
+
+@keyframes splash-aurora-spin {
+  from { transform: rotate(0deg) scale(1.05); }
+  to { transform: rotate(360deg) scale(1.05); }
+}
+
+@keyframes splash-halo-flash {
+  0% { opacity: 0; transform: scale(0.4); }
+  35% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 0.55; transform: scale(1); }
+}
+
+@keyframes splash-halo-breathe {
+  0%, 100% { opacity: 0.4; transform: scale(0.96); }
+  50% { opacity: calc(0.45 + var(--splash-glow) * 0.4); transform: scale(1.08); }
+}
+
+@keyframes splash-burst-pop {
+  0% { opacity: 0; transform: scale(0.3) rotate(-20deg); }
+  40% { opacity: 0.85; }
+  100% { opacity: 0.35; transform: scale(1.05) rotate(0deg); }
+}
+
+@keyframes splash-burst-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes splash-underline-draw {
+  from { width: 0; opacity: 0; }
+  to { width: min(160px, 42vw); opacity: 1; }
+}
+
+@keyframes splash-streak-slash {
+  0% {
+    opacity: 0;
+    transform: translateX(-40px) scaleX(0.2);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(70px) scaleX(1.2);
+  }
+}
+
+@keyframes splash-tick-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes splash-tick-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@keyframes splash-node-awaken {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes splash-node-converge {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  70% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--nx, 0), var(--ny, 0)) scale(0.35);
+  }
+}
+
+@keyframes splash-link-draw {
+  0% {
+    opacity: 0;
+    stroke-dashoffset: 80;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.75;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes splash-x-slash-a {
+  0% {
+    opacity: 0;
+    transform: rotate(32deg) scaleX(0.15);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.35;
+    transform: rotate(32deg) scaleX(1);
+  }
+}
+
+@keyframes splash-x-slash-b {
+  0% {
+    opacity: 0;
+    transform: rotate(-32deg) scaleX(0.15);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.35;
+    transform: rotate(-32deg) scaleX(1);
+  }
+}
+
+@keyframes splash-exp-ring {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(18);
+  }
+}
+
+@keyframes splash-nexus-arrive {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+    filter: blur(10px);
+  }
+  55% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  78% {
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes splash-story-in {
+  from {
+    opacity: 0;
+    letter-spacing: 0.32em;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 0.9;
+    letter-spacing: 0.16em;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-screen .splash-logo-core,
+  .splash-screen .splash-name,
+  .splash-screen .splash-tagline,
+  .splash-screen .splash-underline,
+  .splash-screen .splash-story,
+  .splash-screen .splash-ring,
+  .splash-screen .splash-orb,
+  .splash-screen .splash-spark,
+  .splash-screen .splash-streak,
+  .splash-screen .splash-grid,
+  .splash-screen .splash-beam,
+  .splash-screen .splash-scan,
+  .splash-screen .splash-aurora,
+  .splash-screen .splash-halo,
+  .splash-screen .splash-burst,
+  .splash-screen .splash-tick,
+  .splash-screen .splash-node,
+  .splash-screen .splash-link,
+  .splash-screen .splash-xbeam,
+  .splash-screen .splash-exp,
+  .splash-screen .splash-progress-bar {
+    animation: none !important;
+  }
+
+  .splash-screen .splash-ring,
+  .splash-screen .splash-halo {
+    opacity: 0.35;
+  }
+
+  .splash-screen .splash-spark,
+  .splash-screen .splash-streak,
+  .splash-screen .splash-beam,
+  .splash-screen .splash-scan,
+  .splash-screen .splash-burst,
+  .splash-screen .splash-nexus {
+    display: none;
+  }
+
+  .splash-screen .splash-underline {
+    width: min(160px, 42vw);
+  }
+
+  .splash-screen .splash-story {
+    opacity: 0.85;
+  }
+
+  .splash-screen .splash-progress-bar {
+    width: 100%;
+  }
+}
+
+.preview-splash-stage {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.preview-splash-stage .splash-screen {
+  flex: 1;
+  min-height: 380px;
+}
+
+.preview-splash-replay {
+  align-self: center;
+}
+
+.field-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-check span {
+  margin: 0;
+}
+
+.field-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
 }
 
 .splash-mark .platform-brand {
@@ -5325,15 +6717,35 @@ html[data-scheme="light"] .field textarea {
 }
 
 .xp-splash {
+  position: relative;
+  isolation: isolate;
   align-items: center;
   justify-content: center;
   text-align: center;
+  overflow: hidden;
   background:
     radial-gradient(220px 160px at 20% 0%, rgba(var(--accent-rgb), 0.22) 0%, transparent 60%),
     var(--bg-0);
   border-radius: 16px;
   margin: 8px 0;
-  padding: 28px 12px;
+  padding: 28px 12px 36px;
+  --splash-rise: 12px;
+  --splash-scale: 0.92;
+  --splash-ring-opacity: 0.4;
+  --splash-orb-opacity: 0.5;
+  --splash-speed: 1;
+}
+
+.xp-splash .splash-atmosphere {
+  border-radius: inherit;
+}
+
+.xp-splash-progress {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  width: 110px;
 }
 
 .xp-splash-mark {
