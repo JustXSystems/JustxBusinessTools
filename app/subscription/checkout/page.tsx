@@ -94,7 +94,7 @@ export default function SubscriptionCheckoutPage() {
         </Link>
         <div className="tool-header-text">
           <div className="tool-header-title">Checkout</div>
-          <div className="tool-header-sub">Secure payment to JustX Systems · UPI is the default settlement method</div>
+          <div className="tool-header-sub">Secure payment to JustXSystems · UPI is the default settlement method</div>
         </div>
       </div>
 
@@ -134,7 +134,7 @@ export default function SubscriptionCheckoutPage() {
             </div>
             <div>
               <dt>Merchant</dt>
-              <dd>{quote?.upi?.payeeName || subscription?.upi?.payeeName || "JustX Systems LLP"}</dd>
+              <dd>{quote?.upi?.payeeName || subscription?.upi?.payeeName || "JustXSystems LLP"}</dd>
             </div>
           </dl>
           <Link href="/subscription" className="btn btn-ghost btn-sm">

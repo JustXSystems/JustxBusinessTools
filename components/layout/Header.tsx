@@ -3,18 +3,30 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { NavIcon } from "@/components/layout/NavIcon";
 import { navigationConfig } from "@/config/navigation.config";
 
 /** Mobile-only chrome. Desktop navigation lives in the left sidebar. */
 export function Header() {
+  const { logout } = useAuth();
+
   return (
     <header className="app-topbar app-topbar-mobile no-print">
       <div className="app-topbar-inner">
         <PlatformBrandMark href="/" size="sm" />
         <div className="topbar-spacer" />
         <BranchSwitcher />
+        <button
+          type="button"
+          className="topbar-logout-btn"
+          onClick={() => void logout()}
+          title="Log out"
+          aria-label="Log out"
+        >
+          <NavIcon id="logout" />
+        </button>
       </div>
     </header>
   );

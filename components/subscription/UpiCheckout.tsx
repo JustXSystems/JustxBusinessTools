@@ -125,7 +125,7 @@ export function UpiCheckout({
         <p className="muted">
           Amount {formatInr(pendingClaim.amountInr)}
           {pendingClaim.toolIds?.length ? ` · ${pendingClaim.toolIds.length} tool(s)` : ""}.
-          Licensed access starts after JustX approves this payment.
+          Licensed access starts after JustXSystems approves this payment.
         </p>
       </div>
     );
@@ -142,7 +142,7 @@ export function UpiCheckout({
 
       <ol className="billing-steps">
         <li>
-          <span>1</span> Pay {formatInr(amount)} to JustX
+          <span>1</span> Pay {formatInr(amount)} to JustXSystems
         </li>
         <li>
           <span>2</span> Enter UTR
@@ -177,7 +177,7 @@ export function UpiCheckout({
             </div>
             <div>
               <dt>Beneficiary</dt>
-              <dd>{upi?.payeeName || "JustX Systems LLP"}</dd>
+              <dd>{upi?.payeeName || "JustXSystems LLP"}</dd>
             </div>
             <div>
               <dt>UPI ID</dt>
@@ -196,7 +196,7 @@ export function UpiCheckout({
             {upi?.enabled && upi.intent ? (
               <canvas ref={canvasRef} width={200} height={200} aria-label="UPI QR code" />
             ) : (
-              <p className="muted">UPI is not configured. Contact JustX.</p>
+              <p className="muted">UPI is not configured. Contact JustXSystems.</p>
             )}
             {upi?.intent ? (
               <a className="btn btn-secondary btn-sm" href={upi.intent}>
@@ -209,7 +209,7 @@ export function UpiCheckout({
 
         <form className="billing-confirm" onSubmit={submit}>
           <h3>Confirm payment</h3>
-          <p className="muted">Use the same details as your UPI receipt. JustX matches UTR against the company account.</p>
+          <p className="muted">Use the same details as your UPI receipt. JustXSystems matches UTR against the company account.</p>
 
           <fieldset className="billing-fieldset">
             <legend>Payer</legend>
@@ -294,7 +294,7 @@ export function UpiCheckout({
             {busy ? "Submitting…" : "Submit payment confirmation"}
           </button>
           <p className="muted billing-legal">
-            Selected tools unlock after JustX verifies the credit. False UTR submissions may be rejected.
+            Selected tools unlock after JustXSystems verifies the credit. False UTR submissions may be rejected.
           </p>
 
           {gateways.length > 0 ? (

@@ -1,4 +1,11 @@
 import type { CategoryKey, CompanyProfileV1, EngagementKey } from "./types";
+import {
+  DEFAULT_SEND_SETTINGS,
+  fillSendTemplate,
+  normalizeSendSettings,
+} from "@/lib/types/business-profile";
+
+export { DEFAULT_SEND_SETTINGS, fillSendTemplate, normalizeSendSettings };
 
 export const CATEGORIES: Record<CategoryKey, { label: string; code: string }> = {
   solar: { label: "Solar", code: "SOL" },
@@ -224,9 +231,19 @@ export function mergeCompanyFromBusinessProfile(
   company: CompanyProfileV1,
   profile: BusinessProfileBrandSource | null | undefined,
 ): CompanyProfileV1 {
-  if (!profile) return { ...DEFAULT_COMPANY, ...company, logo: company.logo ?? null };
+  if (!profile) {
+    return {
+      ...DEFAULT_COMPANY,
+      ...company,
+      logo: company.logo ?? null,
+    };
+  }
 
-  const base = { ...DEFAULT_COMPANY, ...company, logo: company.logo ?? null };
+  const base = {
+    ...DEFAULT_COMPANY,
+    ...company,
+    logo: company.logo ?? null,
+  };
   const addressFromProfile = [profile.addressLine1, profile.addressLine2]
     .map((s) => (s ?? "").trim())
     .filter(Boolean)

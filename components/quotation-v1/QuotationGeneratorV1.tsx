@@ -10,13 +10,18 @@ import {
   CATEGORY_ENGAGEMENTS,
   computeTotals,
   DEFAULT_COMPANY,
+  DEFAULT_SEND_SETTINGS,
   engMeta,
+  fillSendTemplate,
   getMissingRequiredFields,
   INDIAN_STATES,
   mergeCompanyFromBusinessProfile,
   money,
   newQuotationDraft,
+  normalizeSendSettings,
   numToWordsIndian,
+  quotationPdfToBase64,
+  renderPageBreakMarkers,
   sanitizeNumStr,
   snapshotOf,
   templateItems,
@@ -28,10 +33,27 @@ import {
   type QuoteHistoryRow,
   type QuoteNotification,
 } from "@/lib/quotation-v1";
+import type { BusinessProfileSendSettings } from "@/lib/types/business-profile";
 import { QuoteSheet } from "./QuoteSheet";
 import "./quotation-v1.css";
 
 type Route = "new" | "list" | "notifications" | "history" | "company";
+type SendChannel = "menu" | "whatsapp" | "email" | "drive";
+
+function waDigits(raw: string) {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 10) return `91${digits}`;
+  return digits;
+}
+
+function userDisplayName(user: { name?: string | null; email?: string } | null | undefined) {
+  const name = (user?.name ?? "").trim();
+  if (name) return name;
+  const email = (user?.email ?? "").trim();
+  if (email.includes("@")) return email.split("@")[0] || "";
+  return email;
+}
 
 function previewQuoteNo(q: QuotationV1, company: CompanyProfileV1, counters: Record<string, number>) {
   if (q.quoteNo) return q.quoteNo;
@@ -49,6 +71,9 @@ export function QuotationGeneratorV1() {
   const { user } = useAuth();
   const [route, setRoute] = useState<Route>("new");
   const [company, setCompany] = useState<CompanyProfileV1>({ ...DEFAULT_COMPANY });
+  const [sendSettings, setSendSettings] = useState<BusinessProfileSendSettings>(() =>
+    normalizeSendSettings(null),
+  );
   const [current, setCurrent] = useState<QuotationV1>(() => newQuotationDraft());
   const [list, setList] = useState<QuotationV1[]>([]);
   const [history, setHistory] = useState<QuoteHistoryRow[]>([]);
@@ -58,8 +83,16 @@ export function QuotationGeneratorV1() {
   const [busy, setBusy] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  const [sendChannel, setSendChannel] = useState<SendChannel>("menu");
+  const [waSelected, setWaSelected] = useState<string[]>([]);
+  const [waExtra, setWaExtra] = useState("");
+  const [emailTo, setEmailTo] = useState("");
+  const [emailCc, setEmailCc] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
   const [approvalLink, setApprovalLink] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const preparedBySeeded = useRef(false);
 
   const totals = useMemo(() => computeTotals(current, company), [current, company]);
   const pendingApprovals = list.filter((q) => q.status === "sent").length;
@@ -79,7 +112,9 @@ export function QuotationGeneratorV1() {
       fetchProfile().catch(() => null),
     ]);
     const stored = c.company ? { ...DEFAULT_COMPANY, ...c.company, logo: c.company.logo ?? null } : { ...DEFAULT_COMPANY };
-    setCompany(mergeCompanyFromBusinessProfile(stored, profile));
+    const merged = mergeCompanyFromBusinessProfile(stored, profile);
+    setCompany(merged);
+    setSendSettings(normalizeSendSettings(profile?.sendSettings ?? null));
     setHistory(h.history ?? []);
     setNotifications(n.notifications ?? []);
     setList((q.quotations ?? []) as QuotationV1[]);
@@ -94,6 +129,16 @@ export function QuotationGeneratorV1() {
       }
     })();
   }, [flash, reloadMeta, user?.businessProfileId]);
+
+  useEffect(() => {
+    const name = userDisplayName(user);
+    if (!name || preparedBySeeded.current) return;
+    preparedBySeeded.current = true;
+    setCurrent((q) => {
+      if (q.quoteNo || q.preparedBy.trim()) return q;
+      return { ...q, preparedBy: name };
+    });
+  }, [user]);
 
   function patch(updater: (q: QuotationV1) => QuotationV1) {
     setCurrent((q) => updater({ ...q }));
@@ -162,46 +207,57 @@ export function QuotationGeneratorV1() {
     }
   }
 
+  useEffect(() => {
+    if (route !== "new") return;
+    const node = document.getElementById("quote-sheet");
+    if (!node) return;
+    const timer = window.setTimeout(() => {
+      renderPageBreakMarkers(node, current);
+    }, 60);
+    return () => {
+      window.clearTimeout(timer);
+      node.querySelectorAll(".page-break-marker").forEach((m) => m.remove());
+    };
+  }, [route, current, company, totals]);
+
+  async function buildPdfPayload(q: QuotationV1): Promise<{ filename: string; pdfBase64: string } | null> {
+    if (!validateSaved(q)) return null;
+    await new Promise((r) => setTimeout(r, 40));
+    const node = document.getElementById("quote-sheet");
+    if (!node) throw new Error("Preview not ready");
+    const fit = node.closest(".qgv1-preview-fit");
+    fit?.classList.add("is-exporting");
+    try {
+      // Refresh markers after forced export width so geometry matches the PDF.
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
+      renderPageBreakMarkers(node, q);
+      return await quotationPdfToBase64(q);
+    } finally {
+      fit?.classList.remove("is-exporting");
+      // Restore preview markers at live layout width.
+      window.setTimeout(() => {
+        const live = document.getElementById("quote-sheet");
+        if (live) renderPageBreakMarkers(live, q);
+      }, 40);
+    }
+  }
+
   async function exportPdf(q: QuotationV1) {
-    if (!validateSaved(q)) return;
     setBusy(true);
     try {
-      await new Promise((r) => setTimeout(r, 40));
-      const node = document.getElementById("quote-sheet");
-      if (!node) throw new Error("Preview not ready");
-      const fit = node.closest(".qgv1-preview-fit");
-      fit?.classList.add("is-exporting");
-      try {
-        const html2canvas = (await import("html2canvas")).default;
-        const { jsPDF } = await import("jspdf");
-        const canvas = await html2canvas(node, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-          ignoreElements: (el) => el.classList?.contains("page-break-marker"),
-        });
-        const pdf = new jsPDF("p", "pt", "a4");
-        const pageW = pdf.internal.pageSize.getWidth();
-        const pageH = pdf.internal.pageSize.getHeight();
-        const imgW = pageW;
-        const imgH = (canvas.height * imgW) / canvas.width;
-        let heightLeft = imgH;
-        let position = 0;
-        const img = canvas.toDataURL("image/png");
-        pdf.addImage(img, "PNG", 0, position, imgW, imgH);
-        heightLeft -= pageH;
-        while (heightLeft > 0) {
-          position -= pageH;
-          pdf.addPage();
-          pdf.addImage(img, "PNG", 0, position, imgW, imgH);
-          heightLeft -= pageH;
-        }
-        const filename = `${(q.quoteNo || "Quotation").replace(/[^\w.-]+/g, "_")}.pdf`;
-        pdf.save(filename);
-        flash("PDF downloaded — check your Downloads folder.");
-      } finally {
-        fit?.classList.remove("is-exporting");
-      }
+      const payload = await buildPdfPayload(q);
+      if (!payload) return;
+      const binary = atob(payload.pdfBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = payload.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      flash("PDF downloaded — check your Downloads folder.");
     } catch (e) {
       flash(e instanceof Error ? e.message : "PDF export failed", "err");
     } finally {
@@ -222,23 +278,47 @@ export function QuotationGeneratorV1() {
     return true;
   }
 
-  function buildMessageText(q: QuotationV1) {
+  function messageVars(q: QuotationV1) {
     const t = computeTotals(q, company);
-    return `Dear ${q.customer.name || "Customer"},
+    return {
+      customerName: q.customer.name || "Customer",
+      quoteNo: q.quoteNo || "",
+      typeLabel: typeLabel(q),
+      date: q.date,
+      validTill: q.validTill,
+      grandTotal: money(t.grand),
+      grandTotalWords: numToWordsIndian(t.grand),
+      companyName: company.name,
+      companyPhone: company.phone,
+    };
+  }
 
-Please find our quotation details below:
+  function buildMessageText(q: QuotationV1) {
+    const tpl = sendSettings.email?.message || DEFAULT_SEND_SETTINGS.email.message;
+    return fillSendTemplate(tpl, messageVars(q));
+  }
 
-* Quotation No.: ${q.quoteNo}
-* Type: ${typeLabel(q)}
-* Date: ${q.date}
-* Valid Till: ${q.validTill}
-* Grand Total: ₹${money(t.grand)} (${numToWordsIndian(t.grand)})
-
-We look forward to your confirmation.
-
-Regards,
-${company.name}
-${company.phone}`;
+  function openSendModal() {
+    if (!validateSaved(current)) return;
+    const send = normalizeSendSettings(sendSettings);
+    const vars = messageVars(current);
+    const customerPhone = current.customer.phone.replace(/\D/g, "");
+    const defaults = [
+      ...(customerPhone ? [`customer:${customerPhone}`] : []),
+      ...send.whatsappNumbers.filter((n) => n.phone).map((n) => n.id),
+    ];
+    setWaSelected(defaults);
+    setWaExtra("");
+    setEmailTo(send.email.to.trim() || current.customer.email || "");
+    const ccConfigured = send.email.cc.trim();
+    setEmailCc(
+      ccConfigured ||
+        [company.salesEmail, company.managerEmail].filter(Boolean).join(", "),
+    );
+    setEmailSubject(fillSendTemplate(send.email.subject || DEFAULT_SEND_SETTINGS.email.subject, vars));
+    setEmailMessage(fillSendTemplate(send.email.message || DEFAULT_SEND_SETTINGS.email.message, vars));
+    setSendChannel("menu");
+    setSendOpen(true);
   }
 
   async function pushNotif(quotationId: string, message: string) {
@@ -294,7 +374,8 @@ ${company.phone}`;
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => {
-              setCurrent(newQuotationDraft());
+              preparedBySeeded.current = true;
+              setCurrent(newQuotationDraft("solar", undefined, userDisplayName(user)));
               setLastSaved(null);
             }}
           >
@@ -345,7 +426,7 @@ ${company.phone}`;
                   ✕
                 </button>
                 <b>How saving works:</b> Category, For, Prepared By, Customer Name, and Phone are required
-                before Save. Send / PDF need a saved quotation with no pending edits.
+                before Save. Send Via / PDF need a saved quotation with no pending edits.
               </div>
             ) : null}
 
@@ -424,7 +505,7 @@ ${company.phone}`;
                   <input
                     value={current.preparedBy}
                     onChange={(e) => patch((q) => ({ ...q, preparedBy: e.target.value }))}
-                    placeholder="Name of the person preparing this quotation"
+                    placeholder="Auto-filled from your login name"
                   />
                 </label>
               </div>
@@ -795,10 +876,7 @@ ${company.phone}`;
                 type="button"
                 className="btn btn-secondary"
                 disabled={busy}
-                onClick={() => {
-                  if (!validateSaved(current)) return;
-                  setSendOpen(true);
-                }}
+                onClick={() => openSendModal()}
               >
                 Send Via
               </button>
@@ -1038,6 +1116,16 @@ ${company.phone}`;
                 />
               </label>
             </div>
+
+            <div className="qgv1-send-admin">
+              <h3 className="qgv1-send-admin-title">Send Via</h3>
+              <p className="muted" style={{ marginTop: 0 }}>
+                WhatsApp numbers, email To/CC/message templates, and Google Drive folder are configured on the{" "}
+                <Link href="/profile">Business Profile</Link> (Business Owner only). Those defaults apply to
+                every tool under this profile.
+              </p>
+            </div>
+
             <button
               type="button"
               className="btn btn-primary"
@@ -1046,6 +1134,9 @@ ${company.phone}`;
                 const profile = await fetchProfile().catch(() => null);
                 const next = mergeCompanyFromBusinessProfile(company, profile);
                 setCompany(next);
+                if (profile?.sendSettings) {
+                  setSendSettings(normalizeSendSettings(profile.sendSettings));
+                }
                 await api("/quotation-v1/company", {
                   method: "PUT",
                   body: JSON.stringify({ company: next }),
@@ -1060,44 +1151,306 @@ ${company.phone}`;
       </main>
 
       {sendOpen ? (
-        <div className="modal-overlay" onClick={() => setSendOpen(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <h3 className="modal-title">Send Via</h3>
-            <p className="modal-msg">
-              Opens WhatsApp / email with a pre-filled message. Attach the downloaded PDF yourself.
-            </p>
-            <div className="modal-btns">
-              <button type="button" className="btn btn-secondary" onClick={() => setSendOpen(false)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={async () => {
-                  const phone = current.customer.phone.replace(/\D/g, "");
-                  const text = encodeURIComponent(buildMessageText(current));
-                  if (phone) window.open(`https://wa.me/91${phone.slice(-10)}?text=${text}`, "_blank");
-                  if (current.customer.email) {
-                    const subject = encodeURIComponent(
-                      `${company.name} — Quotation ${current.quoteNo}`,
-                    );
-                    window.open(
-                      `mailto:${current.customer.email}?cc=${encodeURIComponent(company.salesEmail || "")}&subject=${subject}&body=${text}`,
-                      "_blank",
-                    );
-                  }
-                  await saveQuote("sent");
-                  await pushNotif(
-                    current.id,
-                    `Quotation ${current.quoteNo} sent via WhatsApp/Email.`,
-                  );
-                  setSendOpen(false);
-                  flash("Opened WhatsApp / Email. Attach the PDF before sending.");
-                }}
-              >
-                Open apps
-              </button>
-            </div>
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            setSendOpen(false);
+            setSendChannel("menu");
+          }}
+        >
+          <div
+            className="modal-box qgv1-send-modal"
+            style={{ ["--modal-max-width" as string]: "560px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="modal-title">
+              {sendChannel === "menu"
+                ? "Send Via"
+                : sendChannel === "whatsapp"
+                  ? "WhatsApp message"
+                  : sendChannel === "email"
+                    ? "Email"
+                    : "Google Drive"}
+            </h3>
+
+            {sendChannel === "menu" ? (
+              <>
+                <p className="modal-msg">Choose how to send this quotation.</p>
+                <div className="qgv1-send-options">
+                  <button type="button" className="qgv1-send-option" onClick={() => setSendChannel("whatsapp")}>
+                    <strong>WhatsApp message</strong>
+                    <span>Send to customer and/or configured team numbers</span>
+                  </button>
+                  <button type="button" className="qgv1-send-option" onClick={() => setSendChannel("email")}>
+                    <strong>Email</strong>
+                    <span>To, CC, and message from Letterhead defaults</span>
+                  </button>
+                  <button type="button" className="qgv1-send-option" onClick={() => setSendChannel("drive")}>
+                    <strong>Google Drive</strong>
+                    <span>
+                      {sendSettings.googleDrive?.folderId
+                        ? `Save PDF to ${sendSettings.googleDrive.folderLabel || "configured folder"}`
+                        : "Configure folder in Business Profile first"}
+                    </span>
+                  </button>
+                </div>
+                <div className="modal-btns">
+                  <button type="button" className="btn btn-secondary" onClick={() => setSendOpen(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {sendChannel === "whatsapp" ? (
+              <>
+                <p className="modal-msg">
+                  Select numbers to open WhatsApp with the quotation message. Attach the PDF yourself after
+                  download.
+                </p>
+                <div className="qgv1-wa-list">
+                  {current.customer.phone ? (
+                    <label className="qgv1-check-row">
+                      <input
+                        type="checkbox"
+                        checked={waSelected.includes(`customer:${current.customer.phone.replace(/\D/g, "")}`)}
+                        onChange={(e) => {
+                          const key = `customer:${current.customer.phone.replace(/\D/g, "")}`;
+                          setWaSelected((prev) =>
+                            e.target.checked ? [...new Set([...prev, key])] : prev.filter((x) => x !== key),
+                          );
+                        }}
+                      />
+                      <span>
+                        Customer — {current.customer.phone}
+                        {current.customer.name ? ` (${current.customer.name})` : ""}
+                      </span>
+                    </label>
+                  ) : null}
+                  {normalizeSendSettings(sendSettings)
+                    .whatsappNumbers.filter((n) => n.phone)
+                    .map((n) => (
+                    <label key={n.id} className="qgv1-check-row">
+                      <input
+                        type="checkbox"
+                        checked={waSelected.includes(n.id)}
+                        onChange={(e) => {
+                          setWaSelected((prev) =>
+                            e.target.checked ? [...new Set([...prev, n.id])] : prev.filter((x) => x !== n.id),
+                          );
+                        }}
+                      />
+                      <span>
+                        {n.label || "Team"} — {n.phone}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <label className="field" style={{ marginTop: 10 }}>
+                  <span>Extra numbers (comma-separated)</span>
+                  <input
+                    value={waExtra}
+                    onChange={(e) => setWaExtra(e.target.value)}
+                    placeholder="e.g. 9876543210, 9123456789"
+                  />
+                </label>
+                <div className="modal-btns">
+                  <button type="button" className="btn btn-ghost" onClick={() => setSendChannel("menu")}>
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busy}
+                    onClick={async () => {
+                      const send = normalizeSendSettings(sendSettings);
+                      const phones: string[] = [];
+                      for (const key of waSelected) {
+                        if (key.startsWith("customer:")) phones.push(key.slice("customer:".length));
+                        else {
+                          const row = send.whatsappNumbers.find((n) => n.id === key);
+                          if (row?.phone) phones.push(row.phone);
+                        }
+                      }
+                      for (const part of waExtra.split(/[,;\n]+/)) {
+                        const d = part.replace(/\D/g, "");
+                        if (d) phones.push(d);
+                      }
+                      const unique = [...new Set(phones.map(waDigits).filter(Boolean))];
+                      if (!unique.length) {
+                        flash("Select or enter at least one WhatsApp number.", "err");
+                        return;
+                      }
+                      const text = encodeURIComponent(buildMessageText(current));
+                      for (const phone of unique) {
+                        window.open(`https://wa.me/${phone}?text=${text}`, "_blank");
+                      }
+                      await saveQuote("sent");
+                      await pushNotif(
+                        current.id,
+                        `Quotation ${current.quoteNo} opened on WhatsApp (${unique.length} number${unique.length > 1 ? "s" : ""}).`,
+                      );
+                      setSendOpen(false);
+                      flash("Opened WhatsApp. Attach the PDF before sending.");
+                    }}
+                  >
+                    Open WhatsApp
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {sendChannel === "email" ? (
+              <>
+                <p className="modal-msg">
+                  Defaults come from Business Profile → Send Via. Edit before sending. With an email webhook
+                  configured, the PDF is attached server-side; otherwise your mail app opens.
+                </p>
+                <div className="qgv1-grid2" style={{ marginTop: 8 }}>
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span>To</span>
+                    <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)} />
+                  </label>
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span>CC</span>
+                    <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} placeholder="comma-separated" />
+                  </label>
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span>Subject</span>
+                    <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />
+                  </label>
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span>Message</span>
+                    <textarea rows={7} value={emailMessage} onChange={(e) => setEmailMessage(e.target.value)} />
+                  </label>
+                </div>
+                <div className="modal-btns">
+                  <button type="button" className="btn btn-ghost" onClick={() => setSendChannel("menu")}>
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busy}
+                    onClick={async () => {
+                      if (!emailTo.trim()) {
+                        flash("Enter an email To address.", "err");
+                        return;
+                      }
+                      setBusy(true);
+                      try {
+                        let pdf: { filename: string; pdfBase64: string } | null = null;
+                        try {
+                          pdf = await buildPdfPayload(current);
+                        } catch {
+                          pdf = null;
+                        }
+                        const result = await api<{ ok: boolean; delivered: boolean; via: string }>(
+                          "/quotation-v1/send/email",
+                          {
+                            method: "POST",
+                            body: JSON.stringify({
+                              to: emailTo.trim(),
+                              cc: emailCc.trim(),
+                              subject: emailSubject.trim(),
+                              message: emailMessage,
+                              quotationId: current.id,
+                              quoteNo: current.quoteNo,
+                              filename: pdf?.filename,
+                              pdfBase64: pdf?.pdfBase64,
+                            }),
+                          },
+                        );
+                        if (!result.delivered) {
+                          const ccParam = emailCc.trim()
+                            ? `&cc=${encodeURIComponent(emailCc.trim())}`
+                            : "";
+                          window.location.href = `mailto:${encodeURIComponent(emailTo.trim())}?subject=${encodeURIComponent(emailSubject.trim())}${ccParam}&body=${encodeURIComponent(emailMessage)}`;
+                        }
+                        await saveQuote("sent");
+                        await pushNotif(
+                          current.id,
+                          `Quotation ${current.quoteNo} emailed to ${emailTo.trim()}.`,
+                        );
+                        setSendOpen(false);
+                        flash(
+                          result.delivered
+                            ? "Email sent via server webhook."
+                            : "Opened your mail app. Attach the PDF before sending.",
+                        );
+                      } catch (e) {
+                        flash(e instanceof Error ? e.message : "Email send failed", "err");
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Send email
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {sendChannel === "drive" ? (
+              <>
+                <p className="modal-msg">
+                  {sendSettings.googleDrive?.folderId
+                    ? `This will generate the PDF and upload it to ${
+                        sendSettings.googleDrive.folderLabel || "your configured Google Drive folder"
+                      }.`
+                    : "No Google Drive folder configured. Open Business Profile → Send Via and paste a Drive folder link or ID."}
+                </p>
+                <div className="modal-btns">
+                  <button type="button" className="btn btn-ghost" onClick={() => setSendChannel("menu")}>
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busy || !sendSettings.googleDrive?.folderId}
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        const pdf = await buildPdfPayload(current);
+                        if (!pdf) return;
+                        const result = await api<{
+                          ok: boolean;
+                          fileId: string;
+                          webViewLink: string | null;
+                        }>("/quotation-v1/send/drive", {
+                          method: "POST",
+                          body: JSON.stringify({
+                            filename: pdf.filename,
+                            pdfBase64: pdf.pdfBase64,
+                            quotationId: current.id,
+                            quoteNo: current.quoteNo,
+                            folderId: sendSettings.googleDrive.folderId,
+                          }),
+                        });
+                        await saveQuote("sent");
+                        await pushNotif(
+                          current.id,
+                          `Quotation ${current.quoteNo} uploaded to Google Drive.`,
+                        );
+                        setSendOpen(false);
+                        if (result.webViewLink) {
+                          flash("Saved to Google Drive.");
+                          window.open(result.webViewLink, "_blank");
+                        } else {
+                          flash("Saved to Google Drive.");
+                        }
+                      } catch (e) {
+                        flash(e instanceof Error ? e.message : "Drive upload failed", "err");
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Save to Drive
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}

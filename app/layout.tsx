@@ -6,11 +6,11 @@ import { BrandingProvider } from "@/components/branding/BrandingProvider";
 import { ShellRouter } from "@/components/ShellRouter";
 
 export const metadata: Metadata = {
-  title: "JustX Business Tools",
+  title: "JustXSystems",
   description: "Quotations, invoices, stock, projects, and calculators for Indian businesses.",
   appleWebApp: {
     capable: true,
-    title: "JBT",
+    title: "JustXSystems",
     statusBarStyle: "black-translucent",
   },
   icons: {

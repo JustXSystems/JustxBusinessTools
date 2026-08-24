@@ -25,17 +25,18 @@ export type PoweredByConfig = {
 
 export const DEFAULT_BRANDING: PlatformBranding = {
   logoUrl: "/icons/jbt-icon.svg",
-  appName: "JustX Business Tools",
-  tagline: "JustX Systems",
+  appName: "JustXSystems",
+  tagline: "JustXSystems",
   splashDurationMs: 1800,
 };
 
 export const DEFAULT_POWERED_BY: PoweredByConfig = {
-  text: "Powered by JustX Systems LLP",
+  text: "Powered by JustXSystems LLP",
   locked: true,
 };
 
 export const SPLASH_SEEN_KEY = "jbt.splash.seen";
+export const BRANDING_STORAGE_KEY = "jbt.branding.payload";
 
 export function splashFingerprint(b: PlatformBranding): string {
   return [b.logoUrl, b.appName, b.tagline, String(b.splashDurationMs)].join("\u0001");
@@ -44,6 +45,7 @@ export function splashFingerprint(b: PlatformBranding): string {
 type BrandingContextValue = {
   branding: PlatformBranding;
   poweredBy: PoweredByConfig;
+  /** True until the first network branding response (or stored fallback) is applied. */
   loading: boolean;
   refresh: () => Promise<void>;
 };
@@ -54,6 +56,8 @@ type CachedPayload = { branding: PlatformBranding; poweredBy: PoweredByConfig };
 
 let cached: CachedPayload | null = null;
 let inflight: Promise<CachedPayload> | null = null;
+/** True after this tab has applied a branding payload (network or storage fallback). */
+let confirmed = false;
 
 function normalizePayload(data: {
   branding?: Partial<PlatformBranding>;
@@ -77,13 +81,43 @@ function normalizePayload(data: {
   };
 }
 
+function readStoredPayload(): CachedPayload | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(BRANDING_STORAGE_KEY);
+    if (!raw) return null;
+    return normalizePayload(JSON.parse(raw) as {
+      branding?: Partial<PlatformBranding>;
+      poweredBy?: Partial<PoweredByConfig>;
+    });
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredPayload(payload: CachedPayload): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(BRANDING_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    /* ignore */
+  }
+}
+
+function applyPayload(payload: CachedPayload, fromNetwork: boolean): CachedPayload {
+  cached = payload;
+  confirmed = true;
+  if (fromNetwork) writeStoredPayload(payload);
+  return payload;
+}
+
 export async function fetchPlatformBranding(force = false): Promise<PlatformBranding> {
   const payload = await fetchPlatformBrandPayload(force);
   return payload.branding;
 }
 
 export async function fetchPlatformBrandPayload(force = false): Promise<CachedPayload> {
-  if (!force && cached) return cached;
+  if (!force && cached && confirmed) return cached;
   if (!force && inflight) return inflight;
 
   const run = (async () => {
@@ -96,8 +130,7 @@ export async function fetchPlatformBrandPayload(force = false): Promise<CachedPa
       branding?: Partial<PlatformBranding>;
       poweredBy?: Partial<PoweredByConfig>;
     };
-    cached = normalizePayload(data);
-    return cached;
+    return applyPayload(normalizePayload(data), true);
   })();
 
   if (!force) {
@@ -107,41 +140,54 @@ export async function fetchPlatformBrandPayload(force = false): Promise<CachedPa
     try {
       return await inflight;
     } catch {
-      // Do not cache failures — next call retries against the API.
-      return {
-        branding: { ...DEFAULT_BRANDING },
-        poweredBy: { ...DEFAULT_POWERED_BY },
-      };
+      const stored = readStoredPayload();
+      if (stored) return applyPayload(stored, false);
+      return applyPayload(
+        {
+          branding: { ...DEFAULT_BRANDING },
+          poweredBy: { ...DEFAULT_POWERED_BY },
+        },
+        false,
+      );
     }
   }
 
   try {
     return await run;
   } catch {
-    return {
-      branding: cached?.branding ?? { ...DEFAULT_BRANDING },
-      poweredBy: cached?.poweredBy ?? { ...DEFAULT_POWERED_BY },
-    };
+    if (cached) return cached;
+    const stored = readStoredPayload();
+    if (stored) return applyPayload(stored, false);
+    return applyPayload(
+      {
+        branding: { ...DEFAULT_BRANDING },
+        poweredBy: { ...DEFAULT_POWERED_BY },
+      },
+      false,
+    );
   }
 }
 
 export function invalidateBrandingCache(): void {
   cached = null;
+  confirmed = false;
   try {
     sessionStorage.removeItem(SPLASH_SEEN_KEY);
+  } catch {
+    /* ignore */
+  }
+  try {
+    localStorage.removeItem(BRANDING_STORAGE_KEY);
   } catch {
     /* ignore */
   }
 }
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
-  const [branding, setBranding] = useState<PlatformBranding>(
-    cached?.branding ?? DEFAULT_BRANDING,
-  );
-  const [poweredBy, setPoweredBy] = useState<PoweredByConfig>(
-    cached?.poweredBy ?? DEFAULT_POWERED_BY,
-  );
-  const [loading, setLoading] = useState(!cached);
+  // Never paint DEFAULT on first frame — stay in loading until network/storage confirms.
+  const [branding, setBranding] = useState<PlatformBranding>(DEFAULT_BRANDING);
+  const [poweredBy, setPoweredBy] = useState<PoweredByConfig>(DEFAULT_POWERED_BY);
+  const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     invalidateBrandingCache();
@@ -179,7 +225,7 @@ export function usePlatformBranding(): BrandingContextValue {
   return {
     branding: cached?.branding ?? DEFAULT_BRANDING,
     poweredBy: cached?.poweredBy ?? DEFAULT_POWERED_BY,
-    loading: !cached,
+    loading: !confirmed,
     refresh: async () => {
       await fetchPlatformBrandPayload(true);
     },

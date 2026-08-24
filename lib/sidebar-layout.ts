@@ -1,13 +1,12 @@
 export type SidebarDensity = "mini" | "docked" | "normal";
-export type SidebarAttachment = "edge" | "floating" | "fixed";
+export type SidebarAttachment = "edge" | "floating";
 
 /** Composite mode used by CSS. */
 export type SidebarLayoutMode =
   | "mini"
   | "docked"
   | "normal"
-  | "floating"
-  | "fixed";
+  | "floating";
 
 export type SidebarLayoutState = {
   width: number;
@@ -40,7 +39,6 @@ export const SIDEBAR_LAYOUT_META: Record<
   docked: { label: "Docked", hint: "Compact labels, flush edge" },
   normal: { label: "Normal", hint: "Full navigation" },
   floating: { label: "Float", hint: "Movable mini dock over content" },
-  fixed: { label: "Fixed", hint: "Pinned while content scrolls" },
 };
 
 export const OPERATOR_SIDEBAR_KEY = "jbt.sidebar-layout-v3";
@@ -78,7 +76,6 @@ export function resolveLayoutMode(
 ): SidebarLayoutMode {
   // Float is a distinct chrome — always take over (true floating dock).
   if (attachment === "floating") return "floating";
-  if (attachment === "fixed") return "fixed";
   return densityFromWidth(width);
 }
 
@@ -127,7 +124,8 @@ export function readSidebarLayoutState(storageKey: string): SidebarLayoutState {
           return { ...base, attachment: "floating" };
         }
         if (legacy === "fixed") {
-          return { ...base, attachment: "fixed" };
+          // Fixed merged into Edge — same docked rail behavior.
+          return { ...base, attachment: "edge" };
         }
         try {
           const parsed = JSON.parse(legacy) as Partial<SidebarLayoutState>;
@@ -152,9 +150,7 @@ function normalizeState(
 ): SidebarLayoutState {
   const width = clampSidebarWidth(Number(parsed.width) || base.width);
   const attachment: SidebarAttachment =
-    parsed.attachment === "floating" || parsed.attachment === "fixed"
-      ? parsed.attachment
-      : "edge";
+    parsed.attachment === "floating" ? "floating" : "edge";
   const restoreWidth = clampSidebarWidth(
     Number(parsed.restoreWidth) || Math.max(width, SIDEBAR_SNAPS.docked),
   );

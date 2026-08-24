@@ -39,11 +39,16 @@ export function PlatformBrandMark({
   const src = logoUrl || branding.logoUrl;
   const name = appName || branding.appName;
   const sub = tagline || branding.tagline;
+  // Bust HTTP cache when logo URL is reused after an admin upload replace.
+  const imgSrc =
+    !src || src.startsWith("data:") || src.startsWith("blob:")
+      ? src
+      : `${src}${src.includes("?") ? "&" : "?"}bn=${encodeURIComponent(name)}`;
 
   const inner = (
     <>
       <span className={`platform-brand-logo-frame size-${size}`} style={{ width: px, height: px }}>
-        <img className="platform-brand-logo" src={src} alt="" width={px} height={px} />
+        <img className="platform-brand-logo" src={imgSrc} alt="" width={px} height={px} />
       </span>
       {showText ? (
         <div className="brand-text">

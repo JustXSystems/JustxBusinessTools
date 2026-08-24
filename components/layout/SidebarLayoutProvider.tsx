@@ -55,7 +55,6 @@ function labelFor(width: number, attachment: SidebarAttachment) {
   if (mode === "mini") return "Mini";
   if (mode === "docked") return "Docked";
   if (mode === "floating") return "Float";
-  if (mode === "fixed") return "Fixed";
   return "Normal";
 }
 

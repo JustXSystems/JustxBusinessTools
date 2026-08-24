@@ -52,6 +52,7 @@ export function templateItems(category: CategoryKey, engagement: EngagementKey):
 export function newQuotationDraft(
   category: CategoryKey = "solar",
   engagement?: EngagementKey,
+  preparedBy = "",
 ): QuotationV1 {
   const allowed = CATEGORY_ENGAGEMENTS[category];
   const eng = engagement && allowed.includes(engagement) ? engagement : allowed[0];
@@ -64,7 +65,7 @@ export function newQuotationDraft(
     quoteNo: null,
     date: todayISO(),
     validTill: new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10),
-    preparedBy: "",
+    preparedBy,
     customer: blankCustomer(),
     items: templateItems(category, eng),
     extraCharge: { label: "Transport / Miscellaneous", amount: 0, gst: 0 },

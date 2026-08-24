@@ -9,6 +9,8 @@ import { ConfigProvider } from "@/components/config/ConfigProvider";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { NavIcon } from "@/components/layout/NavIcon";
 import { FloatingNavDock } from "@/components/layout/FloatingNavDock";
+import { SidebarAttachmentToggle } from "@/components/layout/SidebarAttachmentToggle";
+import { SidebarIdentityChip } from "@/components/layout/SidebarIdentityChip";
 import { SidebarLayoutProvider, useSidebarLayout } from "@/components/layout/SidebarLayoutProvider";
 import { SidebarResizeHandle } from "@/components/layout/SidebarResizeHandle";
 import {
@@ -21,13 +23,6 @@ function isActive(pathname: string, item: AdminNavItem) {
   return item.exact ? pathname === item.href : pathname.startsWith(item.href);
 }
 
-function initials(name: string | null | undefined, email: string | undefined) {
-  const raw = (name || email || "?").trim();
-  const parts = raw.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return raw.slice(0, 2).toUpperCase();
-}
-
 function AdminNavLink({
   item,
   active,
@@ -35,6 +30,7 @@ function AdminNavLink({
 }: {
   item: AdminNavItem;
   active: boolean;
+  badge?: ReactNode;
   mini: boolean;
 }) {
   return (
@@ -102,7 +98,7 @@ function AdminShellInner({ children }: { children: ReactNode }) {
               </Link>
               <button
                 type="button"
-                className="float-dock-item"
+                className="float-dock-item float-dock-logout"
                 aria-label="Log out"
                 title="Log out"
                 onClick={() => logout()}
@@ -148,6 +144,18 @@ function AdminShellInner({ children }: { children: ReactNode }) {
                   ) : null}
                 </div>
               ) : null}
+
+              <div className={`ds-brand-account${mini ? " is-mini" : ""}`}>
+                <SidebarIdentityChip
+                  name={user?.name}
+                  email={user?.email}
+                  mini={mini}
+                />
+                <SidebarAttachmentToggle
+                  operatorHref="/"
+                  onLogout={() => logout()}
+                />
+              </div>
             </div>
           </div>
 
@@ -168,60 +176,10 @@ function AdminShellInner({ children }: { children: ReactNode }) {
               </div>
             ))}
           </nav>
-
-          <div className="admin-sidebar-footer">
-            <div className="ds-user-card admin-user-card" title={user?.email || "Admin"}>
-              <span className="ds-user-avatar" aria-hidden="true">
-                {initials(user?.name, user?.email)}
-              </span>
-              <span className="ds-user-meta">
-                <span className="ds-user-name">{user?.name || user?.email || "Admin"}</span>
-                <span className="ds-user-org">{user?.email}</span>
-              </span>
-            </div>
-
-            {!mini ? (
-              <div className="admin-footer-actions">
-                <Link href="/" className="admin-footer-btn">
-                  <NavIcon id="arrowLeft" />
-                  <span>Operator app</span>
-                </Link>
-                <button type="button" className="admin-footer-btn" onClick={() => logout()}>
-                  <NavIcon id="logout" />
-                  <span>Log out</span>
-                </button>
-              </div>
-            ) : (
-              <div className="admin-footer-actions admin-footer-actions-mini">
-                <Link href="/" className="admin-footer-btn" title="Operator app" aria-label="Operator app">
-                  <NavIcon id="arrowLeft" />
-                </Link>
-                <button
-                  type="button"
-                  className="admin-footer-btn"
-                  onClick={() => logout()}
-                  title="Log out"
-                  aria-label="Log out"
-                >
-                  <NavIcon id="logout" />
-                </button>
-              </div>
-            )}
-          </div>
         </aside>
       )}
 
       <div className="admin-main">
-        <header className="admin-topbar no-print">
-          <div className="admin-topbar-copy">
-            <p className="admin-topbar-kicker">Control center</p>
-            <h1>Platform administration</h1>
-          </div>
-          <span className="admin-user-chip">
-            <span className="admin-user-chip-dot" aria-hidden="true" />
-            {user?.email}
-          </span>
-        </header>
         <div className="admin-content">{children}</div>
         <PoweredByFooter variant="bar" />
       </div>

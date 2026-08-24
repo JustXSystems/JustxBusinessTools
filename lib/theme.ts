@@ -35,7 +35,7 @@ export const JUSTX_ELECTRIC: ThemeTokens = {
   scheme: "dark",
 };
 
-/** Daytime companion to JustX Electric — cool paper surfaces + deep cyan accent. */
+/** Daytime companion to JustXSystems Electric — cool paper surfaces + deep cyan accent. */
 export const JUSTX_LIGHT: ThemeTokens = {
   accent: "#007a99",
   teal: "#0f766e",

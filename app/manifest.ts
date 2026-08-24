@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "JustX Business Tools",
-    short_name: "JBT",
+    name: "JustXSystems",
+    short_name: "JustXSystems",
     description:
       "Quotations, invoices, stock, projects, and calculators for Indian businesses.",
     start_url: "/",

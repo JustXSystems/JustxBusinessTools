@@ -1,3 +1,5 @@
+import type { BusinessProfileSendSettings } from "@/lib/types/business-profile";
+
 export type CategoryKey = "solar" | "ups" | "battery" | "inverter" | "other";
 export type EngagementKey =
   | "epc"
@@ -73,6 +75,12 @@ export type QuotationV1 = {
   /** Letterhead frozen at save/send — used on public approve / PDF history. */
   companySnapshot?: CompanyProfileV1;
 };
+
+/** @deprecated Prefer Business Profile sendSettings — kept for letterhead snapshot compat. */
+export type QuotationSendSettings = BusinessProfileSendSettings;
+export type WhatsAppNumberEntry = BusinessProfileSendSettings["whatsappNumbers"][number];
+export type QuotationEmailDefaults = BusinessProfileSendSettings["email"];
+export type QuotationGoogleDriveSettings = BusinessProfileSendSettings["googleDrive"];
 
 export type CompanyProfileV1 = {
   name: string;

@@ -66,7 +66,7 @@ export function CardPayMethod({
       <div className="co-card-empty">
         <h3>{title}</h3>
         <p className="muted">
-          No card payment gateway is enabled for this workspace. Use UPI (default), or ask JustX to enable Razorpay,
+          No card payment gateway is enabled for this workspace. Use UPI (default), or ask JustXSystems to enable Razorpay,
           Cashfree, or Stripe under Admin → Gateways.
         </p>
       </div>
@@ -77,7 +77,7 @@ export function CardPayMethod({
     <div className="co-method-body">
       <h3>Pay by {title.toLowerCase()}</h3>
       <p className="muted">
-        Card numbers are entered on the payment gateway — not on JustX. Choose a processor, then continue to a
+        Card numbers are entered on the payment gateway — not on JustXSystems. Choose a processor, then continue to a
         PCI-compliant hosted checkout for {formatInr(amountInr)}.
       </p>
 

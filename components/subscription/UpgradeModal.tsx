@@ -15,7 +15,7 @@ export function UpgradeModal({ open, onClose }: Props) {
   return (
     <Modal open={open} title="Subscribe to tools" onClose={onClose} maxWidth={480}>
       <p className="modal-msg">
-        Each tool has its own monthly price. Open billing to build a cart and pay JustX by UPI.
+        Each tool has its own monthly price. Open billing to build a cart and pay JustXSystems by UPI.
       </p>
       <div className="modal-btns">
         <a className="btn btn-primary" href="/subscription" onClick={onClose}>

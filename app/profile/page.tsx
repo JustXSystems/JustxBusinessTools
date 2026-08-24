@@ -3,12 +3,24 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
-import { INDIAN_STATES, EMPTY_PROFILE, type BusinessProfile } from "@/lib/types/business-profile";
+import { canEditBusinessProfile } from "@/lib/auth-access";
+import {
+  DEFAULT_SEND_SETTINGS,
+  EMPTY_PROFILE,
+  INDIAN_STATES,
+  extractDriveFolderId,
+  normalizeSendSettings,
+  type BusinessProfile,
+  type BusinessProfileSendSettings,
+} from "@/lib/types/business-profile";
 import { fetchProfile, saveProfile } from "@/lib/api";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 
 export default function ProfilePage() {
+  const { user } = useAuth();
+  const canEdit = canEditBusinessProfile(user);
   const { config } = usePlatformConfig();
   const platformTools = config?.tools ?? [];
   const catalogIds = useMemo(
@@ -21,11 +33,15 @@ export default function ProfilePage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const send = normalizeSendSettings(profile.sendSettings);
+
   useEffect(() => {
     fetchProfile()
       .then((p) => {
         setProfile({
+          ...EMPTY_PROFILE,
           ...p,
+          sendSettings: normalizeSendSettings(p.sendSettings),
           homeToolIds: p.homeToolIds ?? catalogIds,
         });
       })
@@ -34,14 +50,38 @@ export default function ProfilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function patchSend(next: BusinessProfileSendSettings) {
+    if (!canEdit) return;
+    setProfile((p) => ({ ...p, sendSettings: next }));
+  }
+
   async function handleSave() {
+    if (!canEdit) {
+      setError("Only the Business Owner can edit Business Profile details.");
+      return;
+    }
     setSaving(true);
     setMessage("");
     setError("");
     try {
-      const saved = await saveProfile(profile);
+      const payload: BusinessProfile = {
+        ...profile,
+        sendSettings: {
+          ...normalizeSendSettings(profile.sendSettings),
+          whatsappNumbers: normalizeSendSettings(profile.sendSettings).whatsappNumbers.filter(
+            (n) => n.phone.trim(),
+          ),
+          googleDrive: {
+            folderId: extractDriveFolderId(profile.sendSettings?.googleDrive?.folderId ?? ""),
+            folderLabel: profile.sendSettings?.googleDrive?.folderLabel ?? "",
+          },
+        },
+      };
+      const saved = await saveProfile(payload);
       setProfile({
+        ...EMPTY_PROFILE,
         ...saved,
+        sendSettings: normalizeSendSettings(saved.sendSettings),
         homeToolIds: saved.homeToolIds ?? catalogIds,
       });
       setMessage("Business profile saved. Return to Home to see your tool list.");
@@ -53,6 +93,7 @@ export default function ProfilePage() {
   }
 
   function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!canEdit) return;
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -74,22 +115,33 @@ export default function ProfilePage() {
   return (
     <div>
       <div className="tool-header">
-        <Link href="/" className="back-btn" aria-label="Back">←</Link>
+        <Link href="/" className="back-btn" aria-label="Back">
+          ←
+        </Link>
         <div className="tool-header-text">
           <div className="tool-header-title">Business Profile</div>
           <div className="tool-header-sub">
             Fill this once — it auto-fills every quotation, order, invoice, and PO you create.
           </div>
         </div>
-        <button type="button" className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </button>
+        {canEdit ? (
+          <button type="button" className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+        ) : null}
       </div>
 
-      {error ? <div className="error-banner">{error}</div> : null}
-      {message ? (
-        <div className="panel profile-success">{message}</div>
+      {!canEdit ? (
+        <div className="panel" style={{ marginBottom: 14 }}>
+          <p className="section-note" style={{ margin: 0 }}>
+            Viewing as a team user — Business Profile details are read-only. Only the Business Owner can
+            edit these settings.
+          </p>
+        </div>
       ) : null}
+
+      {error ? <div className="error-banner">{error}</div> : null}
+      {message ? <div className="panel profile-success">{message}</div> : null}
 
       <div className="panel profile-hero">
         <div className="flex-row-wrap">
@@ -97,30 +149,35 @@ export default function ProfilePage() {
             {profile.logo ? <img src={profile.logo} alt="Logo" /> : <span>🏢</span>}
           </div>
           <div className="min-w-240">
-            <label className="label" htmlFor="businessName">Business Name</label>
+            <label className="label" htmlFor="businessName">
+              Business Name
+            </label>
             <input
               id="businessName"
               className="business-name-input"
               value={profile.businessName}
+              disabled={!canEdit}
               onChange={(e) => setProfile({ ...profile, businessName: e.target.value })}
               placeholder="Your Business Name"
             />
             <p className="section-note">This name and logo appear at the top of every document you create.</p>
-            <div className="btn-row">
-              <label className="btn btn-secondary btn-sm">
-                🖼 Upload Logo
-                <input type="file" accept="image/*" hidden onChange={handleLogoUpload} />
-              </label>
-              {profile.logo ? (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setProfile({ ...profile, logo: null })}
-                >
-                  Remove
-                </button>
-              ) : null}
-            </div>
+            {canEdit ? (
+              <div className="btn-row">
+                <label className="btn btn-secondary btn-sm">
+                  🖼 Upload Logo
+                  <input type="file" accept="image/*" hidden onChange={handleLogoUpload} />
+                </label>
+                {profile.logo ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setProfile({ ...profile, logo: null })}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -128,12 +185,17 @@ export default function ProfilePage() {
       <div className="panel">
         <h3 className="panel-title">Tools on home</h3>
         <p className="section-note">
-          Only selected tools appear on Home after login. Subscription / billing always shows the full catalog.
+          Only selected tools appear on Home after login. Subscription / billing always shows the full
+          catalog.
         </p>
         <HomeToolPicker
           selectedIds={profile.homeToolIds ?? []}
           platformTools={platformTools}
-          onChange={(ids) => setProfile({ ...profile, homeToolIds: ids })}
+          onChange={(ids) => {
+            if (!canEdit) return;
+            setProfile({ ...profile, homeToolIds: ids });
+          }}
+          disabled={!canEdit}
         />
       </div>
 
@@ -144,6 +206,7 @@ export default function ProfilePage() {
             <span className="label">Address line 1</span>
             <input
               value={profile.addressLine1 ?? ""}
+              disabled={!canEdit}
               onChange={(e) => setProfile({ ...profile, addressLine1: e.target.value })}
             />
           </label>
@@ -151,6 +214,7 @@ export default function ProfilePage() {
             <span className="label">Address line 2</span>
             <input
               value={profile.addressLine2 ?? ""}
+              disabled={!canEdit}
               onChange={(e) => setProfile({ ...profile, addressLine2: e.target.value })}
             />
           </label>
@@ -158,11 +222,19 @@ export default function ProfilePage() {
         <div className="field-row2">
           <label className="field">
             <span className="label">GSTIN</span>
-            <input value={profile.gstin ?? ""} onChange={(e) => setProfile({ ...profile, gstin: e.target.value })} />
+            <input
+              value={profile.gstin ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, gstin: e.target.value })}
+            />
           </label>
           <label className="field">
             <span className="label">PAN</span>
-            <input value={profile.pan ?? ""} onChange={(e) => setProfile({ ...profile, pan: e.target.value })} />
+            <input
+              value={profile.pan ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, pan: e.target.value })}
+            />
           </label>
         </div>
         <div className="field-row2">
@@ -170,6 +242,7 @@ export default function ProfilePage() {
             <span className="label">State</span>
             <select
               value={profile.state ?? ""}
+              disabled={!canEdit}
               onChange={(e) => {
                 const state = e.target.value;
                 const code = INDIAN_STATES.find(([n]) => n === state)?.[1] ?? "";
@@ -178,7 +251,9 @@ export default function ProfilePage() {
             >
               <option value="">Select state</option>
               {INDIAN_STATES.map(([name, code]) => (
-                <option key={code} value={name}>{name}</option>
+                <option key={code} value={name}>
+                  {name}
+                </option>
               ))}
             </select>
           </label>
@@ -190,13 +265,18 @@ export default function ProfilePage() {
         <div className="field-row2">
           <label className="field">
             <span className="label">Phone</span>
-            <input value={profile.phone ?? ""} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+            <input
+              value={profile.phone ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+            />
           </label>
           <label className="field">
             <span className="label">Email</span>
             <input
               type="email"
               value={profile.email ?? ""}
+              disabled={!canEdit}
               onChange={(e) => setProfile({ ...profile, email: e.target.value })}
             />
           </label>
@@ -204,30 +284,206 @@ export default function ProfilePage() {
       </div>
 
       <div className="panel">
+        <h3 className="panel-title">Send Via defaults</h3>
+        <p className="section-note">
+          WhatsApp numbers, email To/CC/message templates, and Google Drive folder — shared by every tool
+          under this Business Profile (quotations, invoices, and more).
+        </p>
+        <p className="section-note">
+          Templates support {"{{customerName}}"}, {"{{quoteNo}}"}, {"{{typeLabel}}"}, {"{{date}}"},{" "}
+          {"{{validTill}}"}, {"{{grandTotal}}"}, {"{{grandTotalWords}}"}, {"{{companyName}}"},{" "}
+          {"{{companyPhone}}"}.
+        </p>
+
+        <h4 className="panel-subtitle">WhatsApp numbers</h4>
+        <div className="profile-wa-list">
+          {send.whatsappNumbers.map((n, idx) => (
+            <div key={n.id} className="profile-wa-row">
+              <input
+                placeholder="Label"
+                value={n.label}
+                disabled={!canEdit}
+                onChange={(e) => {
+                  const next = [...send.whatsappNumbers];
+                  next[idx] = { ...n, label: e.target.value };
+                  patchSend({ ...send, whatsappNumbers: next });
+                }}
+              />
+              <input
+                placeholder="Phone"
+                value={n.phone}
+                disabled={!canEdit}
+                onChange={(e) => {
+                  const next = [...send.whatsappNumbers];
+                  next[idx] = { ...n, phone: e.target.value };
+                  patchSend({ ...send, whatsappNumbers: next });
+                }}
+              />
+              {canEdit ? (
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  onClick={() =>
+                    patchSend({
+                      ...send,
+                      whatsappNumbers: send.whatsappNumbers.filter((_, i) => i !== idx),
+                    })
+                  }
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+        {canEdit ? (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ marginTop: 8 }}
+            onClick={() =>
+              patchSend({
+                ...send,
+                whatsappNumbers: [
+                  ...send.whatsappNumbers,
+                  { id: Math.random().toString(36).slice(2, 9), label: "", phone: "" },
+                ],
+              })
+            }
+          >
+            Add WhatsApp number
+          </button>
+        ) : null}
+
+        <h4 className="panel-subtitle">Email</h4>
+        <div className="field-row2">
+          <label className="field">
+            <span className="label">Default To (blank = customer email)</span>
+            <input
+              value={send.email.to}
+              disabled={!canEdit}
+              onChange={(e) =>
+                patchSend({ ...send, email: { ...send.email, to: e.target.value } })
+              }
+            />
+          </label>
+          <label className="field">
+            <span className="label">Default CC</span>
+            <input
+              value={send.email.cc}
+              disabled={!canEdit}
+              onChange={(e) =>
+                patchSend({ ...send, email: { ...send.email, cc: e.target.value } })
+              }
+              placeholder="comma-separated"
+            />
+          </label>
+        </div>
+        <label className="field">
+          <span className="label">Subject template</span>
+          <input
+            value={send.email.subject}
+            disabled={!canEdit}
+            onChange={(e) =>
+              patchSend({ ...send, email: { ...send.email, subject: e.target.value } })
+            }
+          />
+        </label>
+        <label className="field">
+          <span className="label">Message template</span>
+          <textarea
+            rows={8}
+            value={send.email.message || DEFAULT_SEND_SETTINGS.email.message}
+            disabled={!canEdit}
+            onChange={(e) =>
+              patchSend({ ...send, email: { ...send.email, message: e.target.value } })
+            }
+          />
+        </label>
+
+        <h4 className="panel-subtitle">Google Drive</h4>
+        <label className="field">
+          <span className="label">Folder link or ID</span>
+          <input
+            value={send.googleDrive.folderId}
+            disabled={!canEdit}
+            onChange={(e) =>
+              patchSend({
+                ...send,
+                googleDrive: {
+                  ...send.googleDrive,
+                  folderId: extractDriveFolderId(e.target.value),
+                },
+              })
+            }
+            placeholder="Paste Drive folder URL or ID"
+          />
+        </label>
+        <label className="field">
+          <span className="label">Folder label (optional)</span>
+          <input
+            value={send.googleDrive.folderLabel}
+            disabled={!canEdit}
+            onChange={(e) =>
+              patchSend({
+                ...send,
+                googleDrive: { ...send.googleDrive, folderLabel: e.target.value },
+              })
+            }
+            placeholder="e.g. Quotations / 2026"
+          />
+        </label>
+        <p className="section-note">
+          Server needs <code>GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON</code> (share the folder with that service
+          account) or <code>GOOGLE_DRIVE_WEBHOOK_URL</code>.
+        </p>
+      </div>
+
+      <div className="panel">
         <h3 className="panel-title">Bank details</h3>
         <div className="field-row2">
           <label className="field">
             <span className="label">Bank name</span>
-            <input value={profile.bankName ?? ""} onChange={(e) => setProfile({ ...profile, bankName: e.target.value })} />
+            <input
+              value={profile.bankName ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, bankName: e.target.value })}
+            />
           </label>
           <label className="field">
             <span className="label">Branch</span>
-            <input value={profile.bankBranch ?? ""} onChange={(e) => setProfile({ ...profile, bankBranch: e.target.value })} />
+            <input
+              value={profile.bankBranch ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, bankBranch: e.target.value })}
+            />
           </label>
         </div>
         <div className="field-row2">
           <label className="field">
             <span className="label">Account number</span>
-            <input value={profile.bankAccount ?? ""} onChange={(e) => setProfile({ ...profile, bankAccount: e.target.value })} />
+            <input
+              value={profile.bankAccount ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, bankAccount: e.target.value })}
+            />
           </label>
           <label className="field">
             <span className="label">IFSC</span>
-            <input value={profile.bankIfsc ?? ""} onChange={(e) => setProfile({ ...profile, bankIfsc: e.target.value })} />
+            <input
+              value={profile.bankIfsc ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, bankIfsc: e.target.value })}
+            />
           </label>
         </div>
         <label className="field">
           <span className="label">UPI ID</span>
-          <input value={profile.bankUpi ?? ""} onChange={(e) => setProfile({ ...profile, bankUpi: e.target.value })} />
+          <input
+            value={profile.bankUpi ?? ""}
+            disabled={!canEdit}
+            onChange={(e) => setProfile({ ...profile, bankUpi: e.target.value })}
+          />
         </label>
       </div>
 
@@ -238,14 +494,17 @@ export default function ProfilePage() {
           <textarea
             rows={5}
             value={profile.terms ?? ""}
+            disabled={!canEdit}
             onChange={(e) => setProfile({ ...profile, terms: e.target.value })}
           />
         </label>
       </div>
 
-      <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
-        {saving ? "Saving…" : "Save Business Profile"}
-      </button>
+      {canEdit ? (
+        <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? "Saving…" : "Save Business Profile"}
+        </button>
+      ) : null}
     </div>
   );
 }

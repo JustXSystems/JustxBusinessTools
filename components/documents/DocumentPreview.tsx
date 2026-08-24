@@ -128,7 +128,7 @@ export function DocumentPreview({ config, state, profile }: Props) {
       ) : null}
 
       <p className="doc-muted-foot">
-        Generated with JustX Business Tools (JBT)
+        Generated with JustXSystems
       </p>
     </div>
   );

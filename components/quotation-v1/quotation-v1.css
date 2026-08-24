@@ -732,6 +732,12 @@
   color-scheme: dark;
 }
 
+.qgv1-root .field select,
+.qgv1-root select {
+  border: 1px solid rgba(var(--accent-rgb), 0.32);
+  font-weight: 600;
+}
+
 .qgv1-root .field select option,
 .qgv1-root select option {
   background: var(--bg-2);
@@ -764,4 +770,139 @@ html[data-scheme="light"] .qgv1-root select option {
 .qgv1-root .mono {
   font-family: ui-monospace, "SF Mono", "Segoe UI Mono", Menlo, monospace;
   letter-spacing: -0.02em;
+}
+
+/* ---------- Send Via ---------- */
+.qgv1-send-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+
+.qgv1-send-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-hair);
+  background: var(--glass-1);
+  color: var(--text-hi);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.qgv1-send-option:hover {
+  background: var(--glass-hover);
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+.qgv1-send-option strong {
+  font-size: 14px;
+}
+
+.qgv1-send-option span {
+  font-size: 12px;
+  color: var(--text-mid);
+  line-height: 1.4;
+}
+
+.qgv1-wa-list,
+.qgv1-wa-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.qgv1-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-hi);
+  cursor: pointer;
+}
+
+.qgv1-check-row input {
+  margin-top: 3px;
+  width: auto;
+}
+
+.qgv1-send-admin {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-hair);
+}
+
+.qgv1-send-admin-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.qgv1-send-admin-sub {
+  margin: 18px 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-mid);
+  font-weight: 700;
+}
+
+.qgv1-wa-admin-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 700px) {
+  .qgv1-wa-admin-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Preview-only page-break guides (never captured into PDF). */
+.qgv1-sheet .page-break-marker {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.qgv1-sheet .pbm-line {
+  border-top: 2px dashed #b8761a;
+  position: relative;
+}
+
+.qgv1-sheet .pbm-label {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #b8761a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.qgv1-sheet .pbm-continued-header {
+  margin-top: 6px;
+  background: #fff8ec;
+  border: 1px dashed #b8761a;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 10.5px;
+  color: #7a5a20;
+  line-height: 1.5;
 }

@@ -130,7 +130,7 @@ export default function SubscriptionPage() {
           {pending?.status === "pending" ? (
             <div className="billing-pending">
               <p className="billing-pending-kicker">Payment under review</p>
-              <h3>UTR {pending.utr} is with JustX accounts</h3>
+              <h3>UTR {pending.utr} is with JustXSystems accounts</h3>
               <p className="muted">You can review the order on the checkout page. Tools license after verification.</p>
               <Link href="/subscription/checkout" className="btn btn-primary btn-sm">
                 View checkout

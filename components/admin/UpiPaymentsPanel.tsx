@@ -128,7 +128,7 @@ export function UpiPaymentsPanel() {
     <div className="admin-split payments-split">
       <div className="admin-pane-stack">
         <section className="panel admin-card">
-          <h2>JustX UPI account</h2>
+          <h2>JustXSystems UPI account</h2>
           <p className="muted">Default checkout is a UPI QR to this VPA. Payment gateways stay optional.</p>
           <form className="admin-form-grid" onSubmit={saveConfig}>
             <label className="field">
@@ -155,7 +155,7 @@ export function UpiPaymentsPanel() {
             </label>
             <h3 className="analytics-subhead" style={{ gridColumn: "1 / -1" }}>Company alerts</h3>
             <label className="field">
-              <span>Email JustX</span>
+              <span>Email JustXSystems</span>
               <select
                 value={notify.emailEnabled ? "1" : "0"}
                 onChange={(e) => setNotify({ ...notify, emailEnabled: e.target.value === "1" })}

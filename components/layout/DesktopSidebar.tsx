@@ -7,6 +7,8 @@ import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { FloatingNavDock } from "@/components/layout/FloatingNavDock";
+import { SidebarAttachmentToggle } from "@/components/layout/SidebarAttachmentToggle";
+import { SidebarIdentityChip } from "@/components/layout/SidebarIdentityChip";
 import { SidebarResizeHandle } from "@/components/layout/SidebarResizeHandle";
 import { useSidebarLayout } from "@/components/layout/SidebarLayoutProvider";
 import { navigationConfig, type NavItem } from "@/config/navigation.config";
@@ -16,13 +18,6 @@ import { useSubscriptionContext } from "@/components/subscription/SubscriptionPr
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
-}
-
-function initials(name: string | null | undefined, email: string | undefined) {
-  const raw = (name || email || "?").trim();
-  const parts = raw.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return raw.slice(0, 2).toUpperCase();
 }
 
 function NavLink({
@@ -55,7 +50,7 @@ function NavLink({
 
 export function DesktopSidebar() {
   const pathname = usePathname();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
   const { subscription, isUnlimited, isPro } = useSubscriptionContext();
   const { mode, density } = useSidebarLayout();
   const mini = density === "mini";
@@ -98,7 +93,25 @@ export function DesktopSidebar() {
   ];
 
   if (floating) {
-    return <FloatingNavDock homeHref="/" items={floatItems} />;
+    return (
+      <FloatingNavDock
+        homeHref="/"
+        items={floatItems}
+        footer={
+          <button
+            type="button"
+            className="float-dock-item float-dock-logout"
+            aria-label="Log out"
+            title="Log out"
+            onClick={() => void logout()}
+          >
+            <span className="float-dock-icon">
+              <NavIcon id="logout" />
+            </span>
+          </button>
+        }
+      />
+    );
   }
 
   return (
@@ -136,6 +149,15 @@ export function DesktopSidebar() {
               {!compact ? <BranchSwitcher /> : null}
             </>
           ) : null}
+
+          <div className={`ds-brand-account${mini ? " is-mini" : ""}`}>
+            <SidebarIdentityChip
+              name={user?.name}
+              email={user?.email}
+              mini={mini}
+            />
+            <SidebarAttachmentToggle onLogout={() => void logout()} />
+          </div>
         </div>
       </div>
 
@@ -178,26 +200,6 @@ export function DesktopSidebar() {
           ) : null}
         </div>
       </nav>
-
-      <div className="desktop-sidebar-footer">
-        <Link
-          href="/profile"
-          className="ds-user-card"
-          title={user?.name || user?.email || "Account"}
-          aria-label="Business profile"
-        >
-          <span className="ds-user-avatar" aria-hidden="true">
-            {initials(user?.name, user?.email)}
-          </span>
-          <span className="ds-user-meta">
-            <span className="ds-user-name">{user?.name || user?.email || "Account"}</span>
-            <span className="ds-user-org">
-              {user?.organizationName || "Your workspace"}
-            </span>
-          </span>
-          {!mini ? <span className="ds-plan-chip">{planLabel}</span> : null}
-        </Link>
-      </div>
     </aside>
   );
 }

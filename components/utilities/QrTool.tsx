@@ -248,7 +248,7 @@ export function QrTool() {
             <span className="label">Text, URL, or UPI details</span>
             <textarea
               rows={3}
-              placeholder="e.g. https://justx.example.com or upi://pay?pa=you@bank"
+              placeholder="e.g. https://justxsystems.example.com or upi://pay?pa=you@bank"
               value={text}
               onChange={(e) => setText(e.target.value)}
             />

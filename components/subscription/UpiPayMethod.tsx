@@ -97,7 +97,7 @@ export function UpiPayMethod({
         <p className="muted">
           Amount {formatInr(pendingClaim.amountInr)}
           {pendingClaim.toolIds?.length ? ` · ${pendingClaim.toolIds.length} tool(s)` : ""}.
-          Licensed access starts after JustX approves this payment.
+          Licensed access starts after JustXSystems approves this payment.
         </p>
       </div>
     );
@@ -117,10 +117,10 @@ export function UpiPayMethod({
           {upi?.enabled && upi.intent ? (
             <canvas ref={canvasRef} width={188} height={188} aria-label="UPI QR code" />
           ) : (
-            <p className="muted">UPI is not configured. Contact JustX.</p>
+            <p className="muted">UPI is not configured. Contact JustXSystems.</p>
           )}
           <p className="co-vpa">
-            {upi?.payeeName || "JustX Systems LLP"}
+            {upi?.payeeName || "JustXSystems LLP"}
             <strong>{upi?.vpa || "—"}</strong>
           </p>
           <div className="admin-form-row">
@@ -214,7 +214,7 @@ export function UpiPayMethod({
             {busy ? "Submitting…" : "Submit payment confirmation"}
           </button>
           <p className="muted billing-legal">
-            Tools unlock after JustX verifies the credit. Card payments below are processed by the selected gateway.
+            Tools unlock after JustXSystems verifies the credit. Card payments below are processed by the selected gateway.
           </p>
         </form>
       </div>

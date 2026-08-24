@@ -16,6 +16,12 @@ type Capability =
 type Matrix = Record<RoleKey, Record<Capability, boolean>>;
 
 const ROLES: RoleKey[] = ["owner", "admin", "staff", "viewer"];
+const ROLE_LABELS: Record<RoleKey, string> = {
+  owner: "Business Owner",
+  admin: "Admin",
+  staff: "User",
+  viewer: "Viewer",
+};
 
 export function RoleMatrixPanel() {
   const [matrix, setMatrix] = useState<Matrix | null>(null);
@@ -83,7 +89,7 @@ export function RoleMatrixPanel() {
                 <tr>
                   <th>Capability</th>
                   {ROLES.map((r) => (
-                    <th key={r}>{r}</th>
+                    <th key={r}>{ROLE_LABELS[r]}</th>
                   ))}
                 </tr>
               </thead>

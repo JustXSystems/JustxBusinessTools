@@ -11,14 +11,12 @@ import { SIDEBAR_LAYOUT_META } from "@/lib/sidebar-layout";
 export function SidebarResizeHandle({ variant = "operator" }: { variant?: "operator" | "admin" }) {
   const {
     mode,
-    attachment,
     dragging,
     previewLabel,
     beginResize,
     updateResize,
     endResize,
     toggleMini,
-    setAttachment,
     stepSnap,
   } = useSidebarLayout();
   const activeRef = useRef(false);
@@ -107,27 +105,6 @@ export function SidebarResizeHandle({ variant = "operator" }: { variant?: "opera
           <span className="sidebar-snap-hud-hint">Release to snap · Double-click toggles Mini</span>
         </div>
       ) : null}
-
-      <div className="sidebar-chrome-menu" role="group" aria-label="Navigation attachment">
-        {(
-          [
-            ["edge", "Edge", "Classic resizable sidebar"],
-            ["floating", "Float", "Movable mini dock over content"],
-            ["fixed", "Fixed", "Pinned edge sidebar while scrolling"],
-          ] as const
-        ).map(([id, label, hint]) => (
-          <button
-            key={id}
-            type="button"
-            className={`sidebar-chrome-btn${attachment === id ? " active" : ""}`}
-            title={hint}
-            aria-pressed={attachment === id}
-            onClick={() => setAttachment(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
     </>
   );
 }

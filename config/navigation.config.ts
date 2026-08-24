@@ -31,7 +31,6 @@ export const navigationConfig = {
   ],
   account: [
     { href: "/subscription", label: "Subscription", icon: "subscription" as const },
-    { href: "/settings", label: "Settings", icon: "settings" as const },
   ],
   /** Alias for workspace — Home / Profile / Notifications */
   primary: [
@@ -42,7 +41,7 @@ export const navigationConfig = {
   mobileBottom: [
     { href: "/", label: "Home", icon: "home" as const },
     { href: "/profile", label: "Profile", icon: "profile" as const },
-    { href: "/settings", label: "Settings", icon: "settings" as const },
+    { href: "/subscription", label: "Plan", icon: "subscription" as const },
     { href: "/notifications", label: "Alerts", icon: "notifications" as const },
   ],
 } as const;

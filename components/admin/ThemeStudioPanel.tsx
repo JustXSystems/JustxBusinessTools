@@ -25,7 +25,7 @@ export function ThemeStudioPanel() {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [draft, setDraft] = useState<ThemeTokens>({ ...JUSTX_ELECTRIC });
-  const [name, setName] = useState("JustX Electric");
+  const [name, setName] = useState("JustXSystems Electric");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [previewFrame, setPreviewFrame] = useState<PreviewFrame>("home");
@@ -244,16 +244,16 @@ export function ThemeStudioPanel() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => selectPreset({ name: "JustX Electric", tokens: JUSTX_ELECTRIC })}
+                  onClick={() => selectPreset({ name: "JustXSystems Electric", tokens: JUSTX_ELECTRIC })}
                 >
-                  Reset JustX Electric
+                  Reset JustXSystems Electric
                 </button>
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => selectPreset({ name: "JustX Light", tokens: JUSTX_LIGHT })}
+                  onClick={() => selectPreset({ name: "JustXSystems Light", tokens: JUSTX_LIGHT })}
                 >
-                  JustX Light
+                  JustXSystems Light
                 </button>
                 <button type="button" className="btn btn-ghost" onClick={exportTheme}>
                   Export JSON

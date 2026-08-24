@@ -37,7 +37,7 @@ export function UsageLimitBanner({
         <span>
           You have reached the limit of {limit} records for this tool.
           {subscription?.pendingClaim?.status === "pending"
-            ? " Your UPI payment is waiting for JustX verification."
+            ? " Your UPI payment is waiting for JustXSystems verification."
             : " Delete a record or subscribe to this tool for unlimited records."}
         </span>
         <button type="button" className="usage-banner-cta" onClick={() => openUpgrade(usage.toolId)}>
