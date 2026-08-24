@@ -197,7 +197,8 @@ export default function AdminProfilesPage() {
       }
       await api(`/admin/profiles/${selectedId}`, {
         method: "PUT",
-        body: JSON.stringify({ ...form, homeToolIds }),
+        // Home tab: only send allowlist — incomplete GSTIN/PAN/IFSC must not block this save.
+        body: JSON.stringify(tab === "home" ? { homeToolIds } : { ...form, homeToolIds }),
       });
     });
   }

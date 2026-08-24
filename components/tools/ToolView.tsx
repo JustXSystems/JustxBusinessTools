@@ -8,6 +8,7 @@ import { DocumentTool } from "@/components/documents/DocumentTool";
 import { CalculatorTool } from "@/components/calculators/CalculatorTool";
 import { QrTool } from "@/components/utilities/QrTool";
 import { QuotationGeneratorV1 } from "@/components/quotation-v1/QuotationGeneratorV1";
+import { SiteSurveyV1 } from "@/components/site-survey-v1/SiteSurveyV1";
 import { TrackerTool } from "@/components/tools/TrackerTool";
 import { resolveToolDefinition } from "@/lib/dynamic-tools";
 
@@ -64,6 +65,10 @@ export function ToolView({ toolId }: { toolId: string }) {
 
   if (tool.id === "quotationv1") {
     return <QuotationGeneratorV1 />;
+  }
+
+  if (tool.id === "sitesurveyv1") {
+    return <SiteSurveyV1 />;
   }
 
   return (

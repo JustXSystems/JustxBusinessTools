@@ -14,6 +14,7 @@ const BUILTIN_IDS = new Set(
     [
       "quotation",
       "quotationv1",
+      "sitesurveyv1",
       "salesorder",
       "invoice",
       "po",
@@ -157,6 +158,20 @@ export function filterHomeToolsBySelection(
   if (homeToolIds == null) return tools;
   const allow = new Set(homeToolIds);
   return tools.filter((t) => allow.has(t.id));
+}
+
+/** Hide tools marked unavailable in the org catalog (Admin → Tools → Placement). */
+export function filterHomeToolsByCatalog(
+  tools: ToolDefinition[],
+  catalog: Array<{ id: string; available: boolean }> | null | undefined,
+): ToolDefinition[] {
+  if (!catalog?.length) return tools;
+  const byId = new Map(catalog.map((c) => [c.id, c]));
+  return tools.filter((t) => {
+    const row = byId.get(t.id);
+    // Not in catalog yet → keep (legacy). Explicitly hidden → drop.
+    return row == null || row.available !== false;
+  });
 }
 
 export function homeToolsByCategory(tools: ToolDefinition[]): Array<{

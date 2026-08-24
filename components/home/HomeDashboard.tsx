@@ -10,6 +10,7 @@ import {
   mergedHomeTools,
   homeToolsByCategory,
   filterHomeToolsBySelection,
+  filterHomeToolsByCatalog,
 } from "@/lib/dynamic-tools";
 import type { ToolDefinition } from "@/config/tools.config";
 
@@ -27,6 +28,7 @@ function filterMergedTools(query: string, tools: ToolDefinition[]): ToolDefiniti
 export function HomeDashboard() {
   const { config } = usePlatformConfig();
   const platformTools = config?.tools ?? [];
+  const catalog = config?.catalog ?? [];
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 200);
   const [businessName, setBusinessName] = useState("");
@@ -34,18 +36,20 @@ export function HomeDashboard() {
   const [apiError, setApiError] = useState("");
 
   useEffect(() => {
+    if (!config) return;
     fetchProfile()
       .then((p) => {
         setBusinessName(p.businessName || "");
         setHomeToolIds(p.homeToolIds ?? null);
       })
       .catch((err: Error) => setApiError(err.message));
-  }, []);
+  }, [config]);
 
-  const allTools = useMemo(
-    () => filterHomeToolsBySelection(mergedHomeTools(platformTools), homeToolIds),
-    [platformTools, homeToolIds],
-  );
+  const allTools = useMemo(() => {
+    const merged = mergedHomeTools(platformTools);
+    const byCatalog = filterHomeToolsByCatalog(merged, catalog);
+    return filterHomeToolsBySelection(byCatalog, homeToolIds);
+  }, [platformTools, catalog, homeToolIds]);
   const filtered = useMemo(() => filterMergedTools(debouncedSearch, allTools), [debouncedSearch, allTools]);
   const categorized = useMemo(() => homeToolsByCategory(allTools), [allTools]);
   const isSearching = debouncedSearch.trim().length > 0;

@@ -23,11 +23,19 @@ export type PlatformToolDefinition = {
   definition: Record<string, unknown>;
 };
 
+export type PlatformCatalogTool = {
+  id: string;
+  groupName: string;
+  sortOrder: number;
+  available: boolean;
+};
+
 export type EffectiveConfig = {
   poweredBy: { text: string; locked: boolean };
   branding: PlatformBranding;
   configVersion: number;
   tools: PlatformToolDefinition[];
+  catalog?: PlatformCatalogTool[];
   theme?: ThemeTokens | Record<string, string> | null;
 };
 
@@ -57,6 +65,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         branding: DEFAULT_BRANDING,
         configVersion: 1,
         tools: [],
+        catalog: [],
       });
     } finally {
       setLoading(false);

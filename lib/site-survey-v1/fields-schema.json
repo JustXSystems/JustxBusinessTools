@@ -1,0 +1,4968 @@
+{
+  "steps": {
+    "residential": [
+      {
+        "id": "contact",
+        "label": "Owner",
+        "icon": "ti-user-circle"
+      },
+      {
+        "id": "system",
+        "icon": "ti-sun",
+        "label": "System"
+      },
+      {
+        "id": "electrical",
+        "icon": "ti-bolt",
+        "label": "Electrical"
+      },
+      {
+        "id": "load",
+        "icon": "ti-list-check",
+        "label": "Load"
+      },
+      {
+        "id": "photos",
+        "icon": "ti-camera",
+        "label": "Photos"
+      },
+      {
+        "id": "safety",
+        "icon": "ti-shield-check",
+        "label": "Safety"
+      },
+      {
+        "id": "report",
+        "icon": "ti-report-analytics",
+        "label": "Report"
+      }
+    ],
+    "epc": [
+      {
+        "id": "project",
+        "label": "Project",
+        "icon": "ti-user-circle"
+      },
+      {
+        "id": "overview",
+        "icon": "ti-building-skyscraper",
+        "label": "Overview"
+      },
+      {
+        "id": "site",
+        "icon": "ti-map-pin",
+        "label": "Site"
+      },
+      {
+        "id": "electrical",
+        "icon": "ti-bolt",
+        "label": "Electrical"
+      },
+      {
+        "id": "commercial",
+        "icon": "ti-currency-rupee",
+        "label": "Commercial"
+      },
+      {
+        "id": "safety",
+        "icon": "ti-shield-check",
+        "label": "Safety"
+      },
+      {
+        "id": "checklist",
+        "icon": "ti-camera",
+        "label": "Checklist"
+      },
+      {
+        "id": "report",
+        "icon": "ti-report-analytics",
+        "label": "Report"
+      }
+    ]
+  },
+  "fields": [
+    {
+      "key": "f_address",
+      "kind": "text",
+      "label": "Site Address",
+      "section": "Project Contact",
+      "required": true,
+      "flow": "common",
+      "itype": null,
+      "options": [],
+      "placeholder": "Full site address",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_city",
+      "kind": "text",
+      "label": "City",
+      "section": "Project Contact",
+      "required": true,
+      "flow": "common",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. Bengaluru",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_date",
+      "kind": "date",
+      "label": "Survey Date",
+      "section": "Project Contact",
+      "required": true,
+      "flow": "common",
+      "itype": null,
+      "options": [],
+      "placeholder": null,
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_email",
+      "kind": "email",
+      "label": "Email",
+      "section": "Project Contact",
+      "required": false,
+      "flow": "common",
+      "itype": null,
+      "options": [],
+      "placeholder": "name@example.com",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_name",
+      "kind": "text",
+      "label": "Customer / Company Name",
+      "section": "Project Contact",
+      "required": true,
+      "flow": "common",
+      "itype": null,
+      "options": [],
+      "placeholder": "Full name or registered business name",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_phone",
+      "kind": "text",
+      "label": "Phone Number",
+      "section": "Project Contact",
+      "required": true,
+      "flow": "common",
+      "itype": null,
+      "options": [],
+      "placeholder": "+91 98765 43210",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_phone2",
+      "kind": "text",
+      "label": "Alternate Phone",
+      "section": "Project Contact",
+      "required": false,
+      "flow": "common",
+      "itype": null,
+      "options": [],
+      "placeholder": "+91 98765 43210",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "solartype",
+      "kind": "radio",
+      "label": "Installation Type",
+      "section": "Project Contact",
+      "required": true,
+      "flow": "common",
+      "itype": null,
+      "options": [
+        {
+          "value": "Residential Rooftop",
+          "label": "Residential Rooftop"
+        },
+        {
+          "value": "Commercial Rooftop",
+          "label": "Commercial Rooftop"
+        },
+        {
+          "value": "Industrial Rooftop",
+          "label": "Industrial Rooftop"
+        },
+        {
+          "value": "Ground Mount",
+          "label": "Ground Mount"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "starttime",
+      "kind": "radio",
+      "label": "Preferred Start",
+      "section": "Project Contact",
+      "required": true,
+      "flow": "common",
+      "itype": null,
+      "options": [
+        {
+          "value": "Immediate Start",
+          "label": "Immediate start"
+        },
+        {
+          "value": "After a Week",
+          "label": "After a week"
+        },
+        {
+          "value": "After a Month",
+          "label": "After a month"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "amc",
+      "kind": "radio",
+      "label": "AMC Interested",
+      "section": "Solar Modules, System & Budget",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        },
+        {
+          "value": "Maybe",
+          "label": "Maybe"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "system",
+      "card": "blue"
+    },
+    {
+      "key": "bat_existing",
+      "kind": "radio",
+      "label": "Existing Battery",
+      "section": "Electrical Details",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "bill_photo",
+      "kind": "file",
+      "label": "Electricity bill upload",
+      "section": null,
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": null,
+      "stepId": "photos",
+      "card": "blue"
+    },
+    {
+      "key": "f_area",
+      "kind": "number",
+      "label": "Total Area",
+      "section": "Site Dimensions",
+      "required": true,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 1200",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_areaunit",
+      "kind": "select",
+      "label": "Area Unit",
+      "section": "Site Dimensions",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Sq. Feet",
+          "label": "Sq. Feet"
+        },
+        {
+          "value": "Sq. Meters",
+          "label": "Sq. Meters"
+        },
+        {
+          "value": "Acres",
+          "label": "Acres"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_bill",
+      "kind": "number",
+      "label": "Monthly Bill",
+      "section": "Electrical Details",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 5000",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "f_budget",
+      "kind": "number",
+      "label": "Approx. Budget",
+      "section": "Solar Modules, System & Budget",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 300000",
+      "stepId": "system",
+      "card": "blue"
+    },
+    {
+      "key": "f_cableroute",
+      "kind": "text",
+      "label": "Cable Route",
+      "section": "Electrical Details",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. Terrace to DB via east staircase",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "f_connload",
+      "kind": "number",
+      "label": "Connected Load",
+      "section": "Electrical Details",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 10",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "f_floors",
+      "kind": "number",
+      "label": "No. of Floors",
+      "section": "Ownership",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 3",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_investment",
+      "kind": "select",
+      "label": "Investment Type",
+      "section": "Electrical Details",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Full Capital",
+          "label": "Full capital"
+        },
+        {
+          "value": "Bank Loan",
+          "label": "Bank loan"
+        },
+        {
+          "value": "Govt Subsidy",
+          "label": "Govt subsidy"
+        },
+        {
+          "value": "Loan + Subsidy",
+          "label": "Loan + subsidy"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "f_loadreq",
+      "kind": "number",
+      "label": "Load Requirement",
+      "section": "Electrical Details",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 8",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "f_ltht",
+      "kind": "select",
+      "label": "LT / HT Panel Location",
+      "section": "Electrical Details",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Ground Floor",
+          "label": "Ground Floor"
+        },
+        {
+          "value": "1st Floor",
+          "label": "1st Floor"
+        },
+        {
+          "value": "2nd Floor",
+          "label": "2nd Floor"
+        },
+        {
+          "value": "Basement",
+          "label": "Basement"
+        },
+        {
+          "value": "Terrace",
+          "label": "Terrace"
+        },
+        {
+          "value": "Main Gate",
+          "label": "Main Gate"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "f_meter",
+      "kind": "select",
+      "label": "Meter Location",
+      "section": "Electrical Details",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Ground Floor",
+          "label": "Ground Floor"
+        },
+        {
+          "value": "1st Floor",
+          "label": "1st Floor"
+        },
+        {
+          "value": "2nd Floor",
+          "label": "2nd Floor"
+        },
+        {
+          "value": "Utility Room",
+          "label": "Utility Room"
+        },
+        {
+          "value": "Main Gate",
+          "label": "Main Gate"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "f_modknowledge",
+      "kind": "select",
+      "label": "Customer Module Knowledge",
+      "section": "Solar Modules, System & Budget",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "No Knowledge",
+          "label": "No knowledge"
+        },
+        {
+          "value": "Beginner",
+          "label": "Beginner"
+        },
+        {
+          "value": "Intermediate",
+          "label": "Intermediate"
+        },
+        {
+          "value": "Good",
+          "label": "Good"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "system",
+      "card": "blue"
+    },
+    {
+      "key": "f_modulebrand_txt",
+      "kind": "text",
+      "label": "Module Brand",
+      "section": "Solar Modules, System & Budget",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. Tata, Waaree, Vikram, Luminous...",
+      "stepId": "system",
+      "card": "blue"
+    },
+    {
+      "key": "f_modulesize",
+      "kind": "text",
+      "label": "System Size Required",
+      "section": "Solar Modules, System & Budget",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 5 kW or 10 kW",
+      "stepId": "system",
+      "card": "blue"
+    },
+    {
+      "key": "f_notes",
+      "kind": "textarea",
+      "label": "Additional notes",
+      "section": null,
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "Any extra observations, site conditions, or customer requests...",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_powercut",
+      "kind": "number",
+      "label": "Avg Power Cut",
+      "section": "Electrical Details",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 4",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "f_rentedfamilies",
+      "kind": "number",
+      "label": "Rented Families",
+      "section": "Ownership",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 2",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_rentedshops",
+      "kind": "number",
+      "label": "Rented Shops",
+      "section": "Ownership",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 1",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_roofage",
+      "kind": "number",
+      "label": "Roof Age",
+      "section": "Site Dimensions",
+      "required": true,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 5",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_roofheight",
+      "kind": "text",
+      "label": "Roof Height / Floor",
+      "section": "Site Dimensions",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 3rd floor / 12 m",
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "f_transformer",
+      "kind": "text",
+      "label": "Transformer Details",
+      "section": "Electrical Details",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 100 kVA, pole-mounted, street facing",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "inv_existing",
+      "kind": "radio",
+      "label": "Existing Inverter",
+      "section": "Electrical Details",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "moduletype",
+      "kind": "checkbox",
+      "label": "Module Type",
+      "section": "Solar Modules, System & Budget",
+      "required": true,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Mono PERC",
+          "label": "Mono PERC"
+        },
+        {
+          "value": "TOPCon",
+          "label": "TOPCon"
+        },
+        {
+          "value": "Bifacial",
+          "label": "Bifacial"
+        },
+        {
+          "value": "Thin-Film",
+          "label": "Thin-Film"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "system",
+      "card": "blue"
+    },
+    {
+      "key": "othersites",
+      "kind": "radio",
+      "label": "Other Sites Owned",
+      "section": "Ownership",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "othersitessolar",
+      "kind": "radio",
+      "label": "Solar Interest at Other Sites",
+      "section": "Ownership",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes — interested"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        },
+        {
+          "value": "Maybe Later",
+          "label": "Maybe later"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "ownership",
+      "kind": "radio",
+      "label": "Ownership",
+      "section": "Ownership",
+      "required": true,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Own",
+          "label": "Own building"
+        },
+        {
+          "value": "Rent",
+          "label": "Rent building"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "roof_photos",
+      "kind": "file",
+      "label": null,
+      "section": null,
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": null,
+      "stepId": "photos",
+      "card": "blue"
+    },
+    {
+      "key": "rooftype",
+      "kind": "radio",
+      "label": "Roof Type",
+      "section": "Site Dimensions",
+      "required": true,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "RCC Roof",
+          "label": "RCC roof"
+        },
+        {
+          "value": "Metal Sheet Roof",
+          "label": "Metal sheet"
+        },
+        {
+          "value": "Tile Roof",
+          "label": "Tile roof"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
+      "key": "safetyrating",
+      "kind": "radio",
+      "label": "Overall Safety Rating",
+      "section": "Safety & Site Assessment",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Safe — Ready to Install",
+          "label": "Safe — ready to install"
+        },
+        {
+          "value": "Minor Issues — Proceed with Caution",
+          "label": "Minor issues"
+        },
+        {
+          "value": "Major Issues — Requires Attention",
+          "label": "Major issues"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sc_access",
+      "kind": "select",
+      "label": "Access to Rooftop",
+      "section": "Safety & Site Assessment",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Stair Case",
+          "label": "Stair Case"
+        },
+        {
+          "value": "Service Lift",
+          "label": "Service Lift"
+        },
+        {
+          "value": "Passenger Lift",
+          "label": "Passenger Lift"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sc_earthing",
+      "kind": "select",
+      "label": "Earthing Condition",
+      "section": "Safety & Site Assessment",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Good",
+          "label": "Good"
+        },
+        {
+          "value": "Normal",
+          "label": "Normal"
+        },
+        {
+          "value": "Need to Fix",
+          "label": "Need to Fix"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sc_electrical",
+      "kind": "text",
+      "label": "Wiring / DB Condition",
+      "section": "Safety & Site Assessment",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. DB accessible, wiring in good condition",
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sc_hazard",
+      "kind": "text",
+      "label": "Environmental Hazards",
+      "section": "Safety & Site Assessment",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. Dust-prone area — monthly cleaning needed",
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sc_loadbear",
+      "kind": "text",
+      "label": "Roof Load Bearing",
+      "section": "Safety & Site Assessment",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. RCC — suitable for panel load",
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sc_mcb",
+      "kind": "text",
+      "label": "MCB / Fuse Status",
+      "section": "Safety & Site Assessment",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. 3-phase MCB — functional",
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sc_remarks",
+      "kind": "textarea",
+      "label": "Remarks",
+      "section": "Safety & Site Assessment",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "Any safety concerns, hazards, or special notes observed during the site visit...",
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sc_roof",
+      "kind": "select",
+      "label": "Roof Structural Condition",
+      "section": "Safety & Site Assessment",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "Good",
+          "label": "Good"
+        },
+        {
+          "value": "Normal",
+          "label": "Normal"
+        },
+        {
+          "value": "Average",
+          "label": "Average"
+        },
+        {
+          "value": "Poor",
+          "label": "Poor"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sc_shadow",
+      "kind": "text",
+      "label": "Shadow, Trees & Obstruction",
+      "section": "Safety & Site Assessment",
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. Water tank on NW causes minor morning shadow; no trees on south side",
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "shadow_photos",
+      "kind": "file",
+      "label": null,
+      "section": null,
+      "required": false,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": null,
+      "stepId": "photos",
+      "card": "blue"
+    },
+    {
+      "key": "sv_date",
+      "kind": "date",
+      "label": "Survey Date",
+      "section": "Surveyor Sign-off",
+      "required": true,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sv_designation",
+      "kind": "text",
+      "label": "Designation",
+      "section": "Surveyor Sign-off",
+      "required": true,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. Site Engineer",
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sv_name",
+      "kind": "text",
+      "label": "Surveyor Name",
+      "section": "Surveyor Sign-off",
+      "required": true,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "Full name",
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "sv_phone",
+      "kind": "text",
+      "label": "Phone",
+      "section": "Surveyor Sign-off",
+      "required": true,
+      "flow": "residential",
+      "itype": null,
+      "options": [],
+      "placeholder": "+91 98765 43210",
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "systemtype",
+      "kind": "radio",
+      "label": "System Type",
+      "section": "Solar Modules, System & Budget",
+      "required": true,
+      "flow": "residential",
+      "itype": null,
+      "options": [
+        {
+          "value": "On-Grid",
+          "label": "On-Grid"
+        },
+        {
+          "value": "Off-Grid",
+          "label": "Off-Grid"
+        },
+        {
+          "value": "Hybrid",
+          "label": "Hybrid"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "system",
+      "card": "blue"
+    },
+    {
+      "key": "siterating2",
+      "kind": "radio",
+      "label": "Overall Site Rating",
+      "section": "Surveyor Sign-off",
+      "required": false,
+      "flow": "epc",
+      "itype": null,
+      "options": [
+        {
+          "value": "Ready to Proceed",
+          "label": "Ready to proceed"
+        },
+        {
+          "value": "Minor Issues - Proceed with Caution",
+          "label": "Minor issues"
+        },
+        {
+          "value": "Major Issues - Requires Attention",
+          "label": "Major issues"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "sv2_date",
+      "kind": "date",
+      "label": "Survey Date",
+      "section": "Surveyor Sign-off",
+      "required": true,
+      "flow": "epc",
+      "itype": null,
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "sv2_designation",
+      "kind": "text",
+      "label": "Designation",
+      "section": "Surveyor Sign-off",
+      "required": true,
+      "flow": "epc",
+      "itype": null,
+      "options": [],
+      "placeholder": "e.g. Site Engineer",
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "sv2_name",
+      "kind": "text",
+      "label": "Surveyor Name",
+      "section": "Surveyor Sign-off",
+      "required": true,
+      "flow": "epc",
+      "itype": null,
+      "options": [],
+      "placeholder": "Full name",
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "sv2_phone",
+      "kind": "text",
+      "label": "Phone",
+      "section": "Surveyor Sign-off",
+      "required": true,
+      "flow": "epc",
+      "itype": null,
+      "options": [],
+      "placeholder": "+91 98765 43210",
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "sv2_remarks",
+      "kind": "textarea",
+      "label": "Remarks",
+      "section": "Surveyor Sign-off",
+      "required": false,
+      "flow": "epc",
+      "itype": null,
+      "options": [],
+      "placeholder": "Any concerns, hazards, or special notes observed during the site visit...",
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "c_approvals",
+      "kind": "checkbox",
+      "label": "Approvals / Permissions Required",
+      "section": "Approval & Permissions",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Building Owner / Management NOC",
+          "label": "Building Owner / Management NOC"
+        },
+        {
+          "value": "Municipal Corporation Approval",
+          "label": "Municipal Corporation Approval"
+        },
+        {
+          "value": "DISCOM Net-Metering Approval",
+          "label": "DISCOM Net-Metering Approval"
+        },
+        {
+          "value": "Fire Department NOC",
+          "label": "Fire Department NOC"
+        },
+        {
+          "value": "Society / Association Approval",
+          "label": "Society / Association Approval"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "c_billingentity",
+      "kind": "text",
+      "label": "Billing Entity Name",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "Legal entity name for invoicing",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "c_biztype",
+      "kind": "select",
+      "label": "Business / Facility Type",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Office / IT Park",
+          "label": "Office / IT Park"
+        },
+        {
+          "value": "Retail / Shopping Mall",
+          "label": "Retail / Shopping Mall"
+        },
+        {
+          "value": "Hospital / Healthcare Facility",
+          "label": "Hospital / Healthcare Facility"
+        },
+        {
+          "value": "Hotel / Hospitality",
+          "label": "Hotel / Hospitality"
+        },
+        {
+          "value": "School / Educational Institution",
+          "label": "School / Educational Institution"
+        },
+        {
+          "value": "Warehouse / Logistics",
+          "label": "Warehouse / Logistics"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_builtuparea",
+      "kind": "number",
+      "label": "Total Built-up Area (sq.ft)",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 45000",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_capacity",
+      "kind": "number",
+      "label": "Proposed System Capacity (kW)",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 250",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_checklist",
+      "kind": "checkbox",
+      "label": "Surveyor Confirmation",
+      "section": "Survey Checklist",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Roof accessed and measured",
+          "label": "Roof accessed and measured"
+        },
+        {
+          "value": "Shadow analysis completed",
+          "label": "Shadow analysis completed"
+        },
+        {
+          "value": "Structural assessment completed",
+          "label": "Structural assessment completed"
+        },
+        {
+          "value": "Electrical panel inspected",
+          "label": "Electrical panel inspected"
+        },
+        {
+          "value": "Site photos captured",
+          "label": "Site photos captured"
+        },
+        {
+          "value": "Nearby obstructions noted",
+          "label": "Nearby obstructions noted"
+        },
+        {
+          "value": "Client requirements discussed",
+          "label": "Client requirements discussed"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "c_configuration",
+      "kind": "radio",
+      "label": "System Configuration",
+      "section": "Technical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "On-Grid",
+          "label": "On-Grid"
+        },
+        {
+          "value": "Hybrid",
+          "label": "Hybrid"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_connectiontype",
+      "kind": "radio",
+      "label": "Connection Type",
+      "section": "Electrical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "LT",
+          "label": "LT"
+        },
+        {
+          "value": "HT",
+          "label": "HT"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "c_contractdemand",
+      "kind": "number",
+      "label": "Contract Demand (kVA)",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 450",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "c_dgbackup",
+      "kind": "radio",
+      "label": "Existing DG Backup",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "c_discomcompliance",
+      "kind": "radio",
+      "label": "DISCOM Technical Compliance Required",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "c_docs",
+      "kind": "checkbox",
+      "label": "Documents Collected / Available",
+      "section": "Required Documents",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Electricity Bill (last 3 months)",
+          "label": "Electricity Bill (last 3 months)"
+        },
+        {
+          "value": "Property / Lease Ownership Document",
+          "label": "Property / Lease Ownership Document"
+        },
+        {
+          "value": "Roof Layout Drawing",
+          "label": "Roof Layout Drawing"
+        },
+        {
+          "value": "Company PAN & GST Certificate",
+          "label": "Company PAN & GST Certificate"
+        },
+        {
+          "value": "Board Resolution / Authorization Letter",
+          "label": "Board Resolution / Authorization Letter"
+        },
+        {
+          "value": "Structural Stability Certificate",
+          "label": "Structural Stability Certificate"
+        },
+        {
+          "value": "Single Line Diagram (SLD)",
+          "label": "Single Line Diagram (SLD)"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "c_earthing",
+      "kind": "radio",
+      "label": "Earthing Availability",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "c_fallprotection",
+      "kind": "radio",
+      "label": "Fall Protection Provisions Needed",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "c_financing",
+      "kind": "radio",
+      "label": "Financing / Loan Required",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "c_firenoc",
+      "kind": "radio",
+      "label": "Fire Safety NOC Status",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Available",
+          "label": "Available"
+        },
+        {
+          "value": "Required",
+          "label": "Required"
+        },
+        {
+          "value": "Not Applicable",
+          "label": "Not Applicable"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "c_foundationtype",
+      "kind": "select",
+      "label": "Mounting Foundation Type",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Non-Penetrative (Ballast)",
+          "label": "Non-Penetrative (Ballast)"
+        },
+        {
+          "value": "Penetrative (Bolted)",
+          "label": "Penetrative (Bolted)"
+        },
+        {
+          "value": "Chemical Anchor",
+          "label": "Chemical Anchor"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_gstno",
+      "kind": "text",
+      "label": "Company GST Number",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 29ABCDE1234F1Z5",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "c_inspectorapproval",
+      "kind": "radio",
+      "label": "Electrical Inspector Approval Required",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "c_inverterbrand",
+      "kind": "text",
+      "label": "Inverter Brand Preference",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. Sungrow, Growatt, ABB",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_inverterroomspace",
+      "kind": "radio",
+      "label": "Space Available for Inverter Room",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_invertertype",
+      "kind": "radio",
+      "label": "Inverter Type",
+      "section": "Technical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "String Inverter",
+          "label": "String Inverter"
+        },
+        {
+          "value": "Central Inverter",
+          "label": "Central Inverter"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_liveload",
+      "kind": "number",
+      "label": "Roof Live Load Capacity (kg/sq.m)",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 150",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_meteringtype",
+      "kind": "radio",
+      "label": "Metering Type",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Net Metering",
+          "label": "Net Metering"
+        },
+        {
+          "value": "Gross Metering",
+          "label": "Gross Metering"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "c_moduletype",
+      "kind": "checkbox",
+      "label": "Module Type Preference",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Mono PERC",
+          "label": "Mono PERC"
+        },
+        {
+          "value": "TOPCon",
+          "label": "TOPCon"
+        },
+        {
+          "value": "Bifacial",
+          "label": "Bifacial"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_modulewatt",
+      "kind": "select",
+      "label": "Module Wattage Preference",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "540-550 Wp",
+          "label": "540-550 Wp"
+        },
+        {
+          "value": "555-565 Wp",
+          "label": "555-565 Wp"
+        },
+        {
+          "value": "580-600 Wp",
+          "label": "580-600 Wp"
+        },
+        {
+          "value": "Above 600 Wp",
+          "label": "Above 600 Wp"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_monitoring",
+      "kind": "radio",
+      "label": "Remote Monitoring Required",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_mounting",
+      "kind": "select",
+      "label": "Mounting Structure Type",
+      "section": "Technical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "RCC Elevated Structure",
+          "label": "RCC Elevated Structure"
+        },
+        {
+          "value": "GI Structure (Fixed Tilt)",
+          "label": "GI Structure (Fixed Tilt)"
+        },
+        {
+          "value": "Ballasted Structure",
+          "label": "Ballasted Structure"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_netmetering",
+      "kind": "radio",
+      "label": "Net Metering Status",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "To Be Applied",
+          "label": "To Be Applied"
+        },
+        {
+          "value": "Already Applied",
+          "label": "Already Applied"
+        },
+        {
+          "value": "Already Approved",
+          "label": "Already Approved"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_numbuildings",
+      "kind": "text",
+      "label": "Number of Buildings / Blocks",
+      "section": "Project Overview",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 2",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_obstructions",
+      "kind": "text",
+      "label": "Rooftop Obstructions",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. Water tanks, AC units, lift room",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_operatinghours",
+      "kind": "text",
+      "label": "Daily Operating Hours",
+      "section": "Project Overview",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 9 AM - 9 PM",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_panelcondition",
+      "kind": "select",
+      "label": "Existing Electrical Panel Condition",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Good",
+          "label": "Good"
+        },
+        {
+          "value": "Average",
+          "label": "Average"
+        },
+        {
+          "value": "Needs Upgrade",
+          "label": "Needs Upgrade"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "c_paneldistance",
+      "kind": "number",
+      "label": "Panel-to-Inverter-Room Distance (m)",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 25",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "c_payback",
+      "kind": "text",
+      "label": "Expected Payback Period",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 4-5 years",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "c_paymentmode",
+      "kind": "select",
+      "label": "Business / Payment Model",
+      "section": "Commercial Information",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "CAPEX (Outright Purchase)",
+          "label": "CAPEX (Outright Purchase)"
+        },
+        {
+          "value": "OPEX / RESCO",
+          "label": "OPEX / RESCO"
+        },
+        {
+          "value": "PPA (Power Purchase Agreement)",
+          "label": "PPA (Power Purchase Agreement)"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "c_photo_access",
+      "kind": "file",
+      "label": "Site Entrance / Access Route",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "c_photo_inverterroom",
+      "kind": "file",
+      "label": "Proposed Inverter Room",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "c_photo_meter",
+      "kind": "file",
+      "label": "Energy Meter",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "c_photo_panel",
+      "kind": "file",
+      "label": "Electrical Panel / DB Board",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "c_photo_roof",
+      "kind": "file",
+      "label": "Roof Photos (All Directions)",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "c_photo_shadow",
+      "kind": "file",
+      "label": "Shadow-Casting Objects",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "c_ppatenure",
+      "kind": "text",
+      "label": "PPA Tenure (if RESCO/PPA)",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 15 years",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "c_ppe",
+      "kind": "radio",
+      "label": "PPE Available On-Site",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "c_projectcost",
+      "kind": "number",
+      "label": "Estimated Project Cost (Rs.)",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 12500000",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "c_purpose",
+      "kind": "select",
+      "label": "Purpose of Installation",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Self-Consumption",
+          "label": "Self-Consumption"
+        },
+        {
+          "value": "Net Metering",
+          "label": "Net Metering"
+        },
+        {
+          "value": "Open Access",
+          "label": "Open Access"
+        },
+        {
+          "value": "Group Captive",
+          "label": "Group Captive"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "c_roofaccess",
+      "kind": "select",
+      "label": "Roof Access",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Staircase",
+          "label": "Staircase"
+        },
+        {
+          "value": "Service Lift",
+          "label": "Service Lift"
+        },
+        {
+          "value": "Passenger Lift",
+          "label": "Passenger Lift"
+        },
+        {
+          "value": "Ladder Only",
+          "label": "Ladder Only"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_roofage",
+      "kind": "number",
+      "label": "Age of Roof (years)",
+      "section": "Site Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 6",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_roofcondition",
+      "kind": "select",
+      "label": "Roof Condition",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Good",
+          "label": "Good"
+        },
+        {
+          "value": "Average",
+          "label": "Average"
+        },
+        {
+          "value": "Poor",
+          "label": "Poor"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_roofsections",
+      "kind": "number",
+      "label": "Number of Roof Levels / Sections",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 2",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_rooftype",
+      "kind": "select",
+      "label": "Roof Type",
+      "section": "Site Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "RCC Roof",
+          "label": "RCC Roof"
+        },
+        {
+          "value": "Metal Sheet Roof",
+          "label": "Metal Sheet Roof"
+        },
+        {
+          "value": "Tin Shed",
+          "label": "Tin Shed"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_sanctionedload",
+      "kind": "number",
+      "label": "Sanctioned Load (kVA)",
+      "section": "Electrical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 500",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "c_seismiczone",
+      "kind": "select",
+      "label": "Seismic Zone",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Zone II",
+          "label": "Zone II"
+        },
+        {
+          "value": "Zone III",
+          "label": "Zone III"
+        },
+        {
+          "value": "Zone IV",
+          "label": "Zone IV"
+        },
+        {
+          "value": "Zone V",
+          "label": "Zone V"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_shadowfreearea",
+      "kind": "number",
+      "label": "Shadow-Free Area (sq.ft)",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 15500",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_structcert",
+      "kind": "radio",
+      "label": "Structural Engineer Certificate Required",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_structuralreport",
+      "kind": "radio",
+      "label": "Structural Stability Report",
+      "section": "Structural Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Required",
+          "label": "Required"
+        },
+        {
+          "value": "Already Available",
+          "label": "Already Available"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_subsidy",
+      "kind": "radio",
+      "label": "Subsidy Applicability",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Applicable",
+          "label": "Applicable"
+        },
+        {
+          "value": "Not Applicable",
+          "label": "Not Applicable"
+        },
+        {
+          "value": "To Be Verified",
+          "label": "To Be Verified"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "c_transformercap",
+      "kind": "text",
+      "label": "Transformer Capacity",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 630 kVA",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "c_usablearea",
+      "kind": "number",
+      "label": "Usable Roof Area (sq.ft)",
+      "section": "Site Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 18000",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_voltage",
+      "kind": "select",
+      "label": "Voltage Level",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "415 V (LT)",
+          "label": "415 V (LT)"
+        },
+        {
+          "value": "11 kV (HT)",
+          "label": "11 kV (HT)"
+        },
+        {
+          "value": "33 kV (HT)",
+          "label": "33 kV (HT)"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "c_windzone",
+      "kind": "select",
+      "label": "Wind Load Zone (IS 875)",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Zone I",
+          "label": "Zone I"
+        },
+        {
+          "value": "Zone II",
+          "label": "Zone II"
+        },
+        {
+          "value": "Zone III",
+          "label": "Zone III"
+        },
+        {
+          "value": "Zone IV",
+          "label": "Zone IV"
+        },
+        {
+          "value": "Zone V",
+          "label": "Zone V"
+        },
+        {
+          "value": "Zone VI",
+          "label": "Zone VI"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "c_workpermit",
+      "kind": "radio",
+      "label": "Work-at-Height Permit Required",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Commercial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "g_accessibility",
+      "kind": "select",
+      "label": "Site Accessibility (Road Connectivity)",
+      "section": "Site Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "All-Weather Road Available",
+          "label": "All-Weather Road Available"
+        },
+        {
+          "value": "Kutcha Road - Needs Upgrade",
+          "label": "Kutcha Road - Needs Upgrade"
+        },
+        {
+          "value": "No Road Access",
+          "label": "No Road Access"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_approvals",
+      "kind": "checkbox",
+      "label": "Approvals / Permissions Required",
+      "section": "Approval & Permissions",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Land Use Conversion Approval",
+          "label": "Land Use Conversion Approval"
+        },
+        {
+          "value": "State Nodal Agency Approval",
+          "label": "State Nodal Agency Approval"
+        },
+        {
+          "value": "Grid Connectivity / Evacuation Approval",
+          "label": "Grid Connectivity / Evacuation Approval"
+        },
+        {
+          "value": "Environmental Clearance",
+          "label": "Environmental Clearance"
+        },
+        {
+          "value": "Forest / Wildlife Clearance",
+          "label": "Forest / Wildlife Clearance"
+        },
+        {
+          "value": "Panchayat / Local Body NOC",
+          "label": "Panchayat / Local Body NOC"
+        },
+        {
+          "value": "Power Purchase Agreement Signing",
+          "label": "Power Purchase Agreement Signing"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "g_cabletrenching",
+      "kind": "radio",
+      "label": "Cable Trenching Plan Prepared",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "g_capacity",
+      "kind": "number",
+      "label": "Proposed Capacity (kW)",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 5000",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_checklist",
+      "kind": "checkbox",
+      "label": "Surveyor Confirmation",
+      "section": "Survey Checklist",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Land boundary verified",
+          "label": "Land boundary verified"
+        },
+        {
+          "value": "Topographic survey conducted",
+          "label": "Topographic survey conducted"
+        },
+        {
+          "value": "Soil test conducted",
+          "label": "Soil test conducted"
+        },
+        {
+          "value": "Grid connectivity point confirmed",
+          "label": "Grid connectivity point confirmed"
+        },
+        {
+          "value": "Access road identified",
+          "label": "Access road identified"
+        },
+        {
+          "value": "Shadow / obstruction analysis done",
+          "label": "Shadow / obstruction analysis done"
+        },
+        {
+          "value": "Nearby infrastructure mapped",
+          "label": "Nearby infrastructure mapped"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "g_corrosionprotection",
+      "kind": "radio",
+      "label": "Structure Corrosion Protection",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Hot-Dip Galvanized",
+          "label": "Hot-Dip Galvanized"
+        },
+        {
+          "value": "Pre-Galvanized",
+          "label": "Pre-Galvanized"
+        },
+        {
+          "value": "Not Specified",
+          "label": "Not Specified"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_dcacratio",
+      "kind": "text",
+      "label": "DC:AC Ratio",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 1.25",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_docs",
+      "kind": "checkbox",
+      "label": "Documents Collected / Available",
+      "section": "Required Documents",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Land Title Deed / Lease Agreement",
+          "label": "Land Title Deed / Lease Agreement"
+        },
+        {
+          "value": "Land Conversion (NA) Order",
+          "label": "Land Conversion (NA) Order"
+        },
+        {
+          "value": "Revenue Records (7/12 Extract or equivalent)",
+          "label": "Revenue Records (7/12 Extract or equivalent)"
+        },
+        {
+          "value": "Environmental Clearance (if applicable)",
+          "label": "Environmental Clearance (if applicable)"
+        },
+        {
+          "value": "Grid Connectivity Approval",
+          "label": "Grid Connectivity Approval"
+        },
+        {
+          "value": "Single Line Diagram (SLD)",
+          "label": "Single Line Diagram (SLD)"
+        },
+        {
+          "value": "Detailed Project Report (DPR)",
+          "label": "Detailed Project Report (DPR)"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "g_eia",
+      "kind": "radio",
+      "label": "Environmental Impact Assessment Required",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "g_electricalsafety",
+      "kind": "radio",
+      "label": "Electrical Safety Certification",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Obtained",
+          "label": "Obtained"
+        },
+        {
+          "value": "Required",
+          "label": "Required"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "g_evacuationcapacity",
+      "kind": "text",
+      "label": "Available Evacuation Capacity",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 10 MW available",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "g_evacuationvoltage",
+      "kind": "select",
+      "label": "Evacuation Voltage Level",
+      "section": "Technical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "11 kV",
+          "label": "11 kV"
+        },
+        {
+          "value": "33 kV",
+          "label": "33 kV"
+        },
+        {
+          "value": "66 kV",
+          "label": "66 kV"
+        },
+        {
+          "value": "132 kV",
+          "label": "132 kV"
+        },
+        {
+          "value": "220 kV",
+          "label": "220 kV"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_fencingperimeter",
+      "kind": "number",
+      "label": "Site Fencing Perimeter (meters)",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 2400",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_financing",
+      "kind": "radio",
+      "label": "Financing / Debt Structure Required",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "g_firesafety",
+      "kind": "radio",
+      "label": "Fire Safety Plan Prepared",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "g_floodzone",
+      "kind": "radio",
+      "label": "Flood Zone Assessment",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Not in Flood Zone",
+          "label": "Not in Flood Zone"
+        },
+        {
+          "value": "In Flood Zone - Mitigation Needed",
+          "label": "In Flood Zone - Mitigation Needed"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_forestclearance",
+      "kind": "radio",
+      "label": "Wildlife / Forest Clearance Required",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        },
+        {
+          "value": "Not Applicable",
+          "label": "Not Applicable"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "g_foundationtype",
+      "kind": "select",
+      "label": "Foundation Type",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Pile Foundation",
+          "label": "Pile Foundation"
+        },
+        {
+          "value": "Ballast Foundation",
+          "label": "Ballast Foundation"
+        },
+        {
+          "value": "RCC Isolated Footing",
+          "label": "RCC Isolated Footing"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_geotech",
+      "kind": "radio",
+      "label": "Soil Investigation / Geo-tech Report",
+      "section": "Structural Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Required",
+          "label": "Required"
+        },
+        {
+          "value": "Already Available",
+          "label": "Already Available"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_gridvoltage",
+      "kind": "select",
+      "label": "Grid Connectivity Voltage",
+      "section": "Electrical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "11 kV",
+          "label": "11 kV"
+        },
+        {
+          "value": "33 kV",
+          "label": "33 kV"
+        },
+        {
+          "value": "66 kV",
+          "label": "66 kV"
+        },
+        {
+          "value": "132 kV",
+          "label": "132 kV"
+        },
+        {
+          "value": "220 kV",
+          "label": "220 kV"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "g_invertertype",
+      "kind": "radio",
+      "label": "Inverter Type",
+      "section": "Technical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Central Inverter",
+          "label": "Central Inverter"
+        },
+        {
+          "value": "String Inverter",
+          "label": "String Inverter"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_irr",
+      "kind": "text",
+      "label": "Expected IRR / Payback Period",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 14% IRR / 6 years",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "g_laboursafety",
+      "kind": "radio",
+      "label": "Labour Safety Compliance (Construction)",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Plan In Place",
+          "label": "Plan In Place"
+        },
+        {
+          "value": "To Be Prepared",
+          "label": "To Be Prepared"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "g_landarea",
+      "kind": "number",
+      "label": "Total Land Area (acres)",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 25",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_landcost",
+      "kind": "text",
+      "label": "Land Lease / Purchase Cost",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. Rs. 50,000/acre/year lease",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "g_landlocation",
+      "kind": "text",
+      "label": "Land Location (Survey No. / Village / Taluk / District)",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. Survey No. 45, XYZ Village, ABC Taluk",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_landtype",
+      "kind": "select",
+      "label": "Land Type",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Agricultural",
+          "label": "Agricultural"
+        },
+        {
+          "value": "Barren / Wasteland",
+          "label": "Barren / Wasteland"
+        },
+        {
+          "value": "Industrial",
+          "label": "Industrial"
+        },
+        {
+          "value": "Government Lease",
+          "label": "Government Lease"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_layoutdesign",
+      "kind": "radio",
+      "label": "Plant Layout Design Finalized",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_meteringpoint",
+      "kind": "text",
+      "label": "Metering Point Location",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. At substation interconnection",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "g_moduletype",
+      "kind": "checkbox",
+      "label": "Module Type & Technology",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Mono PERC",
+          "label": "Mono PERC"
+        },
+        {
+          "value": "Bifacial",
+          "label": "Bifacial"
+        },
+        {
+          "value": "TOPCon",
+          "label": "TOPCon"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_mounting",
+      "kind": "select",
+      "label": "Mounting Structure",
+      "section": "Technical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Fixed Tilt Structure",
+          "label": "Fixed Tilt Structure"
+        },
+        {
+          "value": "Seasonal Tilt Structure",
+          "label": "Seasonal Tilt Structure"
+        },
+        {
+          "value": "Single-Axis Tracker",
+          "label": "Single-Axis Tracker"
+        },
+        {
+          "value": "Dual-Axis Tracker",
+          "label": "Dual-Axis Tracker"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_ownershipproof",
+      "kind": "radio",
+      "label": "Land Ownership Proof Available",
+      "section": "Project Overview",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_paymentmode",
+      "kind": "select",
+      "label": "Business Model",
+      "section": "Commercial Information",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "CAPEX",
+          "label": "CAPEX"
+        },
+        {
+          "value": "RESCO",
+          "label": "RESCO"
+        },
+        {
+          "value": "Group Captive",
+          "label": "Group Captive"
+        },
+        {
+          "value": "Open Access",
+          "label": "Open Access"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "g_photo_accessroad",
+      "kind": "file",
+      "label": "Access Road",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "g_photo_boundary",
+      "kind": "file",
+      "label": "Land Boundary (All Corners)",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "g_photo_gridpoint",
+      "kind": "file",
+      "label": "Nearest Substation / Grid Point",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "g_photo_panorama",
+      "kind": "file",
+      "label": "Site Panorama Shots",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "g_photo_soil",
+      "kind": "file",
+      "label": "Soil / Topography",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "g_photo_vegetation",
+      "kind": "file",
+      "label": "Existing Vegetation / Obstructions",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "g_ppadetails",
+      "kind": "text",
+      "label": "PPA Details (Tenure & Tariff)",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 25 years @ Rs. 2.90/unit",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "g_projectcost",
+      "kind": "number",
+      "label": "Estimated Project Cost (Rs.)",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 180000000",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "g_projecttype",
+      "kind": "select",
+      "label": "Project Type",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Utility-Scale",
+          "label": "Utility-Scale"
+        },
+        {
+          "value": "Captive",
+          "label": "Captive"
+        },
+        {
+          "value": "Group Captive",
+          "label": "Group Captive"
+        },
+        {
+          "value": "Open Access",
+          "label": "Open Access"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "g_securityfencing",
+      "kind": "radio",
+      "label": "Site Security & Fencing Plan",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "In Place",
+          "label": "In Place"
+        },
+        {
+          "value": "To Be Prepared",
+          "label": "To Be Prepared"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "g_seismiczone",
+      "kind": "select",
+      "label": "Seismic Zone",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Zone II",
+          "label": "Zone II"
+        },
+        {
+          "value": "Zone III",
+          "label": "Zone III"
+        },
+        {
+          "value": "Zone IV",
+          "label": "Zone IV"
+        },
+        {
+          "value": "Zone V",
+          "label": "Zone V"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_soilbearing",
+      "kind": "text",
+      "label": "Soil Bearing Capacity",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 10 T/sq.m",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_soiltype",
+      "kind": "text",
+      "label": "Soil Type",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. Red loamy soil",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_statesubsidy",
+      "kind": "radio",
+      "label": "State Subsidy / Incentive Applicability",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Applicable",
+          "label": "Applicable"
+        },
+        {
+          "value": "Not Applicable",
+          "label": "Not Applicable"
+        },
+        {
+          "value": "To Be Verified",
+          "label": "To Be Verified"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "g_substationdistance",
+      "kind": "number",
+      "label": "Nearest Substation Distance (km)",
+      "section": "Electrical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 3.5",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "g_switchyardneeded",
+      "kind": "radio",
+      "label": "Transformer / Switchyard Required",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "g_topography",
+      "kind": "select",
+      "label": "Land Topography",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Flat",
+          "label": "Flat"
+        },
+        {
+          "value": "Undulating",
+          "label": "Undulating"
+        },
+        {
+          "value": "Sloped",
+          "label": "Sloped"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_trackerfoundation",
+      "kind": "radio",
+      "label": "Tracker Motor & Civil Foundation Needed",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        },
+        {
+          "value": "Not Applicable",
+          "label": "Not Applicable"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_translineroute",
+      "kind": "text",
+      "label": "Transmission Line Route",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 3.2 km overhead line to substation",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "g_vegetationclearance",
+      "kind": "radio",
+      "label": "Vegetation / Tree Clearance Required",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_watersource",
+      "kind": "text",
+      "label": "Nearby Water Source",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. Borewell, canal, river - distance",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_watertable",
+      "kind": "text",
+      "label": "Water Table Level",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [],
+      "placeholder": "e.g. 15 m below ground",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "g_windzone",
+      "kind": "select",
+      "label": "Wind Load Zone (IS 875)",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Ground Mount",
+      "options": [
+        {
+          "value": "Zone I",
+          "label": "Zone I"
+        },
+        {
+          "value": "Zone II",
+          "label": "Zone II"
+        },
+        {
+          "value": "Zone III",
+          "label": "Zone III"
+        },
+        {
+          "value": "Zone IV",
+          "label": "Zone IV"
+        },
+        {
+          "value": "Zone V",
+          "label": "Zone V"
+        },
+        {
+          "value": "Zone VI",
+          "label": "Zone VI"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_approvals",
+      "kind": "checkbox",
+      "label": "Approvals / Permissions Required",
+      "section": "Approval & Permissions",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Factory Management Approval",
+          "label": "Factory Management Approval"
+        },
+        {
+          "value": "DISCOM / Open Access Approval",
+          "label": "DISCOM / Open Access Approval"
+        },
+        {
+          "value": "Pollution Control Board NOC",
+          "label": "Pollution Control Board NOC"
+        },
+        {
+          "value": "Electrical Inspectorate Approval",
+          "label": "Electrical Inspectorate Approval"
+        },
+        {
+          "value": "Fire Department NOC",
+          "label": "Fire Department NOC"
+        },
+        {
+          "value": "Chief Electrical Inspector (CEI) Approval",
+          "label": "Chief Electrical Inspector (CEI) Approval"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "i_cabling",
+      "kind": "radio",
+      "label": "Cabling Requirement",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Standard AC/DC Cabling",
+          "label": "Standard AC/DC Cabling"
+        },
+        {
+          "value": "Fire-Retardant Cabling",
+          "label": "Fire-Retardant Cabling"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_capacity",
+      "kind": "number",
+      "label": "Proposed System Capacity (kW)",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 1000",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_captivepower",
+      "kind": "radio",
+      "label": "Existing Captive Power Plant / DG Sets",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "i_checklist",
+      "kind": "checkbox",
+      "label": "Surveyor Confirmation",
+      "section": "Survey Checklist",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Roof / shed structure assessed",
+          "label": "Roof / shed structure assessed"
+        },
+        {
+          "value": "Load-bearing capacity verified",
+          "label": "Load-bearing capacity verified"
+        },
+        {
+          "value": "Electrical infrastructure reviewed",
+          "label": "Electrical infrastructure reviewed"
+        },
+        {
+          "value": "Shadow & obstruction mapping done",
+          "label": "Shadow & obstruction mapping done"
+        },
+        {
+          "value": "Safety hazards identified",
+          "label": "Safety hazards identified"
+        },
+        {
+          "value": "Crane / access route confirmed",
+          "label": "Crane / access route confirmed"
+        },
+        {
+          "value": "Client technical team consulted",
+          "label": "Client technical team consulted"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "i_configuration",
+      "kind": "radio",
+      "label": "System Configuration",
+      "section": "Technical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "On-Grid",
+          "label": "On-Grid"
+        },
+        {
+          "value": "Hybrid",
+          "label": "Hybrid"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_connectionvoltage",
+      "kind": "select",
+      "label": "Connection Voltage",
+      "section": "Electrical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "HT (11 kV)",
+          "label": "HT (11 kV)"
+        },
+        {
+          "value": "HT (33 kV)",
+          "label": "HT (33 kV)"
+        },
+        {
+          "value": "EHT (66 kV / 132 kV)",
+          "label": "EHT (66 kV / 132 kV)"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "i_contractdemand",
+      "kind": "number",
+      "label": "Contract Demand (kVA)",
+      "section": "Electrical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 2000",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "i_corrosionlevel",
+      "kind": "select",
+      "label": "Roof Sheet Corrosion Level",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "None",
+          "label": "None"
+        },
+        {
+          "value": "Minor",
+          "label": "Minor"
+        },
+        {
+          "value": "Moderate",
+          "label": "Moderate"
+        },
+        {
+          "value": "Severe - Replacement Needed",
+          "label": "Severe - Replacement Needed"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_craneaccess",
+      "kind": "radio",
+      "label": "Crane / Material Movement Access",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_docs",
+      "kind": "checkbox",
+      "label": "Documents Collected / Available",
+      "section": "Required Documents",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Electricity Bill (HT/EHT, last 6 months)",
+          "label": "Electricity Bill (HT/EHT, last 6 months)"
+        },
+        {
+          "value": "Factory Layout Plan",
+          "label": "Factory Layout Plan"
+        },
+        {
+          "value": "Structural Drawing",
+          "label": "Structural Drawing"
+        },
+        {
+          "value": "Company Incorporation Documents",
+          "label": "Company Incorporation Documents"
+        },
+        {
+          "value": "GST Certificate",
+          "label": "GST Certificate"
+        },
+        {
+          "value": "Factory License",
+          "label": "Factory License"
+        },
+        {
+          "value": "Consent to Establish / Operate (Pollution Board)",
+          "label": "Consent to Establish / Operate (Pollution Board)"
+        },
+        {
+          "value": "Single Line Diagram (SLD)",
+          "label": "Single Line Diagram (SLD)"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "i_evacuationvoltage",
+      "kind": "select",
+      "label": "Power Evacuation Voltage Level",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "415 V (LT)",
+          "label": "415 V (LT)"
+        },
+        {
+          "value": "11 kV (HT)",
+          "label": "11 kV (HT)"
+        },
+        {
+          "value": "33 kV (HT)",
+          "label": "33 kV (HT)"
+        },
+        {
+          "value": "66 kV / 132 kV (EHT)",
+          "label": "66 kV / 132 kV (EHT)"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_explosionproof",
+      "kind": "radio",
+      "label": "Explosion-Proof Equipment Required",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        },
+        {
+          "value": "Not Applicable",
+          "label": "Not Applicable"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "i_firenoc",
+      "kind": "radio",
+      "label": "Fire NOC Status",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Available",
+          "label": "Available"
+        },
+        {
+          "value": "Required",
+          "label": "Required"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "i_gstno",
+      "kind": "text",
+      "label": "Industry GST Number",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 29ABCDE1234F1Z5",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "i_harmonics",
+      "kind": "radio",
+      "label": "Harmonic Distortion Concerns",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        },
+        {
+          "value": "Unknown",
+          "label": "Unknown"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "i_hazardzone",
+      "kind": "radio",
+      "label": "Hazardous Zone Classification Applicable",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "i_industrytype",
+      "kind": "select",
+      "label": "Industry Type",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Manufacturing",
+          "label": "Manufacturing"
+        },
+        {
+          "value": "Textile",
+          "label": "Textile"
+        },
+        {
+          "value": "Pharmaceutical",
+          "label": "Pharmaceutical"
+        },
+        {
+          "value": "Automotive / Auto Ancillary",
+          "label": "Automotive / Auto Ancillary"
+        },
+        {
+          "value": "Cold Storage",
+          "label": "Cold Storage"
+        },
+        {
+          "value": "Warehouse / Logistics",
+          "label": "Warehouse / Logistics"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_invertertype",
+      "kind": "radio",
+      "label": "Inverter Type",
+      "section": "Technical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Central Inverter",
+          "label": "Central Inverter"
+        },
+        {
+          "value": "String Inverter",
+          "label": "String Inverter"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_loadassessment",
+      "kind": "radio",
+      "label": "Purlin / Truss Load Assessment",
+      "section": "Structural Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Required",
+          "label": "Required"
+        },
+        {
+          "value": "Already Available",
+          "label": "Already Available"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_meteringarrangement",
+      "kind": "radio",
+      "label": "Metering Arrangement",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Net Metering",
+          "label": "Net Metering"
+        },
+        {
+          "value": "Gross Metering",
+          "label": "Gross Metering"
+        },
+        {
+          "value": "Open Access Meter",
+          "label": "Open Access Meter"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "i_moduletype",
+      "kind": "checkbox",
+      "label": "Module Type Preference",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Mono PERC",
+          "label": "Mono PERC"
+        },
+        {
+          "value": "TOPCon",
+          "label": "TOPCon"
+        },
+        {
+          "value": "Bifacial",
+          "label": "Bifacial"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_mounting",
+      "kind": "select",
+      "label": "Mounting Structure Type",
+      "section": "Technical Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Purlin-Mounted",
+          "label": "Purlin-Mounted"
+        },
+        {
+          "value": "Truss-Mounted",
+          "label": "Truss-Mounted"
+        },
+        {
+          "value": "Elevated MMS Structure",
+          "label": "Elevated MMS Structure"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_openaccesscharges",
+      "kind": "radio",
+      "label": "Open Access Charges Applicable",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "i_payback",
+      "kind": "text",
+      "label": "Expected Payback Period",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 3.5-4 years",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "i_paymentmode",
+      "kind": "select",
+      "label": "Business Model",
+      "section": "Commercial Information",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "CAPEX",
+          "label": "CAPEX"
+        },
+        {
+          "value": "OPEX / RESCO",
+          "label": "OPEX / RESCO"
+        },
+        {
+          "value": "PPA",
+          "label": "PPA"
+        },
+        {
+          "value": "Group Captive",
+          "label": "Group Captive"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "i_photo_access",
+      "kind": "file",
+      "label": "Access Roads",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "i_photo_dgset",
+      "kind": "file",
+      "label": "DG Sets",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "i_photo_shed",
+      "kind": "file",
+      "label": "Shed Roof (Aerial / Wide Shots)",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "i_photo_structure",
+      "kind": "file",
+      "label": "Purlin / Truss Structure Close-ups",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "i_photo_switchyard",
+      "kind": "file",
+      "label": "Electrical Substation / Switchyard",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "i_photo_transformer",
+      "kind": "file",
+      "label": "Transformer",
+      "section": "Photo Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": null,
+      "stepId": "checklist",
+      "card": "blue"
+    },
+    {
+      "key": "i_plantdetails",
+      "kind": "text",
+      "label": "Plant Capacity / Production Details",
+      "section": "Project Overview",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 50,000 units/month",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_powerfactor",
+      "kind": "text",
+      "label": "Power Factor",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 0.98",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "i_ppadetails",
+      "kind": "text",
+      "label": "Power Purchase Agreement Details",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "Tariff / offtake terms if applicable",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "i_ppatenure",
+      "kind": "text",
+      "label": "PPA Tenure",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 20 years",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "i_ppeplan",
+      "kind": "radio",
+      "label": "PPE & Fall Protection Plan",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "In Place",
+          "label": "In Place"
+        },
+        {
+          "value": "To Be Prepared",
+          "label": "To Be Prepared"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "i_projectcost",
+      "kind": "number",
+      "label": "Estimated Project Cost (Rs.)",
+      "section": "Commercial Information",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 42000000",
+      "stepId": "commercial",
+      "card": "blue"
+    },
+    {
+      "key": "i_purlinspacing",
+      "kind": "text",
+      "label": "Purlin Spacing",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 1.5 m c/c",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_purpose",
+      "kind": "select",
+      "label": "Purpose of Installation",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Captive Consumption",
+          "label": "Captive Consumption"
+        },
+        {
+          "value": "Open Access",
+          "label": "Open Access"
+        },
+        {
+          "value": "Group Captive",
+          "label": "Group Captive"
+        },
+        {
+          "value": "Third-Party Sale",
+          "label": "Third-Party Sale"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_retrofitting",
+      "kind": "radio",
+      "label": "Retrofitting Requirement",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        },
+        {
+          "value": "To Be Assessed",
+          "label": "To Be Assessed"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_roofage",
+      "kind": "number",
+      "label": "Roof Age (years)",
+      "section": "Site Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 10",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_roofmaterial",
+      "kind": "select",
+      "label": "Roof Sheet Material",
+      "section": "Site Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "GI / Metal Sheet",
+          "label": "GI / Metal Sheet"
+        },
+        {
+          "value": "Asbestos Cement Sheet",
+          "label": "Asbestos Cement Sheet"
+        },
+        {
+          "value": "PUF Insulated Panel",
+          "label": "PUF Insulated Panel"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_roofslope",
+      "kind": "select",
+      "label": "Roof Slope / Pitch",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Flat",
+          "label": "Flat"
+        },
+        {
+          "value": "Low Slope (<10°)",
+          "label": "Low Slope (<10°)"
+        },
+        {
+          "value": "Standard Slope (10-20°)",
+          "label": "Standard Slope (10-20°)"
+        },
+        {
+          "value": "Steep (>20°)",
+          "label": "Steep (>20°)"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_safetyofficer",
+      "kind": "radio",
+      "label": "Factory Safety Officer Approval",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Obtained",
+          "label": "Obtained"
+        },
+        {
+          "value": "Required",
+          "label": "Required"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    },
+    {
+      "key": "i_scada",
+      "kind": "radio",
+      "label": "SCADA / Monitoring Integration",
+      "section": "Technical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_seismiczone",
+      "kind": "select",
+      "label": "Seismic Zone",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Zone II",
+          "label": "Zone II"
+        },
+        {
+          "value": "Zone III",
+          "label": "Zone III"
+        },
+        {
+          "value": "Zone IV",
+          "label": "Zone IV"
+        },
+        {
+          "value": "Zone V",
+          "label": "Zone V"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_shadowanalysis",
+      "kind": "text",
+      "label": "Shadow Analysis Notes",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. Chimney / cooling tower shadow on east bay",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_shedarea",
+      "kind": "number",
+      "label": "Total Shed Area (sq.ft)",
+      "section": "Project Overview",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 120000",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_shedbays",
+      "kind": "number",
+      "label": "Number of Shed Bays",
+      "section": "Project Overview",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 6",
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_shiftoperation",
+      "kind": "select",
+      "label": "Shift Operation",
+      "section": "Project Overview",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "1 Shift",
+          "label": "1 Shift"
+        },
+        {
+          "value": "2 Shifts",
+          "label": "2 Shifts"
+        },
+        {
+          "value": "3 Shifts (24x7)",
+          "label": "3 Shifts (24x7)"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "overview",
+      "card": "blue"
+    },
+    {
+      "key": "i_structcert",
+      "kind": "radio",
+      "label": "Structural Stability Certificate",
+      "section": "Structural Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Mandatory - Pending",
+          "label": "Mandatory - Pending"
+        },
+        {
+          "value": "Already Available",
+          "label": "Already Available"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_switchyarddistance",
+      "kind": "number",
+      "label": "Distance to Switchyard / Substation (m)",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 120",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "i_transformercap",
+      "kind": "text",
+      "label": "Transformer Capacity & Type",
+      "section": "Electrical Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 2 x 1600 kVA",
+      "stepId": "electrical",
+      "card": "blue"
+    },
+    {
+      "key": "i_trusstype",
+      "kind": "select",
+      "label": "Truss Spacing & Type",
+      "section": "Site Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Standard Steel Truss",
+          "label": "Standard Steel Truss"
+        },
+        {
+          "value": "Pre-Engineered Building (PEB)",
+          "label": "Pre-Engineered Building (PEB)"
+        },
+        {
+          "value": "RCC Truss",
+          "label": "RCC Truss"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_usablearea",
+      "kind": "number",
+      "label": "Usable Roof Area (sq.ft)",
+      "section": "Site Requirements",
+      "required": true,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [],
+      "placeholder": "e.g. 95000",
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_windzone",
+      "kind": "select",
+      "label": "Wind Load Zone (IS 875)",
+      "section": "Structural Requirements",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Zone I",
+          "label": "Zone I"
+        },
+        {
+          "value": "Zone II",
+          "label": "Zone II"
+        },
+        {
+          "value": "Zone III",
+          "label": "Zone III"
+        },
+        {
+          "value": "Zone IV",
+          "label": "Zone IV"
+        },
+        {
+          "value": "Zone V",
+          "label": "Zone V"
+        },
+        {
+          "value": "Zone VI",
+          "label": "Zone VI"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "site",
+      "card": "blue"
+    },
+    {
+      "key": "i_workpermit",
+      "kind": "radio",
+      "label": "Work Permit System in Use",
+      "section": "Safety & Compliance",
+      "required": false,
+      "flow": "epc",
+      "itype": "Industrial Rooftop",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes"
+        },
+        {
+          "value": "No",
+          "label": "No"
+        }
+      ],
+      "placeholder": null,
+      "stepId": "safety",
+      "card": "blue"
+    }
+  ]
+}

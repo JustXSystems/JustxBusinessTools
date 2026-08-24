@@ -42,6 +42,7 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
   { id: "installation", name: "Installation Report", category: "Projects & Service", icon: "📋", desc: "Document completed installs" },
   { id: "solarroi", name: "Solar ROI Calculator", category: "Solar Solutions", icon: "☀️", desc: "Payback period & savings" },
   { id: "sitesurvey", name: "Solar Site Survey", category: "Solar Solutions", icon: "🏠", desc: "Capture site details on the spot" },
+  { id: "sitesurveyv1", name: "Site Survey Generator V1", category: "Solar Solutions", icon: "🛰️", desc: "Wizard survey with load calc, PDF report & send" },
   { id: "gstcalc", name: "GST Calculator", category: "Finance & Calculators", icon: "🧾", desc: "Add or remove GST instantly" },
   { id: "tdscalc", name: "TDS Calculator", category: "Finance & Calculators", icon: "📉", desc: "Work out TDS deductions" },
   { id: "taxcalc", name: "Tax Calculator", category: "Finance & Calculators", icon: "💼", desc: "Old vs new regime, estimated" },
@@ -74,6 +75,7 @@ const TOOL_TYPES: Record<string, ToolType> = {
   servicetasks: "tracker",
   installation: "tracker",
   sitesurvey: "tracker",
+  sitesurveyv1: "utility",
   pricelist: "tracker",
   creditlimit: "tracker",
   targettracker: "tracker",
@@ -106,6 +108,7 @@ export function getToolDefinition(id: string): ToolDefinition | undefined {
   const type = TOOL_TYPES[id] ?? "utility";
   const subscriptionExempt =
     id !== "quotationv1" &&
+    id !== "sitesurveyv1" &&
     (type === "calculator" || type === "utility" || id === "notifications");
   return {
     ...entry,

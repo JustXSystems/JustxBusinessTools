@@ -22,7 +22,7 @@ export function ToolPlacementPane({
       method: "PUT",
       body: JSON.stringify({ groupName, available }),
     });
-    onSaved("Placement saved. Operator home updates on next load.");
+    onSaved("Placement saved. Live tools are added to branch home lists; refresh home to see them.");
   }
 
   async function hide() {
@@ -33,7 +33,10 @@ export function ToolPlacementPane({
   return (
     <section className="panel admin-card tm-pane">
       <h2>Placement</h2>
-      <p className="muted">Where this tool appears on the operator home screen — not price, not fields.</p>
+      <p className="muted">
+        Org catalog visibility on the operator home screen. Setting Live also adds the tool to each
+        branch&apos;s home allowlist (if that branch uses a fixed tool list).
+      </p>
       <div className="admin-form-grid">
         <label className="field">
           <span>Home group</span>
