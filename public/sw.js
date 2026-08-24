@@ -1,4 +1,4 @@
-const CACHE = "jbt-shell-v3";
+const CACHE = "jbt-shell-v5";
 const PRECACHE = ["/", "/offline.html", "/icons/jbt-icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -24,8 +24,13 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api")) return;
   if (url.pathname.startsWith("/_next")) return;
   if (url.pathname.startsWith("/login")) return;
-  // Always network for branding assets so splash/logo updates are not stale.
-  if (url.pathname.startsWith("/icons/") || url.pathname.startsWith("/uploads/")) {
+  // Never cache install branding — Chrome install dialog reads these.
+  if (
+    url.pathname.startsWith("/icons/") ||
+    url.pathname.startsWith("/uploads/") ||
+    url.pathname.startsWith("/pwa-icon/") ||
+    url.pathname.includes("manifest")
+  ) {
     event.respondWith(fetch(request).catch(() => caches.match(request)));
     return;
   }

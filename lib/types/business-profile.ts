@@ -1,5 +1,7 @@
 export type BusinessProfileSendSettings = {
   whatsappNumbers: Array<{ id: string; label: string; phone: string }>;
+  /** WhatsApp chat text template (supports {{placeholders}}). */
+  whatsappMessage: string;
   email: {
     to: string;
     cc: string;
@@ -12,8 +14,25 @@ export type BusinessProfileSendSettings = {
   };
 };
 
+export const DEFAULT_WHATSAPP_MESSAGE = `Hi {{customerName}},
+
+Please find our quotation details:
+
+• Quotation No.: {{quoteNo}}
+• Type: {{typeLabel}}
+• Date: {{date}}
+• Valid Till: {{validTill}}
+• Grand Total: ₹{{grandTotal}} ({{grandTotalWords}})
+
+I am attaching the PDF quotation. Please review and confirm.
+
+Regards,
+{{companyName}}
+{{companyPhone}}`;
+
 export const DEFAULT_SEND_SETTINGS: BusinessProfileSendSettings = {
   whatsappNumbers: [],
+  whatsappMessage: DEFAULT_WHATSAPP_MESSAGE,
   email: {
     to: "",
     cc: "",
@@ -85,6 +104,7 @@ export const EMPTY_PROFILE: BusinessProfile = {
   homeToolIds: null,
   sendSettings: {
     ...DEFAULT_SEND_SETTINGS,
+    whatsappMessage: DEFAULT_SEND_SETTINGS.whatsappMessage,
     email: { ...DEFAULT_SEND_SETTINGS.email },
     googleDrive: { ...DEFAULT_SEND_SETTINGS.googleDrive },
   },
@@ -109,6 +129,10 @@ export function normalizeSendSettings(
       label: String((n as { label?: string }).label ?? "").trim(),
       phone: String((n as { phone?: string }).phone ?? "").trim(),
     })),
+    whatsappMessage:
+      String(
+        (src as { whatsappMessage?: string }).whatsappMessage ?? DEFAULT_SEND_SETTINGS.whatsappMessage,
+      ).trim() || DEFAULT_WHATSAPP_MESSAGE,
     email: {
       to: String(emailRaw.to ?? DEFAULT_SEND_SETTINGS.email.to).trim(),
       cc: String(emailRaw.cc ?? DEFAULT_SEND_SETTINGS.email.cc).trim(),

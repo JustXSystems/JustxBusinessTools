@@ -1,6 +1,6 @@
 /** Splash motion presets — shared by operator splash + admin branding UI. */
 
-export const SPLASH_ANIMATIONS = ["none", "elegant", "orbit", "spark", "dash"] as const;
+export const SPLASH_ANIMATIONS = ["none", "elegant", "orbit", "spark", "dash", "signal"] as const;
 export type SplashAnimation = (typeof SPLASH_ANIMATIONS)[number];
 
 export const SPLASH_INTENSITIES = ["subtle", "balanced", "bold"] as const;
@@ -12,6 +12,7 @@ export const SPLASH_ANIMATION_LABELS: Record<SplashAnimation, string> = {
   orbit: "Orbit pulse",
   spark: "Spark reveal",
   dash: "Dash cinema",
+  signal: "Brand signal (JustXSystems)",
 };
 
 export const SPLASH_INTENSITY_LABELS: Record<SplashIntensity, string> = {
@@ -22,8 +23,8 @@ export const SPLASH_INTENSITY_LABELS: Record<SplashIntensity, string> = {
 
 export function parseSplashAnimation(raw: unknown): SplashAnimation {
   const v = String(raw ?? "").trim().toLowerCase();
-  // Legacy "nexus" maps back to dash (previous preferred look).
-  if (v === "nexus") return "dash";
+  // Legacy "nexus" maps to brand signal.
+  if (v === "nexus") return "signal";
   return (SPLASH_ANIMATIONS as readonly string[]).includes(v)
     ? (v as SplashAnimation)
     : "dash";

@@ -19,7 +19,7 @@ const ROLES: RoleKey[] = ["owner", "admin", "staff", "viewer"];
 const ROLE_LABELS: Record<RoleKey, string> = {
   owner: "Business Owner",
   admin: "Admin",
-  staff: "User",
+  staff: "Staff",
   viewer: "Viewer",
 };
 
@@ -42,7 +42,10 @@ export function RoleMatrixPanel() {
   }, [open]);
 
   function toggle(role: RoleKey, cap: Capability) {
-    if (!matrix || role === "owner") return;
+    if (!matrix) return;
+    // Locked capabilities / roles.
+    if (role === "owner") return;
+    if (cap === "adminConsole") return;
     setMatrix({
       ...matrix,
       [role]: { ...matrix[role], [cap]: !matrix[role][cap] },
@@ -74,7 +77,10 @@ export function RoleMatrixPanel() {
       <div className="analytics-toolbar">
         <div>
           <h2>Role permission matrix</h2>
-          <p className="muted">Toggle what each org role can do. Owner always keeps full control.</p>
+          <p className="muted">
+            Admin alone can open <code>/admin</code>. Owner edits Business Profile; Staff can view it
+            read-only. Owner row and Admin Console column are locked.
+          </p>
         </div>
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen((v) => !v)}>
           {open ? "Hide matrix" : "Edit matrix"}
@@ -102,7 +108,7 @@ export function RoleMatrixPanel() {
                         <input
                           type="checkbox"
                           checked={Boolean(matrix[role][cap])}
-                          disabled={role === "owner"}
+                          disabled={role === "owner" || cap === "adminConsole"}
                           onChange={() => toggle(role, cap)}
                           aria-label={`${role} ${cap}`}
                         />

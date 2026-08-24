@@ -10,7 +10,6 @@ import {
   DEFAULT_SEND_SETTINGS,
   EMPTY_PROFILE,
   INDIAN_STATES,
-  extractDriveFolderId,
   normalizeSendSettings,
   type BusinessProfile,
   type BusinessProfileSendSettings,
@@ -64,17 +63,12 @@ export default function ProfilePage() {
     setMessage("");
     setError("");
     try {
+      const normalized = normalizeSendSettings(profile.sendSettings);
       const payload: BusinessProfile = {
         ...profile,
         sendSettings: {
-          ...normalizeSendSettings(profile.sendSettings),
-          whatsappNumbers: normalizeSendSettings(profile.sendSettings).whatsappNumbers.filter(
-            (n) => n.phone.trim(),
-          ),
-          googleDrive: {
-            folderId: extractDriveFolderId(profile.sendSettings?.googleDrive?.folderId ?? ""),
-            folderLabel: profile.sendSettings?.googleDrive?.folderLabel ?? "",
-          },
+          ...normalized,
+          whatsappNumbers: normalized.whatsappNumbers.filter((n) => n.phone.trim()),
         },
       };
       const saved = await saveProfile(payload);
@@ -134,8 +128,9 @@ export default function ProfilePage() {
       {!canEdit ? (
         <div className="panel" style={{ marginBottom: 14 }}>
           <p className="section-note" style={{ margin: 0 }}>
-            Viewing as a team user — Business Profile details are read-only. Only the Business Owner can
-            edit these settings.
+            {user?.role === "staff"
+              ? "Staff can view Business Profile details but cannot edit them. Only the Business Owner can make changes."
+              : "Viewing as a team user — Business Profile details are read-only. Only the Business Owner can edit these settings."}
           </p>
         </div>
       ) : null}
@@ -286,8 +281,8 @@ export default function ProfilePage() {
       <div className="panel">
         <h3 className="panel-title">Send Via defaults</h3>
         <p className="section-note">
-          WhatsApp numbers, email To/CC/message templates, and Google Drive folder — shared by every tool
-          under this Business Profile (quotations, invoices, and more).
+          WhatsApp numbers / message and email To/CC/message templates — used by Quotation → Send Via.
+          Share / download needs no profile setup.
         </p>
         <p className="section-note">
           Templates support {"{{customerName}}"}, {"{{quoteNo}}"}, {"{{typeLabel}}"}, {"{{date}}"},{" "}
@@ -355,6 +350,22 @@ export default function ProfilePage() {
           </button>
         ) : null}
 
+        <label className="field" style={{ marginTop: 14 }}>
+          <span className="label">WhatsApp message template</span>
+          <textarea
+            rows={9}
+            value={send.whatsappMessage || DEFAULT_SEND_SETTINGS.whatsappMessage}
+            disabled={!canEdit}
+            onChange={(e) => patchSend({ ...send, whatsappMessage: e.target.value })}
+          />
+        </label>
+        <p className="section-note">
+          Prefilled when you use Send Via → WhatsApp (editable before opening). Automatic PDF attachment
+          requires <code>WHATSAPP_ACCESS_TOKEN</code> + <code>WHATSAPP_PHONE_NUMBER_ID</code> (Meta Cloud
+          API) or <code>WHATSAPP_WEBHOOK_URL</code> on the API server — browser WhatsApp links cannot attach
+          files.
+        </p>
+
         <h4 className="panel-subtitle">Email</h4>
         <div className="field-row2">
           <label className="field">
@@ -401,41 +412,10 @@ export default function ProfilePage() {
           />
         </label>
 
-        <h4 className="panel-subtitle">Google Drive</h4>
-        <label className="field">
-          <span className="label">Folder link or ID</span>
-          <input
-            value={send.googleDrive.folderId}
-            disabled={!canEdit}
-            onChange={(e) =>
-              patchSend({
-                ...send,
-                googleDrive: {
-                  ...send.googleDrive,
-                  folderId: extractDriveFolderId(e.target.value),
-                },
-              })
-            }
-            placeholder="Paste Drive folder URL or ID"
-          />
-        </label>
-        <label className="field">
-          <span className="label">Folder label (optional)</span>
-          <input
-            value={send.googleDrive.folderLabel}
-            disabled={!canEdit}
-            onChange={(e) =>
-              patchSend({
-                ...send,
-                googleDrive: { ...send.googleDrive, folderLabel: e.target.value },
-              })
-            }
-            placeholder="e.g. Quotations / 2026"
-          />
-        </label>
         <p className="section-note">
-          Server needs <code>GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON</code> (share the folder with that service
-          account) or <code>GOOGLE_DRIVE_WEBHOOK_URL</code>.
+          Without <code>EMAIL_WEBHOOK_URL</code> on the API server, Send Via → Email opens the user’s mail
+          app and downloads the PDF to attach. With a webhook, the server posts To/CC/subject/body/PDF to
+          that URL for real delivery (SendGrid, n8n, etc.).
         </p>
       </div>
 

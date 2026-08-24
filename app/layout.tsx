@@ -3,6 +3,8 @@ import "./globals.css";
 import { ClientInit } from "@/components/ClientInit";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { BrandingProvider } from "@/components/branding/BrandingProvider";
+import { DocumentIconSync } from "@/components/branding/DocumentIconSync";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { ShellRouter } from "@/components/ShellRouter";
 
 export const metadata: Metadata = {
@@ -14,8 +16,8 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
   },
   icons: {
-    icon: "/icons/jbt-icon.svg",
-    apple: "/icons/jbt-icon.svg",
+    icon: [{ url: "/icons/presets/justx-mark.png", type: "image/png", sizes: "512x512" }],
+    apple: "/icons/presets/justx-mark.png",
   },
 };
 
@@ -32,6 +34,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         <ClientInit />
         <BrandingProvider>
+          <DocumentIconSync />
+          <InstallPrompt />
           <AuthProvider>
             <ShellRouter>{children}</ShellRouter>
           </AuthProvider>

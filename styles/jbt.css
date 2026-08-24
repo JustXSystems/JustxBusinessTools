@@ -30,7 +30,7 @@ textarea {
   font-family: inherit;
 }
 
-/* Global select chrome — match Quotation V1 category (.qgv1-cat) accent glass */
+/* Global select chrome ï¿½ match Quotation V1 category (.qgv1-cat) accent glass */
 select {
   background: var(--glass-2);
   border: 1px solid rgba(var(--accent-rgb), 0.32);
@@ -463,6 +463,18 @@ a {
   box-shadow: var(--shadow-lift);
 }
 
+.install-prompt-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.install-prompt-brand strong {
+  display: block;
+  font-size: 14px;
+}
+
 .install-prompt p {
   margin: 4px 0 0;
   font-size: 12px;
@@ -473,6 +485,230 @@ a {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.install-icon-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 10px;
+}
+
+.install-icon-preset {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-hair-strong, #e7e1d3);
+  background: #fff;
+  cursor: pointer;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.install-icon-preset:hover {
+  border-color: var(--teal-600, #1b5c5d);
+}
+
+.install-icon-preset.is-selected {
+  border-color: var(--amber, #f2a93b);
+  box-shadow: inset 0 0 0 1px var(--amber, #f2a93b);
+  background: #fffaf0;
+}
+
+.install-icon-preset-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.install-icon-preset-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.install-icon-preset-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.install-icon-preset-meta strong {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.install-icon-preset-meta span {
+  font-size: 11px;
+  color: var(--text-mid, #5a5750);
+  line-height: 1.3;
+}
+
+.install-icon-custom-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #efd4a0;
+  background: #fffaf0;
+}
+
+.install-icon-custom-banner strong {
+  font-size: 13px;
+}
+
+.install-icon-custom-banner .muted {
+  font-size: 11.5px;
+  word-break: break-all;
+}
+
+.install-icon-checker {
+  background-color: #ddd !important;
+  background-image:
+    linear-gradient(45deg, #bbb 25%, transparent 25%),
+    linear-gradient(-45deg, #bbb 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #bbb 75%),
+    linear-gradient(-45deg, transparent 75%, #bbb 75%) !important;
+  background-size: 12px 12px !important;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0 !important;
+}
+
+.install-icon-checker img {
+  object-fit: contain !important;
+}
+
+.install-bg-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.install-bg-preset {
+  min-width: 88px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-hair-strong, #e7e1d3);
+  cursor: pointer;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.install-bg-preset.is-transparent {
+  color: #333;
+  background-color: #ddd;
+  background-image:
+    linear-gradient(45deg, #bbb 25%, transparent 25%),
+    linear-gradient(-45deg, #bbb 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #bbb 75%),
+    linear-gradient(-45deg, transparent 75%, #bbb 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+}
+
+.install-bg-preset.is-light {
+  color: #1b1b1b;
+}
+
+.install-bg-preset.is-selected {
+  outline: 2px solid var(--amber, #f2a93b);
+  outline-offset: 2px;
+}
+
+.install-bg-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-mid, #5a5750);
+  cursor: pointer;
+}
+
+.install-bg-custom input[type="color"] {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border-hair-strong, #e7e1d3);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.preview-install-icon img {
+  object-fit: contain;
+}
+
+.preview-install-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 280px;
+  padding: 24px 16px;
+}
+
+.preview-install-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(100%, 360px);
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--bg-2, #fff);
+  border: 1px solid var(--border-hair-strong, #e7e1d3);
+  box-shadow: var(--shadow-lift, 0 8px 24px rgba(15, 61, 62, 0.08));
+}
+
+.preview-install-card strong {
+  display: block;
+  font-size: 14px;
+}
+
+.preview-install-card p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-mid, #5a5750);
+}
+
+.preview-install-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-install-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.preview-install-hint {
+  margin: 0;
+  font-size: 12px;
 }
 
 .bottom-nav a {
@@ -1927,6 +2163,11 @@ a {
   --splash-glow: 0.55;
 }
 
+/* Boot placeholder shares the same canvas as SplashMark (no color flash). */
+.splash-screen.splash-boot {
+  pointer-events: none;
+}
+
 .splash-screen.splash-preview {
   min-height: 420px;
   height: 100%;
@@ -2283,113 +2524,6 @@ a {
   box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.65);
 }
 
-/* —— JustXSystems nexus: any systems ? integrate ? X multiply ? inspire —— */
-.splash-nexus {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  display: none;
-}
-
-.splash-anim-nexus .splash-nexus {
-  display: block;
-}
-
-.splash-nexus-links {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.splash-link {
-  fill: none;
-  stroke: rgba(var(--accent-rgb), 0.55);
-  stroke-width: 0.35;
-  stroke-linecap: round;
-  stroke-dasharray: 80;
-  stroke-dashoffset: 80;
-  opacity: 0;
-  filter: drop-shadow(0 0 2px rgba(var(--accent-rgb), 0.45));
-}
-
-.splash-node {
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  margin: -4.5px 0 0 -4.5px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow:
-    0 0 0 2px rgba(var(--accent-rgb), 0.2),
-    0 0 16px rgba(var(--accent-rgb), 0.75);
-  opacity: 0;
-  transform: scale(0.3);
-}
-
-.splash-node-1 { left: 14%; top: 20%; }
-.splash-node-2 { left: 86%; top: 18%; }
-.splash-node-3 { left: 10%; top: 58%; }
-.splash-node-4 { left: 90%; top: 62%; }
-.splash-node-5 { left: 28%; top: 86%; }
-.splash-node-6 { left: 74%; top: 84%; }
-.splash-node-7 { left: 48%; top: 8%; }
-.splash-node-8 { left: 62%; top: 40%; }
-
-.splash-xbeam {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 140%;
-  height: 2px;
-  margin-left: -70%;
-  margin-top: -1px;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(var(--accent-rgb), 0.15) 18%,
-    rgba(255, 255, 255, 0.85) 50%,
-    rgba(var(--accent-rgb), 0.15) 82%,
-    transparent 100%
-  );
-  box-shadow: 0 0 22px rgba(var(--accent-rgb), 0.55);
-  opacity: 0;
-  transform-origin: center;
-}
-
-.splash-xbeam-a { transform: rotate(32deg) scaleX(0.2); }
-.splash-xbeam-b { transform: rotate(-32deg) scaleX(0.2); }
-
-.splash-exp {
-  position: absolute;
-  left: 50%;
-  top: 42%;
-  width: 40px;
-  height: 40px;
-  margin: -20px 0 0 -20px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(var(--accent-rgb), 0.55);
-  opacity: 0;
-  box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.25);
-}
-
-.splash-story {
-  display: none;
-  margin-top: 4px;
-  font-size: 10.5px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--text) 55%, var(--accent));
-  font-weight: 600;
-  opacity: 0;
-}
-
-.splash-anim-nexus .splash-story {
-  display: block;
-}
-
 /* —— Animation presets —— */
 .splash-anim-none .splash-ring,
 .splash-anim-none .splash-spark,
@@ -2400,8 +2534,7 @@ a {
 .splash-anim-none .splash-burst,
 .splash-anim-none .splash-halo,
 .splash-anim-none .splash-tick,
-.splash-anim-none .splash-underline,
-.splash-anim-none .splash-story {
+.splash-anim-none .splash-underline {
   display: none;
 }
 
@@ -2583,7 +2716,7 @@ a {
   animation: splash-progress-fill var(--splash-ms, 2200ms) linear forwards;
 }
 
-/* Dash cinema — most dynamic default */
+/* Dash cinema ï¿½ most dynamic default */
 .splash-anim-dash .splash-beam {
   animation: splash-beam-slash calc(980ms * var(--splash-speed)) cubic-bezier(0.2, 0.85, 0.2, 1) both;
 }
@@ -2694,195 +2827,276 @@ a {
   animation: splash-progress-fill var(--splash-ms, 2200ms) linear forwards;
 }
 
-/* JustXSystems nexus — systems connect, X multiplies, inspiration expands */
-.splash-anim-nexus .splash-beam,
-.splash-anim-nexus .splash-streak {
+.splash-anim-none .splash-progress-bar {
+  animation: splash-progress-fill var(--splash-ms, 2200ms) linear forwards;
+}
+
+
+/* â€”â€” Brand signal (JustXSystems value story) â€” logo always on top â€”â€” */
+.splash-signal {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+  overflow: hidden;
+}
+
+.splash-anim-signal .splash-signal {
+  display: block;
+}
+
+.splash-signal-ring {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  opacity: 0;
+}
+
+.splash-signal-ring-2 { width: 320px; height: 320px; margin: -160px 0 0 -160px; }
+.splash-signal-ring-3 { width: 440px; height: 440px; margin: -220px 0 0 -220px; }
+
+.splash-signal-x {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: min(72vw, 520px);
+  height: 2px;
+  margin-left: calc(min(72vw, 520px) / -2);
+  margin-top: -1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.55), transparent);
+  opacity: 0;
+  z-index: 0;
+}
+
+.splash-signal-x-a { transform: rotate(28deg) scaleX(0.2); }
+.splash-signal-x-b { transform: rotate(-28deg) scaleX(0.2); }
+
+.splash-signal-chip {
+  position: absolute;
+  padding: 6px 11px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text) 70%, var(--accent));
+  background: color-mix(in srgb, var(--bg-1) 75%, transparent);
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+.splash-signal-chip-1 { left: 7%; top: 18%; }
+.splash-signal-chip-2 { right: 6%; top: 16%; }
+.splash-signal-chip-3 { left: 5%; top: 58%; }
+.splash-signal-chip-4 { right: 5%; top: 62%; }
+.splash-signal-chip-5 { left: 14%; bottom: 16%; }
+.splash-signal-chip-6 { right: 12%; bottom: 18%; }
+
+.splash-value-reel {
+  position: relative;
+  width: min(280px, 80vw);
+  height: 18px;
+  margin-top: 6px;
   display: none;
 }
 
-.splash-anim-nexus .splash-grid {
-  animation: splash-grid-rush calc(11s * var(--splash-speed)) linear infinite;
-  opacity: 0.11;
+.splash-anim-signal .splash-value-reel {
+  display: block;
 }
 
-.splash-anim-nexus .splash-aurora {
-  animation: splash-aurora-spin calc(16s * var(--splash-speed)) linear infinite;
-  opacity: 0.75;
+.splash-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0;
 }
 
-.splash-anim-nexus .splash-orb-a {
-  animation: splash-orb-drift calc(6s * var(--splash-speed)) ease-in-out infinite alternate;
+.splash-anim-signal .splash-beam,
+.splash-anim-signal .splash-streak {
+  display: none;
 }
 
-.splash-anim-nexus .splash-orb-b {
-  animation: splash-orb-drift-alt calc(7.5s * var(--splash-speed)) ease-in-out infinite alternate;
+.splash-anim-signal .splash-mark {
+  z-index: 4;
 }
 
-.splash-anim-nexus .splash-link {
-  animation: splash-link-draw calc(780ms * var(--splash-speed)) ease-out both;
+.splash-anim-signal .splash-logo-core {
+  z-index: 5;
+  animation: splash-signal-logo-in calc(700ms * var(--splash-speed)) cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.splash-anim-nexus .splash-link-1 { animation-delay: 220ms; }
-.splash-anim-nexus .splash-link-2 { animation-delay: 260ms; }
-.splash-anim-nexus .splash-link-3 { animation-delay: 300ms; }
-.splash-anim-nexus .splash-link-4 { animation-delay: 340ms; }
-.splash-anim-nexus .splash-link-5 { animation-delay: 380ms; }
-.splash-anim-nexus .splash-link-6 { animation-delay: 420ms; }
-.splash-anim-nexus .splash-link-7 { animation-delay: 280ms; }
-.splash-anim-nexus .splash-link-8 { animation-delay: 360ms; }
-
-.splash-anim-nexus .splash-node-1,
-.splash-anim-nexus .splash-node-2,
-.splash-anim-nexus .splash-node-3,
-.splash-anim-nexus .splash-node-4,
-.splash-anim-nexus .splash-node-5,
-.splash-anim-nexus .splash-node-6,
-.splash-anim-nexus .splash-node-7,
-.splash-anim-nexus .splash-node-8 {
+.splash-anim-signal .splash-halo {
   animation:
-    splash-node-awaken calc(700ms * var(--splash-speed)) cubic-bezier(0.2, 0.9, 0.2, 1) both,
-    splash-node-converge calc(900ms * var(--splash-speed)) cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    splash-halo-flash calc(800ms * var(--splash-speed)) ease-out 80ms both,
+    splash-halo-breathe calc(2.8s * var(--splash-speed)) ease-in-out 700ms infinite;
 }
 
-.splash-anim-nexus .splash-node-1 {
-  animation-delay: 40ms, 720ms;
-  --nx: 36%;
-  --ny: 22%;
-}
-.splash-anim-nexus .splash-node-2 {
-  animation-delay: 90ms, 740ms;
-  --nx: -36%;
-  --ny: 24%;
-}
-.splash-anim-nexus .splash-node-3 {
-  animation-delay: 130ms, 760ms;
-  --nx: 40%;
-  --ny: -6%;
-}
-.splash-anim-nexus .splash-node-4 {
-  animation-delay: 170ms, 780ms;
-  --nx: -40%;
-  --ny: -8%;
-}
-.splash-anim-nexus .splash-node-5 {
-  animation-delay: 210ms, 800ms;
-  --nx: 22%;
-  --ny: -34%;
-}
-.splash-anim-nexus .splash-node-6 {
-  animation-delay: 250ms, 820ms;
-  --nx: -24%;
-  --ny: -32%;
-}
-.splash-anim-nexus .splash-node-7 {
-  animation-delay: 70ms, 750ms;
-  --nx: 2%;
-  --ny: 34%;
-}
-.splash-anim-nexus .splash-node-8 {
-  animation-delay: 190ms, 790ms;
-  --nx: -12%;
-  --ny: 8%;
-}
-
-.splash-anim-nexus .splash-xbeam-a {
-  animation: splash-x-slash-a calc(700ms * var(--splash-speed)) cubic-bezier(0.15, 0.85, 0.2, 1) 880ms both;
-}
-
-.splash-anim-nexus .splash-xbeam-b {
-  animation: splash-x-slash-b calc(700ms * var(--splash-speed)) cubic-bezier(0.15, 0.85, 0.2, 1) 940ms both;
-}
-
-.splash-anim-nexus .splash-exp-1 {
-  animation: splash-exp-ring calc(1200ms * var(--splash-speed)) ease-out 980ms both;
-}
-
-.splash-anim-nexus .splash-exp-2 {
-  animation: splash-exp-ring calc(1400ms * var(--splash-speed)) ease-out 1080ms both;
-}
-
-.splash-anim-nexus .splash-exp-3 {
-  animation: splash-exp-ring calc(1600ms * var(--splash-speed)) ease-out 1180ms both;
-}
-
-.splash-anim-nexus .splash-logo-core {
+.splash-anim-signal .splash-ring-outer {
   animation:
-    splash-nexus-arrive calc(820ms * var(--splash-speed)) cubic-bezier(0.16, 1, 0.3, 1) 860ms both,
-    splash-logo-float calc(3.6s * var(--splash-speed)) ease-in-out 1700ms infinite;
+    splash-ring-bloom calc(900ms * var(--splash-speed)) ease-out 120ms both,
+    splash-orbit-spin calc(14s * var(--splash-speed)) linear 500ms infinite;
 }
 
-.splash-anim-nexus .splash-halo {
-  animation:
-    splash-halo-flash calc(900ms * var(--splash-speed)) ease-out 900ms both,
-    splash-halo-breathe calc(2.6s * var(--splash-speed)) ease-in-out 1600ms infinite;
+.splash-anim-signal .splash-ring-mid {
+  opacity: 0.7;
+  animation: splash-orbit-spin-rev calc(9s * var(--splash-speed)) linear 300ms infinite;
 }
 
-.splash-anim-nexus .splash-burst {
-  animation:
-    splash-burst-pop calc(900ms * var(--splash-speed)) ease-out 920ms both,
-    splash-burst-spin calc(10s * var(--splash-speed)) linear 1400ms infinite;
+.splash-anim-signal .splash-ring-inner {
+  animation: splash-ring-bloom calc(900ms * var(--splash-speed)) ease-out 180ms both;
 }
 
-.splash-anim-nexus .splash-ring-outer {
-  animation:
-    splash-ring-bloom calc(900ms * var(--splash-speed)) ease-out 940ms both,
-    splash-orbit-spin calc(11s * var(--splash-speed)) linear 1300ms infinite;
+.splash-anim-signal .splash-name {
+  animation: splash-shimmer-in calc(800ms * var(--splash-speed)) ease-out 200ms both;
 }
 
-.splash-anim-nexus .splash-ring-mid {
-  opacity: 0.85;
-  animation: splash-orbit-spin-rev calc(6s * var(--splash-speed)) linear 1100ms infinite;
+.splash-anim-signal .splash-underline {
+  animation: splash-underline-draw calc(600ms * var(--splash-speed)) ease-out 380ms both;
 }
 
-.splash-anim-nexus .splash-ring-inner {
-  animation:
-    splash-ring-bloom calc(900ms * var(--splash-speed)) ease-out 1000ms both,
-    splash-orbit-spin calc(14s * var(--splash-speed)) linear 1300ms infinite;
+.splash-anim-signal .splash-tagline {
+  animation: splash-fade-up calc(650ms * var(--splash-speed)) ease-out 320ms both;
 }
 
-.splash-anim-nexus .splash-tick {
-  animation: splash-tick-in calc(600ms * var(--splash-speed)) ease-out 1100ms both;
+.splash-anim-signal .splash-signal-ring-1 {
+  animation: splash-signal-ring calc(1600ms * var(--splash-speed)) ease-out 400ms both;
+}
+.splash-anim-signal .splash-signal-ring-2 {
+  animation: splash-signal-ring calc(1800ms * var(--splash-speed)) ease-out 520ms both;
+}
+.splash-anim-signal .splash-signal-ring-3 {
+  animation: splash-signal-ring calc(2000ms * var(--splash-speed)) ease-out 640ms both;
 }
 
-.splash-anim-nexus .splash-tick-e { animation-delay: 1160ms; }
-.splash-anim-nexus .splash-tick-s { animation-delay: 1220ms; }
-.splash-anim-nexus .splash-tick-w { animation-delay: 1280ms; }
-
-.splash-anim-nexus .splash-name {
-  animation: splash-shimmer-in calc(900ms * var(--splash-speed)) ease-out 1180ms both;
+.splash-anim-signal .splash-signal-x-a {
+  animation: splash-signal-x-a calc(900ms * var(--splash-speed)) cubic-bezier(0.2, 0.85, 0.2, 1) 280ms both;
+}
+.splash-anim-signal .splash-signal-x-b {
+  animation: splash-signal-x-b calc(900ms * var(--splash-speed)) cubic-bezier(0.2, 0.85, 0.2, 1) 340ms both;
 }
 
-.splash-anim-nexus .splash-underline {
-  animation: splash-underline-draw calc(650ms * var(--splash-speed)) cubic-bezier(0.2, 0.9, 0.2, 1) 1380ms both;
+.splash-anim-signal .splash-signal-chip {
+  animation: splash-signal-chip-in calc(700ms * var(--splash-speed)) cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+.splash-anim-signal .splash-signal-chip-1 { animation-delay: 450ms; }
+.splash-anim-signal .splash-signal-chip-2 { animation-delay: 520ms; }
+.splash-anim-signal .splash-signal-chip-3 { animation-delay: 590ms; }
+.splash-anim-signal .splash-signal-chip-4 { animation-delay: 660ms; }
+.splash-anim-signal .splash-signal-chip-5 { animation-delay: 730ms; }
+.splash-anim-signal .splash-signal-chip-6 { animation-delay: 800ms; }
+
+.splash-anim-signal .splash-value-1 {
+  animation: splash-value-beat calc(2400ms * var(--splash-speed)) ease-in-out 500ms both;
+}
+.splash-anim-signal .splash-value-2 {
+  animation: splash-value-beat calc(2400ms * var(--splash-speed)) ease-in-out 1300ms both;
+}
+.splash-anim-signal .splash-value-3 {
+  animation: splash-value-beat calc(2400ms * var(--splash-speed)) ease-in-out 2100ms both;
 }
 
-.splash-anim-nexus .splash-tagline {
-  animation: splash-fade-up calc(700ms * var(--splash-speed)) ease-out 1320ms both;
+.splash-anim-signal .splash-aurora {
+  animation: splash-aurora-spin calc(18s * var(--splash-speed)) linear infinite;
+  opacity: 0.65;
 }
 
-.splash-anim-nexus .splash-story {
-  animation: splash-story-in calc(900ms * var(--splash-speed)) ease-out 1480ms both;
+.splash-anim-signal .splash-orb-a {
+  animation: splash-orb-drift calc(7s * var(--splash-speed)) ease-in-out infinite alternate;
+}
+.splash-anim-signal .splash-orb-b {
+  animation: splash-orb-drift-alt calc(8.5s * var(--splash-speed)) ease-in-out infinite alternate;
+}
+.splash-anim-signal .splash-grid {
+  animation: splash-grid-drift calc(14s * var(--splash-speed)) linear infinite;
+  opacity: 0.08;
 }
 
-.splash-anim-nexus .splash-spark {
-  animation: splash-spark-fly calc(1500ms * var(--splash-speed)) ease-out both;
+.splash-anim-signal .splash-progress-bar {
+  animation: splash-progress-fill var(--splash-ms, 2800ms) linear forwards;
 }
 
-.splash-anim-nexus .splash-spark-1 { animation-delay: 1200ms; }
-.splash-anim-nexus .splash-spark-2 { animation-delay: 1280ms; }
-.splash-anim-nexus .splash-spark-3 { animation-delay: 1240ms; }
-.splash-anim-nexus .splash-spark-4 { animation-delay: 1320ms; }
-.splash-anim-nexus .splash-spark-5 { animation-delay: 1360ms; }
-.splash-anim-nexus .splash-spark-6 { animation-delay: 1220ms; }
-.splash-anim-nexus .splash-spark-7 { animation-delay: 1400ms; }
-.splash-anim-nexus .splash-spark-8 { animation-delay: 1300ms; }
+.splash-anim-signal .splash-spark {
+  animation: splash-spark-fly calc(1400ms * var(--splash-speed)) ease-out both;
+}
+.splash-anim-signal .splash-spark-1 { animation-delay: 900ms; }
+.splash-anim-signal .splash-spark-2 { animation-delay: 980ms; }
+.splash-anim-signal .splash-spark-3 { animation-delay: 940ms; }
+.splash-anim-signal .splash-spark-4 { animation-delay: 1020ms; }
+.splash-anim-signal .splash-spark-5 { animation-delay: 1060ms; }
+.splash-anim-signal .splash-spark-6 { animation-delay: 920ms; }
+.splash-anim-signal .splash-spark-7 { animation-delay: 1100ms; }
+.splash-anim-signal .splash-spark-8 { animation-delay: 1000ms; }
 
-.splash-anim-nexus .splash-progress-bar {
-  animation: splash-progress-fill var(--splash-ms, 2600ms) linear forwards;
+@keyframes splash-signal-logo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
 }
 
-.splash-anim-none .splash-progress-bar {
-  animation: splash-progress-fill var(--splash-ms, 2200ms) linear forwards;
+@keyframes splash-signal-ring {
+  0% { opacity: 0.7; transform: scale(0.55); }
+  100% { opacity: 0; transform: scale(1.55); }
+}
+
+@keyframes splash-signal-x-a {
+  0% { opacity: 0; transform: rotate(28deg) scaleX(0.2); }
+  40% { opacity: 0.85; }
+  100% { opacity: 0.28; transform: rotate(28deg) scaleX(1); }
+}
+
+@keyframes splash-signal-x-b {
+  0% { opacity: 0; transform: rotate(-28deg) scaleX(0.2); }
+  40% { opacity: 0.85; }
+  100% { opacity: 0.28; transform: rotate(-28deg) scaleX(1); }
+}
+
+@keyframes splash-signal-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes splash-value-beat {
+  0% { opacity: 0; transform: translateY(8px); }
+  18% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+
+@media (max-width: 720px) {
+  .splash-signal-chip-5,
+  .splash-signal-chip-6 {
+    display: none;
+  }
 }
 
 @keyframes splash-rise-in {
@@ -3118,122 +3332,11 @@ a {
   50% { opacity: 1; }
 }
 
-@keyframes splash-node-awaken {
-  from {
-    opacity: 0;
-    transform: scale(0.2);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes splash-node-converge {
-  0% {
-    opacity: 1;
-    transform: translate(0, 0) scale(1);
-  }
-  70% {
-    opacity: 0.85;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(var(--nx, 0), var(--ny, 0)) scale(0.35);
-  }
-}
-
-@keyframes splash-link-draw {
-  0% {
-    opacity: 0;
-    stroke-dashoffset: 80;
-  }
-  18% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.75;
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes splash-x-slash-a {
-  0% {
-    opacity: 0;
-    transform: rotate(32deg) scaleX(0.15);
-  }
-  35% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.35;
-    transform: rotate(32deg) scaleX(1);
-  }
-}
-
-@keyframes splash-x-slash-b {
-  0% {
-    opacity: 0;
-    transform: rotate(-32deg) scaleX(0.15);
-  }
-  35% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.35;
-    transform: rotate(-32deg) scaleX(1);
-  }
-}
-
-@keyframes splash-exp-ring {
-  0% {
-    opacity: 0.85;
-    transform: scale(0.4);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(18);
-  }
-}
-
-@keyframes splash-nexus-arrive {
-  0% {
-    opacity: 0;
-    transform: scale(0.55);
-    filter: blur(10px);
-  }
-  55% {
-    opacity: 1;
-    filter: blur(0);
-  }
-  78% {
-    transform: scale(1.08);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes splash-story-in {
-  from {
-    opacity: 0;
-    letter-spacing: 0.32em;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 0.9;
-    letter-spacing: 0.16em;
-    transform: translateY(0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .splash-screen .splash-logo-core,
   .splash-screen .splash-name,
   .splash-screen .splash-tagline,
   .splash-screen .splash-underline,
-  .splash-screen .splash-story,
   .splash-screen .splash-ring,
   .splash-screen .splash-orb,
   .splash-screen .splash-spark,
@@ -3245,10 +3348,10 @@ a {
   .splash-screen .splash-halo,
   .splash-screen .splash-burst,
   .splash-screen .splash-tick,
-  .splash-screen .splash-node,
-  .splash-screen .splash-link,
-  .splash-screen .splash-xbeam,
-  .splash-screen .splash-exp,
+  .splash-screen .splash-signal-chip,
+  .splash-screen .splash-signal-ring,
+  .splash-screen .splash-signal-x,
+  .splash-screen .splash-value,
   .splash-screen .splash-progress-bar {
     animation: none !important;
   }
@@ -3263,16 +3366,9 @@ a {
   .splash-screen .splash-beam,
   .splash-screen .splash-scan,
   .splash-screen .splash-burst,
-  .splash-screen .splash-nexus {
-    display: none;
-  }
 
   .splash-screen .splash-underline {
     width: min(160px, 42vw);
-  }
-
-  .splash-screen .splash-story {
-    opacity: 0.85;
   }
 
   .splash-screen .splash-progress-bar {
@@ -6923,7 +7019,7 @@ html[data-scheme="light"] .field textarea {
   font-weight: 700;
 }
 
-/* Business Profile — Send Via */
+/* Business Profile ï¿½ Send Via */
 .panel-subtitle {
   margin: 18px 0 8px;
   font-size: 12px;

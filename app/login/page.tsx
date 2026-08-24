@@ -14,6 +14,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  /** Block browser autofill until the user focuses a field. */
+  const [fieldsUnlocked, setFieldsUnlocked] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -23,6 +25,10 @@ export default function LoginPage() {
       });
     }
   }, []);
+
+  function unlockFields() {
+    if (!fieldsUnlocked) setFieldsUnlocked(true);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,21 +51,19 @@ export default function LoginPage() {
       }
       const params = new URLSearchParams(window.location.search);
       const next = params.get("next");
-      const isOrgAdmin =
-        data.user?.isPlatformAdmin ||
-        data.user?.role === "owner" ||
-        data.user?.role === "admin";
+      const canAdmin =
+        data.user?.isPlatformAdmin || data.user?.role === "admin";
       const dest =
         next &&
         next.startsWith("/") &&
         !next.startsWith("/login") &&
         !next.startsWith("/register")
-          ? next
+          ? canAdmin || !next.startsWith("/admin")
+            ? next
+            : "/"
           : data.user?.isPlatformAdmin
             ? "/admin"
-            : isOrgAdmin && next?.startsWith("/admin")
-              ? next
-              : "/";
+            : "/";
       window.location.assign(dest);
     } catch {
       setError(
@@ -70,12 +74,12 @@ export default function LoginPage() {
     }
   }
 
-  if (!mounted) {
-    return <SplashScreen><div className="login-page" /></SplashScreen>;
-  }
-
+  // Keep a single SplashScreen mount — swapping trees on `mounted` remounted splash and caused flicker.
   return (
     <SplashScreen>
+      {!mounted ? (
+        <div className="login-page" />
+      ) : (
       <div className="login-page">
         <ApiHealthBanner />
         <div className="panel login-panel">
@@ -86,29 +90,57 @@ export default function LoginPage() {
               <p className="muted">{branding.appName}</p>
             </div>
           </div>
-          <form onSubmit={handleSubmit} className="login-form">
+          <form onSubmit={handleSubmit} className="login-form" autoComplete="off" method="post">
+            {/* Honeypot-style decoys reduce aggressive password-manager autofill on load. */}
+            <input
+              type="text"
+              name="fake-username"
+              autoComplete="username"
+              tabIndex={-1}
+              aria-hidden
+              value=""
+              readOnly
+              style={{ position: "absolute", left: -9999, width: 1, height: 1, opacity: 0 }}
+            />
+            <input
+              type="password"
+              name="fake-password"
+              autoComplete="current-password"
+              tabIndex={-1}
+              aria-hidden
+              value=""
+              readOnly
+              style={{ position: "absolute", left: -9999, width: 1, height: 1, opacity: 0 }}
+            />
             <label className="field" htmlFor="login-username">
               <span className="label">Username</span>
               <input
                 id="login-username"
+                name="jbt-sign-in-user"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                onFocus={unlockFields}
                 required
-                autoComplete="username"
+                readOnly={!fieldsUnlocked}
+                autoComplete="off"
                 autoCapitalize="none"
                 spellCheck={false}
+                inputMode="email"
               />
             </label>
             <label className="field" htmlFor="login-password">
               <span className="label">Password</span>
               <input
                 id="login-password"
+                name="jbt-sign-in-pass"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onFocus={unlockFields}
                 required
-                autoComplete="current-password"
+                readOnly={!fieldsUnlocked}
+                autoComplete="off"
               />
             </label>
             {error ? <p className="field-error">{error}</p> : null}
@@ -122,6 +154,7 @@ export default function LoginPage() {
         </div>
         <PoweredByFooter />
       </div>
+      )}
     </SplashScreen>
   );
 }

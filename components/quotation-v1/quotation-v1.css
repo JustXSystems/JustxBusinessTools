@@ -833,6 +833,23 @@ html[data-scheme="light"] .qgv1-root select option {
   width: auto;
 }
 
+.qgv1-wa-launch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.qgv1-wa-launch-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  text-decoration: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .qgv1-send-admin {
   margin-top: 22px;
   padding-top: 18px;

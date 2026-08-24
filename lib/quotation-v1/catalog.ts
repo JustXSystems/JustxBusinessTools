@@ -1,11 +1,17 @@
 import type { CategoryKey, CompanyProfileV1, EngagementKey } from "./types";
 import {
   DEFAULT_SEND_SETTINGS,
+  DEFAULT_WHATSAPP_MESSAGE,
   fillSendTemplate,
   normalizeSendSettings,
 } from "@/lib/types/business-profile";
 
-export { DEFAULT_SEND_SETTINGS, fillSendTemplate, normalizeSendSettings };
+export {
+  DEFAULT_SEND_SETTINGS,
+  DEFAULT_WHATSAPP_MESSAGE,
+  fillSendTemplate,
+  normalizeSendSettings,
+};
 
 export const CATEGORIES: Record<CategoryKey, { label: string; code: string }> = {
   solar: { label: "Solar", code: "SOL" },

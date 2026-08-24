@@ -4,12 +4,13 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 import { apiUrl } from "@/lib/api-base";
+import { DEFAULT_INSTALL_ICON_URL, parseInstallIconBg, resolveInstallIconUrl } from "@/lib/install-branding";
 import {
   parseSplashAnimation,
   parseSplashIntensity,
@@ -25,6 +26,10 @@ export type PlatformBranding = {
   splashAnimation: SplashAnimation;
   splashIntensity: SplashIntensity;
   splashShowProgress: boolean;
+  installName: string;
+  installIconUrl: string;
+  /** `transparent` (default) or #RRGGBB behind the install icon. */
+  installIconBg: string;
 };
 
 export type PoweredByConfig = {
@@ -33,13 +38,16 @@ export type PoweredByConfig = {
 };
 
 export const DEFAULT_BRANDING: PlatformBranding = {
-  logoUrl: "/icons/jbt-icon.svg",
+  logoUrl: "/icons/justxsystems-icon.svg",
   appName: "JustXSystems",
   tagline: "JustXSystems",
   splashDurationMs: 2200,
   splashAnimation: "dash",
   splashIntensity: "balanced",
   splashShowProgress: true,
+  installName: "JustXSystems",
+  installIconUrl: DEFAULT_INSTALL_ICON_URL,
+  installIconBg: "transparent",
 };
 
 export const DEFAULT_POWERED_BY: PoweredByConfig = {
@@ -59,6 +67,9 @@ export function splashFingerprint(b: PlatformBranding): string {
     b.splashAnimation,
     b.splashIntensity,
     b.splashShowProgress ? "1" : "0",
+    b.installName,
+    b.installIconUrl,
+    b.installIconBg,
   ].join("\u0001");
 }
 
@@ -99,6 +110,12 @@ function normalizePayload(data: {
         b.splashShowProgress == null
           ? DEFAULT_BRANDING.splashShowProgress
           : Boolean(b.splashShowProgress),
+      installName: String(b.installName || DEFAULT_BRANDING.installName).trim() || DEFAULT_BRANDING.installName,
+      installIconUrl: resolveInstallIconUrl(
+        String(b.logoUrl || DEFAULT_BRANDING.logoUrl),
+        String(b.installIconUrl || DEFAULT_BRANDING.installIconUrl).trim() || DEFAULT_BRANDING.installIconUrl,
+      ),
+      installIconBg: parseInstallIconBg(b.installIconBg ?? DEFAULT_BRANDING.installIconBg),
     },
     poweredBy: {
       text: String(p.text || DEFAULT_POWERED_BY.text),
@@ -210,7 +227,6 @@ export function invalidateBrandingCache(): void {
 }
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
-  // Never paint DEFAULT on first frame — stay in loading until network/storage confirms.
   const [branding, setBranding] = useState<PlatformBranding>(DEFAULT_BRANDING);
   const [poweredBy, setPoweredBy] = useState<PoweredByConfig>(DEFAULT_POWERED_BY);
   const [loading, setLoading] = useState(true);
@@ -223,7 +239,16 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
+  // Apply cached branding before first paint to avoid blank→branded splash flicker.
+  useLayoutEffect(() => {
+    const stored = readStoredPayload();
+    if (stored) {
+      applyPayload(stored, false);
+      setBranding(stored.branding);
+      setPoweredBy(stored.poweredBy);
+      setLoading(false);
+    }
+
     let cancelled = false;
     fetchPlatformBrandPayload(true).then((next) => {
       if (!cancelled) {

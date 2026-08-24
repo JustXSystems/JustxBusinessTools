@@ -13,7 +13,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { api, verifyPhoneOtp as verifyPhoneOtpApi } from "@/lib/api";
 import { canAccessAdmin } from "@/lib/auth-access";
 import type { SessionUser } from "@/lib/types/auth";
-import { EmptySplash, SplashMark } from "@/components/auth/SplashScreen";
+import { SplashMark } from "@/components/auth/SplashScreen";
 import { usePlatformBranding } from "@/components/branding/BrandingProvider";
 
 type AuthContextValue = {
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
-  const { branding, loading: brandingLoading } = usePlatformBranding();
+  const { branding } = usePlatformBranding();
 
   const refresh = useCallback(async () => {
     try {
@@ -161,15 +161,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
-  const blocking = loading || brandingLoading || (!user && !isPublic);
+  const blocking = loading || (!user && !isPublic);
 
   return (
     <AuthContext.Provider value={value}>
-      {blocking && !isPublic ? (
-        brandingLoading ? <EmptySplash /> : <SplashMark branding={branding} />
-      ) : (
-        children
-      )}
+      {blocking && !isPublic ? <SplashMark branding={branding} /> : children}
     </AuthContext.Provider>
   );
 }

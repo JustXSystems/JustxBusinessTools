@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   splashFingerprint,
   SPLASH_SEEN_KEY,
@@ -9,8 +16,9 @@ import {
 } from "@/components/branding/BrandingProvider";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 
+/** Same shell as SplashMark so boot frames don't flash a different background. */
 export function EmptySplash() {
-  return <div className="splash-screen" role="status" aria-live="polite" />;
+  return <div className="splash-screen splash-boot" role="status" aria-live="polite" />;
 }
 
 type SplashMarkProps = {
@@ -20,6 +28,28 @@ type SplashMarkProps = {
   className?: string;
 };
 
+/**
+ * Brand-value cinematic layer. Kept behind / around the logo — never over it.
+ * Story: integrate systems → multiply (X) → inspire.
+ */
+function SplashBrandSignal() {
+  return (
+    <div className="splash-signal" aria-hidden>
+      <span className="splash-signal-ring splash-signal-ring-1" />
+      <span className="splash-signal-ring splash-signal-ring-2" />
+      <span className="splash-signal-ring splash-signal-ring-3" />
+      <span className="splash-signal-x splash-signal-x-a" />
+      <span className="splash-signal-x splash-signal-x-b" />
+      <span className="splash-signal-chip splash-signal-chip-1">Systems</span>
+      <span className="splash-signal-chip splash-signal-chip-2">Integrate</span>
+      <span className="splash-signal-chip splash-signal-chip-3">Multiply</span>
+      <span className="splash-signal-chip splash-signal-chip-4">Inspire</span>
+      <span className="splash-signal-chip splash-signal-chip-5">Any stack</span>
+      <span className="splash-signal-chip splash-signal-chip-6">Just like that</span>
+    </div>
+  );
+}
+
 export function SplashMark({ branding, preview = false, className = "" }: SplashMarkProps) {
   const ctx = usePlatformBranding();
   const b = branding ?? ctx.branding;
@@ -27,6 +57,7 @@ export function SplashMark({ branding, preview = false, className = "" }: Splash
   const intensity = b.splashIntensity || "balanced";
   const showProgress = Boolean(b.splashShowProgress);
   const ms = Math.max(0, b.splashDurationMs || 0);
+  const isSignal = anim === "signal";
 
   const style = {
     "--splash-ms": `${Math.max(ms, 600)}ms`,
@@ -69,6 +100,8 @@ export function SplashMark({ branding, preview = false, className = "" }: Splash
         <span className="splash-spark splash-spark-8" />
       </div>
 
+      {isSignal ? <SplashBrandSignal /> : null}
+
       <div className="splash-mark">
         <div className="splash-logo-stage">
           <span className="splash-halo" aria-hidden />
@@ -95,6 +128,13 @@ export function SplashMark({ branding, preview = false, className = "" }: Splash
           <span className="splash-name">{b.appName}</span>
           <span className="splash-underline" aria-hidden />
           {b.tagline ? <span className="splash-tagline">{b.tagline}</span> : null}
+          {isSignal ? (
+            <div className="splash-value-reel" aria-hidden>
+              <span className="splash-value splash-value-1">Integrate anything</span>
+              <span className="splash-value splash-value-2">Multiply exponentially</span>
+              <span className="splash-value splash-value-3">Inspire everyone</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -109,26 +149,34 @@ export function SplashMark({ branding, preview = false, className = "" }: Splash
 }
 
 /**
- * Holds children until platform branding is confirmed from the network,
- * then optionally shows the splash mark for splashDurationMs.
- * Never paints DEFAULT branding — blank splash until ready.
+ * Holds children until branding is ready, then shows splash for splashDurationMs.
+ * Keeps one continuous SplashMark mount (no blank→branded→blank flicker).
  */
 export function SplashScreen({ children }: { children: ReactNode }) {
   const { branding, loading } = usePlatformBranding();
-  const [decision, setDecision] = useState<"pending" | "show" | "skip">("pending");
+  const [decision, setDecision] = useState<"hold" | "skip">("hold");
   const fingerprint = splashFingerprint(branding);
+  const lockedRef = useRef(false);
+
+  // If this visit already saw this branding, skip before paint when possible.
+  useLayoutEffect(() => {
+    try {
+      if (sessionStorage.getItem(SPLASH_SEEN_KEY) === fingerprint) {
+        lockedRef.current = true;
+        setDecision("skip");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [fingerprint]);
 
   useEffect(() => {
-    if (loading) {
-      setDecision("pending");
-      return;
-    }
-
-    let cancelled = false;
-    let timer: number | undefined;
+    if (loading) return;
+    if (lockedRef.current) return;
 
     try {
       if (sessionStorage.getItem(SPLASH_SEEN_KEY) === fingerprint) {
+        lockedRef.current = true;
         setDecision("skip");
         return;
       }
@@ -136,35 +184,44 @@ export function SplashScreen({ children }: { children: ReactNode }) {
       /* ignore */
     }
 
-    setDecision("show");
+    let cancelled = false;
+    setDecision("hold");
 
-    const duration = branding.splashDurationMs;
-    if (duration <= 0) {
+    const duration = Math.max(0, branding.splashDurationMs);
+    const seenKey = fingerprint;
+    const markSeen = () => {
       try {
-        sessionStorage.setItem(SPLASH_SEEN_KEY, fingerprint);
+        sessionStorage.setItem(SPLASH_SEEN_KEY, seenKey);
       } catch {
         /* ignore */
       }
+    };
+
+    if (duration <= 0) {
+      markSeen();
+      lockedRef.current = true;
       setDecision("skip");
       return;
     }
 
-    timer = window.setTimeout(() => {
-      try {
-        sessionStorage.setItem(SPLASH_SEEN_KEY, fingerprint);
-      } catch {
-        /* ignore */
-      }
-      if (!cancelled) setDecision("skip");
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      markSeen();
+      lockedRef.current = true;
+      setDecision("skip");
     }, duration);
 
     return () => {
       cancelled = true;
-      if (timer) window.clearTimeout(timer);
+      window.clearTimeout(timer);
     };
-  }, [loading, fingerprint, branding.splashDurationMs]);
+    // Don't depend on fingerprint — settling branding must not remount/restart splash.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, branding.splashDurationMs]);
 
-  if (loading || decision === "pending") return <EmptySplash />;
   if (decision === "skip") return <>{children}</>;
+
+  // Always paint the branded splash (even while branding is still resolving) so
+  // we never flash EmptySplash → SplashMark → remount.
   return <SplashMark branding={branding} />;
 }
