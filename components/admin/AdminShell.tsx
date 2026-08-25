@@ -13,6 +13,7 @@ import { SidebarAttachmentToggle } from "@/components/layout/SidebarAttachmentTo
 import { SidebarIdentityChip } from "@/components/layout/SidebarIdentityChip";
 import { SidebarLayoutProvider, useSidebarLayout } from "@/components/layout/SidebarLayoutProvider";
 import { SidebarResizeHandle } from "@/components/layout/SidebarResizeHandle";
+import { SidebarSessionFooter } from "@/components/layout/SidebarSessionFooter";
 import {
   adminNavigation,
   type AdminNavItem,
@@ -146,15 +147,14 @@ function AdminShellInner({ children }: { children: ReactNode }) {
               ) : null}
 
               <div className={`ds-brand-account${mini ? " is-mini" : ""}`}>
-                <SidebarIdentityChip
-                  name={user?.name}
-                  email={user?.email}
-                  mini={mini}
-                />
-                <SidebarAttachmentToggle
-                  operatorHref="/"
-                  onLogout={() => logout()}
-                />
+                <div className="ds-brand-account-top">
+                  <SidebarIdentityChip
+                    name={user?.name}
+                    email={user?.email}
+                    mini={mini}
+                  />
+                  <SidebarAttachmentToggle mini={mini} />
+                </div>
               </div>
             </div>
           </div>
@@ -176,6 +176,12 @@ function AdminShellInner({ children }: { children: ReactNode }) {
               </div>
             ))}
           </nav>
+
+          <SidebarSessionFooter
+            mini={mini}
+            operatorHref="/"
+            onLogout={() => logout()}
+          />
         </aside>
       )}
 

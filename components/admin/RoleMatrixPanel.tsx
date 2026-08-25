@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { api } from "@/lib/api";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type RoleKey = "owner" | "admin" | "staff" | "viewer";
 type Capability =
@@ -30,16 +31,16 @@ export function RoleMatrixPanel() {
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
 
-  async function reload() {
+  const reload = useCallback(async () => {
     const data = await api<{ matrix: Matrix; labels: Record<string, string> }>("/admin/team/roles/matrix");
     setMatrix(data.matrix);
     setLabels(data.labels);
-  }
+  }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    reload().catch((e: Error) => setMessage(e.message));
-  }, [open]);
+  useLiveRefresh(
+    () => reload().catch((e: Error) => setMessage(e.message)),
+    { enabled: open, intervalMs: 60_000 },
+  );
 
   function toggle(role: RoleKey, cap: Capability) {
     if (!matrix) return;

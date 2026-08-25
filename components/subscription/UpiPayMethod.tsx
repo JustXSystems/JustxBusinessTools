@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { submitUpiClaim } from "@/lib/api";
+import { invalidateLiveData } from "@/hooks/useLiveRefresh";
 import type { PendingUpiClaim, UpiPayInfo } from "@/lib/types/subscription";
 
 function formatInr(amount: number) {
@@ -80,6 +81,7 @@ export function UpiPayMethod({
     setBusy(true);
     try {
       const result = await submitUpiClaim({ toolIds, ...form });
+      invalidateLiveData("notifications");
       onToast(result.message);
       await onDone();
     } catch (err) {

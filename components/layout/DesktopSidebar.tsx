@@ -10,6 +10,7 @@ import { FloatingNavDock } from "@/components/layout/FloatingNavDock";
 import { SidebarAttachmentToggle } from "@/components/layout/SidebarAttachmentToggle";
 import { SidebarIdentityChip } from "@/components/layout/SidebarIdentityChip";
 import { SidebarResizeHandle } from "@/components/layout/SidebarResizeHandle";
+import { SidebarSessionFooter } from "@/components/layout/SidebarSessionFooter";
 import { useSidebarLayout } from "@/components/layout/SidebarLayoutProvider";
 import { navigationConfig, type NavItem } from "@/config/navigation.config";
 import { NavIcon } from "@/components/layout/NavIcon";
@@ -151,12 +152,14 @@ export function DesktopSidebar() {
           ) : null}
 
           <div className={`ds-brand-account${mini ? " is-mini" : ""}`}>
-            <SidebarIdentityChip
-              name={user?.name}
-              email={user?.email}
-              mini={mini}
-            />
-            <SidebarAttachmentToggle onLogout={() => void logout()} />
+            <div className="ds-brand-account-top">
+              <SidebarIdentityChip
+                name={user?.name}
+                email={user?.email}
+                mini={mini}
+              />
+              <SidebarAttachmentToggle mini={mini} />
+            </div>
           </div>
         </div>
       </div>
@@ -200,6 +203,8 @@ export function DesktopSidebar() {
           ) : null}
         </div>
       </nav>
+
+      <SidebarSessionFooter mini={mini} onLogout={() => void logout()} />
     </aside>
   );
 }

@@ -1,29 +1,121 @@
-/* Site Survey Generator V1 — teal dark theme, scoped with ssv1- prefix.
+/* Site Survey Generator V1 — corporate teal workspace, scoped with ssv1- prefix.
    Adapted from SolarSiteSurvey-Tool_final.html. All rules are scoped under
    .ssv1-shell so nothing here leaks into the rest of the app shell. */
 
 .ssv1-shell {
-  --ssv1-bg: #0d1117;
-  --ssv1-surface: #131c27;
-  --ssv1-card: #1a2535;
-  --ssv1-card2: #1f2d3e;
-  --ssv1-teal: #00c4e0;
+  --ssv1-bg: #0b1220;
+  --ssv1-surface: #121a27;
+  --ssv1-card: #172233;
+  --ssv1-card2: #1c2a3d;
+  --ssv1-teal: #1ec8e0;
   --ssv1-teal2: #0ea5c9;
-  --ssv1-tealfade: rgba(0, 196, 224, 0.12);
-  --ssv1-tealfade2: rgba(0, 196, 224, 0.06);
+  --ssv1-tealfade: rgba(30, 200, 224, 0.12);
+  --ssv1-tealfade2: rgba(30, 200, 224, 0.06);
   --ssv1-text: #e8edf4;
-  --ssv1-muted: #7a8fa8;
-  --ssv1-border: rgba(0, 196, 224, 0.18);
-  --ssv1-border2: rgba(255, 255, 255, 0.07);
+  --ssv1-muted: #8496ad;
+  --ssv1-border: rgba(30, 200, 224, 0.22);
+  --ssv1-border2: rgba(255, 255, 255, 0.08);
+  --ssv1-ink: #0f172a;
+  --ssv1-radius: 14px;
+  --ssv1-radius-sm: 10px;
   color: var(--ssv1-text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
 }
 
 .ssv1-shell * {
   box-sizing: border-box;
 }
 
-/* ---------- Page header / nav ---------- */
+.ssv1-inline-link {
+  color: var(--ssv1-teal);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.ssv1-inline-link:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Segmented top nav (Quotation-style) ---------- */
+.ssv1-seg {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 6px;
+  border-radius: var(--ssv1-radius);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ssv1-border2);
+}
+
+.ssv1-seg-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--ssv1-radius-sm);
+  background: transparent;
+  color: var(--ssv1-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ssv1-seg-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ssv1-text);
+  border-color: var(--ssv1-border2);
+}
+
+.ssv1-seg-item.active {
+  background: var(--ssv1-tealfade);
+  border-color: var(--ssv1-border);
+  color: var(--ssv1-text);
+  box-shadow: inset 0 0 0 1px rgba(30, 200, 224, 0.12);
+}
+
+.ssv1-seg-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ssv1-seg-hint {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ssv1-muted);
+  line-height: 1.3;
+}
+
+.ssv1-seg-item.active .ssv1-seg-hint {
+  color: rgba(30, 200, 224, 0.9);
+}
+
+.ssv1-seg-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--ssv1-teal2), var(--ssv1-teal));
+  color: #0b1220;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+/* Legacy nav kept for any residual class use */
 .ssv1-nav {
   display: flex;
   gap: 8px;
@@ -59,20 +151,54 @@
   background: var(--ssv1-surface);
   border: 1px solid var(--ssv1-border2);
   border-radius: 16px;
-  padding: 20px;
+  padding: 22px 22px 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+}
+
+.ssv1-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .ssv1-panel h1 {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 19px;
+  font-weight: 750;
   color: #fff;
   margin: 0 0 4px;
+  letter-spacing: -0.02em;
 }
 
 .ssv1-panel p.ssv1-sub {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--ssv1-muted);
-  margin: 0 0 16px;
+  margin: 0;
+  line-height: 1.45;
+  max-width: 52ch;
+}
+
+.ssv1-empty {
+  text-align: center;
+  padding: 36px 16px;
+  border: 1px dashed var(--ssv1-border2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ssv1-empty-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 6px;
+}
+
+.ssv1-empty p {
+  font-size: 13px;
+  color: var(--ssv1-muted);
+  margin: 0 0 14px;
 }
 
 .ssv1-mono {
@@ -88,6 +214,8 @@
 
 .ssv1-table-wrap {
   overflow-x: auto;
+  border: 1px solid var(--ssv1-border2);
+  border-radius: 12px;
 }
 
 .ssv1-htable {
@@ -101,47 +229,54 @@
   color: var(--ssv1-muted);
   font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 8px 10px;
+  letter-spacing: 0.06em;
+  padding: 11px 12px;
+  background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid var(--ssv1-border2);
 }
 
 .ssv1-htable td {
-  padding: 10px;
+  padding: 12px;
   border-bottom: 1px solid var(--ssv1-border2);
   color: var(--ssv1-text);
 }
 
-/* ---------- Wizard shell / popup ----------
-   Note: intentionally NOT position:fixed — this tool sits inside the
-   existing app shell (persistent header / sidebar / bottom nav), so the
-   wizard card lives in normal page flow rather than as a full-viewport
-   overlay like the original standalone HTML tool. */
+.ssv1-htable tr:last-child td {
+  border-bottom: none;
+}
+
+.ssv1-htable tbody tr:hover td {
+  background: rgba(30, 200, 224, 0.04);
+}
+
+/* ---------- Wizard shell ---------- */
 .ssv1-wizard-wrap {
   display: flex;
   justify-content: center;
-  padding: 4px 0 8px;
+  padding: 2px 0 12px;
 }
 
 .ssv1-popup {
   background: var(--ssv1-surface);
   border: 1px solid var(--ssv1-border);
-  border-radius: 16px;
+  border-radius: 18px;
   width: 100%;
-  max-width: 620px;
-  height: min(78vh, 760px);
-  min-height: 480px;
+  max-width: 680px;
+  height: min(78vh, 780px);
+  min-height: 520px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 196, 224, 0.1);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(30, 200, 224, 0.08);
   color: var(--ssv1-text);
 }
 
 .ssv1-popup-header {
-  background: linear-gradient(135deg, #0d2a3a 0%, #0f1e2e 60%, #0d1117 100%);
+  background: linear-gradient(165deg, #0e2f40 0%, #101c2c 55%, #0c1420 100%);
   border-bottom: 1px solid var(--ssv1-border);
-  padding: 18px 20px 0;
+  padding: 18px 18px 0;
   flex-shrink: 0;
 }
 
@@ -149,20 +284,21 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .ssv1-brand-icon {
-  width: 52px;
-  height: 34px;
-  border-radius: 8px;
+  width: 54px;
+  height: 36px;
+  border-radius: 9px;
   overflow: hidden;
   flex-shrink: 0;
   background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 .ssv1-brand-icon img {
@@ -174,7 +310,10 @@
 
 .ssv1-brand-icon.ssv1-brand-icon-empty {
   color: var(--ssv1-teal2);
-  font-size: 18px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  background: linear-gradient(135deg, #e8fbff, #fff);
 }
 
 .ssv1-brand-text {
@@ -183,10 +322,10 @@
 }
 
 .ssv1-brand-text h1 {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 16.5px;
+  font-weight: 700;
   color: #fff;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -194,34 +333,83 @@
 }
 
 .ssv1-brand-text p {
+  font-size: 10.5px;
+  color: var(--ssv1-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 3px 0 0;
+}
+
+.ssv1-brand-sync {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--ssv1-border2);
+}
+
+.ssv1-brand-sync-copy {
   font-size: 11px;
   color: var(--ssv1-muted);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin: 2px 0 0;
+  line-height: 1.4;
 }
 
-.ssv1-close-btn {
-  margin-left: auto;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--ssv1-border2);
-  border-radius: 10px;
-  color: var(--ssv1-muted);
-  width: 38px;
-  height: 38px;
+.ssv1-report-id-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 18px;
-  flex-shrink: 0;
-  transition: all 0.15s;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--ssv1-muted);
+  padding: 10px 0;
+  border-top: 1px solid var(--ssv1-border2);
+  margin-top: 2px;
 }
 
-.ssv1-close-btn:hover {
-  background: var(--ssv1-tealfade);
+.ssv1-rid-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ssv1-report-id-bar .ssv1-rid-value {
   color: var(--ssv1-teal);
-  border-color: var(--ssv1-border);
+  font-weight: 700;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  letter-spacing: 0.02em;
+  flex: 1;
+  min-width: 0;
+}
+
+.ssv1-status-chip {
+  margin-left: auto;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--ssv1-border2);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ssv1-muted);
+}
+
+.ssv1-status-draft {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.ssv1-status-saved {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.ssv1-status-submitted {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.35);
+  background: rgba(74, 222, 128, 0.1);
 }
 
 .ssv1-tabs {
@@ -230,7 +418,7 @@
   overflow-x: auto;
   scrollbar-width: none;
   border-top: 1px solid var(--ssv1-border2);
-  margin: 0 -20px;
+  margin: 0 -18px;
   padding: 0 10px;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
@@ -243,8 +431,8 @@
 .ssv1-tab {
   flex: 0 0 auto;
   scroll-snap-align: center;
-  min-width: 64px;
-  padding: 10px 8px 9px;
+  min-width: 72px;
+  padding: 10px 10px 11px;
   font-size: 11px;
   font-weight: 600;
   color: var(--ssv1-muted);
@@ -256,9 +444,24 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   letter-spacing: 0.01em;
   white-space: nowrap;
+}
+
+.ssv1-tab-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--ssv1-border2);
+  color: var(--ssv1-muted);
+  line-height: 1;
 }
 
 .ssv1-tab-glyph {
@@ -266,13 +469,30 @@
   line-height: 1;
 }
 
+.ssv1-tab-label {
+  font-size: 11px;
+  font-weight: 650;
+}
+
 .ssv1-tab.is-active {
   color: var(--ssv1-teal);
   border-bottom-color: var(--ssv1-teal);
 }
 
+.ssv1-tab.is-active .ssv1-tab-num {
+  background: var(--ssv1-tealfade);
+  border-color: var(--ssv1-border);
+  color: var(--ssv1-teal);
+}
+
 .ssv1-tab.is-done {
-  color: #22c55e;
+  color: #4ade80;
+}
+
+.ssv1-tab.is-done .ssv1-tab-num {
+  background: rgba(74, 222, 128, 0.14);
+  border-color: rgba(74, 222, 128, 0.35);
+  color: #4ade80;
 }
 
 .ssv1-tab:hover:not(.is-active) {
@@ -292,24 +512,6 @@
   border-radius: 0 2px 2px 0;
 }
 
-.ssv1-report-id-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--ssv1-muted);
-  padding: 8px 0;
-  border-top: 1px solid var(--ssv1-border2);
-  margin-top: 2px;
-}
-
-.ssv1-report-id-bar .ssv1-rid-value {
-  color: var(--ssv1-teal);
-  font-weight: 700;
-  font-family: "SFMono-Regular", Consolas, monospace;
-  letter-spacing: 0.02em;
-}
-
 .ssv1-popup-body {
   overflow-y: auto;
   padding: 18px;
@@ -317,6 +519,76 @@
   scrollbar-width: thin;
   scrollbar-color: var(--ssv1-card) transparent;
   -webkit-overflow-scrolling: touch;
+  background:
+    radial-gradient(900px 280px at 100% -10%, rgba(30, 200, 224, 0.07), transparent 55%),
+    var(--ssv1-surface);
+}
+
+.ssv1-step-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--ssv1-border2);
+}
+
+.ssv1-step-kicker {
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ssv1-teal);
+  margin-bottom: 4px;
+}
+
+.ssv1-step-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.ssv1-step-desc {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ssv1-muted);
+  max-width: 56ch;
+}
+
+.ssv1-step-pct {
+  flex-shrink: 0;
+  min-width: 64px;
+  text-align: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--ssv1-tealfade2);
+  border: 1px solid var(--ssv1-border);
+}
+
+.ssv1-step-pct b {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ssv1-teal);
+  line-height: 1.1;
+}
+
+.ssv1-step-pct span {
+  font-size: 9.5px;
+  color: var(--ssv1-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ssv1-btn-compact {
+  padding: 10px 14px !important;
+  min-height: 40px !important;
+  flex: 0 0 auto !important;
+  width: auto !important;
 }
 
 .ssv1-popup-body::-webkit-scrollbar {
@@ -514,16 +786,14 @@
 }
 
 .ssv1-type-note {
-  background: var(--ssv1-tealfade2);
+  background: linear-gradient(135deg, rgba(30, 200, 224, 0.1), rgba(30, 200, 224, 0.04));
   border: 1px solid var(--ssv1-border);
   border-radius: 12px;
-  padding: 12px 14px;
-  margin-bottom: 14px;
+  padding: 13px 15px;
+  margin-bottom: 16px;
   font-size: 12.5px;
   color: var(--ssv1-text);
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  line-height: 1.5;
 }
 
 .ssv1-type-note b {
@@ -1138,15 +1408,15 @@
 /* ============ DESKTOP: sidebar navigation ============ */
 @media (min-width: 901px) {
   .ssv1-wizard-wrap {
-    padding: 12px 0 24px;
+    padding: 8px 0 24px;
   }
 
   .ssv1-popup {
-    max-width: 1080px;
+    max-width: 1120px;
     width: 100%;
-    height: min(80vh, 820px);
+    height: min(82vh, 860px);
     display: grid;
-    grid-template-columns: 260px 1fr;
+    grid-template-columns: 280px 1fr;
     grid-template-rows: auto 1fr auto;
     grid-template-areas:
       "sidebar progress"
@@ -1167,7 +1437,11 @@
 
   .ssv1-brand-row {
     padding: 0 20px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
+  }
+
+  .ssv1-brand-sync {
+    margin: 0 16px 12px;
   }
 
   .ssv1-brand-text h1 {
@@ -1180,7 +1454,11 @@
     padding: 10px 20px;
     flex-direction: column;
     align-items: flex-start;
-    gap: 3px;
+    gap: 6px;
+  }
+
+  .ssv1-status-chip {
+    margin-left: 0;
   }
 
   .ssv1-tabs {
@@ -1188,7 +1466,7 @@
     overflow: visible;
     margin: 8px 0 0;
     padding: 0 12px;
-    gap: 2px;
+    gap: 3px;
     flex: 1;
   }
 
@@ -1196,7 +1474,7 @@
     flex-direction: row;
     justify-content: flex-start;
     align-items: center;
-    gap: 11px;
+    gap: 12px;
     width: 100%;
     min-width: 0;
     padding: 11px 12px;
@@ -1204,9 +1482,13 @@
     font-weight: 600;
     border-bottom: none;
     border-left: 3px solid transparent;
-    border-radius: 9px;
+    border-radius: 10px;
     text-align: left;
     scroll-snap-align: none;
+  }
+
+  .ssv1-tab-label {
+    font-size: 13.5px;
   }
 
   .ssv1-tab.is-active {
@@ -1215,7 +1497,7 @@
   }
 
   .ssv1-tab.is-done {
-    border-left-color: rgba(34, 197, 94, 0.4);
+    border-left-color: rgba(74, 222, 128, 0.45);
   }
 
   .ssv1-tab:hover:not(.is-active) {
@@ -1228,7 +1510,7 @@
 
   .ssv1-popup-body {
     grid-area: body;
-    padding: 30px 40px;
+    padding: 28px 40px 32px;
   }
 
   .ssv1-popup-footer {
@@ -1253,6 +1535,10 @@
   .ssv1-success {
     max-width: 520px;
     margin: 0 auto;
+  }
+
+  .ssv1-step-title {
+    font-size: 22px;
   }
 }
 

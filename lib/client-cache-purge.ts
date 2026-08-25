@@ -2,7 +2,7 @@
  * One-time client cache purge. Bump CLIENT_CACHE_PURGE_VERSION to force
  * another wipe of SW / Cache Storage / jbt* local+session keys.
  */
-export const CLIENT_CACHE_PURGE_VERSION = "2026-08-24-v16-square-pwa-icon";
+export const CLIENT_CACHE_PURGE_VERSION = "2026-08-25-v19-live-first";
 export const CLIENT_CACHE_PURGE_FLAG = "jbt.client-cache-purge";
 
 const STORAGE_PREFIXES = ["jbt.", "jbt:", "jbt-"];

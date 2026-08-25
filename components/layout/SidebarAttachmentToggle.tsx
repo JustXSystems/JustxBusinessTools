@@ -1,82 +1,85 @@
 "use client";
 
-import Link from "next/link";
 import { useSidebarLayout } from "@/components/layout/SidebarLayoutProvider";
 import type { SidebarAttachment } from "@/lib/sidebar-layout";
 
 const OPTIONS: ReadonlyArray<{
   id: SidebarAttachment;
   label: string;
+  shortLabel: string;
   hint: string;
 }> = [
-  { id: "edge", label: "Edge", hint: "Classic resizable sidebar" },
-  { id: "floating", label: "Float", hint: "Movable mini dock over content" },
+  {
+    id: "edge",
+    label: "Sidebar",
+    shortLabel: "Side",
+    hint: "Full menu beside the page",
+  },
+  {
+    id: "floating",
+    label: "Float",
+    shortLabel: "Float",
+    hint: "Compact floating menu over the page",
+  },
 ];
 
+function LayoutIcon({ id }: { id: SidebarAttachment }) {
+  if (id === "floating") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="8" y="5" width="12" height="14" rx="2" />
+        <path d="M5 8v11a2 2 0 0 0 2 2h9" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+    </svg>
+  );
+}
+
 type SidebarAttachmentToggleProps = {
-  onLogout?: () => void;
-  /** Admin: compact Operator app jump as a colored dot. */
-  operatorHref?: string;
+  /** Compact / icon-rail: shorter labels */
+  mini?: boolean;
 };
 
 /**
- * Compact chrome: show only the inactive layout mode (Edge ↔ Float) plus actions.
- * Active mode is implied by the sidebar itself — no status label.
+ * Layout mode as labeled pills (not macOS traffic-light dots).
+ * Both options stay visible so non-technical users can see Sidebar vs Float.
  */
-export function SidebarAttachmentToggle({
-  onLogout,
-  operatorHref,
-}: SidebarAttachmentToggleProps) {
+export function SidebarAttachmentToggle({ mini = false }: SidebarAttachmentToggleProps) {
   const { attachment, setAttachment } = useSidebarLayout();
-  const alternatives = OPTIONS.filter((o) => o.id !== attachment);
-  const hasActions = Boolean(onLogout || operatorHref);
 
   return (
     <div
-      className="sidebar-attach-toggle"
+      className={`sidebar-layout-pills${mini ? " is-mini" : ""}`}
       role="group"
-      aria-label="Sidebar chrome"
+      aria-label="Menu layout"
     >
-      {alternatives.map(({ id, label, hint }) => (
-        <button
-          key={id}
-          type="button"
-          className={`sidebar-attach-btn sidebar-attach-${id}`}
-          title={`Switch to ${label} — ${hint}`}
-          aria-label={`Switch to ${label}`}
-          onClick={() => setAttachment(id)}
-        >
-          <span className="sidebar-attach-dot" aria-hidden="true" />
-          <span className="sidebar-attach-label">{label}</span>
-        </button>
-      ))}
-
-      {hasActions ? <span className="sidebar-attach-sep" aria-hidden="true" /> : null}
-
-      {operatorHref ? (
-        <Link
-          href={operatorHref}
-          className="sidebar-attach-btn sidebar-attach-operator"
-          title="Operator — Open the operator app"
-          aria-label="Operator app"
-        >
-          <span className="sidebar-attach-dot" aria-hidden="true" />
-          <span className="sidebar-attach-label">Operator</span>
-        </Link>
-      ) : null}
-
-      {onLogout ? (
-        <button
-          type="button"
-          className="sidebar-attach-btn sidebar-attach-logout"
-          title="Log out — Sign out of this session"
-          aria-label="Log out"
-          onClick={() => onLogout()}
-        >
-          <span className="sidebar-attach-dot" aria-hidden="true" />
-          <span className="sidebar-attach-label">Log out</span>
-        </button>
-      ) : null}
+      {!mini ? <span className="sidebar-layout-pills-label">Menu layout</span> : null}
+      <div className="sidebar-layout-pills-track">
+        {OPTIONS.map(({ id, label, shortLabel, hint }) => {
+          const active = attachment === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              className={`sidebar-layout-pill${active ? " is-active" : ""}`}
+              aria-pressed={active}
+              title={hint}
+              aria-label={`${label} — ${hint}`}
+              onClick={() => setAttachment(id)}
+            >
+              <span className="sidebar-layout-pill-icon">
+                <LayoutIcon id={id} />
+              </span>
+              <span className="sidebar-layout-pill-text">{mini ? shortLabel : label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

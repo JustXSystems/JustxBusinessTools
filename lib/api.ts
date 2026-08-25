@@ -67,11 +67,17 @@ export type Stats = {
 };
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
   const res = await fetch(apiUrl(`/api${path}`), {
     ...init,
+    method,
     credentials: "include",
+    // Billing / entitlement state must never be served from HTTP or SW cache.
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
       ...(init?.headers ?? {}),
     },
   });
@@ -240,6 +246,14 @@ export async function cancelProSubscription(toolIds?: string[]): Promise<Subscri
 
 export async function fetchNotifications(): Promise<NotificationsPayload> {
   return api<NotificationsPayload>("/notifications");
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  await api(`/notifications/${encodeURIComponent(id)}/read`, { method: "POST" });
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  await api("/notifications/read-all", { method: "POST" });
 }
 
 export async function requestPhoneOtp(phone: string): Promise<void> {

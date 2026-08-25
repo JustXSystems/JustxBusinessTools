@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { SplashMark } from "@/components/auth/SplashScreen";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/components/branding/BrandingProvider";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
+import { invalidateAdminData } from "@/hooks/useLiveRefresh";
 import {
   INSTALL_ICON_BG_PRESETS,
   INSTALL_ICON_PRESETS,
@@ -85,7 +86,7 @@ export function BrandingPanel() {
   const [previewKey, setPreviewKey] = useState(0);
   const [previewMode, setPreviewMode] = useState<"splash" | "mark" | "install">("splash");
 
-  async function reload() {
+  const reload = useCallback(async () => {
     const d = await api<{ config: PlatformConfig }>("/admin/config/platform");
     const b = d.config.branding ?? DEFAULT_BRANDING;
     const footer = d.config.powered_by ?? DEFAULT_POWERED_BY;
@@ -108,11 +109,11 @@ export function BrandingPanel() {
     setLogoDraft(null);
     setInstallIconDraft(null);
     setPreviewKey((k) => k + 1);
-  }
+  }, []);
 
   useEffect(() => {
     reload().catch((e: Error) => setMessage(e.message));
-  }, []);
+  }, [reload]);
 
   async function onLogoFile(file: File | null) {
     if (!file) return;
@@ -202,6 +203,7 @@ export function BrandingPanel() {
         }),
       });
       invalidateBrandingCache();
+      invalidateAdminData("branding");
       await refreshBranding();
       await refreshConfig();
       await reload();
@@ -230,6 +232,7 @@ export function BrandingPanel() {
         body: JSON.stringify({ text: footerText.trim(), locked: true }),
       });
       invalidateBrandingCache();
+      invalidateAdminData("branding");
       await refreshBranding();
       setMessage("Operator footer updated.");
     } catch (err) {

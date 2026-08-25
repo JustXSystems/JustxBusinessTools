@@ -215,11 +215,11 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
           <button
             type="button"
             className="float-dock-action"
-            title="Dock to window edge"
-            aria-label="Dock to edge"
+            title="Switch to full sidebar menu"
+            aria-label="Switch to sidebar"
             onClick={() => setAttachment("edge")}
           >
-            Edge
+            Sidebar
           </button>
         </div>
       </div>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ToolPlacementPane } from "@/components/admin/ToolPlacementPane";
 import { ToolPricingPane, type SkuState } from "@/components/admin/ToolPricingPane";
 import { ToolSchemaPane } from "@/components/admin/ToolSchemaPane";
 import { getToolDefinition, uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
+import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type CatalogRow = {
   id: string;
@@ -128,16 +129,21 @@ export default function AdminToolsPage() {
 
   const selected = directory.find((t) => t.id === selectedId) ?? filtered[0] ?? directory[0] ?? null;
 
-  useEffect(() => {
-    reload()
-      .then(() => {
+  const didBootTools = useRef(false);
+  useLiveRefresh(async () => {
+    try {
+      await reload();
+      if (!didBootTools.current) {
+        didBootTools.current = true;
         const params = new URLSearchParams(window.location.search);
         setTab(tabFromSearch(params.get("tab")));
         const fromUrl = params.get("tool");
         if (fromUrl) setSelectedId(fromUrl);
-      })
-      .catch((e: Error) => setMessage(e.message));
-  }, [reload]);
+      }
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Failed to load tools");
+    }
+  }, { intervalMs: 60_000 });
 
   useEffect(() => {
     if (!selected) return;
@@ -175,6 +181,7 @@ export default function AdminToolsPage() {
       }),
     });
     await reload();
+    invalidateAdminData("admin-tools");
   }
 
   async function createTool(e: React.FormEvent) {
@@ -230,6 +237,7 @@ export default function AdminToolsPage() {
     setNewTemplate("blank");
     setCreating(false);
     await reload();
+    invalidateAdminData("admin-tools");
     select(id, "schema");
     setMessage(`Created ${title}. Configure fields (including formulas), then pricing if needed.`);
   }
@@ -383,6 +391,7 @@ export default function AdminToolsPage() {
                   onSaved={async (msg) => {
                     setMessage(msg);
                     await reload();
+    invalidateAdminData("admin-tools");
                   }}
                 />
               ) : null}
@@ -407,6 +416,7 @@ export default function AdminToolsPage() {
                   onPublished={async (msg) => {
                     setMessage(msg);
                     await reload();
+    invalidateAdminData("admin-tools");
                   }}
                 />
               ) : null}

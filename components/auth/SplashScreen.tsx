@@ -149,17 +149,20 @@ export function SplashMark({ branding, preview = false, className = "" }: Splash
 }
 
 /**
- * Holds children until branding is ready, then shows splash for splashDurationMs.
- * Keeps one continuous SplashMark mount (no blank→branded→blank flicker).
+ * Holds children until live branding is ready (or offline contingency), then
+ * shows splash with that payload for splashDurationMs.
+ *
+ * Never paints stale localStorage branding ahead of the live-first fetch.
  */
 export function SplashScreen({ children }: { children: ReactNode }) {
-  const { branding, loading } = usePlatformBranding();
-  const [decision, setDecision] = useState<"hold" | "skip">("hold");
+  const { branding, loading, source } = usePlatformBranding();
+  const [decision, setDecision] = useState<"boot" | "hold" | "skip">("boot");
   const fingerprint = splashFingerprint(branding);
   const lockedRef = useRef(false);
 
-  // If this visit already saw this branding, skip before paint when possible.
+  // Session skip only after we already showed this exact live fingerprint.
   useLayoutEffect(() => {
+    if (loading) return;
     try {
       if (sessionStorage.getItem(SPLASH_SEEN_KEY) === fingerprint) {
         lockedRef.current = true;
@@ -168,10 +171,13 @@ export function SplashScreen({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, [fingerprint]);
+  }, [loading, fingerprint]);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading) {
+      setDecision("boot");
+      return;
+    }
     if (lockedRef.current) return;
 
     try {
@@ -184,6 +190,8 @@ export function SplashScreen({ children }: { children: ReactNode }) {
       /* ignore */
     }
 
+    // Prefer not to animate splash on pure defaults if live failed and we have no contingency —
+    // still show briefly so boot isn't abrupt.
     let cancelled = false;
     setDecision("hold");
 
@@ -204,24 +212,25 @@ export function SplashScreen({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Slightly shorter when we only have contingency (offline) so users aren't blocked.
+    const waitMs = source === "live" ? duration : Math.min(duration, 900);
+
     const timer = window.setTimeout(() => {
       if (cancelled) return;
       markSeen();
       lockedRef.current = true;
       setDecision("skip");
-    }, duration);
+    }, waitMs);
 
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-    // Don't depend on fingerprint — settling branding must not remount/restart splash.
+    // Start timer once per resolved boot payload — don't restart if soft revalidate tweaks fields mid-splash.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, branding.splashDurationMs]);
+  }, [loading]);
 
   if (decision === "skip") return <>{children}</>;
-
-  // Always paint the branded splash (even while branding is still resolving) so
-  // we never flash EmptySplash → SplashMark → remount.
+  if (decision === "boot" || loading) return <EmptySplash />;
   return <SplashMark branding={branding} />;
 }

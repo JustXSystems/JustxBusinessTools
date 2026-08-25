@@ -1,4 +1,4 @@
-const CACHE = "jbt-shell-v5";
+const CACHE = "jbt-shell-v8";
 const PRECACHE = ["/", "/offline.html", "/icons/jbt-icon.svg"];
 
 self.addEventListener("install", (event) => {

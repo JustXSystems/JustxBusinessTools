@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
 import { RoleMatrixPanel } from "@/components/admin/RoleMatrixPanel";
+import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type Member = {
   id: number;
@@ -110,26 +111,29 @@ export default function AdminTeamPage() {
   const selected = members.find((m) => m.id === selectedId) ?? null;
 
   const reload = useCallback(async () => {
-    const [team, branchData] = await Promise.all([
-      api<{ members: Member[]; summary: typeof summary }>("/admin/team"),
-      api<{ branches: Branch[] }>("/admin/branches"),
-    ]);
-    setMembers(team.members);
-    setSummary(team.summary);
-    setBranches(branchData.branches);
     try {
-      const catalogData = await api<{
-        tools: Array<{ id: string; groupName: string; available: boolean; toolType: string }>;
-      }>("/admin/catalog");
-      setCatalog(mergeCatalog(catalogData.tools));
-    } catch {
-      setCatalog(mergeCatalog([]));
+      const [team, branchData] = await Promise.all([
+        api<{ members: Member[]; summary: typeof summary }>("/admin/team"),
+        api<{ branches: Branch[] }>("/admin/branches"),
+      ]);
+      setMembers(team.members);
+      setSummary(team.summary);
+      setBranches(branchData.branches);
+      setError("");
+      try {
+        const catalogData = await api<{
+          tools: Array<{ id: string; groupName: string; available: boolean; toolType: string }>;
+        }>("/admin/catalog");
+        setCatalog(mergeCatalog(catalogData.tools));
+      } catch {
+        setCatalog(mergeCatalog([]));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load team");
     }
   }, []);
 
-  useEffect(() => {
-    reload().catch((e) => setError(e.message));
-  }, [reload]);
+  useLiveRefresh(reload, { intervalMs: 45_000 });
 
   async function openMember(id: number, resetTab = true) {
     setSelectedId(id);
@@ -189,6 +193,7 @@ export default function AdminTeamPage() {
     try {
       const focusId = await fn();
       setMessage(label);
+      invalidateAdminData("admin-team");
       await reload();
       if (focusId === 0) {
         setSelectedId(null);

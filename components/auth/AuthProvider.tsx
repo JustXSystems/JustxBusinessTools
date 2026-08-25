@@ -12,8 +12,10 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { api, verifyPhoneOtp as verifyPhoneOtpApi } from "@/lib/api";
 import { canAccessAdmin } from "@/lib/auth-access";
+import { clearSubscriptionSnapshot } from "@/lib/subscription-cache";
+import { clearToolCart } from "@/lib/tool-cart";
 import type { SessionUser } from "@/lib/types/auth";
-import { SplashMark } from "@/components/auth/SplashScreen";
+import { EmptySplash, SplashMark } from "@/components/auth/SplashScreen";
 import { usePlatformBranding } from "@/components/branding/BrandingProvider";
 
 type AuthContextValue = {
@@ -55,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
-  const { branding } = usePlatformBranding();
+  const { branding, loading: brandingLoading } = usePlatformBranding();
 
   const refresh = useCallback(async () => {
     try {
@@ -131,6 +133,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api("/auth/logout", { method: "POST" });
     } finally {
+      clearSubscriptionSnapshot();
+      clearToolCart();
       setUser(null);
       router.push("/login");
     }
@@ -142,6 +146,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ businessProfileId: profileId }),
     });
     setUser(data.user);
+    clearSubscriptionSnapshot();
+    try {
+      window.dispatchEvent(new Event("jbt:auth-context-changed"));
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const value = useMemo(
@@ -165,7 +175,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {blocking && !isPublic ? <SplashMark branding={branding} /> : children}
+      {blocking && !isPublic ? (
+        brandingLoading ? <EmptySplash /> : <SplashMark branding={branding} />
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   AnalyticsRangePills,
@@ -10,6 +10,7 @@ import {
 } from "@/components/admin/AnalyticsRangePills";
 import { uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type SeriesRow = {
   date: string;
@@ -40,16 +41,21 @@ export default function AdminToolAnalyticsPage() {
   const [series, setSeries] = useState<SeriesRow[]>([]);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!toolId) return;
     setError("");
-    api<{ series: SeriesRow[]; grain: Grain }>(`/admin/analytics/tools/${toolId}?days=${days}`)
-      .then((d) => {
-        setSeries(d.series);
-        setGrain(d.grain ?? "day");
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : "Could not load analytics"));
+    try {
+      const d = await api<{ series: SeriesRow[]; grain: Grain }>(
+        `/admin/analytics/tools/${toolId}?days=${days}`,
+      );
+      setSeries(d.series);
+      setGrain(d.grain ?? "day");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load analytics");
+    }
   }, [toolId, days]);
+
+  useLiveRefresh(load, { intervalMs: 60_000, deps: [toolId, days] });
 
   const totals = series.reduce(
     (acc, row) => ({

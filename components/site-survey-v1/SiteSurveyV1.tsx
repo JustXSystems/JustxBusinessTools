@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fetchProfile } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useLiveRefresh, invalidateAdminData } from "@/hooks/useLiveRefresh";
 import {
   cardTone,
   computeLoadSummary,
@@ -72,19 +73,6 @@ Feel free to reach out if you have any questions.
 Regards,
 {{companyName}}
 {{companyPhone}}`;
-
-const TAB_ICONS: Record<string, string> = {
-  "ti-user-circle": "\u{1F464}",
-  "ti-sun": "\u2600\uFE0F",
-  "ti-bolt": "\u26A1",
-  "ti-list-check": "\u{1F4CB}",
-  "ti-camera": "\u{1F4F7}",
-  "ti-shield-check": "\u{1F6E1}\uFE0F",
-  "ti-report-analytics": "\u{1F4CA}",
-  "ti-building-skyscraper": "\u{1F3E2}",
-  "ti-map-pin": "\u{1F4CD}",
-  "ti-currency-rupee": "\u20B9",
-};
 
 const APPLIANCE_ICONS: Record<string, string> = {
   bulb: "\u{1F4A1}",
@@ -639,15 +627,13 @@ export function SiteSurveyV1() {
     setList((s.surveys ?? []) as Survey[]);
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        await reloadMeta();
-      } catch (e) {
-        flash(e instanceof Error ? e.message : "Failed to load", "err");
-      }
-    })();
-  }, [flash, reloadMeta, user?.businessProfileId]);
+  useLiveRefresh(async () => {
+    try {
+      await reloadMeta();
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Failed to load", "err");
+    }
+  }, { intervalMs: 45_000, deps: [user?.businessProfileId] });
 
   useEffect(() => {
     const name = userDisplayName(user);
@@ -712,6 +698,7 @@ export function SiteSurveyV1() {
       setCurrent(saved);
       setLastSaved(snapshotOf(saved));
       flash(`Saved as ${saved.reportNo}.`);
+      invalidateAdminData("site-survey-v1");
       await reloadMeta();
       return saved;
     } catch (e) {
@@ -935,76 +922,105 @@ export function SiteSurveyV1() {
         <div className="tool-header-text">
           <div className="tool-header-title">Site Survey Generator V1</div>
           <div className="tool-header-sub">
-            Solar site survey wizard · load estimate · PDF report{user?.email ? ` · ${user.email}` : ""}
+            Structured solar site survey · load estimate · branded PDF report
+            {user?.email ? ` · ${user.email}` : ""}
           </div>
         </div>
       </header>
 
-      <nav className="ssv1-nav">
+      <nav className="ssv1-seg" aria-label="Site survey views">
         <button
           type="button"
-          className={`ssv1-nav-btn ${route === "new" ? "active" : ""}`}
+          className={`ssv1-seg-item ${route === "new" ? "active" : ""}`}
           onClick={() => setRoute("new")}
         >
-          New Survey
+          <span className="ssv1-seg-label">Survey</span>
+          <span className="ssv1-seg-hint">Capture &amp; estimate</span>
         </button>
         <button
           type="button"
-          className={`ssv1-nav-btn ${route === "list" ? "active" : ""}`}
+          className={`ssv1-seg-item ${route === "list" ? "active" : ""}`}
           onClick={() => setRoute("list")}
         >
-          Saved
+          <span className="ssv1-seg-label">Saved</span>
+          <span className="ssv1-seg-hint">{list.length ? `${list.length} on file` : "Open drafts"}</span>
+          {list.length ? <span className="ssv1-seg-badge">{list.length}</span> : null}
         </button>
         <button
           type="button"
-          className={`ssv1-nav-btn ${route === "history" ? "active" : ""}`}
+          className={`ssv1-seg-item ${route === "history" ? "active" : ""}`}
           onClick={() => setRoute("history")}
         >
-          History
+          <span className="ssv1-seg-label">History</span>
+          <span className="ssv1-seg-hint">Audit &amp; export</span>
+          {history.length ? <span className="ssv1-seg-badge">{history.length}</span> : null}
         </button>
       </nav>
 
       {route === "new" ? (
         <div className="ssv1-wizard-wrap">
           <div className="ssv1-popup">
-            <div className="ssv1-popup-header">
+            <aside className="ssv1-popup-header">
               <div className="ssv1-brand-row">
                 {company.logo ? (
                   <div className="ssv1-brand-icon">
                     <img src={company.logo} alt="" />
                   </div>
                 ) : (
-                  <div className="ssv1-brand-icon ssv1-brand-icon-empty">☀</div>
+                  <div className="ssv1-brand-icon ssv1-brand-icon-empty" aria-hidden>
+                    SS
+                  </div>
                 )}
                 <div className="ssv1-brand-text">
                   <h1>{company.name}</h1>
                   <p>{company.tagline || "Solar Site Survey"}</p>
                 </div>
               </div>
-              <div className="ssv1-report-id-bar">
-                <span>Report ID</span>
-                <span className="ssv1-rid-value">{current.reportNo || previewReportId(company.reportPrefix)}</span>
-              </div>
-              <div className="ssv1-tabs" role="tablist">
-                {steps.map((s, idx) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    role="tab"
-                    className={`ssv1-tab ${idx === safeStepIndex ? "is-active" : ""} ${idx < safeStepIndex ? "is-done" : ""}`}
-                    onClick={() => {
-                      setShowSuccess(false);
-                      setStepIndex(idx);
-                    }}
-                  >
-                    <span className="ssv1-tab-glyph">{TAB_ICONS[s.icon] ?? "•"}</span>
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
 
-            <div className="ssv1-progress-bar">
+              <div className="ssv1-brand-sync">
+                <div className="ssv1-brand-sync-copy">
+                  Letterhead from{" "}
+                  <Link href="/profile" className="ssv1-inline-link">
+                    Business Profile
+                  </Link>
+                </div>
+              </div>
+
+              <div className="ssv1-report-id-bar">
+                <span className="ssv1-rid-label">Report ID</span>
+                <span className="ssv1-rid-value">{current.reportNo || previewReportId(company.reportPrefix)}</span>
+                <span className={`ssv1-status-chip ssv1-status-${current.status || "draft"}`}>
+                  {(current.status || "draft").toUpperCase()}
+                </span>
+              </div>
+
+              <div className="ssv1-tabs" role="tablist" aria-label="Survey steps">
+                {steps.map((s, idx) => {
+                  const done = idx < safeStepIndex;
+                  const active = idx === safeStepIndex;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      className={`ssv1-tab ${active ? "is-active" : ""} ${done ? "is-done" : ""}`}
+                      onClick={() => {
+                        setShowSuccess(false);
+                        setStepIndex(idx);
+                      }}
+                    >
+                      <span className="ssv1-tab-num" aria-hidden>
+                        {done ? "✓" : idx + 1}
+                      </span>
+                      <span className="ssv1-tab-label">{s.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </aside>
+
+            <div className="ssv1-progress-bar" aria-hidden>
               <div className="ssv1-progress-fill" style={{ width: `${progressPct}%` }} />
             </div>
 
@@ -1013,7 +1029,10 @@ export function SiteSurveyV1() {
                 <div className="ssv1-success">
                   <div className="ssv1-success-icon">✓</div>
                   <h2>Survey submitted</h2>
-                  <p>The report has been saved and the PDF downloaded. You can send it via WhatsApp / Email below.</p>
+                  <p>
+                    Report saved and PDF downloaded. Send it to the customer via WhatsApp or email, or start the
+                    next survey.
+                  </p>
                   <div className="ssv1-success-meta">
                     <div>
                       <span>Report ID</span>
@@ -1058,10 +1077,34 @@ export function SiteSurveyV1() {
                 </div>
               ) : (
                 <div className="ssv1-step" key={step?.id}>
+                  <div className="ssv1-step-head">
+                    <div>
+                      <div className="ssv1-step-kicker">
+                        Step {safeStepIndex + 1} of {steps.length}
+                      </div>
+                      <h2 className="ssv1-step-title">{step?.label ?? "Survey"}</h2>
+                      <p className="ssv1-step-desc">
+                        {safeStepIndex === 0
+                          ? "Confirm customer details and installation type. Later steps adapt to your selection."
+                          : step?.id === "load"
+                            ? "Toggle appliances and hours to build the daily load profile used in the estimate."
+                            : step?.id === "report"
+                              ? "Review the generated estimate, then save or submit the branded PDF report."
+                              : step?.id === "photos" || fileFields.length
+                                ? "Attach clear site photos — they appear in the PDF photo appendix."
+                                : "Complete the fields below. Required items are marked and validated before you continue."}
+                      </p>
+                    </div>
+                    <div className="ssv1-step-pct" aria-hidden>
+                      <b>{Math.round(progressPct)}%</b>
+                      <span>complete</span>
+                    </div>
+                  </div>
+
                   {safeStepIndex === 0 ? (
                     <div className="ssv1-type-note">
-                      Choose one of <b>{INSTALLATION_TYPES.join(", ")}</b> below — the remaining steps and the
-                      final estimate adapt automatically.
+                      Choose one of <b>{INSTALLATION_TYPES.join(" · ")}</b> — remaining steps and the final
+                      estimate adapt automatically.
                     </div>
                   ) : null}
 
@@ -1111,11 +1154,11 @@ export function SiteSurveyV1() {
                   </button>
                   {safeStepIndex === steps.length - 1 ? (
                     <button type="button" className="ssv1-btn ssv1-btn-submit" disabled={busy} onClick={() => void submitSurvey()}>
-                      Submit
+                      Submit &amp; PDF
                     </button>
                   ) : (
                     <button type="button" className="ssv1-btn ssv1-btn-next" disabled={busy} onClick={goNext}>
-                      Next
+                      Continue
                     </button>
                   )}
                 </div>
@@ -1127,11 +1170,22 @@ export function SiteSurveyV1() {
 
       {route === "list" ? (
         <section className="ssv1-panel">
-          <h1>Saved surveys</h1>
-          <p className="ssv1-sub">Open a survey to edit or continue, or remove it from the shared list.</p>
+          <div className="ssv1-page-head">
+            <div>
+              <h1>Saved surveys</h1>
+              <p className="ssv1-sub">Open a draft or submitted survey to continue editing, regenerate the PDF, or send it.</p>
+            </div>
+            <button type="button" className="ssv1-btn ssv1-btn-next ssv1-btn-compact" onClick={() => { startNewSurvey(); setRoute("new"); }}>
+              New survey
+            </button>
+          </div>
           {list.length === 0 ? (
-            <div className="empty-state">
-              <div className="es-title">No surveys yet</div>
+            <div className="ssv1-empty">
+              <div className="ssv1-empty-title">No surveys on file</div>
+              <p>Start a new survey to capture site details and generate a branded report.</p>
+              <button type="button" className="ssv1-btn ssv1-btn-next ssv1-btn-compact" onClick={() => setRoute("new")}>
+                Start survey
+              </button>
             </div>
           ) : (
             <div className="tracker-list">
@@ -1173,6 +1227,7 @@ export function SiteSurveyV1() {
                         if (!confirm(`Delete ${s.reportNo || "this draft"}?`)) return;
                         await api(`/site-survey-v1/${s.id}`, { method: "DELETE" });
                         flash("Deleted.");
+                        invalidateAdminData("site-survey-v1");
                         await reloadMeta();
                       }}
                     >
@@ -1188,17 +1243,20 @@ export function SiteSurveyV1() {
 
       {route === "history" ? (
         <section className="ssv1-panel">
-          <div className="ssv1-nav" style={{ padding: 0, marginBottom: 6, justifyContent: "space-between" }}>
+          <div className="ssv1-page-head">
             <div>
               <h1>Save history</h1>
-              <p className="ssv1-sub">Every save is logged here, even if the survey is later deleted.</p>
+              <p className="ssv1-sub">Every save is logged here for audit — even if the survey is later deleted.</p>
             </div>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void exportHistoryExcel()}>
+            <button type="button" className="ssv1-btn ssv1-btn-back ssv1-btn-compact" onClick={() => void exportHistoryExcel()}>
               Export Excel
             </button>
           </div>
           {history.length === 0 ? (
-            <p className="ssv1-sub">History fills as you save surveys.</p>
+            <div className="ssv1-empty">
+              <div className="ssv1-empty-title">No history yet</div>
+              <p>History fills automatically each time you save a survey.</p>
+            </div>
           ) : (
             <div className="ssv1-table-wrap">
               <table className="ssv1-htable">

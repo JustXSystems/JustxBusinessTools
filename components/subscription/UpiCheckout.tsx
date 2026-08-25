@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { submitUpiClaim, startCheckout } from "@/lib/api";
+import { invalidateLiveData } from "@/hooks/useLiveRefresh";
 import type { CartQuote, PayGatewayOption, PendingUpiClaim, UpiPayInfo } from "@/lib/types/subscription";
 
 function formatInr(amount: number) {
@@ -86,6 +87,7 @@ export function UpiCheckout({
         toolIds,
         ...form,
       });
+      invalidateLiveData("notifications");
       onToast(result.message);
       await onDone();
     } catch (err) {

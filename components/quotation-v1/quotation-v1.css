@@ -181,6 +181,58 @@
   font-weight: 700;
 }
 
+.qgv1-notes-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: clamp(280px, 42vh, 560px);
+}
+
+.qgv1-notes-head h3 {
+  margin: 0 0 4px;
+}
+
+.qgv1-notes-head .muted {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.qgv1-notes-area {
+  display: block;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: clamp(220px, 36vh, 480px);
+  height: 100%;
+  resize: vertical;
+  padding: 14px 15px;
+  font-size: 14px;
+  line-height: 1.55;
+  font-family: inherit;
+  color: var(--text-hi);
+  background: var(--glass-2);
+  border: 1px solid var(--border-hair);
+  border-radius: var(--radius-sm);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.qgv1-notes-area:focus {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: var(--glass-3);
+  box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.12);
+}
+
+@media (min-width: 1101px) {
+  .qgv1-notes-card {
+    min-height: clamp(320px, 48vh, 620px);
+  }
+
+  .qgv1-notes-area {
+    min-height: clamp(260px, 42vh, 540px);
+  }
+}
+
 .qgv1-label {
   font-size: 11px;
   font-weight: 700;

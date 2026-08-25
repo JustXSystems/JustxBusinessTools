@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   AnalyticsRangePills,
   analyticsRangeLabel,
@@ -9,6 +9,7 @@ import {
 } from "@/components/admin/AnalyticsRangePills";
 import { uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type ToolRow = {
   toolId: string;
@@ -118,7 +119,6 @@ export default function AdminAnalyticsPage() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async (range: number) => {
-    setLoading(true);
     setError("");
     try {
       const [ov, br, ins] = await Promise.all([
@@ -136,9 +136,7 @@ export default function AdminAnalyticsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    void load(days);
-  }, [days, load]);
+  useLiveRefresh(() => load(days), { intervalMs: 60_000, deps: [days] });
 
   const maxDaily = useMemo(() => {
     if (!overview) return 1;

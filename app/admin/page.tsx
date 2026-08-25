@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { api } from "@/lib/api";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type DashboardData = {
   analytics: {
@@ -37,13 +38,19 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    api<DashboardData>("/admin/dashboard")
-      .then(setData)
-      .catch((e) => setError(e.message));
+  const load = useCallback(async () => {
+    try {
+      const next = await api<DashboardData>("/admin/dashboard");
+      setData(next);
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load dashboard");
+    }
   }, []);
 
-  if (error) return <p className="field-error">{error}</p>;
+  useLiveRefresh(load, { intervalMs: 30_000 });
+
+  if (error && !data) return <p className="field-error">{error}</p>;
   if (!data) return <p className="muted">Loading dashboard…</p>;
 
   const inbox = data.inbox ?? {

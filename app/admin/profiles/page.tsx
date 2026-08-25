@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { INDIAN_STATES } from "@/lib/types/business-profile";
 import { api } from "@/lib/api";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
+import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type Profile = {
   id: number;
@@ -120,14 +121,17 @@ export default function AdminProfilesPage() {
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
 
   const reload = useCallback(async () => {
-    const data = await api<{ profiles: Profile[]; summary: typeof summary }>("/admin/profiles");
-    setProfiles(data.profiles);
-    setSummary(data.summary);
+    try {
+      const data = await api<{ profiles: Profile[]; summary: typeof summary }>("/admin/profiles");
+      setProfiles(data.profiles);
+      setSummary(data.summary);
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load profiles");
+    }
   }, []);
 
-  useEffect(() => {
-    reload().catch((e) => setError(e.message));
-  }, [reload]);
+  useLiveRefresh(reload, { intervalMs: 45_000 });
 
   async function openProfile(id: number) {
     setCreating(false);
@@ -159,6 +163,7 @@ export default function AdminProfilesPage() {
     try {
       const focus = await fn();
       setMessage(label);
+      invalidateAdminData("admin-profiles");
       await reload();
       if (typeof focus === "number") await openProfile(focus);
       else if (selectedId && !creating) await openProfile(selectedId);

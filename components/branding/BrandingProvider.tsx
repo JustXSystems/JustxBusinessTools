@@ -4,8 +4,8 @@ import {
   createContext,
   useCallback,
   useContext,
-  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -17,6 +17,14 @@ import {
   type SplashAnimation,
   type SplashIntensity,
 } from "@/lib/splash-animation";
+import { invalidateLiveData, useLiveRefresh } from "@/hooks/useLiveRefresh";
+import {
+  clearContingency,
+  liveFirstFetch,
+  readContingencyJson,
+  type LiveSource,
+  writeContingencyJson,
+} from "@/lib/live-first";
 
 export type PlatformBranding = {
   logoUrl: string;
@@ -56,6 +64,7 @@ export const DEFAULT_POWERED_BY: PoweredByConfig = {
 };
 
 export const SPLASH_SEEN_KEY = "jbt.splash.seen";
+/** Contingency mirror only — never preferred over a live DB response while online. */
 export const BRANDING_STORAGE_KEY = "jbt.branding.payload";
 
 export function splashFingerprint(b: PlatformBranding): string {
@@ -73,27 +82,29 @@ export function splashFingerprint(b: PlatformBranding): string {
   ].join("\u0001");
 }
 
+type BrandPayload = { branding: PlatformBranding; poweredBy: PoweredByConfig };
+
 type BrandingContextValue = {
   branding: PlatformBranding;
   poweredBy: PoweredByConfig;
-  /** True until the first network branding response (or stored fallback) is applied. */
+  /** True until the first live-first attempt finishes (network or offline fallback). */
   loading: boolean;
+  /** Where the current payload came from. */
+  source: LiveSource;
+  /** True after a successful live (DB) fetch in this session. */
+  liveConfirmed: boolean;
   refresh: () => Promise<void>;
 };
 
 const BrandingContext = createContext<BrandingContextValue | null>(null);
 
-type CachedPayload = { branding: PlatformBranding; poweredBy: PoweredByConfig };
-
-let cached: CachedPayload | null = null;
-let inflight: Promise<CachedPayload> | null = null;
-/** True after this tab has applied a branding payload (network or storage fallback). */
-let confirmed = false;
+let memoryLive: BrandPayload | null = null;
+let inflight: Promise<BrandPayload & { source: LiveSource }> | null = null;
 
 function normalizePayload(data: {
   branding?: Partial<PlatformBranding>;
   poweredBy?: Partial<PoweredByConfig>;
-}): CachedPayload {
+}): BrandPayload {
   const b = data.branding ?? {};
   const p = data.poweredBy ?? {};
   return {
@@ -124,147 +135,136 @@ function normalizePayload(data: {
   };
 }
 
-function readStoredPayload(): CachedPayload | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(BRANDING_STORAGE_KEY);
-    if (!raw) return null;
-    return normalizePayload(JSON.parse(raw) as {
-      branding?: Partial<PlatformBranding>;
-      poweredBy?: Partial<PoweredByConfig>;
+function readContingencyPayload(): BrandPayload | null {
+  const raw = readContingencyJson<{
+    branding?: Partial<PlatformBranding>;
+    poweredBy?: Partial<PoweredByConfig>;
+  }>(BRANDING_STORAGE_KEY);
+  if (!raw) return null;
+  return normalizePayload(raw);
+}
+
+function writeContingencyPayload(payload: BrandPayload): void {
+  writeContingencyJson(BRANDING_STORAGE_KEY, payload);
+}
+
+async function fetchLiveBrandPayload(signal?: AbortSignal): Promise<BrandPayload> {
+  const res = await fetch(apiUrl(`/api/config/branding?t=${Date.now()}`), {
+    credentials: "include",
+    cache: "no-store",
+    signal,
+    headers: {
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
+    },
+  });
+  if (!res.ok) throw new Error("branding fetch failed");
+  const data = (await res.json()) as {
+    branding?: Partial<PlatformBranding>;
+    poweredBy?: Partial<PoweredByConfig>;
+  };
+  return normalizePayload(data);
+}
+
+const DEFAULT_PAYLOAD: BrandPayload = {
+  branding: { ...DEFAULT_BRANDING },
+  poweredBy: { ...DEFAULT_POWERED_BY },
+};
+
+/**
+ * Live-first branding fetch. Memory/localStorage are contingency only —
+ * never returned ahead of a network attempt while online.
+ */
+export async function fetchPlatformBrandPayload(
+  _force = true,
+): Promise<BrandPayload & { source: LiveSource }> {
+  if (inflight) return inflight;
+
+  inflight = (async () => {
+    const result = await liveFirstFetch({
+      fetchLive: fetchLiveBrandPayload,
+      readContingency: readContingencyPayload,
+      defaults: DEFAULT_PAYLOAD,
+      timeoutMs: 8_000,
     });
-  } catch {
-    return null;
-  }
+    if (result.source === "live") {
+      memoryLive = result.data;
+      writeContingencyPayload(result.data);
+    } else if (!memoryLive) {
+      memoryLive = result.data;
+    }
+    return { ...result.data, source: result.source };
+  })().finally(() => {
+    inflight = null;
+  });
+
+  return inflight;
 }
 
-function writeStoredPayload(payload: CachedPayload): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(BRANDING_STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    /* ignore */
-  }
-}
-
-function applyPayload(payload: CachedPayload, fromNetwork: boolean): CachedPayload {
-  cached = payload;
-  confirmed = true;
-  if (fromNetwork) writeStoredPayload(payload);
-  return payload;
-}
-
-export async function fetchPlatformBranding(force = false): Promise<PlatformBranding> {
-  const payload = await fetchPlatformBrandPayload(force);
+export async function fetchPlatformBranding(_force = true): Promise<PlatformBranding> {
+  const payload = await fetchPlatformBrandPayload(true);
   return payload.branding;
 }
 
-export async function fetchPlatformBrandPayload(force = false): Promise<CachedPayload> {
-  if (!force && cached && confirmed) return cached;
-  if (!force && inflight) return inflight;
-
-  const run = (async () => {
-    const res = await fetch(apiUrl(`/api/config/branding?t=${Date.now()}`), {
-      credentials: "include",
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error("branding fetch failed");
-    const data = (await res.json()) as {
-      branding?: Partial<PlatformBranding>;
-      poweredBy?: Partial<PoweredByConfig>;
-    };
-    return applyPayload(normalizePayload(data), true);
-  })();
-
-  if (!force) {
-    inflight = run.finally(() => {
-      inflight = null;
-    });
-    try {
-      return await inflight;
-    } catch {
-      const stored = readStoredPayload();
-      if (stored) return applyPayload(stored, false);
-      return applyPayload(
-        {
-          branding: { ...DEFAULT_BRANDING },
-          poweredBy: { ...DEFAULT_POWERED_BY },
-        },
-        false,
-      );
-    }
-  }
-
-  try {
-    return await run;
-  } catch {
-    if (cached) return cached;
-    const stored = readStoredPayload();
-    if (stored) return applyPayload(stored, false);
-    return applyPayload(
-      {
-        branding: { ...DEFAULT_BRANDING },
-        poweredBy: { ...DEFAULT_POWERED_BY },
-      },
-      false,
-    );
-  }
-}
-
 export function invalidateBrandingCache(): void {
-  cached = null;
-  confirmed = false;
+  memoryLive = null;
+  inflight = null;
   try {
     sessionStorage.removeItem(SPLASH_SEEN_KEY);
   } catch {
     /* ignore */
   }
-  try {
-    localStorage.removeItem(BRANDING_STORAGE_KEY);
-  } catch {
-    /* ignore */
-  }
+  clearContingency(BRANDING_STORAGE_KEY);
+  invalidateLiveData("branding");
 }
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
   const [branding, setBranding] = useState<PlatformBranding>(DEFAULT_BRANDING);
   const [poweredBy, setPoweredBy] = useState<PoweredByConfig>(DEFAULT_POWERED_BY);
   const [loading, setLoading] = useState(true);
+  const [source, setSource] = useState<LiveSource>("default");
+  const [liveConfirmed, setLiveConfirmed] = useState(false);
+  const liveConfirmedRef = useRef(false);
 
-  const refresh = useCallback(async () => {
-    invalidateBrandingCache();
-    const next = await fetchPlatformBrandPayload(true);
-    setBranding(next.branding);
-    setPoweredBy(next.poweredBy);
+  const apply = useCallback((payload: BrandPayload, nextSource: LiveSource) => {
+    setBranding(payload.branding);
+    setPoweredBy(payload.poweredBy);
+    setSource(nextSource);
+    if (nextSource === "live") {
+      liveConfirmedRef.current = true;
+      setLiveConfirmed(true);
+    }
     setLoading(false);
   }, []);
 
-  // Apply cached branding before first paint to avoid blank→branded splash flicker.
-  useLayoutEffect(() => {
-    const stored = readStoredPayload();
-    if (stored) {
-      applyPayload(stored, false);
-      setBranding(stored.branding);
-      setPoweredBy(stored.poweredBy);
-      setLoading(false);
-    }
-
-    let cancelled = false;
-    fetchPlatformBrandPayload(true).then((next) => {
-      if (!cancelled) {
-        setBranding(next.branding);
-        setPoweredBy(next.poweredBy);
+  const softRevalidate = useCallback(async () => {
+    try {
+      const next = await fetchPlatformBrandPayload(true);
+      // Never replace a confirmed live payload with stale contingency after a blip.
+      if (next.source === "live" || !liveConfirmedRef.current) {
+        apply({ branding: next.branding, poweredBy: next.poweredBy }, next.source);
+      } else {
         setLoading(false);
       }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    } catch {
+      setLoading(false);
+    }
+  }, [apply]);
+
+  const refresh = useCallback(async () => {
+    invalidateBrandingCache();
+    liveConfirmedRef.current = false;
+    setLiveConfirmed(false);
+    setLoading(true);
+    await softRevalidate();
+  }, [softRevalidate]);
+
+  // Live-first boot + focus/online/invalidate. Never paint contingency as "ready" before the attempt.
+  useLiveRefresh(softRevalidate, { intervalMs: 60_000 });
 
   const value = useMemo(
-    () => ({ branding, poweredBy, loading, refresh }),
-    [branding, poweredBy, loading, refresh],
+    () => ({ branding, poweredBy, loading, source, liveConfirmed, refresh }),
+    [branding, poweredBy, loading, source, liveConfirmed, refresh],
   );
 
   return <BrandingContext.Provider value={value}>{children}</BrandingContext.Provider>;
@@ -274,9 +274,11 @@ export function usePlatformBranding(): BrandingContextValue {
   const ctx = useContext(BrandingContext);
   if (ctx) return ctx;
   return {
-    branding: cached?.branding ?? DEFAULT_BRANDING,
-    poweredBy: cached?.poweredBy ?? DEFAULT_POWERED_BY,
-    loading: !confirmed,
+    branding: memoryLive?.branding ?? DEFAULT_BRANDING,
+    poweredBy: memoryLive?.poweredBy ?? DEFAULT_POWERED_BY,
+    loading: !memoryLive,
+    source: memoryLive ? "live" : "default",
+    liveConfirmed: Boolean(memoryLive),
     refresh: async () => {
       await fetchPlatformBrandPayload(true);
     },

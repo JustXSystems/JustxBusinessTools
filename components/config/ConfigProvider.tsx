@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -16,6 +17,12 @@ import {
   type PlatformBranding,
 } from "@/components/branding/BrandingProvider";
 import { applyThemeTokens, type ThemeTokens } from "@/lib/theme";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
+import {
+  liveFirstFetch,
+  readContingencyJson,
+  writeContingencyJson,
+} from "@/lib/live-first";
 
 export type PlatformToolDefinition = {
   id: string;
@@ -46,35 +53,48 @@ type ConfigContextValue = {
   getToolDefinition: (toolId: string) => PlatformToolDefinition | undefined;
 };
 
+const CONFIG_CONTINGENCY_KEY = "jbt.config.effective.contingency.v1";
+
 const ConfigContext = createContext<ConfigContextValue | null>(null);
+
+const DEFAULT_CONFIG: EffectiveConfig = {
+  poweredBy: DEFAULT_POWERED_BY,
+  branding: DEFAULT_BRANDING,
+  configVersion: 1,
+  tools: [],
+  catalog: [],
+};
 
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<EffectiveConfig | null>(null);
   const [loading, setLoading] = useState(true);
+  const liveConfirmedRef = useRef(false);
 
   const refresh = useCallback(async () => {
-    try {
-      const data = await api<EffectiveConfig>("/config/effective");
-      setConfig({
-        ...data,
-        branding: data.branding ?? DEFAULT_BRANDING,
-      });
-    } catch {
-      setConfig({
-        poweredBy: DEFAULT_POWERED_BY,
-        branding: DEFAULT_BRANDING,
-        configVersion: 1,
-        tools: [],
-        catalog: [],
-      });
-    } finally {
-      setLoading(false);
+    const result = await liveFirstFetch({
+      fetchLive: async () => {
+        const data = await api<EffectiveConfig>("/config/effective");
+        return {
+          ...data,
+          branding: data.branding ?? DEFAULT_BRANDING,
+        };
+      },
+      readContingency: () => readContingencyJson<EffectiveConfig>(CONFIG_CONTINGENCY_KEY),
+      defaults: DEFAULT_CONFIG,
+      timeoutMs: 10_000,
+    });
+
+    if (result.source === "live") {
+      liveConfirmedRef.current = true;
+      writeContingencyJson(CONFIG_CONTINGENCY_KEY, result.data);
+      setConfig(result.data);
+    } else if (!liveConfirmedRef.current) {
+      setConfig(result.data);
     }
+    setLoading(false);
   }, []);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useLiveRefresh(refresh, { intervalMs: 45_000 });
 
   useEffect(() => {
     applyThemeTokens(config?.theme as ThemeTokens | null | undefined);

@@ -7,6 +7,7 @@ import { BillingStepper } from "@/components/subscription/BillingStepper";
 import { useSubscription } from "@/hooks/useSubscription";
 import { cancelProSubscription, fetchCartQuote } from "@/lib/api";
 import { addToToolCart, clearToolCart, readToolCart, removeFromToolCart, writeToolCart } from "@/lib/tool-cart";
+import { SUBSCRIPTION_SYNCED_EVENT } from "@/lib/subscription-cache";
 import type { CartQuote, ToolCatalogSku } from "@/lib/types/subscription";
 
 function inr(n: number) {
@@ -44,6 +45,24 @@ export default function SubscriptionPage() {
     }
     setCart(stored);
   }, []);
+
+  // Keep page cart in sync when subscription snapshot refreshes from DB (e.g. UPI approved).
+  useEffect(() => {
+    const onSync = () => setCart(readToolCart());
+    const onResolved = () => {
+      setCart(readToolCart());
+      showToast("Payment verified — tool licenses are now active");
+      void refresh();
+    };
+    window.addEventListener("jbt-cart-change", onSync);
+    window.addEventListener(SUBSCRIPTION_SYNCED_EVENT, onSync);
+    window.addEventListener("jbt:upi-claim-resolved", onResolved);
+    return () => {
+      window.removeEventListener("jbt-cart-change", onSync);
+      window.removeEventListener(SUBSCRIPTION_SYNCED_EVENT, onSync);
+      window.removeEventListener("jbt:upi-claim-resolved", onResolved);
+    };
+  }, [refresh, showToast]);
 
   const payableIds = useMemo(() => {
     if (catalog.length === 0) return cart;

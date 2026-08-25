@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { api } from "@/lib/api";
+import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type Payee = { enabled: boolean; vpa: string; payeeName: string; merchantCode: string };
 type Notify = {
@@ -82,9 +83,10 @@ export function UpiPaymentsPanel() {
     setOutbox(ob.events);
   }, [filter]);
 
-  useEffect(() => {
-    load().catch((e: Error) => setMessage(e.message));
-  }, [load]);
+  useLiveRefresh(() => load().catch((e: Error) => setMessage(e.message)), {
+    intervalMs: 20_000,
+    deps: [filter],
+  });
 
   const selected = claims.find((c) => c.id === selectedId) ?? claims[0] ?? null;
 
@@ -116,6 +118,7 @@ export function UpiPaymentsPanel() {
       });
       setReviewNote("");
       setMessage(action === "approve" ? "Approved — selected tools are now licensed." : "Rejected — no new licenses granted.");
+      invalidateAdminData("admin-upi");
       await load();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Review failed");

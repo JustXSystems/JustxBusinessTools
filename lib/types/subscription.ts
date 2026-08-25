@@ -52,7 +52,7 @@ export type UpiPayInfo = {
 
 export type PendingUpiClaim = {
   id: number;
-  status: "pending" | "rejected" | string;
+  status: "pending" | "rejected" | "approved" | string;
   utr: string;
   amountInr: number;
   toolIds?: string[];
@@ -86,8 +86,12 @@ export type SubscriptionInfo = {
   licenses?: ToolLicense[];
   licensedToolIds?: string[];
   upi?: UpiPayInfo;
+  /** Only pending / rejected — never approved (approved clears the review banner). */
   pendingClaim?: PendingUpiClaim | null;
+  /** Latest claim regardless of status (debug / status strip). */
+  latestClaim?: PendingUpiClaim | null;
   gateways?: PayGatewayOption[];
+  serverTime?: string;
 };
 
 export type CheckoutResult = {

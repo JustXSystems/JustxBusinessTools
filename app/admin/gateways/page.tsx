@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type Gateway = {
   id: number;
@@ -136,31 +137,38 @@ export default function AdminGatewaysPage() {
     setEvents(data.events);
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    load()
-      .then(({ nextId }) => {
-        if (nextId != null) return loadEvents(nextId);
-      })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-    // initial load only
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useLiveRefresh(async () => {
+    try {
+      const { nextId } = await load();
+      if (nextId != null) await loadEvents(nextId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load gateways");
+    } finally {
+      setLoading(false);
+    }
+  }, { intervalMs: 45_000 });
 
   const selected = gateways.find((g) => g.id === selectedId) ?? null;
+  const editSeededFor = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!selected) return;
+    if (selectedId == null) {
+      editSeededFor.current = null;
+      return;
+    }
+    if (editSeededFor.current === selectedId) return;
+    const row = gateways.find((g) => g.id === selectedId);
+    if (!row) return;
+    editSeededFor.current = selectedId;
     setEdit({
-      displayName: selected.displayName,
-      mode: selected.mode,
+      displayName: row.displayName,
+      mode: row.mode,
       keyId: "",
       keySecret: "",
       webhookSecret: "",
-      mappedPlanIds: [...(selected.mappedPlanIds ?? [])],
+      mappedPlanIds: [...(row.mappedPlanIds ?? [])],
     });
-  }, [selected]);
+  }, [selectedId, gateways]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -200,6 +208,7 @@ export default function AdminGatewaysPage() {
     try {
       await fn();
       setMessage(label);
+      invalidateAdminData("admin-gateways");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Action failed");
     } finally {

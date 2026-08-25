@@ -56,6 +56,16 @@ export default function SubscriptionCheckoutPage() {
   }, [loadQuote, catalog.length]);
 
   useEffect(() => {
+    const onResolved = () => {
+      clearToolCart();
+      showToast("Payment verified — licenses are active");
+      void refresh().then(() => router.replace("/subscription"));
+    };
+    window.addEventListener("jbt:upi-claim-resolved", onResolved);
+    return () => window.removeEventListener("jbt:upi-claim-resolved", onResolved);
+  }, [refresh, router, showToast]);
+
+  useEffect(() => {
     if (loading || quoting) return;
     if (pending?.status === "pending") return;
     if (quote || quoteError) return;

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { fetchToolUsage } from "@/lib/api";
 import type { ToolUsage } from "@/lib/types/tool-record";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 export function useUsageLimit(toolId: string, subscriptionExempt: boolean) {
   const [usage, setUsage] = useState<ToolUsage | null>(null);
@@ -15,7 +16,6 @@ export function useUsageLimit(toolId: string, subscriptionExempt: boolean) {
       setLoading(false);
       return;
     }
-    setLoading(true);
     setError("");
     try {
       const data = await fetchToolUsage(toolId);
@@ -27,9 +27,7 @@ export function useUsageLimit(toolId: string, subscriptionExempt: boolean) {
     }
   }, [toolId, subscriptionExempt]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useLiveRefresh(refresh, { intervalMs: 60_000, enabled: !subscriptionExempt });
 
   return {
     usage,

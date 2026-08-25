@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fetchProfile } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useLiveRefresh, invalidateAdminData } from "@/hooks/useLiveRefresh";
 import {
   buildTerms,
   CATEGORIES,
@@ -162,15 +163,13 @@ export function QuotationGeneratorV1() {
     setList((q.quotations ?? []) as QuotationV1[]);
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        await reloadMeta();
-      } catch (e) {
-        flash(e instanceof Error ? e.message : "Failed to load", "err");
-      }
-    })();
-  }, [flash, reloadMeta, user?.businessProfileId]);
+  useLiveRefresh(async () => {
+    try {
+      await reloadMeta();
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Failed to load", "err");
+    }
+  }, { intervalMs: 45_000, deps: [user?.businessProfileId] });
 
   useEffect(() => {
     const name = userDisplayName(user);
@@ -239,6 +238,7 @@ export function QuotationGeneratorV1() {
       setCurrent(saved);
       setLastSaved(snapshotOf(saved));
       flash(`Saved as ${saved.quoteNo}.`);
+      invalidateAdminData("quotation-v1");
       await reloadMeta();
       return saved;
     } catch (e) {
@@ -435,6 +435,7 @@ export function QuotationGeneratorV1() {
       method: "POST",
       body: JSON.stringify({ quotationId, message }),
     });
+    invalidateAdminData("quotation-v1");
     await reloadMeta();
   }
 
@@ -960,12 +961,17 @@ export function QuotationGeneratorV1() {
               </button>
             </section>
 
-            <section className="qgv1-card">
-              <h3>Terms &amp; notes</h3>
+            <section className="qgv1-card qgv1-notes-card">
+              <div className="qgv1-notes-head">
+                <h3>Terms &amp; notes</h3>
+                <p className="muted">Printed on the quotation PDF under Terms &amp; Conditions.</p>
+              </div>
               <textarea
-                rows={8}
+                className="qgv1-notes-area"
+                rows={14}
                 value={current.notes}
                 onChange={(e) => patch((q) => ({ ...q, notes: e.target.value }))}
+                placeholder="Payment terms, warranty, delivery timeline, exclusions…"
               />
             </section>
 

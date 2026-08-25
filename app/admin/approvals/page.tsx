@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { api } from "@/lib/api";
+import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type InboxItem = {
   kind: "profile" | "user" | "payment_op" | "upi_claim";
@@ -43,14 +44,17 @@ export default function AdminApprovalsPage() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    const data = await api<{ items: InboxItem[]; summary: Summary }>("/admin/approvals/inbox");
-    setItems(data.items);
-    setSummary(data.summary);
+    try {
+      const data = await api<{ items: InboxItem[]; summary: Summary }>("/admin/approvals/inbox");
+      setItems(data.items);
+      setSummary(data.summary);
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load inbox");
+    }
   }, []);
 
-  useEffect(() => {
-    reload().catch((e: Error) => setError(e.message));
-  }, [reload]);
+  useLiveRefresh(reload, { intervalMs: 20_000 });
 
   async function act(item: InboxItem, action: "approve" | "reject") {
     const key = `${item.kind}:${item.id}:${action}`;
@@ -77,6 +81,7 @@ export default function AdminApprovalsPage() {
         });
       }
       setMessage(`${KIND_LABEL[item.kind]} ${action === "approve" ? "approved" : "rejected"}.`);
+      invalidateAdminData("admin-approvals");
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");

@@ -12,6 +12,7 @@ import { flattenRecord } from "@/lib/types/tool-record";
 import { enqueueOfflineMutation } from "@/lib/offline/queue-store";
 import { isNetworkError } from "@/lib/offline/sync-engine";
 import { OFFLINE_SYNCED_EVENT } from "@/lib/offline/types";
+import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 function newOfflineId(toolId: string): string {
   return `${toolId}_${Date.now()}_${Math.floor(Math.random() * 9999)}`;
@@ -25,7 +26,6 @@ export function useToolRecords(toolId: string) {
   const [queuedCount, setQueuedCount] = useState(0);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
     setError("");
     try {
       const list = await fetchToolRecords(toolId);
@@ -38,9 +38,7 @@ export function useToolRecords(toolId: string) {
     }
   }, [toolId]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useLiveRefresh(refresh, { intervalMs: 45_000 });
 
   useEffect(() => {
     const onSynced = () => refresh();
@@ -52,6 +50,7 @@ export function useToolRecords(toolId: string) {
     const recordId = id ?? newOfflineId(toolId);
     try {
       const record = await createToolRecord(toolId, data, recordId);
+      invalidateAdminData(`tool:${toolId}`);
       await refresh();
       return record;
     } catch (err) {
@@ -73,6 +72,7 @@ export function useToolRecords(toolId: string) {
   const update = async (recordId: string, data: Record<string, unknown>) => {
     try {
       const record = await updateToolRecord(toolId, recordId, data);
+      invalidateAdminData(`tool:${toolId}`);
       await refresh();
       return record;
     } catch (err) {
@@ -94,6 +94,7 @@ export function useToolRecords(toolId: string) {
   const remove = async (recordId: string) => {
     try {
       await deleteToolRecord(toolId, recordId);
+      invalidateAdminData(`tool:${toolId}`);
       await refresh();
     } catch (err) {
       if (isNetworkError(err)) {

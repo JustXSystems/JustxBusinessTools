@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { api } from "@/lib/api";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type AuditEvent = {
   id: number;
@@ -17,11 +18,16 @@ export default function AdminAuditPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api<{ events: AuditEvent[] }>("/admin/audit?limit=100")
-      .then((d) => setEvents(d.events))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    try {
+      const d = await api<{ events: AuditEvent[] }>("/admin/audit?limit=100");
+      setEvents(d.events);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useLiveRefresh(load, { intervalMs: 45_000 });
 
   if (loading) return <p className="muted">Loading audit log…</p>;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { fetchProfile, greeting } from "@/lib/api";
 import { ToolCard } from "@/components/home/ToolCard";
@@ -13,6 +13,7 @@ import {
   filterHomeToolsByCatalog,
 } from "@/lib/dynamic-tools";
 import type { ToolDefinition } from "@/config/tools.config";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 function filterMergedTools(query: string, tools: ToolDefinition[]): ToolDefinition[] {
   const q = query.trim().toLowerCase();
@@ -35,15 +36,19 @@ export function HomeDashboard() {
   const [homeToolIds, setHomeToolIds] = useState<string[] | null>(null);
   const [apiError, setApiError] = useState("");
 
-  useEffect(() => {
+  const loadProfile = useCallback(async () => {
     if (!config) return;
-    fetchProfile()
-      .then((p) => {
-        setBusinessName(p.businessName || "");
-        setHomeToolIds(p.homeToolIds ?? null);
-      })
-      .catch((err: Error) => setApiError(err.message));
+    try {
+      const p = await fetchProfile();
+      setBusinessName(p.businessName || "");
+      setHomeToolIds(p.homeToolIds ?? null);
+      setApiError("");
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Failed to load profile");
+    }
   }, [config]);
+
+  useLiveRefresh(loadProfile, { intervalMs: 90_000, enabled: Boolean(config), deps: [Boolean(config)] });
 
   const allTools = useMemo(() => {
     const merged = mergedHomeTools(platformTools);

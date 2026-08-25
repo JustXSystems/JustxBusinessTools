@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { UpiPaymentsPanel } from "@/components/admin/UpiPaymentsPanel";
 import { api } from "@/lib/api";
+import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type Tab = "overview" | "saas" | "collections" | "ops" | "upi";
 type TxnStatus = "all" | "success" | "failed" | "pending";
@@ -196,7 +197,6 @@ function AdminPaymentsInner() {
 
   const load = useCallback(
     async (range: number) => {
-      setLoading(true);
       setError("");
       try {
         const [s, c, overview] = await Promise.all([
@@ -217,9 +217,7 @@ function AdminPaymentsInner() {
     [loadOps],
   );
 
-  useEffect(() => {
-    void load(days);
-  }, [days, load]);
+  useLiveRefresh(() => load(days), { intervalMs: 30_000, deps: [days] });
 
   const pendingOps = useMemo(() => ops.filter((o) => o.approvalStatus === "pending"), [ops]);
   const selectedOp = ops.find((o) => o.id === selectedOpId) ?? null;
@@ -266,6 +264,7 @@ function AdminPaymentsInner() {
       const next = await loadOps();
       setOpForm(emptyOpForm);
       setMessage("Logged on the payment desk. Approval is pending.");
+      invalidateAdminData("admin-payments");
       if (next[0]) setSelectedOpId(next[0].id);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Could not log payment");
@@ -278,6 +277,7 @@ function AdminPaymentsInner() {
     setBusyId(id);
     try {
       await api(`/admin/payments/ops/${id}/${action}`, { method: "POST" });
+      invalidateAdminData("admin-payments");
       await loadOps();
       setMessage(action === "approve" ? "Approved and marked cleared." : "Rejected.");
     } catch (err) {

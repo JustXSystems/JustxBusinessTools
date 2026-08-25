@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 function inr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(n);
@@ -106,7 +107,7 @@ export default function AdminSubscriptionsPage() {
   const paid = plans.find((p) => p.accessMode === "unlimited" || p.id === "pro");
   const editing = plans.find((p) => p.id === editingId) ?? limited ?? paid ?? null;
 
-  async function reload() {
+  const reload = useCallback(async () => {
     const [p, a, n] = await Promise.all([
       api<{ plans: Plan[] }>("/admin/subscriptions/plans"),
       api<{ subscription: Active | null; tenants?: TenantSub[]; summary?: TenantSummary }>(
@@ -128,17 +129,21 @@ export default function AdminSubscriptionsPage() {
     );
     setNotices(n.notices);
     return p.plans;
-  }
+  }, []);
 
-  useEffect(() => {
-    reload()
-      .then((list) => {
+  const didInitEdit = useRef(false);
+  useLiveRefresh(async () => {
+    try {
+      const list = await reload();
+      if (!didInitEdit.current && list.length) {
+        didInitEdit.current = true;
         const first = list.find((x) => x.id === "free") ?? list[0];
         if (first) startEdit(first);
-      })
-      .catch((e: Error) => setMessage(e.message));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      }
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Failed to load subscriptions");
+    }
+  }, { intervalMs: 45_000 });
 
   function startEdit(plan: Plan) {
     setEditingId(plan.id);
@@ -181,6 +186,7 @@ export default function AdminSubscriptionsPage() {
       });
       const keepId = editingId;
       const next = await reload();
+      invalidateAdminData("admin-subscriptions");
       const keep = next.find((x) => x.id === keepId);
       if (keep) {
         setEditingId(keep.id);
@@ -219,6 +225,7 @@ export default function AdminSubscriptionsPage() {
           : "Operator org switched to this mode. Limits apply on the next create.",
       );
       await reload();
+      invalidateAdminData("admin-subscriptions");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Assign failed");
     } finally {
@@ -238,6 +245,7 @@ export default function AdminSubscriptionsPage() {
         `Renewal job: scanned ${r.scanned}, created ${r.created}, skipped ${r.skipped}, auto-sent ${r.autoSent}.`,
       );
       await reload();
+      invalidateAdminData("admin-subscriptions");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Renewal run failed");
     } finally {
