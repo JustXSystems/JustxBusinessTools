@@ -19,3 +19,9 @@ export function canEditBusinessProfile(user: SessionUser | null | undefined): bo
   // Platform admins are not org members of customer profiles — Owner only.
   return user.role === "owner";
 }
+
+/** Owner / staff / org admin may run Sync Center and register a desktop agent. */
+export function canUseSyncCenter(user: SessionUser | null | undefined): boolean {
+  if (!user) return false;
+  return user.role === "owner" || user.role === "staff" || user.role === "admin";
+}

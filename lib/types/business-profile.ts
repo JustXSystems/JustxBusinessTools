@@ -81,6 +81,33 @@ export type BusinessProfile = {
   homeToolIds: string[] | null;
   /** Profile-level WhatsApp / Email / Google Drive defaults for all tools. */
   sendSettings: BusinessProfileSendSettings;
+  /**
+   * Target folder for tool artifacts (UNC or absolute path).
+   * Written by desktop sync agent / File System Access — not by the SaaS server.
+   */
+  downloadFolder: string | null;
+  /** How the agent/FSA handles an existing file with the same name. */
+  downloadFolderConflictPolicy: "rename" | "skip" | "overwrite";
+  /**
+   * Automatic delivery mode (cloud-first).
+   * `auto` picks Google Drive → webhook → UNC agent based on what is configured.
+   */
+  artifactDestination: "auto" | "google_drive" | "webhook" | "unc_agent" | "none";
+  /** Corporate webhook (Power Automate / n8n / SharePoint flow). */
+  artifactWebhookUrl: string | null;
+  artifactWebhookSecretConfigured?: boolean;
+  delivery?: {
+    artifactDestination: string;
+    effectiveDestination: string;
+    automationReady: boolean;
+    googleDrive: {
+      folderId: string;
+      folderLabel: string;
+      serverConfigured: boolean;
+      serviceAccountEmail: string | null;
+    };
+    webhook: { url: string | null; secretConfigured: boolean };
+  } | null;
 };
 
 export const EMPTY_PROFILE: BusinessProfile = {
@@ -108,6 +135,12 @@ export const EMPTY_PROFILE: BusinessProfile = {
     email: { ...DEFAULT_SEND_SETTINGS.email },
     googleDrive: { ...DEFAULT_SEND_SETTINGS.googleDrive },
   },
+  downloadFolder: null,
+  downloadFolderConflictPolicy: "rename",
+  artifactDestination: "auto",
+  artifactWebhookUrl: null,
+  artifactWebhookSecretConfigured: false,
+  delivery: null,
 };
 
 export function normalizeSendSettings(

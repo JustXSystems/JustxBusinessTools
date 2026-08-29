@@ -36,6 +36,7 @@ import {
   type QuoteNotification,
 } from "@/lib/quotation-v1";
 import type { BusinessProfileSendSettings } from "@/lib/types/business-profile";
+import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
 import { QuoteSheet } from "./QuoteSheet";
 import "./quotation-v1.css";
 
@@ -289,8 +290,17 @@ export function QuotationGeneratorV1() {
     try {
       const payload = await buildPdfPayload(q);
       if (!payload) return;
-      await downloadOrSharePdf(payload.filename, payload.pdfBase64);
-      flash("PDF downloaded — check your Downloads folder.");
+      const result = await deliverToolArtifact({
+        toolId: "quotation-v1",
+        filename: payload.filename.toLowerCase().endsWith(".pdf")
+          ? payload.filename
+          : `${payload.filename}.pdf`,
+        bytes: pdfBase64ToBytes(payload.pdfBase64),
+        mimeType: "application/pdf",
+        preferShare: true,
+        meta: { quoteNo: q.quoteNo, quotationId: q.id },
+      });
+      flash(result.message);
     } catch (e) {
       flash(e instanceof Error ? e.message : "PDF export failed", "err");
     } finally {
@@ -298,27 +308,24 @@ export function QuotationGeneratorV1() {
     }
   }
 
-  /** Prefer system share sheet when available; otherwise force a file download. */
+  /** Prefer artifact delivery (FSA / queue / browser fallback); share sheet on mobile. */
   async function downloadOrSharePdf(filename: string, pdfBase64: string) {
-    const bytes = pdfBase64ToUint8(pdfBase64);
     const safeName = filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`;
-    const file = new File([bytes], safeName, { type: "application/pdf" });
-    const nav = navigator as Navigator & {
-      canShare?: (data: ShareData & { files?: File[] }) => boolean;
-      share?: (data: ShareData & { files?: File[] }) => Promise<void>;
-    };
-    if (typeof nav.canShare === "function" && typeof nav.share === "function") {
-      try {
-        if (nav.canShare({ files: [file] })) {
-          await nav.share({ files: [file], title: safeName });
-          return "shared" as const;
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") return "cancelled" as const;
-      }
+    try {
+      const result = await deliverToolArtifact({
+        toolId: "quotation-v1",
+        filename: safeName,
+        bytes: pdfBase64ToBytes(pdfBase64),
+        mimeType: "application/pdf",
+        preferShare: true,
+        meta: { quoteNo: current.quoteNo, quotationId: current.id },
+      });
+      if (result.channel === "share_sheet") return "shared" as const;
+      return "downloaded" as const;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return "cancelled" as const;
+      throw err;
     }
-    forceDownloadPdf(safeName, pdfBase64);
-    return "downloaded" as const;
   }
 
   function validateSaved(q: QuotationV1) {

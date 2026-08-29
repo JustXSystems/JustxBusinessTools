@@ -56,6 +56,15 @@ export function NavIcon({ id, className }: { id: NavIconId; className?: string }
           <path d="M8 13h5M8 17h8" />
         </Svg>
       );
+    case "sync":
+      return (
+        <Svg {...props}>
+          <path d="M21 12a9 9 0 0 0-15.5-6.4" />
+          <path d="M3 4v5h5" />
+          <path d="M3 12a9 9 0 0 0 15.5 6.4" />
+          <path d="M21 20v-5h-5" />
+        </Svg>
+      );
     case "notifications":
       return (
         <Svg {...props}>

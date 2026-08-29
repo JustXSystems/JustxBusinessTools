@@ -38,6 +38,7 @@ import {
   normalizeSendSettings,
   type BusinessProfileSendSettings,
 } from "@/lib/types/business-profile";
+import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
 import "./site-survey-v1.css";
 
 type Route = "new" | "list" | "history";
@@ -759,9 +760,18 @@ export function SiteSurveyV1() {
     setBusy(true);
     try {
       const pdf = await buildPdf(saved);
-      forceDownloadPdf(pdf.filename, pdf.pdfBase64);
+      const result = await deliverToolArtifact({
+        toolId: "site-survey-v1",
+        filename: pdf.filename.toLowerCase().endsWith(".pdf")
+          ? pdf.filename
+          : `${pdf.filename}.pdf`,
+        bytes: pdfBase64ToBytes(pdf.pdfBase64),
+        mimeType: "application/pdf",
+        preferShare: true,
+        meta: { reportNo: saved.reportNo, surveyId: saved.id },
+      });
       setShowSuccess(true);
-      flash("Survey submitted — PDF downloaded.");
+      flash(result.message || "Survey submitted — PDF delivered.");
     } catch (e) {
       flash(e instanceof Error ? e.message : "PDF generation failed", "err");
     } finally {
@@ -1056,8 +1066,17 @@ export function SiteSurveyV1() {
                         setBusy(true);
                         try {
                           const pdf = await buildPdf(current);
-                          forceDownloadPdf(pdf.filename, pdf.pdfBase64);
-                          flash("PDF downloaded again.");
+                          const result = await deliverToolArtifact({
+                            toolId: "site-survey-v1",
+                            filename: pdf.filename.toLowerCase().endsWith(".pdf")
+                              ? pdf.filename
+                              : `${pdf.filename}.pdf`,
+                            bytes: pdfBase64ToBytes(pdf.pdfBase64),
+                            mimeType: "application/pdf",
+                            preferShare: true,
+                            meta: { reportNo: current.reportNo, surveyId: current.id },
+                          });
+                          flash(result.message || "PDF downloaded again.");
                         } catch (e) {
                           flash(e instanceof Error ? e.message : "PDF failed", "err");
                         } finally {

@@ -15,7 +15,8 @@ export type NavIconId =
   | "experience"
   | "audit"
   | "logout"
-  | "arrowLeft";
+  | "arrowLeft"
+  | "sync";
 
 export type NavItem = {
   href: string;
@@ -27,20 +28,22 @@ export const navigationConfig = {
   workspace: [
     { href: "/", label: "Home", icon: "home" as const },
     { href: "/profile", label: "Business Profile", icon: "profile" as const },
+    { href: "/sync", label: "Sync Center", icon: "sync" as const },
     { href: "/notifications", label: "Notifications", icon: "notifications" as const },
   ],
   account: [
     { href: "/subscription", label: "Subscription", icon: "subscription" as const },
   ],
-  /** Alias for workspace — Home / Profile / Notifications */
+  /** Alias for workspace — Home / Profile / Sync / Notifications */
   primary: [
     { href: "/", label: "Home", icon: "home" as const },
     { href: "/profile", label: "Business Profile", icon: "profile" as const },
+    { href: "/sync", label: "Sync Center", icon: "sync" as const },
     { href: "/notifications", label: "Notifications", icon: "notifications" as const },
   ],
   mobileBottom: [
     { href: "/", label: "Home", icon: "home" as const },
-    { href: "/profile", label: "Profile", icon: "profile" as const },
+    { href: "/sync", label: "Sync", icon: "sync" as const },
     { href: "/subscription", label: "Plan", icon: "subscription" as const },
     { href: "/notifications", label: "Alerts", icon: "notifications" as const },
   ],

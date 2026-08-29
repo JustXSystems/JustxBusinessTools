@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/types/business-profile";
 import { fetchProfile, saveProfile } from "@/lib/api";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
+import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -31,6 +32,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [webhookSecretDraft, setWebhookSecretDraft] = useState("");
 
   const send = normalizeSendSettings(profile.sendSettings);
 
@@ -64,13 +66,16 @@ export default function ProfilePage() {
     setError("");
     try {
       const normalized = normalizeSendSettings(profile.sendSettings);
-      const payload: BusinessProfile = {
+      const payload: BusinessProfile & { artifactWebhookSecret?: string } = {
         ...profile,
         sendSettings: {
           ...normalized,
           whatsappNumbers: normalized.whatsappNumbers.filter((n) => n.phone.trim()),
         },
       };
+      if (webhookSecretDraft.trim()) {
+        payload.artifactWebhookSecret = webhookSecretDraft.trim();
+      }
       const saved = await saveProfile(payload);
       setProfile({
         ...EMPTY_PROFILE,
@@ -78,6 +83,7 @@ export default function ProfilePage() {
         sendSettings: normalizeSendSettings(saved.sendSettings),
         homeToolIds: saved.homeToolIds ?? catalogIds,
       });
+      setWebhookSecretDraft("");
       setMessage("Business profile saved. Return to Home to see your tool list.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -418,6 +424,26 @@ export default function ProfilePage() {
           that URL for real delivery (SendGrid, n8n, etc.).
         </p>
       </div>
+
+      <Suspense fallback={<div className="panel"><p className="section-note">Loading delivery settings…</p></div>}>
+        <DownloadFolderPanel
+          canEdit={canEdit}
+          downloadFolder={profile.downloadFolder}
+          conflictPolicy={profile.downloadFolderConflictPolicy ?? "rename"}
+          artifactDestination={profile.artifactDestination ?? "auto"}
+          artifactWebhookUrl={profile.artifactWebhookUrl}
+          artifactWebhookSecretConfigured={profile.artifactWebhookSecretConfigured}
+          onFolderChange={(path) => setProfile((p) => ({ ...p, downloadFolder: path || null }))}
+          onPolicyChange={(policy) =>
+            setProfile((p) => ({ ...p, downloadFolderConflictPolicy: policy }))
+          }
+          onDestinationChange={(d) => setProfile((p) => ({ ...p, artifactDestination: d }))}
+          onWebhookUrlChange={(url) =>
+            setProfile((p) => ({ ...p, artifactWebhookUrl: url || null }))
+          }
+          onWebhookSecretChange={(secret) => setWebhookSecretDraft(secret)}
+        />
+      </Suspense>
 
       <div className="panel">
         <h3 className="panel-title">Bank details</h3>

@@ -91,7 +91,13 @@ export function HomeDashboard() {
               ✨ Set up your business profile first →
             </Link>
           </div>
-        ) : null}
+        ) : (
+          <div className="quick-row">
+            <Link href="/sync" className="quick-chip">
+              Sync pending files to Download Folder →
+            </Link>
+          </div>
+        )}
         {homeToolIds && homeToolIds.length === 0 ? (
           <div className="quick-row">
             <Link href="/profile" className="quick-chip">
