@@ -1,0 +1,61 @@
+# Example GitHub Actions workflow — copy to .github/workflows/deploy-jbt.yml
+# Requires repo secrets: DEPLOY_SSH_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+# Optional: RAZORPAY_*, SSL_EMAIL
+
+name: Deploy JBT
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "e2e/**"
+      - "android/**"
+
+concurrency:
+  group: deploy-jbt
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 193.203.161.219 >> ~/.ssh/known_hosts
+
+      - name: Sync source + deploy toolkit
+        run: |
+          rsync -az --delete \
+            --exclude node_modules --exclude web/.next --exclude .git \
+            --exclude android --exclude test-results \
+            ./ deploy@193.203.161.219:/opt/justx/apps/jbt/src/
+
+      - name: Run remote deploy
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
+          RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
+          RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+        run: |
+          ssh deploy@193.203.161.219 bash -s <<EOF
+          set -euo pipefail
+          export DEPLOY_MODE=ci NONINTERACTIVE=1
+          export GOOGLE_CLIENT_ID='${GOOGLE_CLIENT_ID}'
+          export GOOGLE_CLIENT_SECRET='${GOOGLE_CLIENT_SECRET}'
+          export RAZORPAY_KEY_ID='${RAZORPAY_KEY_ID:-}'
+          export RAZORPAY_KEY_SECRET='${RAZORPAY_KEY_SECRET:-}'
+          export RAZORPAY_WEBHOOK_SECRET='${RAZORPAY_WEBHOOK_SECRET:-}'
+          export SSL_EMAIL='${{ secrets.SSL_EMAIL || 'justxsystems@gmail.com' }}'
+          export USE_LOCAL_SOURCE=1
+          export REPO_ROOT=/opt/justx/apps/jbt/src
+          cd /opt/justx/deploy
+          ./deploy.sh jbt --local --skip-prereqs
+          EOF
