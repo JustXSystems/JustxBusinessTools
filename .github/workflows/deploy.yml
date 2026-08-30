@@ -1,0 +1,46 @@
+# Deploy JBT to Hostinger VPS (PM2 over SSH)
+#
+# Required GitHub Secrets (repo → Settings → Secrets and variables → Actions):
+#   DEPLOY_HOST    = 193.203.161.219
+#   DEPLOY_USER    = deploy
+#   DEPLOY_SSH_KEY = private key PEM (public key in deploy@server authorized_keys)
+#   DEPLOY_PATH    = /var/www/jbt
+#
+# See docs/DEPLOY.md for one-time server setup.
+
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "**.md"
+      - "e2e/**"
+      - "android/**"
+      - "docs/**"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          command_timeout: 25m
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.DEPLOY_PATH }}"
+            export DEPLOY_BRANCH=master
+            export NEXT_PUBLIC_BASE_PATH=/jbt
+            chmod +x scripts/vps-deploy.sh
+            ./scripts/vps-deploy.sh

@@ -1,0 +1,37 @@
+{
+  "name": "server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "dev:e2e": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "db:seed": "tsx scripts/seed-admin.ts",
+    "db:seed:tools": "tsx scripts/seed-tool-definitions.ts",
+    "analytics:rollup": "tsx scripts/rollup-analytics.ts"
+  },
+  "dependencies": {
+    "@jbt/shared": "*",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "mysql2": "^3.14.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20.19.11",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

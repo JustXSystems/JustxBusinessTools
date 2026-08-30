@@ -1,0 +1,35 @@
+# Example nginx locations for https://justxsystems.com/jbt/
+# Merge into your existing server { } for justxsystems.com, then:
+#   sudo nginx -t && sudo systemctl reload nginx
+#
+# Zigma (or other apps) keep their own ports — JBT uses 3002 (web) and 4002 (api).
+
+# API — strip /jbt so Express serves /api/...
+location /jbt/api/ {
+    proxy_pass http://127.0.0.1:4002/api/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+}
+
+location /jbt/_next/static/ {
+    proxy_pass http://127.0.0.1:3002;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    add_header Cache-Control "public, max-age=31536000, immutable";
+}
+
+location /jbt {
+    proxy_pass http://127.0.0.1:3002;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 120s;
+}

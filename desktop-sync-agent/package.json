@@ -1,0 +1,17 @@
+{
+  "name": "justx-desktop-sync-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Optional desktop agent that writes staged JustX artifacts to a UNC/local Download Folder",
+  "bin": {
+    "jbt-sync-agent": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "sync-once": "node src/index.js --once"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

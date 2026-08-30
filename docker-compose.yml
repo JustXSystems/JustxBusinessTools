@@ -1,0 +1,24 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: justx-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: justxroot
+      # Align with npm run db:setup / .env.example defaults
+      MYSQL_DATABASE: justx_systems
+      MYSQL_USER: justx_user
+      MYSQL_PASSWORD: devpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - justx_mysql_data:/var/lib/mysql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ujustx_user", "-pdevpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  justx_mysql_data:

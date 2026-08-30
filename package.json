@@ -1,46 +1,36 @@
 {
-  "name": "web",
+  "name": "justx-business-tools",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "web",
+    "server",
+    "shared"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "dev:e2e": "next dev -p 3100",
-    "serve:e2e": "next build && next start -p 3100",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "test": "vitest run"
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev -w server\" \"npm run dev -w web\"",
+    "dev:web": "npm run dev -w web",
+    "dev:api": "npm run dev -w server",
+    "build": "npm run build -w web",
+    "start": "concurrently -n api,web -c cyan,magenta \"npm run start -w server\" \"npm run start -w web\"",
+    "test": "npm run test -w shared && npm run test -w server && npm run test -w web",
+    "test:e2e": "playwright test",
+    "cap:sync": "cap sync android",
+    "cap:open:android": "cap open android",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:setup": "mysql -u justx_user -pdevpassword justx_systems < mysql/init.sql && mysql -u justx_user -pdevpassword justx_systems < mysql/jbt_schema.sql && mysql -u justx_user -pdevpassword justx_systems < mysql/admin_schema.sql && mysql -u justx_user -pdevpassword justx_systems < mysql/auth_extensions.sql && mysql -u justx_user -pdevpassword justx_systems < mysql/admin_platform.sql && mysql -u justx_user -pdevpassword justx_systems < mysql/artifact_delivery_schema.sql && npm run db:seed -w server && npm run db:seed:tools -w server"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.4.2",
+    "@capacitor/cli": "^7.4.2",
+    "@playwright/test": "^1.55.0",
+    "concurrently": "^9.1.2"
   },
   "dependencies": {
     "@capacitor/app": "^7.0.2",
     "@capacitor/camera": "^7.0.2",
     "@capacitor/core": "^7.4.2",
-    "@capacitor/status-bar": "^7.0.2",
-    "@jbt/shared": "*",
-    "html2canvas": "^1.4.1",
-    "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8",
-    "jsqr": "^1.4.0",
-    "next": "16.3.1",
-    "qrcode": "^1.5.4",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "xlsx": "^0.18.5"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@testing-library/jest-dom": "^7.0.1",
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.5",
-    "@types/node": "^20",
-    "@types/qrcode": "^1.5.6",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.1",
-    "jsdom": "^30.0.1",
-    "tailwindcss": "^4",
-    "typescript": "^5",
-    "vitest": "^3.2.4"
+    "@capacitor/status-bar": "^7.0.2"
   }
 }
