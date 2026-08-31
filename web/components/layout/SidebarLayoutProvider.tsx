@@ -77,7 +77,7 @@ export function SidebarLayoutProvider({
   const [floatDragging, setFloatDragging] = useState(false);
   const [floatHoverOpen, setFloatHoverOpen] = useState(false);
   const [dragOriginX, setDragOriginX] = useState(0);
-  const [dragOriginWidth, setDragOriginWidth] = useState(SIDEBAR_SNAPS.normal);
+  const [dragOriginWidth, setDragOriginWidth] = useState<number>(SIDEBAR_SNAPS.normal);
   const [floatOrigin, setFloatOrigin] = useState({ x: 0, y: 0, px: 0, py: 0 });
   const [ready, setReady] = useState(false);
 

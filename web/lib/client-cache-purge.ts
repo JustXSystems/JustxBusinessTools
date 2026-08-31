@@ -34,7 +34,7 @@ async function clearIndexedDb(): Promise<number> {
     const dbs = await anyIdb.databases();
     const targets = dbs
       .map((d) => d.name)
-      .filter((name): name is string => Boolean(name) && shouldClearKey(name));
+      .filter((name): name is string => typeof name === "string" && shouldClearKey(name));
     await Promise.all(
       targets.map(
         (name) =>

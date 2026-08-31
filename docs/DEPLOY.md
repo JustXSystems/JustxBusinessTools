@@ -333,8 +333,25 @@ git reset --hard <commit_sha>
 | Actions: `server/.env missing` | Create `/var/www/jbt/server/.env` (Part 1.5) |
 | Local `ssh -i …` fails | Same key/user/host as secrets; fix this before debugging Actions |
 | Build fail | Node 20+ on VPS; `npm ci` needs lockfile |
+| `Cannot find module '../lightningcss.linux-x64-gnu.node'` | Turbopack can’t load the native binary — build with webpack: `cd web && npx next build --webpack` (repo `web` build script already uses `--webpack`) |
 | `JWT_SECRET` / env errors | `server/.env` incomplete — API exits on bad prod env |
 | MySQL 1819 | Stronger `DB_PASSWORD` (upper+lower+digit+special) |
 | `users` missing / `Duplicate column 'home_tool_ids'` | `admin_schema.sql` aborted mid-file — pull latest, then re-run from `admin_schema.sql` onward (see Part 1.4) |
 | 502 from nginx | `pm2 status`; ports 3002/4002 listening |
 | OAuth mismatch | Google redirect URIs must include `/jbt/api/...` |
+
+### lightningcss / Turbopack on VPS
+
+Next.js 16 defaults to Turbopack, which fails loading the `lightningcss` native `.node` binary in PostCSS. Production builds use webpack:
+
+```bash
+cd /var/www/jbt
+# ensure Linux binary exists (once)
+test -d node_modules/lightningcss-linux-x64-gnu \
+  || npm install --no-save lightningcss-linux-x64-gnu@1.32.0
+cp -n node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node \
+  node_modules/lightningcss/ 2>/dev/null || true
+
+export NEXT_PUBLIC_BASE_PATH=/jbt
+cd web && npx next build --webpack
+```

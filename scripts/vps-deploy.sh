@@ -31,7 +31,21 @@ fi
 echo "==> npm ci"
 npm ci
 
-echo "==> Build web (basePath=${BASE_PATH})"
+# Windows lockfiles often omit the Linux lightningcss optional binary (Tailwind/PostCSS).
+if [[ "$(uname -s)" == "Linux" && "$(uname -m)" == "x86_64" ]]; then
+  if [[ ! -d node_modules/lightningcss-linux-x64-gnu ]]; then
+    echo "==> Installing lightningcss Linux native binary"
+    npm install --no-save --no-package-lock lightningcss-linux-x64-gnu@1.32.0
+  fi
+  if [[ -f node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node \
+     && -d node_modules/lightningcss \
+     && ! -f node_modules/lightningcss/lightningcss.linux-x64-gnu.node ]]; then
+    cp -f node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node \
+      node_modules/lightningcss/lightningcss.linux-x64-gnu.node
+  fi
+fi
+
+echo "==> Build web (basePath=${BASE_PATH}, webpack — Turbopack breaks lightningcss .node on VPS)"
 export NODE_ENV=production
 export NEXT_PUBLIC_BASE_PATH="$BASE_PATH"
 export WEB_BASE_PATH="$BASE_PATH"
