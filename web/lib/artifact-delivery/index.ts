@@ -3,10 +3,12 @@ import { writeFileViaFsa, probeFsaFolder, getFsaSupport } from "@/lib/artifact-d
 
 export type ArtifactDeliveryResult = {
   artifactId: string;
-  channel: "fsa" | "desktop_agent" | "browser_download" | "share_sheet";
+  channel: string;
   syncStatus: string;
   message: string;
   duplicateOf?: string;
+  /** True when company Google Drive / webhook upload succeeded. */
+  cloudOk?: boolean;
 };
 
 export type StagedArtifact = {
@@ -16,7 +18,21 @@ export type StagedArtifact = {
   byteSize: number;
   contentHash: string;
   syncStatus: string;
+  deliveryChannel?: string | null;
+  destinationPath?: string | null;
+  lastError?: string | null;
   toolId: string;
+};
+
+type StageResponse = {
+  artifact: StagedArtifact;
+  duplicateOf?: string;
+  delivery?: {
+    ok: boolean;
+    channel: string;
+    status: string;
+    message?: string;
+  };
 };
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -70,12 +86,10 @@ async function ack(
 }
 
 /**
- * Stage artifact on server, then deliver via:
+ * Stage artifact on server (awaits company Drive/webhook), then optionally:
  * 1) File System Access (Chromium, if folder linked)
- * 2) Share sheet (mobile) when useful
- * 3) Browser download fallback (always available)
- *
- * Pending items remain queued for the optional desktop sync agent (UNC/network shares).
+ * 2) Share sheet (mobile)
+ * 3) Browser download fallback
  */
 export async function deliverToolArtifact(input: {
   toolId: string;
@@ -88,7 +102,7 @@ export async function deliverToolArtifact(input: {
   conflictPolicy?: "rename" | "skip" | "overwrite";
 }): Promise<ArtifactDeliveryResult> {
   const mimeType = input.mimeType || "application/octet-stream";
-  const staged = await api<{ artifact: StagedArtifact; duplicateOf?: string }>("/artifacts", {
+  const staged = await api<StageResponse>("/artifacts", {
     method: "POST",
     body: JSON.stringify({
       toolId: input.toolId,
@@ -101,8 +115,26 @@ export async function deliverToolArtifact(input: {
   });
 
   const artifactId = staged.artifact.id;
+  const delivery = staged.delivery;
+  const cloudSynced =
+    Boolean(delivery?.ok) &&
+    delivery?.status === "synced" &&
+    (delivery.channel === "google_drive" || delivery.channel === "webhook");
 
-  // 1) FSA write when this browser has a linked folder with permission
+  let cloudPrefix = "";
+  if (delivery?.channel === "google_drive" && delivery.status === "synced" && delivery.ok) {
+    cloudPrefix = staged.artifact.destinationPath
+      ? `Uploaded to company Google Drive.`
+      : "Uploaded to company Google Drive.";
+  } else if (delivery?.channel === "webhook" && delivery.status === "synced" && delivery.ok) {
+    cloudPrefix = "Delivered to company webhook.";
+  } else if (delivery?.channel === "google_drive" && !delivery.ok) {
+    cloudPrefix = `Google Drive upload failed: ${delivery.message || staged.artifact.lastError || "unknown error"}.`;
+  } else if (delivery?.channel === "webhook" && !delivery.ok) {
+    cloudPrefix = `Webhook delivery failed: ${delivery.message || staged.artifact.lastError || "unknown error"}.`;
+  }
+
+  // Local FSA is optional — never treat it as a substitute for company Drive.
   const fsa = getFsaSupport();
   if (fsa.supported) {
     const probe = await probeFsaFolder();
@@ -114,69 +146,89 @@ export async function deliverToolArtifact(input: {
           mimeType,
           conflictPolicy: input.conflictPolicy ?? "rename",
         });
-        if (written.skipped) {
-          await ack(artifactId, {
-            status: "skipped_duplicate",
-            channel: "fsa",
-            destinationPath: written.pathLabel,
-          });
-          return {
-            artifactId,
-            channel: "fsa",
-            syncStatus: "skipped_duplicate",
-            message: `Skipped — already in linked folder (${written.pathLabel}).`,
-            duplicateOf: staged.duplicateOf,
-          };
+        if (!cloudSynced) {
+          if (written.skipped) {
+            await ack(artifactId, {
+              status: "skipped_duplicate",
+              channel: "fsa",
+              destinationPath: written.pathLabel,
+            });
+          } else {
+            await ack(artifactId, {
+              status: "synced",
+              channel: "fsa",
+              destinationPath: written.pathLabel,
+            });
+          }
         }
-        await ack(artifactId, {
-          status: "synced",
-          channel: "fsa",
-          destinationPath: written.pathLabel,
-        });
+        const localBit = written.skipped
+          ? `Also already in linked browser folder (${written.pathLabel}).`
+          : `Also saved to linked browser folder (${written.pathLabel}).`;
         return {
           artifactId,
-          channel: "fsa",
-          syncStatus: "synced",
-          message: `Saved to linked Download Folder (${written.pathLabel}).`,
+          channel: cloudSynced ? delivery!.channel : "fsa",
+          syncStatus: cloudSynced ? "synced" : written.skipped ? "skipped_duplicate" : "synced",
+          message: cloudPrefix ? `${cloudPrefix} ${localBit}` : written.skipped
+            ? `Skipped — already in linked folder (${written.pathLabel}).`
+            : `Saved to linked Download Folder (${written.pathLabel}).`,
           duplicateOf: staged.duplicateOf,
+          cloudOk: cloudSynced,
         };
       } catch (err) {
-        await ack(artifactId, {
-          status: "pending",
-          channel: "fsa",
-          error: err instanceof Error ? err.message : "FSA write failed",
-        }).catch(() => undefined);
+        if (!cloudSynced) {
+          await ack(artifactId, {
+            status: "pending",
+            channel: "fsa",
+            error: err instanceof Error ? err.message : "FSA write failed",
+          }).catch(() => undefined);
+        }
       }
     }
   }
 
-  // 2) Mobile share sheet (optional)
   if (input.preferShare) {
     const shared = await tryShareSheet(input.filename, input.bytes, mimeType);
     if (shared) {
-      await ack(artifactId, { status: "pending", channel: "share_sheet" });
+      if (!cloudSynced) {
+        await ack(artifactId, { status: "pending", channel: "share_sheet" });
+      }
       return {
         artifactId,
-        channel: "share_sheet",
-        syncStatus: "pending",
-        message:
-          "Shared from this device. File remains queued until a desktop agent syncs it to the Download Folder.",
+        channel: cloudSynced ? delivery!.channel : "share_sheet",
+        syncStatus: cloudSynced ? "synced" : "pending",
+        message: cloudPrefix
+          ? `${cloudPrefix} Also shared from this device.`
+          : "Shared from this device. File remains queued until company delivery completes.",
         duplicateOf: staged.duplicateOf,
+        cloudOk: cloudSynced,
       };
     }
   }
 
-  // 3) Browser download fallback — file still pending for agent/FSA folder sync
-  //    (cloud destinations are already handled server-side on stage).
   forceBrowserDownload(input.filename, input.bytes, mimeType);
-  await ack(artifactId, { status: "pending", channel: "browser_download" });
+  if (!cloudSynced) {
+    await ack(artifactId, { status: "pending", channel: "browser_download" });
+  }
+
+  if (cloudPrefix) {
+    return {
+      artifactId,
+      channel: delivery?.channel || "browser_download",
+      syncStatus: delivery?.status || staged.artifact.syncStatus,
+      message: `${cloudPrefix} Also downloaded locally.`,
+      duplicateOf: staged.duplicateOf,
+      cloudOk: cloudSynced,
+    };
+  }
+
   return {
     artifactId,
     channel: "browser_download",
     syncStatus: "pending",
     message:
-      "Downloaded locally. If Google Drive or a corporate webhook is configured, the server also delivers automatically.",
+      "Downloaded locally. Configure Company Google Drive on Business Profile (connect + save folder) to auto-upload PDFs.",
     duplicateOf: staged.duplicateOf,
+    cloudOk: false,
   };
 }
 

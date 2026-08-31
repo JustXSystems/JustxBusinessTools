@@ -301,13 +301,26 @@ export async function dispatchArtifact(artifactId: string): Promise<{
   });
   const row = (Array.isArray(rows) ? rows[0] : null) as ArtifactRow | null;
   if (!row) return { ok: false, channel: "none", status: "missing", message: "Not found" };
-  if (row.sync_status === "synced" || row.sync_status === "skipped_duplicate") {
-    return { ok: true, channel: row.delivery_channel || "none", status: row.sync_status };
-  }
 
   const cfg = await loadProfileDeliveryConfig(row.business_profile_id);
   if (!cfg) return { ok: false, channel: "none", status: "failed", message: "Profile missing" };
   const dest = resolveEffectiveDestination(cfg);
+
+  const cloudDone =
+    (row.sync_status === "synced" || row.sync_status === "skipped_duplicate") &&
+    (row.delivery_channel === "google_drive" || row.delivery_channel === "webhook");
+  if (cloudDone) {
+    return { ok: true, channel: row.delivery_channel || "none", status: row.sync_status };
+  }
+
+  // Local FSA / browser / share may already be "synced" — still push to company Drive/webhook.
+  const localOnlySynced =
+    (row.sync_status === "synced" || row.sync_status === "skipped_duplicate") &&
+    dest !== "google_drive" &&
+    dest !== "webhook";
+  if (localOnlySynced) {
+    return { ok: true, channel: row.delivery_channel || "none", status: row.sync_status };
+  }
 
   try {
     if (dest === "google_drive") {

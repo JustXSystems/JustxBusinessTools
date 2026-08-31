@@ -284,7 +284,9 @@ export function DownloadFolderPanel({
                   </button>
                   <p className="section-note" style={{ marginTop: 8 }}>
                     Sign in with the company Workspace account (recommended), then paste the shared
-                    folder link.
+                    folder link and click <strong>Save company folder</strong>. If Drive was connected
+                    before and uploads still fail, disconnect and connect again so Google grants the
+                    updated Drive permission.
                   </p>
                 </>
               ) : (

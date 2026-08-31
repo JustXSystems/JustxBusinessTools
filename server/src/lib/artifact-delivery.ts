@@ -382,15 +382,38 @@ export async function createArtifact(input: {
   const row = (Array.isArray(rows) ? rows[0] : null) as ArtifactRow;
   const artifact = toArtifactApi(row);
 
-  // Cloud-first automatic delivery (Drive / webhook). UNC stays queued for the agent.
+  // Await cloud delivery (Drive / webhook) so Download PDF / Send Via actually publish
+  // before the browser continues. UNC stays queued asynchronously.
+  let delivery: {
+    ok: boolean;
+    channel: string;
+    status: string;
+    message?: string;
+  } | null = null;
   try {
-    const { dispatchArtifactAsync } = await import("./artifact-dispatch.js");
-    dispatchArtifactAsync(id);
+    const { dispatchArtifact } = await import("./artifact-dispatch.js");
+    delivery = await dispatchArtifact(id);
+    // Refresh row after dispatch so client sees google_drive + synced/failed.
+    const [after] = await pool.query(`SELECT * FROM artifact_deliveries WHERE id = :id`, { id });
+    const afterRow = (Array.isArray(after) ? after[0] : null) as ArtifactRow | null;
+    return {
+      artifact: afterRow ? toArtifactApi(afterRow) : artifact,
+      duplicateOf: dup?.id,
+      delivery,
+    };
   } catch (err) {
-    console.warn("[artifact-dispatch-import]", err);
+    console.warn("[artifact-dispatch]", id, err);
+    return {
+      artifact,
+      duplicateOf: dup?.id,
+      delivery: {
+        ok: false,
+        channel: "none",
+        status: "failed",
+        message: err instanceof Error ? err.message : String(err),
+      },
+    };
   }
-
-  return { artifact, duplicateOf: dup?.id };
 }
 
 export function hashAgentToken(token: string): string {

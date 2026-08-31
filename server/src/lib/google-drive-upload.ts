@@ -103,7 +103,7 @@ export async function uploadToGoogleDriveFolder(input: {
   ]);
 
   const res = await fetch(
-    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,name",
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,name&supportsAllDrives=true",
     {
       method: "POST",
       headers: {

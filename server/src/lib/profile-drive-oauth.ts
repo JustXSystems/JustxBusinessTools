@@ -7,7 +7,9 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const DRIVE_SCOPES = [
   "openid",
   "email",
-  "https://www.googleapis.com/auth/drive.file",
+  // Full Drive access is required to upload into a pasted/shared company folder ID.
+  // drive.file alone only covers files the app created or opened via Picker — paste-folder fails.
+  "https://www.googleapis.com/auth/drive",
 ].join(" ");
 
 export type ProfileDriveConnection = {
@@ -192,10 +194,13 @@ export async function updateProfileDriveFolder(
   folderLabel: string,
 ): Promise<void> {
   await ensureProfileDriveSchema();
+  // Upsert so a folder can be saved even if the row was partially created.
   await pool.query(
-    `UPDATE business_profile_drive
-     SET folder_id = :folderId, folder_label = :folderLabel
-     WHERE business_profile_id = :id`,
+    `INSERT INTO business_profile_drive (business_profile_id, folder_id, folder_label)
+     VALUES (:id, :folderId, :folderLabel)
+     ON DUPLICATE KEY UPDATE
+       folder_id = :folderId,
+       folder_label = :folderLabel`,
     { id: profileId, folderId: folderId.slice(0, 128), folderLabel: folderLabel.slice(0, 255) },
   );
 }

@@ -393,9 +393,18 @@ router.post("/:id/ack", requireWriteAccess, async (req, res) => {
     body.destinationPath != null ? String(body.destinationPath).slice(0, 1024) : null;
   const lastError = body.error != null ? String(body.error).slice(0, 500) : null;
   const browserFallback = channel === "browser_download";
+  // Never let a local FSA/browser ack wipe a successful (or in-progress) cloud delivery.
+  const cloudLocked =
+    row.delivery_channel === "google_drive" || row.delivery_channel === "webhook";
   const downgradeBlocked =
-    (row.sync_status === "synced" || row.sync_status === "skipped_duplicate") &&
-    (status === "pending" || status === "in_progress");
+    ((row.sync_status === "synced" || row.sync_status === "skipped_duplicate") &&
+      (status === "pending" || status === "in_progress")) ||
+    (cloudLocked &&
+      (row.sync_status === "synced" ||
+        row.sync_status === "skipped_duplicate" ||
+        row.sync_status === "in_progress") &&
+      channel !== "google_drive" &&
+      channel !== "webhook");
 
   const nextStatus = downgradeBlocked ? row.sync_status : status;
 

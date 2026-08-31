@@ -301,7 +301,7 @@ export function QuotationGeneratorV1() {
         preferShare: true,
         meta: { quoteNo: q.quoteNo, quotationId: q.id },
       });
-      flash(result.message);
+      flash(result.message, result.cloudOk === false ? "err" : undefined);
     } catch (e) {
       flash(e instanceof Error ? e.message : "PDF export failed", "err");
     } finally {

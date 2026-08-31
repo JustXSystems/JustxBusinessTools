@@ -772,7 +772,7 @@ export function SiteSurveyV1() {
         meta: { reportNo: saved.reportNo, surveyId: saved.id },
       });
       setShowSuccess(true);
-      flash(result.message || "Survey submitted — PDF delivered.");
+      flash(result.message || "Survey submitted — PDF delivered.", result.cloudOk === false ? "err" : undefined);
     } catch (e) {
       flash(e instanceof Error ? e.message : "PDF generation failed", "err");
     } finally {
