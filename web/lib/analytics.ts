@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/api-base";
+
 type AnalyticsEvent = {
   eventType: string;
   toolId?: string;
@@ -26,7 +28,7 @@ async function flushEvents() {
   }));
 
   try {
-    await fetch("/api/analytics/events", {
+    await fetch(apiUrl("/api/analytics/events"), {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },

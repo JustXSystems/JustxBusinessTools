@@ -6,6 +6,7 @@ import { ApiHealthBanner } from "@/components/layout/ApiHealthBanner";
 import { SplashScreen } from "@/components/auth/SplashScreen";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { usePlatformBranding } from "@/components/branding/BrandingProvider";
+import { apiUrl, withBasePath } from "@/lib/api-base";
 
 export default function LoginPage() {
   const { branding } = usePlatformBranding();
@@ -35,7 +36,7 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(apiUrl("/api/auth/login"), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -64,7 +65,7 @@ export default function LoginPage() {
           : data.user?.isPlatformAdmin
             ? "/admin"
             : "/";
-      window.location.assign(dest);
+      window.location.assign(withBasePath(dest));
     } catch {
       setError(
         "Cannot reach the API server. Run npm run dev (web + API) and ensure the API is on port 4000.",
@@ -149,7 +150,7 @@ export default function LoginPage() {
             </button>
           </form>
           <p className="muted login-hint">
-            No account? <a href="/register">Register with GSTIN</a>
+            No account? <a href={withBasePath("/register")}>Register with GSTIN</a>
           </p>
         </div>
         <PoweredByFooter />
