@@ -7,6 +7,7 @@ import {
   resolveInstallIconDisplay,
   resolveInstallName,
 } from "@/lib/install-branding";
+import { withBasePath } from "@/lib/base-path";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -49,7 +50,7 @@ export function InstallPrompt() {
   const raw = resolveInstallIconDisplay(branding.logoUrl, branding.installIconUrl);
   const v = iconVersion(`${raw}|${branding.installIconBg || "transparent"}`, name);
   // Same square PNG Chrome uses for the desktop shortcut.
-  const icon = `/pwa-icon/192?v=${encodeURIComponent(v)}`;
+  const icon = `${withBasePath("/pwa-icon/192")}?v=${encodeURIComponent(v)}`;
 
   return (
     <div className="install-prompt">

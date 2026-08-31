@@ -6,6 +6,7 @@ import {
   resolveInstallIconDisplay,
   resolveInstallName,
 } from "@/lib/install-branding";
+import { withBasePath } from "@/lib/base-path";
 
 const SYNC_ATTR = "data-jbt-icon-sync";
 
@@ -58,14 +59,19 @@ export function DocumentIconSync() {
     const name = resolveInstallName(branding.appName, branding.installName);
     const v = versionToken(`${icon}|${branding.installIconBg || "transparent"}`, name);
 
-    upsertSyncLink("icon", `/pwa-icon/192?v=${encodeURIComponent(v)}`, {
+    upsertSyncLink("icon", `${withBasePath("/pwa-icon/192")}?v=${encodeURIComponent(v)}`, {
       type: "image/png",
       sizes: "192x192",
     });
-    upsertSyncLink("apple-touch-icon", `/pwa-icon/512?v=${encodeURIComponent(v)}`, {
-      sizes: "512x512",
-    });
-    upsertSyncLink("manifest", `/manifest.webmanifest?v=${encodeURIComponent(v)}`);
+    upsertSyncLink(
+      "apple-touch-icon",
+      `${withBasePath("/pwa-icon/512")}?v=${encodeURIComponent(v)}`,
+      { sizes: "512x512" },
+    );
+    upsertSyncLink(
+      "manifest",
+      `${withBasePath("/manifest.webmanifest")}?v=${encodeURIComponent(v)}`,
+    );
 
     const title = branding.appName || "JustXSystems";
     if (document.title !== title) document.title = title;

@@ -33,6 +33,8 @@ module.exports = {
         PORT: "3002",
         NEXT_PUBLIC_BASE_PATH: "/jbt",
         WEB_BASE_PATH: "/jbt",
+        // Manifest / absolute icon URLs — Next sees localhost:3002 behind nginx otherwise
+        WEB_PUBLIC_ORIGIN: "https://justxsystems.com",
       },
       max_memory_restart: "512M",
       time: true,

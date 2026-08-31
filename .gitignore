@@ -36,3 +36,9 @@ android/app/build/
 android/build/
 android/local.properties
 android/captures/
+
+# Local deploy SSH keys (never commit)
+jbt_deploy
+jbt_deploy.pub
+*_deploy
+*_deploy.pub

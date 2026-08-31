@@ -1,9 +1,32 @@
-const CACHE = "jbt-shell-v8";
-const PRECACHE = ["/", "/offline.html", "/icons/jbt-icon.svg"];
+const CACHE = "jbt-shell-v9";
+
+function appBase() {
+  try {
+    const pathname = new URL(self.registration.scope).pathname;
+    return pathname.replace(/\/$/, "") || "";
+  } catch {
+    return "";
+  }
+}
+
+function withBase(path) {
+  const base = appBase();
+  const p = path.startsWith("/") ? path : `/${path}`;
+  if (!base) return p;
+  if (p === base || p.startsWith(`${base}/`)) return p;
+  return `${base}${p}`;
+}
+
+function precacheUrls() {
+  return [withBase("/"), withBase("/offline.html"), withBase("/icons/jbt-icon.svg")];
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()),
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(precacheUrls()))
+      .then(() => self.skipWaiting()),
   );
 });
 
@@ -21,22 +44,27 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  if (url.pathname.startsWith("/api")) return;
-  if (url.pathname.startsWith("/_next")) return;
-  if (url.pathname.startsWith("/login")) return;
+  const base = appBase();
+  const path = url.pathname;
+  const under = (prefix) =>
+    path === prefix || path.startsWith(`${prefix}/`) || (base && path.startsWith(`${base}${prefix}`));
+
+  if (under("/api")) return;
+  if (path.includes("/_next/")) return;
+  if (under("/login")) return;
   // Never cache install branding — Chrome install dialog reads these.
   if (
-    url.pathname.startsWith("/icons/") ||
-    url.pathname.startsWith("/uploads/") ||
-    url.pathname.startsWith("/pwa-icon/") ||
-    url.pathname.includes("manifest")
+    under("/icons") ||
+    under("/uploads") ||
+    under("/pwa-icon") ||
+    path.includes("manifest")
   ) {
     event.respondWith(fetch(request).catch(() => caches.match(request)));
     return;
   }
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/offline.html")));
+    event.respondWith(fetch(request).catch(() => caches.match(withBase("/offline.html"))));
     return;
   }
 

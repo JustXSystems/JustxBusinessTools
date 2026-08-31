@@ -15,6 +15,7 @@ function apiOrigin(): string {
 
 function webOrigin(): string {
   const raw =
+    process.env.WEB_PUBLIC_ORIGIN ||
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_ORIGIN ||
     "http://127.0.0.1:3000";
@@ -69,10 +70,16 @@ export function resolveManifestIconPath(_b: PlatformBranding): {
 /** Resolve icon to an absolute URL the Next server can fetch. */
 export function absoluteIconFetchUrl(iconPath: string): string {
   const icon = String(iconPath || "").trim();
-  if (!icon) return `${webOrigin()}/icons/presets/justx-mark.png`;
+  const base =
+    (process.env.NEXT_PUBLIC_BASE_PATH ?? process.env.WEB_BASE_PATH ?? "").trim().replace(/\/$/, "") ||
+    "";
+  if (!icon) return `${webOrigin()}${base}/icons/presets/justx-mark.png`;
   if (icon.startsWith("http://") || icon.startsWith("https://")) return icon;
   if (icon.startsWith("/api/")) return `${apiOrigin()}${icon}`;
-  return `${webOrigin()}${icon.startsWith("/") ? icon : `/${icon}`}`;
+  const path = icon.startsWith("/") ? icon : `/${icon}`;
+  const prefixed =
+    base && path !== base && !path.startsWith(`${base}/`) ? `${base}${path}` : path;
+  return `${webOrigin()}${prefixed}`;
 }
 
 export function iconMimeFromUrl(url: string, fallback = "image/png"): string {

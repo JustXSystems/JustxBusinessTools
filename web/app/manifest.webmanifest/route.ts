@@ -4,6 +4,7 @@ import {
   resolveInstallName,
   resolveManifestIconPath,
 } from "@/lib/pwa-branding";
+import { getBasePath, resolvePublicOrigin, withBasePath } from "@/lib/base-path";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -17,19 +18,23 @@ export async function GET(request: Request) {
   const name = resolveInstallName(branding.appName, branding.installName);
   const shortName = name.length > 12 ? name.slice(0, 12) : name;
   const v = brandingIconVersion(branding);
-  const url = new URL(request.url);
-  const origin = `${url.protocol}//${url.host}`;
+  const origin = resolvePublicOrigin(request);
+  const base = getBasePath();
   const { path: iconPath } = resolveManifestIconPath(branding);
-  const iconSrc = `${origin}${iconPath}${iconPath.includes("?") ? "&" : "?"}v=${encodeURIComponent(v)}`;
+  const icon512 = withBasePath(iconPath);
+  const icon192 = withBasePath("/pwa-icon/192");
+  const startPath = withBasePath("/");
+  // Scope must end with / for Chrome; include basePath when hosted under /jbt.
+  const scopePath = `${base || ""}/` || "/";
 
   const body = {
     name,
     short_name: shortName,
     description:
       "Quotations, invoices, stock, projects, and calculators for Indian businesses.",
-    start_url: "/",
-    scope: "/",
-    id: `/?jbt=${encodeURIComponent(v)}`,
+    start_url: `${startPath}${startPath.includes("?") ? "&" : "?"}jbt=${encodeURIComponent(v)}`,
+    scope: scopePath,
+    id: `${startPath}?jbt=${encodeURIComponent(v)}`,
     display: "standalone",
     orientation: "portrait",
     background_color: "#0B2E2F",
@@ -37,19 +42,19 @@ export async function GET(request: Request) {
     categories: ["business", "finance", "productivity"],
     icons: [
       {
-        src: `${origin}/pwa-icon/192?v=${encodeURIComponent(v)}`,
+        src: `${origin}${icon192}?v=${encodeURIComponent(v)}`,
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: iconSrc,
+        src: `${origin}${icon512}${icon512.includes("?") ? "&" : "?"}v=${encodeURIComponent(v)}`,
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: iconSrc,
+        src: `${origin}${icon512}${icon512.includes("?") ? "&" : "?"}v=${encodeURIComponent(v)}`,
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",

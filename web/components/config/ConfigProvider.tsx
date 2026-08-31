@@ -65,6 +65,17 @@ const DEFAULT_CONFIG: EffectiveConfig = {
   catalog: [],
 };
 
+function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefined): EffectiveConfig {
+  return {
+    poweredBy: data?.poweredBy ?? DEFAULT_POWERED_BY,
+    branding: data?.branding ?? DEFAULT_BRANDING,
+    configVersion: Number(data?.configVersion) || 1,
+    tools: Array.isArray(data?.tools) ? data.tools : [],
+    catalog: Array.isArray(data?.catalog) ? data.catalog : [],
+    theme: data?.theme ?? null,
+  };
+}
+
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<EffectiveConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,12 +85,12 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     const result = await liveFirstFetch({
       fetchLive: async () => {
         const data = await api<EffectiveConfig>("/config/effective");
-        return {
-          ...data,
-          branding: data.branding ?? DEFAULT_BRANDING,
-        };
+        return normalizeEffectiveConfig(data);
       },
-      readContingency: () => readContingencyJson<EffectiveConfig>(CONFIG_CONTINGENCY_KEY),
+      readContingency: () => {
+        const cached = readContingencyJson<Partial<EffectiveConfig>>(CONFIG_CONTINGENCY_KEY);
+        return cached ? normalizeEffectiveConfig(cached) : null;
+      },
       defaults: DEFAULT_CONFIG,
       timeoutMs: 10_000,
     });
@@ -121,5 +132,6 @@ export function usePlatformConfig() {
 
 export function usePoweredByText(): string {
   const ctx = useContext(ConfigContext);
-  return ctx?.config?.poweredBy.text ?? DEFAULT_POWERED_BY.text;
+  // Optional-chain poweredBy too — contingency/partial payloads can omit it.
+  return ctx?.config?.poweredBy?.text ?? DEFAULT_POWERED_BY.text;
 }
