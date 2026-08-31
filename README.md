@@ -16,6 +16,7 @@ Multi-tenant business tools for quotations, site surveys, and more — by **Just
 | **Product setup** (OAuth, env, clients) | [`docs/SETUP.md`](docs/SETUP.md) |
 | **Production deploy** (VPS + GitHub Actions + PM2) | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
 | **Env template** | [`.env.example`](.env.example) → `server/.env` |
+| **Mobile (Capacitor)** | [`docs/MOBILE.md`](docs/MOBILE.md) |
 | Desktop UNC sync | [`desktop-sync-agent/README.md`](desktop-sync-agent/README.md) |
 
 ## Local development

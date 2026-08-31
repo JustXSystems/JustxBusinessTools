@@ -20,6 +20,19 @@ uploads/
 *.tsbuildinfo
 web/next-env.d.ts
 
+# IDE / local
 .idea/
 *.iml
+.vscode/
 
+# test artifacts
+test-results/
+playwright-report/
+blob-report/
+
+# Android / Capacitor local builds
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/captures/
