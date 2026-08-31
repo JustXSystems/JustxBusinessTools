@@ -163,31 +163,131 @@ curl -sI http://127.0.0.1:3002/jbt
 
 ---
 
-## Part 2 — GitHub Actions (ongoing deploys)
+## Part 2 — GitHub Actions secrets (do once)
 
-### 2.1 Repo secrets
+These secrets let GitHub Actions **SSH into the VPS** and run `scripts/vps-deploy.sh`.  
+Finish **Part 1** first (clone at `/var/www/jbt`, `server/.env`, MySQL, nginx, first PM2 start).
 
-| Secret | Example |
-|--------|---------|
-| `DEPLOY_HOST` | `193.203.161.219` |
-| `DEPLOY_USER` | `deploy` |
-| `DEPLOY_SSH_KEY` | Contents of private key (`-----BEGIN …`) |
-| `DEPLOY_PATH` | `/var/www/jbt` |
+### 2.1 What each secret means
 
-### 2.2 Ship code
+| Secret | Meaning | Exact value to use |
+|--------|---------|-------------------|
+| `DEPLOY_HOST` | VPS address | `193.203.161.219` |
+| `DEPLOY_USER` | Linux login user | `deploy` |
+| `DEPLOY_SSH_KEY` | **Private** SSH key (full file) | Contents of `jbt_deploy` (not `.pub`) |
+| `DEPLOY_PATH` | App directory on the server | `/var/www/jbt` |
 
-- Push to **`master`**, or  
-- Actions → **Deploy** → **Run workflow**
+### 2.2 Create an SSH key (on your Windows PC)
 
-Workflow: [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)  
-Remote script: [`scripts/vps-deploy.sh`](../scripts/vps-deploy.sh)
+In PowerShell:
 
-### 2.3 Manual deploy on the VPS
+```powershell
+ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\jbt_deploy -C "github-actions-jbt" -N ""
+```
+
+You get:
+
+| File | Use |
+|------|-----|
+| `%USERPROFILE%\.ssh\jbt_deploy` | → GitHub secret `DEPLOY_SSH_KEY` |
+| `%USERPROFILE%\.ssh\jbt_deploy.pub` | → VPS `authorized_keys` |
+
+Show the public key (copy this line for the server):
+
+```powershell
+Get-Content $env:USERPROFILE\.ssh\jbt_deploy.pub
+```
+
+### 2.3 Put the public key on the VPS
+
+SSH as root or `deploy`, then:
+
+```bash
+sudo mkdir -p /home/deploy/.ssh
+sudo nano /home/deploy/.ssh/authorized_keys
+# Paste the single line from jbt_deploy.pub, save, exit
+
+sudo chown -R deploy:deploy /home/deploy/.ssh
+sudo chmod 700 /home/deploy/.ssh
+sudo chmod 600 /home/deploy/.ssh/authorized_keys
+```
+
+Test from your PC (must succeed before Actions will work):
+
+```powershell
+ssh -i $env:USERPROFILE\.ssh\jbt_deploy deploy@193.203.161.219
+```
+
+You should land in a shell as `deploy` with no password prompt.
+
+### 2.4 Confirm `DEPLOY_PATH` exists
+
+On the VPS:
+
+```bash
+ls /var/www/jbt
+ls /var/www/jbt/server/.env
+ls /var/www/jbt/scripts/vps-deploy.sh
+```
+
+If `/var/www/jbt` is missing, complete Part 1.3–1.7 first.  
+If you cloned somewhere else, use **that** path as `DEPLOY_PATH` instead.
+
+### 2.5 Add secrets in GitHub
+
+1. Open https://github.com/JustXSystems/JustxBusinessTools  
+2. **Settings** → **Secrets and variables** → **Actions**  
+3. **New repository secret** — create four secrets:
+
+**`DEPLOY_HOST`**
+```
+193.203.161.219
+```
+
+**`DEPLOY_USER`**
+```
+deploy
+```
+
+**`DEPLOY_PATH`**
+```
+/var/www/jbt
+```
+
+**`DEPLOY_SSH_KEY`** — paste the **entire private** key:
+
+```powershell
+Get-Content $env:USERPROFILE\.ssh\jbt_deploy -Raw
+```
+
+Must include the `BEGIN` / `END` lines, for example:
+
+```
+-----BEGIN OPENSSH PRIVATE KEY-----
+...
+-----END OPENSSH PRIVATE KEY-----
+```
+
+Do **not** paste the `.pub` file into `DEPLOY_SSH_KEY`.
+
+### 2.6 Run a deploy
+
+- Push a commit to **`master`**, or  
+- **Actions** → workflow **Deploy** → **Run workflow**
+
+Watch the job log. On success it SSHs in, runs `./scripts/vps-deploy.sh`, and health-checks the API.
+
+### 2.7 Manual deploy (without Actions)
+
+On the VPS as `deploy`:
 
 ```bash
 cd /var/www/jbt
 ./scripts/vps-deploy.sh
 ```
+
+Workflow file: [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)  
+Remote script: [`scripts/vps-deploy.sh`](../scripts/vps-deploy.sh)
 
 ---
 
@@ -215,7 +315,10 @@ git reset --hard <commit_sha>
 
 | Issue | Fix |
 |-------|-----|
-| Actions SSH fail | Public key on server; secret is **private** key; user can enter `DEPLOY_PATH` |
+| Actions: `Permission denied (publickey)` | Public key not in `/home/deploy/.ssh/authorized_keys`, or secret is the **.pub** file by mistake |
+| Actions: `DEPLOY_PATH` / `cd` fails | Path wrong or clone missing — fix Part 1.3 |
+| Actions: `server/.env missing` | Create `/var/www/jbt/server/.env` (Part 1.5) |
+| Local `ssh -i …` fails | Same key/user/host as secrets; fix this before debugging Actions |
 | Build fail | Node 20+ on VPS; `npm ci` needs lockfile |
 | `JWT_SECRET` / env errors | `server/.env` incomplete — API exits on bad prod env |
 | MySQL 1819 | Stronger `DB_PASSWORD` (upper+lower+digit+special) |
