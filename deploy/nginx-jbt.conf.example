@@ -5,7 +5,9 @@
 # Zigma (or other apps) keep their own ports — JBT uses 3002 (web) and 4002 (api).
 
 # API — strip /jbt so Express serves /api/...
+# Artifacts (PDF / Drive sync) can be multi‑MB; Express allows 30mb — match nginx.
 location /jbt/api/ {
+    client_max_body_size 32m;
     proxy_pass http://127.0.0.1:4002/api/;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
@@ -23,6 +25,7 @@ location /jbt/_next/static/ {
 }
 
 location /jbt {
+    client_max_body_size 32m;
     proxy_pass http://127.0.0.1:3002;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
