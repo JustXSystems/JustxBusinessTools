@@ -44,14 +44,16 @@ sudo npm install -g pm2
 ```bash
 sudo adduser --disabled-password --gecos "" deploy   # skip if exists
 sudo usermod -aG sudo deploy   # optional; or grant narrower rights
-
-# On your PC: create a deploy key (no passphrase for Actions)
-# ssh-keygen -t ed25519 -f jbt_deploy -C "github-actions-jbt"
-# Put jbt_deploy.pub into: sudo -u deploy mkdir -p ~deploy/.ssh && … authorized_keys
 ```
 
-GitHub Actions needs the **private** key as secret `DEPLOY_SSH_KEY`.
+Then allow GitHub Actions (and you) to SSH as `deploy` using a key pair:
 
+1. On your **PC**, create the key (Part 2.2).
+2. On the **VPS**, install the **public** key into `deploy`’s `authorized_keys` (Part 2.3 below — full commands).
+3. Later, put the **private** key into the GitHub secret `DEPLOY_SSH_KEY` (Part 2.5).
+
+**Meaning of “put `jbt_deploy.pub` into authorized_keys”:**  
+Linux only trusts SSH logins listed in that user’s `~/.ssh/authorized_keys` file. You paste the one-line contents of `jbt_deploy.pub` there so `ssh deploy@…` works without a password.
 ### 1.3 Clone the app
 
 ```bash
