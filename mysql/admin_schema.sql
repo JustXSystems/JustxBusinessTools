@@ -1,11 +1,37 @@
 -- JBT Admin: organizations, auth, audit, analytics, payments (Phases P1–P6)
 
--- Extend business profiles for multi-GST branches
-ALTER TABLE business_profiles
-  ADD COLUMN organization_id INT UNSIGNED NULL AFTER id,
-  ADD COLUMN is_default TINYINT(1) NOT NULL DEFAULT 0,
-  ADD COLUMN config_version INT UNSIGNED NOT NULL DEFAULT 1,
-  ADD COLUMN home_tool_ids JSON NULL;
+-- Extend business profiles for multi-GST branches (idempotent; home_tool_ids lives in jbt_schema.sql)
+SET @db := DATABASE();
+
+SET @q := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'business_profiles' AND COLUMN_NAME = 'organization_id') = 0,
+    'ALTER TABLE business_profiles ADD COLUMN organization_id INT UNSIGNED NULL AFTER id',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @q; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @q := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'business_profiles' AND COLUMN_NAME = 'is_default') = 0,
+    'ALTER TABLE business_profiles ADD COLUMN is_default TINYINT(1) NOT NULL DEFAULT 0',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @q; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @q := (
+  SELECT IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'business_profiles' AND COLUMN_NAME = 'config_version') = 0,
+    'ALTER TABLE business_profiles ADD COLUMN config_version INT UNSIGNED NOT NULL DEFAULT 1',
+    'SELECT 1'
+  )
+);
+PREPARE stmt FROM @q; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS organizations (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,

@@ -79,17 +79,21 @@ EXIT;
 
 Password must satisfy MySQL policy (upper + lower + digit + special).
 
-Load schemas:
+Load schemas (stop if any file errors — later files need `users` from `admin_schema.sql`):
 
 ```bash
 cd /var/www/jbt
-mysql -u justx_user -p justx_systems < mysql/init.sql
-mysql -u justx_user -p justx_systems < mysql/jbt_schema.sql
-mysql -u justx_user -p justx_systems < mysql/admin_schema.sql
-mysql -u justx_user -p justx_systems < mysql/auth_extensions.sql
-mysql -u justx_user -p justx_systems < mysql/admin_platform.sql
-mysql -u justx_user -p justx_systems < mysql/artifact_delivery_schema.sql
-mysql -u justx_user -p justx_systems < mysql/notifications_schema.sql
+# one password prompt for the whole chain
+mysql -u justx_user -p justx_systems < mysql/init.sql \
+  && mysql -u justx_user -p justx_systems < mysql/jbt_schema.sql \
+  && mysql -u justx_user -p justx_systems < mysql/admin_schema.sql \
+  && mysql -u justx_user -p justx_systems < mysql/auth_extensions.sql \
+  && mysql -u justx_user -p justx_systems < mysql/admin_platform.sql \
+  && mysql -u justx_user -p justx_systems < mysql/artifact_delivery_schema.sql \
+  && mysql -u justx_user -p justx_systems < mysql/notifications_schema.sql
+
+mysql -u justx_user -p justx_systems -e "SHOW TABLES LIKE 'users';"
+# must print: users
 ```
 
 ### 1.5 Create `server/.env`
@@ -181,10 +185,17 @@ Finish **Part 1** first (clone at `/var/www/jbt`, `server/.env`, MySQL, nginx, f
 
 ### 2.2 Create an SSH key (on your Windows PC)
 
-In PowerShell:
+In **PowerShell** (note: do **not** use `-N ""` — PowerShell drops the empty string and breaks `-N`):
 
 ```powershell
-ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\jbt_deploy -C "github-actions-jbt" -N ""
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.ssh" | Out-Null
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\jbt_deploy" -C "github-actions-jbt" -N '""'
+```
+
+If that still errors, run without `-N` and press **Enter** twice when asked for a passphrase (leave it blank):
+
+```powershell
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\jbt_deploy" -C "github-actions-jbt"
 ```
 
 You get:
@@ -324,5 +335,6 @@ git reset --hard <commit_sha>
 | Build fail | Node 20+ on VPS; `npm ci` needs lockfile |
 | `JWT_SECRET` / env errors | `server/.env` incomplete — API exits on bad prod env |
 | MySQL 1819 | Stronger `DB_PASSWORD` (upper+lower+digit+special) |
+| `users` missing / `Duplicate column 'home_tool_ids'` | `admin_schema.sql` aborted mid-file — pull latest, then re-run from `admin_schema.sql` onward (see Part 1.4) |
 | 502 from nginx | `pm2 status`; ports 3002/4002 listening |
 | OAuth mismatch | Google redirect URIs must include `/jbt/api/...` |
