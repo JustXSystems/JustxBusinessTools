@@ -3,6 +3,7 @@ import type { BusinessProfile } from "@/lib/types/business-profile";
 import type { DocumentState } from "@/lib/types/document";
 import { docComputeTotals, wordsTotal } from "@/lib/document-math";
 import { fmtDate, fmtINR } from "@/lib/format";
+import { publicAssetUrl } from "@/lib/base-path";
 
 type Props = {
   config: DocumentConfig;
@@ -20,7 +21,7 @@ export function DocumentPreview({ config, state, profile }: Props) {
       <div className="dp-header">
         <div>
           {profile.logo ? (
-            <img className="dp-logo" src={profile.logo} alt="" />
+            <img className="dp-logo" src={publicAssetUrl(profile.logo)} alt="" />
           ) : (
             <div className="dp-company-name">{profile.businessName || "Your Business"}</div>
           )}

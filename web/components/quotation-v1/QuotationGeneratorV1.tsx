@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fetchProfile } from "@/lib/api";
+import { publicAssetUrl } from "@/lib/base-path";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useLiveRefresh, invalidateAdminData } from "@/hooks/useLiveRefresh";
 import {
@@ -1183,7 +1184,7 @@ export function QuotationGeneratorV1() {
             </div>
             <div className="qgv1-brand-sync">
               {company.logo ? (
-                <img className="qgv1-brand-sync-logo" src={company.logo} alt="" />
+                <img className="qgv1-brand-sync-logo" src={publicAssetUrl(company.logo)} alt="" />
               ) : (
                 <div className="qgv1-brand-sync-logo is-empty">No logo</div>
               )}

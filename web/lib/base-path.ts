@@ -22,6 +22,45 @@ export function withBasePath(path: string): string {
 }
 
 /**
+ * Resolve a stored asset path for <img src> under basePath.
+ * Rewrites `/api/files/...`, `/icons/...`, and mistaken absolute
+ * `https://host/api/files/...` (missing /jbt) to the public app path.
+ */
+export function publicAssetUrl(url: string): string {
+  const raw = String(url || "").trim();
+  if (!raw || /^(data:|blob:)/i.test(raw)) return raw;
+
+  let pathname = raw;
+  let search = "";
+
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const u = new URL(raw);
+      const isAppAsset =
+        u.pathname.startsWith("/api/files/") ||
+        u.pathname.startsWith("/icons/") ||
+        u.pathname.startsWith("/pwa-icon/") ||
+        /^\/jbt\/(api\/files|icons|pwa-icon)\//.test(u.pathname);
+      if (!isAppAsset) return raw;
+      pathname = u.pathname.replace(/^\/jbt(?=\/)/, "");
+      search = u.search;
+    } catch {
+      return raw;
+    }
+  } else {
+    const q = raw.indexOf("?");
+    if (q >= 0) {
+      pathname = raw.slice(0, q);
+      search = raw.slice(q);
+    }
+    pathname = pathname.startsWith("/") ? pathname : `/${pathname}`;
+    pathname = pathname.replace(/^\/jbt(?=\/)/, "");
+  }
+
+  return `${withBasePath(pathname)}${search}`;
+}
+
+/**
  * Public browser origin for absolute URLs (manifest icons, etc.).
  * Prefer env / forwarded headers — Next often sees localhost behind nginx.
  */

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePlatformBranding } from "@/components/branding/BrandingProvider";
+import { publicAssetUrl } from "@/lib/base-path";
 
 type Size = "sm" | "md" | "lg" | "xl";
 
@@ -40,10 +41,11 @@ export function PlatformBrandMark({
   const name = appName || branding.appName;
   const sub = tagline || branding.tagline;
   // Bust HTTP cache when logo URL is reused after an admin upload replace.
+  const resolved = publicAssetUrl(src);
   const imgSrc =
-    !src || src.startsWith("data:") || src.startsWith("blob:")
-      ? src
-      : `${src}${src.includes("?") ? "&" : "?"}bn=${encodeURIComponent(name)}`;
+    !resolved || resolved.startsWith("data:") || resolved.startsWith("blob:")
+      ? resolved
+      : `${resolved}${resolved.includes("?") ? "&" : "?"}bn=${encodeURIComponent(name)}`;
 
   const inner = (
     <>

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getBasePath, resolvePublicOrigin, withBasePath } from "@/lib/base-path";
+import { getBasePath, publicAssetUrl, resolvePublicOrigin, withBasePath } from "@/lib/base-path";
 
 describe("base-path", () => {
   const prev = {
@@ -49,5 +49,15 @@ describe("base-path", () => {
       },
     });
     expect(resolvePublicOrigin(req)).toBe("https://justxsystems.com");
+  });
+
+  it("rewrites /api/files asset URLs under basePath", () => {
+    process.env.NEXT_PUBLIC_BASE_PATH = "/jbt";
+    expect(publicAssetUrl("/api/files/platform/x.png")).toBe("/jbt/api/files/platform/x.png");
+    expect(publicAssetUrl("https://justxsystems.com/api/files/platform/x.png?bn=A")).toBe(
+      "/jbt/api/files/platform/x.png?bn=A",
+    );
+    expect(publicAssetUrl("/icons/presets/justx-mark.png")).toBe("/jbt/icons/presets/justx-mark.png");
+    expect(publicAssetUrl("https://cdn.example.com/logo.png")).toBe("https://cdn.example.com/logo.png");
   });
 });

@@ -25,6 +25,7 @@ import {
   type LiveSource,
   writeContingencyJson,
 } from "@/lib/live-first";
+import { publicAssetUrl } from "@/lib/base-path";
 
 export type PlatformBranding = {
   logoUrl: string;
@@ -109,7 +110,7 @@ function normalizePayload(data: {
   const p = data.poweredBy ?? {};
   return {
     branding: {
-      logoUrl: String(b.logoUrl || DEFAULT_BRANDING.logoUrl),
+      logoUrl: publicAssetUrl(String(b.logoUrl || DEFAULT_BRANDING.logoUrl)),
       appName: String(b.appName || DEFAULT_BRANDING.appName),
       tagline: String(b.tagline || DEFAULT_BRANDING.tagline),
       splashDurationMs: Number.isFinite(Number(b.splashDurationMs))
@@ -122,9 +123,11 @@ function normalizePayload(data: {
           ? DEFAULT_BRANDING.splashShowProgress
           : Boolean(b.splashShowProgress),
       installName: String(b.installName || DEFAULT_BRANDING.installName).trim() || DEFAULT_BRANDING.installName,
-      installIconUrl: resolveInstallIconUrl(
-        String(b.logoUrl || DEFAULT_BRANDING.logoUrl),
-        String(b.installIconUrl || DEFAULT_BRANDING.installIconUrl).trim() || DEFAULT_BRANDING.installIconUrl,
+      installIconUrl: publicAssetUrl(
+        resolveInstallIconUrl(
+          String(b.logoUrl || DEFAULT_BRANDING.logoUrl),
+          String(b.installIconUrl || DEFAULT_BRANDING.installIconUrl).trim() || DEFAULT_BRANDING.installIconUrl,
+        ),
       ),
       installIconBg: parseInstallIconBg(b.installIconBg ?? DEFAULT_BRANDING.installIconBg),
     },

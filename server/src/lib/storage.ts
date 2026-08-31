@@ -21,7 +21,13 @@ export function localUploadDir(): string {
 }
 
 function publicBase(): string {
-  return (process.env.UPLOAD_PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
+  // Prefer explicit upload CDN/base; else API_PUBLIC_URL (includes /jbt in prod).
+  const raw = (
+    process.env.UPLOAD_PUBLIC_BASE_URL?.trim() ||
+    process.env.API_PUBLIC_URL?.trim() ||
+    ""
+  ).replace(/\/$/, "");
+  return raw;
 }
 
 export function publicFileUrl(key: string): string {
@@ -31,6 +37,7 @@ export function publicFileUrl(key: string): string {
     return `${base}/${key}`;
   }
   const base = publicBase();
+  // Always store/serve under /api/files/...; prefix with /jbt via API_PUBLIC_URL when set.
   const rel = `/api/files/${key}`;
   return base ? `${base}${rel}` : rel;
 }
@@ -53,6 +60,8 @@ function parseDataUrl(input: string): { mime: string; buffer: Buffer } {
 export function isStoredImageUrl(value: string): boolean {
   return (
     value.startsWith("/api/files/") ||
+    value.startsWith("/jbt/api/files/") ||
+    value.includes("/api/files/") ||
     value.startsWith("http://") ||
     value.startsWith("https://")
   );

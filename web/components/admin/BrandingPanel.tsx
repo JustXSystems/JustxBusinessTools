@@ -30,6 +30,7 @@ import {
   type SplashAnimation,
   type SplashIntensity,
 } from "@/lib/splash-animation";
+import { publicAssetUrl } from "@/lib/base-path";
 
 /** Chrome requires square install icons — center-crop + scale to 512 PNG. */
 function normalizeInstallIconDataUrl(dataUrl: string): Promise<string> {
@@ -243,9 +244,9 @@ export function BrandingPanel() {
   }
 
   const previewLogo = logoDraft || form.logoUrl;
-  const previewInstallIcon =
-    installIconDraft ||
-    resolveInstallIconDisplay(previewLogo, form.installIconUrl);
+  const previewInstallIcon = publicAssetUrl(
+    installIconDraft || resolveInstallIconDisplay(previewLogo, form.installIconUrl),
+  );
   const previewInstallName = resolveInstallName(form.appName, form.installName);
   const draftBranding: PlatformBranding = {
     logoUrl: previewLogo,
@@ -418,7 +419,7 @@ export function BrandingPanel() {
                 >
                   <span className="install-icon-preset-thumb">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={preset.url} alt="" />
+                    <img src={publicAssetUrl(preset.url)} alt="" />
                   </span>
                   <span className="install-icon-preset-meta">
                     <strong>{preset.label}</strong>

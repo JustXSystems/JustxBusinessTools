@@ -9,6 +9,7 @@ import {
   numToWordsIndian,
   typeLabel,
 } from "@/lib/quotation-v1";
+import { publicAssetUrl } from "@/lib/base-path";
 
 type Props = {
   quote: QuotationV1;
@@ -35,7 +36,7 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
 
       <div className="qgv1-qs-head">
         <div className="qgv1-qs-brand">
-          {c.logo ? <img className="qgv1-qs-logo" src={c.logo} alt="" /> : null}
+          {c.logo ? <img className="qgv1-qs-logo" src={publicAssetUrl(c.logo)} alt="" /> : null}
           <div className="name">{c.name}</div>
           {c.tagline ? <div className="tagline">{c.tagline}</div> : null}
           <div className="line">

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fetchProfile } from "@/lib/api";
+import { publicAssetUrl } from "@/lib/base-path";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useLiveRefresh, invalidateAdminData } from "@/hooks/useLiveRefresh";
 import {
@@ -974,7 +975,7 @@ export function SiteSurveyV1() {
               <div className="ssv1-brand-row">
                 {company.logo ? (
                   <div className="ssv1-brand-icon">
-                    <img src={company.logo} alt="" />
+                    <img src={publicAssetUrl(company.logo)} alt="" />
                   </div>
                 ) : (
                   <div className="ssv1-brand-icon ssv1-brand-icon-empty" aria-hidden>

@@ -15,6 +15,7 @@ import {
   type BusinessProfileSendSettings,
 } from "@/lib/types/business-profile";
 import { fetchProfile, saveProfile } from "@/lib/api";
+import { publicAssetUrl } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
 
@@ -147,7 +148,7 @@ export default function ProfilePage() {
       <div className="panel profile-hero">
         <div className="flex-row-wrap">
           <div className="logo-preview-lg">
-            {profile.logo ? <img src={profile.logo} alt="Logo" /> : <span>🏢</span>}
+            {profile.logo ? <img src={publicAssetUrl(profile.logo)} alt="Logo" /> : <span>🏢</span>}
           </div>
           <div className="min-w-240">
             <label className="label" htmlFor="businessName">
