@@ -121,10 +121,11 @@ WHERE NOT EXISTS (SELECT 1 FROM platform_config WHERE config_key = 'powered_by')
 
 INSERT INTO platform_config (config_key, value)
 SELECT 'branding', JSON_OBJECT(
-  'logoUrl', '/icons/jbt-icon.svg',
+  'logoUrl', '/icons/justx-logo.png',
   'appName', 'JustX Business Tools',
   'tagline', 'JustX Systems',
-  'splashDurationMs', 1800
+  'splashDurationMs', 1800,
+  'installIconUrl', '/icons/justx-logo.png'
 )
 FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM platform_config WHERE config_key = 'branding');

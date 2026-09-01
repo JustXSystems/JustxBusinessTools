@@ -18,7 +18,7 @@ function withBase(path) {
 }
 
 function precacheUrls() {
-  return [withBase("/"), withBase("/offline.html"), withBase("/icons/jbt-icon.svg")];
+  return [withBase("/"), withBase("/offline.html"), withBase("/icons/justx-logo.png")];
 }
 
 self.addEventListener("install", (event) => {

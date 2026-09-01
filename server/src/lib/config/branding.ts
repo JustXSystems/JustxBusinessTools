@@ -37,10 +37,10 @@ export type PlatformBranding = {
   installIconBg: string;
 };
 
-export const DEFAULT_INSTALL_ICON_URL = "/icons/presets/justx-mark.png";
+export const DEFAULT_INSTALL_ICON_URL = "/icons/justx-logo.png";
 
 export const DEFAULT_BRANDING: PlatformBranding = {
-  logoUrl: "/icons/justxsystems-icon.svg",
+  logoUrl: "/icons/justx-logo.png",
   appName: "JustXSystems",
   tagline: "JustXSystems",
   splashDurationMs: 2200,
@@ -80,9 +80,24 @@ function parseBranding(raw: unknown): PlatformBranding {
       : {};
   const splash = Number(obj.splashDurationMs);
   const installName = String(obj.installName ?? "").trim();
-  const installIconUrl = String(obj.installIconUrl ?? "").trim();
+  let installIconUrl = String(obj.installIconUrl ?? "").trim();
+  let logoUrl = String(obj.logoUrl ?? DEFAULT_BRANDING.logoUrl).trim() || DEFAULT_BRANDING.logoUrl;
+  // Drop legacy generated SVG/PNG presets — only the official JustX logo remains bundled.
+  if (
+    /\/icons\/(jbt-icon|justxsystems-icon)\.svg$/i.test(logoUrl) ||
+    /\/icons\/presets\//i.test(logoUrl)
+  ) {
+    logoUrl = DEFAULT_BRANDING.logoUrl;
+  }
+  if (
+    !installIconUrl ||
+    /\/icons\/(jbt-icon|justxsystems-icon)\.svg$/i.test(installIconUrl) ||
+    /\/icons\/presets\//i.test(installIconUrl)
+  ) {
+    installIconUrl = DEFAULT_BRANDING.installIconUrl;
+  }
   return {
-    logoUrl: String(obj.logoUrl ?? DEFAULT_BRANDING.logoUrl).trim() || DEFAULT_BRANDING.logoUrl,
+    logoUrl,
     appName: String(obj.appName ?? DEFAULT_BRANDING.appName).trim() || DEFAULT_BRANDING.appName,
     tagline: String(obj.tagline ?? DEFAULT_BRANDING.tagline).trim() || DEFAULT_BRANDING.tagline,
     splashDurationMs: Number.isFinite(splash)
@@ -95,11 +110,7 @@ function parseBranding(raw: unknown): PlatformBranding {
         ? DEFAULT_BRANDING.splashShowProgress
         : Boolean(obj.splashShowProgress),
     installName: installName || DEFAULT_BRANDING.installName,
-    installIconUrl: (() => {
-      let u = installIconUrl || DEFAULT_BRANDING.installIconUrl;
-      if (/\/icons\/presets\/justx-.+\.svg$/i.test(u)) u = u.replace(/\.svg$/i, ".png");
-      return u;
-    })(),
+    installIconUrl,
     installIconBg: parseInstallIconBg(obj.installIconBg ?? DEFAULT_BRANDING.installIconBg),
   };
 }

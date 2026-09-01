@@ -25,10 +25,13 @@ const MIME: Record<string, string> = {
 
 function normalizeInstallIconPath(raw: string): string {
   let u = String(raw || "").trim();
-  if (/\/icons\/presets\/justx-.+\.svg$/i.test(u)) {
-    u = u.replace(/\.svg$/i, ".png");
+  if (
+    /\/icons\/(jbt-icon|justxsystems-icon)\.svg$/i.test(u) ||
+    /\/icons\/presets\//i.test(u)
+  ) {
+    u = "/icons/justx-logo.png";
   }
-  return u || "/icons/presets/justx-mark.png";
+  return u || "/icons/justx-logo.png";
 }
 
 function webPublicRoot(): string {

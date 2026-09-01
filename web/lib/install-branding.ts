@@ -1,5 +1,10 @@
-/** Desktop / PWA install branding presets (JustXSystems). */
+/** Desktop / PWA install branding — single JustX logo (no generated presets). */
 
+export const JUSTX_LOGO_URL = "/icons/justx-logo.png";
+
+export const DEFAULT_INSTALL_ICON_URL = JUSTX_LOGO_URL;
+
+/** @deprecated Presets removed — only the official JustX logo is used. */
 export type InstallIconPreset = {
   id: string;
   label: string;
@@ -7,50 +12,16 @@ export type InstallIconPreset = {
   url: string;
 };
 
-export const INSTALL_ICON_PRESETS: InstallIconPreset[] = [
-  {
-    id: "mark",
-    label: "X Mark",
-    description: "Primary JustXSystems mark",
-    url: "/icons/presets/justx-mark.png",
-  },
-  {
-    id: "shield",
-    label: "Shield",
-    description: "Trusted systems seal",
-    url: "/icons/presets/justx-shield.png",
-  },
-  {
-    id: "orbit",
-    label: "Orbit",
-    description: "Connected platforms",
-    url: "/icons/presets/justx-orbit.png",
-  },
-  {
-    id: "tile",
-    label: "JX Tile",
-    description: "Compact monogram tile",
-    url: "/icons/presets/justx-tile.png",
-  },
-  {
-    id: "seal",
-    label: "Seal",
-    description: "Circular brand seal",
-    url: "/icons/presets/justx-seal.png",
-  },
-];
-
-export const DEFAULT_INSTALL_ICON_URL = INSTALL_ICON_PRESETS[0].url;
+/** Empty: custom upload only; default icon is JUSTX_LOGO_URL. */
+export const INSTALL_ICON_PRESETS: InstallIconPreset[] = [];
 
 /** `transparent` or a #RRGGBB / #RGB color. Default: transparent. */
 export type InstallIconBg = string;
 
 export const INSTALL_ICON_BG_PRESETS: { id: string; label: string; value: InstallIconBg }[] = [
   { id: "transparent", label: "Transparent", value: "transparent" },
-  { id: "teal", label: "Brand teal", value: "#0B2E2F" },
+  { id: "black", label: "Black", value: "#000000" },
   { id: "white", label: "White", value: "#FFFFFF" },
-  { id: "paper", label: "Paper", value: "#FBF9F4" },
-  { id: "black", label: "Black", value: "#111111" },
 ];
 
 export function parseInstallIconBg(raw: unknown): InstallIconBg {
@@ -77,23 +48,28 @@ export function resolveInstallName(appName: string, installName?: string | null)
   return String(appName || "JustXSystems").trim() || "JustXSystems";
 }
 
+/** Map legacy generated icons → official JustX logo. */
+export function canonicalizeBrandIconUrl(raw: string): string {
+  const u = String(raw || "").trim();
+  if (!u) return JUSTX_LOGO_URL;
+  if (
+    /\/icons\/(jbt-icon|justxsystems-icon)\.svg$/i.test(u) ||
+    /\/icons\/presets\//i.test(u)
+  ) {
+    return JUSTX_LOGO_URL;
+  }
+  return u;
+}
+
 /** Prefer a path suitable for PWA manifest (not data: URLs). */
 export function resolveInstallIconUrl(
   logoUrl: string,
   installIconUrl?: string | null,
 ): string {
-  const normalize = (raw: string) => {
-    let u = raw.trim();
-    // Legacy SVG presets → PNG (Chrome install dialog ignores SVG).
-    if (/\/icons\/presets\/justx-.+\.svg$/i.test(u)) {
-      u = u.replace(/\.svg$/i, ".png");
-    }
-    return u;
-  };
-
-  const custom = normalize(String(installIconUrl || ""));
+  const custom = canonicalizeBrandIconUrl(String(installIconUrl || ""));
+  if (custom && !custom.startsWith("data:") && custom !== JUSTX_LOGO_URL) return custom;
   if (custom && !custom.startsWith("data:")) return custom;
-  const logo = normalize(String(logoUrl || ""));
+  const logo = canonicalizeBrandIconUrl(String(logoUrl || ""));
   if (logo && !logo.startsWith("data:")) return logo;
   if (custom.startsWith("data:")) return custom;
   return DEFAULT_INSTALL_ICON_URL;

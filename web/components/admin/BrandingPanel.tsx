@@ -16,7 +16,7 @@ import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { invalidateAdminData } from "@/hooks/useLiveRefresh";
 import {
   INSTALL_ICON_BG_PRESETS,
-  INSTALL_ICON_PRESETS,
+  JUSTX_LOGO_URL,
   isTransparentInstallBg,
   parseInstallIconBg,
   resolveInstallIconDisplay,
@@ -141,7 +141,7 @@ export function BrandingPanel() {
       return;
     }
     if (file.type.includes("svg")) {
-      setMessage("For custom desktop icons, upload PNG, WebP, or JPEG (SVG presets are available above).");
+      setMessage("For custom desktop icons, upload PNG, WebP, or JPEG (no SVG).");
       return;
     }
     if (file.size > 2_000_000) {
@@ -397,56 +397,43 @@ export function BrandingPanel() {
             </label>
           </div>
           <p className="muted" style={{ marginTop: 12, marginBottom: 8 }}>
-            Brand icon presets
+            App / install icon — defaults to the official JustX logo. Upload a custom PNG only if needed.
           </p>
-          <div className="install-icon-presets" role="listbox" aria-label="Install icon presets">
-            {INSTALL_ICON_PRESETS.map((preset) => {
-              const selected =
-                !installIconDraft && form.installIconUrl === preset.url;
-              return (
+          <div className="install-icon-custom-banner">
+            <span className="install-icon-preset-thumb install-icon-checker">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={previewInstallIcon || publicAssetUrl(JUSTX_LOGO_URL)} alt="" />
+            </span>
+            <div>
+              <strong>
+                {installIconDraft
+                  ? "New custom icon ready to save"
+                  : form.installIconUrl && form.installIconUrl !== JUSTX_LOGO_URL
+                    ? "Custom install icon active"
+                    : "Official JustX logo"}
+              </strong>
+              <p className="muted" style={{ margin: "2px 0 0" }}>
+                {installIconDraft
+                  ? "Click Save install branding to apply it to the Install dialog and desktop shortcut."
+                  : form.installIconUrl || JUSTX_LOGO_URL}
+              </p>
+              {form.installIconUrl && form.installIconUrl !== JUSTX_LOGO_URL && !installIconDraft ? (
                 <button
-                  key={preset.id}
                   type="button"
-                  role="option"
-                  aria-selected={selected}
-                  className={`install-icon-preset${selected ? " is-selected" : ""}`}
+                  className="btn btn-sm"
+                  style={{ marginTop: 8 }}
                   onClick={() => {
                     setInstallIconDraft(null);
-                    setForm({ ...form, installIconUrl: preset.url });
+                    setForm({ ...form, installIconUrl: JUSTX_LOGO_URL });
                     setPreviewKey((k) => k + 1);
                     setPreviewMode("install");
                   }}
                 >
-                  <span className="install-icon-preset-thumb">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={publicAssetUrl(preset.url)} alt="" />
-                  </span>
-                  <span className="install-icon-preset-meta">
-                    <strong>{preset.label}</strong>
-                    <span>{preset.description}</span>
-                  </span>
+                  Reset to JustX logo
                 </button>
-              );
-            })}
-          </div>
-          {(installIconDraft ||
-            (!INSTALL_ICON_PRESETS.some((p) => p.url === form.installIconUrl) &&
-              form.installIconUrl)) && (
-            <div className="install-icon-custom-banner">
-              <span className="install-icon-preset-thumb install-icon-checker">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={previewInstallIcon} alt="" />
-              </span>
-              <div>
-                <strong>{installIconDraft ? "New custom icon ready to save" : "Custom install icon active"}</strong>
-                <p className="muted" style={{ margin: "2px 0 0" }}>
-                  {installIconDraft
-                    ? "Click Save install branding to apply it to the Install dialog and desktop shortcut."
-                    : form.installIconUrl}
-                </p>
-              </div>
+              ) : null}
             </div>
-          )}
+          </div>
           <p className="muted" style={{ marginTop: 14, marginBottom: 8 }}>
             Icon background
           </p>

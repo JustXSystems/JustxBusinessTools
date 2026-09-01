@@ -16,8 +16,8 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
   },
   icons: {
-    icon: [{ url: "/icons/presets/justx-mark.png", type: "image/png", sizes: "512x512" }],
-    apple: "/icons/presets/justx-mark.png",
+    icon: [{ url: "/icons/justx-logo.png", type: "image/png", sizes: "512x512" }],
+    apple: "/icons/apple-touch-icon.png",
   },
 };
 

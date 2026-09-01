@@ -57,7 +57,7 @@ describe("base-path", () => {
     expect(publicAssetUrl("https://justxsystems.com/api/files/platform/x.png?bn=A")).toBe(
       "/jbt/api/files/platform/x.png?bn=A",
     );
-    expect(publicAssetUrl("/icons/presets/justx-mark.png")).toBe("/jbt/icons/presets/justx-mark.png");
+    expect(publicAssetUrl("/icons/justx-logo.png")).toBe("/jbt/icons/justx-logo.png");
     expect(publicAssetUrl("https://cdn.example.com/logo.png")).toBe("https://cdn.example.com/logo.png");
   });
 });

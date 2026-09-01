@@ -10,7 +10,12 @@ import {
   type ReactNode,
 } from "react";
 import { apiUrl } from "@/lib/api-base";
-import { DEFAULT_INSTALL_ICON_URL, parseInstallIconBg, resolveInstallIconUrl } from "@/lib/install-branding";
+import {
+  DEFAULT_INSTALL_ICON_URL,
+  canonicalizeBrandIconUrl,
+  parseInstallIconBg,
+  resolveInstallIconUrl,
+} from "@/lib/install-branding";
 import {
   parseSplashAnimation,
   parseSplashIntensity,
@@ -47,7 +52,7 @@ export type PoweredByConfig = {
 };
 
 export const DEFAULT_BRANDING: PlatformBranding = {
-  logoUrl: "/icons/justxsystems-icon.svg",
+  logoUrl: "/icons/justx-logo.png",
   appName: "JustXSystems",
   tagline: "JustXSystems",
   splashDurationMs: 2200,
@@ -108,9 +113,13 @@ function normalizePayload(data: {
 }): BrandPayload {
   const b = data.branding ?? {};
   const p = data.poweredBy ?? {};
+  const rawLogo = canonicalizeBrandIconUrl(String(b.logoUrl || DEFAULT_BRANDING.logoUrl));
+  const rawInstall = canonicalizeBrandIconUrl(
+    String(b.installIconUrl || DEFAULT_BRANDING.installIconUrl).trim() || DEFAULT_BRANDING.installIconUrl,
+  );
   return {
     branding: {
-      logoUrl: publicAssetUrl(String(b.logoUrl || DEFAULT_BRANDING.logoUrl)),
+      logoUrl: publicAssetUrl(rawLogo),
       appName: String(b.appName || DEFAULT_BRANDING.appName),
       tagline: String(b.tagline || DEFAULT_BRANDING.tagline),
       splashDurationMs: Number.isFinite(Number(b.splashDurationMs))
@@ -123,12 +132,7 @@ function normalizePayload(data: {
           ? DEFAULT_BRANDING.splashShowProgress
           : Boolean(b.splashShowProgress),
       installName: String(b.installName || DEFAULT_BRANDING.installName).trim() || DEFAULT_BRANDING.installName,
-      installIconUrl: publicAssetUrl(
-        resolveInstallIconUrl(
-          String(b.logoUrl || DEFAULT_BRANDING.logoUrl),
-          String(b.installIconUrl || DEFAULT_BRANDING.installIconUrl).trim() || DEFAULT_BRANDING.installIconUrl,
-        ),
-      ),
+      installIconUrl: publicAssetUrl(resolveInstallIconUrl(rawLogo, rawInstall)),
       installIconBg: parseInstallIconBg(b.installIconBg ?? DEFAULT_BRANDING.installIconBg),
     },
     poweredBy: {

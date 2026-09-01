@@ -73,7 +73,7 @@ export function absoluteIconFetchUrl(iconPath: string): string {
   const base =
     (process.env.NEXT_PUBLIC_BASE_PATH ?? process.env.WEB_BASE_PATH ?? "").trim().replace(/\/$/, "") ||
     "";
-  if (!icon) return `${webOrigin()}${base}/icons/presets/justx-mark.png`;
+  if (!icon) return `${webOrigin()}${base}/icons/justx-logo.png`;
   if (icon.startsWith("http://") || icon.startsWith("https://")) return icon;
   if (icon.startsWith("/api/")) return `${apiOrigin()}${icon}`;
   const path = icon.startsWith("/") ? icon : `/${icon}`;
