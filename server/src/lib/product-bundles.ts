@@ -46,47 +46,51 @@ export async function ensureProductBundleSchema(): Promise<void> {
           KEY idx_pbi_tool (tool_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
-      await pool.query(
-        `INSERT IGNORE INTO product_bundles
-           (id, name, tagline, description, discount_pct, fixed_price_inr, available, highlighted, sort_order)
-         VALUES
-           ('all_tools', 'All Tools Pack', 'Every paid business tool',
-            'Grants a license for every paid tool SKU. À la carte remains available per tool.',
-            0, NULL, 1, 1, 0),
-           ('sales_pack', 'Sales Pack', 'Quote → order → invoice',
-            'Core sales workflow tools for closing and billing.',
-            10, NULL, 1, 1, 1),
-           ('solar_pack', 'Solar Pack', 'Survey → install → service',
-            'Solar delivery tools for site work and after-sales.',
-            10, NULL, 1, 0, 2)`,
-      );
+      try {
+        await pool.query(
+          `INSERT IGNORE INTO product_bundles
+             (id, name, tagline, description, discount_pct, fixed_price_inr, available, highlighted, sort_order)
+           VALUES
+             ('all_tools', 'All Tools Pack', 'Every paid business tool',
+              'Grants a license for every paid tool SKU. A la carte remains available per tool.',
+              0, NULL, 1, 1, 0),
+             ('sales_pack', 'Sales Pack', 'Quote to order to invoice',
+              'Core sales workflow tools for closing and billing.',
+              10, NULL, 1, 1, 1),
+             ('solar_pack', 'Solar Pack', 'Survey to install to service',
+              'Solar delivery tools for site work and after-sales.',
+              10, NULL, 1, 0, 2)`,
+        );
 
-      // Seed pack membership once (empty packs only).
-      const packSeeds: Array<{ id: string; tools: string[] }> = [
-        {
-          id: "sales_pack",
-          tools: ["quotation", "quotationv1", "salesorder", "invoice", "paymenttracker"],
-        },
-        {
-          id: "solar_pack",
-          tools: ["sitesurvey", "sitesurveyv1", "installation", "projects", "amc"],
-        },
-      ];
-      for (const pack of packSeeds) {
-        const [cntRows] = await pool.query(
-          `SELECT COUNT(*) AS cnt FROM product_bundle_items WHERE bundle_id = :id`,
-          { id: pack.id },
-        );
-        const cnt = Number(
-          (Array.isArray(cntRows) ? (cntRows[0] as { cnt: number }) : { cnt: 1 }).cnt,
-        );
-        if (cnt > 0) continue;
-        for (const toolId of pack.tools) {
-          await pool.query(
-            `INSERT IGNORE INTO product_bundle_items (bundle_id, tool_id) VALUES (:id, :toolId)`,
-            { id: pack.id, toolId },
+        // Seed pack membership once (empty packs only).
+        const packSeeds: Array<{ id: string; tools: string[] }> = [
+          {
+            id: "sales_pack",
+            tools: ["quotation", "quotationv1", "salesorder", "invoice", "paymenttracker"],
+          },
+          {
+            id: "solar_pack",
+            tools: ["sitesurvey", "sitesurveyv1", "installation", "projects", "amc"],
+          },
+        ];
+        for (const pack of packSeeds) {
+          const [cntRows] = await pool.query(
+            `SELECT COUNT(*) AS cnt FROM product_bundle_items WHERE bundle_id = :id`,
+            { id: pack.id },
           );
+          const cnt = Number(
+            (Array.isArray(cntRows) ? (cntRows[0] as { cnt: number }) : { cnt: 1 }).cnt,
+          );
+          if (cnt > 0) continue;
+          for (const toolId of pack.tools) {
+            await pool.query(
+              `INSERT IGNORE INTO product_bundle_items (bundle_id, tool_id) VALUES (:id, :toolId)`,
+              { id: pack.id, toolId },
+            );
+          }
         }
+      } catch (err) {
+        console.warn("[product-bundles] seed skipped:", err);
       }
     })().catch((err: unknown) => {
       schemaReady = null;

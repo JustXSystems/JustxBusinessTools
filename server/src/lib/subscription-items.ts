@@ -196,10 +196,14 @@ export async function alignOrgItemPricesWithSkus(orgId: number): Promise<number>
   const mrr = Number(
     (Array.isArray(sumRows) ? (sumRows[0] as { mrr: number }) : { mrr: 0 }).mrr ?? 0,
   );
-  await pool.query(`UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`, {
-    mrr,
-    orgId,
-  });
+  try {
+    await pool.query(`UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`, {
+      mrr,
+      orgId,
+    });
+  } catch {
+    /* mrr_inr column may be missing on older DBs */
+  }
   return mrr;
 }
 

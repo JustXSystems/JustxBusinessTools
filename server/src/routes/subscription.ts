@@ -41,24 +41,29 @@ function isBundleQuote(quote: CartQuote | BundleCartQuote): quote is BundleCartQ
 }
 
 async function listEnabledGateways(orgId: number) {
-  const [rows] = await pool.query(
-    `SELECT id, provider, display_name, mode FROM payment_gateways
-     WHERE organization_id = :orgId AND enabled = 1 ORDER BY id`,
-    { orgId },
-  );
-  return (Array.isArray(rows) ? rows : []).map((row) => {
-    const r = row as Record<string, unknown>;
-    return {
-      id: Number(r.id),
-      provider: String(r.provider),
-      displayName: String(r.display_name),
-      mode: String(r.mode),
-      methods:
-        String(r.provider).toLowerCase() === "stripe"
-          ? ["debit", "credit"]
-          : ["upi", "debit", "credit"],
-    };
-  });
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, provider, display_name, mode FROM payment_gateways
+       WHERE organization_id = :orgId AND enabled = 1 ORDER BY id`,
+      { orgId },
+    );
+    return (Array.isArray(rows) ? rows : []).map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        id: Number(r.id),
+        provider: String(r.provider),
+        displayName: String(r.display_name),
+        mode: String(r.mode),
+        methods:
+          String(r.provider).toLowerCase() === "stripe"
+            ? ["debit", "credit"]
+            : ["upi", "debit", "credit"],
+      };
+    });
+  } catch (err) {
+    console.warn("[subscription] listEnabledGateways:", err);
+    return [];
+  }
 }
 
 async function quoteForOrg(
@@ -76,16 +81,17 @@ async function quoteForOrg(
 router.get("/", async (_req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
   res.setHeader("Pragma", "no-cache");
-  const profileId = getActiveProfileId();
-  const orgId = getActiveOrgId();
-  // Keep active MRR lines on current SKU list prices (trials stay ₹0).
   try {
-    await alignOrgItemPricesWithSkus(orgId);
-  } catch {
-    /* schema may be mid-migrate */
-  }
-  const [subscription, plans, payee, claim, gateways, skus, licenses, items, packs, trialConsumed] =
-    await Promise.all([
+    const profileId = getActiveProfileId();
+    const orgId = getActiveOrgId();
+    // Keep active MRR lines on current SKU list prices (trials stay 0).
+    try {
+      await alignOrgItemPricesWithSkus(orgId);
+    } catch (err) {
+      console.warn("[subscription] alignOrgItemPricesWithSkus:", err);
+    }
+
+    const settled = await Promise.allSettled([
       getSubscription(profileId),
       listCatalogPlans(),
       getUpiPayee(),
@@ -97,39 +103,77 @@ router.get("/", async (_req, res) => {
       listAvailableProductBundles(),
       trialConsumedToolIdSet(orgId),
     ]);
-  const licensed = new Set(licenses.map((l) => l.toolId));
-  // Only surface actionable claims — approved claims must never keep the owner on "under review".
-  const pendingClaim =
-    claim && (claim.status === "pending" || claim.status === "rejected")
-      ? {
-          id: claim.id,
-          status: claim.status,
-          utr: claim.utr,
-          amountInr: claim.amountInr,
-          toolIds: claim.toolIds,
-          createdAt: claim.createdAt,
-          reviewNote: claim.reviewNote,
-        }
-      : null;
-  const billingItems = items;
-  res.json({
-    ...subscription,
-    provider: "upi",
-    plans: plans.filter((p) => p.available).map(publicPlanPayload),
-    catalog: catalogPayload(skus, licensed, trialConsumed),
-    packs: packs.map(publicBundlePayload),
-    licenses,
-    licensedToolIds: [...licensed],
-    billingItems,
-    mrrInr: billingItems.reduce((sum, i) => sum + i.unitPriceInr, 0),
-    upi: {
-      ...publicPayee(payee),
-      amountInr: 0,
-      intent: null,
-    },
-    pendingClaim,
-    latestClaim:
-      claim
+
+    const logRejected = (label: string, idx: number) => {
+      const r = settled[idx];
+      if (r.status === "rejected") console.error(`[subscription] ${label}:`, r.reason);
+    };
+    logRejected("getSubscription", 0);
+    logRejected("listCatalogPlans", 1);
+    logRejected("getUpiPayee", 2);
+    logRejected("getLatestClaimForOrg", 3);
+    logRejected("listEnabledGateways", 4);
+    logRejected("listToolSkus", 5);
+    logRejected("listActiveLicenses", 6);
+    logRejected("listSubscriptionItems", 7);
+    logRejected("listAvailableProductBundles", 8);
+    logRejected("trialConsumedToolIdSet", 9);
+
+    const subscription =
+      settled[0].status === "fulfilled"
+        ? settled[0].value
+        : {
+            businessProfileId: profileId,
+            planId: "free",
+            planName: "Freemium",
+            status: "active" as const,
+            currentPeriodStart: null,
+            currentPeriodEnd: null,
+            paymentProvider: null,
+            externalSubscriptionId: null,
+            externalCustomerId: null,
+            recordLimit: 28,
+            accessMode: "limited" as const,
+            isUnlimited: false,
+            isPro: false,
+          };
+    if (settled[0].status === "rejected") {
+      res.status(500).json({
+        error:
+          settled[0].reason instanceof Error
+            ? settled[0].reason.message
+            : "Could not load subscription",
+      });
+      return;
+    }
+
+    const plans = settled[1].status === "fulfilled" ? settled[1].value : [];
+    const payee =
+      settled[2].status === "fulfilled"
+        ? settled[2].value
+        : { enabled: false, vpa: "", payeeName: "JustXSystems LLP", merchantCode: "" };
+    const claim = settled[3].status === "fulfilled" ? settled[3].value : null;
+    const gateways = settled[4].status === "fulfilled" ? settled[4].value : [];
+    const skus = settled[5].status === "fulfilled" ? settled[5].value : [];
+    const licenses = settled[6].status === "fulfilled" ? settled[6].value : [];
+    const items = settled[7].status === "fulfilled" ? settled[7].value : [];
+    const packs = settled[8].status === "fulfilled" ? settled[8].value : [];
+    const trialConsumed =
+      settled[9].status === "fulfilled" ? settled[9].value : new Set<string>();
+
+    if (settled[5].status === "rejected") {
+      res.status(500).json({
+        error:
+          settled[5].reason instanceof Error
+            ? settled[5].reason.message
+            : "Could not load tool catalog",
+      });
+      return;
+    }
+
+    const licensed = new Set(licenses.map((l) => l.toolId));
+    const pendingClaim =
+      claim && (claim.status === "pending" || claim.status === "rejected")
         ? {
             id: claim.id,
             status: claim.status,
@@ -139,10 +183,45 @@ router.get("/", async (_req, res) => {
             createdAt: claim.createdAt,
             reviewNote: claim.reviewNote,
           }
-        : null,
-    gateways,
-    serverTime: new Date().toISOString(),
-  });
+        : null;
+
+    res.json({
+      ...subscription,
+      provider: "upi",
+      plans: plans.filter((p) => p.available).map(publicPlanPayload),
+      catalog: catalogPayload(skus, licensed, trialConsumed),
+      packs: packs.map(publicBundlePayload),
+      licenses,
+      licensedToolIds: [...licensed],
+      billingItems: items,
+      mrrInr: items.reduce((sum, i) => sum + i.unitPriceInr, 0),
+      upi: {
+        ...publicPayee(payee),
+        amountInr: 0,
+        intent: null,
+      },
+      pendingClaim,
+      latestClaim:
+        claim
+          ? {
+              id: claim.id,
+              status: claim.status,
+              utr: claim.utr,
+              amountInr: claim.amountInr,
+              toolIds: claim.toolIds,
+              createdAt: claim.createdAt,
+              reviewNote: claim.reviewNote,
+            }
+          : null,
+      gateways,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("[subscription] GET / failed:", err);
+    res.status(500).json({
+      error: err instanceof Error ? err.message : "Could not load subscription",
+    });
+  }
 });
 
 router.get("/quote", async (req, res) => {

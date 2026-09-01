@@ -55,8 +55,7 @@ export async function ensureSubscriptionPlanSchema(): Promise<void> {
         `UPDATE subscription_plans
          SET access_mode = 'limited', record_limit = COALESCE(record_limit, :fallback),
              name = IF(name IN ('Free', 'free'), 'Freemium', name),
-             tagline = IF(COALESCE(tagline, '') IN ('', 'Limited use'), 'Try tools with a record cap', tagline),
-             tier_label = COALESCE(tier_label, 'Starter')
+             tagline = IF(COALESCE(tagline, '') IN ('', 'Limited use'), 'Try tools with a record cap', tagline)
          WHERE id = 'free'`,
         { fallback: FREE_RECORD_LIMIT },
       );
@@ -64,10 +63,19 @@ export async function ensureSubscriptionPlanSchema(): Promise<void> {
         `UPDATE subscription_plans
          SET access_mode = 'unlimited', record_limit = NULL,
              name = IF(name IN ('Pro', 'pro', 'Unlimited'), 'All Tools Pack', name),
-             tagline = IF(COALESCE(tagline, '') IN ('', 'Unlimited use'), 'Every paid tool licensed', tagline),
-             tier_label = COALESCE(tier_label, 'Growth')
+             tagline = IF(COALESCE(tagline, '') IN ('', 'Unlimited use'), 'Every paid tool licensed', tagline)
          WHERE id = 'pro'`,
       );
+      try {
+        await pool.query(
+          `UPDATE subscription_plans SET tier_label = COALESCE(tier_label, 'Starter') WHERE id = 'free'`,
+        );
+        await pool.query(
+          `UPDATE subscription_plans SET tier_label = COALESCE(tier_label, 'Growth') WHERE id = 'pro'`,
+        );
+      } catch {
+        /* tier_label may be missing on older DBs */
+      }
       await pool.query(
         `UPDATE subscription_plans SET available = 0 WHERE id NOT IN ('free', 'pro')`,
       );
