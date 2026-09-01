@@ -397,9 +397,10 @@ crontab -e
 Manual one-shot:
 
 ```bash
-# As deploy or root — store off-box
+# As deploy — no sudo needed; --no-tablespaces avoids PROCESS privilege error on MySQL 8
+mkdir -p ~/backups
 DATE=$(date +%Y%m%d_%H%M)
-mysqldump -u justx_user -p --single-transaction --routines \
+mysqldump -u justx_user -p -h 127.0.0.1 --single-transaction --routines --triggers --no-tablespaces \
   justx_systems | gzip > ~/backups/justx_systems_$DATE.sql.gz
 ```
 

@@ -44,9 +44,10 @@ fi
 
 SQL_OUT="$BACKUP_ROOT/justx_systems_${DATE}.sql.gz"
 echo "==> Dumping MySQL $DB_NAME → $SQL_OUT"
+# --no-tablespaces: justx_user typically lacks PROCESS (MySQL 8 tablespace dump error)
 MYSQL_PWD="$DB_PASSWORD" mysqldump \
   -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
-  --single-transaction --routines --triggers \
+  --single-transaction --routines --triggers --no-tablespaces \
   "$DB_NAME" | gzip -c > "$SQL_OUT"
 
 if [[ -d "$UPLOAD_DIR" ]]; then
