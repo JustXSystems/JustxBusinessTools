@@ -27,7 +27,12 @@ import {
 } from "../lib/profile-send-settings.js";
 import { getActiveOrgId, getActiveProfileId } from "../lib/request-context.js";
 import { gstinTakenByOther, isValidGstin, normalizeGstin } from "../lib/gstin.js";
-import { isStoredImageUrl, saveImageUpload } from "../lib/storage.js";
+import {
+  canonicalizeStoredImageUrl,
+  isStoredImageUrl,
+  saveImageUpload,
+  withFileAccessToken,
+} from "../lib/storage.js";
 import { requireBusinessProfileOwner } from "../middleware/require-business-profile-owner.js";
 import { requireWriteAccess } from "../middleware/require-write.js";
 import { publishNotificationAsync } from "../lib/notification-publish.js";
@@ -64,7 +69,7 @@ type ProfileRow = {
 function toApi(row: ProfileRow, deliveryExtra?: ReturnType<typeof publicDeliveryConfig> | null) {
   return {
     id: row.id,
-    logo: row.logo_data_url,
+    logo: withFileAccessToken(row.logo_data_url),
     businessName: row.business_name,
     addressLine1: row.address_line1,
     addressLine2: row.address_line2,
@@ -195,7 +200,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
     logo = null;
   } else if (typeof body.logo === "string" && body.logo.trim()) {
     if (isStoredImageUrl(body.logo.trim())) {
-      logo = body.logo.trim();
+      logo = canonicalizeStoredImageUrl(body.logo.trim());
     } else {
       logo = await saveImageUpload(String(body.logo), "logos");
     }

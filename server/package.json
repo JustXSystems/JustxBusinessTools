@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "dev:e2e": "tsx src/index.ts",
     "start": "tsx src/index.ts",
+    "start:worker": "tsx src/worker.ts",
     "test": "vitest run",
     "db:seed": "tsx scripts/seed-admin.ts",
     "db:seed:tools": "tsx scripts/seed-tool-definitions.ts",

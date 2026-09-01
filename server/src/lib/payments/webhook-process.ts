@@ -1,12 +1,16 @@
 import { pool } from "../../db.js";
 import { getPaymentProvider } from "./index.js";
-import { recordSaasTransaction } from "./saas.js";
+import {
+  ensurePaymentTxnIdempotency,
+  hasProcessedPaymentEvent,
+  recordSaasTransaction,
+} from "./saas.js";
 import { getOrganizationIdForProfile } from "./org-subscription.js";
 import { activatePaidSubscription, cancelSubscription } from "../subscription.js";
 import {
   activateToolCommerceForProfile,
 } from "../commerce.js";
-import { completeCheckoutIntent } from "../subscription-items.js";
+import { completeCheckoutIntent, getCheckoutIntent } from "../subscription-items.js";
 import {
   notifyPaymentOutcome,
   notifySubscriptionActivated,
@@ -20,6 +24,7 @@ export type ProcessedWebhook = {
   type?: string;
   profileId?: number;
   provider: string;
+  duplicate?: boolean;
 };
 
 export async function logGatewayWebhookEvent(input: {
@@ -62,6 +67,7 @@ export async function applyWebhookEvent(
   body: unknown,
   opts?: { skipVerify?: boolean; skipLog?: boolean; headers?: Record<string, unknown> },
 ): Promise<ProcessedWebhook> {
+  await ensurePaymentTxnIdempotency();
   const provider = getPaymentProvider(providerName);
 
   if (!opts?.skipVerify && provider.verifyWebhook) {
@@ -80,20 +86,62 @@ export async function applyWebhookEvent(
     throw err;
   }
 
-  const orgId = await getOrganizationIdForProfile(event.profileId);
+  const intentPreview = event.externalSubscriptionId
+    ? await getCheckoutIntent(event.externalSubscriptionId)
+    : null;
+
+  // Prefer checkout_intents over provider notes (notes can be forged once signature passes).
+  const profileId = intentPreview?.profileId ?? event.profileId;
+  if (!profileId) {
+    const err = new Error("Webhook missing profileId and no matching checkout intent");
+    (err as Error & { status: number }).status = 400;
+    throw err;
+  }
+
+  const chargeType =
+    event.type === "subscription.cancelled" ? "subscription_cancel" : "subscription_charge";
+
+  if (
+    (event.type === "subscription.activated" || event.type === "subscription.cancelled") &&
+    event.externalSubscriptionId &&
+    (await hasProcessedPaymentEvent(provider.name, event.externalSubscriptionId, chargeType))
+  ) {
+    return {
+      received: true,
+      type: event.type,
+      profileId,
+      provider: provider.name,
+      duplicate: true,
+    };
+  }
+
+  const orgId =
+    intentPreview?.orgId ?? (await getOrganizationIdForProfile(profileId));
 
   if (event.type === "subscription.activated") {
     const intent = await completeCheckoutIntent(event.externalSubscriptionId);
     const toolIds =
-      (event.toolIds && event.toolIds.length > 0 ? event.toolIds : null) ??
-      (intent?.toolIds && intent.toolIds.length > 0 ? intent.toolIds : null);
-    const amountInr = event.amountInr ?? intent?.amountInr ?? PRO_PRICE_INR;
+      (intent?.toolIds && intent.toolIds.length > 0 ? intent.toolIds : null) ??
+      (event.toolIds && event.toolIds.length > 0 ? event.toolIds : null);
+    const amountInr = intent?.amountInr ?? event.amountInr ?? PRO_PRICE_INR;
     const periodEnd = event.periodEnd ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const planId = event.planId ?? (toolIds ? "cart" : "pro");
 
-    if (event.planId === "pro" || event.planId === "unlimited" || event.planId === "pack:all_tools") {
-      // Activates All Tools Pack plan + per-tool licenses.
+    // Live providers should activate only against a known pending/completed intent.
+    if (
+      provider.name !== "mock" &&
+      !opts?.skipVerify &&
+      !intent &&
+      process.env.PAYMENT_REQUIRE_CHECKOUT_INTENT !== "false"
+    ) {
+      const err = new Error("No matching checkout intent for payment session");
+      (err as Error & { status: number }).status = 409;
+      throw err;
+    }
+
+    if (planId === "pro" || planId === "unlimited" || planId === "pack:all_tools") {
       await activatePaidSubscription(
-        event.profileId,
+        profileId,
         provider.name,
         event.externalSubscriptionId,
         event.externalCustomerId,
@@ -102,16 +150,16 @@ export async function applyWebhookEvent(
       );
     } else if (toolIds && toolIds.length > 0) {
       await activateToolCommerceForProfile({
-        profileId: event.profileId,
+        profileId,
         toolIds,
-        source: event.planId?.startsWith("pack:") ? "pack" : "webhook",
+        source: planId?.startsWith("pack:") ? "pack" : "webhook",
         externalRef: event.externalSubscriptionId,
         periodEnd,
       });
     }
 
     if (orgId) {
-      await recordSaasTransaction(
+      const recorded = await recordSaasTransaction(
         orgId,
         "subscription_charge",
         "success",
@@ -119,10 +167,19 @@ export async function applyWebhookEvent(
         provider.name,
         event.externalSubscriptionId,
       );
+      if (recorded === "duplicate") {
+        return {
+          received: true,
+          type: event.type,
+          profileId,
+          provider: provider.name,
+          duplicate: true,
+        };
+      }
       notifySubscriptionActivated({
         organizationId: orgId,
-        profileId: event.profileId,
-        planId: event.planId ?? (toolIds ? "cart" : "pro"),
+        profileId,
+        planId: planId ?? (toolIds ? "cart" : "pro"),
         planName: toolIds ? `${toolIds.length} tool license(s)` : undefined,
         provider: provider.name,
       });
@@ -135,9 +192,9 @@ export async function applyWebhookEvent(
       });
     }
   } else if (event.type === "subscription.cancelled") {
-    await cancelSubscription(event.profileId, provider.name, event.externalSubscriptionId);
+    await cancelSubscription(profileId, provider.name, event.externalSubscriptionId);
     if (orgId) {
-      await recordSaasTransaction(
+      const recorded = await recordSaasTransaction(
         orgId,
         "subscription_cancel",
         "success",
@@ -145,9 +202,18 @@ export async function applyWebhookEvent(
         provider.name,
         event.externalSubscriptionId,
       );
+      if (recorded === "duplicate") {
+        return {
+          received: true,
+          type: event.type,
+          profileId,
+          provider: provider.name,
+          duplicate: true,
+        };
+      }
       notifySubscriptionCancelled({
         organizationId: orgId,
-        profileId: event.profileId,
+        profileId,
         provider: provider.name,
       });
     }
@@ -156,7 +222,7 @@ export async function applyWebhookEvent(
       orgId,
       "subscription_charge",
       "failed",
-      event.amountInr ?? PRO_PRICE_INR,
+      event.amountInr ?? intentPreview?.amountInr ?? PRO_PRICE_INR,
       provider.name,
       event.externalSubscriptionId,
       event.errorCode,
@@ -165,7 +231,7 @@ export async function applyWebhookEvent(
     notifyPaymentOutcome({
       organizationId: orgId,
       success: false,
-      amountInr: event.amountInr ?? PRO_PRICE_INR,
+      amountInr: event.amountInr ?? intentPreview?.amountInr ?? PRO_PRICE_INR,
       provider: provider.name,
       reference: event.externalSubscriptionId,
       errorMessage: event.errorMessage ?? event.errorCode ?? null,
@@ -176,7 +242,7 @@ export async function applyWebhookEvent(
     await logGatewayWebhookEvent({
       provider: providerName,
       eventType: `webhook.${event.type}`,
-      message: `Processed ${event.type} for profile ${event.profileId}`,
+      message: `Processed ${event.type} for profile ${profileId}`,
       payload: body,
       organizationId: orgId,
     });
@@ -185,13 +251,13 @@ export async function applyWebhookEvent(
       publishNotificationAsync({
         eventType: "admin.gateway_event",
         title: `Payment gateway · ${event.type}`,
-        body: `${providerName} processed ${event.type} for profile ${event.profileId}.`,
+        body: `${providerName} processed ${event.type} for profile ${profileId}.`,
         organizationId: orgId,
-        businessProfileId: event.profileId,
+        businessProfileId: profileId,
         href: "/admin/payments",
         entityType: "gateway_event",
-        entityId: event.externalSubscriptionId || String(event.profileId),
-        dedupeKey: `gw:${providerName}:${event.type}:${event.externalSubscriptionId || event.profileId}`,
+        entityId: event.externalSubscriptionId || String(profileId),
+        dedupeKey: `gw:${providerName}:${event.type}:${event.externalSubscriptionId || profileId}`,
         expiresInHours: 168,
       });
     }
@@ -200,7 +266,7 @@ export async function applyWebhookEvent(
   return {
     received: true,
     type: event.type,
-    profileId: event.profileId,
+    profileId,
     provider: provider.name,
   };
 }

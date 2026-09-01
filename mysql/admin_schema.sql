@@ -214,7 +214,8 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
   occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_pay_txn_org (organization_id, occurred_at),
-  KEY idx_pay_txn_status (status, occurred_at)
+  KEY idx_pay_txn_status (status, occurred_at),
+  UNIQUE KEY uq_pay_txn_provider_ext_st (provider, external_id, type, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS billing_invoices (

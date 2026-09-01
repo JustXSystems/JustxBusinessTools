@@ -257,11 +257,12 @@ function parseToolIdsJson(raw: unknown): string[] {
   return [];
 }
 
-export async function completeCheckoutIntent(sessionId: string): Promise<{
+export async function getCheckoutIntent(sessionId: string): Promise<{
   orgId: number;
   profileId: number;
   toolIds: string[];
   amountInr: number;
+  status: string;
 } | null> {
   await ensureSubscriptionItemsSchema();
   const [rows] = await pool.query(
@@ -271,8 +272,24 @@ export async function completeCheckoutIntent(sessionId: string): Promise<{
   );
   const row = Array.isArray(rows) ? (rows[0] as Record<string, unknown> | undefined) : undefined;
   if (!row) return null;
-  const toolIds = parseToolIdsJson(row.tool_ids);
-  if (String(row.status) !== "completed") {
+  return {
+    orgId: Number(row.organization_id),
+    profileId: Number(row.profile_id),
+    toolIds: parseToolIdsJson(row.tool_ids),
+    amountInr: Number(row.amount_inr ?? 0),
+    status: String(row.status ?? ""),
+  };
+}
+
+export async function completeCheckoutIntent(sessionId: string): Promise<{
+  orgId: number;
+  profileId: number;
+  toolIds: string[];
+  amountInr: number;
+} | null> {
+  const row = await getCheckoutIntent(sessionId);
+  if (!row) return null;
+  if (row.status !== "completed") {
     await pool.query(
       `UPDATE checkout_intents SET status = 'completed', completed_at = CURRENT_TIMESTAMP
        WHERE session_id = :sessionId`,
@@ -280,9 +297,9 @@ export async function completeCheckoutIntent(sessionId: string): Promise<{
     );
   }
   return {
-    orgId: Number(row.organization_id),
-    profileId: Number(row.profile_id),
-    toolIds,
-    amountInr: Number(row.amount_inr ?? 0),
+    orgId: row.orgId,
+    profileId: row.profileId,
+    toolIds: row.toolIds,
+    amountInr: row.amountInr,
   };
 }

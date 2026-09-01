@@ -1,6 +1,6 @@
 /**
  * PM2 process file for production (Hostinger VPS).
- * Apps: justx-jbt-api (:4002) + justx-jbt-web (:3002)
+ * Apps: justx-jbt-api (:4002) + justx-jbt-web (:3002) + justx-jbt-worker (jobs)
  *
  * Usage:
  *   pm2 start ecosystem.config.cjs
@@ -17,8 +17,25 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         WEB_BASE_PATH: "/jbt",
+        JBT_PROCESS_ROLE: "api",
       },
       max_memory_restart: "512M",
+      time: true,
+      autorestart: true,
+    },
+    {
+      name: "justx-jbt-worker",
+      cwd: __dirname,
+      script: "npm",
+      args: "run start:worker -w server",
+      interpreter: "none",
+      env: {
+        NODE_ENV: "production",
+        WEB_BASE_PATH: "/jbt",
+        JBT_PROCESS_ROLE: "worker",
+      },
+      // Artifact PDF retries + renewals — give headroom above API HTTP process
+      max_memory_restart: "768M",
       time: true,
       autorestart: true,
     },

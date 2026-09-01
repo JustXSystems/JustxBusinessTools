@@ -130,6 +130,8 @@ Copy [`.env.example`](../.env.example) → `server/.env`.
 | `TWILIO_*` / `SMS_API_*` | OTP SMS |
 | `DRIVE_TOKEN_SECRET` | Defaults to `JWT_SECRET` |
 | `UPLOAD_DIR` | Local upload path (default `./uploads`) |
+| `FILE_URL_SECRET` | Optional; HMAC for `/api/files` signed URLs (defaults to `JWT_SECRET`) |
+| `JBT_PROCESS_ROLE` | `all` (dev) · `api` · `worker` — production PM2 sets `api` + `worker` |
 
 Generate a secret:
 

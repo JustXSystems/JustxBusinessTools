@@ -6,7 +6,12 @@ import { Router } from "express";
 import { getPlatformBranding } from "../lib/config/branding.js";
 import { getPoweredBy } from "../lib/config/powered-by.js";
 import { getEffectiveConfig } from "../lib/config/effective.js";
-import { localUploadDir, uploadDriver } from "../lib/storage.js";
+import {
+  isPathInsideRoot,
+  localUploadDir,
+  uploadDriver,
+  withFileAccessToken,
+} from "../lib/storage.js";
 
 const router = Router();
 
@@ -42,9 +47,10 @@ async function resolveInstallIconFile(
 
   if (rel.startsWith("/api/files/")) {
     if (uploadDriver() === "s3") return null;
-    const key = rel.replace(/^\/api\/files\//, "");
-    const abs = path.resolve(localUploadDir(), key);
-    if (!abs.startsWith(localUploadDir()) || !existsSync(abs)) return null;
+    const key = rel.replace(/^\/api\/files\//, "").split("?")[0] ?? "";
+    const root = localUploadDir();
+    const abs = path.resolve(root, key);
+    if (!isPathInsideRoot(abs, root) || !existsSync(abs)) return null;
     const ext = path.extname(abs).toLowerCase();
     return { abs, mime: MIME[ext] ?? "image/png" };
   }
@@ -52,7 +58,7 @@ async function resolveInstallIconFile(
   if (rel.startsWith("/icons/")) {
     const abs = path.resolve(webPublicRoot(), rel.replace(/^\//, ""));
     const root = webPublicRoot();
-    if (!abs.startsWith(root) || !existsSync(abs)) return null;
+    if (!isPathInsideRoot(abs, root) || !existsSync(abs)) return null;
     const ext = path.extname(abs).toLowerCase();
     return { abs, mime: MIME[ext] ?? "image/png" };
   }
@@ -67,7 +73,14 @@ router.get("/effective", async (_req, res) => {
 /** Public JustXSystems branding for splash / login (no auth required). */
 router.get("/branding", async (_req, res) => {
   const [branding, poweredBy] = await Promise.all([getPlatformBranding(), getPoweredBy()]);
-  res.json({ branding, poweredBy });
+  res.json({
+    branding: {
+      ...branding,
+      logoUrl: withFileAccessToken(branding.logoUrl) ?? branding.logoUrl,
+      installIconUrl: withFileAccessToken(branding.installIconUrl) ?? branding.installIconUrl,
+    },
+    poweredBy,
+  });
 });
 
 /**

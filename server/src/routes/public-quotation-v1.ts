@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool } from "../db.js";
 import { publishNotificationAsync } from "../lib/notification-publish.js";
+import { withFileAccessToken } from "../lib/storage.js";
 
 const TOOL_ID = "quotationv1";
 const router = Router();
@@ -22,7 +23,11 @@ async function companyForRecord(
 ): Promise<Record<string, unknown>> {
   const snapshot = data.companySnapshot;
   if (snapshot && typeof snapshot === "object") {
-    return snapshot as Record<string, unknown>;
+    const s = { ...(snapshot as Record<string, unknown>) };
+    if (typeof s.logo === "string") {
+      s.logo = withFileAccessToken(s.logo) ?? s.logo;
+    }
+    return s;
   }
   if (!businessProfileId) {
     return {
@@ -60,7 +65,7 @@ async function companyForRecord(
   }
   return {
     name: row.business_name || "Your Company",
-    logo: row.logo_data_url,
+    logo: withFileAccessToken(row.logo_data_url),
     tagline: "",
     address: [row.address_line1, row.address_line2].filter(Boolean).join("\n"),
     state: row.state || "",

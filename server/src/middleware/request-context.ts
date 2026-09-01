@@ -5,6 +5,7 @@ import {
 } from "../lib/artifact-delivery.js";
 import { pool } from "../db.js";
 import { legacyContext, resolveSession, getTokenFromCookie } from "../lib/auth/session.js";
+import { isUnauthenticatedApiPath } from "../lib/public-paths.js";
 import { runWithContext, type RequestContext } from "../lib/request-context.js";
 
 const REQUIRE_AUTH = process.env.REQUIRE_AUTH === "true";
@@ -57,16 +58,7 @@ export function requestContextMiddleware(req: Request, res: Response, next: Next
       runWithContext(agentCtx, () => next());
       return;
     }
-    const publicPath =
-      req.path === "/api/health" ||
-      req.path === "/api/config/branding" ||
-      req.path === "/api/config/install-icon.png" ||
-      req.path === "/api/config/install-icon-meta" ||
-      req.path.startsWith("/api/auth") ||
-      req.path.startsWith("/api/files") ||
-      req.path.startsWith("/api/webhooks") ||
-      req.path === "/api/profile/drive/callback";
-    if (REQUIRE_AUTH && !publicPath) {
+    if (REQUIRE_AUTH && !isUnauthenticatedApiPath(req.path)) {
       res.status(401).json({ error: "Authentication required" });
       return;
     }

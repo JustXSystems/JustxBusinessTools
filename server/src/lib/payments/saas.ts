@@ -2,6 +2,51 @@ import { pool } from "../../db.js";
 import { getActiveOrgId } from "../request-context.js";
 import { orgEqualsSql } from "../platform-admin.js";
 
+let paymentTxnIdempotencyReady: Promise<void> | null = null;
+
+export async function ensurePaymentTxnIdempotency(): Promise<void> {
+  if (!paymentTxnIdempotencyReady) {
+    paymentTxnIdempotencyReady = (async () => {
+      try {
+        await pool.query(
+          `ALTER TABLE payment_transactions
+           ADD UNIQUE KEY uq_pay_txn_provider_ext_st (provider, external_id, type, status)`,
+        );
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        // ER_DUP_KEYNAME / already exists — OK. Duplicate data may block; log once.
+        if (code !== "ER_DUP_KEYNAME" && code !== "ER_CANT_DROP_FIELD_OR_KEY") {
+          console.warn(
+            "[payments] could not add uq_pay_txn_provider_ext_st:",
+            err instanceof Error ? err.message : err,
+          );
+        }
+      }
+    })();
+  }
+  await paymentTxnIdempotencyReady;
+}
+
+/** Returns true if this provider+externalId success charge was already recorded. */
+export async function hasProcessedPaymentEvent(
+  provider: string,
+  externalId: string,
+  type: string,
+): Promise<boolean> {
+  if (!externalId) return false;
+  await ensurePaymentTxnIdempotency();
+  const [rows] = await pool.query(
+    `SELECT id FROM payment_transactions
+     WHERE provider = :provider
+       AND external_id = :externalId
+       AND type = :type
+       AND status = 'success'
+     LIMIT 1`,
+    { provider, externalId, type },
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
+
 export async function getSaasPaymentSummary(days = 90) {
   const orgId = getActiveOrgId();
   const orgSql = orgEqualsSql("organization_id");
@@ -114,22 +159,31 @@ export async function recordSaasTransaction(
   externalId?: string,
   errorCode?: string,
   errorMessage?: string,
-): Promise<void> {
-  await pool.query(
-    `INSERT INTO payment_transactions
-     (organization_id, provider, external_id, type, status, amount_inr, error_code, error_message)
-     VALUES (:orgId, :provider, :externalId, :type, :status, :amount, :errorCode, :errorMessage)`,
-    {
-      orgId,
-      provider,
-      externalId: externalId ?? null,
-      type,
-      status,
-      amount: amountInr,
-      errorCode: errorCode ?? null,
-      errorMessage: errorMessage ?? null,
-    },
-  );
+): Promise<"inserted" | "duplicate"> {
+  await ensurePaymentTxnIdempotency();
+  try {
+    await pool.query(
+      `INSERT INTO payment_transactions
+       (organization_id, provider, external_id, type, status, amount_inr, error_code, error_message)
+       VALUES (:orgId, :provider, :externalId, :type, :status, :amount, :errorCode, :errorMessage)`,
+      {
+        orgId,
+        provider,
+        externalId: externalId ?? null,
+        type,
+        status,
+        amount: amountInr,
+        errorCode: errorCode ?? null,
+        errorMessage: errorMessage ?? null,
+      },
+    );
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === "ER_DUP_ENTRY" && externalId) {
+      return "duplicate";
+    }
+    throw err;
+  }
 
   if (status === "success" && type === "subscription_charge") {
     await pool.query(
@@ -137,4 +191,5 @@ export async function recordSaasTransaction(
       { orgId, mrr: amountInr },
     );
   }
+  return "inserted";
 }

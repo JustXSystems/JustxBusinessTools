@@ -26,6 +26,7 @@ Related docs (do not duplicate full setup here):
 | SSH user | `deploy` |
 | App path | `/var/www/jbt` |
 | API process (PM2) | `justx-jbt-api` → **127.0.0.1:4002** |
+| Worker process (PM2) | `justx-jbt-worker` → background jobs (artifact retry, renewals, analytics) |
 | Web process (PM2) | `justx-jbt-web` → **127.0.0.1:3002** |
 | Reverse proxy | nginx (TLS via certbot) strips `/jbt` for API |
 | Database | MySQL 8 local — DB `justx_systems`, user `justx_user` |
@@ -122,7 +123,7 @@ If curl fails entirely → DNS / nginx / TLS / firewall before blaming the app.
 ssh -i ~/.ssh/jbt_deploy deploy@193.203.161.219
 
 pm2 status
-# justx-jbt-api  and  justx-jbt-web  should be online
+# justx-jbt-api, justx-jbt-web, and justx-jbt-worker should be online
 
 curl -sS http://127.0.0.1:4002/api/health
 curl -sI http://127.0.0.1:3002/jbt
@@ -167,7 +168,7 @@ pm2 reload ecosystem.config.cjs --update-env
 pm2 save
 ```
 
-Memory cap: each app restarts at **512M** (`ecosystem.config.cjs`). Recurring restarts → check memory leaks / large PDF payloads / runaway jobs.
+Memory cap: API/web restart at **512M**; worker at **768M** (`ecosystem.config.cjs`). Recurring restarts → check memory leaks / large PDF payloads / runaway jobs.
 
 ### Deploy (normal)
 
@@ -245,10 +246,11 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 
 | Job | Env | Default behavior |
 |-----|-----|------------------|
-| Artifact delivery retry | `ARTIFACT_RETRY_MS` | ~60s (min 15s) |
-| Subscription renewal notices | `RENEWAL_NOTICE_INTERVAL_HOURS` | 24h; set `0` to disable |
+| Artifact delivery retry | `ARTIFACT_RETRY_MS` | ~60s (min 15s); runs in **justx-jbt-worker** |
+| Subscription renewal notices | `RENEWAL_NOTICE_INTERVAL_HOURS` | 24h; set `0` to disable; worker process |
 | Renewal window | `RENEWAL_NOTICE_WITHIN_DAYS` | 14 |
-| Analytics rollup | `ANALYTICS_ROLLUP_INTERVAL_HOURS` | Off unless `>0` |
+| Analytics rollup | `ANALYTICS_ROLLUP_INTERVAL_HOURS` | Off unless `>0`; worker process |
+| Process role | `JBT_PROCESS_ROLE` | `api` / `worker` / `all` (dev) — set by PM2 ecosystem |
 
 ---
 
@@ -260,7 +262,7 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 - Google OAuth (`/api/auth/google` → callback)  
 - Phone OTP (`/api/auth/otp/request` + `/verify`) — needs SMS provider (`SMS_PROVIDER`, Twilio, etc.)
 
-Open (unauthenticated) routes include: `/api/health`, branding config, `/api/auth/*`, `/api/files/*`, `/api/webhooks/*`, `/api/public/*`, Drive OAuth callback.
+Open (unauthenticated) routes include: `/api/health`, branding config, `/api/auth/*`, `/api/files/*` (**signed URL or session required**), `/api/webhooks/*`, `/api/public/*`, Drive OAuth callback.
 
 ### Common auth issues
 
@@ -380,7 +382,19 @@ mysql -u justx_user -p -h 127.0.0.1 justx_systems -e "SELECT 1"
 
 Credentials live only in `server/.env` (`DB_*`).
 
-### Backup (recommended runbook)
+### Backup (automated)
+
+Script: [`scripts/backup-jbt.sh`](../scripts/backup-jbt.sh) — MySQL dump + local uploads tarball, retention via `BACKUP_RETENTION_DAYS` (default 14).
+
+```bash
+chmod +x /var/www/jbt/scripts/backup-jbt.sh
+mkdir -p ~/backups
+# Cron as deploy (daily 02:15):
+crontab -e
+# 15 2 * * * /var/www/jbt/scripts/backup-jbt.sh >> /home/deploy/backups/backup.log 2>&1
+```
+
+Manual one-shot:
 
 ```bash
 # As deploy or root — store off-box
@@ -394,6 +408,16 @@ Also back up if using local uploads:
 ```bash
 tar -czf ~/backups/jbt_uploads_$DATE.tgz -C /var/www/jbt/server uploads
 # path may vary with UPLOAD_DIR / cwd — confirm with `pm2 show justx-jbt-api`
+```
+
+### Health monitor (alerting)
+
+Script: [`scripts/health-monitor.sh`](../scripts/health-monitor.sh) — probes public health + UI; optional `ALERT_WEBHOOK_URL` Slack/Discord POST; checks PM2 apps when run on the VPS.
+
+```bash
+chmod +x /var/www/jbt/scripts/health-monitor.sh
+# Every 5 minutes:
+# */5 * * * * ALERT_WEBHOOK_URL='https://hooks.example/...' /var/www/jbt/scripts/health-monitor.sh >> /home/deploy/backups/health.log 2>&1
 ```
 
 ### Restore (SEV-1 data loss — coordinate)
@@ -478,13 +502,14 @@ Clear old backups if safe; investigate upload growth; consider S3 for logos if l
 **Daily (or on-call shift start)**
 
 - [ ] https://justxsystems.com/jbt/api/health → `ok`  
-- [ ] `pm2 status` — both online, low restart count  
+- [ ] `pm2 status` — api, web, **worker** online, low restart count  
 - [ ] Quick glance at `pm2 logs` for repeated errors  
 - [ ] Last GitHub **Deploy** workflow green (if releases shipped)
+- [ ] `health-monitor.sh` cron green (if installed)
 
 **Weekly**
 
-- [ ] MySQL dump succeeded and copied off-box  
+- [ ] MySQL dump / `backup-jbt.sh` succeeded and copied off-box  
 - [ ] Disk usage & SSL expiry (`certbot certificates`)  
 - [ ] Spot-check test PDF → Drive on a JustX-owned profile  
 - [ ] Razorpay webhook success rate (if live)  
@@ -509,6 +534,7 @@ Clear old backups if safe; investigate upload growth; consider S3 for logos if l
 | * | `/api/admin/*` | Admin role | Platform/org admin |
 | * | `/api/profile/drive/*` | Owner for connect | Company Drive OAuth |
 | * | `/api/artifacts/*` | Yes | Artifact status / delivery |
+| * | `/api/files/*` | Signed URL **or** session | Local upload GET |
 | * | `/api/webhooks/*` | Provider secret | Payments / external |
 | * | `/api/public/quotation-v1/*` | Public token | Shared quotation links |
 
@@ -576,9 +602,11 @@ pm2 logs justx-jbt-api --lines 80
 ### Safe commands
 
 ```bash
-pm2 restart justx-jbt-api justx-jbt-web
+pm2 restart justx-jbt-api justx-jbt-web justx-jbt-worker
 pm2 reload ecosystem.config.cjs --update-env && pm2 save
 ./scripts/vps-deploy.sh          # pulls origin/master
+./scripts/backup-jbt.sh          # DB + uploads
+./scripts/health-monitor.sh      # public health probe
 sudo nginx -t && sudo systemctl reload nginx
 mysql -u justx_user -p -h 127.0.0.1 justx_systems -e "SELECT 1"
 ```

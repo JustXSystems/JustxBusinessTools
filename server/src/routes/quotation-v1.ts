@@ -14,6 +14,7 @@ import {
 import { requireWriteAccess } from "../middleware/require-write.js";
 import { publishNotificationAsync } from "../lib/notification-publish.js";
 import { notifyDocumentOutbound } from "../lib/notification-billing.js";
+import { withFileAccessToken } from "../lib/storage.js";
 
 const TOOL_ID = "quotationv1";
 const COMPANY_KEY = "quotation_v1_company";
@@ -111,7 +112,7 @@ async function loadActiveBusinessBrand(): Promise<{
   if (!row) return null;
   return {
     businessName: row.business_name,
-    logo: row.logo_data_url,
+    logo: withFileAccessToken(row.logo_data_url),
     addressLine1: row.address_line1,
     addressLine2: row.address_line2,
     state: row.state,

@@ -1,6 +1,7 @@
-import { createHash, createHmac, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { getJwtSecret } from "./env.js";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const ALLOWED = new Map([
@@ -11,6 +12,9 @@ const ALLOWED = new Map([
   ["image/gif", "gif"],
 ]);
 
+/** Default signed URL lifetime for logos returned to browsers (7 days). */
+export const DEFAULT_FILE_URL_TTL_SEC = 7 * 24 * 3600;
+
 export function uploadDriver(): "local" | "s3" {
   const raw = (process.env.UPLOAD_DRIVER ?? "local").trim().toLowerCase();
   return raw === "s3" || raw === "cloud" ? "s3" : "local";
@@ -18,6 +22,17 @@ export function uploadDriver(): "local" | "s3" {
 
 export function localUploadDir(): string {
   return path.resolve(process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads"));
+}
+
+/** True when abs is exactly root or a file/dir under root (sep-safe). */
+export function isPathInsideRoot(absPath: string, rootPath: string): boolean {
+  const root = path.resolve(rootPath);
+  const abs = path.resolve(absPath);
+  return abs === root || abs.startsWith(root + path.sep);
+}
+
+function fileSigningSecret(): string {
+  return process.env.FILE_URL_SECRET?.trim() || getJwtSecret();
 }
 
 function publicBase(): string {
@@ -30,6 +45,7 @@ function publicBase(): string {
   return raw;
 }
 
+/** Stable storage URL without access token (persist this in DB). */
 export function publicFileUrl(key: string): string {
   if (uploadDriver() === "s3") {
     const base = (process.env.S3_PUBLIC_URL ?? "").replace(/\/$/, "");
@@ -40,6 +56,79 @@ export function publicFileUrl(key: string): string {
   // Always store/serve under /api/files/...; prefix with /jbt via API_PUBLIC_URL when set.
   const rel = `/api/files/${key}`;
   return base ? `${base}${rel}` : rel;
+}
+
+export function extractLocalFileKey(urlOrPath: string): string | null {
+  const raw = String(urlOrPath ?? "").trim();
+  if (!raw) return null;
+  try {
+    const pathOnly = raw.includes("://")
+      ? new URL(raw).pathname
+      : raw.split("?")[0] ?? raw;
+    const cleaned = pathOnly.replace(/^\/jbt(?=\/)/, "");
+    const m = /^\/api\/files\/(.+)$/.exec(cleaned);
+    if (!m) return null;
+    const key = decodeURIComponent(m[1]);
+    if (!key || key.includes("..")) return null;
+    return key;
+  } catch {
+    return null;
+  }
+}
+
+function signFileKey(key: string, expiresAtSec: number): string {
+  return createHmac("sha256", fileSigningSecret())
+    .update(`${key}.${expiresAtSec}`, "utf8")
+    .digest("base64url");
+}
+
+export function verifyFileAccessToken(
+  key: string,
+  expRaw: string | undefined,
+  sigRaw: string | undefined,
+): boolean {
+  if (!key || !expRaw || !sigRaw) return false;
+  const expiresAtSec = Number(expRaw);
+  if (!Number.isFinite(expiresAtSec) || expiresAtSec * 1000 < Date.now()) return false;
+  const expected = signFileKey(key, expiresAtSec);
+  const got = String(sigRaw);
+  try {
+    const a = Buffer.from(expected);
+    const b = Buffer.from(got);
+    return a.length === b.length && timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+/** Strip exp/sig so clients cannot poison stored URLs with foreign tokens. */
+export function canonicalizeStoredImageUrl(value: string): string {
+  const trimmed = value.trim();
+  const key = extractLocalFileKey(trimmed);
+  if (!key) {
+    // Drop query string from absolute non-file URLs we still accept as "stored"
+    const q = trimmed.indexOf("?");
+    return q >= 0 && !trimmed.startsWith("data:") ? trimmed.slice(0, q) : trimmed;
+  }
+  return publicFileUrl(key);
+}
+
+/** Attach expiring HMAC for browser/public GETs of local uploads. */
+export function withFileAccessToken(
+  urlOrPath: string | null | undefined,
+  ttlSec: number = DEFAULT_FILE_URL_TTL_SEC,
+): string | null {
+  if (urlOrPath == null) return null;
+  const trimmed = String(urlOrPath).trim();
+  if (!trimmed) return null;
+  if (uploadDriver() === "s3") return trimmed;
+  const key = extractLocalFileKey(trimmed);
+  if (!key) return trimmed;
+  const expiresAtSec = Math.floor(Date.now() / 1000) + Math.max(60, ttlSec);
+  const sig = signFileKey(key, expiresAtSec);
+  const base = publicFileUrl(key);
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}exp=${expiresAtSec}&sig=${sig}`;
 }
 
 function parseDataUrl(input: string): { mime: string; buffer: Buffer } {
@@ -58,12 +147,14 @@ function parseDataUrl(input: string): { mime: string; buffer: Buffer } {
 }
 
 export function isStoredImageUrl(value: string): boolean {
+  const v = value.trim();
   return (
-    value.startsWith("/api/files/") ||
-    value.startsWith("/jbt/api/files/") ||
-    value.includes("/api/files/") ||
-    value.startsWith("http://") ||
-    value.startsWith("https://")
+    Boolean(extractLocalFileKey(v)) ||
+    v.startsWith("/api/files/") ||
+    v.startsWith("/jbt/api/files/") ||
+    v.includes("/api/files/") ||
+    v.startsWith("http://") ||
+    v.startsWith("https://")
   );
 }
 
@@ -74,7 +165,7 @@ export async function saveImageUpload(
   if (!input) return null;
   const trimmed = input.trim();
   if (!trimmed) return null;
-  if (isStoredImageUrl(trimmed)) return trimmed;
+  if (isStoredImageUrl(trimmed)) return canonicalizeStoredImageUrl(trimmed);
 
   const { mime, buffer } = parseDataUrl(trimmed);
   const ext = ALLOWED.get(mime) ?? "png";

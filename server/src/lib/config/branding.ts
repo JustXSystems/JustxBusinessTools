@@ -1,5 +1,5 @@
 import { pool } from "../../db.js";
-import { saveImageUpload } from "../storage.js";
+import { canonicalizeStoredImageUrl, saveImageUpload, withFileAccessToken } from "../storage.js";
 import {
   parseSplashAnimation,
   parseSplashIntensity,
@@ -139,7 +139,7 @@ export async function savePlatformBranding(input: {
     const saved = await saveImageUpload(String(input.logo), "platform");
     if (saved) logoUrl = saved;
   } else if (input.logoUrl != null && String(input.logoUrl).trim()) {
-    logoUrl = String(input.logoUrl).trim();
+    logoUrl = canonicalizeStoredImageUrl(String(input.logoUrl).trim());
   }
 
   if (input.clearInstallIcon) {
@@ -153,7 +153,7 @@ export async function savePlatformBranding(input: {
       const saved = await saveImageUpload(nextIcon, "platform-install");
       if (saved) installIconUrl = saved;
     } else {
-      installIconUrl = nextIcon;
+      installIconUrl = canonicalizeStoredImageUrl(nextIcon);
     }
   }
 
@@ -196,5 +196,9 @@ export async function savePlatformBranding(input: {
     { key: KEY, value: JSON.stringify(next) },
   );
 
-  return next;
+  return {
+    ...next,
+    logoUrl: withFileAccessToken(next.logoUrl) ?? next.logoUrl,
+    installIconUrl: withFileAccessToken(next.installIconUrl) ?? next.installIconUrl,
+  };
 }

@@ -37,6 +37,8 @@ import { ensureHomeToolIdsColumn } from "./lib/home-tools.js";
 import { ensurePlatformAdminSchema } from "./lib/platform-admin.js";
 import { ensureNotificationSchema } from "./lib/notification-schema.js";
 import { isProductionRuntime, validateServerEnv } from "./lib/env.js";
+import { isUnauthenticatedApiPath } from "./lib/public-paths.js";
+import { shouldRunBackgroundJobsInApi } from "./lib/process-role.js";
 import { pool } from "./db.js";
 
 try {
@@ -57,8 +59,6 @@ void Promise.all([
 ]).catch((err) => {
   console.warn("Startup schema setup failed", err);
 });
-startArtifactDispatchScheduler();
-
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
 
@@ -83,17 +83,7 @@ app.use((_req, res, next) => {
 app.use(requestContextMiddleware);
 
 app.use((req, res, next) => {
-  const open =
-    req.path === "/api/health" ||
-    req.path === "/api/config/branding" ||
-    req.path === "/api/config/install-icon.png" ||
-    req.path === "/api/config/install-icon-meta" ||
-    req.path.startsWith("/api/auth") ||
-    req.path.startsWith("/api/files") ||
-    req.path.startsWith("/api/webhooks") ||
-    req.path.startsWith("/api/public/") ||
-    req.path === "/api/profile/drive/callback";
-  if (open) {
+  if (isUnauthenticatedApiPath(req.path)) {
     next();
     return;
   }
@@ -155,6 +145,11 @@ app.use(
 
 app.listen(port, () => {
   console.log(`JustXSystems API running on http://localhost:${port}`);
-  startAnalyticsRollupScheduler();
-  startRenewalNoticeScheduler();
+  if (shouldRunBackgroundJobsInApi()) {
+    startArtifactDispatchScheduler();
+    startAnalyticsRollupScheduler();
+    startRenewalNoticeScheduler();
+  } else {
+    console.log("[jobs] background schedulers deferred to justx-jbt-worker");
+  }
 });
