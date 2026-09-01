@@ -3,11 +3,13 @@
 **Production URL:** https://justxsystems.com/jbt/  
 **OAuth owner account:** `justxsystems@gmail.com`
 
-This is the **single product/setup guide**. VPS deploy: [`DEPLOY.md`](DEPLOY.md).
+This is the **single product/setup guide**. VPS deploy: [`DEPLOY.md`](DEPLOY.md).  
+Production support / on-call: [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md).
 
 | Who | Section |
 |-----|---------|
 | JustX engineer / admin | [Local development](#local-development) · [Production deploy](#production-deploy) · [Google OAuth](#google-oauth-once) · [Environment reference](#environment-reference) |
+| JustX on-call / ops | [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md) |
 | Customer company Owner | [Client companies](#client-companies-part-b) |
 
 ---

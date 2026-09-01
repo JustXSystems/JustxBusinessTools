@@ -6,7 +6,8 @@
 
 This is the supported deploy path. The old multi-script `deploy/*.sh` toolkit is **retired**.
 
-Product/OAuth/env details: [`SETUP.md`](SETUP.md).
+Product/OAuth/env details: [`SETUP.md`](SETUP.md).  
+On-call / incident runbooks: [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md).
 
 ---
 
