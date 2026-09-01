@@ -43,6 +43,7 @@ else
 fi
 
 SQL_OUT="$BACKUP_ROOT/justx_systems_${DATE}.sql.gz"
+UP_OUT=""
 echo "==> Dumping MySQL $DB_NAME → $SQL_OUT"
 # --no-tablespaces: justx_user typically lacks PROCESS (MySQL 8 tablespace dump error)
 MYSQL_PWD="$DB_PASSWORD" mysqldump \
@@ -61,6 +62,25 @@ fi
 echo "==> Pruning backups older than ${RETENTION_DAYS}d in $BACKUP_ROOT"
 find "$BACKUP_ROOT" -type f \( -name 'justx_systems_*.sql.gz' -o -name 'jbt_uploads_*.tgz' \) \
   -mtime "+${RETENTION_DAYS}" -print -delete || true
+
+# Optional off-box copy (rsync / scp / custom). Examples in docs/PRODUCTION_SUPPORT.md
+# BACKUP_OFFBOX_CMD='rsync -avz %s backup@remote:/jbt/'
+# BACKUP_OFFBOX_CMD='aws s3 cp %s s3://bucket/jbt-backups/'
+if [[ -n "${BACKUP_OFFBOX_CMD:-}" ]]; then
+  echo "==> Off-box copy via BACKUP_OFFBOX_CMD"
+  for f in "$SQL_OUT" "$UP_OUT"; do
+    [[ -n "$f" && -f "$f" ]] || continue
+    # shellcheck disable=SC2059
+    cmd="$(printf "$BACKUP_OFFBOX_CMD" "$f")"
+    echo "    $cmd"
+    eval "$cmd"
+  done
+elif [[ -n "${BACKUP_RSYNC_TARGET:-}" ]]; then
+  echo "==> Off-box rsync → $BACKUP_RSYNC_TARGET"
+  FILES=("$SQL_OUT")
+  [[ -n "$UP_OUT" && -f "$UP_OUT" ]] && FILES+=("$UP_OUT")
+  rsync -avz --chmod=Fu=r,Fgo= "${FILES[@]}" "$BACKUP_RSYNC_TARGET"/
+fi
 
 echo "==> Backup OK"
 ls -lh "$BACKUP_ROOT"/justx_systems_"${DATE}"* "$BACKUP_ROOT"/jbt_uploads_"${DATE}"* 2>/dev/null || true

@@ -36,6 +36,10 @@ router.post("/plans", async (_req, res) => {
 });
 
 router.put("/plans/:id", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to edit catalog plans" });
+    return;
+  }
   await ensureSubscriptionPlanSchema();
   const id = req.params.id;
   if (id !== "free" && id !== "pro") {

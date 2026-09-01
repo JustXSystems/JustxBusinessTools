@@ -51,6 +51,9 @@ export NEXT_PUBLIC_BASE_PATH="$BASE_PATH"
 export WEB_BASE_PATH="$BASE_PATH"
 npm run build -w web
 
+echo "==> Apply pending DB migrations"
+npm run db:migrate -w server || echo "WARN: migrations failed — check logs / mysql/migrations"
+
 echo "==> PM2 reload"
 if pm2 describe justx-jbt-api >/dev/null 2>&1; then
   pm2 reload ecosystem.config.cjs --update-env

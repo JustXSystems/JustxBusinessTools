@@ -510,7 +510,7 @@ router.post("/", async (req, res) => {
       return;
     }
 
-    await pool.query(
+    const [upd] = await pool.query(
       `UPDATE document_records SET
          doc_no = :docNo, doc_date = :docDate,
          party_name = :partyName, grand_total = :grandTotal, status = :status, data = :data
@@ -527,6 +527,10 @@ router.post("/", async (req, res) => {
         data: JSON.stringify(payload),
       },
     );
+    if (Number((upd as { affectedRows?: number }).affectedRows ?? 0) < 1) {
+      res.status(404).json({ error: "Survey not found" });
+      return;
+    }
     await appendHistory({
       id,
       reportNo,
@@ -560,7 +564,11 @@ router.post("/", async (req, res) => {
         expiresInHours: 168,
       });
     }
-    const [rows] = await pool.query(`SELECT * FROM document_records WHERE id = :id`, { id });
+    const [rows] = await pool.query(
+      `SELECT * FROM document_records
+       WHERE id = :id AND business_profile_id = :profileId AND tool_id = :toolId`,
+      { id, profileId: getActiveProfileId(), toolId: TOOL_ID },
+    );
     res.json({ survey: mapRow((Array.isArray(rows) ? rows[0] : {}) as Record<string, unknown>) });
   } catch (err) {
     if (err instanceof LimitReachedError) {

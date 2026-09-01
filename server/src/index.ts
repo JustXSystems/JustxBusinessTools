@@ -39,6 +39,8 @@ import { ensureNotificationSchema } from "./lib/notification-schema.js";
 import { isProductionRuntime, validateServerEnv } from "./lib/env.js";
 import { isUnauthenticatedApiPath } from "./lib/public-paths.js";
 import { shouldRunBackgroundJobsInApi } from "./lib/process-role.js";
+import { rateLimit } from "./middleware/rate-limit.js";
+import { runPendingMigrations } from "./lib/migrations.js";
 import { pool } from "./db.js";
 
 try {
@@ -56,6 +58,7 @@ void Promise.all([
   ensureNotificationSchema(),
   ensureArtifactDeliverySchema(),
   ensureProfileDriveSchema(),
+  runPendingMigrations(),
 ]).catch((err) => {
   console.warn("Startup schema setup failed", err);
 });
@@ -82,6 +85,22 @@ app.use((_req, res, next) => {
 });
 app.use(requestContextMiddleware);
 
+const authRateLimit = rateLimit({
+  name: "auth",
+  windowMs: 15 * 60_000,
+  max: Number(process.env.RATE_LIMIT_AUTH_MAX ?? 60),
+});
+const webhookRateLimit = rateLimit({
+  name: "webhooks",
+  windowMs: 60_000,
+  max: Number(process.env.RATE_LIMIT_WEBHOOK_MAX ?? 120),
+});
+const publicQuoteRateLimit = rateLimit({
+  name: "public-quote",
+  windowMs: 60_000,
+  max: Number(process.env.RATE_LIMIT_PUBLIC_QUOTE_MAX ?? 60),
+});
+
 app.use((req, res, next) => {
   if (isUnauthenticatedApiPath(req.path)) {
     next();
@@ -105,7 +124,7 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authRateLimit, authRouter);
 app.use("/api/files", filesRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/analytics", analyticsRouter);
@@ -122,8 +141,8 @@ app.use("/api/sequences", sequencesRouter);
 app.use("/api/tools", toolsRouter);
 app.use("/api/stats", statsRouter);
 app.use("/api/subscription", subscriptionRouter);
-app.use("/api/webhooks", webhooksRouter);
-app.use("/api/public/quotation-v1", publicQuotationV1Router);
+app.use("/api/webhooks", webhookRateLimit, webhooksRouter);
+app.use("/api/public/quotation-v1", publicQuoteRateLimit, publicQuotationV1Router);
 app.use("/api/quotation-v1", quotationV1Router);
 app.use("/api/site-survey-v1", siteSurveyV1Router);
 app.use("/api/artifacts", artifactsRouter);

@@ -1,6 +1,6 @@
 import itemTemplatesJson from "./item-templates.json";
 import { buildTerms, CATEGORY_ENGAGEMENTS } from "./catalog";
-import { todayISO, uid } from "./compute";
+import { newApprovalToken, todayISO, uid } from "./compute";
 import type {
   CategoryKey,
   EngagementKey,
@@ -73,7 +73,7 @@ export function newQuotationDraft(
     gstOverride: { mode: "manual", cgst: 0, sgst: 0, igst: null },
     createdAt: new Date().toISOString(),
     history: [{ ts: new Date().toISOString(), event: "Draft created" }],
-    approvalToken: uid() + uid(),
+    approvalToken: newApprovalToken(),
     financeSent: false,
   };
 }

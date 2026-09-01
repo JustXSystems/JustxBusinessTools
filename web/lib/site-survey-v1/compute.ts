@@ -9,7 +9,13 @@ import type {
 } from "./types";
 
 export function uid(): string {
-  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+  const bytes = new Uint8Array(10);
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export function todayISO(): string {

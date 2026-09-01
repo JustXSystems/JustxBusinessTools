@@ -11,6 +11,7 @@
     "test": "vitest run",
     "db:seed": "tsx scripts/seed-admin.ts",
     "db:seed:tools": "tsx scripts/seed-tool-definitions.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
     "analytics:rollup": "tsx scripts/rollup-analytics.ts"
   },
   "dependencies": {

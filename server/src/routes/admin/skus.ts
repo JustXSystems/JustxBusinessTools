@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { logAudit } from "../../lib/audit.js";
 import { getActiveOrgId } from "../../lib/request-context.js";
+import { isPlatformAdmin } from "../../lib/platform-admin.js";
 import {
   getToolSku,
   listToolSkus,
@@ -34,6 +35,10 @@ router.get("/", async (_req, res) => {
 });
 
 router.post("/", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to manage SKUs" });
+    return;
+  }
   const toolId = String(req.body?.toolId ?? req.body?.id ?? "").trim();
   const name = String(req.body?.name ?? "").trim();
   if (!toolId || !name) {
@@ -64,6 +69,10 @@ router.get("/bundles", async (_req, res) => {
 });
 
 router.post("/bundles", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to manage bundles" });
+    return;
+  }
   const bundle = await upsertProductBundle({
     id: String(req.body?.id ?? ""),
     name: String(req.body?.name ?? ""),
@@ -81,6 +90,10 @@ router.post("/bundles", async (req, res) => {
 });
 
 router.put("/bundles/:id", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to manage bundles" });
+    return;
+  }
   const bundle = await upsertProductBundle({
     id: req.params.id,
     name: String(req.body?.name ?? req.params.id),
@@ -98,6 +111,10 @@ router.put("/bundles/:id", async (req, res) => {
 });
 
 router.delete("/bundles/:id", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to manage bundles" });
+    return;
+  }
   await deleteProductBundle(req.params.id);
   await logAudit("bundle.delete", "product_bundle", req.params.id, undefined, req.ip);
   res.json({ ok: true });
@@ -196,6 +213,10 @@ router.post("/revoke", async (req, res) => {
 });
 
 router.put("/:toolId", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to manage SKUs" });
+    return;
+  }
   if (req.params.toolId === "bundles" || req.params.toolId === "grant") {
     res.status(404).json({ error: "Not found" });
     return;

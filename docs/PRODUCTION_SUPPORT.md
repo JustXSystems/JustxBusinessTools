@@ -386,13 +386,30 @@ Credentials live only in `server/.env` (`DB_*`).
 
 Script: [`scripts/backup-jbt.sh`](../scripts/backup-jbt.sh) — MySQL dump + local uploads tarball, retention via `BACKUP_RETENTION_DAYS` (default 14).
 
+**Install crons (backup + health) once on the VPS:**
+
 ```bash
-chmod +x /var/www/jbt/scripts/backup-jbt.sh
+chmod +x /var/www/jbt/scripts/*.sh
 mkdir -p ~/backups
-# Cron as deploy (daily 02:15):
-crontab -e
-# 15 2 * * * /var/www/jbt/scripts/backup-jbt.sh >> /home/deploy/backups/backup.log 2>&1
+# Optional off-box + Slack/Discord alerts:
+# export BACKUP_RSYNC_TARGET='backup@otherhost:/var/backups/jbt/'
+# export ALERT_WEBHOOK_URL='https://hooks.example/...'
+/var/www/jbt/scripts/install-ops-cron.sh
 ```
+
+Manual cron entries (if not using the installer):
+
+```bash
+# 15 2 * * * /var/www/jbt/scripts/backup-jbt.sh >> /home/deploy/backups/backup.log 2>&1
+# */5 * * * * ALERT_WEBHOOK_URL='...' /var/www/jbt/scripts/health-monitor.sh >> /home/deploy/backups/health.log 2>&1
+```
+
+**Off-box copy** (pick one; set before cron installer or in the crontab env):
+
+| Env | Example |
+|-----|---------|
+| `BACKUP_RSYNC_TARGET` | `backup@192.0.2.10:/jbt/` |
+| `BACKUP_OFFBOX_CMD` | `aws s3 cp %s s3://my-bucket/jbt/` (`%s` = file path) |
 
 Manual one-shot:
 
@@ -411,15 +428,22 @@ tar -czf ~/backups/jbt_uploads_$DATE.tgz -C /var/www/jbt/server uploads
 # path may vary with UPLOAD_DIR / cwd — confirm with `pm2 show justx-jbt-api`
 ```
 
+### Schema migrations
+
+Versioned SQL lives in [`mysql/migrations/`](../mysql/migrations/). The API applies pending files on startup; deploy also runs `npm run db:migrate -w server`.
+
+```bash
+# Manual
+cd /var/www/jbt && npm run db:migrate -w server
+# or
+./scripts/db-migrate.sh
+```
+
 ### Health monitor (alerting)
 
 Script: [`scripts/health-monitor.sh`](../scripts/health-monitor.sh) — probes public health + UI; optional `ALERT_WEBHOOK_URL` Slack/Discord POST; checks PM2 apps when run on the VPS.
 
-```bash
-chmod +x /var/www/jbt/scripts/health-monitor.sh
-# Every 5 minutes:
-# */5 * * * * ALERT_WEBHOOK_URL='https://hooks.example/...' /var/www/jbt/scripts/health-monitor.sh >> /home/deploy/backups/health.log 2>&1
-```
+Prefer `install-ops-cron.sh` (above) over hand-editing crontab.
 
 ### Restore (SEV-1 data loss — coordinate)
 

@@ -176,8 +176,24 @@ export function sanitizeNumStr(raw: string): string {
   return v;
 }
 
+function randomHex(byteLength: number): string {
+  const bytes = new Uint8Array(byteLength);
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < byteLength; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Short opaque id for draft/item rows (not security-sensitive). */
 export function uid(): string {
-  return Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
+  return randomHex(8);
+}
+
+/** High-entropy public share / approval token (unguessable). */
+export function newApprovalToken(): string {
+  return randomHex(24);
 }
 
 export function todayISO(): string {

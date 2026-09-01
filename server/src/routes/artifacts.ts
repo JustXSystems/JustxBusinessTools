@@ -420,9 +420,10 @@ router.post("/:id/ack", requireWriteAccess, async (req, res) => {
        attempt_count = attempt_count + 1,
        browser_fallback_at = IF(:browserFallback, COALESCE(browser_fallback_at, NOW()), browser_fallback_at),
        synced_at = IF(:isSynced, COALESCE(synced_at, NOW()), synced_at)
-     WHERE id = :id`,
+     WHERE id = :id AND business_profile_id = :profileId`,
     {
       id: row.id,
+      profileId: auth.businessProfileId,
       status: nextStatus,
       channel: channel || null,
       destinationPath,
@@ -473,8 +474,9 @@ router.post("/:id/retry", requireWriteAccess, async (req, res) => {
     return;
   }
   await pool.query(
-    `UPDATE artifact_deliveries SET sync_status = 'pending', last_error = NULL WHERE id = :id`,
-    { id: row.id },
+    `UPDATE artifact_deliveries SET sync_status = 'pending', last_error = NULL
+     WHERE id = :id AND business_profile_id = :profileId`,
+    { id: row.id, profileId: getActiveProfileId() },
   );
   await logArtifactEvent({
     artifactId: row.id,

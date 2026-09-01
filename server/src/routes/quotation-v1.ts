@@ -524,7 +524,7 @@ router.post("/", async (req, res) => {
       return;
     }
 
-    await pool.query(
+    const [upd] = await pool.query(
       `UPDATE document_records SET
          doc_no = :docNo, doc_date = :docDate, extra_date = :extraDate,
          party_name = :partyName, grand_total = :grandTotal, status = :status, data = :data
@@ -542,6 +542,10 @@ router.post("/", async (req, res) => {
         data: JSON.stringify(payload),
       },
     );
+    if (Number((upd as { affectedRows?: number }).affectedRows ?? 0) < 1) {
+      res.status(404).json({ error: "Quotation not found" });
+      return;
+    }
     await appendHistory(payload, grandTotal);
     await logAudit("quotationv1.update", "document", id, { quoteNo }, req.ip);
     if (status === "submitted") {
@@ -570,7 +574,11 @@ router.post("/", async (req, res) => {
         expiresInHours: 336,
       });
     }
-    const [rows] = await pool.query(`SELECT * FROM document_records WHERE id = :id`, { id });
+    const [rows] = await pool.query(
+      `SELECT * FROM document_records
+       WHERE id = :id AND business_profile_id = :profileId AND tool_id = :toolId`,
+      { id, profileId: getActiveProfileId(), toolId: TOOL_ID },
+    );
     res.json({ quotation: mapRow((Array.isArray(rows) ? rows[0] : {}) as Record<string, unknown>) });
   } catch (err) {
     if (err instanceof LimitReachedError) {

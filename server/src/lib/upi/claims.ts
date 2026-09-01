@@ -6,6 +6,8 @@ import { parseToolIds } from "../tool-skus.js";
 import { ensureUpiSchema } from "./config.js";
 import { notifyClaimDecision, notifyClaimSubmitted } from "./notify.js";
 import { publishNotification } from "../notification-publish.js";
+import { getActiveOrgId } from "../request-context.js";
+import { isPlatformAdmin, orgEqualsSql, orgScopeParams } from "../platform-admin.js";
 
 export type UpiClaim = {
   id: number;
@@ -56,9 +58,10 @@ export async function listClaims(status?: string): Promise<UpiClaim[]> {
   const filter = status && status !== "all" ? status : "";
   const [rows] = await pool.query(
     `SELECT * FROM upi_payment_claims
-     WHERE (:status = '' OR status = :status)
+     WHERE ${orgEqualsSql("organization_id")}
+       AND (:status = '' OR status = :status)
      ORDER BY created_at DESC LIMIT 200`,
-    { status: filter },
+    { status: filter, ...orgScopeParams() },
   );
   return (Array.isArray(rows) ? rows : []).map((row) => mapClaim(row as Record<string, unknown>));
 }
@@ -161,7 +164,12 @@ export async function createClaim(input: {
 }
 
 export async function getClaim(id: number): Promise<UpiClaim | null> {
-  const [rows] = await pool.query(`SELECT * FROM upi_payment_claims WHERE id = :id`, { id });
+  const [rows] = await pool.query(
+    `SELECT * FROM upi_payment_claims
+     WHERE id = :id AND ${orgEqualsSql("organization_id")}
+     LIMIT 1`,
+    { id, ...orgScopeParams() },
+  );
   const row = Array.isArray(rows) ? rows[0] : null;
   return row ? mapClaim(row as Record<string, unknown>) : null;
 }
@@ -178,6 +186,9 @@ export async function reviewClaim(
   if (!claim) {
     throw Object.assign(new Error("Claim not found"), { status: 404 });
   }
+  if (!isPlatformAdmin() && claim.organizationId !== getActiveOrgId()) {
+    throw Object.assign(new Error("Claim not found"), { status: 404 });
+  }
   if (claim.status !== "pending") {
     throw Object.assign(new Error("This claim was already reviewed"), { status: 400 });
   }
@@ -185,8 +196,8 @@ export async function reviewClaim(
   await pool.query(
     `UPDATE upi_payment_claims
      SET status = :status, review_note = :note, reviewed_by = :reviewer, reviewed_at = CURRENT_TIMESTAMP
-     WHERE id = :id`,
-    { status: action, note: reviewNote, reviewer: reviewerId, id },
+     WHERE id = :id AND organization_id = :orgId`,
+    { status: action, note: reviewNote, reviewer: reviewerId, id, orgId: claim.organizationId },
   );
 
   if (action === "approved") {

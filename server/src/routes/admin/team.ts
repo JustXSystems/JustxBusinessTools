@@ -10,6 +10,7 @@ import { logAudit } from "../../lib/audit.js";
 import { getActiveOrgId, getActiveSessionId, getActiveUserId } from "../../lib/request-context.js";
 import { isPlatformAdmin, orgEqualsSql, orgScopeParams } from "../../lib/platform-admin.js";
 import { publishNotification } from "../../lib/notification-publish.js";
+import { assertOrgMember, resolveAdminOrgId } from "../../lib/admin/tenant-guard.js";
 
 const router = Router();
 const ROLES = new Set(["owner", "admin", "staff", "viewer"]);
@@ -116,7 +117,12 @@ function parseUserId(param: string | undefined): number | null {
 }
 
 router.post("/invite", async (req, res) => {
-  const orgId = Number(req.body?.organizationId) || getActiveOrgId();
+  const orgResolved = resolveAdminOrgId(req.body?.organizationId);
+  if (typeof orgResolved === "object") {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   const role = String(req.body?.role ?? "staff");
   const password = String(req.body?.password ?? "");
@@ -248,7 +254,12 @@ router.patch("/:userId", async (req, res) => {
     res.status(400).json({ error: "Invalid member" });
     return;
   }
-  const orgId = await orgForMember(userId);
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
+    return;
+  }
+  const orgId = member.orgId;
   const currentRole = await memberRole(orgId, userId);
   if (!currentRole) {
     res.status(404).json({ error: "Member not found" });
@@ -318,9 +329,14 @@ router.post("/:userId/approve", async (req, res) => {
     res.status(400).json({ error: "Invalid member" });
     return;
   }
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
+    return;
+  }
   await pool.query(`UPDATE users SET status = 'active' WHERE id = :userId`, { userId });
   await logAudit("team.approve", "user", String(userId), undefined, req.ip);
-  const orgId = await orgForMember(userId);
+  const orgId = member.orgId;
   await publishNotification({
     eventType: "team.member_approved",
     title: "Team member approved",
@@ -344,9 +360,14 @@ router.post("/:userId/reject", async (req, res) => {
     res.status(400).json({ error: "You cannot reject your own account" });
     return;
   }
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
+    return;
+  }
   await pool.query(`UPDATE users SET status = 'rejected' WHERE id = :userId`, { userId });
   await logAudit("team.reject", "user", String(userId), { note: req.body?.note }, req.ip);
-  const orgId = await orgForMember(userId);
+  const orgId = member.orgId;
   await publishNotification({
     eventType: "team.member_rejected",
     title: "Team member rejected",
@@ -367,7 +388,12 @@ router.post("/:userId/reject", async (req, res) => {
 
 router.post("/:userId/suspend", async (req, res) => {
   const userId = Number(req.params.userId);
-  const orgId = await orgForMember(userId);
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
+    return;
+  }
+  const orgId = member.orgId;
   if (userId === getActiveUserId()) {
     res.status(400).json({ error: "You cannot suspend yourself" });
     return;
@@ -397,6 +423,16 @@ router.post("/:userId/suspend", async (req, res) => {
 });
 
 router.post("/:userId/reset-password", async (req, res) => {
+  const userId = parseUserId(req.params.userId);
+  if (!userId) {
+    res.status(400).json({ error: "Invalid member" });
+    return;
+  }
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
+    return;
+  }
   const password = String(req.body?.password ?? "");
   if (password.length < 8) {
     res.status(400).json({ error: "Password must be at least 8 characters" });
@@ -405,9 +441,9 @@ router.post("/:userId/reset-password", async (req, res) => {
   const hash = await hashPassword(password);
   await pool.query(`UPDATE users SET password_hash = :hash WHERE id = :userId`, {
     hash,
-    userId: Number(req.params.userId),
+    userId,
   });
-  await logAudit("team.reset_password", "user", req.params.userId, undefined, req.ip);
+  await logAudit("team.reset_password", "user", String(userId), undefined, req.ip);
   res.json({ ok: true });
 });
 
@@ -415,6 +451,11 @@ router.post("/:userId/verify", async (req, res) => {
   const userId = parseUserId(req.params.userId);
   if (!userId) {
     res.status(400).json({ error: "Invalid member" });
+    return;
+  }
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
     return;
   }
   const emailV = req.body?.emailVerified === undefined ? null : Number(Boolean(req.body.emailVerified));
@@ -444,6 +485,11 @@ router.post("/:userId/revoke-sessions", async (req, res) => {
   const userId = parseUserId(req.params.userId);
   if (!userId) {
     res.status(400).json({ error: "Invalid member" });
+    return;
+  }
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
     return;
   }
   const current = getActiveSessionId();
@@ -516,6 +562,11 @@ router.delete("/:userId", async (req, res) => {
 
 router.get("/:userId/tools", async (req, res) => {
   const userId = Number(req.params.userId);
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
+    return;
+  }
   const [rows] = await pool.query(
     `SELECT tool_id, granted FROM user_tool_access WHERE user_id = :userId`,
     { userId },
@@ -529,6 +580,11 @@ router.get("/:userId/tools", async (req, res) => {
 
 router.put("/:userId/tools", async (req, res) => {
   const userId = Number(req.params.userId);
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
+    return;
+  }
   const mode = String(req.body?.mode ?? "selected");
   await pool.query(`DELETE FROM user_tool_access WHERE user_id = :userId`, { userId });
   if (mode !== "all") {
@@ -548,6 +604,11 @@ router.put("/:userId/tools", async (req, res) => {
 
 router.post("/:userId/tools", async (req, res) => {
   const userId = Number(req.params.userId);
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
+    return;
+  }
   const toolId = String(req.body?.toolId ?? "");
   if (!toolId) {
     res.status(400).json({ error: "toolId required" });
@@ -563,12 +624,22 @@ router.post("/:userId/tools", async (req, res) => {
 
 router.get("/:userId/branches", async (req, res) => {
   const userId = Number(req.params.userId);
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
+    return;
+  }
   const branches = await listBranchAccessForUser(userId);
   res.json({ userId, branchIds: branches });
 });
 
 router.post("/:userId/branches", async (req, res) => {
   const userId = Number(req.params.userId);
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
+    return;
+  }
   const profileId = Number(req.body?.businessProfileId);
   if (!profileId) {
     res.status(400).json({ error: "businessProfileId required" });
@@ -583,6 +654,11 @@ router.put("/:userId/branches", async (req, res) => {
   const userId = parseUserId(req.params.userId);
   if (!userId) {
     res.status(400).json({ error: "Invalid member" });
+    return;
+  }
+  const member = await assertOrgMember(userId);
+  if (!member.ok) {
+    res.status(member.status).json({ error: member.error });
     return;
   }
   const mode = String(req.body?.mode ?? "all");
