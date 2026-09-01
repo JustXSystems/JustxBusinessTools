@@ -19,6 +19,10 @@ First-time setup: `npx playwright install chromium`
 | S2 | Open profile | Business profile form loads |
 | S3 | Open settings | Settings sections visible |
 | S4 | Open notifications | Feed or empty state loads |
+| S5 | Login defaults | Username + password; no Phone OTP unless enabled |
+| S6 | Public status | `/status` shows system status |
+| S7 | Public quote token | Unknown `/q/:token` does not 500 (`public-quote.spec.ts`) |
+| S8 | Drive panel | Profile delivery section visible when E2E creds set (`drive.spec.ts`) |
 
 ## Subscription & limits
 

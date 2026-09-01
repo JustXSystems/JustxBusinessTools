@@ -1,6 +1,7 @@
 import {
   ConsoleSmsProvider,
   HttpSmsProvider,
+  Msg91SmsProvider,
   TwilioSmsProvider,
 } from "./sms-providers.js";
 import { setSmsProvider } from "./phone-otp.js";
@@ -20,6 +21,19 @@ export function initSmsProvider(): void {
     }
     setSmsProvider(new TwilioSmsProvider(sid, token, from));
     console.log("[SMS] Twilio provider active");
+    return;
+  }
+
+  if (provider === "msg91") {
+    const authKey = process.env.MSG91_AUTH_KEY?.trim();
+    const templateId = process.env.MSG91_TEMPLATE_ID?.trim();
+    if (!authKey) {
+      console.warn("[SMS] SMS_PROVIDER=msg91 but MSG91_AUTH_KEY missing — using console");
+      setSmsProvider(new ConsoleSmsProvider());
+      return;
+    }
+    setSmsProvider(new Msg91SmsProvider(authKey, templateId));
+    console.log("[SMS] MSG91 provider active");
     return;
   }
 

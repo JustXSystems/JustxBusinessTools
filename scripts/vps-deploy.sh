@@ -66,4 +66,24 @@ echo "==> Health check"
 sleep 3
 curl -fsS "http://127.0.0.1:${API_PORT}/api/health" | tee /dev/stderr | grep -q '"ok"'
 echo
+
+echo "==> Post-deploy checks"
+curl -fsS "http://127.0.0.1:${API_PORT}/api/config/branding" | tee /dev/stderr | grep -q '"branding"'
+curl -fsS "http://127.0.0.1:${API_PORT}/api/public/status" | tee /dev/stderr | grep -q '"ok"'
+# Public quote with nonsense token must be 404 (not 401 auth wall)
+QUOTE_CODE="$(curl -sS -o /tmp/jbt_quote_probe.json -w '%{http_code}' "http://127.0.0.1:${API_PORT}/api/public/quotation-v1/deploy-probe-token" || true)"
+if [[ "$QUOTE_CODE" != "404" ]]; then
+  echo "WARN: public quotation probe expected HTTP 404, got ${QUOTE_CODE:-none}" >&2
+  cat /tmp/jbt_quote_probe.json 2>/dev/null || true
+fi
+if command -v pm2 >/dev/null 2>&1; then
+  for app in justx-jbt-api justx-jbt-web justx-jbt-worker; do
+    if ! pm2 describe "$app" >/dev/null 2>&1; then
+      echo "ERROR: PM2 app missing: $app" >&2
+      exit 1
+    fi
+  done
+  echo "PM2 apps present: api, web, worker"
+fi
+echo
 echo "==> Deploy OK"

@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
-import { pool } from "../db.js";
-import { getActiveOrgId } from "../lib/request-context.js";
-import { isPlatformAdmin, orgEqualsSql, orgScopeParams } from "../lib/platform-admin.js";
+import { pool } from "../../db.js";
+import { getActiveOrgId } from "../request-context.js";
+import { isPlatformAdmin, orgEqualsSql, orgScopeParams } from "../platform-admin.js";
 
 /** Ensure target user belongs to the caller's org scope (or platform admin). */
 export async function assertOrgMember(

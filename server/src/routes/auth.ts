@@ -305,6 +305,16 @@ router.post("/login", async (req, res) => {
     return;
   }
 
+  const { isMfaEnabled } = await import("../lib/auth/mfa.js");
+  const { signMfaChallenge } = await import("../lib/auth/totp.js");
+  if (await isMfaEnabled(r.id)) {
+    res.json({
+      mfaRequired: true,
+      mfaToken: signMfaChallenge(r.id),
+    });
+    return;
+  }
+
   const [profileRows] = await pool.query(
     `SELECT id FROM business_profiles WHERE organization_id = :orgId ORDER BY is_default DESC, id LIMIT 1`,
     { orgId: r.organization_id },
@@ -321,6 +331,115 @@ router.post("/login", async (req, res) => {
   }
   await logAudit("auth.login", "user", String(r.id), undefined, req.ip);
   res.json({ user });
+});
+
+router.post("/mfa/verify", async (req, res) => {
+  const mfaToken = String(req.body?.mfaToken ?? "");
+  const code = String(req.body?.code ?? "");
+  const { verifyMfaChallenge } = await import("../lib/auth/totp.js");
+  const { verifyUserTotp } = await import("../lib/auth/mfa.js");
+  const userId = verifyMfaChallenge(mfaToken);
+  if (!userId) {
+    res.status(401).json({ error: "MFA challenge expired — sign in again" });
+    return;
+  }
+  if (!(await verifyUserTotp(userId, code))) {
+    res.status(401).json({ error: "Invalid authenticator code" });
+    return;
+  }
+  const [rows] = await pool.query(
+    `SELECT m.organization_id FROM org_members m WHERE m.user_id = :userId ORDER BY m.id LIMIT 1`,
+    { userId },
+  );
+  const row = Array.isArray(rows) ? (rows[0] as { organization_id: number } | undefined) : undefined;
+  if (!row) {
+    res.status(401).json({ error: "No organization membership" });
+    return;
+  }
+  const [profileRows] = await pool.query(
+    `SELECT id FROM business_profiles WHERE organization_id = :orgId ORDER BY is_default DESC, id LIMIT 1`,
+    { orgId: row.organization_id },
+  );
+  const profile = Array.isArray(profileRows) ? profileRows[0] : null;
+  const profileId = profile ? Number((profile as { id: number }).id) : 1;
+  const token = await createSession(userId, row.organization_id, profileId);
+  setSessionCookie(res, token);
+  const user = await loadSessionUser(userId, row.organization_id, profileId);
+  if (!user) {
+    res.status(500).json({ error: "MFA ok but user profile could not be loaded" });
+    return;
+  }
+  await logAudit("auth.mfa", "user", String(userId), undefined, req.ip);
+  res.json({ user });
+});
+
+router.get("/methods", async (_req, res) => {
+  const sms = (process.env.SMS_PROVIDER ?? "console").toLowerCase();
+  const phoneOtp =
+    process.env.ENABLE_PHONE_OTP === "true" || (sms !== "console" && process.env.ENABLE_PHONE_OTP !== "false");
+  const google = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  res.json({
+    password: true,
+    phoneOtp,
+    google,
+    mfa: process.env.ENABLE_MFA !== "false",
+  });
+});
+
+router.get("/mfa/status", requireAuth, async (_req, res) => {
+  const ctx = getRequestContext();
+  if (!ctx?.userId) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const { isMfaEnabled } = await import("../lib/auth/mfa.js");
+  res.json({ enabled: await isMfaEnabled(ctx.userId) });
+});
+
+router.post("/mfa/setup", requireAuth, async (req, res) => {
+  const ctx = getRequestContext();
+  if (!ctx?.userId) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const user = await loadSessionUser(ctx.userId, ctx.organizationId, ctx.businessProfileId);
+  const { beginMfaSetup } = await import("../lib/auth/mfa.js");
+  const setup = await beginMfaSetup(ctx.userId, user?.email ?? `user-${ctx.userId}`);
+  res.json(setup);
+});
+
+router.post("/mfa/confirm", requireAuth, async (req, res) => {
+  const ctx = getRequestContext();
+  if (!ctx?.userId) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const code = String(req.body?.code ?? "");
+  const { confirmMfaSetup } = await import("../lib/auth/mfa.js");
+  const ok = await confirmMfaSetup(ctx.userId, code);
+  if (!ok) {
+    res.status(400).json({ error: "Invalid authenticator code" });
+    return;
+  }
+  await logAudit("auth.mfa_enable", "user", String(ctx.userId), undefined, req.ip);
+  res.json({ enabled: true });
+});
+
+router.post("/mfa/disable", requireAuth, async (req, res) => {
+  const ctx = getRequestContext();
+  if (!ctx?.userId) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const code = String(req.body?.code ?? "");
+  const { disableMfa } = await import("../lib/auth/mfa.js");
+  const ok = await disableMfa(ctx.userId, code);
+  if (!ok) {
+    res.status(400).json({ error: "Invalid authenticator code" });
+    return;
+  }
+  await logAudit("auth.mfa_disable", "user", String(ctx.userId), undefined, req.ip);
+  res.json({ enabled: false });
 });
 
 router.post("/logout", requireAuth, async (req, res) => {

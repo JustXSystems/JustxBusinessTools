@@ -118,16 +118,22 @@ Copy [`.env.example`](../.env.example) → `server/.env`.
 
 | Variable | Notes |
 |----------|--------|
-| `PAYMENT_PROVIDER` | `razorpay` live · `mock` only for private staging |
+| `PAYMENT_PROVIDER` | `razorpay` live · `stripe` / `cashfree` when configured · `mock` only for private staging |
 | `PAYMENT_AUTO_COMPLETE` | **`false`** on public production |
 | `RAZORPAY_KEY_ID` / `KEY_SECRET` / `WEBHOOK_SECRET` | From Razorpay dashboard |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Optional Stripe Checkout |
+| `CASHFREE_APP_ID` / `SECRET_KEY` / `WEBHOOK_SECRET` | Optional Cashfree PG |
 
 ### Optional
 
 | Variable | Notes |
 |----------|--------|
-| `SMS_PROVIDER` | `console` · `twilio` · `http` |
-| `TWILIO_*` / `SMS_API_*` | OTP SMS |
+| `SMS_PROVIDER` | `console` · `twilio` · `msg91` · `http` |
+| `ENABLE_PHONE_OTP` | `true` to show Phone OTP on login (or non-console SMS without `=false`) |
+| `TWILIO_*` / `MSG91_*` / `SMS_API_*` | OTP SMS credentials |
+| `ENABLE_MFA` | TOTP MFA APIs/UI (default on; set `false` to disable) |
+| `ERROR_WEBHOOK_URL` | Slack/Discord POST for API 500s / uncaught errors |
+| `SENTRY_DSN` | Optional Sentry store endpoint (no SDK required) |
 | `DRIVE_TOKEN_SECRET` | Defaults to `JWT_SECRET` |
 | `UPLOAD_DIR` | Local upload path (default `./uploads`) |
 | `FILE_URL_SECRET` | Optional; HMAC for `/api/files` signed URLs (defaults to `JWT_SECRET`) |

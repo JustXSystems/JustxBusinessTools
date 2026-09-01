@@ -80,3 +80,40 @@ export class HttpSmsProvider implements SmsProvider {
     }
   }
 }
+
+/** MSG91 Flow/OTP API (India). Uses SendOTP when template id set, else raw SMS. */
+export class Msg91SmsProvider implements SmsProvider {
+  constructor(
+    private authKey: string,
+    private templateId?: string,
+  ) {}
+
+  async sendOtp(phone: string, code: string): Promise<void> {
+    const mobile = phone.replace(/\D/g, "");
+    if (this.templateId) {
+      const res = await fetch("https://control.msg91.com/api/v5/flow/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          authkey: this.authKey,
+        },
+        body: JSON.stringify({
+          template_id: this.templateId,
+          short_url: "0",
+          recipients: [{ mobiles: mobile, OTP: code, var: code }],
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`MSG91 flow failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+      }
+      return;
+    }
+    // Fallback: classic sendhttp API
+    const res = await fetch(
+      `https://api.msg91.com/api/sendhttp.php?authkey=${encodeURIComponent(this.authKey)}&mobiles=${mobile}&message=${encodeURIComponent(`Your JustXSystems code is ${code}`)}&sender=${encodeURIComponent(process.env.MSG91_SENDER_ID ?? "JUSTXS")}&route=4&country=91`,
+    );
+    if (!res.ok) {
+      throw new Error(`MSG91 SMS failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    }
+  }
+}

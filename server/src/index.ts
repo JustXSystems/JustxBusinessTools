@@ -41,7 +41,11 @@ import { isUnauthenticatedApiPath } from "./lib/public-paths.js";
 import { shouldRunBackgroundJobsInApi } from "./lib/process-role.js";
 import { rateLimit } from "./middleware/rate-limit.js";
 import { runPendingMigrations } from "./lib/migrations.js";
+import { installProcessErrorHandlers, reportError } from "./lib/error-reporting.js";
+import { ensureMfaSchema } from "./lib/auth/mfa.js";
+import { getActiveUserId } from "./lib/request-context.js";
 import { pool } from "./db.js";
+import publicStatusRouter from "./routes/public-status.js";
 
 try {
   validateServerEnv();
@@ -49,6 +53,8 @@ try {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 }
+
+installProcessErrorHandlers();
 
 initSmsProvider();
 void Promise.all([
@@ -58,6 +64,7 @@ void Promise.all([
   ensureNotificationSchema(),
   ensureArtifactDeliverySchema(),
   ensureProfileDriveSchema(),
+  ensureMfaSchema(),
   runPendingMigrations(),
 ]).catch((err) => {
   console.warn("Startup schema setup failed", err);
@@ -143,6 +150,7 @@ app.use("/api/stats", statsRouter);
 app.use("/api/subscription", subscriptionRouter);
 app.use("/api/webhooks", webhookRateLimit, webhooksRouter);
 app.use("/api/public/quotation-v1", publicQuoteRateLimit, publicQuotationV1Router);
+app.use("/api/public/status", publicStatusRouter);
 app.use("/api/quotation-v1", quotationV1Router);
 app.use("/api/site-survey-v1", siteSurveyV1Router);
 app.use("/api/artifacts", artifactsRouter);
@@ -150,11 +158,16 @@ app.use("/api/artifacts", artifactsRouter);
 app.use(
   (
     err: Error,
-    _req: express.Request,
+    req: express.Request,
     res: express.Response,
     _next: express.NextFunction,
   ) => {
     console.error(err);
+    void reportError(err, {
+      path: req.path,
+      method: req.method,
+      userId: getActiveUserId(),
+    });
     const message = isProductionRuntime()
       ? "Server error"
       : err.message || "Server error";

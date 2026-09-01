@@ -50,7 +50,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const PUBLIC_PREFIXES = ["/login", "/register"];
+const PUBLIC_PREFIXES = ["/login", "/register", "/status", "/q"];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);

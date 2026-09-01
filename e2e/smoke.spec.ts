@@ -39,13 +39,20 @@ test.describe("smoke", () => {
     await expect(page.getByRole("button", { name: /Add Vendor/i })).toBeVisible();
   });
 
-  test("login page is username and password only", async ({ page }) => {
+  test("login page defaults to username and password", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByLabel("Username")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
     await expect(page.getByRole("link", { name: "Continue with Google" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /OTP/i })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Create account" })).toHaveCount(0);
+    // Phone OTP tab only appears when API reports phoneOtp enabled
+    await expect(page.getByRole("button", { name: "Phone OTP" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Register/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /System status/i })).toBeVisible();
+  });
+
+  test("public status page loads", async ({ page }) => {
+    await page.goto("/status");
+    await expect(page.getByRole("heading", { name: /System status/i })).toBeVisible();
   });
 
   test("invoice tool saved list link", async ({ page }) => {

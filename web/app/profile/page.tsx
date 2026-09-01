@@ -18,6 +18,7 @@ import { fetchProfile, saveProfile } from "@/lib/api";
 import { publicAssetUrl } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
+import { MfaSettingsPanel } from "@/components/profile/MfaSettingsPanel";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -141,6 +142,8 @@ export default function ProfilePage() {
           </p>
         </div>
       ) : null}
+
+      <MfaSettingsPanel />
 
       {error ? <div className="error-banner">{error}</div> : null}
       {message ? <div className="panel profile-success">{message}</div> : null}

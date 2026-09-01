@@ -7,6 +7,8 @@
 set -euo pipefail
 
 HEALTH_URL="${HEALTH_URL:-https://justxsystems.com/jbt/api/health}"
+STATUS_URL="${STATUS_URL:-https://justxsystems.com/jbt/api/public/status}"
+BRANDING_URL="${BRANDING_URL:-https://justxsystems.com/jbt/api/config/branding}"
 UI_URL="${UI_URL:-https://justxsystems.com/jbt/}"
 ALERT_WEBHOOK_URL="${ALERT_WEBHOOK_URL:-}"
 STATE_FILE="${HEALTH_STATE_FILE:-$HOME/backups/jbt-health.state}"
@@ -22,6 +24,19 @@ code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$HEALTH_URL" 2>/d
 if [[ "$code" != "200" ]] || ! grep -q '"ok":true' <<<"$body" || ! grep -q '"db":"ok"' <<<"$body"; then
   fail=1
   detail="health HTTP=$code body=${body:-<empty>}"
+fi
+
+status_body="$(curl -fsS --max-time 15 "$STATUS_URL" 2>/dev/null || true)"
+status_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$STATUS_URL" 2>/dev/null || echo 000)"
+if [[ "$status_code" != "200" ]] || ! grep -q '"ok":true' <<<"$status_body"; then
+  fail=1
+  detail="${detail:+$detail; }status HTTP=$status_code"
+fi
+
+brand_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$BRANDING_URL" 2>/dev/null || echo 000)"
+if [[ "$brand_code" != "200" ]]; then
+  fail=1
+  detail="${detail:+$detail; }branding HTTP=$brand_code"
 fi
 
 ui_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 -L "$UI_URL" 2>/dev/null || echo 000)"

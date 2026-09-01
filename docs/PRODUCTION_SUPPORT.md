@@ -224,9 +224,19 @@ Template: root [`.env.example`](../.env.example). Full table: [`SETUP.md`](SETUP
 | `WEB_BASE_PATH` / `NEXT_PUBLIC_BASE_PATH` | `/jbt` |
 | `API_PUBLIC_URL` | `https://justxsystems.com/jbt` |
 | Google redirect URIs | Include `/jbt/api/...` and match Google Console exactly |
-| `PAYMENT_PROVIDER` | `razorpay` for live; `mock` only on private staging |
+| `PAYMENT_PROVIDER` | `razorpay` for live; `stripe` / `cashfree` when keys set; `mock` only on private staging |
 
 Startup validation (`server/src/lib/env.ts`) exits the process if prod env is unsafe. Symptom: PM2 `errored` / restart loop; logs show `Invalid server environment:`.
+
+### Optional ops env
+
+| Var | Purpose |
+|-----|---------|
+| `ERROR_WEBHOOK_URL` | Alert on API errors (Slack/Discord-compatible JSON) |
+| `SENTRY_DSN` | Optional Sentry ingest without installing the SDK |
+| `ENABLE_PHONE_OTP` / `SMS_PROVIDER` | Phone OTP login (`msg91` / `twilio` / `http`) |
+| `ENABLE_MFA` | TOTP MFA (Profile → Security); default enabled |
+| `STRIPE_*` / `CASHFREE_*` | Alternate payment gateways |
 
 ### Generate secrets
 
@@ -543,7 +553,9 @@ Clear old backups if safe; investigate upload growth; consider S3 for logos if l
 **After every production deploy**
 
 - [ ] Health 200  
+- [ ] `/api/public/status` + branding probe (also run by `vps-deploy.sh`)  
 - [ ] Login page loads under `/jbt`  
+- [ ] PM2 api + web + **worker** present  
 - [ ] One authenticated API call (e.g. open Profile)  
 - [ ] No new PM2 crash loops for 10 minutes  
 
@@ -554,8 +566,9 @@ Clear old backups if safe; investigate upload growth; consider S3 for logos if l
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | GET | `/api/health` | No | Liveness + DB ping |
+| GET | `/api/public/status` | No | Public status JSON (status page + deploy probes) |
 | GET | `/api/config/branding` | No | Branding assets |
-| * | `/api/auth/*` | No | Login / OTP / Google |
+| * | `/api/auth/*` | No | Login / OTP / MFA / Google |
 | * | `/api/admin/*` | Admin role | Platform/org admin |
 | * | `/api/profile/drive/*` | Owner for connect | Company Drive OAuth |
 | * | `/api/artifacts/*` | Yes | Artifact status / delivery |
@@ -570,6 +583,9 @@ Public base in production always includes **`/jbt`** before `/api`.
 ## 15. Communications templates
 
 ### Status page / customer (outage)
+
+Public page: https://justxsystems.com/jbt/status · API: `/api/public/status`  
+Ops notify (Slack/Discord): `ALERT_WEBHOOK_URL=... ./scripts/notify-outage.sh investigating|restored`
 
 > We are investigating an issue affecting JustX Business Tools (justxsystems.com/jbt). Document generation and login may fail. We will update when service is restored.
 
