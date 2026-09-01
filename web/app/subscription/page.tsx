@@ -6,6 +6,7 @@ import { useToast } from "@/components/common/ToastProvider";
 import { BillingStepper } from "@/components/subscription/BillingStepper";
 import { useSubscription } from "@/hooks/useSubscription";
 import { cancelProSubscription, fetchCartQuote, startToolTrial } from "@/lib/api";
+import { catalogPriceFingerprint } from "@/lib/commerce-revision";
 import {
   addToToolCart,
   clearToolCart,
@@ -45,6 +46,15 @@ export default function SubscriptionPage() {
   const catalog = subscription?.catalog ?? [];
   const packs = subscription?.packs ?? [];
   const pending = subscription?.pendingClaim;
+  const priceFingerprint = useMemo(
+    () => catalogPriceFingerprint(catalog, packs),
+    [catalog, packs],
+  );
+
+  // Always pull latest catalog when opening the storefront (admin may have repriced).
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   useEffect(() => {
     const stored = readToolCart();
@@ -115,7 +125,7 @@ export default function SubscriptionPage() {
 
   useEffect(() => {
     void loadQuote(payableIds, activePack);
-  }, [payableIds, activePack, loadQuote]);
+  }, [payableIds, activePack, priceFingerprint, loadQuote]);
 
   const groups = useMemo(() => groupCatalog(catalog), [catalog]);
   const licensedCount = catalog.filter((s) => s.licensed && !s.includedFree).length;
@@ -377,10 +387,15 @@ export default function SubscriptionPage() {
                     const sku = catalog.find((s) => s.toolId === id);
                     const line = quote?.lines.find((l) => l.toolId === id);
                     if (!sku) return null;
+                    // Pack quotes redistribute discount across lines; à la carte prefers live catalog.
+                    const displayPrice =
+                      activePack && line
+                        ? line.priceInr
+                        : (sku.priceInr ?? line?.priceInr ?? 0);
                     return (
                       <li key={id}>
                         <span>{sku.name}</span>
-                        <strong>{inr(line?.priceInr ?? sku.priceInr)}</strong>
+                        <strong>{inr(displayPrice)}</strong>
                       </li>
                     );
                   })}
@@ -391,7 +406,16 @@ export default function SubscriptionPage() {
               ) : null}
               <div className="store-cart-total">
                 <span>Due now</span>
-                <strong>{inr(quote?.totalInr ?? 0)}</strong>
+                <strong>
+                  {inr(
+                    activePack
+                      ? (quote?.totalInr ?? 0)
+                      : payableIds.reduce((sum, id) => {
+                          const sku = catalog.find((s) => s.toolId === id);
+                          return sum + (sku?.priceInr ?? 0);
+                        }, 0),
+                  )}
+                </strong>
               </div>
               {quoteError ? <p className="field-error">{quoteError}</p> : null}
               {quote && payableIds.length > 0 ? (

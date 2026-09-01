@@ -135,6 +135,74 @@ export async function syncSubscriptionItemsFromLicenses(
   return listSubscriptionItems(orgId);
 }
 
+/**
+ * When platform SKU list price changes, update active billing lines (except trials)
+ * and recompute MRR for affected organizations.
+ */
+export async function repriceActiveItemsForSku(
+  toolId: string,
+  priceInr: number,
+  opts?: { includedFree?: boolean },
+): Promise<void> {
+  await ensureSubscriptionItemsSchema();
+  const nextPrice = opts?.includedFree ? 0 : Math.max(0, Number(priceInr) || 0);
+  await pool.query(
+    `UPDATE org_subscription_items
+     SET unit_price_inr = :price
+     WHERE tool_id = :toolId
+       AND status = 'active'
+       AND (source IS NULL OR source <> 'trial')`,
+    { toolId, price: nextPrice },
+  );
+  await pool.query(
+    `UPDATE org_subscriptions os
+     SET mrr_inr = (
+       SELECT COALESCE(SUM(i.unit_price_inr), 0)
+       FROM org_subscription_items i
+       WHERE i.organization_id = os.organization_id AND i.status = 'active'
+     )
+     WHERE EXISTS (
+       SELECT 1 FROM org_subscription_items x
+       WHERE x.organization_id = os.organization_id
+         AND x.tool_id = :toolId
+         AND x.status = 'active'
+     )`,
+    { toolId },
+  );
+}
+
+/** Align one org's active non-trial line prices with current SKU list prices. */
+export async function alignOrgItemPricesWithSkus(orgId: number): Promise<number> {
+  await ensureSubscriptionItemsSchema();
+  const skus = await listToolSkus();
+  for (const sku of skus) {
+    const price = sku.includedFree ? 0 : sku.priceInr;
+    await pool.query(
+      `UPDATE org_subscription_items
+       SET unit_price_inr = :price
+       WHERE organization_id = :orgId
+         AND tool_id = :toolId
+         AND status = 'active'
+         AND (source IS NULL OR source <> 'trial')`,
+      { orgId, toolId: sku.toolId, price },
+    );
+  }
+  const [sumRows] = await pool.query(
+    `SELECT COALESCE(SUM(unit_price_inr), 0) AS mrr
+     FROM org_subscription_items
+     WHERE organization_id = :orgId AND status = 'active'`,
+    { orgId },
+  );
+  const mrr = Number(
+    (Array.isArray(sumRows) ? (sumRows[0] as { mrr: number }) : { mrr: 0 }).mrr ?? 0,
+  );
+  await pool.query(`UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`, {
+    mrr,
+    orgId,
+  });
+  return mrr;
+}
+
 export async function createCheckoutIntent(input: {
   orgId: number;
   profileId: number;

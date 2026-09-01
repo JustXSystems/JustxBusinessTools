@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { bumpCommerceRevision } from "@/lib/commerce-revision";
 import type { BundleState, SkuState } from "@/components/admin/ToolPricingPane";
 
 function inr(n: number) {
@@ -111,6 +112,7 @@ export function ProductPacksPanel({
         });
         onMessage(`Pack ${payload.name} saved.`);
       }
+      bumpCommerceRevision();
       const list = await reload();
       const keep = list.find((b) => b.id === (creating ? form.id : editingId));
       if (keep) startEdit(keep);
@@ -128,6 +130,7 @@ export function ProductPacksPanel({
     try {
       await api(`/admin/skus/bundles/${id}`, { method: "DELETE" });
       onMessage("Pack deleted.");
+      bumpCommerceRevision();
       const list = await reload();
       const first = list[0];
       if (first) startEdit(first);
@@ -169,8 +172,8 @@ export function ProductPacksPanel({
         <div>
           <h2>Product packs</h2>
           <p className="muted">
-            Marketing bundles that expand to per-tool licenses. All Tools Pack mirrors Unlimited assign.
-            Custom packs (e.g. Sales, Solar) select specific SKUs.
+            Marketing bundles that expand to per-tool licenses. All Tools Pack grants every paid SKU.
+            Custom packs (e.g. Sales, Solar) select specific tools.
           </p>
         </div>
         <button type="button" className="btn btn-secondary btn-sm" onClick={startCreate}>

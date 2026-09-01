@@ -10,12 +10,13 @@ import { createClaim, getLatestClaimForOrg } from "../lib/upi/claims.js";
 import { parseToolIds, quoteToolCart, listToolSkus } from "../lib/tool-skus.js";
 import {
   catalogPayload,
-  everLicensedToolIdSet,
   licensedToolIdSet,
   listActiveLicenses,
+  trialConsumedToolIdSet,
 } from "../lib/tool-licenses.js";
 import { activateToolCommerce, deactivateToolCommerce } from "../lib/commerce.js";
 import {
+  alignOrgItemPricesWithSkus,
   createCheckoutIntent,
   listSubscriptionItems,
 } from "../lib/subscription-items.js";
@@ -77,7 +78,13 @@ router.get("/", async (_req, res) => {
   res.setHeader("Pragma", "no-cache");
   const profileId = getActiveProfileId();
   const orgId = getActiveOrgId();
-  const [subscription, plans, payee, claim, gateways, skus, licenses, items, packs, everLicensed] =
+  // Keep active MRR lines on current SKU list prices (trials stay ₹0).
+  try {
+    await alignOrgItemPricesWithSkus(orgId);
+  } catch {
+    /* schema may be mid-migrate */
+  }
+  const [subscription, plans, payee, claim, gateways, skus, licenses, items, packs, trialConsumed] =
     await Promise.all([
       getSubscription(profileId),
       listCatalogPlans(),
@@ -88,7 +95,7 @@ router.get("/", async (_req, res) => {
       listActiveLicenses(orgId),
       listSubscriptionItems(orgId),
       listAvailableProductBundles(),
-      everLicensedToolIdSet(orgId),
+      trialConsumedToolIdSet(orgId),
     ]);
   const licensed = new Set(licenses.map((l) => l.toolId));
   // Only surface actionable claims — approved claims must never keep the owner on "under review".
@@ -104,16 +111,17 @@ router.get("/", async (_req, res) => {
           reviewNote: claim.reviewNote,
         }
       : null;
+  const billingItems = items;
   res.json({
     ...subscription,
     provider: "upi",
     plans: plans.filter((p) => p.available).map(publicPlanPayload),
-    catalog: catalogPayload(skus, licensed, everLicensed),
+    catalog: catalogPayload(skus, licensed, trialConsumed),
     packs: packs.map(publicBundlePayload),
     licenses,
     licensedToolIds: [...licensed],
-    billingItems: items,
-    mrrInr: items.reduce((sum, i) => sum + i.unitPriceInr, 0),
+    billingItems,
+    mrrInr: billingItems.reduce((sum, i) => sum + i.unitPriceInr, 0),
     upi: {
       ...publicPayee(payee),
       amountInr: 0,
@@ -328,7 +336,8 @@ router.post("/checkout", async (req, res) => {
 });
 
 /**
- * Self-serve trial: one-time per tool per org (any prior license row blocks retry).
+ * Self-serve trial: one per tool per org after any commercial ledger row
+ * (trial or paid). Cancelled licenses with no ledger row do not block.
  * Line items stay at ₹0 MRR until a paid activation updates the ledger.
  */
 router.post("/trial", async (req, res) => {
@@ -341,10 +350,10 @@ router.post("/trial", async (req, res) => {
       return;
     }
 
-    const [skus, licensed, everLicensed] = await Promise.all([
+    const [skus, licensed, trialConsumed] = await Promise.all([
       listToolSkus(),
       licensedToolIdSet(orgId),
-      everLicensedToolIdSet(orgId),
+      trialConsumedToolIdSet(orgId),
     ]);
     const byId = new Map(skus.map((s) => [s.toolId, s]));
     const eligible: string[] = [];
@@ -368,7 +377,7 @@ router.post("/trial", async (req, res) => {
         rejected.push({ toolId, reason: "No trial configured for this tool" });
         continue;
       }
-      if (everLicensed.has(toolId)) {
+      if (trialConsumed.has(toolId)) {
         rejected.push({ toolId, reason: "Trial already used for this tool" });
         continue;
       }
@@ -392,10 +401,10 @@ router.post("/trial", async (req, res) => {
     });
 
     const subscription = await getSubscription(profileId);
-    const [freshSkus, freshLicenses, freshEver, packs, items] = await Promise.all([
+    const [freshSkus, freshLicenses, freshConsumed, packs, items] = await Promise.all([
       listToolSkus(),
       listActiveLicenses(orgId),
-      everLicensedToolIdSet(orgId),
+      trialConsumedToolIdSet(orgId),
       listAvailableProductBundles(),
       listSubscriptionItems(orgId),
     ]);
@@ -407,7 +416,7 @@ router.post("/trial", async (req, res) => {
       rejected,
       subscription: {
         ...subscription,
-        catalog: catalogPayload(freshSkus, licensedSet, freshEver),
+        catalog: catalogPayload(freshSkus, licensedSet, freshConsumed),
         packs: packs.map(publicBundlePayload),
         licenses: freshLicenses,
         licensedToolIds: [...licensedSet],

@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { fetchSubscription, startToolTrial } from "@/lib/api";
 import { addToToolCart } from "@/lib/tool-cart";
 import { trackUpgradeClick } from "@/lib/analytics";
+import { COMMERCE_CHANNEL, COMMERCE_REV_KEY } from "@/lib/commerce-revision";
 import {
   pendingClaimStale,
   readSubscriptionSnapshot,
@@ -103,17 +104,30 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     };
     const onAuth = () => void refresh();
     const onOnline = () => void refresh();
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === COMMERCE_REV_KEY) void refresh();
+    };
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel(COMMERCE_CHANNEL);
+      bc.onmessage = () => void refresh();
+    } catch {
+      bc = null;
+    }
     window.addEventListener("focus", refresh);
     window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("jbt:auth-context-changed", onAuth);
     window.addEventListener("jbt:data-invalidate", onAuth);
+    window.addEventListener("storage", onStorage);
     return () => {
       window.removeEventListener("focus", refresh);
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("jbt:auth-context-changed", onAuth);
       window.removeEventListener("jbt:data-invalidate", onAuth);
+      window.removeEventListener("storage", onStorage);
+      bc?.close();
     };
   }, [refresh]);
 

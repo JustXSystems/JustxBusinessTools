@@ -290,6 +290,19 @@ export async function updateToolSku(toolId: string, input: ToolSkuPatch): Promis
       featured: next.featured ? 1 : 0,
     },
   );
+  if (
+    current.priceInr !== next.priceInr ||
+    current.includedFree !== next.includedFree
+  ) {
+    try {
+      const { repriceActiveItemsForSku } = await import("./subscription-items.js");
+      await repriceActiveItemsForSku(toolId, next.priceInr, {
+        includedFree: next.includedFree,
+      });
+    } catch {
+      /* ledger table may not exist yet on fresh installs */
+    }
+  }
   return next;
 }
 

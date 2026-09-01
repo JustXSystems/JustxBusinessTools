@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "@/components/common/ToastProvider";
 import { BillingStepper } from "@/components/subscription/BillingStepper";
 import { CardPayMethod } from "@/components/subscription/CardPayMethod";
 import { UpiPayMethod } from "@/components/subscription/UpiPayMethod";
 import { useSubscription } from "@/hooks/useSubscription";
 import { fetchCartQuote } from "@/lib/api";
+import { catalogPriceFingerprint } from "@/lib/commerce-revision";
 import { clearToolCart, readActivePack, readToolCart } from "@/lib/tool-cart";
 import type { CartQuote } from "@/lib/types/subscription";
 
@@ -29,8 +30,13 @@ export default function SubscriptionCheckoutPage() {
   const [bundleId, setBundleId] = useState<string | null>(null);
 
   const catalog = subscription?.catalog ?? [];
+  const packs = subscription?.packs ?? [];
   const pending = subscription?.pendingClaim;
   const gateways = subscription?.gateways ?? [];
+  const priceFingerprint = useMemo(
+    () => catalogPriceFingerprint(catalog, packs),
+    [catalog, packs],
+  );
 
   const loadQuote = useCallback(async () => {
     const ids = readToolCart();
@@ -55,8 +61,12 @@ export default function SubscriptionCheckoutPage() {
   }, []);
 
   useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
     void loadQuote();
-  }, [loadQuote, catalog.length]);
+  }, [loadQuote, priceFingerprint]);
 
   useEffect(() => {
     const onResolved = () => {
@@ -83,6 +93,7 @@ export default function SubscriptionCheckoutPage() {
     router.push("/subscription");
   }
 
+  // Payable amount always from live server quote (UPI QR / claim / card checkout).
   const amount = quote?.totalInr ?? pending?.amountInr ?? 0;
   const lines =
     quote?.lines ??
@@ -92,11 +103,16 @@ export default function SubscriptionCheckoutPage() {
         toolId: id,
         name: sku?.name ?? id,
         category: sku?.category ?? "",
-        priceInr: 0,
+        priceInr: sku?.priceInr ?? 0,
         billingInterval: "month",
       };
     });
-  const toolIds = lines.map((l) => l.toolId);
+  const displayLines = lines.map((line) => {
+    if (bundleId || quote?.bundleId) return line;
+    const sku = catalog.find((s) => s.toolId === line.toolId);
+    return sku ? { ...line, priceInr: sku.priceInr } : line;
+  });
+  const toolIds = displayLines.map((l) => l.toolId);
   const step: 2 | 3 = pending?.status === "pending" ? 3 : 2;
 
   return (
@@ -124,11 +140,11 @@ export default function SubscriptionCheckoutPage() {
           {quote?.savingsInr && quote.savingsInr > 0 ? (
             <p className="muted">Pack savings {inr(quote.savingsInr)}</p>
           ) : null}
-          {lines.length === 0 ? (
+          {displayLines.length === 0 ? (
             <p className="muted">No tools in this order.</p>
           ) : (
             <ul className="billing-line-items">
-              {lines.map((line) => (
+              {displayLines.map((line) => (
                 <li key={line.toolId}>
                   <span>
                     {line.name}

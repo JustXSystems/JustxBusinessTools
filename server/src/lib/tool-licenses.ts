@@ -191,6 +191,28 @@ export async function everLicensedToolIdSet(orgId: number): Promise<Set<string>>
   );
 }
 
+/**
+ * Tools that already used a trial or any commercial billing row.
+ * Cancelled license rows alone (admin mistake, no ledger) do not block a fresh trial.
+ */
+export async function trialConsumedToolIdSet(orgId: number): Promise<Set<string>> {
+  await ensureLicenseSchema();
+  try {
+    const { ensureSubscriptionItemsSchema } = await import("./subscription-items.js");
+    await ensureSubscriptionItemsSchema();
+    const [rows] = await pool.query(
+      `SELECT DISTINCT tool_id FROM org_subscription_items
+       WHERE organization_id = :orgId`,
+      { orgId },
+    );
+    return new Set(
+      (Array.isArray(rows) ? rows : []).map((r) => String((r as { tool_id: string }).tool_id)),
+    );
+  } catch {
+    return everLicensedToolIdSet(orgId);
+  }
+}
+
 export async function refreshOrgMrr(orgId: number): Promise<number> {
   try {
     const { syncSubscriptionItemsFromLicenses } = await import("./subscription-items.js");
@@ -229,7 +251,7 @@ export async function refreshOrgMrr(orgId: number): Promise<number> {
 export function catalogPayload(
   skus: ToolSku[],
   licensed: Set<string>,
-  everLicensed: Set<string> = new Set(),
+  trialConsumed: Set<string> = new Set(),
 ) {
   return skus
     .filter((s) => s.available)
@@ -253,7 +275,7 @@ export function catalogPayload(
           !includedFree &&
           !isLicensed &&
           s.trialDays > 0 &&
-          !everLicensed.has(s.toolId),
+          !trialConsumed.has(s.toolId),
       };
     });
 }

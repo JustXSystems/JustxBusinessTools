@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { bumpCommerceRevision } from "@/lib/commerce-revision";
 
 function inr(n: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -145,6 +146,7 @@ export function ToolPricingPane({
         });
       }
       onMessage(`${body.name} commercial settings saved.`);
+      bumpCommerceRevision();
       await onReload();
     } catch (err) {
       onMessage(err instanceof Error ? err.message : "Save failed");
