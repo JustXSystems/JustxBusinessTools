@@ -1,5 +1,6 @@
 import { pool } from "../../db.js";
 import { jsonVal } from "../admin/approvals.js";
+import { ensureTablesUtf8mb4UnicodeCi, INNODB_UTF8MB4_UNICODE } from "../mysql-charset.js";
 
 export type UpiPayee = {
   enabled: boolean;
@@ -68,7 +69,7 @@ export async function ensureUpiSchema(): Promise<void> {
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (id),
           KEY idx_upi_claim_org (organization_id, status, created_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ${INNODB_UTF8MB4_UNICODE}
       `);
       try {
         await pool.query(`ALTER TABLE upi_payment_claims ADD COLUMN tool_ids JSON NULL`);
@@ -88,8 +89,9 @@ export async function ensureUpiSchema(): Promise<void> {
           error_message VARCHAR(255) NULL,
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ${INNODB_UTF8MB4_UNICODE}
       `);
+      await ensureTablesUtf8mb4UnicodeCi(["upi_payment_claims", "notify_outbox"]);
     })().catch((err: unknown) => {
       schemaReady = null;
       throw err;

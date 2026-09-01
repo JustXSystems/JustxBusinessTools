@@ -1,4 +1,5 @@
 import { pool } from "../db.js";
+import { ensureTablesUtf8mb4UnicodeCi, INNODB_UTF8MB4_UNICODE } from "./mysql-charset.js";
 import { listToolSkus } from "./tool-skus.js";
 import { listActiveLicenses } from "./tool-licenses.js";
 
@@ -32,7 +33,7 @@ export async function ensureSubscriptionItemsSchema(): Promise<void> {
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (organization_id, tool_id),
           KEY idx_osi_org_status (organization_id, status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ${INNODB_UTF8MB4_UNICODE}
       `);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS checkout_intents (
@@ -49,8 +50,12 @@ export async function ensureSubscriptionItemsSchema(): Promise<void> {
           PRIMARY KEY (id),
           UNIQUE KEY uk_checkout_session (session_id),
           KEY idx_checkout_org (organization_id, status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ${INNODB_UTF8MB4_UNICODE}
       `);
+      await ensureTablesUtf8mb4UnicodeCi([
+        "org_subscription_items",
+        "checkout_intents",
+      ]);
     })().catch((err: unknown) => {
       schemaReady = null;
       throw err;

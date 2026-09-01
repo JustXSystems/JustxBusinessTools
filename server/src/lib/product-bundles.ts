@@ -1,4 +1,5 @@
 import { pool } from "../db.js";
+import { ensureTablesUtf8mb4UnicodeCi, INNODB_UTF8MB4_UNICODE } from "./mysql-charset.js";
 import { listToolSkus, paidSkuIds, type ToolSku } from "./tool-skus.js";
 
 export type ProductBundle = {
@@ -36,7 +37,7 @@ export async function ensureProductBundleSchema(): Promise<void> {
           sort_order INT NOT NULL DEFAULT 0,
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ${INNODB_UTF8MB4_UNICODE}
       `);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS product_bundle_items (
@@ -44,8 +45,9 @@ export async function ensureProductBundleSchema(): Promise<void> {
           tool_id VARCHAR(64) NOT NULL,
           PRIMARY KEY (bundle_id, tool_id),
           KEY idx_pbi_tool (tool_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ${INNODB_UTF8MB4_UNICODE}
       `);
+      await ensureTablesUtf8mb4UnicodeCi(["product_bundles", "product_bundle_items"]);
       try {
         await pool.query(
           `INSERT IGNORE INTO product_bundles

@@ -343,6 +343,7 @@ Webhook / UNC alternatives: [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md), `desktop
 | Checkout stuck pending | Webhook not reaching API; secret mismatch; nginx blocking |
 | Tools locked after pay | Org subscription items / licenses not activated — admin payments + DB |
 | Price wrong | `SUBSCRIPTION_PRO_PRICE_INR` / catalog SKUs in admin |
+| Logs: `Illegal mix of collations` on subscription | `org_subscription_items` (etc.) on MySQL 8 default collation vs `tool_skus` unicode_ci — restart API after deploy (auto CONVERT) or ALTER tables to `utf8mb4_unicode_ci` |
 
 Renewal notices run in-process (default every 24h). Logs: `[renewals] scanned=...`.
 

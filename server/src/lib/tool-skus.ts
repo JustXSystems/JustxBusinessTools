@@ -1,5 +1,6 @@
 import { pool } from "../db.js";
 import { jsonVal } from "./admin/approvals.js";
+import { ensureTablesUtf8mb4UnicodeCi, INNODB_UTF8MB4_UNICODE } from "./mysql-charset.js";
 
 export type AccessPolicy = "soft_cap" | "hard_lock";
 
@@ -94,7 +95,7 @@ export async function ensureToolSkuSchema(): Promise<void> {
           sort_order INT NOT NULL DEFAULT 0,
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (tool_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ${INNODB_UTF8MB4_UNICODE}
       `);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS org_tool_licenses (
@@ -107,8 +108,9 @@ export async function ensureToolSkuSchema(): Promise<void> {
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (organization_id, tool_id),
           KEY idx_otl_org_status (organization_id, status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ${INNODB_UTF8MB4_UNICODE}
       `);
+      await ensureTablesUtf8mb4UnicodeCi(["tool_skus", "org_tool_licenses"]);
       await tryAlter(`ALTER TABLE tool_skus ADD COLUMN tagline VARCHAR(160) NULL`);
       await tryAlter(`ALTER TABLE tool_skus ADD COLUMN description TEXT NULL`);
       await tryAlter(`ALTER TABLE tool_skus ADD COLUMN annual_price_inr DECIMAL(12, 2) NULL`);

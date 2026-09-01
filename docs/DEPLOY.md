@@ -341,6 +341,7 @@ git reset --hard <commit_sha>
 | `users` missing / `Duplicate column 'home_tool_ids'` | `admin_schema.sql` aborted mid-file — pull latest, then re-run from `admin_schema.sql` onward (see Part 1.4) |
 | 502 from nginx | `pm2 status`; ports 3002/4002 listening |
 | OAuth mismatch | Google redirect URIs must include `/jbt/api/...` |
+| `Illegal mix of collations` (`utf8mb4_unicode_ci` vs `utf8mb4_0900_ai_ci`) | Runtime tables created without COLLATE on MySQL 8 — deploy latest (auto-converts) or run: `ALTER TABLE org_subscription_items CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;` (also `org_tool_licenses`, `checkout_intents`, `product_bundle_items` if needed) |
 
 ### lightningcss / Turbopack on VPS
 
