@@ -10,6 +10,7 @@ import { createClaim, getLatestClaimForOrg } from "../lib/upi/claims.js";
 import { parseToolIds, quoteToolCart, listToolSkus } from "../lib/tool-skus.js";
 import {
   catalogPayload,
+  everLicensedToolIdSet,
   licensedToolIdSet,
   listActiveLicenses,
 } from "../lib/tool-licenses.js";
@@ -19,6 +20,13 @@ import {
   listSubscriptionItems,
 } from "../lib/subscription-items.js";
 import {
+  listAvailableProductBundles,
+  publicBundlePayload,
+  quoteBundleCart,
+  type BundleCartQuote,
+} from "../lib/product-bundles.js";
+import { type CartQuote } from "../lib/tool-skus.js";
+import {
   notifyCheckoutStarted,
   notifyPaymentOutcome,
   notifySubscriptionActivated,
@@ -26,6 +34,10 @@ import {
 } from "../lib/notification-billing.js";
 
 const router = Router();
+
+function isBundleQuote(quote: CartQuote | BundleCartQuote): quote is BundleCartQuote {
+  return "bundleId" in quote && typeof quote.bundleId === "string" && quote.bundleId.length > 0;
+}
 
 async function listEnabledGateways(orgId: number) {
   const [rows] = await pool.query(
@@ -48,8 +60,15 @@ async function listEnabledGateways(orgId: number) {
   });
 }
 
-async function quoteForOrg(orgId: number, toolIds: string[]) {
+async function quoteForOrg(
+  orgId: number,
+  toolIds: string[],
+  bundleId?: string,
+): Promise<CartQuote | BundleCartQuote> {
   const licensed = await licensedToolIdSet(orgId);
+  if (bundleId) {
+    return quoteBundleCart(bundleId, licensed);
+  }
   return quoteToolCart(toolIds, licensed);
 }
 
@@ -58,16 +77,19 @@ router.get("/", async (_req, res) => {
   res.setHeader("Pragma", "no-cache");
   const profileId = getActiveProfileId();
   const orgId = getActiveOrgId();
-  const [subscription, plans, payee, claim, gateways, skus, licenses, items] = await Promise.all([
-    getSubscription(profileId),
-    listCatalogPlans(),
-    getUpiPayee(),
-    getLatestClaimForOrg(orgId),
-    listEnabledGateways(orgId),
-    listToolSkus(),
-    listActiveLicenses(orgId),
-    listSubscriptionItems(orgId),
-  ]);
+  const [subscription, plans, payee, claim, gateways, skus, licenses, items, packs, everLicensed] =
+    await Promise.all([
+      getSubscription(profileId),
+      listCatalogPlans(),
+      getUpiPayee(),
+      getLatestClaimForOrg(orgId),
+      listEnabledGateways(orgId),
+      listToolSkus(),
+      listActiveLicenses(orgId),
+      listSubscriptionItems(orgId),
+      listAvailableProductBundles(),
+      everLicensedToolIdSet(orgId),
+    ]);
   const licensed = new Set(licenses.map((l) => l.toolId));
   // Only surface actionable claims — approved claims must never keep the owner on "under review".
   const pendingClaim =
@@ -86,7 +108,8 @@ router.get("/", async (_req, res) => {
     ...subscription,
     provider: "upi",
     plans: plans.filter((p) => p.available).map(publicPlanPayload),
-    catalog: catalogPayload(skus, licensed),
+    catalog: catalogPayload(skus, licensed, everLicensed),
+    packs: packs.map(publicBundlePayload),
     licenses,
     licensedToolIds: [...licensed],
     billingItems: items,
@@ -117,16 +140,19 @@ router.get("/", async (_req, res) => {
 router.get("/quote", async (req, res) => {
   try {
     const orgId = getActiveOrgId();
+    const bundleId = String(req.query.bundleId ?? req.query.pack ?? "").trim();
     const toolIds = parseToolIds(req.query.tools ?? req.query.toolIds);
-    const quote = await quoteForOrg(orgId, toolIds);
+    const quote = await quoteForOrg(orgId, toolIds, bundleId || undefined);
     const payee = await getUpiPayee();
-    const note = `JustXSystems ${quote.lines.length} tool${quote.lines.length === 1 ? "" : "s"}`.slice(0, 50);
+    const label = isBundleQuote(quote)
+      ? `JustXSystems ${quote.packName}`.slice(0, 50)
+      : `JustXSystems ${quote.lines.length} tool${quote.lines.length === 1 ? "" : "s"}`.slice(0, 50);
     res.json({
       ...quote,
       upi: {
         ...publicPayee(payee),
         amountInr: quote.totalInr,
-        intent: payee.enabled && payee.vpa ? buildUpiIntent(payee, quote.totalInr, note) : null,
+        intent: payee.enabled && payee.vpa ? buildUpiIntent(payee, quote.totalInr, label) : null,
       },
     });
   } catch (err) {
@@ -137,8 +163,9 @@ router.get("/quote", async (req, res) => {
 
 router.post("/upi-claims", async (req, res) => {
   try {
+    const bundleId = String(req.body?.bundleId ?? req.body?.packId ?? "").trim();
     const toolIds = parseToolIds(req.body?.toolIds ?? req.body?.tools);
-    const quote = await quoteForOrg(getActiveOrgId(), toolIds);
+    const quote = await quoteForOrg(getActiveOrgId(), toolIds, bundleId || undefined);
     const payerEmail = String(req.body?.payerEmail ?? "").trim();
     const payerName = String(req.body?.payerName ?? "").trim();
     const utr = String(req.body?.utr ?? "").trim();
@@ -156,7 +183,7 @@ router.post("/upi-claims", async (req, res) => {
       orgId: getActiveOrgId(),
       userId: getActiveUserId(),
       profileId: getActiveProfileId(),
-      planId: "cart",
+      planId: bundleId ? `pack:${bundleId}` : "cart",
       toolIds: quote.lines.map((l) => l.toolId),
       amountInr: quote.totalInr,
       payerName,
@@ -180,8 +207,9 @@ router.post("/upi-claims", async (req, res) => {
 
 router.post("/checkout", async (req, res) => {
   try {
+    const bundleId = String(req.body?.bundleId ?? req.body?.packId ?? "").trim();
     const toolIds = parseToolIds(req.body?.toolIds ?? req.body?.tools);
-    const quote = await quoteForOrg(getActiveOrgId(), toolIds);
+    const quote = await quoteForOrg(getActiveOrgId(), toolIds, bundleId || undefined);
     const profileId = getActiveProfileId();
     const orgId = getActiveOrgId();
     const gatewayId = Number(req.body?.gatewayId ?? 0);
@@ -205,9 +233,10 @@ router.post("/checkout", async (req, res) => {
     } catch {
       provider = getPaymentProvider("mock");
     }
+    const planId = bundleId ? `pack:${bundleId}` : "cart";
     const session = await provider.createCheckoutSession({
       profileId,
-      planId: "cart",
+      planId,
       amountInr: quote.totalInr,
       toolIds: quote.lines.map((l) => l.toolId),
     });
@@ -225,13 +254,23 @@ router.post("/checkout", async (req, res) => {
     if (autoComplete && provider.name === "mock") {
       const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       const tools = quote.lines.map((l) => l.toolId);
-      await activateToolCommerce({
-        orgId,
-        toolIds: tools,
-        source: "card",
-        externalRef: session.sessionId,
-        periodEnd,
-      });
+      if (bundleId === "all_tools") {
+        const { activateAllToolsPack } = await import("../lib/commerce.js");
+        await activateAllToolsPack({
+          orgId,
+          source: "pack",
+          externalRef: session.sessionId,
+          periodEnd,
+        });
+      } else {
+        await activateToolCommerce({
+          orgId,
+          toolIds: tools,
+          source: bundleId ? "pack" : "card",
+          externalRef: session.sessionId,
+          periodEnd,
+        });
+      }
       const { completeCheckoutIntent } = await import("../lib/subscription-items.js");
       await completeCheckoutIntent(session.sessionId);
       await recordSaasTransaction(
@@ -252,8 +291,10 @@ router.post("/checkout", async (req, res) => {
       notifySubscriptionActivated({
         organizationId: orgId,
         profileId,
-        planId: "cart",
-        planName: `${tools.length} tool license(s)`,
+        planId,
+        planName: isBundleQuote(quote)
+          ? quote.packName
+          : `${tools.length} tool license(s)`,
         provider: provider.name,
       });
       const subscription = await getSubscription(profileId);
@@ -283,6 +324,100 @@ router.post("/checkout", async (req, res) => {
   } catch (err) {
     const status = Number((err as { status?: number }).status) || 400;
     res.status(status).json({ error: err instanceof Error ? err.message : "Checkout failed" });
+  }
+});
+
+/**
+ * Self-serve trial: one-time per tool per org (any prior license row blocks retry).
+ * Line items stay at ₹0 MRR until a paid activation updates the ledger.
+ */
+router.post("/trial", async (req, res) => {
+  try {
+    const orgId = getActiveOrgId();
+    const profileId = getActiveProfileId();
+    const toolIds = parseToolIds(req.body?.toolIds ?? req.body?.tools ?? req.body?.toolId);
+    if (toolIds.length === 0) {
+      res.status(400).json({ error: "Select at least one tool for trial" });
+      return;
+    }
+
+    const [skus, licensed, everLicensed] = await Promise.all([
+      listToolSkus(),
+      licensedToolIdSet(orgId),
+      everLicensedToolIdSet(orgId),
+    ]);
+    const byId = new Map(skus.map((s) => [s.toolId, s]));
+    const eligible: string[] = [];
+    const rejected: Array<{ toolId: string; reason: string }> = [];
+
+    for (const toolId of toolIds) {
+      const sku = byId.get(toolId);
+      if (!sku || !sku.available) {
+        rejected.push({ toolId, reason: "Tool is not available" });
+        continue;
+      }
+      if (sku.includedFree || sku.priceInr <= 0) {
+        rejected.push({ toolId, reason: "Included tools do not need a trial" });
+        continue;
+      }
+      if (licensed.has(toolId)) {
+        rejected.push({ toolId, reason: "Already licensed" });
+        continue;
+      }
+      if (sku.trialDays <= 0) {
+        rejected.push({ toolId, reason: "No trial configured for this tool" });
+        continue;
+      }
+      if (everLicensed.has(toolId)) {
+        rejected.push({ toolId, reason: "Trial already used for this tool" });
+        continue;
+      }
+      eligible.push(toolId);
+    }
+
+    if (eligible.length === 0) {
+      res.status(400).json({
+        error: rejected[0]?.reason ?? "No tools eligible for trial",
+        rejected,
+      });
+      return;
+    }
+
+    const result = await activateToolCommerce({
+      orgId,
+      toolIds: eligible,
+      source: "trial",
+      preferTrial: true,
+      externalRef: `trial:${profileId}:${Date.now()}`,
+    });
+
+    const subscription = await getSubscription(profileId);
+    const [freshSkus, freshLicenses, freshEver, packs, items] = await Promise.all([
+      listToolSkus(),
+      listActiveLicenses(orgId),
+      everLicensedToolIdSet(orgId),
+      listAvailableProductBundles(),
+      listSubscriptionItems(orgId),
+    ]);
+    const licensedSet = new Set(freshLicenses.map((l) => l.toolId));
+
+    res.json({
+      granted: result.granted,
+      periodEnd: result.periodEnd.toISOString(),
+      rejected,
+      subscription: {
+        ...subscription,
+        catalog: catalogPayload(freshSkus, licensedSet, freshEver),
+        packs: packs.map(publicBundlePayload),
+        licenses: freshLicenses,
+        licensedToolIds: [...licensedSet],
+        billingItems: items,
+        mrrInr: items.reduce((sum, i) => sum + i.unitPriceInr, 0),
+      },
+    });
+  } catch (err) {
+    const status = Number((err as { status?: number }).status) || 400;
+    res.status(status).json({ error: err instanceof Error ? err.message : "Could not start trial" });
   }
 });
 

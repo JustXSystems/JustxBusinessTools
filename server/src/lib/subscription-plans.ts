@@ -53,20 +53,20 @@ export async function ensureSubscriptionPlanSchema(): Promise<void> {
       }
       await pool.query(
         `UPDATE subscription_plans
-         SET access_mode = 'limited', record_limit = COALESCE(record_limit, :fallback)
+         SET access_mode = 'limited', record_limit = COALESCE(record_limit, :fallback),
+             name = IF(name IN ('Free', 'free'), 'Freemium', name),
+             tagline = IF(COALESCE(tagline, '') IN ('', 'Limited use'), 'Try tools with a record cap', tagline),
+             tier_label = COALESCE(tier_label, 'Starter')
          WHERE id = 'free'`,
         { fallback: FREE_RECORD_LIMIT },
       );
       await pool.query(
         `UPDATE subscription_plans
          SET access_mode = 'unlimited', record_limit = NULL,
+             name = IF(name IN ('Pro', 'pro', 'Unlimited'), 'All Tools Pack', name),
+             tagline = IF(COALESCE(tagline, '') IN ('', 'Unlimited use'), 'Every paid tool licensed', tagline),
              tier_label = COALESCE(tier_label, 'Growth')
          WHERE id = 'pro'`,
-      );
-      await pool.query(
-        `UPDATE subscription_plans
-         SET tier_label = COALESCE(tier_label, 'Starter')
-         WHERE id = 'free'`,
       );
       await pool.query(
         `UPDATE subscription_plans SET available = 0 WHERE id NOT IN ('free', 'pro')`,
@@ -130,7 +130,7 @@ export async function getLimitedPlan(): Promise<CatalogPlan> {
   return (
     plans.find((p) => p.accessMode === "limited") ?? {
       id: "free",
-      name: "Free",
+      name: "Freemium",
       tagline: null,
       description: null,
       priceInr: 0,
@@ -151,7 +151,7 @@ export async function getUnlimitedPlan(): Promise<CatalogPlan> {
   return (
     plans.find((p) => p.accessMode === "unlimited") ?? {
       id: "pro",
-      name: "Pro",
+      name: "All Tools Pack",
       tagline: null,
       description: null,
       priceInr: Number(process.env.SUBSCRIPTION_PRO_PRICE_INR ?? 499),

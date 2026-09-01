@@ -49,6 +49,7 @@ export async function activateToolCommerce(input: {
   const defaultDays = input.defaultDays ?? 30;
   const sharedEnd = input.periodEnd ?? daysFromNow(defaultDays);
 
+  // Prefer trial period end from SKU; keep billing line at ₹0 until paid activation.
   const usePerToolTrial = Boolean(input.preferTrial && !input.periodEnd);
   if (!usePerToolTrial) {
     await grantToolLicenses(input.orgId, unique, sharedEnd, input.sourceClaimId);
@@ -77,8 +78,6 @@ export async function activateToolCommerce(input: {
         },
       );
     }
-    const { refreshOrgMrr } = await import("./tool-licenses.js");
-    await refreshOrgMrr(input.orgId);
     notifyLicensesGranted({
       organizationId: input.orgId,
       toolIds: unique,
@@ -91,6 +90,12 @@ export async function activateToolCommerce(input: {
     source: input.source,
     externalRef: input.externalRef ?? null,
   });
+
+  // Trial path skips grantToolLicenses (and its MRR refresh); keep org_subscriptions.mrr_inr aligned.
+  if (usePerToolTrial) {
+    const { refreshOrgMrr } = await import("./tool-licenses.js");
+    await refreshOrgMrr(input.orgId);
+  }
 
   const licenses = await listActiveLicenses(input.orgId);
   let farthest = sharedEnd;

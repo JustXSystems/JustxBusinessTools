@@ -192,21 +192,21 @@ export async function reviewClaim(
   if (action === "approved") {
     const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const { activateToolCommerce, activateAllToolsPack } = await import("../commerce.js");
-    if (claim.toolIds.length > 0) {
-      await activateToolCommerce({
-        orgId: claim.organizationId,
-        toolIds: claim.toolIds,
-        source: "upi",
-        sourceClaimId: claim.id,
-        externalRef: claim.utr,
-        periodEnd,
-      });
-    } else {
+    if (claim.planId === "pack:all_tools" || claim.planId === "pro" || claim.toolIds.length === 0) {
       await activateAllToolsPack({
         orgId: claim.organizationId,
         source: "upi",
         periodEnd,
         externalRef: claim.utr,
+      });
+    } else {
+      await activateToolCommerce({
+        orgId: claim.organizationId,
+        toolIds: claim.toolIds,
+        source: claim.planId.startsWith("pack:") ? "pack" : "upi",
+        sourceClaimId: claim.id,
+        externalRef: claim.utr,
+        periodEnd,
       });
     }
     await recordSaasTransaction(

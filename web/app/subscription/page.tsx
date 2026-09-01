@@ -5,10 +5,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "@/components/common/ToastProvider";
 import { BillingStepper } from "@/components/subscription/BillingStepper";
 import { useSubscription } from "@/hooks/useSubscription";
-import { cancelProSubscription, fetchCartQuote } from "@/lib/api";
-import { addToToolCart, clearToolCart, readToolCart, removeFromToolCart, writeToolCart } from "@/lib/tool-cart";
+import { cancelProSubscription, fetchCartQuote, startToolTrial } from "@/lib/api";
+import {
+  addToToolCart,
+  clearToolCart,
+  readActivePack,
+  readToolCart,
+  removeFromToolCart,
+  setPackCart,
+  writeToolCart,
+} from "@/lib/tool-cart";
 import { SUBSCRIPTION_SYNCED_EVENT } from "@/lib/subscription-cache";
-import type { CartQuote, ToolCatalogSku } from "@/lib/types/subscription";
+import type { CartQuote, ProductPack, ToolCatalogSku } from "@/lib/types/subscription";
 
 function inr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
@@ -28,11 +36,14 @@ export default function SubscriptionPage() {
   const { subscription, loading, error, isToolLicensed, refresh } = useSubscription();
   const { showToast } = useToast();
   const [cart, setCart] = useState<string[]>([]);
+  const [activePack, setActivePack] = useState<string | null>(null);
   const [quote, setQuote] = useState<CartQuote | null>(null);
   const [quoteError, setQuoteError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [trialBusy, setTrialBusy] = useState<string | null>(null);
 
   const catalog = subscription?.catalog ?? [];
+  const packs = subscription?.packs ?? [];
   const pending = subscription?.pendingClaim;
 
   useEffect(() => {
@@ -41,16 +52,21 @@ export default function SubscriptionPage() {
     const addParam = params.get("add");
     if (addParam) {
       setCart(addToToolCart(addParam));
+      setActivePack(null);
       return;
     }
     setCart(stored);
+    setActivePack(readActivePack());
   }, []);
 
-  // Keep page cart in sync when subscription snapshot refreshes from DB (e.g. UPI approved).
   useEffect(() => {
-    const onSync = () => setCart(readToolCart());
+    const onSync = () => {
+      setCart(readToolCart());
+      setActivePack(readActivePack());
+    };
     const onResolved = () => {
       setCart(readToolCart());
+      setActivePack(readActivePack());
       showToast("Payment verified — tool licenses are now active");
       void refresh();
     };
@@ -77,17 +93,18 @@ export default function SubscriptionPage() {
     if (payableIds.length !== cart.length) {
       writeToolCart(payableIds);
       setCart(payableIds);
+      if (payableIds.length === 0) setActivePack(null);
     }
   }, [catalog.length, payableIds, cart.length]);
 
-  const loadQuote = useCallback(async (ids: string[]) => {
-    if (ids.length === 0) {
+  const loadQuote = useCallback(async (ids: string[], packId: string | null) => {
+    if (ids.length === 0 && !packId) {
       setQuote(null);
       setQuoteError("");
       return;
     }
     try {
-      const data = await fetchCartQuote(ids);
+      const data = await fetchCartQuote(ids, packId || undefined);
       setQuote(data);
       setQuoteError("");
     } catch (err) {
@@ -97,8 +114,8 @@ export default function SubscriptionPage() {
   }, []);
 
   useEffect(() => {
-    void loadQuote(payableIds);
-  }, [payableIds, loadQuote]);
+    void loadQuote(payableIds, activePack);
+  }, [payableIds, activePack, loadQuote]);
 
   const groups = useMemo(() => groupCatalog(catalog), [catalog]);
   const licensedCount = catalog.filter((s) => s.licensed && !s.includedFree).length;
@@ -108,6 +125,36 @@ export default function SubscriptionPage() {
     if (sku.licensed || sku.includedFree) return;
     const next = cart.includes(sku.toolId) ? removeFromToolCart(sku.toolId) : addToToolCart(sku.toolId);
     setCart(next);
+    setActivePack(null);
+  }
+
+  function addPack(pack: ProductPack) {
+    const remaining = pack.toolIds.filter((id) => {
+      const sku = catalog.find((s) => s.toolId === id);
+      return sku && !sku.includedFree && !sku.licensed && sku.priceInr > 0;
+    });
+    if (remaining.length === 0) {
+      showToast("Every tool in this pack is already licensed");
+      return;
+    }
+    const next = setPackCart(pack.id, remaining);
+    setCart(next);
+    setActivePack(pack.id);
+    showToast(`${pack.name} added — pack pricing applied at checkout`);
+  }
+
+  async function handleTrial(sku: ToolCatalogSku) {
+    if (!sku.trialEligible) return;
+    setTrialBusy(sku.toolId);
+    try {
+      await startToolTrial(sku.toolId);
+      showToast(`${sku.trialDays}-day trial started for ${sku.name}`);
+      await refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Could not start trial");
+    } finally {
+      setTrialBusy(null);
+    }
   }
 
   async function handleCancelLicenses() {
@@ -116,6 +163,7 @@ export default function SubscriptionPage() {
       await cancelProSubscription();
       clearToolCart();
       setCart([]);
+      setActivePack(null);
       showToast("Paid tool licenses cancelled");
       await refresh();
     } catch (err) {
@@ -134,7 +182,7 @@ export default function SubscriptionPage() {
         <div className="tool-header-text">
           <div className="tool-header-title">Subscribe to tools</div>
           <div className="tool-header-sub">
-            Choose the tools you need. Checkout is a separate step — UPI by default, cards via payment gateway.
+            Choose tools or a pack. Trials unlock access without charging MRR until you subscribe.
           </div>
         </div>
       </div>
@@ -199,9 +247,10 @@ export default function SubscriptionPage() {
                     <li key={item.toolId}>
                       <strong>{item.name}</strong>
                       <span>
-                        {inr(item.unitPriceInr)}/mo
-                        {item.periodEnd ? ` · until ${item.periodEnd.slice(0, 10)}` : ""}
-                        {item.source ? ` · ${item.source}` : ""}
+                        {item.source === "trial"
+                          ? `Trial · until ${item.periodEnd?.slice(0, 10) ?? "—"}`
+                          : `${inr(item.unitPriceInr)}/mo${item.periodEnd ? ` · until ${item.periodEnd.slice(0, 10)}` : ""}`}
+                        {item.source && item.source !== "trial" ? ` · ${item.source}` : ""}
                       </span>
                     </li>
                   ))}
@@ -215,10 +264,52 @@ export default function SubscriptionPage() {
             ) : null}
           </section>
 
+          {packs.length > 0 ? (
+            <section className="store-packs">
+              <h2 className="billing-section-title">Product packs</h2>
+              <p className="muted">Bundles apply pack pricing at checkout for tools you do not already license.</p>
+              <div className="store-packs-grid">
+                {packs.map((pack) => {
+                  const remaining = pack.toolIds.filter((id) => {
+                    const sku = catalog.find((s) => s.toolId === id);
+                    return sku && !sku.includedFree && !sku.licensed && sku.priceInr > 0;
+                  });
+                  const selected = activePack === pack.id;
+                  return (
+                    <article key={pack.id} className={`store-pack${selected ? " is-selected" : ""}${pack.highlighted ? " is-featured" : ""}`}>
+                      <div className="store-pack-top">
+                        <div>
+                          <strong>{pack.name}</strong>
+                          {pack.tagline ? <p className="muted store-pack-tagline">{pack.tagline}</p> : null}
+                        </div>
+                        <div className="store-pack-price">
+                          <strong>{inr(pack.priceInr)}</strong>
+                          {pack.savingsInr > 0 ? <em>Save {inr(pack.savingsInr)}</em> : null}
+                        </div>
+                      </div>
+                      <p className="store-pack-meta">
+                        {remaining.length} of {pack.toolCount} tools available
+                        {pack.discountPct > 0 ? ` · ${pack.discountPct}% off` : ""}
+                      </p>
+                      <button
+                        type="button"
+                        className={selected ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
+                        disabled={remaining.length === 0}
+                        onClick={() => addPack(pack)}
+                      >
+                        {remaining.length === 0 ? "Fully licensed" : selected ? "Pack in cart" : "Add pack"}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
           <div className="store-layout">
             <div className="store-catalog">
               <h2 className="billing-section-title">Tool catalog</h2>
-              <p className="muted">Add paid tools to the cart. Calculators and utilities stay included.</p>
+              <p className="muted">Add paid tools à la carte, or start a trial where offered.</p>
               {groups.map(([category, tools]) => (
                 <section key={category} className="store-category">
                   <h3>{category}</h3>
@@ -241,13 +332,25 @@ export default function SubscriptionPage() {
                             )}
                           </div>
                           {!sku.includedFree && !sku.licensed ? (
-                            <button
-                              type="button"
-                              className={inCart ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
-                              onClick={() => toggle(sku)}
-                            >
-                              {inCart ? "Remove" : "Add to cart"}
-                            </button>
+                            <div className="store-sku-actions">
+                              {sku.trialEligible ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-sm"
+                                  disabled={trialBusy === sku.toolId}
+                                  onClick={() => void handleTrial(sku)}
+                                >
+                                  Start {sku.trialDays}-day trial
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className={inCart ? "btn btn-secondary btn-sm" : "btn btn-ghost btn-sm"}
+                                onClick={() => toggle(sku)}
+                              >
+                                {inCart ? "Remove" : "Add to cart"}
+                              </button>
+                            </div>
                           ) : (
                             <p className="muted store-sku-note">
                               {sku.includedFree ? "No subscription required" : "Unlimited on this workspace"}
@@ -263,22 +366,29 @@ export default function SubscriptionPage() {
 
             <aside className="store-cart card">
               <h2>Cart</h2>
+              {activePack && quote?.packName ? (
+                <p className="store-cart-pack">{quote.packName} pricing</p>
+              ) : null}
               {payableIds.length === 0 ? (
-                <p className="muted">Select tools to build a monthly subscription.</p>
+                <p className="muted">Select tools or a pack to build a monthly subscription.</p>
               ) : (
                 <ul className="billing-line-items">
                   {payableIds.map((id) => {
                     const sku = catalog.find((s) => s.toolId === id);
+                    const line = quote?.lines.find((l) => l.toolId === id);
                     if (!sku) return null;
                     return (
                       <li key={id}>
                         <span>{sku.name}</span>
-                        <strong>{inr(sku.priceInr)}</strong>
+                        <strong>{inr(line?.priceInr ?? sku.priceInr)}</strong>
                       </li>
                     );
                   })}
                 </ul>
               )}
+              {quote?.savingsInr && quote.savingsInr > 0 ? (
+                <p className="store-cart-savings">Pack savings {inr(quote.savingsInr)}</p>
+              ) : null}
               <div className="store-cart-total">
                 <span>Due now</span>
                 <strong>{inr(quote?.totalInr ?? 0)}</strong>

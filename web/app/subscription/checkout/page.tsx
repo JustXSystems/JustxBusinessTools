@@ -9,7 +9,7 @@ import { CardPayMethod } from "@/components/subscription/CardPayMethod";
 import { UpiPayMethod } from "@/components/subscription/UpiPayMethod";
 import { useSubscription } from "@/hooks/useSubscription";
 import { fetchCartQuote } from "@/lib/api";
-import { clearToolCart, readToolCart } from "@/lib/tool-cart";
+import { clearToolCart, readActivePack, readToolCart } from "@/lib/tool-cart";
 import type { CartQuote } from "@/lib/types/subscription";
 
 function inr(n: number) {
@@ -26,6 +26,7 @@ export default function SubscriptionCheckoutPage() {
   const [quoteError, setQuoteError] = useState("");
   const [quoting, setQuoting] = useState(true);
   const [method, setMethod] = useState<PayMethod>("upi");
+  const [bundleId, setBundleId] = useState<string | null>(null);
 
   const catalog = subscription?.catalog ?? [];
   const pending = subscription?.pendingClaim;
@@ -33,14 +34,16 @@ export default function SubscriptionCheckoutPage() {
 
   const loadQuote = useCallback(async () => {
     const ids = readToolCart();
-    if (ids.length === 0) {
+    const packId = readActivePack();
+    setBundleId(packId);
+    if (ids.length === 0 && !packId) {
       setQuote(null);
       setQuoting(false);
       return;
     }
     setQuoting(true);
     try {
-      const data = await fetchCartQuote(ids);
+      const data = await fetchCartQuote(ids, packId || undefined);
       setQuote(data);
       setQuoteError("");
     } catch (err) {
@@ -117,7 +120,10 @@ export default function SubscriptionCheckoutPage() {
       <div className="co-layout">
         <aside className="co-summary card">
           <p className="card-label">Order summary</p>
-          <h2>Monthly subscription</h2>
+          <h2>{quote?.packName ? quote.packName : "Monthly subscription"}</h2>
+          {quote?.savingsInr && quote.savingsInr > 0 ? (
+            <p className="muted">Pack savings {inr(quote.savingsInr)}</p>
+          ) : null}
           {lines.length === 0 ? (
             <p className="muted">No tools in this order.</p>
           ) : (
@@ -192,6 +198,7 @@ export default function SubscriptionCheckoutPage() {
             <UpiPayMethod
               toolIds={toolIds}
               amountInr={amount}
+              bundleId={bundleId || quote?.bundleId}
               upi={quote?.upi ?? subscription?.upi}
               pendingClaim={pending}
               onDone={onPaid}
@@ -202,6 +209,7 @@ export default function SubscriptionCheckoutPage() {
               kind={method}
               toolIds={toolIds}
               amountInr={amount}
+              bundleId={bundleId || quote?.bundleId}
               gateways={gateways}
               onDone={onPaid}
               onToast={showToast}

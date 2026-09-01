@@ -106,13 +106,17 @@ export async function syncSubscriptionItemsFromLicenses(
 
   for (const lic of licenses) {
     const sku = byId.get(lic.toolId);
-    const price = sku && !sku.includedFree ? sku.priceInr : 0;
+    const listPrice = sku && !sku.includedFree ? sku.priceInr : 0;
     await pool.query(
       `INSERT INTO org_subscription_items
          (organization_id, tool_id, unit_price_inr, status, source, external_ref, current_period_end)
        VALUES (:orgId, :toolId, :price, 'active', :source, :externalRef, :periodEnd)
        ON DUPLICATE KEY UPDATE
-         unit_price_inr = :price,
+         unit_price_inr = CASE
+           WHEN :source = 'trial' THEN 0
+           WHEN source = 'trial' AND :source IS NULL THEN 0
+           ELSE :price
+         END,
          status = 'active',
          source = COALESCE(:source, source),
          external_ref = COALESCE(:externalRef, external_ref),
@@ -120,7 +124,7 @@ export async function syncSubscriptionItemsFromLicenses(
       {
         orgId,
         toolId: lic.toolId,
-        price,
+        price: meta?.source === "trial" ? 0 : listPrice,
         source: meta?.source ?? null,
         externalRef: meta?.externalRef ?? null,
         periodEnd: lic.periodEnd ? new Date(lic.periodEnd) : null,

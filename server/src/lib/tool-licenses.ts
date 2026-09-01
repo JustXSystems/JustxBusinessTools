@@ -169,43 +169,91 @@ export async function licensedOrIncluded(
   return isToolLicensed(orgId, toolId);
 }
 
+export async function hasEverLicensedTool(orgId: number, toolId: string): Promise<boolean> {
+  await ensureLicenseSchema();
+  const [rows] = await pool.query(
+    `SELECT 1 AS ok FROM org_tool_licenses
+     WHERE organization_id = :orgId AND tool_id = :toolId
+     LIMIT 1`,
+    { orgId, toolId },
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+export async function everLicensedToolIdSet(orgId: number): Promise<Set<string>> {
+  await ensureLicenseSchema();
+  const [rows] = await pool.query(
+    `SELECT tool_id FROM org_tool_licenses WHERE organization_id = :orgId`,
+    { orgId },
+  );
+  return new Set(
+    (Array.isArray(rows) ? rows : []).map((r) => String((r as { tool_id: string }).tool_id)),
+  );
+}
+
 export async function refreshOrgMrr(orgId: number): Promise<number> {
-  const licenses = await listActiveLicenses(orgId);
-  const skus = await listToolSkus();
-  const byId = new Map(skus.map((s) => [s.toolId, s]));
-  const mrr = licenses.reduce((sum, lic) => {
-    const sku = byId.get(lic.toolId);
-    if (!sku || sku.includedFree) return sum;
-    return sum + sku.priceInr;
-  }, 0);
-  await pool.query(`UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`, {
-    mrr,
-    orgId,
-  });
   try {
     const { syncSubscriptionItemsFromLicenses } = await import("./subscription-items.js");
     await syncSubscriptionItemsFromLicenses(orgId);
+    const [sumRows] = await pool.query(
+      `SELECT COALESCE(SUM(unit_price_inr), 0) AS mrr
+       FROM org_subscription_items
+       WHERE organization_id = :orgId AND status = 'active'`,
+      { orgId },
+    );
+    const mrr = Number(
+      (Array.isArray(sumRows) ? (sumRows[0] as { mrr: number }) : { mrr: 0 }).mrr ?? 0,
+    );
+    await pool.query(`UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`, {
+      mrr,
+      orgId,
+    });
+    return mrr;
   } catch {
-    /* line-item ledger optional until schema ready */
+    const licenses = await listActiveLicenses(orgId);
+    const skus = await listToolSkus();
+    const byId = new Map(skus.map((s) => [s.toolId, s]));
+    const mrr = licenses.reduce((sum, lic) => {
+      const sku = byId.get(lic.toolId);
+      if (!sku || sku.includedFree) return sum;
+      return sum + sku.priceInr;
+    }, 0);
+    await pool.query(`UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`, {
+      mrr,
+      orgId,
+    });
+    return mrr;
   }
-  return mrr;
 }
 
-export function catalogPayload(skus: ToolSku[], licensed: Set<string>) {
+export function catalogPayload(
+  skus: ToolSku[],
+  licensed: Set<string>,
+  everLicensed: Set<string> = new Set(),
+) {
   return skus
     .filter((s) => s.available)
-    .map((s) => ({
-      toolId: s.toolId,
-      name: s.name,
-      category: s.category,
-      tagline: s.tagline,
-      priceInr: s.priceInr,
-      annualPriceInr: s.annualPriceInr,
-      billingInterval: s.billingInterval,
-      includedFree: s.includedFree || s.priceInr <= 0,
-      accessPolicy: s.accessPolicy,
-      featured: s.featured,
-      trialDays: s.trialDays,
-      licensed: licensed.has(s.toolId) || s.includedFree || s.priceInr <= 0,
-    }));
+    .map((s) => {
+      const includedFree = s.includedFree || s.priceInr <= 0;
+      const isLicensed = licensed.has(s.toolId) || includedFree;
+      return {
+        toolId: s.toolId,
+        name: s.name,
+        category: s.category,
+        tagline: s.tagline,
+        priceInr: s.priceInr,
+        annualPriceInr: s.annualPriceInr,
+        billingInterval: s.billingInterval,
+        includedFree,
+        accessPolicy: s.accessPolicy,
+        featured: s.featured,
+        trialDays: s.trialDays,
+        licensed: isLicensed,
+        trialEligible:
+          !includedFree &&
+          !isLicensed &&
+          s.trialDays > 0 &&
+          !everLicensed.has(s.toolId),
+      };
+    });
 }

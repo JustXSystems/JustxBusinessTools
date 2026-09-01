@@ -135,6 +135,25 @@ export async function ensureToolSkuSchema(): Promise<void> {
           },
         );
       }
+
+      // One-time conversion defaults: hard-lock high-ARPU tools + 14-day trial.
+      // Skips rows already customized (non-default policy).
+      const [flagRows] = await pool.query(
+        `SELECT config_key FROM platform_config WHERE config_key = 'commerce_defaults_v1' LIMIT 1`,
+      );
+      if (!Array.isArray(flagRows) || flagRows.length === 0) {
+        await pool.query(
+          `UPDATE tool_skus
+           SET access_policy = 'hard_lock',
+               trial_days = IF(trial_days > 0, trial_days, 14)
+           WHERE tool_id IN ('invoice', 'quotation', 'quotationv1')
+             AND access_policy = 'soft_cap'`,
+        );
+        await pool.query(
+          `INSERT INTO platform_config (config_key, value)
+           VALUES ('commerce_defaults_v1', JSON_OBJECT('hardLock', JSON_ARRAY('invoice','quotation','quotationv1'), 'trialDays', 14))`,
+        );
+      }
     })().catch((err: unknown) => {
       schemaReady = null;
       throw err;

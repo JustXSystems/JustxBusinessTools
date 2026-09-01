@@ -15,6 +15,7 @@ export function UpiPayMethod({
   amountInr,
   upi,
   pendingClaim,
+  bundleId,
   onDone,
   onToast,
 }: {
@@ -22,6 +23,7 @@ export function UpiPayMethod({
   amountInr: number;
   upi?: UpiPayInfo;
   pendingClaim?: PendingUpiClaim | null;
+  bundleId?: string | null;
   onDone: () => Promise<void>;
   onToast: (msg: string) => void;
 }) {
@@ -80,7 +82,11 @@ export function UpiPayMethod({
     e.preventDefault();
     setBusy(true);
     try {
-      const result = await submitUpiClaim({ toolIds, ...form });
+      const result = await submitUpiClaim({
+        toolIds,
+        ...(bundleId ? { bundleId } : {}),
+        ...form,
+      });
       invalidateLiveData("notifications");
       onToast(result.message);
       await onDone();

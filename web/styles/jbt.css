@@ -6469,6 +6469,124 @@ html[data-scheme="light"] .field textarea {
   font-size: 12px;
 }
 
+.store-sku-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.store-packs {
+  margin: 20px 0 8px;
+}
+
+.store-packs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.store-pack {
+  border: 1px solid var(--border-hair);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: var(--glass-1);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.store-pack.is-featured {
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+.store-pack.is-selected {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+}
+
+.store-pack-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.store-pack-tagline {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.store-pack-price {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.store-pack-price strong {
+  display: block;
+  color: var(--accent);
+}
+
+.store-pack-price em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-mid);
+}
+
+.store-pack-meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-mid);
+}
+
+.store-cart-pack {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.store-cart-savings {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-mid);
+}
+
+.tool-card-cta-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.tool-card-subscribe-secondary {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-mid);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 4px 6px;
+  text-align: center;
+}
+
+.tool-card-subscribe-secondary:hover {
+  color: var(--accent);
+}
+
+.usage-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.usage-banner-cta-secondary {
+  background: transparent;
+  border: 1px solid currentColor;
+}
+
 .store-cart {
   position: sticky;
   top: 16px;

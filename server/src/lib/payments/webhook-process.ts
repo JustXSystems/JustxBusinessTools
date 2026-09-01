@@ -90,15 +90,7 @@ export async function applyWebhookEvent(
     const amountInr = event.amountInr ?? intent?.amountInr ?? PRO_PRICE_INR;
     const periodEnd = event.periodEnd ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    if (toolIds && toolIds.length > 0) {
-      await activateToolCommerceForProfile({
-        profileId: event.profileId,
-        toolIds,
-        source: "webhook",
-        externalRef: event.externalSubscriptionId,
-        periodEnd,
-      });
-    } else if (event.planId === "pro" || event.planId === "unlimited") {
+    if (event.planId === "pro" || event.planId === "unlimited" || event.planId === "pack:all_tools") {
       // Activates All Tools Pack plan + per-tool licenses.
       await activatePaidSubscription(
         event.profileId,
@@ -108,6 +100,14 @@ export async function applyWebhookEvent(
         periodEnd,
         "pro",
       );
+    } else if (toolIds && toolIds.length > 0) {
+      await activateToolCommerceForProfile({
+        profileId: event.profileId,
+        toolIds,
+        source: event.planId?.startsWith("pack:") ? "pack" : "webhook",
+        externalRef: event.externalSubscriptionId,
+        periodEnd,
+      });
     }
 
     if (orgId) {

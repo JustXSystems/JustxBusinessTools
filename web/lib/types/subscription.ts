@@ -25,6 +25,22 @@ export type ToolCatalogSku = {
   featured?: boolean;
   trialDays?: number;
   licensed: boolean;
+  /** True when SKU has trialDays and this org has never held a license row for the tool. */
+  trialEligible?: boolean;
+};
+
+export type ProductPack = {
+  id: string;
+  name: string;
+  tagline?: string | null;
+  description?: string | null;
+  discountPct: number;
+  listPriceInr: number;
+  priceInr: number;
+  highlighted?: boolean;
+  toolIds: string[];
+  toolCount: number;
+  savingsInr: number;
 };
 
 export type ToolLicense = {
@@ -54,6 +70,10 @@ export type CartQuote = {
   }>;
   totalInr: number;
   billingInterval: string;
+  bundleId?: string;
+  packName?: string;
+  listPriceInr?: number;
+  savingsInr?: number;
   upi?: UpiPayInfo;
 };
 
@@ -98,6 +118,7 @@ export type SubscriptionInfo = {
   provider: string;
   plans: SubscriptionPlan[];
   catalog?: ToolCatalogSku[];
+  packs?: ProductPack[];
   licenses?: ToolLicense[];
   licensedToolIds?: string[];
   billingItems?: BillingItem[];

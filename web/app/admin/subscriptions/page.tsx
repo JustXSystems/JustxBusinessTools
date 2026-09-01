@@ -269,8 +269,8 @@ export default function AdminSubscriptionsPage() {
             <h2>Operator access</h2>
             <p className="muted">
               Platform freemium (record cap) plus product packs. Per-tool subscriptions live in{" "}
-              <Link href="/admin/tools?tab=pricing">Tool management → Product</Link>. Assigning Unlimited grants the All
-              Tools Pack (every paid SKU license); Limited revokes those licenses. UPI verify:{" "}
+              <Link href="/admin/tools?tab=pricing">Tool management → Product</Link>. Assigning All Tools Pack
+              grants every paid SKU license; Freemium revokes those licenses. UPI verify:{" "}
               <Link href="/admin/upi">UPI</Link>.
             </p>
           </div>
@@ -288,7 +288,7 @@ export default function AdminSubscriptionsPage() {
             <span>Tenants</span>
             <strong>{tenantSummary.total}</strong>
             <span className="analytics-delta">
-              {tenantSummary.unlimited} unlimited · {tenantSummary.limited} limited
+              {tenantSummary.unlimited} All Tools Pack · {tenantSummary.limited} Freemium
             </span>
           </div>
           <div className="result-card">
@@ -339,7 +339,7 @@ export default function AdminSubscriptionsPage() {
                     <span className="m-val">{inr(t.mrrInr)}</span>
                   </span>
                   <span className={t.accessMode === "unlimited" ? "pill pill-success" : "pill pill-warning"}>
-                    {t.accessMode === "unlimited" ? "Unlimited" : "Limited"}
+                    {t.accessMode === "unlimited" ? "All Tools Pack" : "Freemium"}
                   </span>
                 </div>
                 <div className="tracker-actions">
@@ -349,7 +349,7 @@ export default function AdminSubscriptionsPage() {
                     disabled={saving || t.planId === "free"}
                     onClick={() => void assign("free", t.organizationId)}
                   >
-                    → Limited
+                    → Freemium
                   </button>
                   <button
                     type="button"
@@ -357,7 +357,7 @@ export default function AdminSubscriptionsPage() {
                     disabled={saving || t.planId === "pro"}
                     onClick={() => void assign("pro", t.organizationId)}
                   >
-                    → All tools
+                    → All Tools Pack
                   </button>
                 </div>
               </div>

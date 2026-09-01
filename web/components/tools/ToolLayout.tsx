@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { ToolDefinition } from "@/config/tools.config";
+import { useToast } from "@/components/common/ToastProvider";
 import { ToolUsageCounter, UsageLimitBanner } from "@/components/subscription/UsageLimitBanner";
 import { useSubscription } from "@/hooks/useSubscription";
 import type { ToolUsage } from "@/lib/types/tool-record";
@@ -38,11 +39,26 @@ export function ToolLayout({
   headerActions,
   children,
 }: Props) {
-  const { subscription, isToolLicensed, openUpgrade } = useSubscription();
+  const { subscription, isToolLicensed, openUpgrade, startTrial } = useSubscription();
+  const { showToast } = useToast();
+  const [busy, setBusy] = useState(false);
   const sku = subscription?.catalog?.find((s) => s.toolId === tool.id);
   const licensed = isToolLicensed(tool.id);
   const showSubscribe =
     !tool.subscriptionExempt && Boolean(sku && !sku.includedFree && sku.priceInr > 0 && !licensed);
+  const trialEligible = Boolean(showSubscribe && sku?.trialEligible && (sku.trialDays ?? 0) > 0);
+
+  async function onTrial() {
+    setBusy(true);
+    try {
+      await startTrial(tool.id);
+      showToast(`${sku?.trialDays ?? 14}-day trial started`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Could not start trial");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div>
@@ -58,13 +74,33 @@ export function ToolLayout({
         </div>
         {!tool.subscriptionExempt ? <ToolUsageCounter usage={usage} licensed={licensed} /> : null}
         {showSubscribe && sku ? (
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => openUpgrade(tool.id)}
-          >
-            Subscribe · {inr(sku.priceInr)}/mo
-          </button>
+          trialEligible ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={busy}
+                onClick={() => void onTrial()}
+              >
+                Start {sku.trialDays}-day trial
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => openUpgrade(tool.id)}
+              >
+                Subscribe · {inr(sku.priceInr)}/mo
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => openUpgrade(tool.id)}
+            >
+              Subscribe · {inr(sku.priceInr)}/mo
+            </button>
+          )
         ) : null}
         {headerActions}
         {onAdd ? (
@@ -73,7 +109,7 @@ export function ToolLayout({
             className="btn btn-primary btn-sm"
             onClick={onAdd}
             disabled={!canCreate}
-            title={!canCreate ? "Subscribe to unlock more records" : undefined}
+            title={!canCreate ? "Subscribe or start a trial to unlock" : undefined}
           >
             {addLabel}
           </button>

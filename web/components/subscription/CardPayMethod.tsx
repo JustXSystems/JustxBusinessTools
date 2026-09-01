@@ -18,6 +18,7 @@ export function CardPayMethod({
   toolIds,
   amountInr,
   gateways,
+  bundleId,
   onDone,
   onToast,
 }: {
@@ -25,6 +26,7 @@ export function CardPayMethod({
   toolIds: string[];
   amountInr: number;
   gateways: PayGatewayOption[];
+  bundleId?: string | null;
   onDone: () => Promise<void>;
   onToast: (msg: string) => void;
 }) {
@@ -39,9 +41,10 @@ export function CardPayMethod({
     if (!selected) return;
     setBusy(true);
     try {
-      const result = await startCheckout("cart", toolIds, {
+      const result = await startCheckout(bundleId ? `pack:${bundleId}` : "cart", toolIds, {
         gatewayId: selected.id,
         method: kind,
+        ...(bundleId ? { bundleId } : {}),
       });
       if (result.activated) {
         onToast("Payment successful. Selected tools are now licensed.");

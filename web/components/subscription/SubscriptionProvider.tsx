@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { fetchSubscription } from "@/lib/api";
+import { fetchSubscription, startToolTrial } from "@/lib/api";
 import { addToToolCart } from "@/lib/tool-cart";
 import { trackUpgradeClick } from "@/lib/analytics";
 import {
@@ -36,6 +36,8 @@ type SubscriptionContextValue = {
   refresh: () => Promise<void>;
   /** Add tool to cart and open /subscription (per-tool subscribe flow) */
   openUpgrade: (toolId?: string) => void;
+  /** Start self-serve trial when catalog marks the tool trialEligible */
+  startTrial: (toolId: string) => Promise<void>;
 };
 
 const SubscriptionContext = createContext<SubscriptionContextValue | null>(null);
@@ -149,6 +151,23 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     [router],
   );
 
+  const startTrial = useCallback(
+    async (toolId: string) => {
+      trackUpgradeClick();
+      const result = await startToolTrial(toolId);
+      writeSubscriptionSnapshot(result.subscription);
+      prevRef.current = result.subscription;
+      liveConfirmedRef.current = true;
+      setSubscription(result.subscription);
+      try {
+        window.dispatchEvent(new Event("jbt:data-invalidate"));
+      } catch {
+        /* ignore */
+      }
+    },
+    [],
+  );
+
   const value = useMemo(
     () => ({
       subscription,
@@ -161,6 +180,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       unlicensedPaidCount,
       refresh,
       openUpgrade,
+      startTrial,
     }),
     [
       subscription,
@@ -172,6 +192,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       unlicensedPaidCount,
       refresh,
       openUpgrade,
+      startTrial,
     ],
   );
 

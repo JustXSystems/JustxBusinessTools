@@ -52,8 +52,42 @@ export async function ensureProductBundleSchema(): Promise<void> {
          VALUES
            ('all_tools', 'All Tools Pack', 'Every paid business tool',
             'Grants a license for every paid tool SKU. À la carte remains available per tool.',
-            0, NULL, 1, 1, 0)`,
+            0, NULL, 1, 1, 0),
+           ('sales_pack', 'Sales Pack', 'Quote → order → invoice',
+            'Core sales workflow tools for closing and billing.',
+            10, NULL, 1, 1, 1),
+           ('solar_pack', 'Solar Pack', 'Survey → install → service',
+            'Solar delivery tools for site work and after-sales.',
+            10, NULL, 1, 0, 2)`,
       );
+
+      // Seed pack membership once (empty packs only).
+      const packSeeds: Array<{ id: string; tools: string[] }> = [
+        {
+          id: "sales_pack",
+          tools: ["quotation", "quotationv1", "salesorder", "invoice", "paymenttracker"],
+        },
+        {
+          id: "solar_pack",
+          tools: ["sitesurvey", "sitesurveyv1", "installation", "projects", "amc"],
+        },
+      ];
+      for (const pack of packSeeds) {
+        const [cntRows] = await pool.query(
+          `SELECT COUNT(*) AS cnt FROM product_bundle_items WHERE bundle_id = :id`,
+          { id: pack.id },
+        );
+        const cnt = Number(
+          (Array.isArray(cntRows) ? (cntRows[0] as { cnt: number }) : { cnt: 1 }).cnt,
+        );
+        if (cnt > 0) continue;
+        for (const toolId of pack.tools) {
+          await pool.query(
+            `INSERT IGNORE INTO product_bundle_items (bundle_id, tool_id) VALUES (:id, :toolId)`,
+            { id: pack.id, toolId },
+          );
+        }
+      }
     })().catch((err: unknown) => {
       schemaReady = null;
       throw err;
@@ -209,4 +243,112 @@ export async function resolveBundleToolIds(bundleId: string): Promise<string[]> 
   const bundle = await getProductBundle(bundleId);
   if (!bundle) throw Object.assign(new Error("Unknown pack"), { status: 404 });
   return bundle.toolIds;
+}
+
+export async function listAvailableProductBundles(): Promise<ProductBundle[]> {
+  const all = await listProductBundles();
+  return all.filter((b) => b.available);
+}
+
+export function publicBundlePayload(bundle: ProductBundle) {
+  return {
+    id: bundle.id,
+    name: bundle.name,
+    tagline: bundle.tagline,
+    description: bundle.description,
+    discountPct: bundle.discountPct,
+    listPriceInr: bundle.listPriceInr,
+    priceInr: bundle.priceInr,
+    highlighted: bundle.highlighted,
+    toolIds: bundle.toolIds,
+    toolCount: bundle.toolIds.length,
+    savingsInr: Math.max(0, bundle.listPriceInr - bundle.priceInr),
+  };
+}
+
+export type BundleCartQuote = {
+  lines: Array<{
+    toolId: string;
+    name: string;
+    category: string;
+    priceInr: number;
+    billingInterval: string;
+  }>;
+  totalInr: number;
+  billingInterval: string;
+  bundleId: string;
+  packName: string;
+  listPriceInr: number;
+  savingsInr: number;
+};
+
+/**
+ * Quote unlicensed tools in a pack with pack discount / fixed price applied
+ * only to the remaining (unlicensed) list price.
+ */
+export async function quoteBundleCart(
+  bundleId: string,
+  licensedIds: Set<string>,
+): Promise<BundleCartQuote> {
+  const bundle = await getProductBundle(bundleId);
+  if (!bundle || !bundle.available) {
+    throw Object.assign(new Error("This pack is not available"), { status: 404 });
+  }
+
+  const skus = await listToolSkus();
+  const byId = new Map(skus.map((s) => [s.toolId, s]));
+  const remaining = bundle.toolIds.filter((id) => {
+    const sku = byId.get(id);
+    if (!sku || !sku.available || sku.includedFree || sku.priceInr <= 0) return false;
+    return !licensedIds.has(id);
+  });
+
+  if (remaining.length === 0) {
+    throw Object.assign(new Error("Every tool in this pack is already licensed"), {
+      status: 400,
+    });
+  }
+
+  const listPriceInr = remaining.reduce((sum, id) => sum + (byId.get(id)?.priceInr ?? 0), 0);
+  let totalInr: number;
+  if (bundle.fixedPriceInr != null && bundle.fixedPriceInr >= 0) {
+    const fullList = Math.max(1, bundle.listPriceInr || listPriceInr);
+    totalInr = Math.round(bundle.fixedPriceInr * (listPriceInr / fullList));
+  } else {
+    const pct = Math.max(0, Math.min(100, bundle.discountPct));
+    totalInr = Math.round(listPriceInr * (1 - pct / 100));
+  }
+
+  // Distribute payable total across lines so checkout UIs stay line-item based.
+  const lines = remaining.map((id, index) => {
+    const sku = byId.get(id)!;
+    let priceInr: number;
+    if (index === remaining.length - 1) {
+      const prior = remaining.slice(0, -1).reduce((sum, tid) => {
+        const list = byId.get(tid)?.priceInr ?? 0;
+        return sum + (listPriceInr > 0 ? Math.floor((totalInr * list) / listPriceInr) : 0);
+      }, 0);
+      priceInr = Math.max(0, totalInr - prior);
+    } else {
+      priceInr =
+        listPriceInr > 0 ? Math.floor((totalInr * sku.priceInr) / listPriceInr) : 0;
+    }
+    return {
+      toolId: sku.toolId,
+      name: sku.name,
+      category: sku.category,
+      priceInr,
+      billingInterval: sku.billingInterval,
+    };
+  });
+
+  return {
+    lines,
+    totalInr,
+    billingInterval: lines[0]?.billingInterval ?? "month",
+    bundleId: bundle.id,
+    packName: bundle.name,
+    listPriceInr,
+    savingsInr: Math.max(0, listPriceInr - totalInr),
+  };
 }
