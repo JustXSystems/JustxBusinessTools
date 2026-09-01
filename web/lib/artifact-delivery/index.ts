@@ -90,6 +90,8 @@ async function ack(
  * 1) File System Access (Chromium, if folder linked)
  * 2) Share sheet (mobile)
  * 3) Browser download fallback
+ *
+ * Pass `companyOnly: true` to skip all local copy paths (Submit / archive-to-company flows).
  */
 export async function deliverToolArtifact(input: {
   toolId: string;
@@ -99,6 +101,8 @@ export async function deliverToolArtifact(input: {
   meta?: Record<string, unknown>;
   /** Prefer share sheet on mobile before browser download. */
   preferShare?: boolean;
+  /** Stage + company delivery only — no FSA, share sheet, or browser download. */
+  companyOnly?: boolean;
   conflictPolicy?: "rename" | "skip" | "overwrite";
 }): Promise<ArtifactDeliveryResult> {
   const mimeType = input.mimeType || "application/octet-stream";
@@ -120,11 +124,15 @@ export async function deliverToolArtifact(input: {
     Boolean(delivery?.ok) &&
     delivery?.status === "synced" &&
     (delivery.channel === "google_drive" || delivery.channel === "webhook");
+  const uncQueued =
+    Boolean(delivery?.ok) &&
+    delivery?.status === "pending" &&
+    (delivery.channel === "desktop_agent" || delivery.channel === "unc_agent");
 
   let cloudPrefix = "";
   if (delivery?.channel === "google_drive" && delivery.status === "synced" && delivery.ok) {
     cloudPrefix = staged.artifact.destinationPath
-      ? `Uploaded to company Google Drive.`
+      ? `Uploaded to company Google Drive (${staged.artifact.destinationPath}).`
       : "Uploaded to company Google Drive.";
   } else if (delivery?.channel === "webhook" && delivery.status === "synced" && delivery.ok) {
     cloudPrefix = "Delivered to company webhook.";
@@ -132,6 +140,26 @@ export async function deliverToolArtifact(input: {
     cloudPrefix = `Google Drive upload failed: ${delivery.message || staged.artifact.lastError || "unknown error"}.`;
   } else if (delivery?.channel === "webhook" && !delivery.ok) {
     cloudPrefix = `Webhook delivery failed: ${delivery.message || staged.artifact.lastError || "unknown error"}.`;
+  } else if (uncQueued) {
+    cloudPrefix = delivery?.message || "Queued for company file server (UNC) via desktop agent.";
+  } else if (delivery?.channel === "none" || !delivery) {
+    cloudPrefix =
+      delivery?.message ||
+      "No company destination configured (Profile → Company document delivery).";
+  } else if (delivery?.message) {
+    cloudPrefix = delivery.message;
+  }
+
+  if (input.companyOnly) {
+    const ok = cloudSynced || uncQueued;
+    return {
+      artifactId,
+      channel: delivery?.channel || staged.artifact.deliveryChannel || "none",
+      syncStatus: delivery?.status || staged.artifact.syncStatus,
+      message: cloudPrefix || (ok ? "Submitted to company document delivery." : "Company delivery did not complete."),
+      duplicateOf: staged.duplicateOf,
+      cloudOk: ok,
+    };
   }
 
   // Local FSA is optional — never treat it as a substitute for company Drive.

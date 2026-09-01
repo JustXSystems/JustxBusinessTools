@@ -310,7 +310,7 @@ export function QuotationGeneratorV1() {
     }
   }
 
-  /** Save as submitted and deliver a copy per Company document delivery (Drive / webhook / UNC / none). */
+  /** Save as submitted and deliver a copy per Company document delivery (no local download). */
   async function submitQuote() {
     const saved = await saveQuote("submitted");
     if (!saved) return;
@@ -325,15 +325,20 @@ export function QuotationGeneratorV1() {
           : `${payload.filename}.pdf`,
         bytes: pdfBase64ToBytes(payload.pdfBase64),
         mimeType: "application/pdf",
-        preferShare: false,
+        companyOnly: true,
         meta: { quoteNo: saved.quoteNo, quotationId: saved.id, status: "submitted" },
       });
+      const summary = result.message || "Submitted.";
       await pushNotif(
         saved.id,
-        `Quotation ${saved.quoteNo} submitted — copy sent to company document delivery.`,
+        result.cloudOk
+          ? `Quotation ${saved.quoteNo} submitted — ${summary}`
+          : `Quotation ${saved.quoteNo} submitted, but company delivery failed — ${summary}`,
       );
       flash(
-        result.message || "Quotation submitted — copy delivered per Company document delivery settings.",
+        result.cloudOk
+          ? `Submitted. ${summary}`
+          : `Submitted, but delivery failed. ${summary}`,
         result.cloudOk === false ? "err" : undefined,
       );
     } catch (e) {
@@ -570,7 +575,7 @@ export function QuotationGeneratorV1() {
                   ✕
                 </button>
                 <b>Workflow:</b> Fill required fields → <b>Save</b> (draft) → <b>Submit</b> (status submitted +
-                copy to Company document delivery) → <b>Download PDF</b> (local only) or <b>Send Via</b>{" "}
+                company delivery only, no local download) → <b>Download PDF</b> (local only) or <b>Send Via</b>{" "}
                 WhatsApp / Email.
               </div>
             ) : null}
