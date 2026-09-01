@@ -42,7 +42,7 @@ import { QuoteSheet } from "./QuoteSheet";
 import "./quotation-v1.css";
 
 type Route = "new" | "list" | "notifications" | "history" | "company";
-type SendChannel = "menu" | "whatsapp" | "email" | "share";
+type SendChannel = "whatsapp" | "email";
 
 function waDigits(raw: string) {
   let digits = raw.replace(/\D/g, "");
@@ -120,7 +120,8 @@ export function QuotationGeneratorV1() {
   const [busy, setBusy] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
-  const [sendChannel, setSendChannel] = useState<SendChannel>("menu");
+  const [sendChannel, setSendChannel] = useState<SendChannel>("whatsapp");
+  const [sendViaOpen, setSendViaOpen] = useState(false);
   const [waSelected, setWaSelected] = useState<string[]>([]);
   const [waExtra, setWaExtra] = useState("");
   const [waMessage, setWaMessage] = useState("");
@@ -138,6 +139,7 @@ export function QuotationGeneratorV1() {
   const [approvalLink, setApprovalLink] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
+  const sendViaRef = useRef<HTMLDivElement>(null);
 
   const totals = useMemo(() => computeTotals(current, company), [current, company]);
   const pendingApprovals = list.filter((q) => q.status === "sent").length;
@@ -239,7 +241,11 @@ export function QuotationGeneratorV1() {
       const saved = data.quotation;
       setCurrent(saved);
       setLastSaved(snapshotOf(saved));
-      flash(`Saved as ${saved.quoteNo}.`);
+      if (!markStatus) {
+        flash(`Saved as ${saved.quoteNo}.`);
+      } else if (markStatus === "submitted") {
+        flash(`Status set to submitted — ${saved.quoteNo}.`);
+      }
       invalidateAdminData("quotation-v1");
       await reloadMeta();
       return saved;
@@ -264,8 +270,11 @@ export function QuotationGeneratorV1() {
     };
   }, [route, current, company, totals]);
 
-  async function buildPdfPayload(q: QuotationV1): Promise<{ filename: string; pdfBase64: string } | null> {
-    if (!validateSaved(q)) return null;
+  async function buildPdfPayload(
+    q: QuotationV1,
+    opts?: { requireClean?: boolean },
+  ): Promise<{ filename: string; pdfBase64: string } | null> {
+    if (!validateSaved(q, opts)) return null;
     await new Promise((r) => setTimeout(r, 40));
     const node = document.getElementById("quote-sheet");
     if (!node) throw new Error("Preview not ready");
@@ -286,10 +295,28 @@ export function QuotationGeneratorV1() {
     }
   }
 
-  async function exportPdf(q: QuotationV1) {
+  /** Local PDF download only — does not push to Company document delivery. */
+  async function downloadPdf(q: QuotationV1) {
     setBusy(true);
     try {
       const payload = await buildPdfPayload(q);
+      if (!payload) return;
+      forceDownloadPdf(payload.filename, payload.pdfBase64);
+      flash(`Downloaded ${payload.filename}.`);
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "PDF download failed", "err");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Save as submitted and deliver a copy per Company document delivery (Drive / webhook / UNC / none). */
+  async function submitQuote() {
+    const saved = await saveQuote("submitted");
+    if (!saved) return;
+    setBusy(true);
+    try {
+      const payload = await buildPdfPayload(saved, { requireClean: false });
       if (!payload) return;
       const result = await deliverToolArtifact({
         toolId: "quotation-v1",
@@ -298,45 +325,37 @@ export function QuotationGeneratorV1() {
           : `${payload.filename}.pdf`,
         bytes: pdfBase64ToBytes(payload.pdfBase64),
         mimeType: "application/pdf",
-        preferShare: true,
-        meta: { quoteNo: q.quoteNo, quotationId: q.id },
+        preferShare: false,
+        meta: { quoteNo: saved.quoteNo, quotationId: saved.id, status: "submitted" },
       });
-      flash(result.message, result.cloudOk === false ? "err" : undefined);
+      await pushNotif(
+        saved.id,
+        `Quotation ${saved.quoteNo} submitted — copy sent to company document delivery.`,
+      );
+      flash(
+        result.message || "Quotation submitted — copy delivered per Company document delivery settings.",
+        result.cloudOk === false ? "err" : undefined,
+      );
     } catch (e) {
-      flash(e instanceof Error ? e.message : "PDF export failed", "err");
+      flash(e instanceof Error ? e.message : "Submit failed", "err");
     } finally {
       setBusy(false);
     }
   }
 
-  /** Prefer artifact delivery (FSA / queue / browser fallback); share sheet on mobile. */
-  async function downloadOrSharePdf(filename: string, pdfBase64: string) {
-    const safeName = filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`;
-    try {
-      const result = await deliverToolArtifact({
-        toolId: "quotation-v1",
-        filename: safeName,
-        bytes: pdfBase64ToBytes(pdfBase64),
-        mimeType: "application/pdf",
-        preferShare: true,
-        meta: { quoteNo: current.quoteNo, quotationId: current.id },
-      });
-      if (result.channel === "share_sheet") return "shared" as const;
-      return "downloaded" as const;
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return "cancelled" as const;
-      throw err;
-    }
-  }
-
-  function validateSaved(q: QuotationV1) {
+  function validateSaved(q: QuotationV1, opts?: { requireClean?: boolean }) {
     const missing = getMissingRequiredFields(q);
     if (missing.length) {
       flash(`Please fill in before continuing: ${missing.join(", ")}.`, "err");
       return false;
     }
-    if (!q.quoteNo || snapshotOf(q) !== lastSaved) {
-      flash("Please Save this quotation first — sending and downloading require a saved quotation.", "err");
+    if (!q.quoteNo) {
+      flash("Please Save this quotation first.", "err");
+      return false;
+    }
+    const requireClean = opts?.requireClean !== false;
+    if (requireClean && snapshotOf(q) !== lastSaved) {
+      flash("Please Save this quotation first — pending edits must be saved.", "err");
       return false;
     }
     return true;
@@ -367,13 +386,9 @@ export function QuotationGeneratorV1() {
     return fillSendTemplate(tpl, messageVars(q));
   }
 
-  function buildMessageText(q: QuotationV1) {
-    const tpl = sendSettings.email?.message || DEFAULT_SEND_SETTINGS.email.message;
-    return fillSendTemplate(tpl, messageVars(q));
-  }
-
-  function openSendModal() {
+  function openSendModal(channel: SendChannel) {
     if (!validateSaved(current)) return;
+    setSendViaOpen(false);
     const send = normalizeSendSettings(sendSettings);
     const vars = messageVars(current);
     const customerPhone = current.customer.phone.replace(/\D/g, "");
@@ -398,12 +413,23 @@ export function QuotationGeneratorV1() {
     );
     setEmailSubject(fillSendTemplate(send.email.subject || DEFAULT_SEND_SETTINGS.email.subject, vars));
     setEmailMessage(fillSendTemplate(send.email.message || DEFAULT_SEND_SETTINGS.email.message, vars));
-    setSendChannel("menu");
+    setSendChannel(channel);
     setSendOpen(true);
-    void api<{ canAutoAttach?: boolean }>("/quotation-v1/send/whatsapp/status")
-      .then((s) => setWaCanAutoAttach(Boolean(s.canAutoAttach)))
-      .catch(() => setWaCanAutoAttach(false));
+    if (channel === "whatsapp") {
+      void api<{ canAutoAttach?: boolean }>("/quotation-v1/send/whatsapp/status")
+        .then((s) => setWaCanAutoAttach(Boolean(s.canAutoAttach)))
+        .catch(() => setWaCanAutoAttach(false));
+    }
   }
+
+  useEffect(() => {
+    if (!sendViaOpen) return;
+    function onDoc(e: MouseEvent) {
+      if (!sendViaRef.current?.contains(e.target as Node)) setSendViaOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [sendViaOpen]);
 
   function collectWhatsAppRecipients() {
     const send = normalizeSendSettings(sendSettings);
@@ -483,7 +509,7 @@ export function QuotationGeneratorV1() {
         <div className="tool-header-text">
           <div className="tool-header-title">Quotation Generator V1</div>
           <div className="tool-header-sub">
-            Category templates · live GST · PDF &amp; customer approval
+            Draft · submit to company delivery · PDF · WhatsApp / Email
             {user?.email ? ` · ${user.email}` : ""}
           </div>
         </div>
@@ -534,7 +560,7 @@ export function QuotationGeneratorV1() {
             <div className="qgv1-page-head">
               <div>
                 <h1>Compose quotation</h1>
-                <p>Edit on the left — the quotation updates live on the right. Save, then download PDF or send.</p>
+                <p>Edit left · live preview right. Save draft, Submit to company delivery, download PDF, or send via WhatsApp / Email.</p>
               </div>
             </div>
 
@@ -543,8 +569,9 @@ export function QuotationGeneratorV1() {
                 <button type="button" className="qgv1-banner-x" onClick={() => setBannerDismissed(true)}>
                   ✕
                 </button>
-                <b>How saving works:</b> Category, For, Prepared By, Customer Name, and Phone are required
-                before Save. Send Via / PDF need a saved quotation with no pending edits.
+                <b>Workflow:</b> Fill required fields → <b>Save</b> (draft) → <b>Submit</b> (status submitted +
+                copy to Company document delivery) → <b>Download PDF</b> (local only) or <b>Send Via</b>{" "}
+                WhatsApp / Email.
               </div>
             ) : null}
 
@@ -984,39 +1011,63 @@ export function QuotationGeneratorV1() {
             </section>
 
             <div className="qgv1-btn-row qgv1-editor-actions">
-              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void saveQuote()}>
+              <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void saveQuote()}>
                 Save
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={busy}
-                onClick={() => void exportPdf(current)}
-              >
-                Download PDF
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={busy}
-                onClick={() => openSendModal()}
-              >
-                Send Via
               </button>
               <button
                 type="button"
                 className="btn btn-primary"
                 disabled={busy}
-                onClick={async () => {
-                  const saved = await saveQuote("sent");
-                  if (!saved) return;
-                  const link = `${window.location.origin}/q/${saved.approvalToken}`;
-                  setApprovalLink(link);
-                  await pushNotif(saved.id, `Approval link generated for ${saved.quoteNo}.`);
-                }}
+                onClick={() => void submitQuote()}
               >
-                Get Customer Approval Link
+                Submit
               </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy}
+                onClick={() => void downloadPdf(current)}
+              >
+                Download PDF
+              </button>
+              <div
+                className={`qgv1-send-via${sendViaOpen ? " is-open" : ""}`}
+                ref={sendViaRef}
+              >
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy}
+                  aria-haspopup="true"
+                  aria-expanded={sendViaOpen}
+                  onClick={() => {
+                    if (!validateSaved(current)) return;
+                    setSendViaOpen((o) => !o);
+                  }}
+                >
+                  Send Via
+                </button>
+                <div className="qgv1-send-via-pills" role="menu" aria-label="Send channels">
+                  <button
+                    type="button"
+                    className="qgv1-send-pill qgv1-send-pill-wa"
+                    role="menuitem"
+                    disabled={busy}
+                    onClick={() => openSendModal("whatsapp")}
+                  >
+                    WhatsApp
+                  </button>
+                  <button
+                    type="button"
+                    className="qgv1-send-pill qgv1-send-pill-email"
+                    role="menuitem"
+                    disabled={busy}
+                    onClick={() => openSendModal("email")}
+                  >
+                    Email
+                  </button>
+                </div>
+              </div>
               {!isSaved && current.quoteNo ? (
                 <span className="pill pill-warning">Unsaved changes</span>
               ) : null}
@@ -1029,14 +1080,31 @@ export function QuotationGeneratorV1() {
                   <span className="qgv1-preview-title preview-pane-title">Live preview</span>
                   <span className="qgv1-preview-sub preview-pane-sub">Updates as you type</span>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  disabled={busy}
-                  onClick={() => void exportPdf(current)}
-                >
-                  Download PDF
-                </button>
+                <div className="qgv1-preview-toolbar-actions">
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={busy || !current.quoteNo}
+                    onClick={async () => {
+                      if (!validateSaved(current)) return;
+                      const saved = await saveQuote("sent");
+                      if (!saved) return;
+                      const link = `${window.location.origin}/q/${saved.approvalToken}`;
+                      setApprovalLink(link);
+                      await pushNotif(saved.id, `Approval link generated for ${saved.quoteNo}.`);
+                    }}
+                  >
+                    Approval link
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={busy}
+                    onClick={() => void downloadPdf(current)}
+                  >
+                    Download PDF
+                  </button>
+                </div>
               </div>
               <div className="qgv1-preview-scroll preview-pane-scroll" ref={sheetRef}>
                 <div className="qgv1-preview-fit">
@@ -1069,7 +1137,7 @@ export function QuotationGeneratorV1() {
                         {q.customer?.name} · {typeLabel(q)} · ₹{money(Number((q as { _grandTotal?: number })._grandTotal ?? computeTotals(q, company).grand))}
                       </span>
                     </div>
-                    <span className={`pill pill-${q.status === "approved" ? "success" : q.status === "rejected" ? "danger" : q.status === "sent" ? "warning" : "neutral"}`}>
+                    <span className={`pill pill-${q.status === "approved" ? "success" : q.status === "rejected" ? "danger" : q.status === "sent" ? "warning" : q.status === "submitted" ? "success" : "neutral"}`}>
                       {q.status}
                     </span>
                     <div className="tracker-actions">
@@ -1278,7 +1346,6 @@ export function QuotationGeneratorV1() {
           className="modal-overlay"
           onClick={() => {
             setSendOpen(false);
-            setSendChannel("menu");
             setWaLaunch(null);
           }}
         >
@@ -1287,52 +1354,7 @@ export function QuotationGeneratorV1() {
             style={{ ["--modal-max-width" as string]: "560px" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="modal-title">
-              {sendChannel === "menu"
-                ? "Send Via"
-                : sendChannel === "whatsapp"
-                  ? "WhatsApp"
-                  : sendChannel === "email"
-                    ? "Email"
-                    : "Share / download"}
-            </h3>
-
-            {sendChannel === "menu" ? (
-              <>
-                <p className="modal-msg">Choose how to deliver this quotation.</p>
-                <div className="qgv1-send-options">
-                  <button
-                    type="button"
-                    className="qgv1-send-option"
-                    onClick={() => {
-                      setWaLaunch(null);
-                      setWaMessage((prev) => prev.trim() || buildWhatsAppText(current));
-                      setSendChannel("whatsapp");
-                    }}
-                  >
-                    <strong>WhatsApp</strong>
-                    <span>
-                      {waCanAutoAttach
-                        ? "Sends message + PDF attachment via WhatsApp Business"
-                        : "Message + PDF (auto-attach needs WhatsApp Business API on server)"}
-                    </span>
-                  </button>
-                  <button type="button" className="qgv1-send-option" onClick={() => setSendChannel("email")}>
-                    <strong>Email</strong>
-                    <span>Opens your mail app, or sends via server if a webhook is configured</span>
-                  </button>
-                  <button type="button" className="qgv1-send-option" onClick={() => setSendChannel("share")}>
-                    <strong>Share / download</strong>
-                    <span>Share the PDF (phone) or download it (desktop)</span>
-                  </button>
-                </div>
-                <div className="modal-btns">
-                  <button type="button" className="btn btn-secondary" onClick={() => setSendOpen(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </>
-            ) : null}
+            <h3 className="modal-title">{sendChannel === "whatsapp" ? "WhatsApp" : "Email"}</h3>
 
             {sendChannel === "whatsapp" ? (
               <>
@@ -1405,8 +1427,15 @@ export function QuotationGeneratorV1() {
                       />
                     </label>
                     <div className="modal-btns">
-                      <button type="button" className="btn btn-ghost" onClick={() => setSendChannel("menu")}>
-                        Back
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          setSendOpen(false);
+                          setWaLaunch(null);
+                        }}
+                      >
+                        Cancel
                       </button>
                       <button
                         type="button"
@@ -1455,7 +1484,6 @@ export function QuotationGeneratorV1() {
                                   `Quotation ${current.quoteNo} sent on WhatsApp with PDF (${(result.sent ?? unique).length} recipient${(result.sent ?? unique).length > 1 ? "s" : ""}).`,
                                 );
                                 setSendOpen(false);
-                                setSendChannel("menu");
                                 const partial = result.errors?.length
                                   ? ` Some failed: ${result.errors.map((e) => e.phone).join(", ")}.`
                                   : "";
@@ -1592,7 +1620,6 @@ export function QuotationGeneratorV1() {
                             );
                             setWaLaunch(null);
                             setSendOpen(false);
-                            setSendChannel("menu");
                             flash("Marked as sent. Attach the PDF in each WhatsApp chat if you have not yet.");
                           } catch (e) {
                             flash(e instanceof Error ? e.message : "Failed to mark sent", "err");
@@ -1635,8 +1662,12 @@ export function QuotationGeneratorV1() {
                   </label>
                 </div>
                 <div className="modal-btns">
-                  <button type="button" className="btn btn-ghost" onClick={() => setSendChannel("menu")}>
-                    Back
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setSendOpen(false)}
+                  >
+                    Cancel
                   </button>
                   <button
                     type="button"
@@ -1673,7 +1704,7 @@ export function QuotationGeneratorV1() {
                         );
                         if (!result.delivered) {
                           if (pdf) {
-                            await downloadOrSharePdf(pdf.filename, pdf.pdfBase64);
+                            forceDownloadPdf(pdf.filename, pdf.pdfBase64);
                           }
                           const params = new URLSearchParams();
                           if (emailCc.trim()) params.set("cc", emailCc.trim());
@@ -1702,51 +1733,6 @@ export function QuotationGeneratorV1() {
                     }}
                   >
                     Send email
-                  </button>
-                </div>
-              </>
-            ) : null}
-
-            {sendChannel === "share" ? (
-              <>
-                <p className="modal-msg">
-                  On phone, this opens the system share sheet (WhatsApp, Drive, Files, etc.). On desktop, it
-                  downloads the PDF so you can attach or save it anywhere.
-                </p>
-                <div className="modal-btns">
-                  <button type="button" className="btn btn-ghost" onClick={() => setSendChannel("menu")}>
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={busy}
-                    onClick={async () => {
-                      setBusy(true);
-                      try {
-                        const pdf = await buildPdfPayload(current);
-                        if (!pdf) return;
-                        const result = await downloadOrSharePdf(pdf.filename, pdf.pdfBase64);
-                        if (result === "cancelled") return;
-                        await saveQuote("sent");
-                        await pushNotif(
-                          current.id,
-                          `Quotation ${current.quoteNo} PDF shared/downloaded.`,
-                        );
-                        setSendOpen(false);
-                        flash(
-                          result === "shared"
-                            ? "Opened share sheet."
-                            : "PDF downloaded — check your Downloads folder.",
-                        );
-                      } catch (e) {
-                        flash(e instanceof Error ? e.message : "Share failed", "err");
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  >
-                    Share PDF
                   </button>
                 </div>
               </>

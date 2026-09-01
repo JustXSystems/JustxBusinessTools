@@ -12,7 +12,7 @@ export type EngagementKey =
   | "gsr"
   | "misc";
 
-export type QuoteStatus = "draft" | "sent" | "approved" | "rejected";
+export type QuoteStatus = "draft" | "submitted" | "sent" | "approved" | "rejected";
 
 export type QuoteItem = {
   id: string;

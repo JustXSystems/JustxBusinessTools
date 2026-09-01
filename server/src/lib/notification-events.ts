@@ -76,6 +76,12 @@ export const NOTIFICATION_EVENTS = {
   },
 
   // ── Quotation / site survey → Owner; acting staff via targetUserId ─────
+  "document.quotation_submitted": {
+    category: "workflow" as const,
+    severity: "info" as const,
+    audience: ["owner"] as NotificationAudience[],
+    icon: "📑",
+  },
   "document.quotation_sent": {
     category: "workflow" as const,
     severity: "info" as const,

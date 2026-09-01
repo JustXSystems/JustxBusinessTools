@@ -83,7 +83,7 @@ export default function PublicQuoteApprovePage() {
                 <QuoteSheet quote={quote} company={company} />
               </div>
             </div>
-            {quote.status === "sent" ? (
+            {quote.status === "sent" || quote.status === "submitted" ? (
               <div className="qgv1-card" style={{ textAlign: "center" }}>
                 <p className="muted">By approving, you confirm you would like us to proceed on these terms.</p>
                 <div className="qgv1-btn-row" style={{ justifyContent: "center" }}>

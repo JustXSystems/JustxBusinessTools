@@ -493,6 +493,32 @@ router.post("/", async (req, res) => {
 
       await appendHistory(payload, grandTotal);
       await logAudit("quotationv1.create", "document", id, { quoteNo }, req.ip);
+      if (status === "submitted") {
+        publishNotificationAsync({
+          eventType: "document.quotation_submitted",
+          title: "Quotation submitted",
+          body: `${quoteNo} · ${customer.name ?? "Customer"} — copy queued for company document delivery.`,
+          href: "/tools/quotationv1",
+          entityType: "document",
+          entityId: id,
+          dedupeKey: `quote-submitted:${id}`,
+          meta: { quoteNo, status },
+          expiresInHours: 168,
+        });
+      }
+      if (status === "sent") {
+        publishNotificationAsync({
+          eventType: "document.quotation_sent",
+          title: "Quotation marked as sent",
+          body: `${quoteNo} · ${customer.name ?? "Customer"} is awaiting a decision.`,
+          href: "/tools/quotationv1",
+          entityType: "document",
+          entityId: id,
+          dedupeKey: `quote-sent:${id}`,
+          meta: { quoteNo, status },
+          expiresInHours: 336,
+        });
+      }
       res.status(201).json({ quotation });
       return;
     }
@@ -517,6 +543,19 @@ router.post("/", async (req, res) => {
     );
     await appendHistory(payload, grandTotal);
     await logAudit("quotationv1.update", "document", id, { quoteNo }, req.ip);
+    if (status === "submitted") {
+      publishNotificationAsync({
+        eventType: "document.quotation_submitted",
+        title: "Quotation submitted",
+        body: `${quoteNo} · ${customer.name ?? "Customer"} — copy queued for company document delivery.`,
+        href: "/tools/quotationv1",
+        entityType: "document",
+        entityId: id,
+        dedupeKey: `quote-submitted:${id}`,
+        meta: { quoteNo, status },
+        expiresInHours: 168,
+      });
+    }
     if (status === "sent") {
       publishNotificationAsync({
         eventType: "document.quotation_sent",
