@@ -1,18 +1,43 @@
 import { pool } from "../db.js";
 import { jsonVal } from "./admin/approvals.js";
 
+export type AccessPolicy = "soft_cap" | "hard_lock";
+
 export type ToolSku = {
   toolId: string;
   name: string;
   category: string;
+  tagline: string | null;
+  description: string | null;
   priceInr: number;
+  annualPriceInr: number | null;
   billingInterval: string;
   includedFree: boolean;
   available: boolean;
   sortOrder: number;
+  trialDays: number;
+  /** soft_cap = freemium records; hard_lock = no creates until licensed */
+  accessPolicy: AccessPolicy;
+  /** Override platform free record cap when unlicensed; null = use plan default */
+  unlicensedRecordLimit: number | null;
+  featured: boolean;
 };
 
-export const DEFAULT_TOOL_SKUS: Array<Omit<ToolSku, "billingInterval" | "available" | "sortOrder">> = [
+export const DEFAULT_TOOL_SKUS: Array<
+  Omit<
+    ToolSku,
+    | "billingInterval"
+    | "available"
+    | "sortOrder"
+    | "tagline"
+    | "description"
+    | "annualPriceInr"
+    | "trialDays"
+    | "accessPolicy"
+    | "unlicensedRecordLimit"
+    | "featured"
+  >
+> = [
   { toolId: "quotation", name: "Quotation Creator", category: "Sales & Business", priceInr: 149, includedFree: false },
   { toolId: "quotationv1", name: "Quotation Generator V1", category: "Sales & Business", priceInr: 199, includedFree: false },
   { toolId: "salesorder", name: "Sales Order Creator", category: "Sales & Business", priceInr: 149, includedFree: false },
@@ -46,6 +71,14 @@ export const DEFAULT_TOOL_SKUS: Array<Omit<ToolSku, "billingInterval" | "availab
 
 let schemaReady: Promise<void> | null = null;
 
+async function tryAlter(sql: string): Promise<void> {
+  try {
+    await pool.query(sql);
+  } catch {
+    /* column / table already exists */
+  }
+}
+
 export async function ensureToolSkuSchema(): Promise<void> {
   if (!schemaReady) {
     schemaReady = (async () => {
@@ -76,6 +109,16 @@ export async function ensureToolSkuSchema(): Promise<void> {
           KEY idx_otl_org_status (organization_id, status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+      await tryAlter(`ALTER TABLE tool_skus ADD COLUMN tagline VARCHAR(160) NULL`);
+      await tryAlter(`ALTER TABLE tool_skus ADD COLUMN description TEXT NULL`);
+      await tryAlter(`ALTER TABLE tool_skus ADD COLUMN annual_price_inr DECIMAL(12, 2) NULL`);
+      await tryAlter(`ALTER TABLE tool_skus ADD COLUMN trial_days INT NOT NULL DEFAULT 0`);
+      await tryAlter(
+        `ALTER TABLE tool_skus ADD COLUMN access_policy VARCHAR(20) NOT NULL DEFAULT 'soft_cap'`,
+      );
+      await tryAlter(`ALTER TABLE tool_skus ADD COLUMN unlicensed_record_limit INT NULL`);
+      await tryAlter(`ALTER TABLE tool_skus ADD COLUMN featured TINYINT(1) NOT NULL DEFAULT 0`);
+
       let order = 0;
       for (const sku of DEFAULT_TOOL_SKUS) {
         await pool.query(
@@ -100,24 +143,34 @@ export async function ensureToolSkuSchema(): Promise<void> {
   await schemaReady;
 }
 
+function parseAccessPolicy(raw: unknown): AccessPolicy {
+  return String(raw ?? "").toLowerCase() === "hard_lock" ? "hard_lock" : "soft_cap";
+}
+
 function mapSku(r: Record<string, unknown>): ToolSku {
   return {
     toolId: String(r.tool_id),
     name: String(r.name),
     category: String(r.category),
+    tagline: r.tagline == null ? null : String(r.tagline),
+    description: r.description == null ? null : String(r.description),
     priceInr: Number(r.price_inr ?? 0),
+    annualPriceInr: r.annual_price_inr == null ? null : Number(r.annual_price_inr),
     billingInterval: String(r.billing_interval ?? "month"),
     includedFree: Boolean(r.included_free),
     available: Boolean(r.available),
     sortOrder: Number(r.sort_order ?? 0),
+    trialDays: Math.max(0, Number(r.trial_days ?? 0)),
+    accessPolicy: parseAccessPolicy(r.access_policy),
+    unlicensedRecordLimit:
+      r.unlicensed_record_limit == null ? null : Math.max(0, Number(r.unlicensed_record_limit)),
+    featured: Boolean(r.featured),
   };
 }
 
 export async function listToolSkus(): Promise<ToolSku[]> {
   await ensureToolSkuSchema();
-  const [rows] = await pool.query(
-    `SELECT * FROM tool_skus ORDER BY sort_order, name`,
-  );
+  const [rows] = await pool.query(`SELECT * FROM tool_skus ORDER BY sort_order, name`);
   return (Array.isArray(rows) ? rows : []).map((row) => mapSku(row as Record<string, unknown>));
 }
 
@@ -128,10 +181,27 @@ export async function getToolSku(toolId: string): Promise<ToolSku | null> {
   return row ? mapSku(row as Record<string, unknown>) : null;
 }
 
-export async function updateToolSku(
-  toolId: string,
-  input: Partial<Pick<ToolSku, "name" | "category" | "priceInr" | "billingInterval" | "includedFree" | "available" | "sortOrder">>,
-): Promise<ToolSku> {
+export type ToolSkuPatch = Partial<
+  Pick<
+    ToolSku,
+    | "name"
+    | "category"
+    | "tagline"
+    | "description"
+    | "priceInr"
+    | "annualPriceInr"
+    | "billingInterval"
+    | "includedFree"
+    | "available"
+    | "sortOrder"
+    | "trialDays"
+    | "accessPolicy"
+    | "unlicensedRecordLimit"
+    | "featured"
+  >
+>;
+
+export async function updateToolSku(toolId: string, input: ToolSkuPatch): Promise<ToolSku> {
   await ensureToolSkuSchema();
   const current = await getToolSku(toolId);
   if (!current) {
@@ -141,29 +211,110 @@ export async function updateToolSku(
     ...current,
     name: input.name?.trim() || current.name,
     category: input.category?.trim() || current.category,
+    tagline:
+      input.tagline === undefined
+        ? current.tagline
+        : input.tagline?.trim()
+          ? String(input.tagline).trim().slice(0, 160)
+          : null,
+    description:
+      input.description === undefined
+        ? current.description
+        : input.description?.trim()
+          ? String(input.description).trim()
+          : null,
     priceInr: input.priceInr == null ? current.priceInr : Math.max(0, Number(input.priceInr)),
+    annualPriceInr:
+      input.annualPriceInr === undefined
+        ? current.annualPriceInr
+        : input.annualPriceInr == null
+          ? null
+          : Math.max(0, Number(input.annualPriceInr)),
     billingInterval: input.billingInterval || current.billingInterval,
     includedFree: input.includedFree ?? current.includedFree,
     available: input.available ?? current.available,
     sortOrder: input.sortOrder ?? current.sortOrder,
+    trialDays:
+      input.trialDays == null ? current.trialDays : Math.max(0, Math.min(365, Number(input.trialDays))),
+    accessPolicy: input.accessPolicy ? parseAccessPolicy(input.accessPolicy) : current.accessPolicy,
+    unlicensedRecordLimit:
+      input.unlicensedRecordLimit === undefined
+        ? current.unlicensedRecordLimit
+        : input.unlicensedRecordLimit == null
+          ? null
+          : Math.max(0, Number(input.unlicensedRecordLimit)),
+    featured: input.featured ?? current.featured,
   };
   await pool.query(
     `UPDATE tool_skus SET
-       name = :name, category = :category, price_inr = :price, billing_interval = :interval,
-       included_free = :included, available = :available, sort_order = :sortOrder
+       name = :name, category = :category, tagline = :tagline, description = :description,
+       price_inr = :price, annual_price_inr = :annual, billing_interval = :interval,
+       included_free = :included, available = :available, sort_order = :sortOrder,
+       trial_days = :trialDays, access_policy = :accessPolicy,
+       unlicensed_record_limit = :unlicensedLimit, featured = :featured
      WHERE tool_id = :id`,
     {
       id: toolId,
       name: next.name,
       category: next.category,
+      tagline: next.tagline,
+      description: next.description,
       price: next.priceInr,
+      annual: next.annualPriceInr,
       interval: next.billingInterval,
       included: next.includedFree ? 1 : 0,
       available: next.available ? 1 : 0,
       sortOrder: next.sortOrder,
+      trialDays: next.trialDays,
+      accessPolicy: next.accessPolicy,
+      unlicensedLimit: next.unlicensedRecordLimit,
+      featured: next.featured ? 1 : 0,
     },
   );
   return next;
+}
+
+/** Publish a commercial offer for a tool (create or update). */
+export async function upsertToolSku(
+  toolId: string,
+  input: {
+    name: string;
+    category?: string;
+    priceInr?: number;
+    includedFree?: boolean;
+    available?: boolean;
+  } & ToolSkuPatch,
+): Promise<ToolSku> {
+  await ensureToolSkuSchema();
+  const id = toolId.trim();
+  if (!id) throw Object.assign(new Error("toolId required"), { status: 400 });
+  const existing = await getToolSku(id);
+  if (!existing) {
+    const [maxRows] = await pool.query(
+      `SELECT COALESCE(MAX(sort_order), 0) + 1 AS nextOrd FROM tool_skus`,
+    );
+    const nextOrd = Number(
+      (Array.isArray(maxRows) ? (maxRows[0] as { nextOrd: number }) : { nextOrd: 1 }).nextOrd,
+    );
+    await pool.query(
+      `INSERT INTO tool_skus
+         (tool_id, name, category, price_inr, billing_interval, included_free, available, sort_order)
+       VALUES (:id, :name, :category, :price, 'month', :included, :available, :sortOrder)`,
+      {
+        id,
+        name: input.name.trim() || id,
+        category: (input.category ?? "General").trim() || "General",
+        price: Math.max(0, Number(input.priceInr ?? 0)),
+        included: input.includedFree ? 1 : 0,
+        available: input.available === false ? 0 : 1,
+        sortOrder: nextOrd,
+      },
+    );
+  }
+  return updateToolSku(id, {
+    ...input,
+    name: input.name.trim() || existing?.name || id,
+  });
 }
 
 export type CartLine = {
@@ -204,10 +355,14 @@ export async function quoteToolCart(
   for (const id of parseToolIds(toolIds)) {
     const sku = byId.get(id);
     if (!sku || !sku.available) {
-      throw Object.assign(new Error(`Tool "${id}" is not available for subscription`), { status: 400 });
+      throw Object.assign(new Error(`Tool "${id}" is not available for subscription`), {
+        status: 400,
+      });
     }
     if (sku.includedFree || sku.priceInr <= 0) {
-      throw Object.assign(new Error(`${sku.name} is included — no subscription required`), { status: 400 });
+      throw Object.assign(new Error(`${sku.name} is included — no subscription required`), {
+        status: 400,
+      });
     }
     if (licensedIds.has(id)) {
       throw Object.assign(new Error(`${sku.name} is already licensed`), { status: 400 });
@@ -229,4 +384,8 @@ export async function quoteToolCart(
     totalInr,
     billingInterval: lines[0]?.billingInterval ?? "month",
   };
+}
+
+export function paidSkuIds(skus: ToolSku[]): string[] {
+  return skus.filter((s) => s.available && !s.includedFree && s.priceInr > 0).map((s) => s.toolId);
 }

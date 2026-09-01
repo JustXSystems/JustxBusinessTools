@@ -32,7 +32,7 @@ export const navigationConfig = {
     { href: "/notifications", label: "Notifications", icon: "notifications" as const },
   ],
   account: [
-    { href: "/subscription", label: "Subscription", icon: "subscription" as const },
+    { href: "/subscription", label: "My tools", icon: "subscription" as const },
   ],
   /** Alias for workspace — Home / Profile / Sync / Notifications */
   primary: [
@@ -44,7 +44,7 @@ export const navigationConfig = {
   mobileBottom: [
     { href: "/", label: "Home", icon: "home" as const },
     { href: "/sync", label: "Sync", icon: "sync" as const },
-    { href: "/subscription", label: "Plan", icon: "subscription" as const },
+    { href: "/subscription", label: "Tools", icon: "subscription" as const },
     { href: "/notifications", label: "Alerts", icon: "notifications" as const },
   ],
 } as const;

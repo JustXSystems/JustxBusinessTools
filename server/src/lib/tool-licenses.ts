@@ -1,5 +1,10 @@
 import { pool } from "../db.js";
-import { ensureToolSkuSchema, listToolSkus, type ToolSku } from "./tool-skus.js";
+import {
+  ensureToolSkuSchema,
+  listToolSkus,
+  paidSkuIds,
+  type ToolSku,
+} from "./tool-skus.js";
 import { notifyLicensesGranted, notifyLicensesRevoked } from "./notification-billing.js";
 
 export type ToolLicense = {
@@ -81,6 +86,28 @@ export async function grantToolLicenses(
   });
 }
 
+/** Extend an active license (or grant) by N days from max(now, current end). */
+export async function extendToolLicenses(
+  orgId: number,
+  toolIds: string[],
+  days: number,
+): Promise<Date> {
+  const addMs = Math.max(1, days) * 24 * 60 * 60 * 1000;
+  await ensureLicenseSchema();
+  const existing = await listActiveLicenses(orgId);
+  const byId = new Map(existing.map((l) => [l.toolId, l]));
+  let farthest = new Date(Date.now() + addMs);
+  for (const toolId of toolIds) {
+    const cur = byId.get(toolId);
+    const base = cur?.periodEnd ? new Date(cur.periodEnd) : new Date();
+    const from = base.getTime() > Date.now() ? base : new Date();
+    const periodEnd = new Date(from.getTime() + addMs);
+    if (periodEnd > farthest) farthest = periodEnd;
+    await grantToolLicenses(orgId, [toolId], periodEnd);
+  }
+  return farthest;
+}
+
 export async function revokeToolLicenses(orgId: number, toolIds?: string[]): Promise<void> {
   await ensureLicenseSchema();
   if (toolIds && toolIds.length > 0) {
@@ -103,12 +130,40 @@ export async function revokeToolLicenses(orgId: number, toolIds?: string[]): Pro
 
 export async function grantAllPaidSkus(orgId: number, periodEnd: Date): Promise<string[]> {
   const skus = await listToolSkus();
-  const paid = skus.filter((s) => s.available && !s.includedFree && s.priceInr > 0).map((s) => s.toolId);
+  const paid = paidSkuIds(skus);
   await grantToolLicenses(orgId, paid, periodEnd);
   return paid;
 }
 
-export async function licensedOrIncluded(orgId: number, toolId: string, sku?: ToolSku | null): Promise<boolean> {
+/** Idempotent: grant any missing paid SKUs for All Tools Pack tenants (no notification spam). */
+export async function ensureAllPaidLicenses(orgId: number, periodEnd: Date): Promise<string[]> {
+  await ensureLicenseSchema();
+  const skus = await listToolSkus();
+  const paid = paidSkuIds(skus);
+  if (paid.length === 0) return [];
+  const have = await licensedToolIdSet(orgId);
+  const missing = paid.filter((id) => !have.has(id));
+  if (missing.length === 0) return [];
+  for (const toolId of missing) {
+    await pool.query(
+      `INSERT INTO org_tool_licenses
+         (organization_id, tool_id, status, source_claim_id, current_period_end)
+       VALUES (:orgId, :toolId, 'active', NULL, :periodEnd)
+       ON DUPLICATE KEY UPDATE
+         status = 'active',
+         current_period_end = COALESCE(current_period_end, :periodEnd)`,
+      { orgId, toolId, periodEnd },
+    );
+  }
+  await refreshOrgMrr(orgId);
+  return missing;
+}
+
+export async function licensedOrIncluded(
+  orgId: number,
+  toolId: string,
+  sku?: ToolSku | null,
+): Promise<boolean> {
   const row = sku ?? (await listToolSkus()).find((s) => s.toolId === toolId) ?? null;
   if (row?.includedFree || (row && row.priceInr <= 0)) return true;
   return isToolLicensed(orgId, toolId);
@@ -123,26 +178,34 @@ export async function refreshOrgMrr(orgId: number): Promise<number> {
     if (!sku || sku.includedFree) return sum;
     return sum + sku.priceInr;
   }, 0);
-  await pool.query(
-    `UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`,
-    { mrr, orgId },
-  );
+  await pool.query(`UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`, {
+    mrr,
+    orgId,
+  });
+  try {
+    const { syncSubscriptionItemsFromLicenses } = await import("./subscription-items.js");
+    await syncSubscriptionItemsFromLicenses(orgId);
+  } catch {
+    /* line-item ledger optional until schema ready */
+  }
   return mrr;
 }
 
-export function catalogPayload(
-  skus: ToolSku[],
-  licensed: Set<string>,
-) {
+export function catalogPayload(skus: ToolSku[], licensed: Set<string>) {
   return skus
     .filter((s) => s.available)
     .map((s) => ({
       toolId: s.toolId,
       name: s.name,
       category: s.category,
+      tagline: s.tagline,
       priceInr: s.priceInr,
+      annualPriceInr: s.annualPriceInr,
       billingInterval: s.billingInterval,
       includedFree: s.includedFree || s.priceInr <= 0,
+      accessPolicy: s.accessPolicy,
+      featured: s.featured,
+      trialDays: s.trialDays,
       licensed: licensed.has(s.toolId) || s.includedFree || s.priceInr <= 0,
     }));
 }

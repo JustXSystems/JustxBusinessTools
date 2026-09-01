@@ -9,7 +9,6 @@ import {
   getCatalogPlan,
   listCatalogPlans,
 } from "../../lib/subscription-plans.js";
-import { grantAllPaidSkus, revokeToolLicenses } from "../../lib/tool-licenses.js";
 import {
   listRenewalCandidates,
   runRenewalNoticeJob,
@@ -123,11 +122,23 @@ router.post("/assign", async (req, res) => {
   });
   if (plan.id === "pro") {
     const licenseDays = plan.trialDays > 0 ? plan.trialDays : 365;
-    await grantAllPaidSkus(orgId, new Date(Date.now() + licenseDays * 24 * 60 * 60 * 1000));
+    const { activateAllToolsPack } = await import("../../lib/commerce.js");
+    await activateAllToolsPack({
+      orgId,
+      source: plan.trialDays > 0 ? "trial" : "admin",
+      periodEnd: new Date(Date.now() + licenseDays * 24 * 60 * 60 * 1000),
+    });
   } else {
-    await revokeToolLicenses(orgId);
+    const { deactivateToolCommerce } = await import("../../lib/commerce.js");
+    await deactivateToolCommerce({ orgId });
   }
-  await logAudit("subscription.assign", "org_subscription", String(orgId), { planId: plan.id }, req.ip);
+  await logAudit(
+    "subscription.assign",
+    "org_subscription",
+    String(orgId),
+    { planId: plan.id, mode: plan.id === "pro" ? "all_tools_pack" : "platform_limited" },
+    req.ip,
+  );
   await notifySubscriptionAssigned({
     organizationId: orgId,
     planId: plan.id,

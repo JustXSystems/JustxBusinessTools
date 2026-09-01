@@ -23,7 +23,7 @@ type Props = {
 };
 
 export function ExportActions({ toolId, config, rows = [], documentRows, documentHeaders }: Props) {
-  const { isToolLicensed, isUnlimited, openUpgrade } = useSubscription();
+  const { isToolLicensed, openUpgrade } = useSubscription();
   const { showToast } = useToast();
   const { t } = useLocale();
 
@@ -39,7 +39,7 @@ export function ExportActions({ toolId, config, rows = [], documentRows, documen
   }
 
   function handleExport(format: "csv" | "xlsx") {
-    if (!(isUnlimited || isToolLicensed(toolId))) {
+    if (!isToolLicensed(toolId)) {
       showToast(t("common.exportProOnly"));
       openUpgrade(toolId);
       return;

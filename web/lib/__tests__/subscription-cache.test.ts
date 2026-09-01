@@ -42,6 +42,40 @@ describe("subscription-cache cart sync", () => {
     expect(JSON.parse(sessionStorage.getItem("jbt.tool-cart") ?? "[]")).toEqual(["projects"]);
   });
 
+  it("does not wipe the cart just because All Tools Pack plan flag is set", async () => {
+    sessionStorage.setItem("jbt.tool-cart", JSON.stringify(["projects"]));
+    const { writeSubscriptionSnapshot } = await import("../subscription-cache");
+    writeSubscriptionSnapshot(
+      baseSub({
+        isUnlimited: true,
+        isPro: true,
+        planId: "pro",
+        licensedToolIds: ["amc"],
+        catalog: [
+          {
+            toolId: "amc",
+            name: "AMC",
+            category: "Ops",
+            priceInr: 199,
+            billingInterval: "month",
+            includedFree: false,
+            licensed: true,
+          },
+          {
+            toolId: "projects",
+            name: "Projects",
+            category: "Ops",
+            priceInr: 199,
+            billingInterval: "month",
+            includedFree: false,
+            licensed: false,
+          },
+        ],
+      }),
+    );
+    expect(JSON.parse(sessionStorage.getItem("jbt.tool-cart") ?? "[]")).toEqual(["projects"]);
+  });
+
   it("detects when a pending claim was cleared by the server", async () => {
     const { pendingClaimStale } = await import("../subscription-cache");
     const cached = baseSub({

@@ -38,9 +38,10 @@ export class RazorpayPaymentProvider implements PaymentProvider {
     profileId: number;
     planId: string;
     amountInr: number;
+    toolIds?: string[];
   }): Promise<CheckoutSession> {
     const amountPaise = Math.round(input.amountInr * 100);
-    const receipt = `jbt_pro_${input.profileId}_${Date.now()}`;
+    const receipt = `jbt_${input.planId}_${input.profileId}_${Date.now()}`.slice(0, 40);
 
     const res = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
@@ -52,7 +53,11 @@ export class RazorpayPaymentProvider implements PaymentProvider {
         amount: amountPaise,
         currency: "INR",
         receipt,
-        notes: { profileId: String(input.profileId), planId: input.planId },
+        notes: {
+          profileId: String(input.profileId),
+          planId: input.planId,
+          toolIds: (input.toolIds ?? []).join(","),
+        },
       }),
     });
 
@@ -114,6 +119,12 @@ export class RazorpayPaymentProvider implements PaymentProvider {
         externalSubscriptionId: externalId,
         externalCustomerId: entity.customer_id ? String(entity.customer_id) : undefined,
         periodEnd: new Date(Date.now() + 30 * 86400000),
+        toolIds: notes.toolIds
+          ? String(notes.toolIds)
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : undefined,
       };
     }
 

@@ -50,6 +50,38 @@ export async function syncOrgSubscription(
   );
 }
 
+export async function touchOrgBillingEnvelope(
+  organizationId: number,
+  opts?: {
+    provider?: string;
+    externalSubscriptionId?: string;
+    periodEnd?: Date;
+  },
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO org_subscriptions
+       (organization_id, plan_id, status, current_period_start, current_period_end,
+        payment_provider, external_subscription_id, mrr_inr)
+     VALUES (:orgId, 'free', 'active', NOW(), :periodEnd, :provider, :externalId, 0)
+     ON DUPLICATE KEY UPDATE
+       status = 'active',
+       current_period_end = CASE
+         WHEN :periodEnd IS NULL THEN current_period_end
+         WHEN current_period_end IS NULL THEN :periodEnd
+         WHEN :periodEnd > current_period_end THEN :periodEnd
+         ELSE current_period_end
+       END,
+       payment_provider = COALESCE(:provider, payment_provider),
+       external_subscription_id = COALESCE(:externalId, external_subscription_id)`,
+    {
+      orgId: organizationId,
+      periodEnd: opts?.periodEnd ?? null,
+      provider: opts?.provider ?? null,
+      externalId: opts?.externalSubscriptionId ?? null,
+    },
+  );
+}
+
 export async function applyPlanToOrganization(
   organizationId: number,
   planId: string,

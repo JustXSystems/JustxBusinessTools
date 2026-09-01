@@ -868,14 +868,14 @@ a {
   background: linear-gradient(165deg, rgba(var(--accent-rgb), 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
   border: 1px solid var(--border-hair);
   border-radius: var(--radius);
-  padding: 22px 12px 18px;
-  cursor: pointer;
+  padding: 18px 12px 14px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 13px;
+  gap: 10px;
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+  min-height: 148px;
 }
 
 .tool-card:hover {
@@ -883,6 +883,46 @@ a {
   border-color: rgba(var(--accent-rgb), 0.4);
   transform: translateY(-3px);
   box-shadow: var(--shadow-soft);
+}
+
+.tool-card-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tool-card-tagline {
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--text-muted, #667);
+  max-width: 100%;
+}
+
+.tool-card-paywall {
+  border-color: rgba(var(--accent-rgb), 0.28);
+}
+
+.tool-card-subscribe {
+  appearance: none;
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 10.5px;
+  font-weight: 650;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.tool-card-subscribe:hover {
+  background: rgba(var(--accent-rgb), 0.18);
 }
 
 .tool-icon {
@@ -909,6 +949,11 @@ a {
   letter-spacing: 0.02em;
   color: var(--accent);
   opacity: 0.9;
+}
+
+.tool-card-sku.is-licensed {
+  color: var(--success, #1a7f4b);
+  opacity: 1;
 }
 
 .tool-header {
@@ -1787,6 +1832,33 @@ a {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+}
+
+.billing-lines {
+  margin-top: 12px;
+}
+
+.billing-line-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.billing-line-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-hair);
+}
+
+.billing-line-list li span {
+  color: var(--text-muted, #667);
+  text-align: right;
 }
 
 .billing-dl {
@@ -6781,6 +6853,109 @@ html[data-scheme="light"] .field textarea {
 
 .tm-pane h2 {
   margin-top: 0;
+}
+
+.tm-product-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.tm-product-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.tm-product-banner {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.tm-section-title {
+  margin: 8px 0 4px;
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.tm-product-form .field-span-2,
+.tm-packs-editor .field-span-2 {
+  grid-column: 1 / -1;
+}
+
+.tm-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.tm-license-ops,
+.tm-pack-refs {
+  padding-top: 8px;
+  border-top: 1px solid var(--border-hair);
+}
+
+.tm-pack-list {
+  margin: 0 0 8px;
+  padding-left: 1.1rem;
+}
+
+.tm-packs-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.tm-packs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.tm-pack-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tm-pack-tools .field-label {
+  font-size: 0.85rem;
+  color: var(--text-muted, #667);
+}
+
+.tm-pack-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 12px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border-hair);
+  border-radius: 8px;
+}
+
+.tm-pack-tool {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 0.88rem;
+}
+
+.tm-pack-tool em {
+  color: var(--text-muted, #667);
+  font-style: normal;
+  margin-left: 4px;
+}
+
+@media (max-width: 900px) {
+  .tm-packs-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .tm-schema-pane {

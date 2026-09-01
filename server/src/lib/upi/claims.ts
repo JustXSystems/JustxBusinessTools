@@ -3,7 +3,6 @@ import { jsonVal } from "../admin/approvals.js";
 import { logAudit } from "../audit.js";
 import { recordSaasTransaction } from "../payments/saas.js";
 import { parseToolIds } from "../tool-skus.js";
-import { grantAllPaidSkus, grantToolLicenses } from "../tool-licenses.js";
 import { ensureUpiSchema } from "./config.js";
 import { notifyClaimDecision, notifyClaimSubmitted } from "./notify.js";
 import { publishNotification } from "../notification-publish.js";
@@ -192,10 +191,23 @@ export async function reviewClaim(
 
   if (action === "approved") {
     const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const { activateToolCommerce, activateAllToolsPack } = await import("../commerce.js");
     if (claim.toolIds.length > 0) {
-      await grantToolLicenses(claim.organizationId, claim.toolIds, periodEnd, claim.id);
+      await activateToolCommerce({
+        orgId: claim.organizationId,
+        toolIds: claim.toolIds,
+        source: "upi",
+        sourceClaimId: claim.id,
+        externalRef: claim.utr,
+        periodEnd,
+      });
     } else {
-      await grantAllPaidSkus(claim.organizationId, periodEnd);
+      await activateAllToolsPack({
+        orgId: claim.organizationId,
+        source: "upi",
+        periodEnd,
+        externalRef: claim.utr,
+      });
     }
     await recordSaasTransaction(
       claim.organizationId,

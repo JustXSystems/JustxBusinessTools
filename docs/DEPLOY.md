@@ -90,7 +90,8 @@ mysql -u justx_user -p justx_systems < mysql/init.sql \
   && mysql -u justx_user -p justx_systems < mysql/auth_extensions.sql \
   && mysql -u justx_user -p justx_systems < mysql/admin_platform.sql \
   && mysql -u justx_user -p justx_systems < mysql/artifact_delivery_schema.sql \
-  && mysql -u justx_user -p justx_systems < mysql/notifications_schema.sql
+  && mysql -u justx_user -p justx_systems < mysql/notifications_schema.sql \
+  && mysql -u justx_user -p justx_systems < mysql/product_commerce_schema.sql
 
 mysql -u justx_user -p justx_systems -e "SHOW TABLES LIKE 'users';"
 # must print: users

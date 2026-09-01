@@ -50,18 +50,13 @@ export function clearSubscriptionSnapshot(): void {
 }
 
 /**
- * Remove cart lines that are already licensed / included / unlimited on the server.
+ * Remove cart lines that are already licensed / included on the server.
  * Keeps local cart aligned with DB entitlements after UPI approval.
  */
 export function syncToolCartWithLicenses(data: SubscriptionInfo): string[] {
   if (typeof window === "undefined") return [];
   const cart = readToolCart();
   if (cart.length === 0) return cart;
-
-  if (data.isUnlimited || data.isPro) {
-    writeToolCart([]);
-    return [];
-  }
 
   const licensed = new Set(data.licensedToolIds ?? []);
   for (const sku of data.catalog ?? []) {

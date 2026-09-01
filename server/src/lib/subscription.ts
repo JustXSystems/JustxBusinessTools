@@ -27,8 +27,10 @@ export type Subscription = {
   paymentProvider: string | null;
   externalSubscriptionId: string | null;
   externalCustomerId: string | null;
-  recordLimit: number | null;
+  /** Freemium record cap for unlicensed paid tools (never null). */
+  recordLimit: number;
   accessMode: AccessMode;
+  /** True when org is on All Tools Pack plan — licenses are still the access source of truth. */
   isUnlimited: boolean;
   /** Alias of isUnlimited — kept so existing operator UI still works. */
   isPro: boolean;
@@ -46,19 +48,18 @@ type SubRow = {
   external_customer_id: string | null;
 };
 
-function entitlements(plan: CatalogPlan, status: SubscriptionStatus): {
+function entitlements(plan: CatalogPlan, status: SubscriptionStatus, freemiumLimit: number): {
   accessMode: AccessMode;
-  recordLimit: number | null;
+  recordLimit: number;
   isUnlimited: boolean;
 } {
   const paidActive = plan.accessMode === "unlimited" && status === "active";
-  if (paidActive) {
-    return { accessMode: "unlimited", recordLimit: null, isUnlimited: true };
-  }
   return {
-    accessMode: "limited",
-    recordLimit: plan.accessMode === "limited" ? plan.recordLimit : (plan.recordLimit ?? FREE_RECORD_LIMIT),
-    isUnlimited: false,
+    // accessMode/isUnlimited describe the All Tools Pack assignment (marketing / admin).
+    // Entitlement for records is always per-tool license — freemiumLimit applies when unlicensed.
+    accessMode: paidActive ? "unlimited" : "limited",
+    recordLimit: freemiumLimit,
+    isUnlimited: paidActive,
   };
 }
 
@@ -66,9 +67,10 @@ function toSubscription(
   profileId: number,
   row: SubRow,
   plan: CatalogPlan,
+  freemiumLimit: number,
 ): Subscription {
   const status = (row.status as SubscriptionStatus) ?? "active";
-  const ent = entitlements(plan, status);
+  const ent = entitlements(plan, status, freemiumLimit);
   return {
     businessProfileId: profileId,
     planId: plan.id,
@@ -98,31 +100,42 @@ export async function getSubscription(
   conn?: PoolConnection,
 ): Promise<Subscription> {
   const q: Queryable = conn ?? pool;
+  const limited = await getLimitedPlan();
+  const freemiumLimit = limited.recordLimit ?? FREE_RECORD_LIMIT;
 
   const [orgRows] = await q.query(
     `SELECT os.plan_id, os.status, os.current_period_start, os.current_period_end,
-            os.payment_provider, os.external_subscription_id, NULL AS external_customer_id
+            os.payment_provider, os.external_subscription_id, NULL AS external_customer_id,
+            bp.organization_id AS organization_id
      FROM business_profiles bp
      INNER JOIN org_subscriptions os ON os.organization_id = bp.organization_id
      WHERE bp.id = :profileId
      LIMIT 1`,
     { profileId },
   );
-  let row = Array.isArray(orgRows) ? (orgRows[0] as SubRow | undefined) : undefined;
+  let row = Array.isArray(orgRows)
+    ? (orgRows[0] as (SubRow & { organization_id?: number }) | undefined)
+    : undefined;
+  let orgId = row?.organization_id != null ? Number(row.organization_id) : null;
 
   if (!row) {
     const [profileRows] = await q.query(
-      `SELECT plan_id, status, current_period_start, current_period_end,
-              payment_provider, external_subscription_id, external_customer_id
-       FROM subscriptions WHERE business_profile_id = :profileId`,
+      `SELECT s.plan_id, s.status, s.current_period_start, s.current_period_end,
+              s.payment_provider, s.external_subscription_id, s.external_customer_id,
+              bp.organization_id AS organization_id
+       FROM subscriptions s
+       INNER JOIN business_profiles bp ON bp.id = s.business_profile_id
+       WHERE s.business_profile_id = :profileId`,
       { profileId },
     );
-    row = Array.isArray(profileRows) ? (profileRows[0] as SubRow | undefined) : undefined;
+    row = Array.isArray(profileRows)
+      ? (profileRows[0] as (SubRow & { organization_id?: number }) | undefined)
+      : undefined;
+    orgId = row?.organization_id != null ? Number(row.organization_id) : null;
   }
 
   if (!row) {
-    const limited = await getLimitedPlan();
-    const ent = entitlements(limited, "active");
+    const ent = entitlements(limited, "active", freemiumLimit);
     return {
       businessProfileId: profileId,
       planId: limited.id,
@@ -142,11 +155,19 @@ export async function getSubscription(
 
   const assigned = await loadPlanForId(String(row.plan_id));
   const status = (row.status as SubscriptionStatus) ?? "active";
-  const plan =
-    assigned.accessMode === "unlimited" && status === "active"
-      ? assigned
-      : await getLimitedPlan();
-  return toSubscription(profileId, { ...row, status }, plan);
+  const onAllToolsPack = assigned.accessMode === "unlimited" && status === "active";
+  const plan = onAllToolsPack ? assigned : limited;
+
+  // Heal: All Tools Pack tenants must hold per-tool licenses (source of truth for access).
+  if (onAllToolsPack && orgId) {
+    const { ensureAllPaidLicenses } = await import("./tool-licenses.js");
+    const periodEnd = row.current_period_end
+      ? new Date(row.current_period_end)
+      : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    await ensureAllPaidLicenses(orgId, periodEnd);
+  }
+
+  return toSubscription(profileId, { ...row, status }, plan, freemiumLimit);
 }
 
 export async function getRecordLimit(
@@ -155,15 +176,24 @@ export async function getRecordLimit(
   toolId?: string,
 ): Promise<number | null> {
   const sub = await getSubscription(profileId, conn);
-  if (sub.isUnlimited) return null;
-  if (!toolId) return sub.recordLimit;
+  const freemiumCap = async (): Promise<number> => {
+    if (sub.recordLimit != null) return sub.recordLimit;
+    const limited = await getLimitedPlan();
+    return limited.recordLimit ?? FREE_RECORD_LIMIT;
+  };
+
+  if (!toolId) {
+    // Platform default only — per-tool entitlement always requires toolId.
+    return freemiumCap();
+  }
 
   const orgId = await getOrganizationIdForProfile(profileId);
-  if (orgId) {
-    const sku = await getToolSku(toolId);
-    if (await licensedOrIncluded(orgId, toolId, sku)) return null;
-  }
-  return sub.recordLimit;
+  const sku = await getToolSku(toolId);
+  if (orgId && (await licensedOrIncluded(orgId, toolId, sku))) return null;
+
+  if (sku?.accessPolicy === "hard_lock") return 0;
+  if (sku?.unlicensedRecordLimit != null) return sku.unlicensedRecordLimit;
+  return freemiumCap();
 }
 
 export async function logSubscriptionEvent(
@@ -250,6 +280,11 @@ export async function activatePaidSubscription(
   planId?: string,
 ): Promise<Subscription> {
   const paid = planId ? await loadPlanForId(planId) : await getUnlimitedPlan();
+  const end =
+    periodEnd ??
+    (paid.accessMode === "unlimited"
+      ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      : undefined);
   const sub = await applyPlanToProfile(
     profileId,
     paid.id,
@@ -257,12 +292,20 @@ export async function activatePaidSubscription(
     provider,
     externalSubscriptionId,
     externalCustomerId,
-    periodEnd,
+    end,
   );
+  // All-tools pack semantics: Pro / unlimited activates per-tool licenses (source of truth).
+  if (paid.accessMode === "unlimited") {
+    const orgId = await getOrganizationIdForProfile(profileId);
+    if (orgId) {
+      const { grantAllPaidSkus } = await import("./tool-licenses.js");
+      await grantAllPaidSkus(orgId, end ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+    }
+  }
   await logSubscriptionEvent(profileId, "subscription.activated", provider, {
     externalSubscriptionId,
     planId: paid.id,
-    periodEnd: periodEnd?.toISOString() ?? null,
+    periodEnd: end?.toISOString() ?? null,
   });
   return sub;
 }
@@ -276,6 +319,11 @@ export async function cancelSubscription(
   externalSubscriptionId: string,
 ): Promise<Subscription> {
   const limited = await getLimitedPlan();
+  const orgId = await getOrganizationIdForProfile(profileId);
+  if (orgId) {
+    const { revokeToolLicenses } = await import("./tool-licenses.js");
+    await revokeToolLicenses(orgId);
+  }
   const sub = await applyPlanToProfile(
     profileId,
     limited.id,

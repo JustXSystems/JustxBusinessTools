@@ -4,6 +4,10 @@ import { recordSaasTransaction } from "./saas.js";
 import { getOrganizationIdForProfile } from "./org-subscription.js";
 import { activatePaidSubscription, cancelSubscription } from "../subscription.js";
 import {
+  activateToolCommerceForProfile,
+} from "../commerce.js";
+import { completeCheckoutIntent } from "../subscription-items.js";
+import {
   notifyPaymentOutcome,
   notifySubscriptionActivated,
   notifySubscriptionCancelled,
@@ -79,33 +83,53 @@ export async function applyWebhookEvent(
   const orgId = await getOrganizationIdForProfile(event.profileId);
 
   if (event.type === "subscription.activated") {
-    await activatePaidSubscription(
-      event.profileId,
-      provider.name,
-      event.externalSubscriptionId,
-      event.externalCustomerId,
-      event.periodEnd,
-      event.planId,
-    );
+    const intent = await completeCheckoutIntent(event.externalSubscriptionId);
+    const toolIds =
+      (event.toolIds && event.toolIds.length > 0 ? event.toolIds : null) ??
+      (intent?.toolIds && intent.toolIds.length > 0 ? intent.toolIds : null);
+    const amountInr = event.amountInr ?? intent?.amountInr ?? PRO_PRICE_INR;
+    const periodEnd = event.periodEnd ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    if (toolIds && toolIds.length > 0) {
+      await activateToolCommerceForProfile({
+        profileId: event.profileId,
+        toolIds,
+        source: "webhook",
+        externalRef: event.externalSubscriptionId,
+        periodEnd,
+      });
+    } else if (event.planId === "pro" || event.planId === "unlimited") {
+      // Activates All Tools Pack plan + per-tool licenses.
+      await activatePaidSubscription(
+        event.profileId,
+        provider.name,
+        event.externalSubscriptionId,
+        event.externalCustomerId,
+        periodEnd,
+        "pro",
+      );
+    }
+
     if (orgId) {
       await recordSaasTransaction(
         orgId,
         "subscription_charge",
         "success",
-        PRO_PRICE_INR,
+        amountInr,
         provider.name,
         event.externalSubscriptionId,
       );
       notifySubscriptionActivated({
         organizationId: orgId,
         profileId: event.profileId,
-        planId: event.planId ?? "pro",
+        planId: event.planId ?? (toolIds ? "cart" : "pro"),
+        planName: toolIds ? `${toolIds.length} tool license(s)` : undefined,
         provider: provider.name,
       });
       notifyPaymentOutcome({
         organizationId: orgId,
         success: true,
-        amountInr: PRO_PRICE_INR,
+        amountInr,
         provider: provider.name,
         reference: event.externalSubscriptionId,
       });
@@ -132,7 +156,7 @@ export async function applyWebhookEvent(
       orgId,
       "subscription_charge",
       "failed",
-      PRO_PRICE_INR,
+      event.amountInr ?? PRO_PRICE_INR,
       provider.name,
       event.externalSubscriptionId,
       event.errorCode,
@@ -141,7 +165,7 @@ export async function applyWebhookEvent(
     notifyPaymentOutcome({
       organizationId: orgId,
       success: false,
-      amountInr: PRO_PRICE_INR,
+      amountInr: event.amountInr ?? PRO_PRICE_INR,
       provider: provider.name,
       reference: event.externalSubscriptionId,
       errorMessage: event.errorMessage ?? event.errorCode ?? null,

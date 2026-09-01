@@ -151,6 +151,19 @@ router.post("/", async (req, res) => {
       formula: req.body?.formula ?? null,
     },
   );
+  // Every tool is a sellable product — publish a commercial SKU (draft-friendly defaults).
+  try {
+    const { upsertToolSku } = await import("../../lib/tool-skus.js");
+    await upsertToolSku(toolId, {
+      name: title,
+      category: String(req.body?.groupName ?? "Custom Tools"),
+      priceInr: Number(req.body?.priceInr ?? 0),
+      includedFree: Boolean(req.body?.includedFree),
+      available: true,
+    });
+  } catch {
+    /* commercial catalog optional at create */
+  }
   await logAudit("tool.create", "tool", toolId, { title }, req.ip);
   res.status(201).json({ id: toolId });
 });

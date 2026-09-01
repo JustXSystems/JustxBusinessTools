@@ -13,6 +13,8 @@ export type PaymentWebhookEvent = {
   externalSubscriptionId: string;
   externalCustomerId?: string;
   periodEnd?: Date;
+  toolIds?: string[];
+  amountInr?: number;
   errorCode?: string;
   errorMessage?: string;
 };
@@ -23,6 +25,7 @@ export interface PaymentProvider {
     profileId: number;
     planId: PaymentPlanId;
     amountInr: number;
+    toolIds?: string[];
   }): Promise<CheckoutSession>;
   verifyWebhook?(headers: Record<string, string | string[] | undefined>, body: unknown): boolean;
   parseWebhookEvent(body: unknown): PaymentWebhookEvent | null;

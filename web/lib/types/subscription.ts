@@ -16,9 +16,14 @@ export type ToolCatalogSku = {
   toolId: string;
   name: string;
   category: string;
+  tagline?: string | null;
   priceInr: number;
+  annualPriceInr?: number | null;
   billingInterval: string;
   includedFree: boolean;
+  accessPolicy?: "soft_cap" | "hard_lock";
+  featured?: boolean;
+  trialDays?: number;
   licensed: boolean;
 };
 
@@ -26,6 +31,16 @@ export type ToolLicense = {
   toolId: string;
   name: string;
   status: string;
+  periodEnd: string | null;
+};
+
+export type BillingItem = {
+  toolId: string;
+  name: string;
+  unitPriceInr: number;
+  status: string;
+  source: string | null;
+  externalRef: string | null;
   periodEnd: string | null;
 };
 
@@ -85,6 +100,8 @@ export type SubscriptionInfo = {
   catalog?: ToolCatalogSku[];
   licenses?: ToolLicense[];
   licensedToolIds?: string[];
+  billingItems?: BillingItem[];
+  mrrInr?: number;
   upi?: UpiPayInfo;
   /** Only pending / rejected — never approved (approved clears the review banner). */
   pendingClaim?: PendingUpiClaim | null;

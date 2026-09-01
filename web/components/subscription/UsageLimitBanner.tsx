@@ -3,10 +3,16 @@
 import { useSubscription } from "@/hooks/useSubscription";
 import type { ToolUsage } from "@/lib/types/tool-record";
 
-export function ToolUsageCounter({ usage }: { usage: ToolUsage | null }) {
+export function ToolUsageCounter({
+  usage,
+  licensed = false,
+}: {
+  usage: ToolUsage | null;
+  licensed?: boolean;
+}) {
   if (!usage) return null;
-  if (usage.limit === null) {
-    return <span className="usage-counter usage-counter-pro">Unlimited</span>;
+  if (usage.limit === null || licensed) {
+    return <span className="usage-counter usage-counter-pro">Licensed · unlimited</span>;
   }
   return (
     <span className="usage-counter">

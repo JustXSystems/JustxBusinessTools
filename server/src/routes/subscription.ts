@@ -10,11 +10,14 @@ import { createClaim, getLatestClaimForOrg } from "../lib/upi/claims.js";
 import { parseToolIds, quoteToolCart, listToolSkus } from "../lib/tool-skus.js";
 import {
   catalogPayload,
-  grantToolLicenses,
   licensedToolIdSet,
   listActiveLicenses,
-  revokeToolLicenses,
 } from "../lib/tool-licenses.js";
+import { activateToolCommerce, deactivateToolCommerce } from "../lib/commerce.js";
+import {
+  createCheckoutIntent,
+  listSubscriptionItems,
+} from "../lib/subscription-items.js";
 import {
   notifyCheckoutStarted,
   notifyPaymentOutcome,
@@ -55,7 +58,7 @@ router.get("/", async (_req, res) => {
   res.setHeader("Pragma", "no-cache");
   const profileId = getActiveProfileId();
   const orgId = getActiveOrgId();
-  const [subscription, plans, payee, claim, gateways, skus, licenses] = await Promise.all([
+  const [subscription, plans, payee, claim, gateways, skus, licenses, items] = await Promise.all([
     getSubscription(profileId),
     listCatalogPlans(),
     getUpiPayee(),
@@ -63,6 +66,7 @@ router.get("/", async (_req, res) => {
     listEnabledGateways(orgId),
     listToolSkus(),
     listActiveLicenses(orgId),
+    listSubscriptionItems(orgId),
   ]);
   const licensed = new Set(licenses.map((l) => l.toolId));
   // Only surface actionable claims — approved claims must never keep the owner on "under review".
@@ -85,6 +89,8 @@ router.get("/", async (_req, res) => {
     catalog: catalogPayload(skus, licensed),
     licenses,
     licensedToolIds: [...licensed],
+    billingItems: items,
+    mrrInr: items.reduce((sum, i) => sum + i.unitPriceInr, 0),
     upi: {
       ...publicPayee(payee),
       amountInr: 0,
@@ -203,13 +209,31 @@ router.post("/checkout", async (req, res) => {
       profileId,
       planId: "cart",
       amountInr: quote.totalInr,
+      toolIds: quote.lines.map((l) => l.toolId),
+    });
+
+    await createCheckoutIntent({
+      orgId,
+      profileId,
+      sessionId: session.sessionId,
+      toolIds: quote.lines.map((l) => l.toolId),
+      amountInr: quote.totalInr,
+      provider: provider.name,
     });
 
     const autoComplete = process.env.PAYMENT_AUTO_COMPLETE === "true";
     if (autoComplete && provider.name === "mock") {
       const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       const tools = quote.lines.map((l) => l.toolId);
-      await grantToolLicenses(orgId, tools, periodEnd);
+      await activateToolCommerce({
+        orgId,
+        toolIds: tools,
+        source: "card",
+        externalRef: session.sessionId,
+        periodEnd,
+      });
+      const { completeCheckoutIntent } = await import("../lib/subscription-items.js");
+      await completeCheckoutIntent(session.sessionId);
       await recordSaasTransaction(
         orgId,
         "subscription_charge",
@@ -268,12 +292,13 @@ router.post("/cancel", async (req, res) => {
   const toolIds = parseToolIds(req.body?.toolIds);
   const current = await getSubscription(profileId);
   if (toolIds.length > 0) {
-    await revokeToolLicenses(orgId, toolIds);
+    await deactivateToolCommerce({ orgId, toolIds });
     res.json(await getSubscription(profileId));
     return;
   }
-  await revokeToolLicenses(orgId);
-  if (current.isUnlimited) {
+  await deactivateToolCommerce({ orgId });
+  // If they held the All Tools Pack plan, step workspace back to freemium.
+  if (current.isUnlimited || current.planId === "pro") {
     const subscription = await cancelSubscription(
       profileId,
       current.paymentProvider ?? getConfiguredProviderName(),

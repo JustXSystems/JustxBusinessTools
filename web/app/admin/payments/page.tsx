@@ -41,6 +41,13 @@ type Invoice = {
 
 type SaasPayload = {
   subscription: Subscription | null;
+  billingItems?: Array<{
+    toolId: string;
+    name: string;
+    unitPriceInr: number;
+    periodEnd: string | null;
+    source: string | null;
+  }>;
   summary: { collectedInr: number; successCount: number; failedCount: number; failureRate: number };
   transactions: Transaction[];
   invoices: Invoice[];
@@ -444,6 +451,22 @@ function AdminPaymentsInner() {
                       <strong>{saas.subscription.provider || "—"}</strong>
                     </li>
                   </ul>
+                  {(saas.billingItems?.length ?? 0) > 0 ? (
+                    <div className="billing-lines" style={{ marginTop: 12 }}>
+                      <p className="muted">Line items</p>
+                      <ul className="billing-line-list">
+                        {saas.billingItems!.map((item) => (
+                          <li key={item.toolId}>
+                            <strong>{item.name}</strong>
+                            <span>
+                              {inr(item.unitPriceInr)}/mo
+                              {item.periodEnd ? ` · ${item.periodEnd.slice(0, 10)}` : ""}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   <div className="pay-meter">
                     <div className="pay-meter-head">
                       <span>Charge success</span>

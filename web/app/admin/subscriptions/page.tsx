@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
+import { ProductPacksPanel } from "@/components/admin/ProductPacksPanel";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
@@ -267,14 +268,14 @@ export default function AdminSubscriptionsPage() {
           <div>
             <h2>Operator access</h2>
             <p className="muted">
-              Record cap for unlicensed tools. Per-tool prices live in{" "}
-              <Link href="/admin/tools?tab=pricing">Tool management → Pricing</Link>. Paid upgrades collect UPI — verify in{" "}
-              <Link href="/admin/upi">UPI verify</Link>. Assigning Unlimited licenses every paid SKU;
-              Limited revokes those licenses.
+              Platform freemium (record cap) plus product packs. Per-tool subscriptions live in{" "}
+              <Link href="/admin/tools?tab=pricing">Tool management → Product</Link>. Assigning Unlimited grants the All
+              Tools Pack (every paid SKU license); Limited revokes those licenses. UPI verify:{" "}
+              <Link href="/admin/upi">UPI</Link>.
             </p>
           </div>
           <Link href="/admin/tools?tab=pricing" className="btn btn-primary btn-sm">
-            Tool pricing
+            Tool products
           </Link>
         </div>
         <div className="analytics-kpis">
@@ -356,7 +357,7 @@ export default function AdminSubscriptionsPage() {
                     disabled={saving || t.planId === "pro"}
                     onClick={() => void assign("pro", t.organizationId)}
                   >
-                    → Unlimited
+                    → All tools
                   </button>
                 </div>
               </div>
@@ -365,10 +366,12 @@ export default function AdminSubscriptionsPage() {
         </div>
       </section>
 
+      <ProductPacksPanel onMessage={setMessage} />
+
       <div className="admin-split sub-workspace">
         <div className="admin-pane-stack">
           <section className="panel admin-card admin-pane">
-            <h2>Modes</h2>
+            <h2>Platform modes</h2>
             <div className="sub-mode-list">
               {[limited, paid].filter(Boolean).map((p) => {
                 const plan = p as Plan;
@@ -383,7 +386,7 @@ export default function AdminSubscriptionsPage() {
                     <header>
                       <h3>{plan.name}</h3>
                       <span className={unlimited ? "pill pill-success" : "pill pill-warning"}>
-                        {unlimited ? "Unlimited" : "Limited"}
+                        {unlimited ? "All tools pack" : "Freemium"}
                       </span>
                       {plan.available === false ? <span className="pill pill-danger">Hidden</span> : null}
                     </header>

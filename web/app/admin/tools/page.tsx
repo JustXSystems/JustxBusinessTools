@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ToolPlacementPane } from "@/components/admin/ToolPlacementPane";
-import { ToolPricingPane, type SkuState } from "@/components/admin/ToolPricingPane";
+import { ToolPricingPane, type BundleState, type SkuState } from "@/components/admin/ToolPricingPane";
 import { ToolSchemaPane } from "@/components/admin/ToolSchemaPane";
 import { getToolDefinition, uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
@@ -56,6 +56,7 @@ export default function AdminToolsPage() {
   const [catalog, setCatalog] = useState<CatalogRow[]>([]);
   const [skus, setSkus] = useState<SkuState[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
+  const [bundles, setBundles] = useState<BundleState[]>([]);
   const [defs, setDefs] = useState<ToolDef[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [tab, setTab] = useState<Tab>("placement");
@@ -63,7 +64,6 @@ export default function AdminToolsPage() {
   const [message, setMessage] = useState("");
   const [groupName, setGroupName] = useState("");
   const [available, setAvailable] = useState(true);
-  const [priceDraft, setPriceDraft] = useState("");
   const [creating, setCreating] = useState(false);
   const [newId, setNewId] = useState("");
   const [newTitle, setNewTitle] = useState("");
@@ -74,12 +74,13 @@ export default function AdminToolsPage() {
   const reload = useCallback(async () => {
     const [c, s, d] = await Promise.all([
       api<{ tools: CatalogRow[] }>("/admin/catalog"),
-      api<{ skus: SkuState[]; licenses: License[] }>("/admin/skus"),
+      api<{ skus: SkuState[]; licenses: License[]; bundles?: BundleState[] }>("/admin/skus"),
       api<{ tools: ToolDef[] }>("/admin/config/tools"),
     ]);
     setCatalog(c.tools);
     setSkus(s.skus);
     setLicenses(s.licenses);
+    setBundles(s.bundles ?? []);
     setDefs(d.tools);
   }, []);
 
@@ -150,7 +151,6 @@ export default function AdminToolsPage() {
     if (!selectedId) setSelectedId(selected.id);
     setGroupName(selected.catalog?.groupName || selected.groupName);
     setAvailable(selected.catalog?.available ?? true);
-    setPriceDraft(selected.sku ? String(selected.sku.priceInr) : "0");
   }, [selected, selectedId]);
 
   function select(id: string, nextTab = tab) {
@@ -257,7 +257,7 @@ export default function AdminToolsPage() {
       <section className="panel admin-card admin-page-head">
         <h2>Tool management</h2>
         <p className="muted">
-          Select a tool, then configure placement, commercial terms, and field schema in one workspace.
+          Select a tool to configure placement, product subscription (price & entitlement), and field schema.
         </p>
       </section>
 
@@ -295,6 +295,8 @@ export default function AdminToolsPage() {
                         <span className="pill">Incl.</span>
                       ) : t.licensed ? (
                         <span className="pill pill-success">Lic.</span>
+                      ) : t.sku?.accessPolicy === "hard_lock" ? (
+                        <span className="pill pill-danger">Lock</span>
                       ) : t.sku ? (
                         <span className="pill pill-warning">Paid</span>
                       ) : null}
@@ -371,7 +373,7 @@ export default function AdminToolsPage() {
                     Placement
                   </button>
                   <button type="button" className={tab === "pricing" ? "active" : ""} onClick={() => goTab("pricing")}>
-                    Pricing
+                    Product
                   </button>
                   <button type="button" className={tab === "schema" ? "active" : ""} onClick={() => goTab("schema")}>
                     Schema
@@ -398,12 +400,17 @@ export default function AdminToolsPage() {
 
               {tab === "pricing" ? (
                 <ToolPricingPane
+                  toolId={selected.id}
+                  toolName={selected.name}
+                  toolCategory={selected.groupName}
                   sku={selected.sku}
                   licensed={selected.licensed}
                   periodEnd={selected.periodEnd}
-                  priceDraft={priceDraft}
-                  onPriceDraft={setPriceDraft}
-                  onReload={reload}
+                  bundles={bundles}
+                  onReload={async () => {
+                    await reload();
+                    invalidateAdminData("admin-tools");
+                  }}
                   onMessage={setMessage}
                 />
               ) : null}

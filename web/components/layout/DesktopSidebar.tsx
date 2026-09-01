@@ -52,15 +52,19 @@ function NavLink({
 export function DesktopSidebar() {
   const pathname = usePathname();
   const { user, isAdmin, logout } = useAuth();
-  const { subscription, isUnlimited, isPro } = useSubscriptionContext();
+  const { subscription, isToolLicensed } = useSubscriptionContext();
   const { mode, density } = useSidebarLayout();
   const mini = density === "mini";
   const compact = density === "docked";
   const floating = mode === "floating";
 
+  const licensedCount = (subscription?.catalog ?? []).filter(
+    (s) => !s.includedFree && (s.licensed || isToolLicensed(s.toolId)),
+  ).length;
   const planLabel =
-    subscription?.planName ||
-    (isUnlimited || isPro ? "Unlimited" : subscription?.planId ? "Plan" : "Free");
+    licensedCount > 0
+      ? `${licensedCount} tool${licensedCount === 1 ? "" : "s"}`
+      : subscription?.planName || "Freemium";
 
   const floatItems = [
     ...navigationConfig.workspace.map((item) => ({

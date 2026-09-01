@@ -11,6 +11,7 @@ export class MockPaymentProvider implements PaymentProvider {
     profileId: number;
     planId: string;
     amountInr: number;
+    toolIds?: string[];
   }): Promise<CheckoutSession> {
     const sessionId = `mock_${input.profileId}_${Date.now()}`;
     return {
@@ -45,6 +46,7 @@ export class MockPaymentProvider implements PaymentProvider {
     const periodEndRaw = payload.periodEnd;
     const periodEnd =
       periodEndRaw ? new Date(String(periodEndRaw)) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const toolIds = Array.isArray(payload.toolIds) ? payload.toolIds.map(String) : undefined;
     return {
       type,
       profileId,
@@ -54,6 +56,8 @@ export class MockPaymentProvider implements PaymentProvider {
         ? String(payload.externalCustomerId)
         : undefined,
       periodEnd,
+      toolIds,
+      amountInr: payload.amountInr != null ? Number(payload.amountInr) : undefined,
     };
   }
 }

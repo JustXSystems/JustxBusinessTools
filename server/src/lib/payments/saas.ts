@@ -62,6 +62,26 @@ export async function getSaasPaymentSummary(days = 90) {
     };
   });
 
+  let billingItems: Array<{
+    toolId: string;
+    name: string;
+    unitPriceInr: number;
+    periodEnd: string | null;
+    source: string | null;
+  }> = [];
+  try {
+    const { listSubscriptionItems } = await import("../subscription-items.js");
+    billingItems = (await listSubscriptionItems(orgId)).map((i) => ({
+      toolId: i.toolId,
+      name: i.name,
+      unitPriceInr: i.unitPriceInr,
+      periodEnd: i.periodEnd,
+      source: i.source,
+    }));
+  } catch {
+    /* optional until migrated */
+  }
+
   return {
     subscription: sub
       ? {
@@ -73,6 +93,7 @@ export async function getSaasPaymentSummary(days = 90) {
           provider: (sub as { payment_provider: string | null }).payment_provider,
         }
       : null,
+    billingItems,
     summary: {
       collectedInr: collected,
       successCount: success.length,

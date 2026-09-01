@@ -25,11 +25,16 @@ type SubscriptionContextValue = {
   subscription: SubscriptionInfo | null;
   loading: boolean;
   error: string;
+  /** @deprecated Prefer isToolLicensed — pack assignment, not entitlement */
   isUnlimited: boolean;
+  /** @deprecated Prefer isToolLicensed */
   isPro: boolean;
   licensedToolIds: string[];
   isToolLicensed: (toolId: string) => boolean;
+  /** Paid catalog tools that are still unlicensed */
+  unlicensedPaidCount: number;
   refresh: () => Promise<void>;
+  /** Add tool to cart and open /subscription (per-tool subscribe flow) */
   openUpgrade: (toolId?: string) => void;
 };
 
@@ -45,7 +50,6 @@ export function useSubscriptionContext(): SubscriptionContextValue {
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  // Live-first: do not seed UI from contingency snapshot (avoids stale UPI/license states).
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -57,7 +61,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     try {
       const data = await fetchSubscription();
       const prev = prevRef.current;
-      // Always trust DB payload over any local snapshot.
       writeSubscriptionSnapshot(data);
       prevRef.current = data;
       liveConfirmedRef.current = true;
@@ -78,7 +81,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (err) {
-      // Contingency only when we have no live session data yet.
       if (!liveConfirmedRef.current) {
         const contingency = readSubscriptionSnapshot();
         if (contingency) {
@@ -113,7 +115,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
-  // Poll faster while a UPI claim is pending so admin approval shows up quickly.
   useEffect(() => {
     const pending = subscription?.pendingClaim?.status === "pending";
     const ms = pending ? 5_000 : 30_000;
@@ -126,13 +127,18 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const isToolLicensed = useCallback(
     (toolId: string) => {
-      if (isUnlimited) return true;
       const sku = subscription?.catalog?.find((s) => s.toolId === toolId);
       if (sku?.licensed || sku?.includedFree) return true;
       return licensedToolIds.includes(toolId);
     },
-    [isUnlimited, licensedToolIds, subscription?.catalog],
+    [licensedToolIds, subscription?.catalog],
   );
+
+  const unlicensedPaidCount = useMemo(() => {
+    const catalog = subscription?.catalog ?? [];
+    return catalog.filter((s) => !s.includedFree && s.priceInr > 0 && !s.licensed && !licensedToolIds.includes(s.toolId))
+      .length;
+  }, [subscription?.catalog, licensedToolIds]);
 
   const openUpgrade = useCallback(
     (toolId?: string) => {
@@ -152,10 +158,21 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       isPro: isUnlimited,
       licensedToolIds,
       isToolLicensed,
+      unlicensedPaidCount,
       refresh,
       openUpgrade,
     }),
-    [subscription, loading, error, isUnlimited, licensedToolIds, isToolLicensed, refresh, openUpgrade],
+    [
+      subscription,
+      loading,
+      error,
+      isUnlimited,
+      licensedToolIds,
+      isToolLicensed,
+      unlicensedPaidCount,
+      refresh,
+      openUpgrade,
+    ],
   );
 
   return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;

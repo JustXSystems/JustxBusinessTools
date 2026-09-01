@@ -25,7 +25,7 @@ function groupCatalog(items: ToolCatalogSku[]) {
 }
 
 export default function SubscriptionPage() {
-  const { subscription, loading, error, isUnlimited, isToolLicensed, refresh } = useSubscription();
+  const { subscription, loading, error, isToolLicensed, refresh } = useSubscription();
   const { showToast } = useToast();
   const [cart, setCart] = useState<string[]>([]);
   const [quote, setQuote] = useState<CartQuote | null>(null);
@@ -165,17 +165,21 @@ export default function SubscriptionPage() {
                   {includedCount ? ` · ${includedCount} included` : ""}
                 </p>
               </div>
-              <span className={pending?.status === "pending" ? "pill pill-warning" : licensedCount || isUnlimited ? "pill pill-success" : "pill"}>
-                {pending?.status === "pending" ? "Payment under review" : isUnlimited ? "All-tools" : licensedCount ? "À la carte" : "Limited"}
+              <span className={pending?.status === "pending" ? "pill pill-warning" : licensedCount ? "pill pill-success" : "pill"}>
+                {pending?.status === "pending"
+                  ? "Payment under review"
+                  : licensedCount
+                    ? "Subscribed"
+                    : "Freemium"}
               </span>
             </div>
             <dl className="billing-dl billing-dl-row">
               <div>
                 <dt>Unlicensed tools</dt>
                 <dd>
-                  {subscription.recordLimit == null || isUnlimited
-                    ? "Unlimited records"
-                    : `${subscription.recordLimit} saved records each`}
+                  {subscription.recordLimit != null
+                    ? `${subscription.recordLimit} saved records each`
+                    : "Limited records"}
                 </dd>
               </div>
               <div>
@@ -183,11 +187,28 @@ export default function SubscriptionPage() {
                 <dd>Unlimited records · CSV / Excel</dd>
               </div>
               <div>
-                <dt>Settlement</dt>
-                <dd>UPI default · cards via PG</dd>
+                <dt>MRR</dt>
+                <dd>{inr(subscription.mrrInr ?? 0)}</dd>
               </div>
             </dl>
-            {licensedCount > 0 || isUnlimited ? (
+            {(subscription.billingItems?.length ?? 0) > 0 ? (
+              <div className="billing-lines">
+                <p className="card-label">Active subscriptions</p>
+                <ul className="billing-line-list">
+                  {subscription.billingItems!.map((item) => (
+                    <li key={item.toolId}>
+                      <strong>{item.name}</strong>
+                      <span>
+                        {inr(item.unitPriceInr)}/mo
+                        {item.periodEnd ? ` · until ${item.periodEnd.slice(0, 10)}` : ""}
+                        {item.source ? ` · ${item.source}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {licensedCount > 0 ? (
               <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void handleCancelLicenses()}>
                 Cancel paid licenses
               </button>
