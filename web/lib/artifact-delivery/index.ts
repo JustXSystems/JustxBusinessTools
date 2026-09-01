@@ -172,7 +172,7 @@ export async function deliverToolArtifact(input: {
           filename: input.filename,
           bytes: input.bytes,
           mimeType,
-          conflictPolicy: input.conflictPolicy ?? "rename",
+          conflictPolicy: input.conflictPolicy ?? "overwrite",
         });
         if (!cloudSynced) {
           if (written.skipped) {

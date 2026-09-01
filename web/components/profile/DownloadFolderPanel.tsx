@@ -258,6 +258,26 @@ export function DownloadFolderPanel({
                   Save company folder
                 </button>
               ) : null}
+              <label className="field" style={{ marginTop: 12 }}>
+                <span className="label">Same-filename policy</span>
+                <select
+                  value={conflictPolicy}
+                  disabled={!canEdit}
+                  onChange={(e) =>
+                    onPolicyChange(e.target.value as "rename" | "skip" | "overwrite")
+                  }
+                >
+                  <option value="overwrite">
+                    Overwrite — new Drive revision under the same filename (recommended)
+                  </option>
+                  <option value="rename">Rename — keep old file; save as name (1).ext</option>
+                  <option value="skip">Skip — leave existing file unchanged</option>
+                </select>
+              </label>
+              <p className="section-note">
+                Re-uploading e.g. the same quotation number updates the existing Drive file and
+                keeps revision history. Also used for UNC / browser folder sync.
+              </p>
               {!canEdit ? (
                 <p className="section-note">
                   You are Staff: keep using JustX tools normally. Your PDFs go to this company folder
@@ -361,7 +381,7 @@ export function DownloadFolderPanel({
             />
           </label>
           <label className="field">
-            <span className="label">Conflict policy</span>
+            <span className="label">Conflict policy (UNC / local folder)</span>
             <select
               value={conflictPolicy}
               disabled={!canEdit}
@@ -369,9 +389,9 @@ export function DownloadFolderPanel({
                 onPolicyChange(e.target.value as "rename" | "skip" | "overwrite")
               }
             >
-              <option value="rename">Rename</option>
+              <option value="overwrite">Overwrite existing file</option>
+              <option value="rename">Rename — name (1).ext</option>
               <option value="skip">Skip if exists</option>
-              <option value="overwrite">Overwrite</option>
             </select>
           </label>
         </div>

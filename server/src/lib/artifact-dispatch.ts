@@ -209,7 +209,7 @@ async function deliverViaDrive(
   row: ArtifactRow,
   folderId: string,
   accessToken?: string | null,
-): Promise<void> {
+): Promise<"synced" | "skipped_duplicate"> {
   const buf = await readArtifactBlob(row.storage_key);
   const uploaded = await uploadToGoogleDriveFolder({
     folderId,
@@ -217,9 +217,11 @@ async function deliverViaDrive(
     mimeType: row.mime_type,
     buffer: buf,
     accessToken: accessToken || undefined,
+    conflictPolicy: row.conflict_policy || "overwrite",
   });
+  const skipped = uploaded.action === "skipped";
   await markArtifact(row.id, {
-    status: "synced",
+    status: skipped ? "skipped_duplicate" : "synced",
     channel: "google_drive",
     destinationPath: uploaded.webViewLink || `drive:${uploaded.fileId}`,
   });
@@ -228,10 +230,17 @@ async function deliverViaDrive(
     organizationId: row.organization_id,
     businessProfileId: row.business_profile_id,
     userId: row.user_id,
-    eventType: "ack.synced",
+    eventType: skipped ? "ack.skipped_duplicate" : "ack.synced",
     channel: "google_drive",
-    detail: { fileId: uploaded.fileId, webViewLink: uploaded.webViewLink },
+    detail: {
+      fileId: uploaded.fileId,
+      webViewLink: uploaded.webViewLink,
+      filename: uploaded.filename,
+      action: uploaded.action,
+      conflictPolicy: row.conflict_policy || "overwrite",
+    },
   });
+  return skipped ? "skipped_duplicate" : "synced";
 }
 
 async function deliverViaWebhook(
@@ -337,11 +346,17 @@ export async function dispatchArtifact(artifactId: string): Promise<{
         `UPDATE artifact_deliveries SET sync_status = 'in_progress', delivery_channel = 'google_drive' WHERE id = :id`,
         { id: row.id },
       );
-      await deliverViaDrive(row, cfg.driveFolderId, tenantToken);
+      const status = await deliverViaDrive(row, cfg.driveFolderId, tenantToken);
       publishNotificationAsync({
         eventType: "artifact.synced",
-        title: "File saved to Google Drive",
-        body: `${row.original_filename} was uploaded automatically.`,
+        title:
+          status === "skipped_duplicate"
+            ? "Google Drive file already present"
+            : "File saved to Google Drive",
+        body:
+          status === "skipped_duplicate"
+            ? `${row.original_filename} was skipped (same name already in the company folder).`
+            : `${row.original_filename} was uploaded automatically (new file or new revision under the same name).`,
         organizationId: row.organization_id,
         businessProfileId: row.business_profile_id,
         href: "/sync",
@@ -350,7 +365,7 @@ export async function dispatchArtifact(artifactId: string): Promise<{
         dedupeKey: `art-synced:${row.id}`,
         expiresInHours: 48,
       });
-      return { ok: true, channel: "google_drive", status: "synced" };
+      return { ok: true, channel: "google_drive", status };
     }
 
     if (dest === "webhook") {

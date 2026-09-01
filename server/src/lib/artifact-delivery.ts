@@ -77,7 +77,7 @@ export async function ensureArtifactDeliverySchema(): Promise<void> {
         `ALTER TABLE business_profiles ADD COLUMN download_folder VARCHAR(512) NULL`,
       );
       await addColumnIfMissing(
-        `ALTER TABLE business_profiles ADD COLUMN download_folder_conflict_policy VARCHAR(16) NOT NULL DEFAULT 'rename'`,
+        `ALTER TABLE business_profiles ADD COLUMN download_folder_conflict_policy VARCHAR(16) NOT NULL DEFAULT 'overwrite'`,
       );
       await pool.query(`
         CREATE TABLE IF NOT EXISTS artifact_deliveries (
@@ -94,7 +94,7 @@ export async function ensureArtifactDeliverySchema(): Promise<void> {
           sync_status VARCHAR(32) NOT NULL DEFAULT 'pending',
           delivery_channel VARCHAR(32) NULL,
           destination_path VARCHAR(1024) NULL,
-          conflict_policy VARCHAR(16) NOT NULL DEFAULT 'rename',
+          conflict_policy VARCHAR(16) NOT NULL DEFAULT 'overwrite',
           attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
           last_error VARCHAR(500) NULL,
           browser_fallback_at TIMESTAMP NULL,
@@ -170,9 +170,9 @@ export function validateDownloadFolderPath(raw: unknown): string | null {
 }
 
 export function normalizeConflictPolicy(raw: unknown): ConflictPolicy {
-  const v = String(raw ?? "rename").trim().toLowerCase();
+  const v = String(raw ?? "overwrite").trim().toLowerCase();
   if (v === "skip" || v === "overwrite" || v === "rename") return v;
-  return "rename";
+  return "overwrite";
 }
 
 export function sanitizeFilename(name: string): string {
@@ -336,7 +336,7 @@ export async function createArtifact(input: {
 
   const retention = Math.min(Math.max(Number(input.retentionDays ?? 30) || 30, 1), 365);
   const expires = new Date(Date.now() + retention * 24 * 60 * 60 * 1000);
-  const policy = input.conflictPolicy ?? "rename";
+  const policy = input.conflictPolicy ?? "overwrite";
   const meta = {
     ...(input.meta ?? {}),
     toolId: input.toolId,

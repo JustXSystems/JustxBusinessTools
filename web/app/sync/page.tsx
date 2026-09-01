@@ -40,7 +40,7 @@ export default function SyncCenterPage() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(0);
   const [downloadFolder, setDownloadFolder] = useState<string | null>(null);
-  const [conflictPolicy, setConflictPolicy] = useState<"rename" | "skip" | "overwrite">("rename");
+  const [conflictPolicy, setConflictPolicy] = useState<"rename" | "skip" | "overwrite">("overwrite");
   const [items, setItems] = useState<ArtifactListItem[]>([]);
   const [agents, setAgents] = useState<SyncAgentRow[]>([]);
   const [fsaLabel, setFsaLabel] = useState("Checking…");
@@ -69,7 +69,7 @@ export default function SyncCenterPage() {
       ]);
       setPending(summary.pending);
       setDownloadFolder(summary.downloadFolder ?? list.downloadFolder);
-      setConflictPolicy(list.conflictPolicy || "rename");
+      setConflictPolicy(list.conflictPolicy || "overwrite");
       setItems(list.items);
       setAgents(agentList.items);
       setLocalAgent(local);

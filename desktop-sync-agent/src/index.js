@@ -171,7 +171,7 @@ export async function syncOnce() {
       return result;
     }
 
-    const policy = list.conflictPolicy || "rename";
+    const policy = list.conflictPolicy || "overwrite";
     let synced = 0;
     let failed = 0;
     const details = [];

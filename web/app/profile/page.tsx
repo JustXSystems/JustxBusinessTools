@@ -430,7 +430,7 @@ export default function ProfilePage() {
         <DownloadFolderPanel
           canEdit={canEdit}
           downloadFolder={profile.downloadFolder}
-          conflictPolicy={profile.downloadFolderConflictPolicy ?? "rename"}
+          conflictPolicy={profile.downloadFolderConflictPolicy ?? "overwrite"}
           artifactDestination={profile.artifactDestination ?? "auto"}
           artifactWebhookUrl={profile.artifactWebhookUrl}
           artifactWebhookSecretConfigured={profile.artifactWebhookSecretConfigured}

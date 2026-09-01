@@ -86,7 +86,7 @@ export async function fetchArtifactContentBytes(id: string): Promise<Uint8Array>
 }
 
 /** Sync all pending artifacts into the folder linked via File System Access in this browser. */
-export async function syncPendingViaFsa(conflictPolicy: "rename" | "skip" | "overwrite" = "rename") {
+export async function syncPendingViaFsa(conflictPolicy: "rename" | "skip" | "overwrite" = "overwrite") {
   const support = getFsaSupport();
   if (!support.supported) throw new Error(support.reason || "File System Access not supported");
   let probe = await probeFsaFolder();

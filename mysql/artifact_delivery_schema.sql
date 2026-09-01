@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS artifact_deliveries (
   sync_status VARCHAR(32) NOT NULL DEFAULT 'pending',
   delivery_channel VARCHAR(32) NULL,
   destination_path VARCHAR(1024) NULL,
-  conflict_policy VARCHAR(16) NOT NULL DEFAULT 'rename',
+  conflict_policy VARCHAR(16) NOT NULL DEFAULT 'overwrite',
   attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
   last_error VARCHAR(500) NULL,
   browser_fallback_at TIMESTAMP NULL,

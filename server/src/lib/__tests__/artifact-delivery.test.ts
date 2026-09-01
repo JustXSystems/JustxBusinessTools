@@ -23,7 +23,8 @@ describe("download folder validation", () => {
 
   it("normalizes conflict policy and filenames", () => {
     expect(normalizeConflictPolicy("overwrite")).toBe("overwrite");
-    expect(normalizeConflictPolicy("nope")).toBe("rename");
+    expect(normalizeConflictPolicy("rename")).toBe("rename");
+    expect(normalizeConflictPolicy("nope")).toBe("overwrite");
     expect(sanitizeFilename("report?.pdf")).toBe("report_.pdf");
     expect(sanitizeFilename("a/b/c.pdf")).toBe("c.pdf");
   });

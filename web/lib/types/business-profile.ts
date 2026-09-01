@@ -86,7 +86,7 @@ export type BusinessProfile = {
    * Written by desktop sync agent / File System Access — not by the SaaS server.
    */
   downloadFolder: string | null;
-  /** How the agent/FSA handles an existing file with the same name. */
+  /** How company delivery handles an existing file with the same name (Drive revisions / UNC / FSA). */
   downloadFolderConflictPolicy: "rename" | "skip" | "overwrite";
   /**
    * Automatic delivery mode (cloud-first).
@@ -136,7 +136,7 @@ export const EMPTY_PROFILE: BusinessProfile = {
     googleDrive: { ...DEFAULT_SEND_SETTINGS.googleDrive },
   },
   downloadFolder: null,
-  downloadFolderConflictPolicy: "rename",
+  downloadFolderConflictPolicy: "overwrite",
   artifactDestination: "auto",
   artifactWebhookUrl: null,
   artifactWebhookSecretConfigured: false,
