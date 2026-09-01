@@ -507,70 +507,6 @@ a {
   flex-shrink: 0;
 }
 
-.install-icon-presets {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  gap: 10px;
-}
-
-.install-icon-preset {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-align: left;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid var(--border-hair-strong, #e7e1d3);
-  background: #fff;
-  cursor: pointer;
-  color: inherit;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.install-icon-preset:hover {
-  border-color: var(--teal-600, #1b5c5d);
-}
-
-.install-icon-preset.is-selected {
-  border-color: var(--amber, #f2a93b);
-  box-shadow: inset 0 0 0 1px var(--amber, #f2a93b);
-  background: #fffaf0;
-}
-
-.install-icon-preset-thumb {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  overflow: hidden;
-  flex-shrink: 0;
-  background: transparent;
-}
-
-.install-icon-preset-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.install-icon-preset-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.install-icon-preset-meta strong {
-  font-size: 12.5px;
-  font-weight: 700;
-}
-
-.install-icon-preset-meta span {
-  font-size: 11px;
-  color: var(--text-mid, #5a5750);
-  line-height: 1.3;
-}
-
 .install-icon-custom-banner {
   display: flex;
   align-items: center;
@@ -591,6 +527,22 @@ a {
   word-break: break-all;
 }
 
+.install-icon-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.install-icon-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .install-icon-checker {
   background-color: #ddd !important;
   background-image:
@@ -604,70 +556,6 @@ a {
 
 .install-icon-checker img {
   object-fit: contain !important;
-}
-
-.install-bg-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.install-bg-preset {
-  min-width: 88px;
-  height: 36px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border-hair-strong, #e7e1d3);
-  cursor: pointer;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
-}
-
-.install-bg-preset.is-transparent {
-  color: #333;
-  background-color: #ddd;
-  background-image:
-    linear-gradient(45deg, #bbb 25%, transparent 25%),
-    linear-gradient(-45deg, #bbb 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #bbb 75%),
-    linear-gradient(-45deg, transparent 75%, #bbb 75%);
-  background-size: 10px 10px;
-  background-position: 0 0, 0 5px, 5px -5px, -5px 0;
-}
-
-.install-bg-preset.is-light {
-  color: #1b1b1b;
-}
-
-.install-bg-preset.is-selected {
-  outline: 2px solid var(--amber, #f2a93b);
-  outline-offset: 2px;
-}
-
-.install-bg-custom {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-mid, #5a5750);
-  cursor: pointer;
-}
-
-.install-bg-custom input[type="color"] {
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid var(--border-hair-strong, #e7e1d3);
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
 }
 
 .preview-install-icon img {

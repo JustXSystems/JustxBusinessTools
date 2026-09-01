@@ -1,28 +1,11 @@
-/** Desktop / PWA install branding — single JustX logo (no generated presets). */
+/** Desktop / PWA install branding — official JustX logo only (no icon presets). */
 
 export const JUSTX_LOGO_URL = "/icons/justx-logo.png";
 
 export const DEFAULT_INSTALL_ICON_URL = JUSTX_LOGO_URL;
 
-/** @deprecated Presets removed — only the official JustX logo is used. */
-export type InstallIconPreset = {
-  id: string;
-  label: string;
-  description: string;
-  url: string;
-};
-
-/** Empty: custom upload only; default icon is JUSTX_LOGO_URL. */
-export const INSTALL_ICON_PRESETS: InstallIconPreset[] = [];
-
 /** `transparent` or a #RRGGBB / #RGB color. Default: transparent. */
 export type InstallIconBg = string;
-
-export const INSTALL_ICON_BG_PRESETS: { id: string; label: string; value: InstallIconBg }[] = [
-  { id: "transparent", label: "Transparent", value: "transparent" },
-  { id: "black", label: "Black", value: "#000000" },
-  { id: "white", label: "White", value: "#FFFFFF" },
-];
 
 export function parseInstallIconBg(raw: unknown): InstallIconBg {
   const s = String(raw ?? "").trim();
