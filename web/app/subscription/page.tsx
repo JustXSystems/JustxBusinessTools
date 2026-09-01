@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "@/components/common/ToastProvider";
 import { BillingStepper } from "@/components/subscription/BillingStepper";
+import { StoreCartDock } from "@/components/subscription/StoreCartDock";
 import { useSubscription } from "@/hooks/useSubscription";
 import { cancelProSubscription, fetchCartQuote, startToolTrial } from "@/lib/api";
 import { catalogPriceFingerprint } from "@/lib/commerce-revision";
@@ -183,8 +184,48 @@ export default function SubscriptionPage() {
     }
   }
 
+  const dueNow = activePack
+    ? (quote?.totalInr ?? 0)
+    : payableIds.reduce((sum, id) => {
+        const sku = catalog.find((s) => s.toolId === id);
+        return sum + (sku?.priceInr ?? 0);
+      }, 0);
+
+  const cartLines = payableIds
+    .map((id) => {
+      const sku = catalog.find((s) => s.toolId === id);
+      const line = quote?.lines.find((l) => l.toolId === id);
+      if (!sku) return null;
+      const displayPrice =
+        activePack && line ? line.priceInr : (sku.priceInr ?? line?.priceInr ?? 0);
+      return { id, name: sku.name, priceLabel: inr(displayPrice) };
+    })
+    .filter(Boolean) as { id: string; name: string; priceLabel: string }[];
+
   return (
     <div className="billing-page billing-store">
+      <StoreCartDock
+        itemCount={payableIds.length}
+        totalLabel={inr(dueNow)}
+        packLabel={activePack && quote?.packName ? quote.packName : null}
+        savingsLabel={
+          quote?.savingsInr && quote.savingsInr > 0 ? `Pack savings ${inr(quote.savingsInr)}` : null
+        }
+        lines={cartLines}
+        quoteError={quoteError}
+        canCheckout={Boolean(quote && payableIds.length > 0)}
+        onRemove={(id) => {
+          const next = removeFromToolCart(id);
+          setCart(next);
+          setActivePack(null);
+        }}
+        onClear={() => {
+          clearToolCart();
+          setCart([]);
+          setActivePack(null);
+        }}
+      />
+
       <div className="tool-header">
         <Link href="/" className="back-btn" aria-label="Back">
           ←
@@ -373,61 +414,6 @@ export default function SubscriptionPage() {
                 </section>
               ))}
             </div>
-
-            <aside className="store-cart card">
-              <h2>Cart</h2>
-              {activePack && quote?.packName ? (
-                <p className="store-cart-pack">{quote.packName} pricing</p>
-              ) : null}
-              {payableIds.length === 0 ? (
-                <p className="muted">Select tools or a pack to build a monthly subscription.</p>
-              ) : (
-                <ul className="billing-line-items">
-                  {payableIds.map((id) => {
-                    const sku = catalog.find((s) => s.toolId === id);
-                    const line = quote?.lines.find((l) => l.toolId === id);
-                    if (!sku) return null;
-                    // Pack quotes redistribute discount across lines; à la carte prefers live catalog.
-                    const displayPrice =
-                      activePack && line
-                        ? line.priceInr
-                        : (sku.priceInr ?? line?.priceInr ?? 0);
-                    return (
-                      <li key={id}>
-                        <span>{sku.name}</span>
-                        <strong>{inr(displayPrice)}</strong>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              {quote?.savingsInr && quote.savingsInr > 0 ? (
-                <p className="store-cart-savings">Pack savings {inr(quote.savingsInr)}</p>
-              ) : null}
-              <div className="store-cart-total">
-                <span>Due now</span>
-                <strong>
-                  {inr(
-                    activePack
-                      ? (quote?.totalInr ?? 0)
-                      : payableIds.reduce((sum, id) => {
-                          const sku = catalog.find((s) => s.toolId === id);
-                          return sum + (sku?.priceInr ?? 0);
-                        }, 0),
-                  )}
-                </strong>
-              </div>
-              {quoteError ? <p className="field-error">{quoteError}</p> : null}
-              {quote && payableIds.length > 0 ? (
-                <Link className="btn btn-primary" href="/subscription/checkout">
-                  Checkout
-                </Link>
-              ) : (
-                <button type="button" className="btn btn-primary" disabled>
-                  Checkout
-                </button>
-              )}
-            </aside>
           </div>
         </>
       ) : null}
