@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
 import { api } from "@/lib/api";
+import { publicAssetUrl } from "@/lib/base-path";
 import { INDIAN_STATES } from "@/lib/types/business-profile";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 
@@ -217,7 +218,11 @@ export default function RegisterPage() {
                 <span>Company logo</span>
                 <div className="register-logo-row">
                   <div className="logo-preview-lg">
-                    {logo ? <img src={logo} alt="Logo preview" /> : <span>🏢</span>}
+                    {logo ? (
+                      <img src={publicAssetUrl(logo)} alt="Logo preview" />
+                    ) : (
+                      <span>🏢</span>
+                    )}
                   </div>
                   {locked ? null : (
                     <label className="btn btn-secondary btn-sm">

@@ -70,7 +70,16 @@ async function resolveInstallIconFile(
 }
 
 router.get("/effective", async (_req, res) => {
-  res.json(await getEffectiveConfig());
+  const cfg = await getEffectiveConfig();
+  res.json({
+    ...cfg,
+    branding: {
+      ...cfg.branding,
+      logoUrl: withFileAccessToken(cfg.branding.logoUrl) ?? cfg.branding.logoUrl,
+      installIconUrl:
+        withFileAccessToken(cfg.branding.installIconUrl) ?? cfg.branding.installIconUrl,
+    },
+  });
 });
 
 /** Public JustXSystems branding for splash / login (no auth required). */

@@ -1,5 +1,6 @@
 import type { Pool, PoolConnection } from "mysql2/promise";
 import { pool } from "../db.js";
+import { withFileAccessToken } from "./storage.js";
 
 export const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i;
 export const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/i;
@@ -44,7 +45,8 @@ export function publicGstinProfile(row: GstinProfileRow) {
     stateCode: row.stateCode,
     phone: row.phone,
     email: row.email,
-    logo: row.logo,
+    // Signed URL so register/login (no session) can preview the company logo.
+    logo: withFileAccessToken(row.logo),
   };
 }
 

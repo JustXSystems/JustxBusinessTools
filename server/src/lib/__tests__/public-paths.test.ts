@@ -4,6 +4,8 @@ import { isUnauthenticatedApiPath } from "../public-paths.js";
 describe("isUnauthenticatedApiPath", () => {
   it("allows public quotation and health", () => {
     expect(isUnauthenticatedApiPath("/api/health")).toBe(true);
+    expect(isUnauthenticatedApiPath("/api/config/branding")).toBe(true);
+    expect(isUnauthenticatedApiPath("/api/config/effective")).toBe(true);
     expect(isUnauthenticatedApiPath("/api/public/quotation-v1/abc")).toBe(true);
     expect(isUnauthenticatedApiPath("/api/webhooks/payments/razorpay")).toBe(true);
     expect(isUnauthenticatedApiPath("/api/files/logos/x.png")).toBe(true);
