@@ -421,8 +421,10 @@ Set at least:
 ```bash
 GF_SECURITY_ADMIN_USER=admin
 GF_SECURITY_ADMIN_PASSWORD=USE_A_LONG_RANDOM_PASSWORD_HERE
-GF_SERVER_ROOT_URL=https://justxsystems.com/grafana
+GF_SERVER_ROOT_URL=https://justxsystems.com/grafana/
 ```
+
+Use a **trailing slash** on `GF_SERVER_ROOT_URL` (`…/grafana/`).
 
 Generate a password example:
 
@@ -432,7 +434,9 @@ openssl rand -base64 24
 
 Paste that into `GF_SECURITY_ADMIN_PASSWORD`. **Do not** leave `change-me-now`. **Do not** commit `.env`. **Never put the real password in this guide or any git-tracked file** — only in `/var/www/jbt/deploy/observability/.env` on the VPS (`chmod 600`).
 
-**Where to read the live password later:**
+**Optional later (MySQL graphs only):** when you reach [§4.7](#47-optional--mysql-metrics), add `MYSQL_EXPORTER_USER` / `MYSQL_EXPORTER_PASSWORD` / `MYSQL_EXPORTER_HOST` to **this same** `.env` file. Do not put those in `server/.env`.
+
+**Where to read the live Grafana password later:**
 
 ```bash
 grep GF_SECURITY_ADMIN_ /var/www/jbt/deploy/observability/.env
@@ -1714,119 +1718,155 @@ docker compose exec prometheus wget -qO- 'http://localhost:9090/api/v1/targets' 
 
 Look for job `node` / target `node-exporter:9100` = **UP**.
 
-### 4.7 Optional — MySQL metrics
+### 4.7 Optional — MySQL metrics (verified)
 
-Skip unless you want DB graphs. Creates a **read-only** MySQL user and starts one more container.
+Skip unless you want DB graphs in Grafana. Tempo, Loki, and host metrics do **not** need this.
 
-#### 4.7.1 Create the MySQL user (on the VPS)
+**How it works on this stack**
+
+| Piece | Detail |
+|-------|--------|
+| Image | `prom/mysqld-exporter:v0.16.0` |
+| Auth | `MYSQL_EXPORTER_USER` + `MYSQL_EXPORTER_PASSWORD` in **`deploy/observability/.env`** |
+| Compose | Maps password → container env `MYSQLD_EXPORTER_PASSWORD` and passes `--mysqld.username` / `--mysqld.address` |
+| Profile | Only starts with `docker compose --profile mysql-metrics …` |
+
+**Do not use `MYSQL_EXPORTER_DSN` / `DATA_SOURCE_NAME`.** Those were removed in exporter v0.15+ and cause a crash loop (`no user specified` / `no configuration found`).
+
+#### 4.7.1 Generate a password and create the MySQL user
+
+On the VPS:
+
+```bash
+openssl rand -base64 24
+# copy the output — you will use it twice (SQL + .env)
+```
 
 ```bash
 sudo mysql
 ```
 
-In the MySQL prompt (replace `LONG_RANDOM_SECRET` with a real password — generate with `openssl rand -base64 24`):
+In the MySQL prompt, paste the **same** secret everywhere `PASTE_SECRET` appears:
 
 ```sql
-CREATE USER IF NOT EXISTS 'jbt_exporter'@'127.0.0.1' IDENTIFIED BY 'LONG_RANDOM_SECRET';
-CREATE USER IF NOT EXISTS 'jbt_exporter'@'localhost' IDENTIFIED BY 'LONG_RANDOM_SECRET';
+CREATE USER IF NOT EXISTS 'jbt_exporter'@'127.0.0.1' IDENTIFIED BY 'PASTE_SECRET';
+CREATE USER IF NOT EXISTS 'jbt_exporter'@'localhost' IDENTIFIED BY 'PASTE_SECRET';
 GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'jbt_exporter'@'127.0.0.1';
 GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'jbt_exporter'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
 
-#### 4.7.2 Configure credentials in the **observability** `.env`
-
-`mysqld-exporter` **v0.15+ does not use `DATA_SOURCE_NAME` / `MYSQL_EXPORTER_DSN`**.  
-If you only set a DSN, you get exactly:
-
-```text
-failed to validate config … err="no user specified in section or parent"
-Error parsing host config file=.my.cnf err="no configuration found"
-```
-
-Put credentials in **`/var/www/jbt/deploy/observability/.env`** (same file as Grafana password — **not** `server/.env`):
+Smoke-test login from the host (should print `1`):
 
 ```bash
-# Generate a password once; reuse it in SQL + .env
-openssl rand -base64 24
+mysql -h 127.0.0.1 -u jbt_exporter -p -e "SELECT 1"
+# enter PASTE_SECRET when prompted
+```
 
+#### 4.7.2 Put credentials in the observability `.env`
+
+File: **`/var/www/jbt/deploy/observability/.env`**  
+(Same file as `GF_SECURITY_ADMIN_PASSWORD`. **Not** `server/.env`.)
+
+```bash
 nano /var/www/jbt/deploy/observability/.env
 ```
 
-Add (no quotes; password must match the MySQL user from §4.7.1):
+Add these three lines (no quotes, no spaces around `=`). Password must match §4.7.1:
 
 ```bash
 MYSQL_EXPORTER_USER=jbt_exporter
-MYSQL_EXPORTER_PASSWORD=PASTE_SAME_SECRET
+MYSQL_EXPORTER_PASSWORD=PASTE_SECRET
 MYSQL_EXPORTER_HOST=host.docker.internal:3306
 ```
 
-If you previously added `MYSQL_EXPORTER_DSN=...`, you can delete that line — it is ignored.
+If an old `MYSQL_EXPORTER_DSN=...` line exists, **delete it**.
 
-Verify (password hidden):
+Save (`Ctrl+O`, Enter, `Ctrl+X`), then:
 
 ```bash
+chmod 600 /var/www/jbt/deploy/observability/.env
 grep -E '^MYSQL_EXPORTER_' /var/www/jbt/deploy/observability/.env | sed 's/PASSWORD=.*/PASSWORD=***/'
 ```
 
-Expect three lines including `PASSWORD=***`.
+Expect:
 
-#### 4.7.3 Pull the fixed compose file and recreate the exporter
+```text
+MYSQL_EXPORTER_USER=jbt_exporter
+MYSQL_EXPORTER_PASSWORD=***
+MYSQL_EXPORTER_HOST=host.docker.internal:3306
+```
 
-The repo compose must use `--mysqld.username` + `MYSQLD_EXPORTER_PASSWORD` (not DSN). Pull first:
+#### 4.7.3 Start (or recreate) mysqld-exporter
 
 ```bash
-cd /var/www/jbt
-git pull origin master
-# or: ./scripts/vps-deploy.sh
-
-chmod 600 /var/www/jbt/deploy/observability/.env
 cd /var/www/jbt/deploy/observability
 
-# Stop crash loop, recreate with new config
-docker compose --profile mysql-metrics stop mysqld-exporter
-docker compose --profile mysql-metrics rm -f mysqld-exporter
+# First time, or after editing .env:
 docker compose --profile mysql-metrics up -d --force-recreate mysqld-exporter
 
 docker compose ps
 docker compose logs mysqld-exporter --tail=30
 ```
 
-**Healthy:** container stays Up; logs mention listening on `:9104` (no restart loop).  
-**Still broken:** re-check `MYSQL_EXPORTER_PASSWORD` is set, then:
+**Success:** container status `Up` (not Restarting). Logs do **not** contain `no user specified`.
+
+**Confirm compose wired the password** (value may appear — do not paste into chat):
 
 ```bash
-docker compose --profile mysql-metrics config | grep -A20 mysqld-exporter
+docker compose --profile mysql-metrics config | grep -A25 'mysqld-exporter:'
 ```
 
-You should see `MYSQLD_EXPORTER_PASSWORD` (value may be shown) and `--mysqld.username=jbt_exporter`.
-
-Test MySQL login from the host before blaming Docker:
-
-```bash
-mysql -h 127.0.0.1 -u jbt_exporter -p -e "SELECT 1"
-```
+You should see `--mysqld.username=jbt_exporter`, `--mysqld.address=host.docker.internal:3306`, and `MYSQLD_EXPORTER_PASSWORD`.
 
 #### 4.7.4 Query in Grafana
 
-Explore → **Prometheus**:
+1. Open https://justxsystems.com/grafana/ → **Explore**.  
+2. Datasource → **Prometheus**.  
+3. Run:
 
 ```promql
 mysql_up
-mysql_global_status_threads_connected
 ```
 
-`mysql_up` should be `1`.
+Expect a time series with value **`1`**.
 
-#### 4.7.5 Symptom: crash loop / “no user specified”
+Useful extras:
 
-| Cause | Fix |
-|-------|-----|
-| Old compose still using `DATA_SOURCE_NAME` | `git pull` so compose uses username + `MYSQLD_EXPORTER_PASSWORD` |
-| Only set `MYSQL_EXPORTER_DSN` (ignored since v0.15) | Set `MYSQL_EXPORTER_USER` + `MYSQL_EXPORTER_PASSWORD` instead |
-| Password missing / empty in observability `.env` | Add `MYSQL_EXPORTER_PASSWORD=...`, then `--force-recreate` |
-| Do not need MySQL metrics | `docker compose --profile mysql-metrics stop mysqld-exporter` |
+```promql
+mysql_global_status_threads_connected
+mysql_global_status_queries
+rate(mysql_global_status_questions[5m])
+```
+
+If `mysql_up` is missing or `0`:
+
+```bash
+cd /var/www/jbt/deploy/observability
+docker compose logs mysqld-exporter --tail=40
+docker compose exec prometheus wget -qO- 'http://localhost:9090/api/v1/targets' | head -c 3000
+# look for job "mysql" / mysqld-exporter:9104 = UP
+```
+
+#### 4.7.5 Stop MySQL metrics (optional)
+
+```bash
+cd /var/www/jbt/deploy/observability
+docker compose --profile mysql-metrics stop mysqld-exporter
+# or remove the container:
+docker compose --profile mysql-metrics rm -f mysqld-exporter
+```
+
+#### 4.7.6 Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `no user specified` / `no configuration found` | Using DSN / empty password / old compose | Use `MYSQL_EXPORTER_USER` + `MYSQL_EXPORTER_PASSWORD`; `git pull`; `--force-recreate` |
+| Compose error: `MYSQL_EXPORTER_PASSWORD` not set | Missing line in observability `.env` | Add password, then recreate |
+| Container Up but `mysql_up` = 0 | Wrong password, user missing, or MySQL not reachable via `host.docker.internal` | Re-test `mysql -h 127.0.0.1 -u jbt_exporter -p`; recreate exporter |
+| Put vars in `server/.env` | Wrong file | Move to `deploy/observability/.env` |
+| Password has special characters and login fails | Rare quoting issues | Prefer `openssl rand -base64 24` and no quotes in `.env` |
 
 ### 4.8 Optional — nginx basic auth in front of Grafana
 
@@ -1850,7 +1890,8 @@ Also keep the `proxy_redirect` lines from [§D.6](#d6-symptom-explore--loki-api-
 | Logs have traceId | `pm2 logs justx-jbt-api --lines 20 --nostream \| grep traceId` |
 | Tempo UI | Grafana Explore → Tempo → recent `justx-jbt-api` traces |
 | Ops UI | `/jbt/admin/ops` shows OTel **on** + Tempo button |
-| Host mem | Prometheus query `node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes` |
+| Host mem | Prometheus: `node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes` |
+| MySQL metrics (optional) | Profile up + Prometheus: `mysql_up` = `1` ([§4.7](#47-optional--mysql-metrics)) |
 
 ### 4.10 Turn traces off again (if needed)
 
@@ -1894,7 +1935,7 @@ Tempo can keep running idle; or `docker compose stop tempo` to free RAM.
 | Phase 4: logs have `requestId` but no `traceId` | Edit **`/var/www/jbt/server/.env`** (not observability `.env`); `OTEL_ENABLED=true`; `pm2 reload … --update-env`; Alloy on `:4318` |
 | Tempo Explore empty | Generate traffic; wait ~30s; datasource **Tempo**; check `docker compose logs tempo alloy` |
 | Prometheus host query empty | `node-exporter` Up? Prometheus target `node` UP? ([§4.6](#46-host-metrics-always-on-after-compose-up)) |
-| `mysql_up` = 0 / mysqld-exporter crash: `no user specified` | Exporter v0.15+ ignores DSN — set `MYSQL_EXPORTER_USER` + `MYSQL_EXPORTER_PASSWORD`, pull fixed compose ([§4.7.5](#475-symptom-crash-loop--no-user-specified)) |
+| `mysql_up` = 0 / mysqld-exporter crash: `no user specified` | Use `MYSQL_EXPORTER_USER` + `MYSQL_EXPORTER_PASSWORD` (never DSN) — [§4.7](#47-optional--mysql-metrics) |
 | VPS OOM / MySQL flaky | `docker stats`; `docker compose down` to free RAM; consider a second VM |
 | After `git pull`, compose files missing | Observability commit not on `master` yet — pull again after push |
 
@@ -1936,4 +1977,13 @@ cd /var/www/jbt && pm2 reload ecosystem.config.cjs --update-env
 curl -sI http://127.0.0.1:4002/api/health | head
 pm2 logs justx-jbt-api --lines 20 --nostream | grep traceId
 # Grafana Explore → Tempo; Admin → /jbt/admin/ops → Tempo: traces
+
+# --- Optional MySQL metrics (§4.7) — USER + PASSWORD only, never DSN ---
+# sudo mysql → CREATE USER jbt_exporter … then in deploy/observability/.env:
+#   MYSQL_EXPORTER_USER=jbt_exporter
+#   MYSQL_EXPORTER_PASSWORD=…
+#   MYSQL_EXPORTER_HOST=host.docker.internal:3306
+# cd /var/www/jbt/deploy/observability
+# docker compose --profile mysql-metrics up -d --force-recreate mysqld-exporter
+# Grafana Explore → Prometheus → mysql_up
 ```
