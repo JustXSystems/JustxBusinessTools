@@ -52,11 +52,13 @@ services:
     mem_limit: 64m
 
   mysqld-exporter:
+    # v0.15+ no longer reads DATA_SOURCE_NAME — use my.cnf flags + MYSQLD_EXPORTER_PASSWORD
     image: prom/mysqld-exporter:v0.16.0
-    # Requires MYSQL_EXPORTER_DSN in deploy/observability/.env (see docs §4.7).
-    # Format: user:password@(host.docker.internal:3306)/
+    command:
+      - --mysqld.address=${MYSQL_EXPORTER_HOST:-host.docker.internal:3306}
+      - --mysqld.username=${MYSQL_EXPORTER_USER:-jbt_exporter}
     environment:
-      DATA_SOURCE_NAME: ${MYSQL_EXPORTER_DSN:?Set MYSQL_EXPORTER_DSN in deploy/observability/.env before --profile mysql-metrics}
+      MYSQLD_EXPORTER_PASSWORD: ${MYSQL_EXPORTER_PASSWORD:?Set MYSQL_EXPORTER_PASSWORD in deploy/observability/.env}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     profiles:
