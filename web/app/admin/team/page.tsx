@@ -242,7 +242,7 @@ export default function AdminTeamPage() {
       <RoleMatrixPanel />
 
       <div className="team-workspace">
-      <section className="panel admin-card">
+      <section className="panel admin-card admin-dir-panel">
         <h2>Directory</h2>
         <div className="admin-form-row">
           <input
@@ -259,7 +259,7 @@ export default function AdminTeamPage() {
             ))}
           </div>
         </div>
-        <div className="tracker-list">
+        <div className="tracker-list admin-dir-list">
           {visible.map((m) => (
             <button
               type="button"
@@ -293,17 +293,70 @@ export default function AdminTeamPage() {
 
       <div className="admin-pane-stack">
       {selected ? (
-        <section className="panel admin-card">
+        <section className="panel admin-card admin-detail-panel">
           <h2>{selected.name || selected.email}</h2>
           <p className="muted">{ROLE_HELP[selected.role] ?? selected.role}</p>
-          <div className="admin-tabs">
-            {(["profile", "access", "tools", "verify"] as Tab[]).map((t) => (
-              <button key={t} type="button" className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-                {t === "access" ? "Branches" : t === "verify" ? "Verification" : t[0].toUpperCase() + t.slice(1)}
-              </button>
-            ))}
+          <div className="admin-tabs-bar">
+            <div className="admin-tabs" role="tablist">
+              {(["profile", "access", "tools", "verify"] as Tab[]).map((t) => (
+                <button key={t} type="button" role="tab" className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
+                  {t === "access" ? "Branches" : t === "verify" ? "Verification" : t[0].toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
+            <div className="admin-tabs-actions">
+              {tab === "profile" ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() =>
+                    void run("Profile saved.", () =>
+                      api(`/admin/team/${selected.id}`, {
+                        method: "PATCH",
+                        body: JSON.stringify(profile),
+                      }).then(() => undefined),
+                    )
+                  }
+                >
+                  Save profile
+                </button>
+              ) : null}
+              {tab === "access" && selected.role !== "owner" && selected.role !== "admin" ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() =>
+                    void run("Branch access saved.", () =>
+                      api(`/admin/team/${selected.id}/branches`, {
+                        method: "PUT",
+                        body: JSON.stringify({ mode: branchMode, branchIds }),
+                      }).then(() => undefined),
+                    )
+                  }
+                >
+                  Save branch access
+                </button>
+              ) : null}
+              {tab === "tools" ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() =>
+                    void run("Tool access saved.", () =>
+                      api(`/admin/team/${selected.id}/tools`, {
+                        method: "PUT",
+                        body: JSON.stringify({ mode: toolMode, toolIds }),
+                      }).then(() => undefined),
+                    )
+                  }
+                >
+                  Save tool access
+                </button>
+              ) : null}
+            </div>
           </div>
 
+          <div className="admin-detail-scroll">
           {tab === "profile" ? (
             <div className="admin-stack">
               <div className="admin-form-row">
@@ -320,7 +373,7 @@ export default function AdminTeamPage() {
                   <button type="button" className="btn btn-primary" onClick={() => run("Account reactivated.", () => api(`/admin/team/${selected.id}/approve`, { method: "POST" }).then(() => undefined))}>Reactivate</button>
                 ) : null}
               </div>
-              <form className="admin-form-grid" onSubmit={(e) => {
+              <form className="admin-form-grid" id="team-profile-form" onSubmit={(e) => {
                 e.preventDefault();
                 void run("Profile saved.", () => api(`/admin/team/${selected.id}`, {
                   method: "PATCH",
@@ -341,7 +394,6 @@ export default function AdminTeamPage() {
                     <option value="viewer">Viewer (read-only)</option>
                   </select>
                 </label>
-                <button type="submit" className="btn btn-primary">Save profile</button>
               </form>
               <form className="admin-form-row" onSubmit={(e) => {
                 e.preventDefault();
@@ -438,10 +490,6 @@ export default function AdminTeamPage() {
                       ))}
                     </ul>
                   )}
-                  <button type="button" className="btn btn-primary" onClick={() => run("Branch access saved.", () => api(`/admin/team/${selected.id}/branches`, {
-                    method: "PUT",
-                    body: JSON.stringify({ mode: branchMode, branchIds }),
-                  }).then(() => undefined))}>Save branch access</button>
                 </>
               )}
             </div>
@@ -517,10 +565,6 @@ export default function AdminTeamPage() {
                 </div>
               ))}
               {toolGroups.length === 0 ? <p className="muted">No tools match that search.</p> : null}
-              <button type="button" className="btn btn-primary" onClick={() => run("Tool access saved.", () => api(`/admin/team/${selected.id}/tools`, {
-                method: "PUT",
-                body: JSON.stringify({ mode: toolMode, toolIds }),
-              }).then(() => undefined))}>Save tool access</button>
             </div>
           ) : null}
 
@@ -588,6 +632,7 @@ export default function AdminTeamPage() {
               </ul>
             </div>
           ) : null}
+          </div>
 
           {message ? <p className="muted">{message}</p> : null}
           {error ? <p className="field-error">{error}</p> : null}

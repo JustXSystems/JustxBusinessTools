@@ -304,6 +304,7 @@ export default function AdminSubscriptionsPage() {
         {message ? <p className="muted">{message}</p> : null}
       </section>
 
+      <div className="admin-page-scroll">
       <section className="panel admin-card">
         <div className="analytics-toolbar">
           <div>
@@ -317,7 +318,7 @@ export default function AdminSubscriptionsPage() {
             aria-label="Filter tenants"
           />
         </div>
-        <div className="tracker-list">
+        <div className="tracker-list admin-scroll-list">
           {visibleTenants.length === 0 ? (
             <p className="muted">No subscriptions in scope.</p>
           ) : (
@@ -454,7 +455,7 @@ export default function AdminSubscriptionsPage() {
               </label>
               <button type="submit" className="btn btn-primary">Schedule notice</button>
             </form>
-            <div className="tracker-list">
+            <div className="tracker-list admin-scroll-list">
               {notices.map((n) => (
                 <div key={n.id} className="tracker-row">
                   <div>
@@ -491,11 +492,16 @@ export default function AdminSubscriptionsPage() {
                       : "Record cap is enforced on the operator app as soon as you save."}
                   </p>
                 </div>
-                <span className={unlimitedEdit ? "pill pill-success" : "pill pill-warning"}>
-                  {unlimitedEdit ? "Unlimited" : "Limited"}
-                </span>
+                <div className="admin-form-row">
+                  <span className={unlimitedEdit ? "pill pill-success" : "pill pill-warning"}>
+                    {unlimitedEdit ? "Unlimited" : "Limited"}
+                  </span>
+                  <button type="submit" form="subscription-plan-form" className="btn btn-primary" disabled={saving}>
+                    {saving ? "Saving…" : "Save mode"}
+                  </button>
+                </div>
               </div>
-              <form className="admin-form-grid sub-editor-form" onSubmit={savePlan}>
+              <form id="subscription-plan-form" className="admin-form-grid sub-editor-form" onSubmit={savePlan}>
                 <label className="field">
                   <span>Display name</span>
                   <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -576,11 +582,6 @@ export default function AdminSubscriptionsPage() {
                     <option value="no">No — hidden</option>
                   </select>
                 </label>
-                <div className="admin-form-row">
-                  <button type="submit" className="btn btn-primary" disabled={saving}>
-                    {saving ? "Saving…" : "Save mode"}
-                  </button>
-                </div>
               </form>
             </>
           ) : (
@@ -590,6 +591,7 @@ export default function AdminSubscriptionsPage() {
             </>
           )}
         </section>
+      </div>
       </div>
     </div>
   );

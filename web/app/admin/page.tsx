@@ -94,6 +94,7 @@ export default function AdminDashboardPage() {
         </div>
       </section>
 
+      <div className="admin-page-scroll">
       <div className="admin-grid">
         <section className="panel admin-card">
           <h2>Usage (30d)</h2>
@@ -192,6 +193,7 @@ export default function AdminDashboardPage() {
             ))}
           </ul>
         </section>
+      </div>
       </div>
     </div>
   );

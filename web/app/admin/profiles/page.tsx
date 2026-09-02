@@ -252,7 +252,7 @@ export default function AdminProfilesPage() {
       </section>
 
       <div className="team-workspace">
-        <section className="panel admin-card">
+        <section className="panel admin-card admin-dir-panel">
           <h2>Directory</h2>
           <div className="admin-form-row">
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, GSTIN, state" aria-label="Search profiles" />
@@ -262,7 +262,7 @@ export default function AdminProfilesPage() {
               ))}
             </div>
           </div>
-          <div className="tracker-list">
+          <div className="tracker-list admin-dir-list">
             {visible.map((p) => (
               <button
                 type="button"
@@ -291,7 +291,7 @@ export default function AdminProfilesPage() {
           </div>
         </section>
 
-        <section className="panel admin-card">
+        <section className="panel admin-card admin-detail-panel">
           {creating || selected ? (
             <>
               <h2>{creating ? "New branch" : selected?.businessName}</h2>
@@ -302,21 +302,35 @@ export default function AdminProfilesPage() {
               ) : (
                 <p className="muted">New branches stay pending until an owner/admin approves them.</p>
               )}
-              <div className="admin-tabs">
-                {(["identity", "address", "bank", "home", "access", "lifecycle"] as Tab[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    className={tab === t ? "active" : ""}
-                    onClick={() => setTab(t)}
-                    disabled={creating && (t === "access" || t === "lifecycle")}
-                  >
-                    {t === "home" ? "Home tools" : t[0].toUpperCase() + t.slice(1)}
-                  </button>
-                ))}
+              <div className="admin-tabs-bar">
+                <div className="admin-tabs" role="tablist">
+                  {(["identity", "address", "bank", "home", "access", "lifecycle"] as Tab[]).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      role="tab"
+                      className={tab === t ? "active" : ""}
+                      onClick={() => setTab(t)}
+                      disabled={creating && (t === "access" || t === "lifecycle")}
+                    >
+                      {t === "home" ? "Home tools" : t[0].toUpperCase() + t.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                <div className="admin-tabs-actions">
+                  {tab === "identity" || tab === "address" || tab === "bank" || tab === "home" ? (
+                    <button type="submit" form="profile-save-form" className="btn btn-primary">
+                      {creating || !selectedId ? "Create (pending approval)" : "Save profile"}
+                    </button>
+                  ) : null}
+                  {creating ? (
+                    <button type="button" className="btn btn-secondary" onClick={() => { setCreating(false); setForm(emptyForm); }}>Cancel</button>
+                  ) : null}
+                </div>
               </div>
 
-              <form onSubmit={save} className="admin-stack">
+              <div className="admin-detail-scroll">
+              <form id="profile-save-form" onSubmit={save} className="admin-stack">
                 {tab === "identity" ? (
                   <div className="admin-form-grid">
                     <label className="field"><span>Legal name</span>
@@ -394,17 +408,6 @@ export default function AdminProfilesPage() {
                     />
                   </div>
                 ) : null}
-
-                {tab === "identity" || tab === "address" || tab === "bank" || tab === "home" ? (
-                  <div className="admin-form-row">
-                    <button type="submit" className="btn btn-primary">
-                      {creating || !selectedId ? "Create (pending approval)" : "Save profile"}
-                    </button>
-                    {creating ? (
-                      <button type="button" className="btn btn-secondary" onClick={() => { setCreating(false); setForm(emptyForm); }}>Cancel</button>
-                    ) : null}
-                  </div>
-                ) : null}
               </form>
 
               {tab === "access" && selected ? (
@@ -480,6 +483,7 @@ export default function AdminProfilesPage() {
                   </div>
                 </div>
               ) : null}
+              </div>
 
               {message ? <p className="muted">{message}</p> : null}
               {error ? <p className="field-error">{error}</p> : null}

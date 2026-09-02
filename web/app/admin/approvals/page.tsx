@@ -125,11 +125,12 @@ export default function AdminApprovalsPage() {
       {error ? <p className="field-error">{error}</p> : null}
       {message ? <p className="muted">{message}</p> : null}
 
+      <div className="admin-page-scroll">
       <section className="panel admin-card">
         {items.length === 0 ? (
           <p className="muted">Nothing pending. You&apos;re clear.</p>
         ) : (
-          <div className="tracker-list">
+          <div className="tracker-list admin-scroll-list">
             {items.map((item) => {
               const approveKey = `${item.kind}:${item.id}:approve`;
               const rejectKey = `${item.kind}:${item.id}:reject`;
@@ -173,6 +174,7 @@ export default function AdminApprovalsPage() {
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 }

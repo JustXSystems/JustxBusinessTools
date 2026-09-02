@@ -510,6 +510,7 @@ function AdminPaymentsInner() {
         </div>
       </div>
 
+      <div className="admin-page-scroll">
       {loading && !saas ? <p className="muted">Loading payments…</p> : null}
 
       {upiReady ? (
@@ -990,6 +991,7 @@ function AdminPaymentsInner() {
           </div>
         </div>
       ) : null}
+      </div>
     </div>
   );
 }

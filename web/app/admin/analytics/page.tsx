@@ -187,7 +187,8 @@ export default function AdminAnalyticsPage() {
   const deviceTotal = breakdown.devices.reduce((s, d) => s + d.count, 0) || 1;
 
   return (
-    <div className="admin-stack analytics-page">
+    <div className="admin-page">
+      <div className="admin-stack analytics-page admin-page-scroll">
       <section className="panel admin-card">
         <div className="analytics-toolbar">
           <div>
@@ -309,7 +310,7 @@ export default function AdminAnalyticsPage() {
             </select>
           </div>
         </div>
-        <div className="tracker-list">
+        <div className="tracker-list admin-scroll-list">
           {tools.map((row) => {
             const activity = row.opens + row.creates;
             return (
@@ -416,7 +417,7 @@ export default function AdminAnalyticsPage() {
         </section>
         <section className="panel admin-card">
           <h2>Live stream</h2>
-          <div className="tracker-list">
+          <div className="tracker-list admin-scroll-list">
             {breakdown.recent.map((ev, i) => (
               <div key={`${ev.at}-${i}`} className="tracker-row">
                 <div className="tracker-row-main">
@@ -431,6 +432,7 @@ export default function AdminAnalyticsPage() {
             {breakdown.recent.length === 0 ? <p className="muted">No raw events stored for this range.</p> : null}
           </div>
         </section>
+      </div>
       </div>
     </div>
   );

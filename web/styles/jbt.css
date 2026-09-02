@@ -8108,3 +8108,148 @@ html[data-scheme="light"] .field textarea {
   font-family: ui-monospace, Consolas, monospace;
   font-size: 0.92em;
 }
+
+/* —— Admin scroll system (all /admin screens) —— */
+.admin-page {
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-page:has(> .admin-split),
+.admin-page:has(> .team-workspace),
+.admin-page:has(> .tm-workspace),
+.admin-page:has(> .admin-page-body),
+.admin-page:has(> .admin-page-scroll) {
+  overflow: hidden;
+}
+
+.admin-page-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.admin-page > .admin-tabs-bar {
+  flex-shrink: 0;
+}
+
+.admin-page > .analytics-kpis,
+.admin-page > .field-error,
+.admin-page > .error,
+.admin-page > .success,
+.admin-page > p.muted {
+  flex-shrink: 0;
+}
+
+.admin-page > .admin-tabs-bar + .admin-page-scroll,
+.admin-page > .admin-tabs-bar ~ .admin-split,
+.admin-page > .admin-tabs-bar ~ .payments-split,
+.admin-page > .admin-tabs-bar ~ .admin-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.admin-dir-panel,
+.admin-detail-panel {
+  display: flex !important;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden !important;
+}
+
+.admin-dir-list,
+.admin-detail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.admin-dir-panel > .admin-form-row,
+.admin-dir-panel > h2,
+.admin-dir-panel > .admin-tabs,
+.admin-dir-panel > .tm-directory-head,
+.admin-dir-panel > .tm-dir-filters,
+.admin-detail-panel > h2,
+.admin-detail-panel > p,
+.admin-detail-panel > .admin-tabs-bar,
+.admin-detail-panel > .analytics-toolbar {
+  flex-shrink: 0;
+}
+
+.team-workspace > .panel.admin-dir-panel .tracker-list,
+.admin-split > .panel .tracker-list.admin-dir-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.admin-role-matrix-wrap {
+  overflow: auto;
+  max-height: min(42vh, 380px);
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-pane-stack > .panel.admin-detail-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.branch-checklist {
+  max-height: min(40vh, 320px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tm-detail {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tm-detail > .admin-page-scroll,
+.tm-detail > [hidden] + *,
+.tm-detail > .panel.tm-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.audit-timeline,
+.audit-page .tracker-list {
+  max-height: none;
+}
+
+.audit-timeline.admin-scroll-list,
+.audit-page .tracker-list.admin-scroll-list {
+  max-height: min(56vh, 560px);
+  overflow: auto;
+}
+
+.admin-page .audit-page,
+.admin-page .analytics-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Bounded lists that grow beyond the viewport */
+.admin-scroll-list {
+  max-height: min(52vh, 480px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.tm-packs-list.admin-scroll-list {
+  max-height: min(52vh, 420px);
+}

@@ -79,7 +79,8 @@ export default function AdminToolAnalyticsPage() {
   const listLabel = grain === "month" ? "By month" : grain === "week" ? "By week" : "By day";
 
   return (
-    <div className="admin-stack analytics-page">
+    <div className="admin-page">
+      <div className="admin-stack analytics-page admin-page-scroll">
       <section className="panel admin-card">
         <div className="analytics-toolbar">
           <div>
@@ -128,7 +129,7 @@ export default function AdminToolAnalyticsPage() {
 
       <section className="panel admin-card">
         <h2>{listLabel}</h2>
-        <div className="tracker-list">
+        <div className="tracker-list admin-scroll-list">
           {series.map((row) => (
             <div key={row.date} className="tracker-row">
               <strong>{formatAnalyticsBucket(row.date, grain)}</strong>
@@ -141,6 +142,7 @@ export default function AdminToolAnalyticsPage() {
           {series.length === 0 ? <p className="muted">No rollup rows for this tool yet.</p> : null}
         </div>
       </section>
+      </div>
     </div>
   );
 }

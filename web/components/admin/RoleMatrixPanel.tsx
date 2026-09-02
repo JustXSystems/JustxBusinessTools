@@ -83,9 +83,16 @@ export function RoleMatrixPanel() {
             read-only. Owner row and Admin Console column are locked.
           </p>
         </div>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen((v) => !v)}>
-          {open ? "Hide matrix" : "Edit matrix"}
-        </button>
+        <div className="admin-form-row">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen((v) => !v)}>
+            {open ? "Hide matrix" : "Edit matrix"}
+          </button>
+          {open && matrix ? (
+            <button type="button" className="btn btn-primary btn-sm" disabled={saving} onClick={() => void save()}>
+              {saving ? "Saving…" : "Save matrix"}
+            </button>
+          ) : null}
+        </div>
       </div>
       {message ? <p className="muted">{message}</p> : null}
       {open && matrix ? (
@@ -119,11 +126,6 @@ export function RoleMatrixPanel() {
                 ))}
               </tbody>
             </table>
-          </div>
-          <div className="admin-form-row" style={{ marginTop: 12 }}>
-            <button type="button" className="btn btn-primary btn-sm" disabled={saving} onClick={() => void save()}>
-              {saving ? "Saving…" : "Save matrix"}
-            </button>
           </div>
         </>
       ) : null}

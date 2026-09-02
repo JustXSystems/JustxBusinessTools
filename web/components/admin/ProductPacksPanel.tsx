@@ -176,13 +176,18 @@ export function ProductPacksPanel({
             Custom packs (e.g. Sales, Solar) select specific tools.
           </p>
         </div>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={startCreate}>
-          + New pack
-        </button>
+        <div className="admin-form-row">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={startCreate}>
+            + New pack
+          </button>
+          <button type="submit" form="product-pack-form" className="btn btn-primary btn-sm" disabled={saving}>
+            {saving ? "Saving…" : creating ? "Create pack" : "Save pack"}
+          </button>
+        </div>
       </div>
 
       <div className="tm-packs-layout">
-        <div className="tm-packs-list">
+        <div className="tm-packs-list admin-scroll-list">
           {bundles.map((b) => (
             <button
               key={b.id}
@@ -202,7 +207,7 @@ export function ProductPacksPanel({
           ))}
         </div>
 
-        <form className="tm-packs-editor" onSubmit={(e) => void save(e)}>
+        <form id="product-pack-form" className="tm-packs-editor" onSubmit={(e) => void save(e)}>
           {creating ? (
             <label className="field">
               <span>Pack id</span>
@@ -307,9 +312,6 @@ export function ProductPacksPanel({
           )}
 
           <div className="admin-form-row">
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? "Saving…" : creating ? "Create pack" : "Save pack"}
-            </button>
             {!creating && editingId ? (
               <button
                 type="button"

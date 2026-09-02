@@ -311,7 +311,8 @@ export function AuditConsole() {
   const p = overview.previous;
 
   return (
-    <div className="admin-stack audit-page">
+    <div className="admin-page">
+      <div className="admin-stack audit-page admin-page-scroll">
       <section className="panel admin-card">
         <div className="analytics-toolbar">
           <div>
@@ -542,7 +543,7 @@ export function AuditConsole() {
         ) : null}
 
         {tab === "timeline" || tab === "feed" ? (
-          <div className={tab === "timeline" ? "audit-timeline" : "tracker-list"}>
+          <div className={tab === "timeline" ? "audit-timeline admin-scroll-list" : "tracker-list admin-scroll-list"}>
             {events.length === 0 ? (
               <p className="muted">No audit events match these filters.</p>
             ) : tab === "timeline" ? (
@@ -638,7 +639,7 @@ export function AuditConsole() {
         ) : null}
 
         {tab === "people" ? (
-          <div className="tracker-list">
+          <div className="tracker-list admin-scroll-list">
             {actors.length === 0 ? (
               <p className="muted">No actors in this range.</p>
             ) : (
@@ -679,7 +680,7 @@ export function AuditConsole() {
         ) : null}
 
         {tab === "entities" ? (
-          <div className="tracker-list">
+          <div className="tracker-list admin-scroll-list">
             {entities.length === 0 ? (
               <p className="muted">No entity-linked events in this range.</p>
             ) : (
@@ -745,6 +746,7 @@ export function AuditConsole() {
           })}
         </ul>
       </section>
+      </div>
     </div>
   );
 }

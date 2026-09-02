@@ -393,7 +393,7 @@ export default function AdminGatewaysPage() {
       {message ? <p className="muted">{message}</p> : null}
 
       <div className="admin-split payments-split">
-        <section className="panel admin-card admin-pane">
+        <section className="panel admin-card admin-pane admin-dir-panel">
           <h2>Directory</h2>
           <div className="admin-form-row">
             <input
@@ -410,7 +410,7 @@ export default function AdminGatewaysPage() {
               ))}
             </div>
           </div>
-          <div className="tracker-list">
+          <div className="tracker-list admin-dir-list">
             {visible.map((g) => (
               <button
                 type="button"
@@ -536,7 +536,7 @@ export default function AdminGatewaysPage() {
               </form>
             </section>
           ) : selected ? (
-            <section className="panel admin-card">
+            <section className="panel admin-card admin-detail-panel">
               <div className="analytics-toolbar">
                 <div>
                   <h2>{selected.displayName}</h2>
@@ -551,14 +551,39 @@ export default function AdminGatewaysPage() {
                   <span className={healthClass(selected.lastHealth, selected.enabled)}>{healthLabel(selected)}</span>
                 </div>
               </div>
-              <div className="admin-tabs">
-                {(["health", "config", "plans", "trace"] as Pane[]).map((t) => (
-                  <button key={t} type="button" className={pane === t ? "active" : ""} onClick={() => setPane(t)}>
-                    {t === "trace" ? `Trace (${events.length})` : t[0].toUpperCase() + t.slice(1)}
-                  </button>
-                ))}
+              <div className="admin-tabs-bar">
+                <div className="admin-tabs" role="tablist">
+                  {(["health", "config", "plans", "trace"] as Pane[]).map((t) => (
+                    <button key={t} type="button" role="tab" className={pane === t ? "active" : ""} onClick={() => setPane(t)}>
+                      {t === "trace" ? `Trace (${events.length})` : t[0].toUpperCase() + t.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                <div className="admin-tabs-actions">
+                  {pane === "health" ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={Boolean(busy)}
+                      onClick={() => void testGateway(selected)}
+                    >
+                      Run health check
+                    </button>
+                  ) : null}
+                  {pane === "config" ? (
+                    <button type="submit" form="gateway-config-form" className="btn btn-primary" disabled={Boolean(busy)}>
+                      Save config
+                    </button>
+                  ) : null}
+                  {pane === "plans" ? (
+                    <button type="button" className="btn btn-primary" disabled={Boolean(busy)} onClick={() => void savePlans()}>
+                      Save mapping
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
+              <div className="admin-detail-scroll">
               {pane === "health" ? (
                 <div className="admin-stack">
                   <ul className="admin-kv">
@@ -591,14 +616,6 @@ export default function AdminGatewaysPage() {
                   <div className="admin-form-row">
                     <button
                       type="button"
-                      className="btn btn-primary"
-                      disabled={Boolean(busy)}
-                      onClick={() => void testGateway(selected)}
-                    >
-                      Run health check
-                    </button>
-                    <button
-                      type="button"
                       className="btn btn-secondary"
                       disabled={Boolean(busy)}
                       onClick={() => void toggleEnabled(selected)}
@@ -610,7 +627,7 @@ export default function AdminGatewaysPage() {
               ) : null}
 
               {pane === "config" ? (
-                <form className="admin-form-grid" onSubmit={saveConfig}>
+                <form id="gateway-config-form" className="admin-form-grid" onSubmit={saveConfig}>
                   <label className="field">
                     <span>Display name</span>
                     <input
@@ -655,9 +672,6 @@ export default function AdminGatewaysPage() {
                       autoComplete="new-password"
                     />
                   </label>
-                  <button type="submit" className="btn btn-primary" disabled={Boolean(busy)}>
-                    Save config
-                  </button>
                 </form>
               ) : null}
 
@@ -693,9 +707,6 @@ export default function AdminGatewaysPage() {
                       })}
                     </div>
                   )}
-                  <button type="button" className="btn btn-primary" disabled={Boolean(busy)} onClick={() => void savePlans()}>
-                    Save mapping
-                  </button>
                 </div>
               ) : null}
 
@@ -741,6 +752,7 @@ export default function AdminGatewaysPage() {
                   </ul>
                 </div>
               ) : null}
+              </div>
             </section>
           ) : (
             <section className="panel admin-card">
