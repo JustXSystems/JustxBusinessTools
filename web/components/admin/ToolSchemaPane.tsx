@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
 import { TrackerSchemaDesigner } from "@/components/admin/SchemaDesigner";
 import { TRACKER_CONFIGS } from "@/config/tools.config";
 import { api } from "@/lib/api";
@@ -30,17 +31,15 @@ function hydrateJson(
   return JSON.stringify(merged, null, 2);
 }
 
-export function ToolSchemaPane({
-  toolId,
-  toolType,
-  definition,
-  onPublished,
-}: {
-  toolId: string;
-  toolType: string;
-  definition: Record<string, unknown> | null;
-  onPublished: (msg: string) => void;
-}) {
+export const ToolSchemaPane = forwardRef<
+  ToolsSaveHandle,
+  {
+    toolId: string;
+    toolType: string;
+    definition: Record<string, unknown> | null;
+    onPublished: (msg: string) => void;
+  }
+>(function ToolSchemaPane({ toolId, toolType, definition, onPublished }, ref) {
   const isTracker = toolType === "tracker" || TRACKER_CONFIGS[toolId] != null;
   const [mode, setMode] = useState<"visual" | "json">(isTracker ? "visual" : "json");
   const [jsonText, setJsonText] = useState(() => hydrateJson(toolId, toolType, definition));
@@ -87,10 +86,23 @@ export function ToolSchemaPane({
       const msg = err instanceof Error ? err.message : "Publish failed";
       setLocalError(msg);
       onPublished(msg);
+      throw err;
     } finally {
       setBusy(false);
     }
   }
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      save: publish,
+      isBusy: () => busy,
+      isDirty: () => dirty,
+      label: () => "Publish revision",
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [busy, dirty, jsonText, toolId, isTracker],
+  );
 
   return (
     <section className="panel admin-card tm-pane tm-schema-pane">
@@ -103,16 +115,19 @@ export function ToolSchemaPane({
               : "Calculator and document tools use JSON config (rates, copy). Runtime math stays in product code."}
           </p>
         </div>
-        {isTracker ? (
-          <div className="admin-tabs">
-            <button type="button" className={mode === "visual" ? "active" : ""} onClick={() => setMode("visual")}>
-              Visual
-            </button>
-            <button type="button" className={mode === "json" ? "active" : ""} onClick={() => setMode("json")}>
-              JSON
-            </button>
-          </div>
-        ) : null}
+        <div className="admin-form-row">
+          {dirty ? <span className="pill pill-warning">Unsaved</span> : null}
+          {isTracker ? (
+            <div className="admin-tabs">
+              <button type="button" className={mode === "visual" ? "active" : ""} onClick={() => setMode("visual")}>
+                Visual
+              </button>
+              <button type="button" className={mode === "json" ? "active" : ""} onClick={() => setMode("json")}>
+                JSON
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="tm-pane-body">
@@ -127,12 +142,11 @@ export function ToolSchemaPane({
         ) : null}
       </div>
 
-      <div className="tm-pane-footer">
-        {localError ? <p className="field-error">{localError}</p> : null}
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void publish()}>
-          {busy ? "Publishing…" : "Publish revision"}
-        </button>
-      </div>
+      {localError ? (
+        <div className="tm-pane-footer">
+          <p className="field-error">{localError}</p>
+        </div>
+      ) : null}
     </section>
   );
-}
+});

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
 import { api } from "@/lib/api";
 import { bumpCommerceRevision } from "@/lib/commerce-revision";
 
@@ -77,34 +78,35 @@ function formFromSku(sku: SkuState | null, fallbackName: string, fallbackCategor
   };
 }
 
-export function ToolPricingPane({
-  toolId,
-  toolName,
-  toolCategory,
-  sku,
-  licensed,
-  periodEnd,
-  bundles,
-  onReload,
-  onMessage,
-}: {
-  toolId: string;
-  toolName: string;
-  toolCategory: string;
-  sku: SkuState | null;
-  licensed: boolean;
-  periodEnd: string | null;
-  bundles: BundleState[];
-  onReload: () => Promise<void>;
-  onMessage: (msg: string) => void;
-}) {
+export const ToolPricingPane = forwardRef<
+  ToolsSaveHandle,
+  {
+    toolId: string;
+    toolName: string;
+    toolCategory: string;
+    sku: SkuState | null;
+    licensed: boolean;
+    periodEnd: string | null;
+    bundles: BundleState[];
+    onReload: () => Promise<void>;
+    onMessage: (msg: string) => void;
+  }
+>(function ToolPricingPane(
+  { toolId, toolName, toolCategory, sku, licensed, periodEnd, bundles, onReload, onMessage },
+  ref,
+) {
   const [form, setForm] = useState<FormState>(() => formFromSku(sku, toolName, toolCategory));
   const [grantDays, setGrantDays] = useState("30");
   const [saving, setSaving] = useState(false);
+  const savedSnap = useRef("");
 
   useEffect(() => {
-    setForm(formFromSku(sku, toolName, toolCategory));
+    const next = formFromSku(sku, toolName, toolCategory);
+    setForm(next);
+    savedSnap.current = JSON.stringify(next);
   }, [sku, toolId, toolName, toolCategory]);
+
+  const dirty = JSON.stringify(form) !== savedSnap.current;
 
   const packsForTool = useMemo(
     () => bundles.filter((b) => b.id === "all_tools" || b.toolIds.includes(toolId)),
@@ -145,15 +147,29 @@ export function ToolPricingPane({
           body: JSON.stringify({ toolId, ...body }),
         });
       }
+      savedSnap.current = JSON.stringify(form);
       onMessage(`${body.name} commercial settings saved.`);
       bumpCommerceRevision();
       await onReload();
     } catch (err) {
       onMessage(err instanceof Error ? err.message : "Save failed");
+      throw err;
     } finally {
       setSaving(false);
     }
   }
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      save: () => saveProduct(),
+      isBusy: () => saving,
+      isDirty: () => dirty,
+      label: () => (sku ? "Save product" : "Publish product"),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [saving, dirty, sku, form, toolId, toolName, toolCategory],
+  );
 
   async function grant(days: number) {
     setSaving(true);
@@ -234,14 +250,17 @@ export function ToolPricingPane({
             <Link href="/admin/subscriptions">Operator access</Link>.
           </p>
         </div>
-        <span className={`pill ${form.includedFree ? "" : form.available ? "pill-success" : "pill-warning"}`}>
-          {commercialMode}
-        </span>
+        <div className="admin-form-row">
+          {dirty ? <span className="pill pill-warning">Unsaved</span> : null}
+          <span className={`pill ${form.includedFree ? "" : form.available ? "pill-success" : "pill-warning"}`}>
+            {commercialMode}
+          </span>
+        </div>
       </div>
 
       {!sku ? (
         <p className="muted tm-product-banner">
-          No commercial offer yet — save below to publish this tool as a product SKU.
+          No commercial offer yet — use Publish product in the tab bar to create this SKU.
         </p>
       ) : null}
 
@@ -417,12 +436,6 @@ export function ToolPricingPane({
           Soft cap uses the platform free limit (or override). Hard lock sets the effective limit to zero until a license
           is active. Trial days are stored on the product for checkout / admin grants.
         </p>
-
-        <div className="admin-form-row">
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            {sku ? "Save product" : "Publish product"}
-          </button>
-        </div>
       </form>
 
       <div className="tm-license-ops">
@@ -504,4 +517,4 @@ export function ToolPricingPane({
       ) : null}
     </section>
   );
-}
+});

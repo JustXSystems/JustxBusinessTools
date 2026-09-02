@@ -7043,8 +7043,27 @@ html[data-scheme="light"] .field textarea {
   flex-shrink: 0;
 }
 
+.tm-detail .admin-tabs-bar {
+  flex-shrink: 0;
+  margin: 0 0 8px;
+}
+
 .tm-detail-tabs {
-  grid-column: 1 / -1;
+  flex-wrap: wrap;
+}
+
+.tm-kpis {
+  margin-top: 14px;
+}
+
+.tm-dir-filters {
+  margin: 0 0 10px;
+  padding: 0 4px;
+}
+
+.tm-dir-filters button {
+  padding: 5px 10px;
+  font-size: 12px;
 }
 
 .tm-flash {

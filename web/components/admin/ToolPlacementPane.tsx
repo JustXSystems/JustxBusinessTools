@@ -1,34 +1,63 @@
 "use client";
 
+import { forwardRef, useImperativeHandle, useState } from "react";
+import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
 import { api } from "@/lib/api";
 
-export function ToolPlacementPane({
-  toolId,
-  groupName,
-  available,
-  onGroupName,
-  onAvailable,
-  onSaved,
-}: {
-  toolId: string;
-  groupName: string;
-  available: boolean;
-  onGroupName: (v: string) => void;
-  onAvailable: (v: boolean) => void;
-  onSaved: (msg: string) => void;
-}) {
+export const ToolPlacementPane = forwardRef<
+  ToolsSaveHandle,
+  {
+    toolId: string;
+    groupName: string;
+    available: boolean;
+    onGroupName: (v: string) => void;
+    onAvailable: (v: boolean) => void;
+    onSaved: (msg: string) => void;
+  }
+>(function ToolPlacementPane(
+  { toolId, groupName, available, onGroupName, onAvailable, onSaved },
+  ref,
+) {
+  const [busy, setBusy] = useState(false);
+
   async function save() {
-    await api(`/admin/catalog/${toolId}`, {
-      method: "PUT",
-      body: JSON.stringify({ groupName, available }),
-    });
-    onSaved("Placement saved. Live tools are added to branch home lists; refresh home to see them.");
+    setBusy(true);
+    try {
+      await api(`/admin/catalog/${toolId}`, {
+        method: "PUT",
+        body: JSON.stringify({ groupName, available }),
+      });
+      onSaved("Placement saved. Live tools are added to branch home lists; refresh home to see them.");
+    } catch (err) {
+      onSaved(err instanceof Error ? err.message : "Save failed");
+      throw err;
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function hide() {
-    await api(`/admin/catalog/${toolId}`, { method: "DELETE" });
-    onSaved("Tool hidden from the operator home catalog.");
+    setBusy(true);
+    try {
+      await api(`/admin/catalog/${toolId}`, { method: "DELETE" });
+      onSaved("Tool hidden from the operator home catalog.");
+    } catch (err) {
+      onSaved(err instanceof Error ? err.message : "Hide failed");
+    } finally {
+      setBusy(false);
+    }
   }
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      save,
+      isBusy: () => busy,
+      label: () => "Save placement",
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- latest props closed over on each render
+    [busy, toolId, groupName, available],
+  );
 
   return (
     <section className="panel admin-card tm-pane">
@@ -51,13 +80,10 @@ export function ToolPlacementPane({
         </label>
       </div>
       <div className="admin-form-row">
-        <button type="button" className="btn btn-primary" onClick={() => void save()}>
-          Save placement
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={() => void hide()}>
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void hide()}>
           Hide from home
         </button>
       </div>
     </section>
   );
-}
+});
