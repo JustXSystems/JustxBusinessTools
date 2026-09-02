@@ -3590,11 +3590,6 @@ a {
   background: rgba(var(--accent-rgb), 0.2);
 }
 
-.login-status-link {
-  margin-top: 12px;
-  text-align: center;
-}
-
 .branch-switcher {
   display: flex;
   align-items: center;

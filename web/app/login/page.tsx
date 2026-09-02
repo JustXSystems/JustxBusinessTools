@@ -325,9 +325,6 @@ export default function LoginPage() {
                 Register with GSTIN
               </a>
             </div>
-            <p className="muted login-hint login-status-link">
-              <a href={withBasePath("/status")}>System status</a>
-            </p>
           </div>
           <PoweredByFooter />
         </div>
