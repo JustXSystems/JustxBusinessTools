@@ -319,9 +319,13 @@ export default function LoginPage() {
               </>
             )}
 
-            <p className="muted login-hint">
-              No account? <a href={withBasePath("/register")}>Register with GSTIN</a>
-              {" · "}
+            <div className="login-signup">
+              <p className="muted login-hint">No account yet?</p>
+              <a href={withBasePath("/register")} className="btn btn-secondary btn-block login-signup-cta">
+                Register with GSTIN
+              </a>
+            </div>
+            <p className="muted login-hint login-status-link">
               <a href={withBasePath("/status")}>System status</a>
             </p>
           </div>

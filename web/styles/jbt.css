@@ -3556,9 +3556,43 @@ a {
   margin-top: 16px;
 }
 
+.login-form .btn {
+  width: 100%;
+}
+
 .login-hint {
   margin-top: 16px;
   font-size: 12px;
+}
+
+.login-signup {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-signup .login-hint {
+  margin: 0;
+  text-align: center;
+}
+
+.login-signup-cta {
+  text-decoration: none;
+  border-color: rgba(var(--accent-rgb), 0.45);
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.12);
+  font-weight: 700;
+}
+
+.login-signup-cta:hover {
+  border-color: rgba(var(--accent-rgb), 0.65);
+  background: rgba(var(--accent-rgb), 0.2);
+}
+
+.login-status-link {
+  margin-top: 12px;
+  text-align: center;
 }
 
 .branch-switcher {
