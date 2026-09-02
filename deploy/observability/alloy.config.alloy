@@ -24,6 +24,14 @@ loki.source.file "pm2" {
 }
 
 loki.process "pm2" {
+  // PM2 wraps each stdout line as: "2026-09-02T06:27:58: {json...}"
+  // Without stripping the prefix, stage.json fails and `service` never becomes a label
+  // (Explore `{service="justx-jbt-api"}` looks empty even though Loki has data under job=pm2).
+  stage.replace {
+    expression = `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}:\s*`
+    replace    = ""
+  }
+
   stage.json {
     expressions = {
       level     = "level",
@@ -37,9 +45,8 @@ loki.process "pm2" {
 
   stage.labels {
     values = {
-      level   = "level",
-      service = "service",
-      job     = "job",
+      level   = "",
+      service = "",
     }
   }
 

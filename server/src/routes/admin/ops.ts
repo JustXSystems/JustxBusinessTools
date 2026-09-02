@@ -128,10 +128,10 @@ router.get("/overview", async (_req, res) => {
     links: {
       grafana: grafanaBase || null,
       grafanaExploreApi: grafanaBase
-        ? grafanaExploreUrl(grafanaBase, '{service="justx-jbt-api"}')
+        ? grafanaExploreUrl(grafanaBase, '{job="pm2"} |= `justx-jbt-api`')
         : null,
       grafanaExploreErrors: grafanaBase
-        ? grafanaExploreUrl(grafanaBase, '{service="justx-jbt-api", level=~"warn|error"}')
+        ? grafanaExploreUrl(grafanaBase, '{job="pm2"} |= `justx-jbt-api` |= `"level":"error"`')
         : null,
       errorsUi: errorsUi || null,
       healthPublic: `${apiPublic}/api/health`,

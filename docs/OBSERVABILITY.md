@@ -816,13 +816,13 @@ You should see lines that look like JSON (`{"level":...,"msg":"http_request",...
 3. Run:
 
 ```logql
-{service="justx-jbt-api"}
+{job="pm2"}
 ```
 
-If labels differ, browse **Label browser** or try:
+If that works, narrow to API JSON:
 
 ```logql
-{job="pm2"}
+{job="pm2"} |= "justx-jbt-api"
 ```
 
 For day-to-day analysis (filters, request tracing, 5xx, live tail), see **[§G](#g-using-grafana-to-view-and-analyze-jbt-logs)**.
@@ -852,6 +852,41 @@ docker compose up -d --force-recreate alloy
 ## G. Using Grafana to view and analyze JBT logs
 
 This is the **operator handbook** after the stack is up. You do not need SSH for normal log analysis.
+
+### G.0 If Explore looks empty (most common)
+
+Your stack is often **working** even when `{service="justx-jbt-api"}` returns nothing.
+
+**Why:** PM2 prefixes every line like:
+
+```text
+2026-09-02T06:27:58: {"ts":"...","service":"justx-jbt-api","msg":"http_request",...}
+```
+
+Until Alloy strips that prefix, Loki never gets a `service` **label**. Labels you will see instead:
+
+| Label | Value |
+|-------|--------|
+| `job` | `pm2` |
+| `filename` | `/var/log/pm2/justx-jbt-api-out.log` |
+| `service_name` | `pm2` (auto; not our app service) |
+
+**Use these queries now:**
+
+```logql
+{job="pm2"}
+{job="pm2"} |= "justx-jbt-api"
+{filename=~".*justx-jbt-api.*"}
+```
+
+In Explore → **Label browser**, click `job` → `pm2` → Run query. You should see JSON lines.
+
+After deploying the updated `alloy.config.alloy` (PM2 prefix strip) and recreating Alloy, `{service="justx-jbt-api"}` starts working for **new** lines:
+
+```bash
+cd /var/www/jbt/deploy/observability
+docker compose up -d --force-recreate alloy
+```
 
 ### G.1 Mental model (what you are looking at)
 
@@ -958,12 +993,16 @@ curl -sI https://justxsystems.com/jbt/api/health | head
 #### All API logs
 
 ```logql
+{job="pm2"} |= "justx-jbt-api"
+# after Alloy prefix-strip is live:
 {service="justx-jbt-api"}
 ```
 
 #### All worker / job logs
 
 ```logql
+{job="pm2"} |= "justx-jbt-worker"
+# or:
 {service="justx-jbt-worker"}
 ```
 
@@ -976,24 +1015,28 @@ curl -sI https://justxsystems.com/jbt/api/health | head
 #### Only errors
 
 ```logql
+{job="pm2"} |= `"level":"error"`
+# or after labels work:
 {service="justx-jbt-api", level="error"}
 ```
 
 #### Only warnings + errors
 
 ```logql
-{service="justx-jbt-api", level=~"warn|error"}
+{job="pm2"} |= "justx-jbt-api" |~ `"level":"(warn|error)"`
 ```
 
 #### HTTP access lines
 
 ```logql
-{service="justx-jbt-api"} |= "http_request"
+{job="pm2"} |= "http_request"
 ```
 
 #### HTTP 5xx (server failures)
 
 ```logql
+{job="pm2"} |= "http_request" |= `"status":5`
+# richer (needs clean JSON line — after Alloy strip):
 {service="justx-jbt-api"} |= "http_request" | json | status >= 500
 ```
 
