@@ -53,8 +53,10 @@ services:
 
   mysqld-exporter:
     image: prom/mysqld-exporter:v0.16.0
+    # Requires MYSQL_EXPORTER_DSN in deploy/observability/.env (see docs §4.7).
+    # Format: user:password@(host.docker.internal:3306)/
     environment:
-      DATA_SOURCE_NAME: ${MYSQL_EXPORTER_DSN:-}
+      DATA_SOURCE_NAME: ${MYSQL_EXPORTER_DSN:?Set MYSQL_EXPORTER_DSN in deploy/observability/.env before --profile mysql-metrics}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     profiles:

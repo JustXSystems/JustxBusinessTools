@@ -1511,7 +1511,7 @@ docker compose ps
 | `grafana` | yes |
 | `tempo` | yes (Phase 4) |
 | `node-exporter` | yes (Phase 4) |
-| `mysqld-exporter` | no — only after [§4.5](#45-optional--mysql-metrics) |
+| `mysqld-exporter` | no — only after [§4.7](#47-optional--mysql-metrics) |
 
 If `tempo` or `node-exporter` is missing, the compose file on disk is old — go back to [§4.2](#42-pull-the-phase-4-files-onto-the-vps).
 
@@ -1737,24 +1737,62 @@ EXIT;
 
 #### 4.7.2 Put the DSN in the **observability** `.env` (Docker file)
 
+This goes in **`/var/www/jbt/deploy/observability/.env`** — the same file as `GF_SECURITY_ADMIN_PASSWORD`.  
+It is **not** `server/.env`.
+
+```bash
+# Generate a password once; reuse it in SQL + DSN
+openssl rand -base64 24
+```
+
 ```bash
 nano /var/www/jbt/deploy/observability/.env
 ```
 
-Add (password must match the SQL user; no spaces):
+Add **one** line (password must match the SQL user). Rules:
+
+- No spaces around `=`
+- No quotes around the value
+- Trailing `/` after the host is required
+- If the password contains `@`, `:`, `/`, or `#`, URL-encode them or pick a simpler password
 
 ```bash
 MYSQL_EXPORTER_DSN=jbt_exporter:LONG_RANDOM_SECRET@(host.docker.internal:3306)/
 ```
 
-Save, then:
+Verify the line is present and non-empty (**do not** paste the password into chat):
+
+```bash
+grep -E '^MYSQL_EXPORTER_DSN=' /var/www/jbt/deploy/observability/.env | sed 's/:.*@/:***@/'
+# Expect: MYSQL_EXPORTER_DSN=jbt_exporter:***@(host.docker.internal:3306)/
+```
+
+Save, then recreate the exporter (editing `.env` alone is not enough if the container already started empty):
 
 ```bash
 chmod 600 /var/www/jbt/deploy/observability/.env
 cd /var/www/jbt/deploy/observability
-docker compose --profile mysql-metrics up -d
+docker compose --profile mysql-metrics up -d --force-recreate mysqld-exporter
 docker compose ps
 docker compose logs mysqld-exporter --tail=30
+```
+
+**Healthy logs** look like “Listening on …” / no restart loop.  
+**Broken** (empty DSN) looks exactly like:
+
+```text
+failed to validate config … err="no user specified in section or parent"
+Error parsing host config file=.my.cnf err="no configuration found"
+```
+
+That means `DATA_SOURCE_NAME` inside the container is empty → fix the `.env` line and `--force-recreate` again.
+
+Confirm the container actually received the DSN (password redacted in output):
+
+```bash
+docker compose --profile mysql-metrics exec mysqld-exporter \
+  sh -c 'echo "$DATA_SOURCE_NAME" | sed "s/:.*@/:***@/"'
+# Expect: jbt_exporter:***@(host.docker.internal:3306)/
 ```
 
 #### 4.7.3 Query in Grafana
@@ -1767,6 +1805,24 @@ mysql_global_status_threads_connected
 ```
 
 `mysql_up` should be `1`. If `0` or target DOWN, check password/DSN and that MySQL listens on `127.0.0.1:3306`.
+
+#### 4.7.4 Symptom: crash loop / “no user specified”
+
+| Cause | Fix |
+|-------|-----|
+| Started profile before setting `MYSQL_EXPORTER_DSN` | Add DSN to observability `.env`, then `--force-recreate mysqld-exporter` |
+| Line commented out (`# MYSQL_EXPORTER_DSN=…`) | Uncomment it |
+| Put DSN in `server/.env` by mistake | Move to `deploy/observability/.env` |
+| Quotes / spaces: `DSN="…"` or `DSN = …` | Use bare `MYSQL_EXPORTER_DSN=user:pass@(host.docker.internal:3306)/` |
+| Do not need MySQL metrics right now | Stop the crash loop: `docker compose --profile mysql-metrics stop mysqld-exporter` (or omit the profile) |
+
+Optional — allow Docker host to connect if MySQL only allows socket users (user already created for `127.0.0.1` above covers `host.docker.internal` via host-gateway on Linux).
+
+Test MySQL login from the host before blaming Docker:
+
+```bash
+mysql -h 127.0.0.1 -u jbt_exporter -p -e "SELECT 1"
+```
 
 ### 4.8 Optional — nginx basic auth in front of Grafana
 
