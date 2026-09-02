@@ -6199,6 +6199,119 @@ body.is-float-dock-dragging {
   color: var(--text-mid);
 }
 
+/* Dashboard command center */
+.result-card.dash-kpi-alert {
+  box-shadow: inset 0 0 0 1px rgba(220, 80, 80, 0.35);
+}
+
+.result-card.dash-kpi-warn {
+  box-shadow: inset 0 0 0 1px rgba(220, 160, 60, 0.35);
+}
+
+.dash-attention-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dash-attention-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-hair);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dash-attention-item.severity-critical {
+  border-color: rgba(220, 80, 80, 0.4);
+}
+
+.dash-attention-item.severity-high {
+  border-color: rgba(220, 160, 60, 0.4);
+}
+
+.dash-attention-main {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.dash-attention-main strong {
+  display: block;
+  font-size: 14px;
+}
+
+.dash-attention-main p {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.dash-attention-count {
+  font-size: 1.25rem;
+  font-weight: 700;
+  min-width: 2ch;
+  text-align: right;
+}
+
+.dash-health-grid {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+a.dash-health-card {
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+a.dash-health-card:hover {
+  border-color: rgba(var(--accent-rgb), 0.45);
+}
+
+.dash-health-card strong {
+  display: block;
+  font-size: 1.35rem;
+  margin: 4px 0 6px;
+}
+
+.dash-usage-kpis {
+  margin-bottom: 14px;
+}
+
+.dash-quick-links h2 {
+  margin-bottom: 10px;
+}
+
+.dash-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .dash-attention-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dash-attention-main {
+    grid-template-columns: auto 1fr;
+  }
+
+  .dash-attention-count {
+    grid-column: 2;
+    text-align: left;
+  }
+}
+
 /* Live activity console */
 .analytics-live-kpis {
   margin: 12px 0 16px;
