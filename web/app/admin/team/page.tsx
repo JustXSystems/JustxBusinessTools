@@ -239,6 +239,7 @@ export default function AdminTeamPage() {
         </div>
       </section>
 
+      <div className="admin-page-scroll">
       <RoleMatrixPanel />
 
       <div className="team-workspace">
@@ -701,6 +702,7 @@ export default function AdminTeamPage() {
           <button type="submit" className="btn btn-primary">Send invite</button>
         </form>
       </section>
+      </div>
       </div>
       </div>
     </div>

@@ -251,6 +251,7 @@ export default function AdminProfilesPage() {
         </div>
       </section>
 
+      <div className="admin-page-scroll">
       <div className="team-workspace">
         <section className="panel admin-card admin-dir-panel">
           <h2>Directory</h2>
@@ -495,6 +496,7 @@ export default function AdminProfilesPage() {
             </>
           )}
         </section>
+      </div>
       </div>
     </div>
   );

@@ -392,6 +392,7 @@ export default function AdminGatewaysPage() {
       {error ? <p className="field-error">{error}</p> : null}
       {message ? <p className="muted">{message}</p> : null}
 
+      <div className="admin-page-scroll">
       <div className="admin-split payments-split">
         <section className="panel admin-card admin-pane admin-dir-panel">
           <h2>Directory</h2>
@@ -763,6 +764,7 @@ export default function AdminGatewaysPage() {
               </button>
             </section>
           )}
+        </div>
         </div>
       </div>
     </div>

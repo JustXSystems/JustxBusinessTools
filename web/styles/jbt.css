@@ -4001,12 +4001,13 @@ a {
   display: grid;
   gap: 16px;
   grid-template-columns: minmax(280px, 0.88fr) minmax(360px, 1.22fr);
-  overflow: hidden;
+  overflow: visible;
+  align-items: start;
 }
 
 .admin-pane {
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
   display: flex;
   flex-direction: column;
 }
@@ -4016,7 +4017,7 @@ a {
 .team-workspace > .panel,
 .admin-pane-stack {
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
 }
 
 .admin-pane-stack {
@@ -4026,7 +4027,7 @@ a {
 }
 
 .admin-pane-stack > .panel {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
 }
 
 .admin-grid {
@@ -4150,14 +4151,19 @@ a {
   .admin-split,
   .team-workspace {
     grid-template-columns: 1fr;
-    overflow: auto;
+    overflow: visible;
   }
 
   .admin-pane,
   .admin-split > .panel,
   .team-workspace > .panel,
   .admin-pane-stack {
-    max-height: min(62vh, 720px);
+    max-height: none;
+  }
+
+  .admin-dir-panel {
+    position: static;
+    max-height: min(48vh, 420px);
   }
 }
 
@@ -8109,17 +8115,22 @@ html[data-scheme="light"] .field textarea {
   font-size: 0.92em;
 }
 
-/* —— Admin scroll system (all /admin screens) —— */
+/* —— Admin scroll system (all /admin screens) ——
+   Detail panels grow with content; directory lists keep an inner scrollbar;
+   the main page (or .admin-page-scroll) owns the primary scrollbar. */
 .admin-page {
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-.admin-page:has(> .admin-split),
-.admin-page:has(> .team-workspace),
+/* Viewport-locked editors only (tools / experience preview) */
 .admin-page:has(> .tm-workspace),
-.admin-page:has(> .admin-page-body),
+.admin-page:has(> .admin-page-body) {
+  overflow: hidden;
+}
+
+/* Sticky header + scrollable body */
 .admin-page:has(> .admin-page-scroll) {
   overflow: hidden;
 }
@@ -8155,16 +8166,32 @@ html[data-scheme="light"] .field textarea {
   min-height: 0;
 }
 
-.admin-dir-panel,
-.admin-detail-panel {
+.admin-page-scroll > .admin-split,
+.admin-page-scroll > .team-workspace,
+.admin-page-scroll > .payments-split,
+.admin-page > .admin-split,
+.admin-page > .team-workspace {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+  align-items: start;
+}
+
+/* Directory: bounded height + list scroll (does not clip the detail column) */
+.admin-dir-panel {
   display: flex !important;
   flex-direction: column;
+  align-self: start;
+  position: sticky;
+  top: 0;
+  max-height: min(78vh, 860px);
   min-height: 0;
   overflow: hidden !important;
 }
 
 .admin-dir-list,
-.admin-detail-scroll {
+.team-workspace > .panel.admin-dir-panel .tracker-list,
+.admin-split > .panel .tracker-list.admin-dir-list {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
@@ -8177,6 +8204,31 @@ html[data-scheme="light"] .field textarea {
 .admin-dir-panel > .admin-tabs,
 .admin-dir-panel > .tm-directory-head,
 .admin-dir-panel > .tm-dir-filters,
+.admin-dir-panel > .analytics-toolbar,
+.admin-dir-panel > .admin-page-head {
+  flex-shrink: 0;
+}
+
+/* Detail: grow with content — no inner height clamp */
+.admin-detail-panel {
+  display: flex !important;
+  flex-direction: column;
+  align-self: start;
+  width: 100%;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0;
+  overflow: visible !important;
+}
+
+.admin-detail-scroll {
+  flex: 0 0 auto;
+  min-height: auto;
+  height: auto;
+  max-height: none;
+  overflow: visible !important;
+}
+
 .admin-detail-panel > h2,
 .admin-detail-panel > p,
 .admin-detail-panel > .admin-tabs-bar,
@@ -8184,11 +8236,10 @@ html[data-scheme="light"] .field textarea {
   flex-shrink: 0;
 }
 
-.team-workspace > .panel.admin-dir-panel .tracker-list,
-.admin-split > .panel .tracker-list.admin-dir-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
+.admin-pane-stack > .panel.admin-detail-panel {
+  flex: 0 0 auto;
+  min-height: auto;
+  max-height: none;
 }
 
 .admin-role-matrix-wrap {
@@ -8197,17 +8248,13 @@ html[data-scheme="light"] .field textarea {
   -webkit-overflow-scrolling: touch;
 }
 
-.admin-pane-stack > .panel.admin-detail-panel {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
 .branch-checklist {
   max-height: min(40vh, 320px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
 }
 
+/* Tools editor stays viewport-locked with pane scroll */
 .tm-detail {
   min-height: 0;
   overflow: hidden;
@@ -8231,8 +8278,8 @@ html[data-scheme="light"] .field textarea {
 
 .audit-timeline.admin-scroll-list,
 .audit-page .tracker-list.admin-scroll-list {
-  max-height: min(56vh, 560px);
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .admin-page .audit-page,
@@ -8242,14 +8289,17 @@ html[data-scheme="light"] .field textarea {
   overflow: auto;
 }
 
-/* Bounded lists that grow beyond the viewport */
+/* Long directory-style lists on stacked pages: prefer page scroll over nested caps */
 .admin-scroll-list {
-  max-height: min(52vh, 480px);
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
 }
 
-.tm-packs-list.admin-scroll-list {
+/* Pack picker + checklist grids can still scroll when dense */
+.tm-packs-list.admin-scroll-list,
+.tm-pack-tool-grid {
   max-height: min(52vh, 420px);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
