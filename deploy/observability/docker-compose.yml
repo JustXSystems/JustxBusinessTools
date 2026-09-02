@@ -1,18 +1,12 @@
-# JustX Business Tools — Observability (Grafana LGTM-lite)
+# JustX Business Tools — Observability (Grafana LGTM + Tempo)
 #
-# Recommended companion stack: Grafana + Loki + Prometheus + Alloy.
-# Do NOT run SigNoz/ClickHouse on the same small Hostinger KVM as MySQL + PM2.
-#
-# Quick start (on VPS or a dedicated monitoring host):
 #   cd /var/www/jbt/deploy/observability
-#   cp .env.example .env   # set GF_SECURITY_ADMIN_PASSWORD
+#   cp .env.example .env   # set GF_SECURITY_ADMIN_PASSWORD (+ optional MySQL exporter DSN)
 #   docker compose up -d
 #
-# Then set on the API (server/.env):
-#   GRAFANA_PUBLIC_URL=https://justxsystems.com/grafana
-#   LOG_FORMAT=json
-#   ERROR_WEBHOOK_URL=...
-#   SENTRY_DSN=...   # Sentry SaaS or self-hosted GlitchTip
+# API (server/.env) for traces:
+#   OTEL_ENABLED=true
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
 #
 # Full guide: docs/OBSERVABILITY.md
 
@@ -26,6 +20,15 @@ services:
     restart: unless-stopped
     mem_limit: 512m
 
+  tempo:
+    image: grafana/tempo:2.7.1
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo-config.yml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    restart: unless-stopped
+    mem_limit: 384m
+
   prometheus:
     image: prom/prometheus:v3.2.1
     command:
@@ -37,17 +40,41 @@ services:
     restart: unless-stopped
     mem_limit: 512m
 
+  node-exporter:
+    image: prom/node-exporter:v1.9.0
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /:/host:ro,rslave
+    pid: host
+    restart: unless-stopped
+    mem_limit: 64m
+
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.16.0
+    environment:
+      DATA_SOURCE_NAME: ${MYSQL_EXPORTER_DSN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles:
+      - mysql-metrics
+    restart: unless-stopped
+    mem_limit: 64m
+
   alloy:
     image: grafana/alloy:v1.7.1
     command: run /etc/alloy/config.alloy --storage.path=/var/lib/alloy/data
     volumes:
       - ./alloy.config.alloy:/etc/alloy/config.alloy:ro
       - alloy-data:/var/lib/alloy/data
-      # Host PM2 / app logs (adjust paths for your VPS)
       - /home/deploy/.pm2/logs:/var/log/pm2:ro
+    ports:
+      - "127.0.0.1:4318:4318"
     depends_on:
       - loki
       - prometheus
+      - tempo
     restart: unless-stopped
     mem_limit: 256m
 
@@ -69,6 +96,7 @@ services:
     depends_on:
       - loki
       - prometheus
+      - tempo
     restart: unless-stopped
     mem_limit: 384m
 
@@ -77,3 +105,4 @@ volumes:
   prometheus-data:
   alloy-data:
   grafana-data:
+  tempo-data:

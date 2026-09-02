@@ -6,24 +6,60 @@ import { listOpsErrors } from "../../lib/ops-errors.js";
 const router = Router();
 
 /** Deep-link into Grafana Explore under /grafana (subpath-safe). */
-function grafanaExploreUrl(grafanaBase: string, expr: string, from = "now-1h", to = "now"): string {
+function grafanaExploreUrl(
+  grafanaBase: string,
+  opts: {
+    datasource: "loki" | "tempo" | "prometheus";
+    expr?: string;
+    queryType?: string;
+    from?: string;
+    to?: string;
+  },
+): string {
   const base = grafanaBase.replace(/\/$/, "");
-  // Grafana 10.2+ panes schema (legacy `left=` often redirects to /explore without /grafana → marketing SPA)
+  const from = opts.from ?? "now-1h";
+  const to = opts.to ?? "now";
+  const dsType =
+    opts.datasource === "loki"
+      ? "loki"
+      : opts.datasource === "tempo"
+        ? "tempo"
+        : "prometheus";
   const panes = {
     jbt: {
-      datasource: "loki",
+      datasource: opts.datasource,
       queries: [
         {
           refId: "A",
-          expr,
-          queryType: "range",
-          datasource: { type: "loki", uid: "loki" },
+          ...(opts.expr != null ? { expr: opts.expr } : {}),
+          queryType: opts.queryType ?? (opts.datasource === "tempo" ? "traceqlSearch" : "range"),
+          datasource: { type: dsType, uid: opts.datasource },
         },
       ],
       range: { from, to },
     },
   };
   return `${base}/explore?schemaVersion=1&panes=${encodeURIComponent(JSON.stringify(panes))}&orgId=1`;
+}
+
+function grafanaTraceUrl(grafanaBase: string, traceId: string): string {
+  const base = grafanaBase.replace(/\/$/, "");
+  return `${base}/explore?schemaVersion=1&panes=${encodeURIComponent(
+    JSON.stringify({
+      jbt: {
+        datasource: "tempo",
+        queries: [
+          {
+            refId: "A",
+            queryType: "traceql",
+            query: traceId,
+            datasource: { type: "tempo", uid: "tempo" },
+          },
+        ],
+        range: { from: "now-6h", to: "now" },
+      },
+    }),
+  )}&orgId=1`;
 }
 
 async function probe(url: string, timeoutMs = 2500): Promise<{ ok: boolean; status?: number; ms: number }> {
@@ -128,11 +164,31 @@ router.get("/overview", async (_req, res) => {
     links: {
       grafana: grafanaBase || null,
       grafanaExploreApi: grafanaBase
-        ? grafanaExploreUrl(grafanaBase, '{job="pm2"} |= `justx-jbt-api`')
+        ? grafanaExploreUrl(grafanaBase, {
+            datasource: "loki",
+            expr: '{service="justx-jbt-api"}',
+          })
         : null,
       grafanaExploreErrors: grafanaBase
-        ? grafanaExploreUrl(grafanaBase, '{job="pm2"} |= `justx-jbt-api` |= `"level":"error"`')
+        ? grafanaExploreUrl(grafanaBase, {
+            datasource: "loki",
+            expr: '{service="justx-jbt-api"} |= `"level":"error"`',
+          })
         : null,
+      grafanaExploreTraces: grafanaBase
+        ? grafanaExploreUrl(grafanaBase, {
+            datasource: "tempo",
+            queryType: "traceqlSearch",
+          })
+        : null,
+      grafanaExploreHost: grafanaBase
+        ? grafanaExploreUrl(grafanaBase, {
+            datasource: "prometheus",
+            expr: "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
+            queryType: "range",
+          })
+        : null,
+      grafanaTraceByIdTemplate: grafanaBase ? grafanaTraceUrl(grafanaBase, "__TRACE_ID__") : null,
       errorsUi: errorsUi || null,
       healthPublic: `${apiPublic}/api/health`,
       runbook:
@@ -145,6 +201,10 @@ router.get("/overview", async (_req, res) => {
       sentryConfigured: Boolean(process.env.SENTRY_DSN?.trim()),
       webhookConfigured: Boolean(process.env.ERROR_WEBHOOK_URL?.trim()),
       grafanaConfigured: Boolean(grafanaBase),
+      otelConfigured: ["1", "true", "yes", "on"].includes(
+        (process.env.OTEL_ENABLED ?? "").trim().toLowerCase(),
+      ),
+      otelEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || null,
     },
   });
 });

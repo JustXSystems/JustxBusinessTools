@@ -38,7 +38,7 @@ Do **not** install SigNoz/ClickHouse on the same small Hostinger KVM as MySQL + 
 9. [§G.6](#g6-triage-one-http-request-end-to-end) **Triage one HTTP request end-to-end**  
 10. Optional: [§3](#3-sentry--glitchtip-exception-store) Sentry / GlitchTip  
 11. Optional: [§D.3](#d3-strongly-recommended-http-basic-auth-in-front-of-grafana) nginx basic auth for Grafana  
-12. Optional: [§4](#4-prometheus-exporters-phase-4--optional) Prometheus exporters  
+12. [§4](#4-phase-4--tempo-traces--prometheus-exporters) **Phase 4:** Tempo + OTel + node/MySQL exporters  
 
 ---
 
@@ -655,6 +655,16 @@ cat /var/www/jbt/deploy/observability/nginx-grafana.conf.example
 
 **Why:** Grafana under `/grafana/` is on the public internet. Basic auth cuts noise even if someone guesses a weak Grafana password.
 
+**Helper script (preferred):**
+
+```bash
+bash /var/www/jbt/deploy/observability/scripts/setup-grafana-basic-auth.sh
+# Creates /etc/nginx/.htpasswd-grafana + snippet; follow the printed `include` line
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**Manual equivalent:**
+
 ```bash
 sudo apt-get install -y apache2-utils
 sudo htpasswd -c /etc/nginx/.htpasswd_grafana YOUR_NGINX_USER
@@ -1079,20 +1089,21 @@ curl -sI https://justxsystems.com/jbt/api/health | head
 
 ### G.6 Triage one HTTP request end-to-end
 
-JBT does **not** yet ship full distributed traces (OpenTelemetry → Tempo is Phase 4). Today you triage with **request id + Loki logs** — enough for most production incidents.
+Triage with **request id + Loki**. When `OTEL_ENABLED=true`, also open the **Tempo** span for that request (`traceId` on log lines / span attribute `request.id`).
 
-#### What “start to end” means in JBT today
+#### What “start to end” means
 
 ```
 Browser
   → nginx (TLS, /jbt/api → :4002)
-    → Express API (assigns X-Request-Id, logs http_request)
+    → Express API (X-Request-Id + OTel span)
       → MySQL / Google Drive / Razorpay / disk
-        → response (+ X-Request-Id header; 500 body may include requestId)
-          → PM2 log line → Alloy → Loki → Grafana Explore
+        → response (+ X-Request-Id; logs include requestId + traceId)
+          → PM2 → Alloy → Loki
+          → OTLP :4318 → Alloy → Tempo
 ```
 
-Worker jobs (`justx-jbt-worker`) are **separate** processes — they get their own log lines (often without the browser’s request id unless the job payload stores it).
+Worker jobs (`justx-jbt-worker`) are **separate** processes — they get their own log lines (and their own traces when OTel is on).
 
 #### Step 1 — Capture the request id
 
@@ -1127,6 +1138,7 @@ You should see at least one `http_request` line with:
 | `status` | HTTP status |
 | `durationMs` | How long the handler took |
 | `level` | `info` / `warn` / `error` |
+| `traceId` | Present when OTel is enabled — paste into Tempo Explore |
 
 #### Step 3 — Pull the full story for that id
 
@@ -1135,6 +1147,12 @@ Same query — expand every matching line (not only `http_request`). Look for:
 - `level=error` / stack snippets from `reportError`
 - Drive / delivery / payment messages that share the same `requestId`
 - A slow `durationMs` with status 200 (timeout on client, not always 5xx)
+
+#### Step 3b — Open the Tempo trace (when OTel is on)
+
+1. Copy `traceId` from the Loki line, **or** Admin → Operations → **Tempo: traces**.  
+2. Grafana → Explore → **Tempo** → TraceQL search / paste the id.  
+3. Span attribute `request.id` should match your request id (for logs ↔ traces).
 
 #### Step 4 — Classify
 
@@ -1162,13 +1180,11 @@ curl -sI https://justxsystems.com/jbt/api/health | grep -i x-request-id
 # copy id → Grafana → confirm new http_request line within ~30s
 ```
 
-#### What you do *not* have yet (honest gap vs Dynatrace)
+#### Honest gap vs Dynatrace
 
-- No automatic span tree (nginx → Express → MySQL → Drive) in one flame graph  
-- Worker ↔ API correlation only if you pass ids in job payloads  
-- Phase 4 adds OpenTelemetry → Tempo for true trace views  
-
-Until then: **request id + Loki** is the supported end-to-end triage path.
+- Spans cover Node HTTP / selected libs — not full nginx/MySQL wire protocol unless instrumented  
+- Worker ↔ API correlation still needs shared ids in job payloads  
+- **request id + Loki** remains the fastest path; Tempo is the deeper view when OTel is enabled
 
 ---
 
@@ -1340,30 +1356,95 @@ Reload PM2 as above. Every `reportError` posts a short message including `reques
 
 ---
 
-## 4. Prometheus exporters (Phase 4 — optional)
+## 4. Phase 4 — Tempo traces + Prometheus exporters
 
-### What they are
+Lean stack on the same Hostinger VPS (mem-capped). **Do not** self-host GlitchTip/ClickHouse here.
+
+### 4.1 What you get
 
 | Piece | Role |
 |-------|------|
-| **Prometheus** | Time-series DB (already in `deploy/observability`) |
-| **Exporter** | Small agent that exposes metrics at `/metrics` for Prometheus to scrape |
-| **node_exporter** | Host CPU, RAM, disk, network |
-| **mysqld_exporter** | MySQL connections, queries, replication |
+| **Tempo** | Trace store (OTLP from API/worker via Alloy `:4318`) |
+| **node_exporter** | Host CPU / RAM / disk (always on with compose) |
+| **mysqld_exporter** | MySQL metrics (`--profile mysql-metrics`) |
+| **OTel SDK** | Opt-in in Node (`OTEL_ENABLED=true`) |
 
-Grafana can graph those metrics. This is **infrastructure health**, not HTTP request tracing.
+### 4.2 Bring up Tempo + exporters
 
-**You do not need exporters for log triage.** Loki already covers request logs. Add exporters when you want “is the VPS out of RAM / is MySQL saturated?” charts.
+After `git pull` / `./scripts/vps-deploy.sh`:
 
-### How to configure later (outline)
+```bash
+cd /var/www/jbt/deploy/observability
+# keep existing .env; ensure GF_* still set
+docker compose up -d
+docker compose ps
+curl -sI http://127.0.0.1:4318/ | head   # Alloy OTLP (may 404 without POST — connection is enough)
+```
 
-1. Add services to `deploy/observability/docker-compose.yml` (examples commented in [`prometheus.yml`](../deploy/observability/prometheus.yml)).  
-2. Uncomment scrape jobs for `node-exporter:9100` / `mysqld-exporter:9104`.  
-3. `docker compose up -d`  
-4. Grafana → Explore → **Prometheus** → e.g. `node_memory_MemAvailable_bytes`  
-5. Keep mem limits modest — exporters are light; still watch `free -h`.
+Expect `tempo`, `node-exporter`, `alloy`, `grafana`, `loki`, `prometheus` **Up**.
 
-Full OpenTelemetry traces (Express → Alloy → Tempo) remain a later Phase 4 item.
+### 4.3 Enable OTel on the API (and worker)
+
+In `/var/www/jbt/.env` (or wherever PM2 loads env):
+
+```bash
+OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+LOG_FORMAT=json
+GRAFANA_PUBLIC_URL=https://justxsystems.com/grafana
+```
+
+```bash
+cd /var/www/jbt
+pm2 reload ecosystem.config.cjs --update-env
+# or: ./scripts/vps-deploy.sh
+```
+
+Hit any API route, then Grafana → Explore → **Tempo**, or Admin → **Operations** → **Tempo: traces**.
+
+Log lines should include `"traceId":"…"` when a span is active.
+
+### 4.4 Optional MySQL exporter
+
+```sql
+CREATE USER 'jbt_exporter'@'127.0.0.1' IDENTIFIED BY 'LONG_RANDOM_SECRET';
+GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'jbt_exporter'@'127.0.0.1';
+FLUSH PRIVILEGES;
+```
+
+In `deploy/observability/.env`:
+
+```bash
+MYSQL_EXPORTER_DSN=jbt_exporter:LONG_RANDOM_SECRET@(host.docker.internal:3306)/
+```
+
+```bash
+cd /var/www/jbt/deploy/observability
+docker compose --profile mysql-metrics up -d
+```
+
+Grafana → Explore → **Prometheus** → `mysql_up` or `mysql_global_status_threads_connected`.
+
+### 4.5 Host metrics (no extra config)
+
+Explore → **Prometheus**:
+
+```promql
+node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes
+rate(node_cpu_seconds_total{mode="idle"}[5m])
+```
+
+Admin Ops also links **Prometheus: host mem**.
+
+### 4.6 nginx basic auth (recommended)
+
+```bash
+bash /var/www/jbt/deploy/observability/scripts/setup-grafana-basic-auth.sh
+# follow printed include snippet, then:
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Also ensure `proxy_redirect` lines from [§D.6](#d6-symptom-explore--loki-api-logs-opens-marketing-indexhtml) are present so Explore stays under `/grafana/`.
 
 ---
 

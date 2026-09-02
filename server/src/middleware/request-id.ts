@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { context, trace } from "@opentelemetry/api";
 import { log, newRequestId, runWithRequestLog } from "../lib/logging.js";
 
 /**
@@ -11,6 +12,13 @@ export function requestIdMiddleware(req: Request, res: Response, next: NextFunct
 
   const started = Date.now();
   runWithRequestLog({ requestId, method: req.method, path: req.path }, () => {
+    try {
+      const span = trace.getSpan(context.active());
+      span?.setAttribute("request.id", requestId);
+      span?.setAttribute("http.route", req.path);
+    } catch {
+      /* OTel optional */
+    }
     res.on("finish", () => {
       const durationMs = Date.now() - started;
       const level = res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info";

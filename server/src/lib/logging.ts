@@ -4,6 +4,7 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomBytes } from "node:crypto";
+import { context, trace } from "@opentelemetry/api";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -67,9 +68,21 @@ export function getRequestId(): string | undefined {
   return requestStore.getStore()?.requestId;
 }
 
+function activeTraceId(): string | undefined {
+  try {
+    const span = trace.getSpan(context.active());
+    const id = span?.spanContext().traceId;
+    if (id && id !== "00000000000000000000000000000000") return id;
+  } catch {
+    /* OTel optional */
+  }
+  return undefined;
+}
+
 function write(level: LogLevel, msg: string, fields: LogFields = {}): void {
   const req = requestStore.getStore();
   const safeFields = (redact(fields) ?? {}) as LogFields;
+  const traceId = activeTraceId();
   const payload: Record<string, unknown> = {
     ts: new Date().toISOString(),
     level,
@@ -79,6 +92,7 @@ function write(level: LogLevel, msg: string, fields: LogFields = {}): void {
     method: req?.method,
     path: req?.path,
     env: process.env.NODE_ENV ?? "development",
+    ...(traceId ? { traceId } : {}),
     ...safeFields,
   };
 

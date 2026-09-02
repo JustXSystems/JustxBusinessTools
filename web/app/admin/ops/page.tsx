@@ -39,6 +39,9 @@ type OpsOverview = {
     grafana: string | null;
     grafanaExploreApi: string | null;
     grafanaExploreErrors: string | null;
+    grafanaExploreTraces: string | null;
+    grafanaExploreHost: string | null;
+    grafanaTraceByIdTemplate: string | null;
     errorsUi: string | null;
     healthPublic: string;
     runbook: string;
@@ -49,6 +52,8 @@ type OpsOverview = {
     sentryConfigured: boolean;
     webhookConfigured: boolean;
     grafanaConfigured: boolean;
+    otelConfigured: boolean;
+    otelEndpoint: string | null;
   };
 };
 
@@ -161,7 +166,8 @@ export default function AdminOpsPage() {
             <h2>Telemetry config</h2>
             <strong>{config.logFormat}</strong>
             <p className="muted">
-              Logs · webhook {config.webhookConfigured ? "on" : "off"} · Sentry/GlitchTip{" "}
+              Logs · OTel {config.otelConfigured ? "on" : "off"} · webhook{" "}
+              {config.webhookConfigured ? "on" : "off"} · Sentry/GlitchTip{" "}
               {config.sentryConfigured ? "on" : "off"} · Grafana{" "}
               {config.grafanaConfigured ? "linked" : "not set"}
             </p>
@@ -211,6 +217,26 @@ export default function AdminOpsPage() {
                 rel="noreferrer"
               >
                 Loki: warn/error (1h)
+              </a>
+            ) : null}
+            {links.grafanaExploreTraces ? (
+              <a
+                href={links.grafanaExploreTraces}
+                className="btn btn-secondary btn-sm"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Tempo: traces
+              </a>
+            ) : null}
+            {links.grafanaExploreHost ? (
+              <a
+                href={links.grafanaExploreHost}
+                className="btn btn-secondary btn-sm"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Prometheus: host mem
               </a>
             ) : null}
             {links.errorsUi ? (

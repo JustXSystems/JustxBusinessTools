@@ -25,7 +25,6 @@ loki.source.file "pm2" {
 
 loki.process "pm2" {
   // PM2 wraps stdout as: "2026-09-02T06:27:58: {json...}"
-  // Extract JSON (or remainder) so labels like `service` populate for Explore.
   stage.regex {
     expression = `^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}:\s*)?(?P<body>.*)$`
   }
@@ -40,6 +39,7 @@ loki.process "pm2" {
       msg       = "msg",
       service   = "service",
       requestId = "requestId",
+      traceId   = "traceId",
       status    = "status",
       path      = "path",
     }
@@ -53,4 +53,30 @@ loki.process "pm2" {
   }
 
   forward_to = [loki.write.default.receiver]
+}
+
+// OTLP from host Node (API/worker) → Tempo
+otelcol.receiver.otlp "default" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+    tls {
+      insecure = true
+    }
+  }
 }

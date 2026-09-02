@@ -9,9 +9,36 @@ datasources:
     isDefault: true
     jsonData:
       maxLines: 1000
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '"traceId":"([a-f0-9]+)"'
+          url: "$${__value.raw}"
+          datasourceUid: tempo
+          urlDisplayLabel: View trace
 
   - name: Prometheus
     type: prometheus
     uid: prometheus
     access: proxy
     url: http://prometheus:9090
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: "-5m"
+        spanEndTimeShift: "5m"
+        filterByTraceID: false
+        filterBySpanID: false
+        customQuery: true
+        query: '{service="justx-jbt-api"} |= `${__span.tags["request.id"]}` or {job="pm2"} |= `${__span.tags["request.id"]}`'
+      lokiSearch:
+        datasourceUid: loki
+      nodeGraph:
+        enabled: true
+      serviceMap:
+        datasourceUid: prometheus
