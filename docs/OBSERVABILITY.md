@@ -5,8 +5,9 @@
 | Layer | Tool | Role |
 |-------|------|------|
 | Control tower | Admin → **Operations** (`/jbt/admin/ops`) | Health, error pulse, deep links |
-| Logs + metrics UI | **Grafana** + **Loki** + **Prometheus** | Search logs, dashboards |
-| Log shipper | **Grafana Alloy** | Scrapes PM2 JSON logs → Loki |
+| Logs + metrics UI | **Grafana** + **Loki** + **Prometheus** | Search logs, dashboards, host metrics |
+| Traces | **Tempo** + OpenTelemetry (opt-in) | Span tree for one HTTP request |
+| Log / trace shipper | **Grafana Alloy** | PM2 logs → Loki; OTLP `:4318` → Tempo |
 | Errors | **Sentry** or **GlitchTip** via `SENTRY_DSN` | Exception store |
 | Alerts | `ERROR_WEBHOOK_URL` + optional Grafana Alerting | Slack/Discord page |
 
@@ -22,6 +23,10 @@ Do **not** install SigNoz/ClickHouse on the same small Hostinger KVM as MySQL + 
 | PM2 logs | `/home/deploy/.pm2/logs` |
 | Public Grafana URL | `https://justxsystems.com/grafana` |
 | Grafana bind | `127.0.0.1:3003` (Docker → nginx only) |
+| OTLP (traces) bind | `127.0.0.1:4318` (Alloy; Node sends here) |
+| App env file | `/var/www/jbt/server/.env` (not the repo root) |
+
+**If Grafana + Loki already work** and you only need Phase 4 (traces / host metrics): skip to [§4](#4-phase-4--tempo-traces--hostmysql-metrics--step-by-step) after a fresh [§B](#b-pull-latest-code-with-observability-files) deploy.
 
 ---
 
@@ -38,7 +43,7 @@ Do **not** install SigNoz/ClickHouse on the same small Hostinger KVM as MySQL + 
 9. [§G.6](#g6-triage-one-http-request-end-to-end) **Triage one HTTP request end-to-end**  
 10. Optional: [§3](#3-sentry--glitchtip-exception-store) Sentry / GlitchTip  
 11. Optional: [§D.3](#d3-strongly-recommended-http-basic-auth-in-front-of-grafana) nginx basic auth for Grafana  
-12. [§4](#4-phase-4--tempo-traces--prometheus-exporters) **Phase 4:** Tempo + OTel + node/MySQL exporters  
+12. [§4](#4-phase-4--tempo-traces--hostmysql-metrics--step-by-step) **Phase 4 (after Loki works):** Tempo traces + host/MySQL metrics  
 
 ---
 
@@ -378,6 +383,8 @@ Confirm these files exist:
 - `deploy/observability/alloy.config.alloy`
 - `deploy/observability/loki-config.yml`
 - `deploy/observability/prometheus.yml`
+- `deploy/observability/tempo-config.yml` (Phase 4 — traces)
+- `deploy/observability/scripts/setup-grafana-basic-auth.sh`
 - `deploy/observability/grafana/provisioning/datasources/datasources.yml`
 
 ### B.1 Confirm PM2 log path (Alloy volume)
@@ -440,7 +447,18 @@ cd /var/www/jbt/deploy/observability
 docker compose up -d
 ```
 
-First run pulls images (Loki, Prometheus, Alloy, Grafana) — can take several minutes on a small VPS.
+First run pulls images — can take several minutes on a small VPS. Current compose starts:
+
+| Service | Purpose |
+|---------|---------|
+| `loki` | Log store |
+| `prometheus` | Metrics store |
+| `alloy` | Ships PM2 logs → Loki; receives OTLP traces → Tempo |
+| `grafana` | UI |
+| `tempo` | Trace store (Phase 4) |
+| `node-exporter` | Host CPU/RAM/disk metrics (Phase 4) |
+
+`mysqld-exporter` stays **off** until you run with `--profile mysql-metrics` ([§4.7](#47-optional--mysql-metrics)).
 
 ### C.3 Check container health
 
@@ -449,12 +467,14 @@ docker compose ps
 docker compose logs --tail=50
 ```
 
-All four services should be `Up` (or `running`):
+These should be `Up` (or `running`):
 
 - `loki`
 - `prometheus`
 - `alloy`
 - `grafana`
+- `tempo`
+- `node-exporter`
 
 Local Grafana (only on loopback — not public yet):
 
@@ -775,6 +795,9 @@ curl -sI 'https://justxsystems.com/grafana/explore' | grep -i location
 
 ## E. Wire the API env and reload PM2
 
+The API reads environment from **`/var/www/jbt/server/.env`** (loaded by Node/`dotenv`).  
+Do **not** put these in `deploy/observability/.env` — that file is only for Grafana/Docker.
+
 ### E.1 Edit `server/.env` on the VPS
 
 ```bash
@@ -783,27 +806,44 @@ nano /var/www/jbt/server/.env
 chmod 600 /var/www/jbt/server/.env
 ```
 
-Add or update:
+Add or update (minimum for logs + Ops links):
 
 ```bash
 LOG_FORMAT=json
 GRAFANA_PUBLIC_URL=https://justxsystems.com/grafana
-# optional but recommended:
+```
+
+Optional alerts / exception store:
+
+```bash
 ERROR_WEBHOOK_URL=https://hooks.slack.com/services/...   # or Discord webhook
 SENTRY_DSN=https://KEY@HOST/PROJECT                      # Sentry SaaS or GlitchTip
 SENTRY_ENVIRONMENT=production
 ERRORS_UI_URL=https://glitchtip.example/                 # optional deep link in Ops UI
 ```
 
+**Leave traces off until [§4](#4-phase-4--tempo-traces--hostmysql-metrics--step-by-step)** (Tempo + Alloy OTLP must be running first). When you are ready for Phase 4, add:
+
+```bash
+OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+```
+
 | Variable | Why |
 |----------|-----|
 | `LOG_FORMAT=json` | One JSON object per log line so Loki can parse `status`, `requestId`, etc. |
-| `GRAFANA_PUBLIC_URL` | Admin → Operations “Open Grafana” button |
+| `GRAFANA_PUBLIC_URL` | Admin → Operations “Open Grafana” / Loki / Tempo buttons |
 | `ERROR_WEBHOOK_URL` | Instant Slack/Discord page on server errors |
 | `SENTRY_DSN` | Exception store (SaaS or GlitchTip) |
 | `ERRORS_UI_URL` | Optional link in Operations UI |
+| `OTEL_ENABLED=true` | Turn on OpenTelemetry spans (API + worker) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Where Node sends traces (Alloy on the VPS loopback) |
+
+Save in nano: `Ctrl+O` → Enter → `Ctrl+X`.
 
 ### E.2 Reload PM2 with the new env
+
+PM2 does **not** pick up `.env` changes until you reload with `--update-env` (or run a full deploy).
 
 ```bash
 cd /var/www/jbt
@@ -819,6 +859,8 @@ pm2 logs justx-jbt-api --lines 20 --nostream
 ```
 
 You should see lines that look like JSON (`{"level":...,"msg":"http_request",...}`) rather than plain text.
+
+If you set `OTEL_ENABLED=true`, after a few requests you should also see `"traceId":"..."` inside those JSON lines ([§4.5](#45-verify-traces-in-grafana-and-admin-ops)).
 
 ---
 
@@ -848,7 +890,15 @@ If that works, narrow to API JSON:
 
 For day-to-day analysis (filters, request tracing, 5xx, live tail), see **[§G](#g-using-grafana-to-view-and-analyze-jbt-logs)**.
 
-### F.3 If Alloy shows no logs
+### F.3 Traces / host metrics (only after Phase 4)
+
+If you have **not** enabled Phase 4 yet, skip this. After [§4](#4-phase-4--tempo-traces--hostmysql-metrics--step-by-step):
+
+1. Admin → **Operations** — Telemetry should show **OTel on**; buttons **Tempo: traces** and **Prometheus: host mem** should appear.  
+2. Grafana → Explore → **Tempo** — after hitting any API URL, Search should show recent traces for `justx-jbt-api`.  
+3. Grafana → Explore → **Prometheus** — run `node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes`.
+
+### F.4 If Alloy shows no logs
 
 ```bash
 # Host can read PM2 logs?
@@ -1238,9 +1288,9 @@ Suggested starter panels:
 | 5xx / min | `sum(count_over_time({service="justx-jbt-api"} \|= "http_request" \| json \| status >= 500 [1m]))` | Time series |
 | Live access | `{service="justx-jbt-api"} \|= "http_request"` | Logs + Live |
 
-### G.9 Prometheus (optional, light use)
+### G.9 Prometheus (host / MySQL metrics)
 
-Datasource **Prometheus** is provisioned for later metrics (exporters / Alloy). Day one you can ignore it; logs in Loki cover most JBT incidents. When node/MySQL exporters are added (Phase 4), use Explore → Prometheus for CPU/RAM/disk.
+Datasource **Prometheus** is provisioned automatically. Day one (logs only) you can ignore it. After Phase 4, `node-exporter` scrapes the VPS — use Explore → **Prometheus** for CPU/RAM/disk ([§4.6](#46-host-metrics-always-on-after-compose-up)). MySQL needs the optional profile ([§4.7](#47-optional--mysql-metrics)).
 
 ### G.10 Incident playbook (15 minutes)
 
@@ -1356,95 +1406,402 @@ Reload PM2 as above. Every `reportError` posts a short message including `reques
 
 ---
 
-## 4. Phase 4 — Tempo traces + Prometheus exporters
+## 4. Phase 4 — Tempo traces + host/MySQL metrics (step-by-step)
 
-Lean stack on the same Hostinger VPS (mem-capped). **Do not** self-host GlitchTip/ClickHouse here.
+Do this **only after** Grafana opens at `https://justxsystems.com/grafana/` and Loki shows API logs ([§F](#f-verify-end-to-end) / [§G](#g-using-grafana-to-view-and-analyze-jbt-logs)).
 
-### 4.1 What you get
+Lean stack on the **same** Hostinger VPS (containers are mem-capped). **Do not** self-host GlitchTip or ClickHouse on this box.
 
-| Piece | Role |
-|-------|------|
-| **Tempo** | Trace store (OTLP from API/worker via Alloy `:4318`) |
-| **node_exporter** | Host CPU / RAM / disk (always on with compose) |
-| **mysqld_exporter** | MySQL metrics (`--profile mysql-metrics`) |
-| **OTel SDK** | Opt-in in Node (`OTEL_ENABLED=true`) |
+### 4.0 What Phase 4 adds (plain English)
 
-### 4.2 Bring up Tempo + exporters
+| You already have | Phase 4 adds |
+|------------------|--------------|
+| Loki = “what did the API print?” | **Tempo** = “what did this one HTTP call do, as a timeline of spans?” |
+| Admin Ops health cards | Deep links: **Tempo: traces**, **Prometheus: host mem** |
+| — | **node_exporter** = is the VPS out of RAM / CPU? |
+| — | Optional **mysqld_exporter** = is MySQL saturated? |
 
-After `git pull` / `./scripts/vps-deploy.sh`:
+**How traces flow (memorize this):**
+
+```text
+Browser → nginx → Node API (OpenTelemetry SDK)
+                      │
+                      ├─ JSON log line (requestId + traceId) → PM2 → Alloy → Loki
+                      │
+                      └─ OTLP HTTP → 127.0.0.1:4318 (Alloy) → Tempo → Grafana Explore
+```
+
+Traces are **opt-in**. Docker can run Tempo forever; the API only sends spans when `OTEL_ENABLED=true` in **`/var/www/jbt/server/.env`**.
+
+### 4.1 Prerequisites checklist
+
+SSH in first ([§0.1](#01-ssh-into-the-vps)), then confirm:
+
+```bash
+# 1) You are deploy on the VPS
+whoami
+# expect: deploy
+
+# 2) Docker works
+docker --version
+docker compose version
+
+# 3) Grafana already responds (from earlier §§ C–D)
+curl -sI http://127.0.0.1:3003/grafana/ | head -5
+# expect HTTP/1.1 200 or 302 — not connection refused
+
+# 4) Free RAM still OK for ~0.5 GB more (Tempo + node-exporter)
+free -h
+```
+
+If Docker or Grafana is missing, finish [§A](#a-install-docker-engine--compose-on-the-vps)–[§D](#d-expose-grafana-through-nginx) first — do not start Phase 4 mid-install.
+
+### 4.2 Pull the Phase 4 files onto the VPS
+
+Phase 4 lives in git (`tempo-config.yml`, updated `docker-compose.yml`, OTel code in `server/`). Your VPS must be on current `master`.
+
+**Preferred (rebuilds app + installs npm deps including OpenTelemetry packages):**
+
+```bash
+cd /var/www/jbt
+./scripts/vps-deploy.sh
+```
+
+Wait until it finishes (npm ci, web build, PM2 reload, health check). That can take several minutes.
+
+**If deploy already ran today and you only need compose files**, still confirm files exist:
+
+```bash
+cd /var/www/jbt
+git log -1 --oneline
+ls deploy/observability/tempo-config.yml
+ls deploy/observability/docker-compose.yml
+grep -n tempo deploy/observability/docker-compose.yml | head
+ls server/src/lib/otel.ts
+```
+
+If `tempo-config.yml` is missing, deploy did not get the Phase 4 commit — run `./scripts/vps-deploy.sh` again (or `git fetch && git reset --hard origin/master` only if you know that is safe on this host).
+
+### 4.3 Start / refresh the Docker stack (Tempo + node-exporter)
+
+This uses the **same** folder and `.env` as Grafana day one. You do **not** create a second stack.
 
 ```bash
 cd /var/www/jbt/deploy/observability
-# keep existing .env; ensure GF_* still set
+
+# Confirm Grafana password file still exists (do NOT recreate if already set)
+ls -la .env
+grep GF_SECURITY_ADMIN_USER .env
+# Password is there — do not paste it into chat or git
+
+# Pull new images and (re)create containers
 docker compose up -d
+
+# Watch status
 docker compose ps
-curl -sI http://127.0.0.1:4318/ | head   # Alloy OTLP (may 404 without POST — connection is enough)
 ```
 
-Expect `tempo`, `node-exporter`, `alloy`, `grafana`, `loki`, `prometheus` **Up**.
+**What you should see as `Up`:**
 
-### 4.3 Enable OTel on the API (and worker)
+| Name (approx.) | Required? |
+|----------------|-----------|
+| `loki` | yes |
+| `prometheus` | yes |
+| `alloy` | yes |
+| `grafana` | yes |
+| `tempo` | yes (Phase 4) |
+| `node-exporter` | yes (Phase 4) |
+| `mysqld-exporter` | no — only after [§4.5](#45-optional--mysql-metrics) |
 
-In `/var/www/jbt/.env` (or wherever PM2 loads env):
+If `tempo` or `node-exporter` is missing, the compose file on disk is old — go back to [§4.2](#42-pull-the-phase-4-files-onto-the-vps).
+
+**Check logs if something is Restarting:**
 
 ```bash
-OTEL_ENABLED=true
-OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+docker compose logs tempo --tail=40
+docker compose logs node-exporter --tail=20
+docker compose logs alloy --tail=40
+```
+
+**Check OTLP port (Alloy receives traces here):**
+
+```bash
+ss -lntp | grep 4318 || netstat -lntp 2>/dev/null | grep 4318
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4318/
+# Any response code is fine (often 404/405). "Connection refused" means Alloy is not listening.
+```
+
+**Check host metrics scrape (optional):**
+
+```bash
+# From inside the compose network — Prometheus should list node-exporter
+docker compose exec prometheus wget -qO- http://node-exporter:9100/metrics | head -5
+```
+
+RAM snapshot:
+
+```bash
+docker stats --no-stream
+free -h
+```
+
+If the box starts swapping heavily, stop extras first:
+
+```bash
+cd /var/www/jbt/deploy/observability
+docker compose stop tempo node-exporter
+# last resort: docker compose down   (keeps volumes; Loki history preserved)
+```
+
+### 4.4 Turn on OpenTelemetry in the API (and worker)
+
+#### 4.4.1 Edit the correct file
+
+The app env file is:
+
+```text
+/var/www/jbt/server/.env
+```
+
+**Not** `/var/www/jbt/.env`  
+**Not** `/var/www/jbt/deploy/observability/.env`
+
+```bash
+nano /var/www/jbt/server/.env
+```
+
+#### 4.4.2 Add these lines (or change them if they already exist)
+
+Keep your existing DB / JWT / Google lines. Append or edit:
+
+```bash
 LOG_FORMAT=json
 GRAFANA_PUBLIC_URL=https://justxsystems.com/grafana
+
+# Phase 4 — traces
+OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
 ```
+
+| Line | Meaning |
+|------|---------|
+| `OTEL_ENABLED=true` | Start the OpenTelemetry SDK on API **and** worker |
+| `OTEL_EXPORTER_OTLP_ENDPOINT=...` | Send spans to Alloy on this VPS (loopback only — not public) |
+
+Optional (usually leave default):
+
+```bash
+# OTEL_SERVICE_NAME=justx-jbt-api
+# OTEL_DIAG_DEBUG=true    # noisy — only while debugging missing traces
+```
+
+Save: `Ctrl+O` → Enter → `Ctrl+X`.
+
+```bash
+chmod 600 /var/www/jbt/server/.env
+```
+
+#### 4.4.3 Reload PM2 so the new env is loaded
 
 ```bash
 cd /var/www/jbt
 pm2 reload ecosystem.config.cjs --update-env
-# or: ./scripts/vps-deploy.sh
+pm2 save
+pm2 status
 ```
 
-Hit any API route, then Grafana → Explore → **Tempo**, or Admin → **Operations** → **Tempo: traces**.
+Both `justx-jbt-api` and `justx-jbt-worker` should be **online**.
 
-Log lines should include `"traceId":"…"` when a span is active.
+If you prefer a full rebuild (also refreshes `node_modules` OTel packages):
 
-### 4.4 Optional MySQL exporter
+```bash
+cd /var/www/jbt
+./scripts/vps-deploy.sh
+```
+
+#### 4.4.4 Generate traffic and confirm `traceId` in logs
+
+```bash
+# Trigger a few API calls (from the VPS)
+curl -sI http://127.0.0.1:4002/api/health | head -15
+# Note X-Request-Id header
+
+# Or hit public health
+curl -sI https://justxsystems.com/jbt/api/health | head -15
+
+# Inspect recent API logs for traceId
+pm2 logs justx-jbt-api --lines 30 --nostream | grep -E 'traceId|http_request' | tail -10
+```
+
+**Success look:** a JSON line containing both `"requestId":"..."` and `"traceId":"..."` (32 hex characters).
+
+**If there is `requestId` but no `traceId`:**
+
+1. Confirm env is really loaded:
+
+```bash
+pm2 env 0 | grep -E 'OTEL_|LOG_FORMAT|GRAFANA' || true
+# If empty, find the API id: pm2 list
+# then: pm2 env <id> | grep OTEL
+```
+
+2. Confirm Tempo/Alloy still up: `docker compose -f /var/www/jbt/deploy/observability/docker-compose.yml ps`  
+3. Confirm you edited **`server/.env`**, then `pm2 reload … --update-env` again.  
+4. Confirm `server/src/lib/otel.ts` exists (deploy pulled Phase 4 code).
+
+### 4.5 Verify traces in Grafana (and Admin Ops)
+
+#### 4.5.1 Admin Operations
+
+1. Browser: https://justxsystems.com/jbt/admin/ops  
+2. Under **Telemetry config**, expect **OTel on**.  
+3. Under **Observability links**, use:
+   - **Tempo: traces**
+   - **Prometheus: host mem**
+   - **Loki: API logs (1h)** (still your fastest triage)
+
+#### 4.5.2 Grafana → Tempo
+
+1. Open https://justxsystems.com/grafana/ and sign in.  
+2. Left sidebar → **Explore**.  
+3. Top datasource dropdown → **Tempo** (not Loki).  
+4. Use **Search** / TraceQL search for service `justx-jbt-api`, last 15–60 minutes.  
+5. Click a recent trace → you should see HTTP spans. Span attribute **`request.id`** matches the `X-Request-Id` / Loki `requestId`.
+
+**From a Loki log line:** copy `traceId` → Explore → Tempo → paste the id (TraceQL / TraceID query).
+
+#### 4.5.3 Loki ↔ Tempo together
+
+```logql
+{service="justx-jbt-api"} |= "<paste-request-id>"
+```
+
+Expand the line → copy `traceId` → open in Tempo. Full triage steps: [§G.6](#g6-triage-one-http-request-end-to-end).
+
+### 4.6 Host metrics (always on after compose up)
+
+No extra MySQL user needed. `node-exporter` scrapes the VPS; Prometheus scrapes `node-exporter`.
+
+1. Grafana → Explore → datasource **Prometheus**.  
+2. Run:
+
+```promql
+node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes
+```
+
+Expect a graph between `0` and `1` (fraction of RAM free).
+
+Other useful queries:
+
+```promql
+# Idle CPU rate (higher = more idle)
+rate(node_cpu_seconds_total{mode="idle"}[5m])
+
+# Root filesystem free bytes (panel may need mountpoint label filter)
+node_filesystem_avail_bytes{mountpoint="/"}
+```
+
+Or click **Prometheus: host mem** on Admin → Operations.
+
+If Prometheus Explore is empty:
+
+```bash
+cd /var/www/jbt/deploy/observability
+docker compose ps node-exporter
+docker compose logs node-exporter --tail=30
+docker compose exec prometheus wget -qO- 'http://localhost:9090/api/v1/targets' | head -c 2000
+```
+
+Look for job `node` / target `node-exporter:9100` = **UP**.
+
+### 4.7 Optional — MySQL metrics
+
+Skip unless you want DB graphs. Creates a **read-only** MySQL user and starts one more container.
+
+#### 4.7.1 Create the MySQL user (on the VPS)
+
+```bash
+sudo mysql
+```
+
+In the MySQL prompt (replace `LONG_RANDOM_SECRET` with a real password — generate with `openssl rand -base64 24`):
 
 ```sql
-CREATE USER 'jbt_exporter'@'127.0.0.1' IDENTIFIED BY 'LONG_RANDOM_SECRET';
+CREATE USER IF NOT EXISTS 'jbt_exporter'@'127.0.0.1' IDENTIFIED BY 'LONG_RANDOM_SECRET';
+CREATE USER IF NOT EXISTS 'jbt_exporter'@'localhost' IDENTIFIED BY 'LONG_RANDOM_SECRET';
 GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'jbt_exporter'@'127.0.0.1';
+GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'jbt_exporter'@'localhost';
 FLUSH PRIVILEGES;
+EXIT;
 ```
 
-In `deploy/observability/.env`:
+#### 4.7.2 Put the DSN in the **observability** `.env` (Docker file)
+
+```bash
+nano /var/www/jbt/deploy/observability/.env
+```
+
+Add (password must match the SQL user; no spaces):
 
 ```bash
 MYSQL_EXPORTER_DSN=jbt_exporter:LONG_RANDOM_SECRET@(host.docker.internal:3306)/
 ```
 
+Save, then:
+
 ```bash
+chmod 600 /var/www/jbt/deploy/observability/.env
 cd /var/www/jbt/deploy/observability
 docker compose --profile mysql-metrics up -d
+docker compose ps
+docker compose logs mysqld-exporter --tail=30
 ```
 
-Grafana → Explore → **Prometheus** → `mysql_up` or `mysql_global_status_threads_connected`.
-
-### 4.5 Host metrics (no extra config)
+#### 4.7.3 Query in Grafana
 
 Explore → **Prometheus**:
 
 ```promql
-node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes
-rate(node_cpu_seconds_total{mode="idle"}[5m])
+mysql_up
+mysql_global_status_threads_connected
 ```
 
-Admin Ops also links **Prometheus: host mem**.
+`mysql_up` should be `1`. If `0` or target DOWN, check password/DSN and that MySQL listens on `127.0.0.1:3306`.
 
-### 4.6 nginx basic auth (recommended)
+### 4.8 Optional — nginx basic auth in front of Grafana
+
+Recommended once Grafana is public. Step-by-step: [§D.3](#d3-strongly-recommended-http-basic-auth-in-front-of-grafana).
 
 ```bash
 bash /var/www/jbt/deploy/observability/scripts/setup-grafana-basic-auth.sh
-# follow printed include snippet, then:
+# Follow the printed "include …" line inside location /grafana/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Also ensure `proxy_redirect` lines from [§D.6](#d6-symptom-explore--loki-api-logs-opens-marketing-indexhtml) are present so Explore stays under `/grafana/`.
+Also keep the `proxy_redirect` lines from [§D.6](#d6-symptom-explore--loki-api-logs-opens-marketing-indexhtml) so Explore stays under `/grafana/`.
+
+### 4.9 Phase 4 done checklist
+
+| Check | How |
+|-------|-----|
+| Containers up | `cd /var/www/jbt/deploy/observability && docker compose ps` |
+| OTLP listening | `ss -lntp \| grep 4318` |
+| Env on | `grep OTEL_ /var/www/jbt/server/.env` then PM2 reload done |
+| Logs have traceId | `pm2 logs justx-jbt-api --lines 20 --nostream \| grep traceId` |
+| Tempo UI | Grafana Explore → Tempo → recent `justx-jbt-api` traces |
+| Ops UI | `/jbt/admin/ops` shows OTel **on** + Tempo button |
+| Host mem | Prometheus query `node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes` |
+
+### 4.10 Turn traces off again (if needed)
+
+```bash
+nano /var/www/jbt/server/.env
+# set OTEL_ENABLED=false   or delete the OTEL_* lines
+cd /var/www/jbt
+pm2 reload ecosystem.config.cjs --update-env
+```
+
+Tempo can keep running idle; or `docker compose stop tempo` to free RAM.
 
 ---
 
@@ -1473,6 +1830,11 @@ Also ensure `proxy_redirect` lines from [§D.6](#d6-symptom-explore--loki-api-lo
 | Grafana UI broken under `/grafana` | `GF_SERVER_ROOT_URL` and `GF_SERVER_SERVE_FROM_SUB_PATH=true` (already in compose) |
 | No logs in Loki | PM2 path mount; `LOG_FORMAT=json`; Alloy logs; wait 1–2 min after reload — see [§G.4](#g4-discover-labels-if-queries-return-nothing) |
 | How to search / analyze logs | [§G](#g-using-grafana-to-view-and-analyze-jbt-logs) — Explore, LogQL recipes, request tracing |
+| Phase 4: no `tempo` / `node-exporter` in `compose ps` | Pull latest master ([§4.2](#42-pull-the-phase-4-files-onto-the-vps)), then `docker compose up -d` |
+| Phase 4: logs have `requestId` but no `traceId` | Edit **`/var/www/jbt/server/.env`** (not observability `.env`); `OTEL_ENABLED=true`; `pm2 reload … --update-env`; Alloy on `:4318` |
+| Tempo Explore empty | Generate traffic; wait ~30s; datasource **Tempo**; check `docker compose logs tempo alloy` |
+| Prometheus host query empty | `node-exporter` Up? Prometheus target `node` UP? ([§4.6](#46-host-metrics-always-on-after-compose-up)) |
+| `mysql_up` = 0 | DSN password / `host.docker.internal` / profile `mysql-metrics` ([§4.7](#47-optional--mysql-metrics)) |
 | VPS OOM / MySQL flaky | `docker stats`; `docker compose down` to free RAM; consider a second VM |
 | After `git pull`, compose files missing | Observability commit not on `master` yet — pull again after push |
 
@@ -1505,4 +1867,13 @@ sudo nginx -t && sudo systemctl reload nginx
 
 # edit /var/www/jbt/server/.env → LOG_FORMAT=json GRAFANA_PUBLIC_URL=...
 cd /var/www/jbt && pm2 reload ecosystem.config.cjs --update-env && pm2 save
+
+# --- Phase 4 (after Loki works) — see docs §4 for full walkthrough ---
+cd /var/www/jbt && ./scripts/vps-deploy.sh
+cd /var/www/jbt/deploy/observability && docker compose up -d && docker compose ps
+# edit /var/www/jbt/server/.env → OTEL_ENABLED=true + OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+cd /var/www/jbt && pm2 reload ecosystem.config.cjs --update-env
+curl -sI http://127.0.0.1:4002/api/health | head
+pm2 logs justx-jbt-api --lines 20 --nostream | grep traceId
+# Grafana Explore → Tempo; Admin → /jbt/admin/ops → Tempo: traces
 ```
