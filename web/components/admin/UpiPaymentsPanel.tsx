@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
+import type { PaymentsActionHandle } from "@/components/admin/payments-actions";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
@@ -51,7 +52,24 @@ function statusPill(status: string) {
   return "pill";
 }
 
-export function UpiPaymentsPanel() {
+function snapshot(payee: Payee, notify: Notify) {
+  return JSON.stringify({ payee, notify });
+}
+
+function fmtWhen(value: string | null | undefined) {
+  if (!value) return "—";
+  const d = new Date(value.includes("T") ? value : value.replace(" ", "T"));
+  if (Number.isNaN(d.getTime())) return value.slice(0, 16);
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export const UpiPaymentsPanel = forwardRef<PaymentsActionHandle>(function UpiPaymentsPanel(_props, ref) {
   const [payee, setPayee] = useState<Payee>({ enabled: true, vpa: "", payeeName: "", merchantCode: "" });
   const [notify, setNotify] = useState<Notify>({
     emailEnabled: true,
@@ -63,6 +81,7 @@ export function UpiPaymentsPanel() {
     decisionSubject: "",
     decisionBody: "",
   });
+  const savedSnap = useRef("");
   const [claims, setClaims] = useState<Claim[]>([]);
   const [outbox, setOutbox] = useState<Outbox[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -70,6 +89,7 @@ export function UpiPaymentsPanel() {
   const [reviewNote, setReviewNote] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     const [cfg, cl, ob] = await Promise.all([
@@ -79,8 +99,13 @@ export function UpiPaymentsPanel() {
     ]);
     setPayee(cfg.payee);
     setNotify(cfg.notify);
+    savedSnap.current = snapshot(cfg.payee, cfg.notify);
     setClaims(cl.claims);
     setOutbox(ob.events);
+    setSelectedId((cur) => {
+      if (cur && cl.claims.some((c) => c.id === cur)) return cur;
+      return cl.claims[0]?.id ?? null;
+    });
   }, [filter]);
 
   useLiveRefresh(() => load().catch((e: Error) => setMessage(e.message)), {
@@ -89,9 +114,9 @@ export function UpiPaymentsPanel() {
   });
 
   const selected = claims.find((c) => c.id === selectedId) ?? claims[0] ?? null;
+  const dirty = snapshot(payee, notify) !== savedSnap.current;
 
-  async function saveConfig(e: React.FormEvent) {
-    e.preventDefault();
+  async function saveConfig() {
     setBusy(true);
     setMessage("");
     try {
@@ -99,13 +124,26 @@ export function UpiPaymentsPanel() {
         method: "PUT",
         body: JSON.stringify({ payee, notify }),
       });
+      savedSnap.current = snapshot(payee, notify);
       setMessage("UPI account and notification templates saved.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Save failed");
+      throw err;
     } finally {
       setBusy(false);
     }
   }
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      save: saveConfig,
+      isBusy: () => busy,
+      isDirty: () => dirty,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- save closes over latest payee/notify/busy/dirty
+    [busy, dirty, payee, notify],
+  );
 
   async function review(action: "approve" | "reject") {
     if (!selected) return;
@@ -127,13 +165,36 @@ export function UpiPaymentsPanel() {
     }
   }
 
+  async function copyUtr() {
+    if (!selected?.utr) return;
+    try {
+      await navigator.clipboard.writeText(selected.utr);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setMessage("Could not copy UTR");
+    }
+  }
+
   return (
     <div className="admin-split payments-split">
       <div className="admin-pane-stack">
         <section className="panel admin-card">
-          <h2>JustXSystems UPI account</h2>
-          <p className="muted">Default checkout is a UPI QR to this VPA. Payment gateways stay optional.</p>
-          <form className="admin-form-grid" onSubmit={saveConfig}>
+          <div className="analytics-toolbar">
+            <div>
+              <h2>JustXSystems UPI account</h2>
+              <p className="muted">Default checkout is a UPI QR to this VPA. Gateways stay optional.</p>
+            </div>
+            {dirty ? <span className="pill pill-warning">Unsaved changes</span> : null}
+          </div>
+          <form
+            className="admin-form-grid"
+            id="upi-settings-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void saveConfig();
+            }}
+          >
             <label className="field">
               <span>Enable UPI QR</span>
               <select
@@ -156,7 +217,9 @@ export function UpiPaymentsPanel() {
               <span>Merchant code (optional)</span>
               <input value={payee.merchantCode} onChange={(e) => setPayee({ ...payee, merchantCode: e.target.value })} />
             </label>
-            <h3 className="analytics-subhead" style={{ gridColumn: "1 / -1" }}>Company alerts</h3>
+            <h3 className="analytics-subhead" style={{ gridColumn: "1 / -1" }}>
+              Company alerts
+            </h3>
             <label className="field">
               <span>Email JustXSystems</span>
               <select
@@ -201,9 +264,6 @@ export function UpiPaymentsPanel() {
               <span>On approve/reject — body</span>
               <textarea rows={3} value={notify.decisionBody} onChange={(e) => setNotify({ ...notify, decisionBody: e.target.value })} />
             </label>
-            <button type="submit" className="btn btn-primary" disabled={busy}>
-              Save UPI settings
-            </button>
           </form>
           {message ? <p className="muted">{message}</p> : null}
         </section>
@@ -212,7 +272,8 @@ export function UpiPaymentsPanel() {
       <div className="admin-pane-stack">
         <section className="panel admin-card">
           <h2>UPI claims</h2>
-          <div className="admin-tabs">
+          <p className="muted">Verify bank UTR against the amount, then approve to grant tool licenses.</p>
+          <div className="admin-tabs" role="tablist" aria-label="Claim filter">
             {["pending", "approved", "rejected", "all"].map((f) => (
               <button key={f} type="button" className={filter === f ? "active" : ""} onClick={() => setFilter(f)}>
                 {f}
@@ -230,7 +291,7 @@ export function UpiPaymentsPanel() {
                 <div>
                   <strong>{c.payerName}</strong>
                   <span className="muted">
-                    {c.utr} · {inr(c.amountInr)}
+                    {c.utr} · {inr(c.amountInr)} · {fmtWhen(c.createdAt)}
                   </span>
                 </div>
                 <span className={statusPill(c.status)}>{c.status}</span>
@@ -244,14 +305,43 @@ export function UpiPaymentsPanel() {
           <section className="panel admin-card">
             <h2>Verify #{selected.id}</h2>
             <ul className="admin-kv">
-              <li><span>Payer</span><strong>{selected.payerName}</strong></li>
-              <li><span>Email</span><strong>{selected.payerEmail}</strong></li>
-              <li><span>Phone</span><strong>{selected.payerPhone || "—"}</strong></li>
-              <li><span>Payer UPI</span><strong>{selected.payerUpi || "—"}</strong></li>
-              <li><span>UTR</span><strong>{selected.utr}</strong></li>
-              <li><span>Amount</span><strong>{inr(selected.amountInr)}</strong></li>
-              <li><span>Tools</span><strong>{selected.toolIds?.length ? selected.toolIds.join(", ") : "—"}</strong></li>
-              <li><span>Paid on</span><strong>{selected.paidAt ?? "—"}</strong></li>
+              <li>
+                <span>Payer</span>
+                <strong>{selected.payerName}</strong>
+              </li>
+              <li>
+                <span>Email</span>
+                <strong>{selected.payerEmail}</strong>
+              </li>
+              <li>
+                <span>Phone</span>
+                <strong>{selected.payerPhone || "—"}</strong>
+              </li>
+              <li>
+                <span>Payer UPI</span>
+                <strong>{selected.payerUpi || "—"}</strong>
+              </li>
+              <li>
+                <span>UTR</span>
+                <strong className="admin-form-row" style={{ gap: 8 }}>
+                  <span className="mono">{selected.utr}</span>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => void copyUtr()}>
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </strong>
+              </li>
+              <li>
+                <span>Amount</span>
+                <strong>{inr(selected.amountInr)}</strong>
+              </li>
+              <li>
+                <span>Tools</span>
+                <strong>{selected.toolIds?.length ? selected.toolIds.join(", ") : "—"}</strong>
+              </li>
+              <li>
+                <span>Paid on</span>
+                <strong>{selected.paidAt ? fmtWhen(selected.paidAt) : "—"}</strong>
+              </li>
             </ul>
             {selected.notes ? <p className="muted">{selected.notes}</p> : null}
             {selected.status === "pending" ? (
@@ -262,7 +352,7 @@ export function UpiPaymentsPanel() {
                 </label>
                 <div className="admin-form-row">
                   <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void review("approve")}>
-                    Approve
+                    Approve & license
                   </button>
                   <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void review("reject")}>
                     Reject
@@ -270,7 +360,9 @@ export function UpiPaymentsPanel() {
                 </div>
               </>
             ) : (
-              <p className="muted">Already {selected.status}. {selected.reviewNote}</p>
+              <p className="muted">
+                Already {selected.status}. {selected.reviewNote}
+              </p>
             )}
           </section>
         ) : null}
@@ -282,14 +374,18 @@ export function UpiPaymentsPanel() {
               <li key={ev.id}>
                 <span>
                   {ev.channel} · {ev.destination}
-                  <em className="muted"> {ev.kind}</em>
+                  <em className="muted">
+                    {" "}
+                    {ev.kind} · {fmtWhen(ev.createdAt)}
+                  </em>
                 </span>
                 <span className={statusPill(ev.status)}>{ev.status}</span>
               </li>
             ))}
+            {outbox.length === 0 ? <li className="muted">No outbound notifications yet.</li> : null}
           </ul>
         </section>
       </div>
     </div>
   );
-}
+});

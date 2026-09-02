@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { UpiPaymentsPanel } from "@/components/admin/UpiPaymentsPanel";
+import type { PaymentsActionHandle } from "@/components/admin/payments-actions";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
@@ -110,7 +111,15 @@ function fmtDate(value: string | null | undefined) {
 
 function fmtWhen(value: string | null | undefined) {
   if (!value) return "—";
-  return value.slice(0, 16).replace("T", " ");
+  const d = new Date(value.includes("T") ? value : `${value.replace(" ", "T")}`);
+  if (Number.isNaN(d.getTime())) return value.slice(0, 16).replace("T", " ");
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function statusPill(status: string) {
@@ -165,6 +174,9 @@ export default function AdminPaymentsPage() {
 
 function AdminPaymentsInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const upiSaveRef = useRef<PaymentsActionHandle>(null);
+  const opFormRef = useRef<HTMLFormElement>(null);
   const tabFromUrl = useMemo((): Tab => {
     const t = searchParams.get("tab");
     if (t === "saas" || t === "collections" || t === "ops" || t === "upi" || t === "overview") return t;
@@ -188,17 +200,33 @@ function AdminPaymentsInner() {
   const [opsQuery, setOpsQuery] = useState("");
   const [selectedOpId, setSelectedOpId] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<number | "create" | null>(null);
+  const [tabBusy, setTabBusy] = useState(false);
+  const [upiReady, setUpiReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    if (tab === "upi") setUpiReady(true);
+  }, [tab]);
+
+  useEffect(() => {
     setTab(tabFromUrl);
   }, [tabFromUrl]);
+
+  function selectTab(next: Tab) {
+    setTab(next);
+    router.replace(`/admin/payments?tab=${next}`);
+  }
 
   const loadOps = useCallback(async () => {
     const d = await api<{ ops: PaymentOp[] }>("/admin/payments/ops");
     setOps(d.ops);
+    setSelectedOpId((cur) => {
+      if (cur && d.ops.some((o) => o.id === cur)) return cur;
+      const pending = d.ops.find((o) => o.approvalStatus === "pending");
+      return pending?.id ?? d.ops[0]?.id ?? null;
+    });
     return d.ops;
   }, []);
 
@@ -255,6 +283,7 @@ function AdminPaymentsInner() {
   async function createOp(e: React.FormEvent) {
     e.preventDefault();
     setBusyId("create");
+    setTabBusy(true);
     setMessage("");
     try {
       await api("/admin/payments/ops", {
@@ -273,10 +302,12 @@ function AdminPaymentsInner() {
       setMessage("Logged on the payment desk. Approval is pending.");
       invalidateAdminData("admin-payments");
       if (next[0]) setSelectedOpId(next[0].id);
+      setOpsFilter("pending");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Could not log payment");
     } finally {
       setBusyId(null);
+      setTabBusy(false);
     }
   }
 
@@ -294,6 +325,45 @@ function AdminPaymentsInner() {
     }
   }
 
+  async function runTabPrimary() {
+    if (tab === "upi") {
+      const handle = upiSaveRef.current;
+      if (!handle) return;
+      setTabBusy(true);
+      try {
+        await handle.save();
+      } catch {
+        /* panel shows message */
+      } finally {
+        setTabBusy(false);
+      }
+      return;
+    }
+    if (tab === "ops") {
+      opFormRef.current?.requestSubmit();
+      return;
+    }
+    if (tab === "overview" || tab === "saas" || tab === "collections") {
+      exportCsv(saas, collections, ops);
+    }
+  }
+
+  const tabPrimaryLabel =
+    tab === "upi"
+      ? tabBusy
+        ? "Saving…"
+        : "Save UPI settings"
+      : tab === "ops"
+        ? busyId === "create"
+          ? "Logging…"
+          : "Log payment"
+        : "Export CSV";
+
+  const tabPrimaryDisabled =
+    tabBusy ||
+    busyId === "create" ||
+    ((tab === "overview" || tab === "saas" || tab === "collections") && !saas && !collections);
+
   return (
     <div className="admin-page">
       <section className="panel admin-card admin-page-head">
@@ -308,19 +378,11 @@ function AdminPaymentsInner() {
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => void load(days)} disabled={loading}>
               {loading ? "Refreshing…" : "Refresh"}
             </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => exportCsv(saas, collections, ops)}
-              disabled={!saas && !collections}
-            >
-              Export CSV
-            </button>
-            <Link href="/admin/upi" className="btn btn-ghost btn-sm">
-              UPI verify
-            </Link>
             <Link href="/admin/gateways" className="btn btn-ghost btn-sm">
               Gateways
+            </Link>
+            <Link href="/admin/subscriptions" className="btn btn-ghost btn-sm">
+              Subscriptions
             </Link>
           </div>
         </div>
@@ -341,22 +403,29 @@ function AdminPaymentsInner() {
         </div>
 
         <div className="analytics-kpis">
-          <button type="button" className={`result-card ${tab === "saas" ? "is-selected" : ""}`} onClick={() => setTab("saas")}>
+          <button type="button" className={`result-card ${tab === "saas" ? "is-selected" : ""}`} onClick={() => selectTab("saas")}>
             <span>Collected ({days}d)</span>
             <strong>{inr(saas?.summary.collectedInr ?? 0)}</strong>
             <span className="analytics-delta">{saas?.summary.successCount ?? 0} successful charges</span>
           </button>
-          <button type="button" className={`result-card ${tab === "saas" ? "is-selected" : ""}`} onClick={() => setTab("saas")}>
+          <button
+            type="button"
+            className={`result-card ${tab === "saas" && txnStatus === "failed" ? "is-selected" : ""}`}
+            onClick={() => {
+              setTxnStatus("failed");
+              selectTab("saas");
+            }}
+          >
             <span>Failure rate</span>
             <strong>{pct(saas?.summary.failureRate ?? 0)}</strong>
             <span className={`analytics-delta ${(saas?.summary.failedCount ?? 0) > 0 ? "is-down" : "is-up"}`}>
-              {saas?.summary.failedCount ?? 0} failed
+              {saas?.summary.failedCount ?? 0} failed — click to review
             </span>
           </button>
           <button
             type="button"
             className={`result-card ${tab === "collections" ? "is-selected" : ""}`}
-            onClick={() => setTab("collections")}
+            onClick={() => selectTab("collections")}
           >
             <span>Receivable</span>
             <strong>{inr(ar)}</strong>
@@ -365,7 +434,7 @@ function AdminPaymentsInner() {
           <button
             type="button"
             className={`result-card ${tab === "collections" ? "is-selected" : ""}`}
-            onClick={() => setTab("collections")}
+            onClick={() => selectTab("collections")}
           >
             <span>Overdue</span>
             <strong>{inr(collections?.summary.overdueReceivable ?? 0)}</strong>
@@ -376,18 +445,25 @@ function AdminPaymentsInner() {
           <button
             type="button"
             className={`result-card ${tab === "collections" ? "is-selected" : ""}`}
-            onClick={() => setTab("collections")}
+            onClick={() => selectTab("collections")}
           >
             <span>Net position</span>
             <strong>{inr(collections?.summary.netPosition ?? 0)}</strong>
             <span className="analytics-delta">Payables {inr(ap)}</span>
           </button>
-          <button type="button" className={`result-card ${tab === "upi" ? "is-selected" : ""}`} onClick={() => setTab("upi")}>
+          <button type="button" className={`result-card ${tab === "upi" ? "is-selected" : ""}`} onClick={() => selectTab("upi")}>
             <span>UPI pending</span>
             <strong>{pendingSummary.upiClaims}</strong>
             <span className="analytics-delta">{inr(pendingSummary.upiAmountInr)} awaiting verify</span>
           </button>
-          <button type="button" className={`result-card ${tab === "ops" ? "is-selected" : ""}`} onClick={() => setTab("ops")}>
+          <button
+            type="button"
+            className={`result-card ${tab === "ops" ? "is-selected" : ""}`}
+            onClick={() => {
+              setOpsFilter("pending");
+              selectTab("ops");
+            }}
+          >
             <span>Desk pending</span>
             <strong>{pendingOps.length || pendingSummary.deskOps}</strong>
             <span className="analytics-delta">{ops.length} logged items</span>
@@ -398,27 +474,49 @@ function AdminPaymentsInner() {
       {error ? <p className="field-error">{error}</p> : null}
       {message ? <p className="muted">{message}</p> : null}
 
-      <div className="admin-tabs" role="tablist">
-        {(
-          [
-            ["overview", "Overview"],
-            ["saas", "SaaS billing"],
-            ["collections", "Collections"],
-            ["ops", "Payment desk"],
-            ["upi", "UPI QR"],
-          ] as const
-        ).map(([id, label]) => (
-          <button key={id} type="button" role="tab" className={tab === id ? "active" : ""} onClick={() => setTab(id)}>
-            {label}
-            {id === "ops" && pendingOps.length ? ` (${pendingOps.length})` : ""}
-            {id === "upi" && pendingSummary.upiClaims ? ` (${pendingSummary.upiClaims})` : ""}
+      <div className="admin-tabs-bar">
+        <div className="admin-tabs" role="tablist">
+          {(
+            [
+              ["overview", "Overview"],
+              ["saas", "SaaS billing"],
+              ["collections", "Collections"],
+              ["ops", "Payment desk"],
+              ["upi", "UPI QR"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              className={tab === id ? "active" : ""}
+              onClick={() => selectTab(id)}
+            >
+              {label}
+              {id === "ops" && pendingOps.length ? ` (${pendingOps.length})` : ""}
+              {id === "upi" && pendingSummary.upiClaims ? ` (${pendingSummary.upiClaims})` : ""}
+            </button>
+          ))}
+        </div>
+        <div className="admin-tabs-actions">
+          <button
+            type="button"
+            className={tab === "upi" || tab === "ops" ? "btn btn-primary" : "btn btn-secondary"}
+            disabled={Boolean(tabPrimaryDisabled)}
+            onClick={() => void runTabPrimary()}
+          >
+            {tabPrimaryLabel}
           </button>
-        ))}
+        </div>
       </div>
 
       {loading && !saas ? <p className="muted">Loading payments…</p> : null}
 
-      {tab === "upi" ? <UpiPaymentsPanel /> : null}
+      {upiReady ? (
+        <div hidden={tab !== "upi"} className={tab === "upi" ? undefined : "payments-tab-park"}>
+          <UpiPaymentsPanel ref={upiSaveRef} />
+        </div>
+      ) : null}
 
       {tab === "overview" && saas && collections ? (
         <div className="admin-split payments-split">
@@ -528,7 +626,7 @@ function AdminPaymentsInner() {
                 <li>
                   <span>UPI claims</span>
                   <strong>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTab("upi")}>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => selectTab("upi")}>
                       {pendingSummary.upiClaims} · {inr(pendingSummary.upiAmountInr)}
                     </button>
                   </strong>
@@ -536,7 +634,7 @@ function AdminPaymentsInner() {
                 <li>
                   <span>Payment desk</span>
                   <strong>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTab("ops")}>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => selectTab("ops")}>
                       {pendingOps.length || pendingSummary.deskOps} pending
                     </button>
                   </strong>
@@ -553,7 +651,7 @@ function AdminPaymentsInner() {
                       className="tracker-row admin-member-row"
                       onClick={() => {
                         setSelectedOpId(op.id);
-                        setTab("ops");
+                        selectTab("ops");
                       }}
                     >
                       <div>
@@ -833,8 +931,8 @@ function AdminPaymentsInner() {
 
             <section className="panel admin-card">
               <h2>Log payment</h2>
-              <p className="muted">Creates a desk item with pending approval.</p>
-              <form className="admin-form-grid" onSubmit={createOp}>
+              <p className="muted">Fill the fields, then use Log payment in the tab bar (creates a pending desk item).</p>
+              <form ref={opFormRef} className="admin-form-grid" onSubmit={createOp} id="payment-desk-log-form">
                 <label className="field">
                   <span>Party</span>
                   <input
@@ -887,9 +985,6 @@ function AdminPaymentsInner() {
                     placeholder="Optional"
                   />
                 </label>
-                <button type="submit" className="btn btn-primary" disabled={busyId === "create"}>
-                  {busyId === "create" ? "Logging…" : "Log payment"}
-                </button>
               </form>
             </section>
           </div>
