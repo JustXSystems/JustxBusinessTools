@@ -35,7 +35,10 @@ Do **not** install SigNoz/ClickHouse on the same small Hostinger KVM as MySQL + 
 6. [§E](#e-wire-the-api-env-and-reload-pm2) Set API env (`LOG_FORMAT`, `GRAFANA_PUBLIC_URL`, …) and reload PM2  
 7. [§F](#f-verify-end-to-end) Verify Grafana + Admin Ops + Loki queries  
 8. [§G](#g-using-grafana-to-view-and-analyze-jbt-logs) **Day-to-day: view & analyze logs in Grafana**  
-9. Optional: [§3](#3-glitchtip-optional-self-hosted-sentry) GlitchTip / Sentry  
+9. [§G.6](#g6-triage-one-http-request-end-to-end) **Triage one HTTP request end-to-end**  
+10. Optional: [§3](#3-sentry--glitchtip-exception-store) Sentry / GlitchTip  
+11. Optional: [§D.3](#d3-strongly-recommended-http-basic-auth-in-front-of-grafana) nginx basic auth for Grafana  
+12. Optional: [§4](#4-prometheus-exporters-phase-4--optional) Prometheus exporters  
 
 ---
 
@@ -648,22 +651,30 @@ cat /var/www/jbt/deploy/observability/nginx-grafana.conf.example
 
 ### D.3 (Strongly recommended) HTTP basic auth in front of Grafana
 
-Grafana has its own login, but an extra nginx gate reduces bot noise:
+**What it is:** an extra username/password prompt from **nginx** before anyone reaches the Grafana login page. It is not Grafana’s own admin password — it is a second gate so bots and scanners never hit Grafana.
+
+**Why:** Grafana under `/grafana/` is on the public internet. Basic auth cuts noise even if someone guesses a weak Grafana password.
 
 ```bash
 sudo apt-get install -y apache2-utils
 sudo htpasswd -c /etc/nginx/.htpasswd_grafana YOUR_NGINX_USER
-# enter a password when prompted
+# enter a password when prompted (-c creates the file; omit -c to add another user later)
 sudo chmod 640 /etc/nginx/.htpasswd_grafana
 sudo chown root:www-data /etc/nginx/.htpasswd_grafana
 ```
 
-Then add inside `location /grafana/ { ... }`:
+Then add inside `location /grafana/ { ... }` (near the top of the block):
 
 ```nginx
     auth_basic "Grafana";
     auth_basic_user_file /etc/nginx/.htpasswd_grafana;
 ```
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Browser flow: nginx asks for basic-auth user → then Grafana asks for `admin` / Grafana password.
 
 ### D.4 Test and reload nginx
 
@@ -1066,30 +1077,102 @@ curl -sI https://justxsystems.com/jbt/api/health | head
 
 `|=` means “line contains this string” (before or after parsing). Use `!=` to exclude noise.
 
-### G.6 Trace one failing request (Dynatrace-style)
+### G.6 Triage one HTTP request end-to-end
 
-When a user reports “it failed” or Admin Ops shows an error:
+JBT does **not** yet ship full distributed traces (OpenTelemetry → Tempo is Phase 4). Today you triage with **request id + Loki logs** — enough for most production incidents.
 
-1. Get the **request id** from any of:
-   - Browser Network tab → failed API call → response header **`X-Request-Id`**
-   - JSON body on many 500s: `"requestId": "..."`
-   - Admin → **Operations** → recent error row  
-2. In Grafana Explore (Last 1–6 hours):
+#### What “start to end” means in JBT today
 
-```logql
-{job="pm2"} |= "<paste-request-id-here>"
+```
+Browser
+  → nginx (TLS, /jbt/api → :4002)
+    → Express API (assigns X-Request-Id, logs http_request)
+      → MySQL / Google Drive / Razorpay / disk
+        → response (+ X-Request-Id header; 500 body may include requestId)
+          → PM2 log line → Alloy → Loki → Grafana Explore
 ```
 
-Or after JSON parse:
+Worker jobs (`justx-jbt-worker`) are **separate** processes — they get their own log lines (often without the browser’s request id unless the job payload stores it).
+
+#### Step 1 — Capture the request id
+
+| Source | Where |
+|--------|--------|
+| Browser DevTools | Network → failed/slow call → **Headers** → Response `X-Request-Id` |
+| Error JSON | Many 500 responses: `"requestId": "..."` |
+| Admin Ops | **Operations** → recent error row |
+| Reproduce yourself | `curl -sI https://justxsystems.com/jbt/api/health \| findstr /I request` (Windows) or `curl -sI ... \| grep -i request` |
+
+Example id: `54d1dd5fa816c9e575649774`
+
+#### Step 2 — Confirm the access log in Loki
+
+Grafana → Explore → Loki → Last 1–6 hours:
 
 ```logql
-{service="justx-jbt-api"} | json | requestId = `<paste-request-id-here>`
+{service="justx-jbt-api"} |= "<paste-request-id>"
 ```
 
-3. Read the timeline for that id: incoming `http_request`, warnings, final `error`.  
-4. Note `path`, `status`, `durationMs`, and any message fields to decide next action (code bug, Google token, MySQL, nginx timeout, etc.).
+or:
 
-**Workflow with Ops UI:** Ops → copy request id → Grafana Explore → paste into query → analyze.
+```logql
+{job="pm2"} |= "<paste-request-id>"
+```
+
+You should see at least one `http_request` line with:
+
+| Field | Meaning |
+|-------|---------|
+| `method` / `path` | Endpoint called |
+| `status` | HTTP status |
+| `durationMs` | How long the handler took |
+| `level` | `info` / `warn` / `error` |
+
+#### Step 3 — Pull the full story for that id
+
+Same query — expand every matching line (not only `http_request`). Look for:
+
+- `level=error` / stack snippets from `reportError`
+- Drive / delivery / payment messages that share the same `requestId`
+- A slow `durationMs` with status 200 (timeout on client, not always 5xx)
+
+#### Step 4 — Classify
+
+| Signal | Likely cause | Next action |
+|--------|--------------|-------------|
+| No log line at all | Never hit API (DNS, nginx, wrong host, CORS preflight only) | `curl -sI` public URL; check nginx `error.log` |
+| `status=401/403` | Auth / role | Session cookie, JWT, org role |
+| `status=404` | Route / pack / artifact missing | Path spelling, admin SKU |
+| `status=5xx` + error log | Server exception | Stack in Loki / Ops / Sentry |
+| `status=200` but UI broken | Frontend / wrong payload | Web logs + Network response body |
+| High `durationMs` | DB / Drive / upstream slow | Query MySQL slow log; Drive token; timeout settings |
+| Line only on worker | Async job after HTTP returned | Search worker logs around same timestamp |
+
+#### Step 5 — Cross-check Ops + optional Sentry
+
+1. Admin → **Operations** — same `requestId` in recent errors?  
+2. If `SENTRY_DSN` configured — open Errors UI / Sentry and search by message or tag `requestId`.  
+3. If Slack/Discord webhook configured — check the page for that id.
+
+#### Step 6 — Reproduce and verify the fix
+
+```bash
+# after deploy / config change
+curl -sI https://justxsystems.com/jbt/api/health | grep -i x-request-id
+# copy id → Grafana → confirm new http_request line within ~30s
+```
+
+#### What you do *not* have yet (honest gap vs Dynatrace)
+
+- No automatic span tree (nginx → Express → MySQL → Drive) in one flame graph  
+- Worker ↔ API correlation only if you pass ids in job payloads  
+- Phase 4 adds OpenTelemetry → Tempo for true trace views  
+
+Until then: **request id + Loki** is the supported end-to-end triage path.
+
+---
+
+## 1. Application reference (already in repo)
 
 ### G.7 Analyze patterns (volume / rates)
 
@@ -1187,21 +1270,100 @@ Shows:
 
 ---
 
-## 3. GlitchTip (optional self-hosted Sentry)
+## 3. Sentry / GlitchTip (exception store)
 
-GlitchTip speaks the Sentry store API. Point `SENTRY_DSN` at your GlitchTip project DSN — no extra SDK install required (JBT posts via [`server/src/lib/error-reporting.ts`](../server/src/lib/error-reporting.ts)).
+### What they are
 
-Set `ERRORS_UI_URL` to the GlitchTip UI so Operations can deep-link.
+| Tool | What it is | Role vs Grafana/Loki |
+|------|------------|----------------------|
+| **Sentry** | Hosted error tracker (sentry.io) | Groups exceptions, stack traces, release regression |
+| **GlitchTip** | Open-source Sentry-compatible self-host | Same API shape; you run the UI/DB yourself |
+| **Loki** (what you have now) | Log search | Every line, including successful `http_request` |
+| **ERROR_WEBHOOK_URL** | Slack/Discord hook | Instant ping on `reportError` |
 
-**Recommendation on a small Hostinger KVM:** use **Sentry SaaS** (free tier) or a **separate** small VPS for GlitchTip — do not add another Postgres + Redis stack next to MySQL + this Grafana stack unless you have RAM to spare.
+**Use Loki** to search any request. **Use Sentry/GlitchTip** when you want a dedicated error inbox (deduped crashes, assignee, email alerts). They complement each other — not replacements.
+
+JBT already posts to Sentry’s store API from [`server/src/lib/error-reporting.ts`](../server/src/lib/error-reporting.ts) — **no npm Sentry SDK required**.
+
+### Option A — Sentry SaaS (recommended on this VPS)
+
+1. Create a free project at https://sentry.io (platform: Node).  
+2. Copy the **DSN** (looks like `https://KEY@o123.ingest.sentry.io/456`).  
+3. On the VPS edit `/var/www/jbt/server/.env`:
+
+```bash
+SENTRY_DSN=https://KEY@o123.ingest.sentry.io/PROJECT_ID
+SENTRY_ENVIRONMENT=production
+ERRORS_UI_URL=https://sentry.io/organizations/YOUR_ORG/issues/
+```
+
+4. Reload API:
+
+```bash
+cd /var/www/jbt
+pm2 reload ecosystem.config.cjs --update-env
+pm2 save
+```
+
+5. Trigger a test error (or wait for a real 500) → check Sentry Issues.  
+6. Admin → **Operations** → Errors UI link uses `ERRORS_UI_URL`.
+
+### Option B — GlitchTip self-hosted
+
+Same DSN env vars, but the DSN host is **your** GlitchTip instance.
+
+**Do not** install GlitchTip (Postgres + Redis + app) on the same small Hostinger box as MySQL + PM2 + Grafana unless you have spare RAM. Prefer:
+
+- Sentry SaaS, or  
+- a **second** small VPS for GlitchTip only.
+
+If you do run GlitchTip elsewhere:
+
+```bash
+SENTRY_DSN=https://KEY@glitchtip.yourdomain.com/1
+SENTRY_ENVIRONMENT=production
+ERRORS_UI_URL=https://glitchtip.yourdomain.com/
+```
+
+Then `pm2 reload ecosystem.config.cjs --update-env`.
+
+### Option C — Slack/Discord only (fastest alert)
+
+Create an Incoming Webhook, then:
+
+```bash
+ERROR_WEBHOOK_URL=https://hooks.slack.com/services/...
+# or Discord webhook URL
+```
+
+Reload PM2 as above. Every `reportError` posts a short message including `requestId`.
 
 ---
 
-## 4. Later (Phase 4)
+## 4. Prometheus exporters (Phase 4 — optional)
 
-- OpenTelemetry SDK on Express → Grafana Alloy → Tempo  
-- `node_exporter` + MySQL exporter in Prometheus  
-- Move the compose stack to a second VPS if RAM is tight  
+### What they are
+
+| Piece | Role |
+|-------|------|
+| **Prometheus** | Time-series DB (already in `deploy/observability`) |
+| **Exporter** | Small agent that exposes metrics at `/metrics` for Prometheus to scrape |
+| **node_exporter** | Host CPU, RAM, disk, network |
+| **mysqld_exporter** | MySQL connections, queries, replication |
+
+Grafana can graph those metrics. This is **infrastructure health**, not HTTP request tracing.
+
+**You do not need exporters for log triage.** Loki already covers request logs. Add exporters when you want “is the VPS out of RAM / is MySQL saturated?” charts.
+
+### How to configure later (outline)
+
+1. Add services to `deploy/observability/docker-compose.yml` (examples commented in [`prometheus.yml`](../deploy/observability/prometheus.yml)).  
+2. Uncomment scrape jobs for `node-exporter:9100` / `mysqld-exporter:9104`.  
+3. `docker compose up -d`  
+4. Grafana → Explore → **Prometheus** → e.g. `node_memory_MemAvailable_bytes`  
+5. Keep mem limits modest — exporters are light; still watch `free -h`.
+
+Full OpenTelemetry traces (Express → Alloy → Tempo) remain a later Phase 4 item.
 
 ---
 
