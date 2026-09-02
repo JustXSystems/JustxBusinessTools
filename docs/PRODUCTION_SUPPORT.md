@@ -10,6 +10,7 @@ Related docs (do not duplicate full setup here):
 |-----|----------|
 | [`SETUP.md`](SETUP.md) | Env vars, Google OAuth once, client Drive onboarding |
 | [`DEPLOY.md`](DEPLOY.md) | First-time VPS, GitHub Actions, nginx, PM2 |
+| [`OBSERVABILITY.md`](OBSERVABILITY.md) | Grafana/Loki/Prometheus, Admin Operations, Sentry/GlitchTip |
 | [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) | Artifact delivery channels & filename policies |
 | [`.env.example`](../.env.example) | Env template → `server/.env` on the VPS |
 

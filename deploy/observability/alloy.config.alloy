@@ -1,0 +1,47 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+local.file_match "pm2" {
+  path_targets = [
+    {
+      __path__ = "/var/log/pm2/*.log",
+      job      = "pm2",
+    },
+  ]
+}
+
+loki.source.file "pm2" {
+  targets    = local.file_match.pm2.targets
+  forward_to = [loki.process.pm2.receiver]
+}
+
+loki.process "pm2" {
+  stage.json {
+    expressions = {
+      level     = "level",
+      msg       = "msg",
+      service   = "service",
+      requestId = "requestId",
+      status    = "status",
+      path      = "path",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level   = "level",
+      service = "service",
+      job     = "job",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}

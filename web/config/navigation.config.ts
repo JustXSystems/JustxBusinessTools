@@ -14,6 +14,7 @@ export type NavIconId =
   | "gateways"
   | "experience"
   | "audit"
+  | "ops"
   | "logout"
   | "arrowLeft"
   | "sync";

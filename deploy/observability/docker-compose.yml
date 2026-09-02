@@ -1,0 +1,78 @@
+# JustX Business Tools — Observability (Grafana LGTM-lite)
+#
+# Recommended companion stack: Grafana + Loki + Prometheus + Alloy.
+# Do NOT run SigNoz/ClickHouse on the same small Hostinger KVM as MySQL + PM2.
+#
+# Quick start (on VPS or a dedicated monitoring host):
+#   cd /var/www/jbt/deploy/observability
+#   cp .env.example .env   # set GF_SECURITY_ADMIN_PASSWORD
+#   docker compose up -d
+#
+# Then set on the API (server/.env):
+#   GRAFANA_PUBLIC_URL=https://justxsystems.com/grafana
+#   LOG_FORMAT=json
+#   ERROR_WEBHOOK_URL=...
+#   SENTRY_DSN=...   # Sentry SaaS or self-hosted GlitchTip
+#
+# Full guide: docs/OBSERVABILITY.md
+
+services:
+  loki:
+    image: grafana/loki:3.4.2
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./loki-config.yml:/etc/loki/config.yml:ro
+      - loki-data:/loki
+    restart: unless-stopped
+    mem_limit: 512m
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+    mem_limit: 512m
+
+  alloy:
+    image: grafana/alloy:v1.7.1
+    command: run /etc/alloy/config.alloy --storage.path=/var/lib/alloy/data
+    volumes:
+      - ./alloy.config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+      # Host PM2 / app logs (adjust paths for your VPS)
+      - /home/deploy/.pm2/logs:/var/log/pm2:ro
+    depends_on:
+      - loki
+      - prometheus
+    restart: unless-stopped
+    mem_limit: 256m
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?set GF_SECURITY_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-https://justxsystems.com/grafana}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "127.0.0.1:3003:3000"
+    depends_on:
+      - loki
+      - prometheus
+    restart: unless-stopped
+    mem_limit: 384m
+
+volumes:
+  loki-data:
+  prometheus-data:
+  alloy-data:
+  grafana-data:

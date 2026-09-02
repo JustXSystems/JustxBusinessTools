@@ -156,6 +156,14 @@ export function NavIcon({ id, className }: { id: NavIconId; className?: string }
           <path d="M9 10h6M9 14h4" />
         </Svg>
       );
+    case "ops":
+      return (
+        <Svg {...props}>
+          <path d="M4 7h16M4 12h10M4 17h13" />
+          <circle cx="18" cy="12" r="2" />
+          <circle cx="19" cy="17" r="2" />
+        </Svg>
+      );
     case "logout":
       return (
         <Svg {...props}>

@@ -423,6 +423,9 @@ export default function AdminDashboardPage() {
             <Link href="/admin/audit" className="btn btn-secondary btn-sm">
               Audit
             </Link>
+            <Link href="/admin/ops" className="btn btn-secondary btn-sm">
+              Operations
+            </Link>
             <Link href="/admin/experience" className="btn btn-secondary btn-sm">
               Experience
             </Link>

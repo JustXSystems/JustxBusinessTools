@@ -7,6 +7,7 @@ import branchesRouter from "./branches.js";
 import catalogRouter from "./catalog.js";
 import configRouter from "./config.js";
 import gatewaysRouter from "./gateways.js";
+import opsRouter from "./ops.js";
 import paymentsRouter from "./payments.js";
 import profilesRouter from "./profiles.js";
 import skusRouter from "./skus.js";
@@ -307,6 +308,7 @@ router.get("/dashboard", async (_req, res) => {
 router.use("/analytics", analyticsRouter);
 router.use("/approvals", approvalsInboxRouter);
 router.use("/audit", auditRouter);
+router.use("/ops", opsRouter);
 router.use("/payments", paymentsRouter);
 router.use("/branches", branchesRouter);
 router.use("/profiles", profilesRouter);

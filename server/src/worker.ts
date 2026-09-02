@@ -7,6 +7,8 @@ import { ensureNotificationSchema } from "./lib/notification-schema.js";
 import { ensureProfileDriveSchema } from "./lib/profile-drive-oauth.js";
 import { getProcessRole, shouldRunBackgroundJobsInWorker } from "./lib/process-role.js";
 import { validateServerEnv } from "./lib/env.js";
+import { installProcessErrorHandlers } from "./lib/error-reporting.js";
+import { log } from "./lib/logging.js";
 
 try {
   validateServerEnv();
@@ -14,6 +16,8 @@ try {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 }
+
+installProcessErrorHandlers();
 
 const role = getProcessRole();
 if (role !== "worker" && role !== "all") {
@@ -33,10 +37,12 @@ void Promise.all([
   ensureNotificationSchema(),
   ensureProfileDriveSchema(),
 ]).catch((err) => {
-  console.warn("[worker] schema setup failed", err);
+  log.warn("worker_schema_setup_failed", {
+    detail: err instanceof Error ? err.message : String(err),
+  });
 });
 
-console.log(`[worker] JustX JBT background worker starting (role=${role})`);
+log.info("worker_start", { role });
 startArtifactDispatchScheduler();
 startAnalyticsRollupScheduler();
 startRenewalNoticeScheduler();

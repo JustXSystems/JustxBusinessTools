@@ -25,6 +25,7 @@ import publicQuotationV1Router from "./routes/public-quotation-v1.js";
 import siteSurveyV1Router from "./routes/site-survey-v1.js";
 import artifactsRouter from "./routes/artifacts.js";
 import { requestContextMiddleware } from "./middleware/request-context.js";
+import { requestIdMiddleware } from "./middleware/request-id.js";
 import { requireBranchAccess } from "./middleware/require-write.js";
 import { startAnalyticsRollupScheduler } from "./jobs/analytics-rollup.js";
 import { startRenewalNoticeScheduler } from "./jobs/renewal-notices.js";
@@ -44,6 +45,7 @@ import { runPendingMigrations } from "./lib/migrations.js";
 import { installProcessErrorHandlers, reportError } from "./lib/error-reporting.js";
 import { ensureMfaSchema } from "./lib/auth/mfa.js";
 import { getActiveUserId } from "./lib/request-context.js";
+import { getRequestId, log } from "./lib/logging.js";
 import { pool } from "./db.js";
 import publicStatusRouter from "./routes/public-status.js";
 
@@ -82,6 +84,7 @@ app.use(
 );
 app.use(cookieParser());
 app.use(express.json({ limit: "30mb" }));
+app.use(requestIdMiddleware);
 app.use((_req, res, next) => {
   // Entitlements / billing / auth must not be served from intermediary HTTP caches.
   if (!_req.path.startsWith("/api/files")) {
@@ -128,6 +131,7 @@ app.get("/api/health", async (_req, res) => {
     ok,
     service: "justx-api",
     db,
+    requestId: getRequestId() ?? null,
   });
 });
 
@@ -162,26 +166,27 @@ app.use(
     res: express.Response,
     _next: express.NextFunction,
   ) => {
-    console.error(err);
+    const requestId = getRequestId() ?? undefined;
     void reportError(err, {
       path: req.path,
       method: req.method,
       userId: getActiveUserId(),
+      requestId,
     });
     const message = isProductionRuntime()
       ? "Server error"
       : err.message || "Server error";
-    res.status(500).json({ error: message });
+    res.status(500).json({ error: message, requestId: requestId ?? null });
   },
 );
 
 app.listen(port, () => {
-  console.log(`JustXSystems API running on http://localhost:${port}`);
+  log.info("api_listen", { port, role: process.env.JBT_PROCESS_ROLE ?? "all" });
   if (shouldRunBackgroundJobsInApi()) {
     startArtifactDispatchScheduler();
     startAnalyticsRollupScheduler();
     startRenewalNoticeScheduler();
   } else {
-    console.log("[jobs] background schedulers deferred to justx-jbt-worker");
+    log.info("jobs_deferred_to_worker");
   }
 });
