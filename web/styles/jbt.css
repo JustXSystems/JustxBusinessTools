@@ -4095,6 +4095,28 @@ a {
   flex-wrap: wrap;
 }
 
+.admin-tabs-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.admin-tabs-bar .admin-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-tabs-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .admin-tabs button {
   padding: 8px 14px;
   border-radius: var(--radius-pill);

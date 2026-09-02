@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BrandingPanel } from "@/components/admin/BrandingPanel";
 import { ThemeStudioPanel } from "@/components/admin/ThemeStudioPanel";
+import type { ExperienceSaveHandle } from "@/components/admin/experience-save";
 
 type Tab = "theme" | "branding";
 
 export default function ExperienceInner() {
   const search = useSearchParams();
   const router = useRouter();
+  const themeSaveRef = useRef<ExperienceSaveHandle>(null);
+  const brandingSaveRef = useRef<ExperienceSaveHandle>(null);
+  const [saving, setSaving] = useState(false);
   const initial = useMemo((): Tab => {
     const t = search.get("tab");
     return t === "branding" ? "branding" : "theme";
@@ -25,6 +29,19 @@ export default function ExperienceInner() {
     router.replace(`/admin/experience?tab=${next}`);
   }
 
+  async function saveActive() {
+    const handle = tab === "theme" ? themeSaveRef.current : brandingSaveRef.current;
+    if (!handle) return;
+    setSaving(true);
+    try {
+      await handle.save();
+    } catch {
+      /* panel surfaces its own error message */
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="admin-page">
       <section className="panel admin-card admin-page-head">
@@ -34,33 +51,45 @@ export default function ExperienceInner() {
         </p>
       </section>
 
-      <div className="admin-tabs" role="tablist">
-        {(
-          [
-            ["theme", "Theme"],
-            ["branding", "Branding"],
-          ] as const
-        ).map(([id, label]) => (
+      <div className="admin-tabs-bar">
+        <div className="admin-tabs" role="tablist">
+          {(
+            [
+              ["theme", "Theme"],
+              ["branding", "Branding"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              className={tab === id ? "active" : ""}
+              onClick={() => select(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="admin-tabs-actions">
           <button
-            key={id}
             type="button"
-            role="tab"
-            className={tab === id ? "active" : ""}
-            onClick={() => select(id)}
+            className="btn btn-primary"
+            disabled={saving}
+            onClick={() => void saveActive()}
           >
-            {label}
+            {saving ? "Saving…" : tab === "theme" ? "Save & activate" : "Save changes"}
           </button>
-        ))}
+        </div>
       </div>
 
       {tab === "theme" ? (
         <div className="admin-page-body">
-          <ThemeStudioPanel />
+          <ThemeStudioPanel ref={themeSaveRef} />
         </div>
       ) : null}
       {tab === "branding" ? (
         <div className="admin-page-body">
-          <BrandingPanel />
+          <BrandingPanel ref={brandingSaveRef} />
         </div>
       ) : null}
     </div>

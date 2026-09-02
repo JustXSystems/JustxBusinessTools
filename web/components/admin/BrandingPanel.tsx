@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useState,
+} from "react";
 import { api } from "@/lib/api";
 import { SplashMark } from "@/components/auth/SplashScreen";
 import {
@@ -13,6 +19,7 @@ import {
 } from "@/components/branding/BrandingProvider";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
+import type { ExperienceSaveHandle } from "@/components/admin/experience-save";
 import { invalidateAdminData } from "@/hooks/useLiveRefresh";
 import { JUSTX_LOGO_URL, resolveInstallName } from "@/lib/install-branding";
 import {
@@ -30,7 +37,7 @@ type PlatformConfig = {
   branding?: PlatformBranding;
 };
 
-export function BrandingPanel() {
+export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingPanel(_props, ref) {
   const { refresh: refreshConfig } = usePlatformConfig();
   const { refresh: refreshBranding } = usePlatformBranding();
   const [form, setForm] = useState({
@@ -47,7 +54,6 @@ export function BrandingPanel() {
   const [logoDraft, setLogoDraft] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const [savingFooter, setSavingFooter] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
   const [previewMode, setPreviewMode] = useState<"splash" | "mark" | "install">("splash");
 
@@ -95,61 +101,61 @@ export function BrandingPanel() {
     reader.readAsDataURL(file);
   }
 
-  async function saveBranding(opts: { clearLogo?: boolean; clearInstallIcon?: boolean } = {}) {
-    setSaving(true);
-    setMessage("");
-    try {
-      const splash = Math.round(Number(form.splashDurationMs));
-      await api<{ branding: PlatformBranding }>("/admin/config/branding", {
-        method: "PUT",
-        body: JSON.stringify({
-          appName: form.appName.trim(),
-          tagline: form.tagline.trim(),
-          splashDurationMs: Number.isFinite(splash) ? splash : DEFAULT_BRANDING.splashDurationMs,
-          splashAnimation: form.splashAnimation,
-          splashIntensity: form.splashIntensity,
-          splashShowProgress: form.splashShowProgress,
-          logo: opts.clearLogo ? undefined : logoDraft,
-          clearLogo: Boolean(opts.clearLogo),
-          installName: form.installName.trim() || form.appName.trim(),
-          installIconUrl: JUSTX_LOGO_URL,
-          installIconBg: "transparent",
-          clearInstallIcon: Boolean(opts.clearInstallIcon),
-        }),
-      });
-      invalidateBrandingCache();
-      invalidateAdminData("branding");
-      await refreshBranding();
-      await refreshConfig();
-      await reload();
-      if (opts.clearInstallIcon) setMessage("Install icon set to the official JustX logo.");
-      else if (opts.clearLogo) setMessage("Logo reset to default.");
-      else setMessage("Branding saved. Reinstall the app to refresh the OS desktop icon.");
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
-    }
-  }
+  const saveAll = useCallback(
+    async (opts: { clearLogo?: boolean } = {}) => {
+      setSaving(true);
+      setMessage("");
+      try {
+        const splash = Math.round(Number(form.splashDurationMs));
+        await api<{ branding: PlatformBranding }>("/admin/config/branding", {
+          method: "PUT",
+          body: JSON.stringify({
+            appName: form.appName.trim(),
+            tagline: form.tagline.trim(),
+            splashDurationMs: Number.isFinite(splash) ? splash : DEFAULT_BRANDING.splashDurationMs,
+            splashAnimation: form.splashAnimation,
+            splashIntensity: form.splashIntensity,
+            splashShowProgress: form.splashShowProgress,
+            logo: opts.clearLogo ? undefined : logoDraft,
+            clearLogo: Boolean(opts.clearLogo),
+            installName: form.installName.trim() || form.appName.trim(),
+            installIconUrl: JUSTX_LOGO_URL,
+            installIconBg: "transparent",
+            clearInstallIcon: true,
+          }),
+        });
+        await api("/admin/config/powered-by", {
+          method: "PUT",
+          body: JSON.stringify({ text: footerText.trim(), locked: true }),
+        });
+        invalidateBrandingCache();
+        invalidateAdminData("branding");
+        await refreshBranding();
+        await refreshConfig();
+        await reload();
+        setMessage(
+          opts.clearLogo
+            ? "Logo reset and branding saved."
+            : "Branding, install name, and footer saved.",
+        );
+      } catch (err) {
+        setMessage(err instanceof Error ? err.message : "Save failed");
+        throw err;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [form, footerText, logoDraft, refreshBranding, refreshConfig, reload],
+  );
 
-  async function saveFooter() {
-    setSavingFooter(true);
-    setMessage("");
-    try {
-      await api("/admin/config/powered-by", {
-        method: "PUT",
-        body: JSON.stringify({ text: footerText.trim(), locked: true }),
-      });
-      invalidateBrandingCache();
-      invalidateAdminData("branding");
-      await refreshBranding();
-      setMessage("Operator footer updated.");
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Footer save failed");
-    } finally {
-      setSavingFooter(false);
-    }
-  }
+  useImperativeHandle(
+    ref,
+    () => ({
+      save: () => saveAll(),
+      isSaving: () => saving,
+    }),
+    [saveAll, saving],
+  );
 
   const previewLogo = logoDraft || form.logoUrl;
   const previewInstallIcon = publicAssetUrl(JUSTX_LOGO_URL);
@@ -263,19 +269,11 @@ export function BrandingPanel() {
           <div className="admin-form-row">
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-secondary btn-sm"
               disabled={saving}
-              onClick={() => void saveBranding()}
+              onClick={() => void saveAll({ clearLogo: true })}
             >
-              {saving ? "Saving…" : "Save branding"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={saving}
-              onClick={() => void saveBranding({ clearLogo: true })}
-            >
-              Reset logo
+              Reset logo to JustX
             </button>
           </div>
         </section>
@@ -283,8 +281,7 @@ export function BrandingPanel() {
         <section className="panel admin-card" style={{ marginTop: 16 }}>
           <h2>Desktop / PWA install</h2>
           <p className="muted">
-            Name and icon for the browser Install dialog and desktop shortcut. The icon is always the
-            official JustX logo — brand icon presets have been removed.
+            Install dialog name and icon. The icon is always the official JustX logo.
           </p>
           <div className="admin-form-grid">
             <label className="field" style={{ gridColumn: "1 / -1" }}>
@@ -313,16 +310,6 @@ export function BrandingPanel() {
               </p>
             </div>
           </div>
-          <div className="admin-form-row" style={{ marginTop: 12 }}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={saving}
-              onClick={() => void saveBranding({ clearInstallIcon: true })}
-            >
-              {saving ? "Saving…" : "Save install branding"}
-            </button>
-          </div>
         </section>
 
         <section className="panel admin-card" style={{ marginTop: 16 }}>
@@ -332,9 +319,6 @@ export function BrandingPanel() {
             <span>Footer text</span>
             <input value={footerText} onChange={(e) => setFooterText(e.target.value)} />
           </label>
-          <button type="button" className="btn btn-primary" disabled={savingFooter} onClick={() => void saveFooter()}>
-            {savingFooter ? "Saving…" : "Save footer"}
-          </button>
         </section>
       </div>
 
@@ -342,7 +326,7 @@ export function BrandingPanel() {
         <div className="preview-pane-toolbar">
           <div>
             <strong>Live preview</strong>
-            <p className="muted">Updates as you edit — save to publish.</p>
+            <p className="muted">Updates as you edit — use Save changes to publish.</p>
           </div>
           <div className="preview-mode-tabs">
             {(
@@ -395,4 +379,4 @@ export function BrandingPanel() {
       </aside>
     </div>
   );
-}
+});
