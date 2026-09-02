@@ -7,6 +7,7 @@ import {
   analyticsRangeLabel,
   formatAnalyticsBucket,
 } from "@/components/admin/AnalyticsRangePills";
+import { LiveActivityStream } from "@/components/admin/LiveActivityStream";
 import { uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -51,7 +52,29 @@ type Breakdown = {
   hours: Array<{ hour: number; count: number }>;
   eventTypes: Array<{ eventType: string; count: number }>;
   users: Array<{ userId: number | null; label: string; count: number; tools: number }>;
-  recent: Array<{ at: string; eventType: string; toolId: string | null; device: string | null; actor: string | null }>;
+  recent: Array<{
+    id: number;
+    at: string;
+    eventType: string;
+    toolId: string | null;
+    device: string | null;
+    appVersion?: string | null;
+    sessionId?: string | null;
+    userId?: number | null;
+    actor: string | null;
+    actorEmail?: string | null;
+    profileName?: string | null;
+    organizationName?: string | null;
+    properties?: Record<string, unknown> | null;
+  }>;
+  stream?: {
+    lastHour: number;
+    last15m: number;
+    uniqueActors: number;
+    uniqueTools: number;
+    blocks: number;
+    upgrades: number;
+  };
 };
 
 type Insight = {
@@ -415,24 +438,9 @@ export default function AdminAnalyticsPage() {
             </ul>
           )}
         </section>
-        <section className="panel admin-card">
-          <h2>Live stream</h2>
-          <div className="tracker-list admin-scroll-list">
-            {breakdown.recent.map((ev, i) => (
-              <div key={`${ev.at}-${i}`} className="tracker-row">
-                <div className="tracker-row-main">
-                  <span className="tracker-row-title">{ev.eventType}</span>
-                  <span className="tracker-row-sub">
-                    {ev.toolId ? toolName(ev.toolId) : "app"} · {ev.actor ?? "anonymous"} · {ev.device ?? "—"}
-                  </span>
-                </div>
-                <span className="muted">{String(ev.at).slice(0, 16).replace("T", " ")}</span>
-              </div>
-            ))}
-            {breakdown.recent.length === 0 ? <p className="muted">No raw events stored for this range.</p> : null}
-          </div>
-        </section>
       </div>
+
+      <LiveActivityStream events={breakdown.recent} stream={breakdown.stream} />
       </div>
     </div>
   );

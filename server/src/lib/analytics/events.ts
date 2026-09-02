@@ -365,12 +365,28 @@ export async function getAnalyticsBreakdown(days: unknown = 30): Promise<{
   eventTypes: Array<{ eventType: string; count: number }>;
   users: Array<{ userId: number | null; label: string; count: number; tools: number }>;
   recent: Array<{
+    id: number;
     at: string;
     eventType: string;
     toolId: string | null;
     device: string | null;
+    appVersion: string | null;
+    sessionId: string | null;
+    userId: number | null;
     actor: string | null;
+    actorEmail: string | null;
+    profileName: string | null;
+    organizationName: string | null;
+    properties: Record<string, unknown> | null;
   }>;
+  stream: {
+    lastHour: number;
+    last15m: number;
+    uniqueActors: number;
+    uniqueTools: number;
+    blocks: number;
+    upgrades: number;
+  };
 }> {
   const orgId = getActiveOrgId();
   const range = parseAnalyticsRange(days);
@@ -416,12 +432,31 @@ export async function getAnalyticsBreakdown(days: unknown = 30): Promise<{
     params,
   );
   const [recentRows] = await pool.query(
-    `SELECT e.occurred_at, e.event_type, e.tool_id, e.device, COALESCE(NULLIF(u.name, ''), u.email) AS actor
+    `SELECT e.id, e.occurred_at, e.event_type, e.tool_id, e.device, e.app_version, e.session_id,
+            e.user_id, e.properties,
+            COALESCE(NULLIF(u.name, ''), u.email) AS actor,
+            u.email AS actor_email,
+            bp.business_name AS profile_name,
+            o.name AS organization_name
      FROM usage_events e
      LEFT JOIN users u ON u.id = e.user_id
+     LEFT JOIN business_profiles bp ON bp.id = e.business_profile_id
+     LEFT JOIN organizations o ON o.id = e.organization_id
      WHERE ${eventSince}
      ORDER BY e.occurred_at DESC
-     LIMIT 20`,
+     LIMIT 80`,
+    params,
+  );
+  const [streamRows] = await pool.query(
+    `SELECT
+       SUM(CASE WHEN occurred_at >= DATE_SUB(NOW(), INTERVAL 60 MINUTE) THEN 1 ELSE 0 END) AS last_hour,
+       SUM(CASE WHEN occurred_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE) THEN 1 ELSE 0 END) AS last_15m,
+       COUNT(DISTINCT CASE WHEN occurred_at >= DATE_SUB(NOW(), INTERVAL 60 MINUTE) THEN user_id END) AS actors_hour,
+       COUNT(DISTINCT CASE WHEN occurred_at >= DATE_SUB(NOW(), INTERVAL 60 MINUTE) THEN tool_id END) AS tools_hour,
+       SUM(CASE WHEN event_type = 'limit.blocked' AND occurred_at >= DATE_SUB(NOW(), INTERVAL 60 MINUTE) THEN 1 ELSE 0 END) AS blocks_hour,
+       SUM(CASE WHEN event_type = 'upgrade.modal' AND occurred_at >= DATE_SUB(NOW(), INTERVAL 60 MINUTE) THEN 1 ELSE 0 END) AS upgrades_hour
+     FROM usage_events
+     WHERE ${since}`,
     params,
   );
 
@@ -430,6 +465,17 @@ export async function getAnalyticsBreakdown(days: unknown = 30): Promise<{
     const r = row as { hour: number; cnt: number };
     hourMap.set(Number(r.hour), Number(r.cnt) || 0);
   }
+
+  const streamRow = (Array.isArray(streamRows) ? streamRows[0] : null) as
+    | {
+        last_hour?: number;
+        last_15m?: number;
+        actors_hour?: number;
+        tools_hour?: number;
+        blocks_hour?: number;
+        upgrades_hour?: number;
+      }
+    | null;
 
   return {
     devices: (Array.isArray(deviceRows) ? deviceRows : []).map((row) => {
@@ -452,20 +498,59 @@ export async function getAnalyticsBreakdown(days: unknown = 30): Promise<{
     }),
     recent: (Array.isArray(recentRows) ? recentRows : []).map((row) => {
       const r = row as {
+        id: number;
         occurred_at: string;
         event_type: string;
         tool_id: string | null;
         device: string | null;
+        app_version: string | null;
+        session_id: string | null;
+        user_id: number | null;
+        properties: unknown;
         actor: string | null;
+        actor_email: string | null;
+        profile_name: string | null;
+        organization_name: string | null;
       };
+      let properties: Record<string, unknown> | null = null;
+      if (r.properties != null) {
+        if (typeof r.properties === "object" && !Array.isArray(r.properties)) {
+          properties = r.properties as Record<string, unknown>;
+        } else if (typeof r.properties === "string") {
+          try {
+            const parsed = JSON.parse(r.properties) as unknown;
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              properties = parsed as Record<string, unknown>;
+            }
+          } catch {
+            properties = null;
+          }
+        }
+      }
       return {
+        id: Number(r.id) || 0,
         at: String(r.occurred_at),
         eventType: String(r.event_type),
         toolId: r.tool_id ? String(r.tool_id) : null,
         device: r.device ? String(r.device) : null,
+        appVersion: r.app_version ? String(r.app_version) : null,
+        sessionId: r.session_id ? String(r.session_id) : null,
+        userId: r.user_id == null ? null : Number(r.user_id),
         actor: r.actor ? String(r.actor) : null,
+        actorEmail: r.actor_email ? String(r.actor_email) : null,
+        profileName: r.profile_name ? String(r.profile_name) : null,
+        organizationName: r.organization_name ? String(r.organization_name) : null,
+        properties,
       };
     }),
+    stream: {
+      lastHour: Number(streamRow?.last_hour) || 0,
+      last15m: Number(streamRow?.last_15m) || 0,
+      uniqueActors: Number(streamRow?.actors_hour) || 0,
+      uniqueTools: Number(streamRow?.tools_hour) || 0,
+      blocks: Number(streamRow?.blocks_hour) || 0,
+      upgrades: Number(streamRow?.upgrades_hour) || 0,
+    },
   };
 }
 
