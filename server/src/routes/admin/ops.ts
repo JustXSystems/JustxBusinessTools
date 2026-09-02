@@ -5,6 +5,27 @@ import { listOpsErrors } from "../../lib/ops-errors.js";
 
 const router = Router();
 
+/** Deep-link into Grafana Explore under /grafana (subpath-safe). */
+function grafanaExploreUrl(grafanaBase: string, expr: string, from = "now-1h", to = "now"): string {
+  const base = grafanaBase.replace(/\/$/, "");
+  // Grafana 10.2+ panes schema (legacy `left=` often redirects to /explore without /grafana → marketing SPA)
+  const panes = {
+    jbt: {
+      datasource: "loki",
+      queries: [
+        {
+          refId: "A",
+          expr,
+          queryType: "range",
+          datasource: { type: "loki", uid: "loki" },
+        },
+      ],
+      range: { from, to },
+    },
+  };
+  return `${base}/explore?schemaVersion=1&panes=${encodeURIComponent(JSON.stringify(panes))}&orgId=1`;
+}
+
 async function probe(url: string, timeoutMs = 2500): Promise<{ ok: boolean; status?: number; ms: number }> {
   const started = Date.now();
   const ctrl = new AbortController();
@@ -74,8 +95,6 @@ router.get("/overview", async (_req, res) => {
     (process.env.API_PUBLIC_URL || "").replace(/\/$/, "") ||
     `${webOrigin}${webBase}`;
 
-  const exploreBase = grafanaBase ? `${grafanaBase}/explore` : null;
-
   res.json({
     generatedAt: new Date().toISOString(),
     viewer: {
@@ -108,14 +127,11 @@ router.get("/overview", async (_req, res) => {
     recentErrors,
     links: {
       grafana: grafanaBase || null,
-      grafanaExploreApi: exploreBase
-        ? `${exploreBase}?orgId=1&left=${encodeURIComponent(
-            JSON.stringify({
-              datasource: "Loki",
-              queries: [{ refId: "A", expr: '{service="justx-jbt-api"}' }],
-              range: { from: "now-1h", to: "now" },
-            }),
-          )}`
+      grafanaExploreApi: grafanaBase
+        ? grafanaExploreUrl(grafanaBase, '{service="justx-jbt-api"}')
+        : null,
+      grafanaExploreErrors: grafanaBase
+        ? grafanaExploreUrl(grafanaBase, '{service="justx-jbt-api", level=~"warn|error"}')
         : null,
       errorsUi: errorsUi || null,
       healthPublic: `${apiPublic}/api/health`,

@@ -1,7 +1,16 @@
-# Observability nginx location (append inside the justxsystems.com server block)
+# Observability nginx locations (INSIDE the HTTPS server { } for justxsystems.com)
 #
-# Grafana runs on 127.0.0.1:3003 via deploy/observability/docker-compose.yml
+# Grafana: 127.0.0.1:3003 via deploy/observability/docker-compose.yml
+# Critical: these blocks must appear BEFORE any catch-all like:
+#   location / { try_files $uri $uri/ /index.html; }
+# Otherwise /grafana/ is swallowed by the marketing SPA and you see the homepage.
+#
 # Prefer HTTP basic auth or SSO in front of Grafana — never anonymous on the public internet.
+
+# Bare /grafana → /grafana/ (avoids SPA / Grafana redirect confusion)
+location = /grafana {
+    return 301 /grafana/;
+}
 
 location /grafana/ {
     proxy_pass http://127.0.0.1:3003;
@@ -12,4 +21,11 @@ location /grafana/ {
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
+    proxy_read_timeout 60s;
+
+    # If Grafana emits Location: /login or /explore (missing /grafana), the marketing
+    # SPA catch-all serves index.html. Rewrite those relative redirects.
+    proxy_redirect ~^/(?!grafana/)(.*)$ /grafana/$1;
+    proxy_redirect http://127.0.0.1:3003/ /grafana/;
+    proxy_redirect http://127.0.0.1:3003 /grafana;
 }

@@ -38,6 +38,7 @@ type OpsOverview = {
   links: {
     grafana: string | null;
     grafanaExploreApi: string | null;
+    grafanaExploreErrors: string | null;
     errorsUi: string | null;
     healthPublic: string;
     runbook: string;
@@ -200,6 +201,16 @@ export default function AdminOpsPage() {
                 rel="noreferrer"
               >
                 Loki: API logs (1h)
+              </a>
+            ) : null}
+            {links.grafanaExploreErrors ? (
+              <a
+                href={links.grafanaExploreErrors}
+                className="btn btn-secondary btn-sm"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Loki: warn/error (1h)
               </a>
             ) : null}
             {links.errorsUi ? (
