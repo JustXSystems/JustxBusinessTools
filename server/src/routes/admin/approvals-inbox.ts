@@ -13,6 +13,7 @@ export type InboxItem = {
   status: string;
   createdAt: string | null;
   href: string;
+  role?: string | null;
 };
 
 router.get("/inbox", async (_req, res) => {
@@ -68,7 +69,7 @@ router.get("/inbox", async (_req, res) => {
       subtitle: r.organization_name ? `Branch · ${r.organization_name}` : "Branch awaiting approval",
       status: "pending",
       createdAt: r.created_at ? String(r.created_at) : null,
-      href: `/admin/profiles`,
+      href: `/admin/profiles?filter=pending&id=${r.id}`,
     });
   }
 
@@ -91,7 +92,8 @@ router.get("/inbox", async (_req, res) => {
       subtitle: r.organization_name ? `${kindLabel} · ${r.organization_name}` : kindLabel,
       status: "pending",
       createdAt: r.created_at ? String(r.created_at) : null,
-      href: `/admin/team`,
+      href: `/admin/team?filter=pending&user=${r.id}`,
+      role,
     });
   }
 

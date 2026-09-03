@@ -42,6 +42,29 @@ import { publicAssetUrl } from "@/lib/base-path";
 type PlatformConfig = {
   powered_by?: PoweredByConfig;
   branding?: PlatformBranding;
+  registration_copy?: RegistrationCopyForm;
+};
+
+type RegistrationCopyForm = {
+  pendingOwnerTitle: string;
+  pendingOwnerMessage: string;
+  pendingOwnerDetail: string;
+  pendingJoinTitle: string;
+  pendingJoinMessage: string;
+  pendingJoinDetail: string;
+};
+
+const DEFAULT_REG_COPY: RegistrationCopyForm = {
+  pendingOwnerTitle: "Awaiting approval",
+  pendingOwnerMessage:
+    "Account created. A JustX admin must approve your Owner registration before you can sign in.",
+  pendingOwnerDetail:
+    "We registered {{email}}. You will be able to sign in after a JustX admin approves your Owner account.",
+  pendingJoinTitle: "Awaiting approval",
+  pendingJoinMessage:
+    "Request sent. The Business Profile Owner must approve you before you can sign in.",
+  pendingJoinDetail:
+    "We registered {{email}}. You will be able to sign in after the Business Profile Owner (or a JustX admin) approves your request.",
 };
 
 export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingPanel(_props, ref) {
@@ -64,6 +87,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
   const [iconDraft, setIconDraft] = useState<string | null>(null);
   const [iconSource, setIconSource] = useState<InstallIconSource>("justx");
   const [publishSiteFavicon, setPublishSiteFavicon] = useState(true);
+  const [regCopy, setRegCopy] = useState<RegistrationCopyForm>(DEFAULT_REG_COPY);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
@@ -95,6 +119,15 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
         ? DEFAULT_BRANDING.publishSiteFavicon
         : Boolean(b.publishSiteFavicon),
     );
+    const rc = d.config.registration_copy ?? DEFAULT_REG_COPY;
+    setRegCopy({
+      pendingOwnerTitle: rc.pendingOwnerTitle || DEFAULT_REG_COPY.pendingOwnerTitle,
+      pendingOwnerMessage: rc.pendingOwnerMessage || DEFAULT_REG_COPY.pendingOwnerMessage,
+      pendingOwnerDetail: rc.pendingOwnerDetail || DEFAULT_REG_COPY.pendingOwnerDetail,
+      pendingJoinTitle: rc.pendingJoinTitle || DEFAULT_REG_COPY.pendingJoinTitle,
+      pendingJoinMessage: rc.pendingJoinMessage || DEFAULT_REG_COPY.pendingJoinMessage,
+      pendingJoinDetail: rc.pendingJoinDetail || DEFAULT_REG_COPY.pendingJoinDetail,
+    });
     setFooterText(footer.text || DEFAULT_POWERED_BY.text);
     setLogoDraft(null);
     setIconDraft(null);
@@ -183,6 +216,10 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
           method: "PUT",
           body: JSON.stringify({ text: footerText.trim(), locked: true }),
         });
+        await api("/admin/config/registration-copy", {
+          method: "PUT",
+          body: JSON.stringify(regCopy),
+        });
         invalidateBrandingCache();
         invalidateAdminData("branding");
         await refreshBranding();
@@ -191,7 +228,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
         setMessage(
           opts.clearLogo
             ? "Logo reset and branding saved."
-            : "Branding, favicon / install icon, and footer saved.",
+            : "Branding, registration copy, favicon, and footer saved.",
         );
       } catch (err) {
         setMessage(err instanceof Error ? err.message : "Save failed");
@@ -200,7 +237,18 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
         setSaving(false);
       }
     },
-    [form, footerText, logoDraft, iconDraft, iconSource, publishSiteFavicon, refreshBranding, refreshConfig, reload],
+    [
+      form,
+      footerText,
+      logoDraft,
+      iconDraft,
+      iconSource,
+      publishSiteFavicon,
+      regCopy,
+      refreshBranding,
+      refreshConfig,
+      reload,
+    ],
   );
 
   useImperativeHandle(
@@ -452,6 +500,61 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
             <code>deploy/nginx-jbt.conf.example</code>, then reload nginx. After that, saving branding here updates the
             root site tab icon.
           </p>
+        </section>
+
+        <section className="panel admin-card" style={{ marginTop: 16 }}>
+          <h2>Pending registration screen</h2>
+          <p className="muted">
+            Shown after someone registers and waits for approval. Use <code>{"{{email}}"}</code> in the detail lines.
+          </p>
+          <div className="admin-form-grid">
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span>New GSTIN (Owner) — title</span>
+              <input
+                value={regCopy.pendingOwnerTitle}
+                onChange={(e) => setRegCopy({ ...regCopy, pendingOwnerTitle: e.target.value })}
+              />
+            </label>
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span>New GSTIN (Owner) — message</span>
+              <textarea
+                rows={2}
+                value={regCopy.pendingOwnerMessage}
+                onChange={(e) => setRegCopy({ ...regCopy, pendingOwnerMessage: e.target.value })}
+              />
+            </label>
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span>New GSTIN (Owner) — detail</span>
+              <textarea
+                rows={2}
+                value={regCopy.pendingOwnerDetail}
+                onChange={(e) => setRegCopy({ ...regCopy, pendingOwnerDetail: e.target.value })}
+              />
+            </label>
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span>Join existing GSTIN — title</span>
+              <input
+                value={regCopy.pendingJoinTitle}
+                onChange={(e) => setRegCopy({ ...regCopy, pendingJoinTitle: e.target.value })}
+              />
+            </label>
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span>Join existing GSTIN — message</span>
+              <textarea
+                rows={2}
+                value={regCopy.pendingJoinMessage}
+                onChange={(e) => setRegCopy({ ...regCopy, pendingJoinMessage: e.target.value })}
+              />
+            </label>
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span>Join existing GSTIN — detail</span>
+              <textarea
+                rows={2}
+                value={regCopy.pendingJoinDetail}
+                onChange={(e) => setRegCopy({ ...regCopy, pendingJoinDetail: e.target.value })}
+              />
+            </label>
+          </div>
         </section>
 
         <section className="panel admin-card" style={{ marginTop: 16 }}>

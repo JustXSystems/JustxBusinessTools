@@ -42,7 +42,14 @@ type AuthContextValue = {
     businessEmail?: string;
     logo?: string;
     homeToolIds?: string[];
-  }) => Promise<{ pending: true; joinedExisting: boolean; email: string; message: string }>;
+  }) => Promise<{
+    pending: true;
+    joinedExisting: boolean;
+    email: string;
+    title: string;
+    message: string;
+    detail: string;
+  }>;
   logout: () => Promise<void>;
   switchBranch: (profileId: number) => Promise<void>;
   refresh: () => Promise<void>;
@@ -124,7 +131,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         pending: true;
         joinedExisting: boolean;
         email: string;
+        title?: string;
         message: string;
+        detail?: string;
       }>("/auth/register", {
         method: "POST",
         body: JSON.stringify(input),
@@ -134,7 +143,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         pending: true as const,
         joinedExisting: Boolean(data.joinedExisting),
         email: data.email,
+        title: data.title || "Awaiting approval",
         message: data.message,
+        detail: data.detail || data.message,
       };
     },
     [],

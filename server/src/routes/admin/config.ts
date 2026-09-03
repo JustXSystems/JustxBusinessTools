@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { getPlatformBranding, savePlatformBranding } from "../../lib/config/branding.js";
 import { getPoweredBy, savePoweredBy } from "../../lib/config/powered-by.js";
+import {
+  getRegistrationCopy,
+  saveRegistrationCopy,
+} from "../../lib/config/registration-copy.js";
 import { getEffectiveConfig, listToolDefinitions, publishToolDefinition } from "../../lib/config/effective.js";
 
 const router = Router();
@@ -38,7 +42,19 @@ router.get("/platform", async (_req, res) => {
   if (!config.powered_by) {
     config.powered_by = await getPoweredBy();
   }
+  if (!config.registration_copy) {
+    config.registration_copy = await getRegistrationCopy();
+  }
   res.json({ config });
+});
+
+router.put("/registration-copy", async (req, res) => {
+  try {
+    const registrationCopy = await saveRegistrationCopy(req.body ?? {});
+    res.json({ registrationCopy });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Save failed" });
+  }
 });
 
 router.put("/branding", async (req, res) => {

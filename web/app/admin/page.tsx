@@ -155,6 +155,14 @@ export default function AdminDashboardPage() {
               {inbox.profiles} branches · {inbox.users} users · {inbox.deskOps} desk · {inbox.upiClaims} UPI
             </span>
           </Link>
+          <Link
+            href="/admin/team?filter=pending"
+            className={`result-card${inbox.users ? " dash-kpi-alert" : ""}`}
+          >
+            <span>Pending users</span>
+            <strong>{inbox.users}</strong>
+            <span className="analytics-delta">Team → pending filter</span>
+          </Link>
           <Link href="/admin/payments?tab=upi" className={`result-card${inbox.upiClaims ? " dash-kpi-alert" : ""}`}>
             <span>UPI pending</span>
             <strong>{inbox.upiClaims}</strong>

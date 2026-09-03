@@ -28,10 +28,14 @@ import {
   verifyPassword,
 } from "../lib/auth/session.js";
 import { requireAuth } from "../middleware/require-auth.js";
+import {
+  applyRegistrationPlaceholders,
+  getRegistrationCopy,
+} from "../lib/config/registration-copy.js";
+import { publishNotificationAsync } from "../lib/notification-publish.js";
 import { getRequestContext } from "../lib/request-context.js";
 import { ensureHomeToolIdsColumn, normalizeHomeToolIdsInput } from "../lib/home-tools.js";
 import { saveImageUpload } from "../lib/storage.js";
-import { publishNotificationAsync } from "../lib/notification-publish.js";
 import { webAppUrl } from "../lib/web-public-url.js";
 import crypto from "node:crypto";
 
@@ -240,7 +244,7 @@ router.post("/register", async (req, res) => {
         : `${email} registered a new business for GSTIN ${gstin} as Owner. JBT admin approval required.`,
       organizationId: orgId,
       businessProfileId: profileId,
-      href: joinedExisting ? "/profile" : "/admin/team",
+      href: joinedExisting ? "/profile" : "/admin/team?filter=pending",
       entityType: "user",
       entityId: String(userId),
       targetRoles: joinedExisting ? ["owner", "admin"] : ["admin"],
@@ -248,14 +252,17 @@ router.post("/register", async (req, res) => {
       severity: "attention",
       expiresInHours: 336,
     });
-    const message = joinedExisting
-      ? "Request sent. The Business Profile Owner must approve you before you can sign in."
-      : "Account created. A JustX admin must approve your Owner registration before you can sign in.";
+    const copy = await getRegistrationCopy();
+    const title = joinedExisting ? copy.pendingJoinTitle : copy.pendingOwnerTitle;
+    const message = joinedExisting ? copy.pendingJoinMessage : copy.pendingOwnerMessage;
+    const detailTemplate = joinedExisting ? copy.pendingJoinDetail : copy.pendingOwnerDetail;
     res.status(201).json({
       pending: true,
       joinedExisting,
       email,
+      title,
       message,
+      detail: applyRegistrationPlaceholders(detailTemplate, email),
     });
   } catch (err) {
     await conn.rollback();

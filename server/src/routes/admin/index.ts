@@ -174,7 +174,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Branches awaiting approval",
       detail: `${profiles} GST branch${profiles === 1 ? "" : "es"} pending review`,
       count: profiles,
-      href: "/admin/approvals",
+      href: "/admin/profiles?filter=pending",
     });
   }
   if (users > 0) {
@@ -184,7 +184,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Users awaiting approval",
       detail: `${users} teammate${users === 1 ? "" : "s"} cannot sign in until approved`,
       count: users,
-      href: "/admin/approvals",
+      href: "/admin/team?filter=pending",
     });
   }
   if (upiPending > 0) {

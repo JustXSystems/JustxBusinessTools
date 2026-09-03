@@ -62,7 +62,9 @@ export default function RegisterPage() {
   const [pendingResult, setPendingResult] = useState<{
     joinedExisting: boolean;
     email: string;
+    title: string;
     message: string;
+    detail: string;
   } | null>(null);
 
   const gstinNorm = gstin.trim().toUpperCase();
@@ -178,7 +180,9 @@ export default function RegisterPage() {
       setPendingResult({
         joinedExisting: result.joinedExisting,
         email: result.email,
+        title: result.title,
         message: result.message,
+        detail: result.detail,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
@@ -191,14 +195,9 @@ export default function RegisterPage() {
     return (
       <div className="login-page">
         <div className="panel login-panel register-panel">
-          <h1>Awaiting approval</h1>
+          <h1>{pendingResult.title}</h1>
           <p>{pendingResult.message}</p>
-          <p className="muted">
-            We registered <strong>{pendingResult.email}</strong>
-            {pendingResult.joinedExisting
-              ? ". You will be able to sign in after the Business Profile Owner (or a JustX admin) approves your request."
-              : ". You will be able to sign in after a JustX admin approves your Owner account."}
-          </p>
+          <p className="muted">{pendingResult.detail}</p>
           <p className="muted login-hint">
             <Link href="/login">Back to sign in</Link>
           </p>

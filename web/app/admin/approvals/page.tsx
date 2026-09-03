@@ -13,6 +13,7 @@ type InboxItem = {
   status: string;
   createdAt: string | null;
   href: string;
+  role?: string | null;
 };
 
 type Summary = {
@@ -28,6 +29,13 @@ const KIND_LABEL: Record<InboxItem["kind"], string> = {
   user: "User",
   payment_op: "Payment desk",
   upi_claim: "UPI claim",
+};
+
+const KIND_HUB: Record<InboxItem["kind"], string> = {
+  profile: "/admin/profiles?filter=pending",
+  user: "/admin/team?filter=pending",
+  payment_op: "/admin/payments?tab=ops",
+  upi_claim: "/admin/payments?tab=upi",
 };
 
 export default function AdminApprovalsPage() {
@@ -68,9 +76,15 @@ export default function AdminApprovalsPage() {
           body: action === "reject" ? JSON.stringify({ note: "Rejected from Approvals inbox" }) : undefined,
         });
       } else if (item.kind === "user") {
+        const body =
+          action === "reject"
+            ? JSON.stringify({ note: "Rejected from Approvals inbox" })
+            : item.role === "owner"
+              ? undefined
+              : JSON.stringify({ role: "staff" });
         await api(`/admin/team/${item.id}/${action}`, {
           method: "POST",
-          body: action === "reject" ? JSON.stringify({ note: "Rejected from Approvals inbox" }) : undefined,
+          body,
         });
       } else if (item.kind === "payment_op") {
         await api(`/admin/payments/ops/${item.id}/${action}`, { method: "POST" });
@@ -95,7 +109,8 @@ export default function AdminApprovalsPage() {
       <section className="panel admin-card admin-page-head">
         <h2>Approvals inbox</h2>
         <p className="muted">
-          Pending branches, users, payment-desk items, and UPI claims in one place. Open detail pages for full context.
+          Pending branches, users, payment-desk items, and UPI claims. Open a type below to jump to that screen with
+          pending filter applied.
         </p>
       </section>
 
@@ -104,22 +119,24 @@ export default function AdminApprovalsPage() {
           <span>Total</span>
           <strong>{summary.total}</strong>
         </div>
-        <div className="result-card">
+        <Link href={KIND_HUB.profile} className={`result-card${summary.profiles ? " dash-kpi-alert" : ""}`}>
           <span>Branches</span>
           <strong>{summary.profiles}</strong>
-        </div>
-        <div className="result-card">
+          <span className="analytics-delta">Open pending branches</span>
+        </Link>
+        <Link href={KIND_HUB.user} className={`result-card${summary.users ? " dash-kpi-alert" : ""}`}>
           <span>Users</span>
           <strong>{summary.users}</strong>
-        </div>
-        <div className="result-card">
+          <span className="analytics-delta">Open pending registrations</span>
+        </Link>
+        <Link href={KIND_HUB.payment_op} className={`result-card${summary.paymentOps ? " dash-kpi-alert" : ""}`}>
           <span>Payment desk</span>
           <strong>{summary.paymentOps}</strong>
-        </div>
-        <div className="result-card">
+        </Link>
+        <Link href={KIND_HUB.upi_claim} className={`result-card${summary.upiClaims ? " dash-kpi-alert" : ""}`}>
           <span>UPI claims</span>
           <strong>{summary.upiClaims}</strong>
-        </div>
+        </Link>
       </div>
 
       {error ? <p className="field-error">{error}</p> : null}

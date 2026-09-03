@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
 import { RoleMatrixPanel } from "@/components/admin/RoleMatrixPanel";
@@ -80,13 +81,39 @@ function mergeCatalog(
 }
 
 export default function AdminTeamPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="admin-page">
+          <p className="muted">Loading team…</p>
+        </div>
+      }
+    >
+      <AdminTeamInner />
+    </Suspense>
+  );
+}
+
+function AdminTeamInner() {
+  const search = useSearchParams();
+  const initialFilter = useMemo((): Filter => {
+    const f = search.get("filter");
+    if (f === "pending" || f === "active" || f === "suspended" || f === "unverified") return f;
+    return "all";
+  }, [search]);
+  const focusUserId = useMemo(() => {
+    const raw = search.get("user") || search.get("userId");
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [search]);
+
   const [catalog, setCatalog] = useState<CatalogTool[]>(() => mergeCatalog([]));
   const [toolQuery, setToolQuery] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [summary, setSummary] = useState({ total: 0, pending: 0, active: 0, suspended: 0, unverified: 0 });
   const [branches, setBranches] = useState<Branch[]>([]);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>(initialFilter);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("profile");
   const [branchIds, setBranchIds] = useState<number[]>([]);
@@ -135,6 +162,18 @@ export default function AdminTeamPage() {
   }, []);
 
   useLiveRefresh(reload, { intervalMs: 45_000 });
+
+  useEffect(() => {
+    setFilter(initialFilter);
+  }, [initialFilter]);
+
+  useEffect(() => {
+    if (!focusUserId || members.length === 0) return;
+    if (!members.some((m) => m.id === focusUserId)) return;
+    if (selectedId === focusUserId) return;
+    void openMember(focusUserId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once when list + query user are ready
+  }, [focusUserId, members]);
 
   async function openMember(id: number, resetTab = true) {
     setSelectedId(id);

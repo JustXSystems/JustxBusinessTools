@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { INDIAN_STATES } from "@/lib/types/business-profile";
@@ -98,6 +99,31 @@ function fromProfile(p: Profile) {
 }
 
 export default function AdminProfilesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="admin-page">
+          <p className="muted">Loading profiles…</p>
+        </div>
+      }
+    >
+      <AdminProfilesInner />
+    </Suspense>
+  );
+}
+
+function AdminProfilesInner() {
+  const search = useSearchParams();
+  const initialFilter = useMemo((): Filter => {
+    const f = search.get("filter");
+    if (f === "pending" || f === "approved" || f === "archived" || f === "incomplete") return f;
+    return "all";
+  }, [search]);
+  const focusId = useMemo(() => {
+    const n = Number(search.get("id"));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [search]);
+
   const { config } = usePlatformConfig();
   const platformTools = config?.tools ?? [];
   const catalogIds = useMemo(
@@ -107,7 +133,7 @@ export default function AdminProfilesPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [summary, setSummary] = useState({ total: 0, pending: 0, approved: 0, archived: 0, incomplete: 0 });
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>(initialFilter);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<Tab>("identity");
@@ -132,6 +158,18 @@ export default function AdminProfilesPage() {
   }, []);
 
   useLiveRefresh(reload, { intervalMs: 45_000 });
+
+  useEffect(() => {
+    setFilter(initialFilter);
+  }, [initialFilter]);
+
+  useEffect(() => {
+    if (!focusId || profiles.length === 0) return;
+    if (!profiles.some((p) => p.id === focusId)) return;
+    if (selectedId === focusId) return;
+    void openProfile(focusId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, profiles]);
 
   async function openProfile(id: number) {
     setCreating(false);
