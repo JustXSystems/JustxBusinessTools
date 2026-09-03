@@ -528,12 +528,26 @@ function AdminProfilesInner() {
                       <button type="button" className="btn btn-primary" onClick={() => run("Branch restored.", () => api(`/admin/profiles/${selected.id}/unarchive`, { method: "POST" }).then(() => undefined))}>
                         Restore
                       </button>
-                    ) : !selected.isDefault ? (
-                      <button type="button" className="btn btn-ghost" onClick={() => {
-                        if (!window.confirm(`Archive ${selected.businessName}?`)) return;
-                        void run("Branch archived.", () => api(`/admin/profiles/${selected.id}`, { method: "DELETE" }).then(() => undefined));
-                      }}>Archive</button>
-                    ) : null}
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          const warn = selected.isDefault
+                            ? `Archive default branch “${selected.businessName}”? It will leave the active directory. Another branch becomes default if one exists.`
+                            : `Archive ${selected.businessName}?`;
+                          if (!window.confirm(warn)) return;
+                          void run("Branch archived.", () =>
+                            api(`/admin/profiles/${selected.id}`, { method: "DELETE" }).then(() => undefined),
+                          );
+                        }}
+                      >
+                        Archive
+                      </button>
+                    )}
+                    <p className="muted">
+                      Archive hides the branch from normal use. Use the <strong>archived</strong> filter to find it later, then Restore.
+                    </p>
                   </div>
                 </div>
               ) : null}

@@ -587,29 +587,54 @@ router.post("/:id/duplicate", async (req, res) => {
 });
 
 router.delete("/:id", async (req, res) => {
-  const orgId = getActiveOrgId();
   const id = Number(req.params.id);
   const [rows] = await pool.query(
-    `SELECT is_default FROM business_profiles WHERE id = :id AND ${orgEqualsSql("organization_id")}`,
-    { id, orgId },
+    `SELECT organization_id AS orgId, is_default AS isDefault
+     FROM business_profiles
+     WHERE id = :id AND ${orgEqualsSql("organization_id")}
+     LIMIT 1`,
+    { id, ...orgScopeParams() },
   );
-  const row = Array.isArray(rows) ? rows[0] : null;
+  const row = Array.isArray(rows)
+    ? (rows[0] as { orgId: number; isDefault: number } | undefined)
+    : undefined;
   if (!row) {
     res.status(404).json({ error: "Profile not found" });
     return;
   }
-  if ((row as { is_default: number }).is_default) {
-    res.status(400).json({ error: "Cannot remove the default branch" });
-    return;
-  }
+  const orgId = Number(row.orgId);
+  const wasDefault = Boolean(row.isDefault);
+
   await pool.query(
     `INSERT INTO business_profile_meta (business_profile_id, approval_status, archived_at)
      VALUES (:id, 'archived', CURRENT_TIMESTAMP)
      ON DUPLICATE KEY UPDATE approval_status = 'archived', archived_at = CURRENT_TIMESTAMP`,
     { id },
   );
+
+  if (wasDefault) {
+    await pool.query(`UPDATE business_profiles SET is_default = 0 WHERE id = :id`, { id });
+    const [nextRows] = await pool.query(
+      `SELECT p.id
+       FROM business_profiles p
+       LEFT JOIN business_profile_meta m ON m.business_profile_id = p.id
+       WHERE p.organization_id = :orgId
+         AND p.id <> :id
+         AND COALESCE(m.approval_status, 'approved') <> 'archived'
+       ORDER BY p.id
+       LIMIT 1`,
+      { orgId, id },
+    );
+    const next = Array.isArray(nextRows) ? (nextRows[0] as { id: number } | undefined) : undefined;
+    if (next) {
+      await pool.query(`UPDATE business_profiles SET is_default = 1 WHERE id = :nextId`, {
+        nextId: next.id,
+      });
+    }
+  }
+
   await createApproval({ entityType: "business_profile", entityId: String(id), action: "archive" });
-  await logAudit("profile.archive", "business_profile", String(id), undefined, req.ip);
+  await logAudit("profile.archive", "business_profile", String(id), { wasDefault }, req.ip);
   await publishNotification({
     eventType: "business.branch_archived",
     title: "Business branch archived",
