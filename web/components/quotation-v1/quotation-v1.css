@@ -118,87 +118,7 @@
   flex-wrap: wrap;
 }
 
-/* ---------- Send Via (hover pills) ---------- */
-.qgv1-send-via {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
-.qgv1-send-via-pills {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 8px);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--bg-1) 94%, transparent);
-  border: 1px solid var(--border-hair);
-  box-shadow: var(--shadow-soft), 0 8px 24px rgba(0, 0, 0, 0.18);
-  backdrop-filter: blur(12px);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translateY(6px);
-  transition:
-    opacity 0.16s ease,
-    transform 0.16s ease,
-    visibility 0.16s ease;
-  z-index: 8;
-  white-space: nowrap;
-}
-
-.qgv1-send-via:hover .qgv1-send-via-pills,
-.qgv1-send-via:focus-within .qgv1-send-via-pills,
-.qgv1-send-via.is-open .qgv1-send-via-pills {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-.qgv1-send-pill {
-  appearance: none;
-  border: 1px solid var(--border-hair);
-  border-radius: 999px;
-  padding: 7px 14px;
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  color: var(--text-hi);
-  background: var(--glass-2);
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
-}
-
-.qgv1-send-pill:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: rgba(var(--accent-rgb), 0.45);
-  background: var(--glass-hover);
-}
-
-.qgv1-send-pill:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.qgv1-send-pill-wa {
-  border-color: rgba(37, 211, 102, 0.35);
-  background: rgba(37, 211, 102, 0.12);
-  color: #1fa855;
-}
-
-html[data-scheme="dark"] .qgv1-send-pill-wa {
-  color: #6ee7a0;
-}
-
-.qgv1-send-pill-email {
-  border-color: rgba(var(--accent-rgb), 0.35);
-  background: rgba(var(--accent-rgb), 0.1);
-}
-
+/* ---------- Preview pane tweaks ---------- */
 .qgv1-preview-scroll {
   /* inherits .preview-pane-scroll; keep mild QGV1 padding tweak */
   padding-bottom: 20px;
@@ -936,23 +856,6 @@ html[data-scheme="light"] .qgv1-root select option {
 .qgv1-check-row input {
   margin-top: 3px;
   width: auto;
-}
-
-.qgv1-wa-launch-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.qgv1-wa-launch-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  text-decoration: none;
-  width: 100%;
-  box-sizing: border-box;
 }
 
 .qgv1-send-admin {

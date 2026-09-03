@@ -43,7 +43,7 @@ import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
 import "./site-survey-v1.css";
 
 type Route = "new" | "list" | "history";
-type SendChannel = "menu" | "whatsapp" | "email";
+type SendChannel = "whatsapp" | "email";
 
 const DEFAULT_WA_MESSAGE = `Hi {{customerName}},
 
@@ -107,30 +107,6 @@ function fileFieldLabel(field: SurveyFieldDef): string {
     .filter(Boolean)
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join(" ");
-}
-
-function pdfBase64ToUint8(pdfBase64: string) {
-  const binary = atob(pdfBase64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
-function forceDownloadPdf(filename: string, pdfBase64: string) {
-  const bytes = pdfBase64ToUint8(pdfBase64);
-  const safeName = filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`;
-  const blob = new Blob([bytes], { type: "application/octet-stream" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = safeName;
-  a.rel = "noopener";
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-  return new File([bytes], safeName, { type: "application/pdf" });
 }
 
 function waDigits(raw: string) {
@@ -593,11 +569,10 @@ export function SiteSurveyV1() {
   const [photoBusyKey, setPhotoBusyKey] = useState<string | null>(null);
 
   const [sendOpen, setSendOpen] = useState(false);
-  const [sendChannel, setSendChannel] = useState<SendChannel>("menu");
+  const [sendChannel, setSendChannel] = useState<SendChannel>("whatsapp");
   const [waPhones, setWaPhones] = useState("");
   const [waMessage, setWaMessage] = useState("");
   const [waCanAutoAttach, setWaCanAutoAttach] = useState(false);
-  const [waLaunch, setWaLaunch] = useState<{ filename: string; file: File; links: Array<{ phone: string; label: string; href: string }> } | null>(null);
   const [emailTo, setEmailTo] = useState("");
   const [emailCc, setEmailCc] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
@@ -793,24 +768,25 @@ export function SiteSurveyV1() {
     return true;
   }
 
-  function openSendModal() {
+  function openSendModal(channel: SendChannel) {
     if (!validateSaved()) return;
     const send = normalizeSendSettings(sendSettings);
     const vars = messageVars(current, company);
     const customerPhone = val(current.values, "f_phone").replace(/\D/g, "");
     const numbers = [customerPhone, ...send.whatsappNumbers.filter((n) => n.phone).map((n) => n.phone)].filter(Boolean);
     setWaPhones([...new Set(numbers)].join(", "));
-    setWaLaunch(null);
     setWaMessage(fillSendTemplate(send.whatsappMessage?.trim() || DEFAULT_WA_MESSAGE, vars));
     setEmailTo(send.email.to.trim() || val(current.values, "f_email") || "");
     setEmailCc(send.email.cc.trim());
     setEmailSubject(fillSendTemplate(send.email.subject?.trim() || DEFAULT_EMAIL_SUBJECT, vars));
     setEmailMessage(fillSendTemplate(send.email.message?.trim() || DEFAULT_EMAIL_MESSAGE, vars));
-    setSendChannel("menu");
+    setSendChannel(channel);
     setSendOpen(true);
-    void api<{ canAutoAttach?: boolean }>("/site-survey-v1/send/whatsapp/status")
-      .then((s) => setWaCanAutoAttach(Boolean(s.canAutoAttach)))
-      .catch(() => setWaCanAutoAttach(false));
+    if (channel === "whatsapp") {
+      void api<{ canAutoAttach?: boolean }>("/site-survey-v1/send/whatsapp/status")
+        .then((s) => setWaCanAutoAttach(Boolean(s.canAutoAttach)))
+        .catch(() => setWaCanAutoAttach(false));
+    }
   }
 
   async function sendWhatsApp() {
@@ -826,8 +802,8 @@ export function SiteSurveyV1() {
     }
     setBusy(true);
     try {
-      const pdf = await buildPdf(current);
       if (waCanAutoAttach) {
+        const pdf = await buildPdf(current);
         const result = await api<{ delivered: boolean; via: string; sent?: string[]; errors?: Array<{ phone: string; error: string }> }>(
           "/site-survey-v1/send/whatsapp",
           {
@@ -837,21 +813,22 @@ export function SiteSurveyV1() {
         );
         if (result.delivered) {
           setSendOpen(false);
-          setSendChannel("menu");
           const partial = result.errors?.length ? ` Some failed: ${result.errors.map((e) => e.phone).join(", ")}.` : "";
           flash(`WhatsApp sent with PDF attached.${partial}`);
           return;
         }
       }
-      const file = forceDownloadPdf(pdf.filename, pdf.pdfBase64);
-      setWaLaunch({
-        filename: pdf.filename,
-        file,
-        links: unique.map((phone) => ({ phone, label: phone, href: whatsappChatUrl(phone, text) })),
-      });
-      flash(`PDF saved as ${pdf.filename}. Open each WhatsApp chat below and attach the file.`);
+      setSendOpen(false);
+      for (const phone of unique) {
+        window.open(whatsappChatUrl(phone, text), "_blank", "noopener,noreferrer");
+      }
+      flash(
+        unique.length === 1
+          ? "WhatsApp opened with your message. Use Download PDF if you need to attach the file."
+          : `Opened WhatsApp for ${unique.length} numbers. Use Download PDF if you need to attach the file.`,
+      );
     } catch (e) {
-      flash(e instanceof Error ? e.message : "WhatsApp prepare failed", "err");
+      flash(e instanceof Error ? e.message : "WhatsApp send failed", "err");
     } finally {
       setBusy(false);
     }
@@ -884,7 +861,6 @@ export function SiteSurveyV1() {
         }),
       });
       if (!result.delivered) {
-        if (pdf) forceDownloadPdf(pdf.filename, pdf.pdfBase64);
         const params = new URLSearchParams();
         if (emailCc.trim()) params.set("cc", emailCc.trim());
         params.set("subject", emailSubject.trim());
@@ -892,7 +868,11 @@ export function SiteSurveyV1() {
         window.location.href = `mailto:${emailTo.trim()}?${params.toString()}`;
       }
       setSendOpen(false);
-      flash(result.delivered ? "Email sent." : "Opened your mail app and downloaded the PDF — attach it before sending.");
+      flash(
+        result.delivered
+          ? "Email sent."
+          : "Opened your mail app with the message. Use Download PDF if you need to attach the file.",
+      );
     } catch (e) {
       flash(e instanceof Error ? e.message : "Email send failed", "err");
     } finally {
@@ -1087,8 +1067,11 @@ export function SiteSurveyV1() {
                     >
                       Download PDF
                     </button>
-                    <button type="button" className="ssv1-btn-new" onClick={() => openSendModal()}>
-                      Send via WhatsApp / Email
+                    <button type="button" className="ssv1-btn-new" onClick={() => openSendModal("whatsapp")}>
+                      WhatsApp
+                    </button>
+                    <button type="button" className="ssv1-btn-new" onClick={() => openSendModal("email")}>
+                      Email
                     </button>
                     <button type="button" className="ssv1-btn-new ssv1-btn-new-primary" onClick={startNewSurvey}>
                       Start New Survey
@@ -1313,96 +1296,43 @@ export function SiteSurveyV1() {
           className="modal-overlay"
           onClick={() => {
             setSendOpen(false);
-            setSendChannel("menu");
-            setWaLaunch(null);
           }}
         >
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <h3 className="modal-title">
-              {sendChannel === "menu" ? "Send Via" : sendChannel === "whatsapp" ? "WhatsApp" : "Email"}
-            </h3>
+            <h3 className="modal-title">{sendChannel === "whatsapp" ? "WhatsApp" : "Email"}</h3>
 
-            {sendChannel === "menu" ? (
+            {sendChannel === "whatsapp" ? (
               <>
-                <p className="modal-msg">Choose how to deliver this survey report.</p>
-                <div className="ssv1-send-options">
-                  <button type="button" className="ssv1-send-option" onClick={() => setSendChannel("whatsapp")}>
-                    <strong>WhatsApp</strong>
-                    <span>
-                      {waCanAutoAttach
-                        ? "Sends message + PDF attachment automatically"
-                        : "Message + PDF (attach manually if no webhook is configured)"}
-                    </span>
-                  </button>
-                  <button type="button" className="ssv1-send-option" onClick={() => setSendChannel("email")}>
-                    <strong>Email</strong>
-                    <span>Opens your mail app, or sends via server if a webhook is configured</span>
-                  </button>
-                </div>
+                <p className="modal-msg">
+                  {waCanAutoAttach
+                    ? "Preview the message, then Send — the PDF attaches automatically."
+                    : "Preview the message, then Send to open WhatsApp with that text. Use Download PDF only if you need to attach the file yourself."}
+                </p>
+                <label className="field">
+                  <span>WhatsApp numbers (comma-separated)</span>
+                  <input value={waPhones} onChange={(e) => setWaPhones(e.target.value)} placeholder="e.g. 9876543210, 9123456789" />
+                </label>
+                <label className="field" style={{ marginTop: 10 }}>
+                  <span>Message</span>
+                  <textarea rows={9} value={waMessage} onChange={(e) => setWaMessage(e.target.value)} />
+                </label>
                 <div className="modal-btns">
-                  <button type="button" className="btn btn-secondary" onClick={() => setSendOpen(false)}>
+                  <button type="button" className="btn btn-ghost" onClick={() => setSendOpen(false)}>
                     Cancel
+                  </button>
+                  <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void sendWhatsApp()}>
+                    Send
                   </button>
                 </div>
               </>
             ) : null}
 
-            {sendChannel === "whatsapp" ? (
-              !waLaunch ? (
-                <>
-                  <label className="field">
-                    <span>WhatsApp numbers (comma-separated)</span>
-                    <input value={waPhones} onChange={(e) => setWaPhones(e.target.value)} placeholder="e.g. 9876543210, 9123456789" />
-                  </label>
-                  <label className="field" style={{ marginTop: 10 }}>
-                    <span>Message</span>
-                    <textarea rows={9} value={waMessage} onChange={(e) => setWaMessage(e.target.value)} />
-                  </label>
-                  <div className="modal-btns">
-                    <button type="button" className="btn btn-ghost" onClick={() => setSendChannel("menu")}>
-                      Back
-                    </button>
-                    <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void sendWhatsApp()}>
-                      {waCanAutoAttach ? "Send WhatsApp with PDF" : "Download PDF & continue"}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="modal-msg">
-                    PDF <strong>{waLaunch.filename}</strong> was downloaded. Open each chat below (message
-                    prefilled) and attach the PDF manually.
-                  </p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {waLaunch.links.map((link) => (
-                      <a key={link.phone} className="btn btn-primary" href={link.href} target="_blank" rel="noopener noreferrer">
-                        Open WhatsApp — {link.label}
-                      </a>
-                    ))}
-                  </div>
-                  <div className="modal-btns">
-                    <button type="button" className="btn btn-ghost" onClick={() => setWaLaunch(null)}>
-                      Back
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => {
-                        setWaLaunch(null);
-                        setSendOpen(false);
-                        setSendChannel("menu");
-                        flash("Marked as sent. Attach the PDF in each WhatsApp chat if you have not yet.");
-                      }}
-                    >
-                      Done
-                    </button>
-                  </div>
-                </>
-              )
-            ) : null}
-
             {sendChannel === "email" ? (
               <>
+                <p className="modal-msg">
+                  Preview the message, then Send. With an email webhook, the PDF attaches automatically;
+                  otherwise your mail app opens. Use Download PDF only if you need to attach the file.
+                </p>
                 <div>
                   <label className="field">
                     <span>To</span>
@@ -1422,11 +1352,11 @@ export function SiteSurveyV1() {
                   </label>
                 </div>
                 <div className="modal-btns">
-                  <button type="button" className="btn btn-ghost" onClick={() => setSendChannel("menu")}>
-                    Back
+                  <button type="button" className="btn btn-ghost" onClick={() => setSendOpen(false)}>
+                    Cancel
                   </button>
                   <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void sendEmail()}>
-                    Send email
+                    Send
                   </button>
                 </div>
               </>

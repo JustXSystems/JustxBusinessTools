@@ -121,16 +121,9 @@ export function QuotationGeneratorV1() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [sendChannel, setSendChannel] = useState<SendChannel>("whatsapp");
-  const [sendViaOpen, setSendViaOpen] = useState(false);
   const [waSelected, setWaSelected] = useState<string[]>([]);
   const [waExtra, setWaExtra] = useState("");
   const [waMessage, setWaMessage] = useState("");
-  /** After PDF prepare: user must click these (popup blockers block window.open after await). */
-  const [waLaunch, setWaLaunch] = useState<{
-    filename: string;
-    file: File;
-    links: Array<{ phone: string; label: string; href: string }>;
-  } | null>(null);
   const [waCanAutoAttach, setWaCanAutoAttach] = useState(false);
   const [emailTo, setEmailTo] = useState("");
   const [emailCc, setEmailCc] = useState("");
@@ -139,7 +132,6 @@ export function QuotationGeneratorV1() {
   const [approvalLink, setApprovalLink] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
-  const sendViaRef = useRef<HTMLDivElement>(null);
 
   const totals = useMemo(() => computeTotals(current, company), [current, company]);
   const pendingApprovals = list.filter((q) => q.status === "sent").length;
@@ -393,7 +385,6 @@ export function QuotationGeneratorV1() {
 
   function openSendModal(channel: SendChannel) {
     if (!validateSaved(current)) return;
-    setSendViaOpen(false);
     const send = normalizeSendSettings(sendSettings);
     const vars = messageVars(current);
     const customerPhone = current.customer.phone.replace(/\D/g, "");
@@ -403,7 +394,6 @@ export function QuotationGeneratorV1() {
     ];
     setWaSelected(defaults);
     setWaExtra("");
-    setWaLaunch(null);
     setWaMessage(
       fillSendTemplate(
         send.whatsappMessage?.trim() || DEFAULT_WHATSAPP_MESSAGE,
@@ -426,15 +416,6 @@ export function QuotationGeneratorV1() {
         .catch(() => setWaCanAutoAttach(false));
     }
   }
-
-  useEffect(() => {
-    if (!sendViaOpen) return;
-    function onDoc(e: MouseEvent) {
-      if (!sendViaRef.current?.contains(e.target as Node)) setSendViaOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [sendViaOpen]);
 
   function collectWhatsAppRecipients() {
     const send = normalizeSendSettings(sendSettings);
@@ -565,7 +546,7 @@ export function QuotationGeneratorV1() {
             <div className="qgv1-page-head">
               <div>
                 <h1>Compose quotation</h1>
-                <p>Edit left · live preview right. Save draft, Submit to company delivery, download PDF, or send via WhatsApp / Email.</p>
+                <p>Edit left · live preview right. Save draft, Submit to company delivery, Download PDF, or send WhatsApp / Email.</p>
               </div>
             </div>
 
@@ -574,9 +555,8 @@ export function QuotationGeneratorV1() {
                 <button type="button" className="qgv1-banner-x" onClick={() => setBannerDismissed(true)}>
                   ✕
                 </button>
-                <b>Workflow:</b> Fill required fields → <b>Save</b> (draft) → <b>Submit</b> (status submitted +
-                company delivery only, no local download) → <b>Download PDF</b> (local only) or <b>Send Via</b>{" "}
-                WhatsApp / Email.
+                <b>Workflow:</b> Fill required fields → <b>Save</b> (draft) → <b>Submit</b> (company delivery) →{" "}
+                <b>Download PDF</b> when you need the file, or <b>WhatsApp</b> / <b>Email</b> to send the message.
               </div>
             ) : null}
 
@@ -1035,44 +1015,22 @@ export function QuotationGeneratorV1() {
               >
                 Download PDF
               </button>
-              <div
-                className={`qgv1-send-via${sendViaOpen ? " is-open" : ""}`}
-                ref={sendViaRef}
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy}
+                onClick={() => openSendModal("whatsapp")}
               >
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={busy}
-                  aria-haspopup="true"
-                  aria-expanded={sendViaOpen}
-                  onClick={() => {
-                    if (!validateSaved(current)) return;
-                    setSendViaOpen((o) => !o);
-                  }}
-                >
-                  Send Via
-                </button>
-                <div className="qgv1-send-via-pills" role="menu" aria-label="Send channels">
-                  <button
-                    type="button"
-                    className="qgv1-send-pill qgv1-send-pill-wa"
-                    role="menuitem"
-                    disabled={busy}
-                    onClick={() => openSendModal("whatsapp")}
-                  >
-                    WhatsApp
-                  </button>
-                  <button
-                    type="button"
-                    className="qgv1-send-pill qgv1-send-pill-email"
-                    role="menuitem"
-                    disabled={busy}
-                    onClick={() => openSendModal("email")}
-                  >
-                    Email
-                  </button>
-                </div>
-              </div>
+                WhatsApp
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy}
+                onClick={() => openSendModal("email")}
+              >
+                Email
+              </button>
               {!isSaved && current.quoteNo ? (
                 <span className="pill pill-warning">Unsaved changes</span>
               ) : null}
@@ -1351,7 +1309,6 @@ export function QuotationGeneratorV1() {
           className="modal-overlay"
           onClick={() => {
             setSendOpen(false);
-            setWaLaunch(null);
           }}
         >
           <div
@@ -1363,290 +1320,174 @@ export function QuotationGeneratorV1() {
 
             {sendChannel === "whatsapp" ? (
               <>
-                {!waLaunch ? (
-                  <>
-                    <p className="modal-msg">
-                      {waCanAutoAttach
-                        ? "WhatsApp Business delivery is configured — the PDF will be sent as an attachment automatically."
-                        : "Automatic PDF attachment needs WhatsApp Business API (or WHATSAPP_WEBHOOK_URL) on the server. Without that, WhatsApp links can only open a chat with text — you attach the PDF manually."}
-                    </p>
-                    <div className="qgv1-wa-list">
-                      {current.customer.phone ? (
-                        <label className="qgv1-check-row">
-                          <input
-                            type="checkbox"
-                            checked={waSelected.includes(
-                              `customer:${current.customer.phone.replace(/\D/g, "")}`,
-                            )}
-                            onChange={(e) => {
-                              const key = `customer:${current.customer.phone.replace(/\D/g, "")}`;
-                              setWaSelected((prev) =>
-                                e.target.checked
-                                  ? [...new Set([...prev, key])]
-                                  : prev.filter((x) => x !== key),
-                              );
-                            }}
-                          />
-                          <span>
-                            Customer — {current.customer.phone}
-                            {current.customer.name ? ` (${current.customer.name})` : ""}
-                          </span>
-                        </label>
-                      ) : null}
-                      {normalizeSendSettings(sendSettings)
-                        .whatsappNumbers.filter((n) => n.phone)
-                        .map((n) => (
-                          <label key={n.id} className="qgv1-check-row">
-                            <input
-                              type="checkbox"
-                              checked={waSelected.includes(n.id)}
-                              onChange={(e) => {
-                                setWaSelected((prev) =>
-                                  e.target.checked
-                                    ? [...new Set([...prev, n.id])]
-                                    : prev.filter((x) => x !== n.id),
-                                );
-                              }}
-                            />
-                            <span>
-                              {n.label || "Team"} — {n.phone}
-                            </span>
-                          </label>
-                        ))}
-                    </div>
-                    <label className="field" style={{ marginTop: 10 }}>
-                      <span>Extra numbers (comma-separated)</span>
+                <p className="modal-msg">
+                  {waCanAutoAttach
+                    ? "Preview the message, then Send — the PDF attaches automatically via WhatsApp Business."
+                    : "Preview the message, then Send to open WhatsApp with that text. Use Download PDF only if you need to attach the file yourself."}
+                </p>
+                <div className="qgv1-wa-list">
+                  {current.customer.phone ? (
+                    <label className="qgv1-check-row">
                       <input
-                        value={waExtra}
-                        onChange={(e) => setWaExtra(e.target.value)}
-                        placeholder="e.g. 9876543210, 9123456789"
-                      />
-                    </label>
-                    <label className="field" style={{ marginTop: 10 }}>
-                      <span>WhatsApp message</span>
-                      <textarea
-                        rows={9}
-                        value={waMessage}
-                        onChange={(e) => setWaMessage(e.target.value)}
-                        placeholder="Message that will open in WhatsApp"
-                      />
-                    </label>
-                    <div className="modal-btns">
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => {
-                          setSendOpen(false);
-                          setWaLaunch(null);
+                        type="checkbox"
+                        checked={waSelected.includes(
+                          `customer:${current.customer.phone.replace(/\D/g, "")}`,
+                        )}
+                        onChange={(e) => {
+                          const key = `customer:${current.customer.phone.replace(/\D/g, "")}`;
+                          setWaSelected((prev) =>
+                            e.target.checked
+                              ? [...new Set([...prev, key])]
+                              : prev.filter((x) => x !== key),
+                          );
                         }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={busy}
-                        onClick={async () => {
-                          const unique = collectWhatsAppRecipients();
-                          if (!unique.length) {
-                            flash("Select or enter at least one WhatsApp number.", "err");
-                            return;
-                          }
-                          const text = (waMessage.trim() || buildWhatsAppText(current)).trim();
-                          if (!text) {
-                            flash("Enter a WhatsApp message before sending.", "err");
-                            return;
-                          }
-                          setWaMessage(text);
-
-                          setBusy(true);
-                          try {
-                            const pdf = await buildPdfPayload(current);
-                            if (!pdf) return;
-
-                            if (waCanAutoAttach) {
-                              const result = await api<{
-                                ok: boolean;
-                                delivered: boolean;
-                                via: string;
-                                sent?: string[];
-                                errors?: Array<{ phone: string; error: string }>;
-                              }>("/quotation-v1/send/whatsapp", {
-                                method: "POST",
-                                body: JSON.stringify({
-                                  phones: unique.map((e) => e.phone),
-                                  message: text,
-                                  filename: pdf.filename,
-                                  pdfBase64: pdf.pdfBase64,
-                                  quotationId: current.id,
-                                  quoteNo: current.quoteNo,
-                                }),
-                              });
-                              if (result.delivered) {
-                                await saveQuote("sent");
-                                await pushNotif(
-                                  current.id,
-                                  `Quotation ${current.quoteNo} sent on WhatsApp with PDF (${(result.sent ?? unique).length} recipient${(result.sent ?? unique).length > 1 ? "s" : ""}).`,
-                                );
-                                setSendOpen(false);
-                                const partial = result.errors?.length
-                                  ? ` Some failed: ${result.errors.map((e) => e.phone).join(", ")}.`
-                                  : "";
-                                flash(
-                                  result.via === "cloud"
-                                    ? `WhatsApp delivered with PDF attachment.${partial}`
-                                    : `WhatsApp handed off to your webhook with PDF.${partial}`,
-                                );
-                                return;
-                              }
-                            }
-
-                            // Manual fallback: download PDF + clickable chat links (no auto-attach).
-                            const file = forceDownloadPdf(pdf.filename, pdf.pdfBase64);
-                            setWaLaunch({
-                              filename: pdf.filename,
-                              file,
-                              links: unique.map((e) => ({
-                                phone: e.phone,
-                                label: e.label,
-                                href: whatsappChatUrl(e.phone, text),
-                              })),
-                            });
-                            flash(
-                              waCanAutoAttach
-                                ? "Server did not deliver — PDF downloaded for manual send."
-                                : `PDF saved as ${pdf.filename}. Open each WhatsApp chat below and attach the file.`,
+                      />
+                      <span>
+                        Customer — {current.customer.phone}
+                        {current.customer.name ? ` (${current.customer.name})` : ""}
+                      </span>
+                    </label>
+                  ) : null}
+                  {normalizeSendSettings(sendSettings)
+                    .whatsappNumbers.filter((n) => n.phone)
+                    .map((n) => (
+                      <label key={n.id} className="qgv1-check-row">
+                        <input
+                          type="checkbox"
+                          checked={waSelected.includes(n.id)}
+                          onChange={(e) => {
+                            setWaSelected((prev) =>
+                              e.target.checked
+                                ? [...new Set([...prev, n.id])]
+                                : prev.filter((x) => x !== n.id),
                             );
-                          } catch (e) {
-                            flash(e instanceof Error ? e.message : "WhatsApp prepare failed", "err");
-                          } finally {
-                            setBusy(false);
-                          }
-                        }}
-                      >
-                        {waCanAutoAttach ? "Send WhatsApp with PDF" : "Download PDF & continue"}
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="modal-msg">
-                      PDF <strong>{waLaunch.filename}</strong> is in your Downloads folder. Open each chat
-                      below (message is prefilled), then attach that PDF in WhatsApp. Browsers block
-                      auto-opening multiple chats after PDF generation — tap each number yourself.
-                    </p>
-                    <div className="qgv1-wa-launch-list">
-                      {waLaunch.links.map((link) => (
-                        <a
-                          key={link.phone}
-                          className="btn btn-primary qgv1-wa-launch-btn"
-                          href={link.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Open WhatsApp — {link.label}
-                        </a>
-                      ))}
-                    </div>
-                    {typeof navigator !== "undefined" &&
-                    typeof (navigator as Navigator & { share?: unknown }).share === "function" ? (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ marginTop: 10, width: "100%" }}
-                        onClick={async () => {
-                          const nav = navigator as Navigator & {
-                            canShare?: (data: ShareData & { files?: File[] }) => boolean;
-                            share?: (data: ShareData & { files?: File[] }) => Promise<void>;
-                          };
-                          try {
-                            const data: ShareData & { files?: File[] } = {
-                              files: [waLaunch.file],
-                              title: waLaunch.filename,
-                              text: waMessage,
-                            };
-                            if (nav.canShare?.(data)) {
-                              await nav.share(data);
-                              flash("Share sheet opened — pick WhatsApp to send the PDF.");
-                            } else if (nav.share) {
-                              await nav.share({ title: waLaunch.filename, text: waMessage });
-                              flash("Share sheet opened (file share not supported on this device).");
-                            }
-                          } catch (err) {
-                            if (!(err instanceof DOMException && err.name === "AbortError")) {
-                              flash(err instanceof Error ? err.message : "Share failed", "err");
-                            }
-                          }
-                        }}
-                      >
-                        Share PDF via phone share sheet
-                      </button>
-                    ) : null}
-                    <div className="modal-btns">
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => setWaLaunch(null)}
-                      >
-                        Back
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => {
-                          void waLaunch.file.arrayBuffer().then((buf) => {
-                            const blob = new Blob([buf], { type: "application/octet-stream" });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = waLaunch.filename;
-                            a.style.display = "none";
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-                            flash("PDF download started again.");
+                          }}
+                        />
+                        <span>
+                          {n.label || "Team"} — {n.phone}
+                        </span>
+                      </label>
+                    ))}
+                </div>
+                <label className="field" style={{ marginTop: 10 }}>
+                  <span>Extra numbers (comma-separated)</span>
+                  <input
+                    value={waExtra}
+                    onChange={(e) => setWaExtra(e.target.value)}
+                    placeholder="e.g. 9876543210, 9123456789"
+                  />
+                </label>
+                <label className="field" style={{ marginTop: 10 }}>
+                  <span>WhatsApp message</span>
+                  <textarea
+                    rows={9}
+                    value={waMessage}
+                    onChange={(e) => setWaMessage(e.target.value)}
+                    placeholder="Message that will open in WhatsApp"
+                  />
+                </label>
+                <div className="modal-btns">
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setSendOpen(false);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busy}
+                    onClick={async () => {
+                      const unique = collectWhatsAppRecipients();
+                      if (!unique.length) {
+                        flash("Select or enter at least one WhatsApp number.", "err");
+                        return;
+                      }
+                      const text = (waMessage.trim() || buildWhatsAppText(current)).trim();
+                      if (!text) {
+                        flash("Enter a WhatsApp message before sending.", "err");
+                        return;
+                      }
+                      setWaMessage(text);
+
+                      setBusy(true);
+                      try {
+                        if (waCanAutoAttach) {
+                          const pdf = await buildPdfPayload(current);
+                          if (!pdf) return;
+
+                          const result = await api<{
+                            ok: boolean;
+                            delivered: boolean;
+                            via: string;
+                            sent?: string[];
+                            errors?: Array<{ phone: string; error: string }>;
+                          }>("/quotation-v1/send/whatsapp", {
+                            method: "POST",
+                            body: JSON.stringify({
+                              phones: unique.map((e) => e.phone),
+                              message: text,
+                              filename: pdf.filename,
+                              pdfBase64: pdf.pdfBase64,
+                              quotationId: current.id,
+                              quoteNo: current.quoteNo,
+                            }),
                           });
-                        }}
-                      >
-                        Re-download PDF
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={busy}
-                        onClick={async () => {
-                          setBusy(true);
-                          try {
+                          if (result.delivered) {
                             await saveQuote("sent");
                             await pushNotif(
                               current.id,
-                              `Quotation ${current.quoteNo} prepared for WhatsApp (${waLaunch.links.length} number${waLaunch.links.length > 1 ? "s" : ""}).`,
+                              `Quotation ${current.quoteNo} sent on WhatsApp with PDF (${(result.sent ?? unique).length} recipient${(result.sent ?? unique).length > 1 ? "s" : ""}).`,
                             );
-                            setWaLaunch(null);
                             setSendOpen(false);
-                            flash("Marked as sent. Attach the PDF in each WhatsApp chat if you have not yet.");
-                          } catch (e) {
-                            flash(e instanceof Error ? e.message : "Failed to mark sent", "err");
-                          } finally {
-                            setBusy(false);
+                            const partial = result.errors?.length
+                              ? ` Some failed: ${result.errors.map((e) => e.phone).join(", ")}.`
+                              : "";
+                            flash(
+                              result.via === "cloud"
+                                ? `WhatsApp delivered with PDF attachment.${partial}`
+                                : `WhatsApp handed off to your webhook with PDF.${partial}`,
+                            );
+                            return;
                           }
-                        }}
-                      >
-                        Done
-                      </button>
-                    </div>
-                  </>
-                )}
+                        }
+
+                        await saveQuote("sent");
+                        await pushNotif(
+                          current.id,
+                          `Quotation ${current.quoteNo} opened on WhatsApp (${unique.length} number${unique.length > 1 ? "s" : ""}).`,
+                        );
+                        setSendOpen(false);
+                        for (const e of unique) {
+                          window.open(whatsappChatUrl(e.phone, text), "_blank", "noopener,noreferrer");
+                        }
+                        flash(
+                          unique.length === 1
+                            ? "WhatsApp opened with your message. Use Download PDF if you need to attach the file."
+                            : `Opened WhatsApp for ${unique.length} numbers. Use Download PDF if you need to attach the file.`,
+                        );
+                      } catch (e) {
+                        flash(e instanceof Error ? e.message : "WhatsApp send failed", "err");
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Send
+                  </button>
+                </div>
               </>
             ) : null}
 
             {sendChannel === "email" ? (
               <>
                 <p className="modal-msg">
-                  Defaults come from Business Profile → Send Via. Without{" "}
-                  <code>EMAIL_WEBHOOK_URL</code> on the server, this opens your mail app and downloads the
-                  PDF so you can attach it.
+                  Preview the message, then Send. With an email webhook configured, the PDF attaches
+                  automatically; otherwise your mail app opens with this text. Use Download PDF only if you
+                  need to attach the file yourself.
                 </p>
                 <div className="qgv1-grid2" style={{ marginTop: 8 }}>
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
@@ -1708,9 +1549,6 @@ export function QuotationGeneratorV1() {
                           },
                         );
                         if (!result.delivered) {
-                          if (pdf) {
-                            forceDownloadPdf(pdf.filename, pdf.pdfBase64);
-                          }
                           const params = new URLSearchParams();
                           if (emailCc.trim()) params.set("cc", emailCc.trim());
                           params.set("subject", emailSubject.trim());
@@ -1728,7 +1566,7 @@ export function QuotationGeneratorV1() {
                         flash(
                           result.delivered
                             ? "Email handed off to your email webhook."
-                            : "Opened your mail app and downloaded the PDF — attach it before sending.",
+                            : "Opened your mail app with the message. Use Download PDF if you need to attach the file.",
                         );
                       } catch (e) {
                         flash(e instanceof Error ? e.message : "Email send failed", "err");
@@ -1737,7 +1575,7 @@ export function QuotationGeneratorV1() {
                       }
                     }}
                   >
-                    Send email
+                    Send
                   </button>
                 </div>
               </>
