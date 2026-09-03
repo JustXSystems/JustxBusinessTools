@@ -35,9 +35,17 @@ export type PlatformBranding = {
   installIconUrl: string;
   /** Install icon canvas: `transparent` (default) or #RRGGBB. */
   installIconBg: string;
+  /**
+   * When true, `/api/config/favicon.png` (and nginx `/favicon.ico` proxy) serves the
+   * chosen install icon for the marketing homepage at justxsystems.com.
+   */
+  publishSiteFavicon: boolean;
 };
 
 export const DEFAULT_INSTALL_ICON_URL = "/icons/justx-logo.png";
+
+/** Favicon / install icon should track the platform logo until a custom icon is set. */
+export const INSTALL_ICON_FOLLOW_LOGO = "__logo__";
 
 export const DEFAULT_BRANDING: PlatformBranding = {
   logoUrl: "/icons/justx-logo.png",
@@ -50,6 +58,7 @@ export const DEFAULT_BRANDING: PlatformBranding = {
   installName: "JustXSystems",
   installIconUrl: DEFAULT_INSTALL_ICON_URL,
   installIconBg: "transparent",
+  publishSiteFavicon: true,
 };
 
 const KEY = "branding";
@@ -89,7 +98,9 @@ function parseBranding(raw: unknown): PlatformBranding {
   ) {
     logoUrl = DEFAULT_BRANDING.logoUrl;
   }
-  if (
+  if (installIconUrl === INSTALL_ICON_FOLLOW_LOGO) {
+    // Keep sentinel — clients resolve against logoUrl.
+  } else if (
     !installIconUrl ||
     /\/icons\/(jbt-icon|justxsystems-icon)\.svg$/i.test(installIconUrl) ||
     /\/icons\/presets\//i.test(installIconUrl)
@@ -112,6 +123,10 @@ function parseBranding(raw: unknown): PlatformBranding {
     installName: installName || DEFAULT_BRANDING.installName,
     installIconUrl,
     installIconBg: parseInstallIconBg(obj.installIconBg ?? DEFAULT_BRANDING.installIconBg),
+    publishSiteFavicon:
+      obj.publishSiteFavicon == null
+        ? DEFAULT_BRANDING.publishSiteFavicon
+        : Boolean(obj.publishSiteFavicon),
   };
 }
 
@@ -139,6 +154,7 @@ export async function savePlatformBranding(input: {
   installIconUrl?: string | null;
   installIconBg?: string;
   clearInstallIcon?: boolean;
+  publishSiteFavicon?: boolean;
 }): Promise<PlatformBranding> {
   const current = await getPlatformBranding();
   let logoUrl = current.logoUrl;
@@ -155,6 +171,11 @@ export async function savePlatformBranding(input: {
 
   if (input.clearInstallIcon) {
     installIconUrl = DEFAULT_BRANDING.installIconUrl;
+  } else if (
+    input.installIconUrl === INSTALL_ICON_FOLLOW_LOGO ||
+    String(input.installIconUrl ?? "").trim() === INSTALL_ICON_FOLLOW_LOGO
+  ) {
+    installIconUrl = INSTALL_ICON_FOLLOW_LOGO;
   } else if (input.installIcon) {
     const saved = await saveImageUpload(String(input.installIcon), "platform-install");
     if (saved) installIconUrl = saved;
@@ -199,6 +220,10 @@ export async function savePlatformBranding(input: {
       input.installIconBg != null
         ? parseInstallIconBg(input.installIconBg)
         : current.installIconBg,
+    publishSiteFavicon:
+      input.publishSiteFavicon != null
+        ? Boolean(input.publishSiteFavicon)
+        : current.publishSiteFavicon,
   };
 
   await pool.query(
@@ -210,6 +235,9 @@ export async function savePlatformBranding(input: {
   return {
     ...next,
     logoUrl: withFileAccessToken(next.logoUrl) ?? next.logoUrl,
-    installIconUrl: withFileAccessToken(next.installIconUrl) ?? next.installIconUrl,
+    installIconUrl:
+      next.installIconUrl === INSTALL_ICON_FOLLOW_LOGO
+        ? INSTALL_ICON_FOLLOW_LOGO
+        : withFileAccessToken(next.installIconUrl) ?? next.installIconUrl,
   };
 }

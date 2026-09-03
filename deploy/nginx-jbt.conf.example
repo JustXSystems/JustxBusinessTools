@@ -4,6 +4,24 @@
 #
 # Zigma (or other apps) keep their own ports — JBT uses 3002 (web) and 4002 (api).
 
+# Marketing homepage favicon — controlled from JBT Admin → Branding.
+# Browsers request /favicon.ico by default when the SPA omits <link rel="icon">.
+location = /favicon.ico {
+    proxy_pass http://127.0.0.1:4002/api/config/favicon.ico;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    add_header Cache-Control "no-store, max-age=0, must-revalidate";
+}
+
+location = /apple-touch-icon.png {
+    proxy_pass http://127.0.0.1:4002/api/config/favicon.png;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    add_header Cache-Control "no-store, max-age=0, must-revalidate";
+}
+
 # API — strip /jbt so Express serves /api/...
 # Artifacts (PDF / Drive sync) can be multi‑MB; Express allows 30mb — match nginx.
 location /jbt/api/ {

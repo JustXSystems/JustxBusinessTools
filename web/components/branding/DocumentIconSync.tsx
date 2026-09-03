@@ -59,15 +59,18 @@ export function DocumentIconSync() {
     const name = resolveInstallName(branding.appName, branding.installName);
     const v = versionToken(`${icon}|${branding.installIconBg || "transparent"}`, name);
 
-    upsertSyncLink("icon", `${withBasePath("/pwa-icon/192")}?v=${encodeURIComponent(v)}`, {
+    const iconHref = `${withBasePath("/pwa-icon/192")}?v=${encodeURIComponent(v)}`;
+    const appleHref = `${withBasePath("/pwa-icon/512")}?v=${encodeURIComponent(v)}`;
+
+    upsertSyncLink("icon", iconHref, {
       type: "image/png",
       sizes: "192x192",
     });
-    upsertSyncLink(
-      "apple-touch-icon",
-      `${withBasePath("/pwa-icon/512")}?v=${encodeURIComponent(v)}`,
-      { sizes: "512x512" },
-    );
+    // Some browsers still prefer shortcut icon for the tab favicon.
+    upsertSyncLink("shortcut icon", iconHref, {
+      type: "image/png",
+    });
+    upsertSyncLink("apple-touch-icon", appleHref, { sizes: "512x512" });
     upsertSyncLink(
       "manifest",
       `${withBasePath("/manifest.webmanifest")}?v=${encodeURIComponent(v)}`,

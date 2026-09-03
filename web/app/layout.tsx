@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [{ url: "/icons/justx-logo.png", type: "image/png", sizes: "512x512" }],
-    apple: "/icons/apple-touch-icon.png",
+    apple: "/icons/justx-logo.png",
   },
 };
 

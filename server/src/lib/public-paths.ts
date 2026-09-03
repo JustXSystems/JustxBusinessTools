@@ -9,6 +9,8 @@ export function isUnauthenticatedApiPath(pathname: string): boolean {
     path === "/api/config/branding" ||
     path === "/api/config/effective" ||
     path === "/api/config/install-icon.png" ||
+    path === "/api/config/favicon.png" ||
+    path === "/api/config/favicon.ico" ||
     path === "/api/config/install-icon-meta" ||
     path.startsWith("/api/auth") ||
     path.startsWith("/api/files") ||

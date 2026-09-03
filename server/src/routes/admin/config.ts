@@ -58,6 +58,8 @@ router.put("/branding", async (req, res) => {
       installIconUrl: req.body?.installIconUrl,
       installIconBg: req.body?.installIconBg,
       clearInstallIcon: Boolean(req.body?.clearInstallIcon),
+      publishSiteFavicon:
+        req.body?.publishSiteFavicon == null ? undefined : Boolean(req.body.publishSiteFavicon),
     });
     res.json({ branding });
   } catch (err) {

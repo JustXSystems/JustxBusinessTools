@@ -21,7 +21,14 @@ import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import type { ExperienceSaveHandle } from "@/components/admin/experience-save";
 import { invalidateAdminData } from "@/hooks/useLiveRefresh";
-import { JUSTX_LOGO_URL, resolveInstallName } from "@/lib/install-branding";
+import {
+  detectInstallIconSource,
+  INSTALL_ICON_FOLLOW_LOGO,
+  JUSTX_LOGO_URL,
+  resolveInstallIconDisplay,
+  resolveInstallName,
+  type InstallIconSource,
+} from "@/lib/install-branding";
 import {
   SPLASH_ANIMATION_LABELS,
   SPLASH_ANIMATIONS,
@@ -49,9 +56,14 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
     splashShowProgress: DEFAULT_BRANDING.splashShowProgress,
     logoUrl: DEFAULT_BRANDING.logoUrl,
     installName: DEFAULT_BRANDING.installName,
+    installIconUrl: DEFAULT_BRANDING.installIconUrl,
+    publishSiteFavicon: DEFAULT_BRANDING.publishSiteFavicon,
   });
   const [footerText, setFooterText] = useState(DEFAULT_POWERED_BY.text);
   const [logoDraft, setLogoDraft] = useState<string | null>(null);
+  const [iconDraft, setIconDraft] = useState<string | null>(null);
+  const [iconSource, setIconSource] = useState<InstallIconSource>("justx");
+  const [publishSiteFavicon, setPublishSiteFavicon] = useState(true);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
@@ -61,6 +73,8 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
     const d = await api<{ config: PlatformConfig }>("/admin/config/platform");
     const b = d.config.branding ?? DEFAULT_BRANDING;
     const footer = d.config.powered_by ?? DEFAULT_POWERED_BY;
+    const logoUrl = b.logoUrl || DEFAULT_BRANDING.logoUrl;
+    const installIconUrl = b.installIconUrl || DEFAULT_BRANDING.installIconUrl;
     setForm({
       appName: b.appName || DEFAULT_BRANDING.appName,
       tagline: b.tagline || DEFAULT_BRANDING.tagline,
@@ -71,11 +85,19 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
         b.splashShowProgress == null
           ? DEFAULT_BRANDING.splashShowProgress
           : Boolean(b.splashShowProgress),
-      logoUrl: b.logoUrl || DEFAULT_BRANDING.logoUrl,
+      logoUrl,
       installName: b.installName || DEFAULT_BRANDING.installName,
+      installIconUrl,
     });
+    setIconSource(detectInstallIconSource(logoUrl, installIconUrl));
+    setPublishSiteFavicon(
+      b.publishSiteFavicon == null
+        ? DEFAULT_BRANDING.publishSiteFavicon
+        : Boolean(b.publishSiteFavicon),
+    );
     setFooterText(footer.text || DEFAULT_POWERED_BY.text);
     setLogoDraft(null);
+    setIconDraft(null);
     setPreviewKey((k) => k + 1);
   }, []);
 
@@ -101,28 +123,61 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
     reader.readAsDataURL(file);
   }
 
+  async function onIconFile(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setMessage("Choose an image file (PNG, WebP, or JPEG).");
+      return;
+    }
+    if (file.size > 2_000_000) {
+      setMessage("Favicon / install icon must be under 2 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setIconDraft(String(reader.result || ""));
+      setIconSource("custom");
+      setPreviewKey((k) => k + 1);
+      setPreviewMode("install");
+    };
+    reader.readAsDataURL(file);
+  }
+
   const saveAll = useCallback(
     async (opts: { clearLogo?: boolean } = {}) => {
       setSaving(true);
       setMessage("");
       try {
         const splash = Math.round(Number(form.splashDurationMs));
+        const body: Record<string, unknown> = {
+          appName: form.appName.trim(),
+          tagline: form.tagline.trim(),
+          splashDurationMs: Number.isFinite(splash) ? splash : DEFAULT_BRANDING.splashDurationMs,
+          splashAnimation: form.splashAnimation,
+          splashIntensity: form.splashIntensity,
+          splashShowProgress: form.splashShowProgress,
+          logo: opts.clearLogo ? undefined : logoDraft,
+          clearLogo: Boolean(opts.clearLogo),
+          installName: form.installName.trim() || form.appName.trim(),
+          installIconBg: "transparent",
+          publishSiteFavicon,
+        };
+        if (iconSource === "justx") {
+          body.clearInstallIcon = true;
+          body.installIconUrl = JUSTX_LOGO_URL;
+        } else if (iconSource === "logo") {
+          body.installIconUrl = INSTALL_ICON_FOLLOW_LOGO;
+        } else if (iconDraft) {
+          body.installIcon = iconDraft;
+        } else if (form.installIconUrl && form.installIconUrl !== INSTALL_ICON_FOLLOW_LOGO) {
+          body.installIconUrl = form.installIconUrl;
+        } else {
+          body.clearInstallIcon = true;
+        }
+
         await api<{ branding: PlatformBranding }>("/admin/config/branding", {
           method: "PUT",
-          body: JSON.stringify({
-            appName: form.appName.trim(),
-            tagline: form.tagline.trim(),
-            splashDurationMs: Number.isFinite(splash) ? splash : DEFAULT_BRANDING.splashDurationMs,
-            splashAnimation: form.splashAnimation,
-            splashIntensity: form.splashIntensity,
-            splashShowProgress: form.splashShowProgress,
-            logo: opts.clearLogo ? undefined : logoDraft,
-            clearLogo: Boolean(opts.clearLogo),
-            installName: form.installName.trim() || form.appName.trim(),
-            installIconUrl: JUSTX_LOGO_URL,
-            installIconBg: "transparent",
-            clearInstallIcon: true,
-          }),
+          body: JSON.stringify(body),
         });
         await api("/admin/config/powered-by", {
           method: "PUT",
@@ -136,7 +191,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
         setMessage(
           opts.clearLogo
             ? "Logo reset and branding saved."
-            : "Branding, install name, and footer saved.",
+            : "Branding, favicon / install icon, and footer saved.",
         );
       } catch (err) {
         setMessage(err instanceof Error ? err.message : "Save failed");
@@ -145,7 +200,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
         setSaving(false);
       }
     },
-    [form, footerText, logoDraft, refreshBranding, refreshConfig, reload],
+    [form, footerText, logoDraft, iconDraft, iconSource, publishSiteFavicon, refreshBranding, refreshConfig, reload],
   );
 
   useImperativeHandle(
@@ -158,7 +213,17 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
   );
 
   const previewLogo = logoDraft || form.logoUrl;
-  const previewInstallIcon = publicAssetUrl(JUSTX_LOGO_URL);
+  const previewInstallIcon = publicAssetUrl(
+    iconDraft ||
+      resolveInstallIconDisplay(
+        previewLogo,
+        iconSource === "justx"
+          ? JUSTX_LOGO_URL
+          : iconSource === "logo"
+            ? INSTALL_ICON_FOLLOW_LOGO
+            : form.installIconUrl,
+      ),
+  );
   const previewInstallName = resolveInstallName(form.appName, form.installName);
   const draftBranding: PlatformBranding = {
     logoUrl: previewLogo,
@@ -173,6 +238,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
     installName: previewInstallName,
     installIconUrl: previewInstallIcon,
     installIconBg: "transparent",
+    publishSiteFavicon,
   };
 
   return (
@@ -279,9 +345,10 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
         </section>
 
         <section className="panel admin-card" style={{ marginTop: 16 }}>
-          <h2>Desktop / PWA install</h2>
+          <h2>Favicon &amp; install icon</h2>
           <p className="muted">
-            Install dialog name and icon. The icon is always the official JustX logo.
+            Browser tab favicon, PWA / desktop install icon, and apple touch icon. Choose the official JustX mark,
+            match your platform logo, or upload a custom square PNG.
           </p>
           <div className="admin-form-grid">
             <label className="field" style={{ gridColumn: "1 / -1" }}>
@@ -297,19 +364,94 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
                 }}
               />
             </label>
+            <fieldset className="field" style={{ gridColumn: "1 / -1", border: "none", padding: 0, margin: 0 }}>
+              <legend className="label" style={{ marginBottom: 8 }}>
+                Icon source
+              </legend>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {(
+                  [
+                    ["justx", "Official JustX logo"],
+                    ["logo", "Same as platform logo"],
+                    ["custom", "Custom upload"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <label key={id} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="icon-source"
+                      checked={iconSource === id}
+                      onChange={() => {
+                        setIconSource(id);
+                        if (id !== "custom") setIconDraft(null);
+                        setPreviewKey((k) => k + 1);
+                        setPreviewMode("install");
+                      }}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {iconSource === "custom" ? (
+              <label className="field" style={{ gridColumn: "1 / -1" }}>
+                <span>Upload favicon / install icon</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(e) => void onIconFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            ) : null}
           </div>
           <div className="install-icon-custom-banner">
             <span className="install-icon-thumb install-icon-checker">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={publicAssetUrl(JUSTX_LOGO_URL)} alt="" />
+              <img src={previewInstallIcon} alt="" />
             </span>
             <div>
-              <strong>Official JustX logo</strong>
+              <strong>
+                {iconSource === "justx"
+                  ? "Official JustX logo"
+                  : iconSource === "logo"
+                    ? "Platform logo"
+                    : "Custom icon"}
+              </strong>
               <p className="muted" style={{ margin: "2px 0 0" }}>
-                {JUSTX_LOGO_URL}
+                Used for browser favicon and install shortcuts after you save.
               </p>
             </div>
           </div>
+        </section>
+
+        <section className="panel admin-card" style={{ marginTop: 16 }}>
+          <h2>Marketing homepage favicon</h2>
+          <p className="muted">
+            The marketing site at justxsystems.com is separate from JBT, but you can publish the same icon above to a
+            public URL and (with a one-time nginx snippet) serve it as{" "}
+            <code>https://justxsystems.com/favicon.ico</code>.
+          </p>
+          <label className="field" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={publishSiteFavicon}
+              onChange={(e) => setPublishSiteFavicon(e.target.checked)}
+            />
+            <span>Publish this favicon for justxsystems.com</span>
+          </label>
+          <p className="muted" style={{ marginTop: 10 }}>
+            Public URL (always available):{" "}
+            <code>{publicAssetUrl("/api/config/favicon.png")}</code>
+          </p>
+          <p className="muted">
+            Optional HTML on the marketing homepage:{" "}
+            <code>{`<link rel="icon" href="${publicAssetUrl("/api/config/favicon.png")}" type="image/png" />`}</code>
+          </p>
+          <p className="muted">
+            Preferred VPS setup: add the <code>/favicon.ico</code> proxy from{" "}
+            <code>deploy/nginx-jbt.conf.example</code>, then reload nginx. After that, saving branding here updates the
+            root site tab icon.
+          </p>
         </section>
 
         <section className="panel admin-card" style={{ marginTop: 16 }}>

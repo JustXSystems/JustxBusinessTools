@@ -44,6 +44,8 @@ export type PlatformBranding = {
   installIconUrl: string;
   /** `transparent` (default) or #RRGGBB behind the install icon. */
   installIconBg: string;
+  /** Publish chosen icon for justxsystems.com via /api/config/favicon.png. */
+  publishSiteFavicon: boolean;
 };
 
 export type PoweredByConfig = {
@@ -62,6 +64,7 @@ export const DEFAULT_BRANDING: PlatformBranding = {
   installName: "JustXSystems",
   installIconUrl: DEFAULT_INSTALL_ICON_URL,
   installIconBg: "transparent",
+  publishSiteFavicon: true,
 };
 
 export const DEFAULT_POWERED_BY: PoweredByConfig = {
@@ -85,6 +88,7 @@ export function splashFingerprint(b: PlatformBranding): string {
     b.installName,
     b.installIconUrl,
     b.installIconBg,
+    b.publishSiteFavicon ? "1" : "0",
   ].join("\u0001");
 }
 
@@ -134,6 +138,10 @@ function normalizePayload(data: {
       installName: String(b.installName || DEFAULT_BRANDING.installName).trim() || DEFAULT_BRANDING.installName,
       installIconUrl: publicAssetUrl(resolveInstallIconUrl(rawLogo, rawInstall)),
       installIconBg: parseInstallIconBg(b.installIconBg ?? DEFAULT_BRANDING.installIconBg),
+      publishSiteFavicon:
+        b.publishSiteFavicon == null
+          ? DEFAULT_BRANDING.publishSiteFavicon
+          : Boolean(b.publishSiteFavicon),
     },
     poweredBy: {
       text: String(p.text || DEFAULT_POWERED_BY.text),

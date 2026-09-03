@@ -3,7 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Router } from "express";
-import { getPlatformBranding } from "../lib/config/branding.js";
+import { getPlatformBranding, INSTALL_ICON_FOLLOW_LOGO } from "../lib/config/branding.js";
 import { getPoweredBy } from "../lib/config/powered-by.js";
 import { getEffectiveConfig } from "../lib/config/effective.js";
 import {
@@ -12,6 +12,11 @@ import {
   uploadDriver,
   withFileAccessToken,
 } from "../lib/storage.js";
+
+function signBrandIcon(url: string): string {
+  if (!url || url === INSTALL_ICON_FOLLOW_LOGO) return url;
+  return withFileAccessToken(url) ?? url;
+}
 
 const router = Router();
 
@@ -23,8 +28,11 @@ const MIME: Record<string, string> = {
   ".gif": "image/gif",
 };
 
-function normalizeInstallIconPath(raw: string): string {
+function normalizeInstallIconPath(raw: string, logoUrl?: string): string {
   let u = String(raw || "").trim();
+  if (u === INSTALL_ICON_FOLLOW_LOGO) {
+    u = String(logoUrl || "").trim();
+  }
   if (
     /\/icons\/(jbt-icon|justxsystems-icon)\.svg$/i.test(u) ||
     /\/icons\/presets\//i.test(u)
@@ -75,9 +83,8 @@ router.get("/effective", async (_req, res) => {
     ...cfg,
     branding: {
       ...cfg.branding,
-      logoUrl: withFileAccessToken(cfg.branding.logoUrl) ?? cfg.branding.logoUrl,
-      installIconUrl:
-        withFileAccessToken(cfg.branding.installIconUrl) ?? cfg.branding.installIconUrl,
+      logoUrl: signBrandIcon(cfg.branding.logoUrl),
+      installIconUrl: signBrandIcon(cfg.branding.installIconUrl),
     },
   });
 });
@@ -88,8 +95,8 @@ router.get("/branding", async (_req, res) => {
   res.json({
     branding: {
       ...branding,
-      logoUrl: withFileAccessToken(branding.logoUrl) ?? branding.logoUrl,
-      installIconUrl: withFileAccessToken(branding.installIconUrl) ?? branding.installIconUrl,
+      logoUrl: signBrandIcon(branding.logoUrl),
+      installIconUrl: signBrandIcon(branding.installIconUrl),
     },
     poweredBy,
   });
@@ -98,38 +105,66 @@ router.get("/branding", async (_req, res) => {
 /**
  * Canonical install icon for PWA / desktop shortcuts.
  * Chrome reads this via the web manifest — must be a real raster file, not SVG.
+ * Also powers marketing-site favicon when publishSiteFavicon is enabled.
  */
-router.get("/install-icon.png", async (req, res) => {
+async function streamResolvedIcon(
+  res: import("express").Response,
+  opts: { forSiteFavicon?: boolean },
+): Promise<void> {
+  const branding = await getPlatformBranding();
+  const useBrandingIcon = !opts.forSiteFavicon || branding.publishSiteFavicon !== false;
+  const iconUrl = useBrandingIcon
+    ? normalizeInstallIconPath(branding.installIconUrl, branding.logoUrl)
+    : "/icons/justx-logo.png";
+  const file = await resolveInstallIconFile(iconUrl);
+  res.setHeader("Cache-Control", "no-store, max-age=0, must-revalidate");
+  res.setHeader("X-Install-Icon-Source", iconUrl);
+  if (opts.forSiteFavicon) {
+    res.setHeader("X-Site-Favicon-Published", useBrandingIcon ? "1" : "0");
+  }
+
+  if (!file) {
+    const pixel = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5W2XQAAAAASUVORK5CYII=",
+      "base64",
+    );
+    res.setHeader("Content-Type", "image/png");
+    res.status(200).send(pixel);
+    return;
+  }
+
+  const info = await stat(file.abs);
+  if (!info.isFile()) {
+    res.status(404).json({ error: "Icon not found" });
+    return;
+  }
+
+  res.setHeader("Content-Type", file.mime);
+  res.setHeader("Content-Length", String(info.size));
+  createReadStream(file.abs).pipe(res);
+}
+
+router.get("/install-icon.png", async (_req, res) => {
   try {
-    const branding = await getPlatformBranding();
-    const iconUrl = normalizeInstallIconPath(branding.installIconUrl || branding.logoUrl);
-    const file = await resolveInstallIconFile(iconUrl);
-    res.setHeader("Cache-Control", "no-store, max-age=0, must-revalidate");
-    res.setHeader("X-Install-Icon-Source", iconUrl);
+    await streamResolvedIcon(res, { forSiteFavicon: false });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Icon failed" });
+  }
+});
 
-    if (!file) {
-      // Last resort: tiny 1x1 transparent PNG so install doesn't break.
-      const pixel = Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5W2XQAAAAASUVORK5CYII=",
-        "base64",
-      );
-      res.setHeader("Content-Type", "image/png");
-      res.status(200).send(pixel);
-      return;
-    }
+/** Public marketing / root-site favicon (PNG). Safe to proxy as /favicon.ico. */
+router.get("/favicon.png", async (_req, res) => {
+  try {
+    await streamResolvedIcon(res, { forSiteFavicon: true });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Icon failed" });
+  }
+});
 
-    const info = await stat(file.abs);
-    if (!info.isFile()) {
-      res.status(404).json({ error: "Install icon not found" });
-      return;
-    }
-
-    // Optional size query is informational; we stream the source PNG as-is.
-    // Chrome scales 512→192 fine for the install dialog.
-    void req.query.size;
-    res.setHeader("Content-Type", file.mime);
-    res.setHeader("Content-Length", String(info.size));
-    createReadStream(file.abs).pipe(res);
+/** Alias for browsers and nginx `location = /favicon.ico` proxies. */
+router.get("/favicon.ico", async (_req, res) => {
+  try {
+    await streamResolvedIcon(res, { forSiteFavicon: true });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Icon failed" });
   }
@@ -138,7 +173,7 @@ router.get("/install-icon.png", async (req, res) => {
 /** Debug helper: confirms which icon path branding currently resolves to. */
 router.get("/install-icon-meta", async (_req, res) => {
   const branding = await getPlatformBranding();
-  const iconUrl = normalizeInstallIconPath(branding.installIconUrl || branding.logoUrl);
+  const iconUrl = normalizeInstallIconPath(branding.installIconUrl, branding.logoUrl);
   const file = await resolveInstallIconFile(iconUrl);
   let bytes = 0;
   if (file) {
@@ -152,9 +187,11 @@ router.get("/install-icon-meta", async (_req, res) => {
     installName: branding.installName,
     installIconUrl: branding.installIconUrl,
     installIconBg: branding.installIconBg,
+    publishSiteFavicon: branding.publishSiteFavicon,
     resolved: iconUrl,
     file: file?.abs ?? null,
     bytes,
+    siteFaviconPath: "/api/config/favicon.png",
   });
 });
 
