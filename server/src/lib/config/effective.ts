@@ -2,6 +2,7 @@ import { pool } from "../../db.js";
 import { getActiveOrgId, getActiveProfileId } from "../request-context.js";
 import { getPlatformBranding, type PlatformBranding } from "./branding.js";
 import { getPoweredBy, type PoweredByConfig } from "./powered-by.js";
+import { getToolGrouping, type ToolGroupingConfig } from "./tool-grouping.js";
 import {
   appendToolToOrgHomeSelections,
   listOrgCatalog,
@@ -24,6 +25,7 @@ async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
 export async function getEffectiveConfig(): Promise<{
   poweredBy: PoweredByConfig;
   branding: PlatformBranding;
+  toolGrouping: ToolGroupingConfig;
   configVersion: number;
   tools: Array<{ id: string; toolType: string; definition: Record<string, unknown> }>;
   catalog: OrgCatalogTool[];
@@ -32,7 +34,11 @@ export async function getEffectiveConfig(): Promise<{
   const orgId = getActiveOrgId();
   const profileId = getActiveProfileId();
 
-  const [poweredBy, branding] = await Promise.all([getPoweredBy(), getPlatformBranding()]);
+  const [poweredBy, branding, toolGrouping] = await Promise.all([
+    getPoweredBy(),
+    getPlatformBranding(),
+    getToolGrouping(),
+  ]);
 
   const [profileRows] = await pool.query(
     `SELECT config_version FROM business_profiles WHERE id = :id`,
@@ -63,7 +69,7 @@ export async function getEffectiveConfig(): Promise<{
     theme = parsed as Record<string, string>;
   }
 
-  return { poweredBy, branding, configVersion, tools, catalog, theme };
+  return { poweredBy, branding, toolGrouping, configVersion, tools, catalog, theme };
 }
 
 export async function listToolDefinitions(): Promise<

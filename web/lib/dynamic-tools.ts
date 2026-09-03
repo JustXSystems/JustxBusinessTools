@@ -174,10 +174,26 @@ export function filterHomeToolsByCatalog(
   });
 }
 
-export function homeToolsByCategory(tools: ToolDefinition[]): Array<{
+export function homeToolsByCategory(
+  tools: ToolDefinition[],
+  options?: { group?: boolean },
+): Array<{
   category: string;
   tools: ToolDefinition[];
 }> {
+  const group = options?.group !== false;
+
+  if (!group) {
+    const seen = new Set<string>();
+    const flat: ToolDefinition[] = [];
+    for (const tool of tools) {
+      if (seen.has(tool.id)) continue;
+      seen.add(tool.id);
+      flat.push(tool);
+    }
+    return flat.length ? [{ category: "Tools", tools: flat }] : [];
+  }
+
   const categories: string[] = [...TOOL_CATEGORIES];
   if (tools.some((t) => t.category === "Custom Tools")) {
     categories.push("Custom Tools");

@@ -55,8 +55,12 @@ export function HomeDashboard() {
     const byCatalog = filterHomeToolsByCatalog(merged, catalog);
     return filterHomeToolsBySelection(byCatalog, homeToolIds);
   }, [platformTools, catalog, homeToolIds]);
+  const groupTools = config?.toolGrouping?.enabled !== false;
   const filtered = useMemo(() => filterMergedTools(debouncedSearch, allTools), [debouncedSearch, allTools]);
-  const categorized = useMemo(() => homeToolsByCategory(allTools), [allTools]);
+  const categorized = useMemo(
+    () => homeToolsByCategory(allTools, { group: groupTools }),
+    [allTools, groupTools],
+  );
   const isSearching = debouncedSearch.trim().length > 0;
 
   return (
@@ -133,7 +137,7 @@ export function HomeDashboard() {
             Pick tools in <Link href="/profile">Business Profile</Link>. Billing still lists every tool.
           </div>
         </div>
-      ) : (
+      ) : groupTools ? (
         categorized.map((group) => (
           <section key={group.category} className="category-block">
             <div className="category-head">
@@ -145,6 +149,12 @@ export function HomeDashboard() {
             </div>
           </section>
         ))
+      ) : (
+        <div className="tool-grid">
+          {categorized.flatMap((g) => g.tools).map((tool) => (
+            <ToolCard key={tool.id} tool={tool} />
+          ))}
+        </div>
       )}
     </div>
   );

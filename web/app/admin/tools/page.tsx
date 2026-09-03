@@ -9,6 +9,8 @@ import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
 import { getToolDefinition, uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
 import { withBasePath } from "@/lib/base-path";
+import { groupItemsByKey } from "@/lib/group-items";
+import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type CatalogRow = {
@@ -57,6 +59,9 @@ function syncUrl(toolId: string, tab: Tab) {
 }
 
 export default function AdminToolsPage() {
+  const { config, refresh: refreshConfig } = usePlatformConfig();
+  const groupTools = config?.toolGrouping?.enabled !== false;
+  const [groupingBusy, setGroupingBusy] = useState(false);
   const [catalog, setCatalog] = useState<CatalogRow[]>([]);
   const [skus, setSkus] = useState<SkuState[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
@@ -80,6 +85,24 @@ export default function AdminToolsPage() {
   const placementRef = useRef<ToolsSaveHandle>(null);
   const pricingRef = useRef<ToolsSaveHandle>(null);
   const schemaRef = useRef<ToolsSaveHandle>(null);
+
+  async function setToolGrouping(enabled: boolean) {
+    setGroupingBusy(true);
+    setMessage("");
+    try {
+      await api("/admin/config/tool-grouping", {
+        method: "PUT",
+        body: JSON.stringify({ enabled }),
+      });
+      await refreshConfig();
+      setMessage(enabled ? "Tools/Products grouping is on." : "Tools/Products grouping is off — lists are flat everywhere.");
+      invalidateAdminData("admin-tools");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not update grouping");
+    } finally {
+      setGroupingBusy(false);
+    }
+  }
 
   const reload = useCallback(async () => {
     const [c, s, d] = await Promise.all([
@@ -291,15 +314,10 @@ export default function AdminToolsPage() {
     setMessage(`Created ${title}. Configure fields (including formulas), then pricing if needed.`);
   }
 
-  const groups = useMemo(() => {
-    const map = new Map<string, DirectoryItem[]>();
-    for (const t of filtered) {
-      const list = map.get(t.groupName) ?? [];
-      list.push(t);
-      map.set(t.groupName, list);
-    }
-    return Array.from(map.entries());
-  }, [filtered]);
+  const groups = useMemo(
+    () => groupItemsByKey(filtered, (t) => t.groupName || "General", groupTools, "All tools"),
+    [filtered, groupTools],
+  );
 
   return (
     <div className="admin-page tm-page">
@@ -312,6 +330,18 @@ export default function AdminToolsPage() {
             </p>
           </div>
           <div className="admin-form-row">
+            <label className="field" style={{ margin: 0, minWidth: 220 }}>
+              <span>Tools / Products grouping</span>
+              <select
+                value={groupTools ? "on" : "off"}
+                disabled={groupingBusy}
+                onChange={(e) => void setToolGrouping(e.target.value === "on")}
+                aria-label="Tools and products grouping"
+              >
+                <option value="on">Grouped by category</option>
+                <option value="off">Flat list (no groups)</option>
+              </select>
+            </label>
             <Link href="/admin/subscriptions" className="btn btn-ghost btn-sm">
               Packs & access
             </Link>
@@ -386,7 +416,7 @@ export default function AdminToolsPage() {
             ) : (
               groups.map(([group, rows]) => (
                 <div key={group} className="admin-tool-group">
-                  <h3>{group}</h3>
+                  {groupTools ? <h3>{group}</h3> : null}
                   {rows.map((t) => (
                     <button
                       type="button"

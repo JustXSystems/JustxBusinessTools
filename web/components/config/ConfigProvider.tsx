@@ -40,6 +40,7 @@ export type PlatformCatalogTool = {
 export type EffectiveConfig = {
   poweredBy: { text: string; locked: boolean };
   branding: PlatformBranding;
+  toolGrouping?: { enabled: boolean };
   configVersion: number;
   tools: PlatformToolDefinition[];
   catalog?: PlatformCatalogTool[];
@@ -60,6 +61,7 @@ const ConfigContext = createContext<ConfigContextValue | null>(null);
 const DEFAULT_CONFIG: EffectiveConfig = {
   poweredBy: DEFAULT_POWERED_BY,
   branding: DEFAULT_BRANDING,
+  toolGrouping: { enabled: true },
   configVersion: 1,
   tools: [],
   catalog: [],
@@ -69,6 +71,9 @@ function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefi
   return {
     poweredBy: data?.poweredBy ?? DEFAULT_POWERED_BY,
     branding: data?.branding ?? DEFAULT_BRANDING,
+    toolGrouping: {
+      enabled: data?.toolGrouping?.enabled !== false,
+    },
     configVersion: Number(data?.configVersion) || 1,
     tools: Array.isArray(data?.tools) ? data.tools : [],
     catalog: Array.isArray(data?.catalog) ? data.catalog : [],
@@ -128,6 +133,11 @@ export function usePlatformConfig() {
   const ctx = useContext(ConfigContext);
   if (!ctx) throw new Error("usePlatformConfig must be used within ConfigProvider");
   return ctx;
+}
+
+/** Same as usePlatformConfig but safe outside the provider (e.g. public register). */
+export function useOptionalPlatformConfig(): ConfigContextValue | null {
+  return useContext(ConfigContext);
 }
 
 export function usePoweredByText(): string {

@@ -5,6 +5,7 @@ import {
   getRegistrationCopy,
   saveRegistrationCopy,
 } from "../../lib/config/registration-copy.js";
+import { getToolGrouping, saveToolGrouping } from "../../lib/config/tool-grouping.js";
 import { getEffectiveConfig, listToolDefinitions, publishToolDefinition } from "../../lib/config/effective.js";
 
 const router = Router();
@@ -45,7 +46,21 @@ router.get("/platform", async (_req, res) => {
   if (!config.registration_copy) {
     config.registration_copy = await getRegistrationCopy();
   }
+  if (!config.tool_grouping) {
+    config.tool_grouping = await getToolGrouping();
+  }
   res.json({ config });
+});
+
+router.put("/tool-grouping", async (req, res) => {
+  try {
+    const toolGrouping = await saveToolGrouping({
+      enabled: req.body?.enabled == null ? undefined : Boolean(req.body.enabled),
+    });
+    res.json({ toolGrouping });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Save failed" });
+  }
 });
 
 router.put("/registration-copy", async (req, res) => {

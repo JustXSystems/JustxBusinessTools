@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
 import { RoleMatrixPanel } from "@/components/admin/RoleMatrixPanel";
+import { usePlatformConfig } from "@/components/config/ConfigProvider";
+import { groupItemsByKey } from "@/lib/group-items";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type Member = {
@@ -96,6 +98,8 @@ export default function AdminTeamPage() {
 
 function AdminTeamInner() {
   const search = useSearchParams();
+  const { config } = usePlatformConfig();
+  const groupTools = config?.toolGrouping?.enabled !== false;
   const initialFilter = useMemo((): Filter => {
     const f = search.get("filter");
     if (f === "pending" || f === "active" || f === "suspended" || f === "unverified") return f;
@@ -217,15 +221,11 @@ function AdminTeamInner() {
 
   const toolGroups = useMemo(() => {
     const q = toolQuery.trim().toLowerCase();
-    const map = new Map<string, CatalogTool[]>();
-    for (const t of catalog) {
-      if (q && !`${t.name} ${t.id} ${t.groupName}`.toLowerCase().includes(q)) continue;
-      const list = map.get(t.groupName) ?? [];
-      list.push(t);
-      map.set(t.groupName, list);
-    }
-    return Array.from(map.entries());
-  }, [catalog, toolQuery]);
+    const rows = catalog.filter(
+      (t) => !q || `${t.name} ${t.id} ${t.groupName}`.toLowerCase().includes(q),
+    );
+    return groupItemsByKey(rows, (t) => t.groupName || "General", groupTools, "All tools");
+  }, [catalog, toolQuery, groupTools]);
 
   async function run(label: string, fn: () => Promise<number | void>) {
     setError("");
@@ -608,22 +608,24 @@ function AdminTeamInner() {
               </div>
               {toolGroups.map(([group, rows]) => (
                 <div key={group} className="admin-tool-group">
-                  <h3>
-                    {group}
-                    {toolMode === "selected" ? (
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setToolIds((prev) => {
-                          const ids = rows.map((r) => r.id);
-                          const allOn = ids.every((id) => prev.includes(id));
-                          return allOn ? prev.filter((id) => !ids.includes(id)) : Array.from(new Set([...prev, ...ids]));
-                        })}
-                      >
-                        Toggle group
-                      </button>
-                    ) : null}
-                  </h3>
+                  {groupTools ? (
+                    <h3>
+                      {group}
+                      {toolMode === "selected" ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setToolIds((prev) => {
+                            const ids = rows.map((r) => r.id);
+                            const allOn = ids.every((id) => prev.includes(id));
+                            return allOn ? prev.filter((id) => !ids.includes(id)) : Array.from(new Set([...prev, ...ids]));
+                          })}
+                        >
+                          Toggle group
+                        </button>
+                      ) : null}
+                    </h3>
+                  ) : null}
                   <div className="branch-checklist">
                     {rows.map((t) => {
                       const checked = toolMode === "all" || toolIds.includes(t.id);

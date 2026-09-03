@@ -19,22 +19,16 @@ import {
 } from "@/lib/tool-cart";
 import { SUBSCRIPTION_SYNCED_EVENT } from "@/lib/subscription-cache";
 import type { CartQuote, ProductPack, ToolCatalogSku } from "@/lib/types/subscription";
+import { usePlatformConfig } from "@/components/config/ConfigProvider";
+import { groupItemsByKey } from "@/lib/group-items";
 
 function inr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 }
 
-function groupCatalog(items: ToolCatalogSku[]) {
-  const map = new Map<string, ToolCatalogSku[]>();
-  for (const item of items) {
-    const list = map.get(item.category) ?? [];
-    list.push(item);
-    map.set(item.category, list);
-  }
-  return Array.from(map.entries());
-}
-
 export default function SubscriptionPage() {
+  const { config } = usePlatformConfig();
+  const groupProducts = config?.toolGrouping?.enabled !== false;
   const { subscription, loading, error, isToolLicensed, refresh } = useSubscription();
   const { showToast } = useToast();
   const [cart, setCart] = useState<string[]>([]);
@@ -128,7 +122,10 @@ export default function SubscriptionPage() {
     void loadQuote(payableIds, activePack);
   }, [payableIds, activePack, priceFingerprint, loadQuote]);
 
-  const groups = useMemo(() => groupCatalog(catalog), [catalog]);
+  const groups = useMemo(
+    () => groupItemsByKey(catalog, (s) => s.category || "General", groupProducts, "Products"),
+    [catalog, groupProducts],
+  );
   const licensedCount = catalog.filter((s) => s.licensed && !s.includedFree).length;
   const includedCount = catalog.filter((s) => s.includedFree).length;
 
@@ -363,7 +360,7 @@ export default function SubscriptionPage() {
               <p className="muted">Add paid tools à la carte, or start a trial where offered.</p>
               {groups.map(([category, tools]) => (
                 <section key={category} className="store-category">
-                  <h3>{category}</h3>
+                  {groupProducts ? <h3>{category}</h3> : null}
                   <div className="store-grid">
                     {tools.map((sku) => {
                       const inCart = cart.includes(sku.toolId);
