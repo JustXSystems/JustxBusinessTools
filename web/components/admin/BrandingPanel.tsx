@@ -80,7 +80,6 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
     logoUrl: DEFAULT_BRANDING.logoUrl,
     installName: DEFAULT_BRANDING.installName,
     installIconUrl: DEFAULT_BRANDING.installIconUrl,
-    publishSiteFavicon: DEFAULT_BRANDING.publishSiteFavicon,
   });
   const [footerText, setFooterText] = useState(DEFAULT_POWERED_BY.text);
   const [logoDraft, setLogoDraft] = useState<string | null>(null);
