@@ -38,13 +38,13 @@ export async function loadPendingInbox(): Promise<{
 
   const [profileRows, userRows, opRows] = await Promise.all([
     pool.query(
-      `SELECT p.id, p.business_name, p.organization_id, o.name AS organization_name, m.created_at
+      `SELECT p.id, p.business_name, p.organization_id, o.name AS organization_name, p.created_at
        FROM business_profiles p
        LEFT JOIN organizations o ON o.id = p.organization_id
        LEFT JOIN business_profile_meta m ON m.business_profile_id = p.id
        WHERE COALESCE(m.approval_status, 'approved') = 'pending'
          AND ${orgEqualsSql("p.organization_id")}
-       ORDER BY m.created_at DESC, p.id DESC
+       ORDER BY p.id DESC
        LIMIT 100`,
       scope,
     ),
