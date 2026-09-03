@@ -229,6 +229,13 @@ router.post("/register", async (req, res) => {
 
     await conn.commit();
 
+    const { ensureUserPlatformAdminFlag, isPlatformAdminEmail } = await import(
+      "../lib/platform-admin.js"
+    );
+    if (isPlatformAdminEmail(email)) {
+      await ensureUserPlatformAdminFlag(userId, email);
+    }
+
     if (joinedExisting) {
       await logAudit(
         "auth.register.join",
@@ -350,6 +357,13 @@ router.post("/login", async (req, res) => {
   if (!ok) {
     res.status(401).json({ error: "Invalid email or password" });
     return;
+  }
+
+  const { ensureUserPlatformAdminFlag, isPlatformAdminEmail } = await import(
+    "../lib/platform-admin.js"
+  );
+  if (isPlatformAdminEmail(email)) {
+    await ensureUserPlatformAdminFlag(r.id, email);
   }
 
   const { isMfaEnabled } = await import("../lib/auth/mfa.js");

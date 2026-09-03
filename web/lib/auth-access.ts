@@ -2,7 +2,12 @@ import type { SessionUser } from "@/lib/types/auth";
 
 /**
  * Who may open `/admin` (full admin console).
- * Hard rule: platform admins and org role `admin` only — not Owner, Staff, or Viewer.
+ * - JustX platform admins (`isPlatformAdmin` / PLATFORM_ADMIN_EMAIL)
+ * - Org role `admin` only — not Owner, Staff, or Viewer
+ *
+ * Note: Business Profile Owner does not get Admin Console. To operate JustX platform
+ * tooling, use a platform-admin email (e.g. admin@justxsystems.com) or set is_platform_admin.
+ * Elevating the sole Owner to org role Admin is blocked (cannot demote last owner).
  */
 export function canAccessAdmin(user: SessionUser | null | undefined): boolean {
   if (!user) return false;

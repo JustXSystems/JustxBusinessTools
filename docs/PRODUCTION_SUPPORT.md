@@ -54,7 +54,7 @@ Browser  →  https://justxsystems.com/jbt/...
 - **One** platform Google OAuth client in `server/.env`.
 - **Each** Business Profile stores its own encrypted Drive refresh token + folder ID.
 - Staff log into JBT only; **only the Profile Owner** connects company Drive.
-- Platform admin flag / email (`PLATFORM_ADMIN_EMAIL`, default `admin@justx.local`) can see across orgs in admin tooling.
+- Platform admin flag / email (`PLATFORM_ADMIN_EMAIL`, comma-separated; default `admin@justxsystems.com,admin@justx.local`) can see across orgs in admin tooling.
 
 ---
 
@@ -284,7 +284,7 @@ Open (unauthenticated) routes include: `/api/health`, branding config, `/api/aut
 | Session lost / 401 after deploy | `JWT_SECRET` changed → all sessions invalidated |
 | CORS errors in browser | `CORS_ORIGIN` must be origin only; credentials enabled |
 | User pending / cannot work | Org approval / team approval status — Admin/Owner must approve |
-| Platform admin missing | `is_platform_admin` on `users`, or email = `PLATFORM_ADMIN_EMAIL` |
+| Platform admin missing | `is_platform_admin` on `users`, or email in `PLATFORM_ADMIN_EMAIL` (default includes `admin@justxsystems.com`) |
 
 ### Session / cookie notes
 
