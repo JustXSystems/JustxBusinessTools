@@ -22,6 +22,12 @@ location = /apple-touch-icon.png {
     add_header Cache-Control "no-store, max-age=0, must-revalidate";
 }
 
+# Short quotation approval URLs (legacy / shared without /jbt).
+# Canonical app path is /jbt/q/<token> — keep this redirect so customer links work.
+location ^~ /q/ {
+    return 302 /jbt$request_uri;
+}
+
 # API — strip /jbt so Express serves /api/...
 # Artifacts (PDF / Drive sync) can be multi‑MB; Express allows 30mb — match nginx.
 location /jbt/api/ {

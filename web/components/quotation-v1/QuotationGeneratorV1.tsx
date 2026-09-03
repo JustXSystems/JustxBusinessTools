@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fetchProfile } from "@/lib/api";
-import { publicAssetUrl } from "@/lib/base-path";
+import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useLiveRefresh, invalidateAdminData } from "@/hooks/useLiveRefresh";
 import {
@@ -1094,7 +1094,7 @@ export function QuotationGeneratorV1() {
                       if (!validateSaved(current)) return;
                       const saved = await saveQuote("sent");
                       if (!saved) return;
-                      const link = `${window.location.origin}/q/${saved.approvalToken}`;
+                      const link = `${window.location.origin}${withBasePath(`/q/${saved.approvalToken}`)}`;
                       setApprovalLink(link);
                       await pushNotif(saved.id, `Approval link generated for ${saved.quoteNo}.`);
                     }}

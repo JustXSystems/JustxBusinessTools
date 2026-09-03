@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { QuoteSheet } from "@/components/quotation-v1/QuoteSheet";
 import "@/components/quotation-v1/quotation-v1.css";
+import { apiUrl } from "@/lib/api-base";
 import { DEFAULT_COMPANY, type CompanyProfileV1, type QuotationV1 } from "@/lib/quotation-v1";
-
-const API = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000/api";
 
 export default function PublicQuoteApprovePage() {
   const params = useParams();
@@ -18,7 +17,7 @@ export default function PublicQuoteApprovePage() {
 
   useEffect(() => {
     if (!token) return;
-    fetch(`${API}/public/quotation-v1/${encodeURIComponent(token)}`)
+    fetch(apiUrl(`/api/public/quotation-v1/${encodeURIComponent(token)}`))
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || "Not found");
@@ -32,7 +31,7 @@ export default function PublicQuoteApprovePage() {
   async function decide(decision: "approved" | "rejected") {
     setBusy(true);
     try {
-      const r = await fetch(`${API}/public/quotation-v1/${encodeURIComponent(token)}/decide`, {
+      const r = await fetch(apiUrl(`/api/public/quotation-v1/${encodeURIComponent(token)}/decide`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision }),
