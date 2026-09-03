@@ -1,4 +1,5 @@
 import { getAnalyticsOverview } from "./events.js";
+import { adminDeepLink } from "../admin/deep-links.js";
 
 export async function generateInsights(days: unknown = 30): Promise<
   Array<{ id: number; title: string; body: string; actionLabel: string | null; actionHref: string | null }>
@@ -24,7 +25,7 @@ export async function generateInsights(days: unknown = 30): Promise<
       title: "Invoices outpace payment tracking",
       body: "You create many invoices but few payment tracker entries. Enable reminders in Collections.",
       actionLabel: "Open collections",
-      actionHref: "/admin/payments/collections",
+      actionHref: adminDeepLink.paymentCollections(),
     });
   }
 
@@ -46,7 +47,7 @@ export async function generateInsights(days: unknown = 30): Promise<
       title: "Many tools are unused",
       body: `${quiet.length} catalog tools had no activity. Hide unused tools or train staff on the ones that matter.`,
       actionLabel: "Tools catalog",
-      actionHref: "/admin/tools",
+      actionHref: adminDeepLink.tools(),
     });
   }
 

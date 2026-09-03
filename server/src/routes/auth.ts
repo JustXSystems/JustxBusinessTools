@@ -244,7 +244,7 @@ router.post("/register", async (req, res) => {
         : `${email} registered a new business for GSTIN ${gstin} as Owner. JBT admin approval required.`,
       organizationId: orgId,
       businessProfileId: profileId,
-      href: joinedExisting ? "/profile" : "/admin/team?filter=pending",
+      href: joinedExisting ? "/profile" : "/admin/approvals?kind=user",
       entityType: "user",
       entityId: String(userId),
       targetRoles: joinedExisting ? ["owner", "admin"] : ["admin"],

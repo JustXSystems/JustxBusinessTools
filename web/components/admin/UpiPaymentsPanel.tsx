@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { PaymentsActionHandle } from "@/components/admin/payments-actions";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -69,7 +69,10 @@ function fmtWhen(value: string | null | undefined) {
   });
 }
 
-export const UpiPaymentsPanel = forwardRef<PaymentsActionHandle>(function UpiPaymentsPanel(_props, ref) {
+export const UpiPaymentsPanel = forwardRef<
+  PaymentsActionHandle,
+  { initialStatus?: string; focusClaimId?: number | null }
+>(function UpiPaymentsPanel({ initialStatus = "pending", focusClaimId = null }, ref) {
   const [payee, setPayee] = useState<Payee>({ enabled: true, vpa: "", payeeName: "", merchantCode: "" });
   const [notify, setNotify] = useState<Notify>({
     emailEnabled: true,
@@ -84,8 +87,8 @@ export const UpiPaymentsPanel = forwardRef<PaymentsActionHandle>(function UpiPay
   const savedSnap = useRef("");
   const [claims, setClaims] = useState<Claim[]>([]);
   const [outbox, setOutbox] = useState<Outbox[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [filter, setFilter] = useState("pending");
+  const [selectedId, setSelectedId] = useState<number | null>(focusClaimId);
+  const [filter, setFilter] = useState(initialStatus || "pending");
   const [reviewNote, setReviewNote] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -103,10 +106,19 @@ export const UpiPaymentsPanel = forwardRef<PaymentsActionHandle>(function UpiPay
     setClaims(cl.claims);
     setOutbox(ob.events);
     setSelectedId((cur) => {
+      if (focusClaimId && cl.claims.some((c) => c.id === focusClaimId)) return focusClaimId;
       if (cur && cl.claims.some((c) => c.id === cur)) return cur;
       return cl.claims[0]?.id ?? null;
     });
-  }, [filter]);
+  }, [filter, focusClaimId]);
+
+  useEffect(() => {
+    if (initialStatus) setFilter(initialStatus);
+  }, [initialStatus]);
+
+  useEffect(() => {
+    if (focusClaimId) setSelectedId(focusClaimId);
+  }, [focusClaimId]);
 
   useLiveRefresh(() => load().catch((e: Error) => setMessage(e.message)), {
     intervalMs: 20_000,

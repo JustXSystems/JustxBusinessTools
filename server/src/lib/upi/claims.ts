@@ -148,7 +148,7 @@ export async function createClaim(input: {
     eventType: "billing.upi_claim_submitted",
     title: "UPI payment awaiting verification",
     body: `${claim.payerName} · ₹${claim.amountInr} · UTR ${claim.utr}. JustXSystems will verify and notify you.`,
-    href: "/admin/approvals",
+    href: "/admin/approvals?kind=upi_claim",
     organizationId: claim.organizationId,
     businessProfileId: claim.profileId,
     entityType: "upi_claim",
@@ -256,7 +256,7 @@ export async function reviewClaim(
       action === "approved"
         ? `${next.payerName} · ₹${next.amountInr} · UTR ${next.utr} approved. Tools are now licensed.`
         : `${next.payerName} · ₹${next.amountInr} · UTR ${next.utr} was rejected${next.reviewNote ? `: ${next.reviewNote}` : "."}`,
-    href: action === "approved" ? "/subscription" : "/admin/approvals",
+      href: action === "approved" ? "/subscription" : "/admin/approvals?kind=upi_claim",
     organizationId: next.organizationId,
     businessProfileId: next.profileId,
     entityType: "upi_claim",

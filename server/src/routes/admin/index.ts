@@ -26,47 +26,20 @@ router.get("/dashboard", async (_req, res) => {
   const { getCollectionsSummary } = await import("../../lib/payments/collections.js");
   const { getSaasPaymentSummary } = await import("../../lib/payments/saas.js");
   const { listRenewalCandidates } = await import("../../lib/subscriptions/renewal-notices.js");
+  const { loadPendingInbox } = await import("../../lib/admin/pending-inbox.js");
+  const { adminDeepLink } = await import("../../lib/admin/deep-links.js");
   const { pool } = await import("../../db.js");
   const { orgEqualsSql, orgScopeParams } = await import("../../lib/platform-admin.js");
 
   const scope = orgScopeParams();
   const orgPred = orgEqualsSql("organization_id");
 
-  const [
-    analytics,
-    collections,
-    saas,
-    renewals,
-    profilePending,
-    userPending,
-    deskPending,
-    gatewayRows,
-    usagePulseRows,
-  ] = await Promise.all([
+  const [analytics, collections, saas, renewals, pendingInbox, gatewayRows, usagePulseRows] = await Promise.all([
     getAnalyticsOverview(30),
     getCollectionsSummary(),
     getSaasPaymentSummary(90),
     listRenewalCandidates(14),
-    pool.query(
-      `SELECT COUNT(*) AS cnt
-       FROM business_profiles p
-       LEFT JOIN business_profile_meta m ON m.business_profile_id = p.id
-       WHERE COALESCE(m.approval_status, 'approved') = 'pending'
-         AND ${orgEqualsSql("p.organization_id")}`,
-      scope,
-    ),
-    pool.query(
-      `SELECT COUNT(*) AS cnt
-       FROM org_members m
-       INNER JOIN users u ON u.id = m.user_id
-       WHERE u.status = 'pending' AND ${orgEqualsSql("m.organization_id")}`,
-      scope,
-    ),
-    pool.query(
-      `SELECT COUNT(*) AS cnt FROM payment_ops
-       WHERE approval_status = 'pending' AND ${orgPred}`,
-      scope,
-    ),
+    loadPendingInbox(),
     pool.query(
       `SELECT
          COUNT(*) AS total,
@@ -87,16 +60,11 @@ router.get("/dashboard", async (_req, res) => {
     ),
   ]);
 
-  let upiPending = 0;
-  let upiAmountInr = 0;
-  try {
-    const { listClaims } = await import("../../lib/upi/claims.js");
-    const claims = await listClaims("pending");
-    upiPending = claims.length;
-    upiAmountInr = claims.reduce((sum, c) => sum + c.amountInr, 0);
-  } catch {
-    /* optional */
-  }
+  const profiles = pendingInbox.summary.profiles;
+  const users = pendingInbox.summary.users;
+  const desk = pendingInbox.summary.deskOps;
+  const upiPending = pendingInbox.summary.upiClaims;
+  const upiAmountInr = pendingInbox.summary.upiAmountInr;
 
   let deliveryFailed = 0;
   let deliveryPending = 0;
@@ -128,20 +96,11 @@ router.get("/dashboard", async (_req, res) => {
     /* optional */
   }
 
-  const countOf = (result: unknown) => {
-    const rows = Array.isArray(result) ? result[0] : null;
-    const first = Array.isArray(rows) ? rows[0] : null;
-    return Number((first as { cnt?: number } | null)?.cnt ?? 0);
-  };
-
   const firstRow = (result: unknown) => {
     const rows = Array.isArray(result) ? result[0] : null;
     return (Array.isArray(rows) ? rows[0] : null) as Record<string, unknown> | null;
   };
 
-  const profiles = countOf(profilePending);
-  const users = countOf(userPending);
-  const desk = countOf(deskPending);
   const renewalsSoon = renewals.length;
   const limitBlocks = Number(analytics.totals.limit_blocks) || 0;
 
@@ -174,7 +133,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Branches awaiting approval",
       detail: `${profiles} GST branch${profiles === 1 ? "" : "es"} pending review`,
       count: profiles,
-      href: "/admin/profiles?filter=pending",
+      href: adminDeepLink.approvals("profile"),
     });
   }
   if (users > 0) {
@@ -184,7 +143,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Users awaiting approval",
       detail: `${users} teammate${users === 1 ? "" : "s"} cannot sign in until approved`,
       count: users,
-      href: "/admin/team?filter=pending",
+      href: adminDeepLink.approvals("user"),
     });
   }
   if (upiPending > 0) {
@@ -194,7 +153,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "UPI claims pending",
       detail: `${upiPending} claim${upiPending === 1 ? "" : "s"} · ₹${Math.round(upiAmountInr).toLocaleString("en-IN")}`,
       count: upiPending,
-      href: "/admin/payments?tab=upi",
+      href: adminDeepLink.approvals("upi_claim"),
     });
   }
   if (desk > 0) {
@@ -204,7 +163,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Payment desk items",
       detail: `${desk} offline / manual payment${desk === 1 ? "" : "s"} need a decision`,
       count: desk,
-      href: "/admin/payments?tab=ops",
+      href: adminDeepLink.approvals("payment_op"),
     });
   }
   if (renewalsSoon > 0) {
@@ -214,7 +173,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Renewals within 14 days",
       detail: `${renewalsSoon} subscription${renewalsSoon === 1 ? "" : "s"} approaching period end`,
       count: renewalsSoon,
-      href: "/admin/subscriptions",
+      href: adminDeepLink.subscriptions(),
     });
   }
   if (limitBlocks > 0) {
@@ -224,7 +183,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Limit blocks (30d)",
       detail: `${limitBlocks} blocked save${limitBlocks === 1 ? "" : "s"} — freemium friction / upgrade signal`,
       count: limitBlocks,
-      href: "/admin/analytics",
+      href: adminDeepLink.analytics(),
     });
   }
   if (deliveryFailed > 0) {
@@ -234,7 +193,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Document delivery failures",
       detail: `${deliveryFailed} failed PDF deliver${deliveryFailed === 1 ? "y" : "ies"} in the last 7 days`,
       count: deliveryFailed,
-      href: "/admin/profiles",
+      href: adminDeepLink.profiles(),
     });
   }
   if (gatewaysUnhealthy > 0) {
@@ -244,7 +203,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Gateway health needs check",
       detail: `${gatewaysUnhealthy} enabled gateway${gatewaysUnhealthy === 1 ? "" : "s"} untested or unhealthy`,
       count: gatewaysUnhealthy,
-      href: "/admin/gateways",
+      href: adminDeepLink.gateways("unhealthy"),
     });
   }
   if (auditHighRisk > 0) {
@@ -254,7 +213,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "High-risk audit events (7d)",
       detail: `${auditHighRisk} security / access / billing events worth a look`,
       count: auditHighRisk,
-      href: "/admin/audit",
+      href: adminDeepLink.audit(),
     });
   }
 

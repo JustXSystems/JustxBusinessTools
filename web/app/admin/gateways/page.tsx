@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
+import { adminDeepLink } from "@/lib/admin-deep-links";
 
 type Gateway = {
   id: number;
@@ -96,11 +98,25 @@ function credentialLabels(provider: string) {
 }
 
 export default function AdminGatewaysPage() {
+  return (
+    <Suspense fallback={<div className="admin-page"><p className="muted">Loading gateways…</p></div>}>
+      <AdminGatewaysInner />
+    </Suspense>
+  );
+}
+
+function AdminGatewaysInner() {
+  const search = useSearchParams();
+  const filterFromUrl = useMemo((): Filter => {
+    const f = search.get("filter");
+    if (f === "live" || f === "test" || f === "enabled" || f === "off" || f === "unhealthy") return f;
+    return "all";
+  }, [search]);
   const [gateways, setGateways] = useState<Gateway[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [events, setEvents] = useState<GwEvent[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>(filterFromUrl);
   const [query, setQuery] = useState("");
   const [pane, setPane] = useState<Pane>("health");
   const [form, setForm] = useState(emptyForm);
@@ -117,6 +133,10 @@ export default function AdminGatewaysPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+
+  useEffect(() => {
+    setFilter(filterFromUrl);
+  }, [filterFromUrl]);
 
   const load = useCallback(async (keepId?: number | null) => {
     setError("");
@@ -347,13 +367,13 @@ export default function AdminGatewaysPage() {
             >
               {loading ? "Loading…" : "Refresh"}
             </button>
-            <Link href="/admin/upi" className="btn btn-ghost btn-sm">
+            <Link href={adminDeepLink.upi()} className="btn btn-ghost btn-sm">
               UPI QR (default)
             </Link>
-            <Link href="/admin/payments" className="btn btn-ghost btn-sm">
+            <Link href={adminDeepLink.payments()} className="btn btn-ghost btn-sm">
               Payments
             </Link>
-            <Link href="/admin/subscriptions" className="btn btn-ghost btn-sm">
+            <Link href={adminDeepLink.subscriptions()} className="btn btn-ghost btn-sm">
               Plans
             </Link>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>

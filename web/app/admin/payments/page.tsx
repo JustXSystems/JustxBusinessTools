@@ -196,15 +196,32 @@ function AdminPaymentsInner() {
   const [opForm, setOpForm] = useState(emptyOpForm);
   const [txnQuery, setTxnQuery] = useState("");
   const [txnStatus, setTxnStatus] = useState<TxnStatus>("all");
-  const [opsFilter, setOpsFilter] = useState<OpsFilter>("all");
+  const [opsFilter, setOpsFilter] = useState<OpsFilter>(() => {
+    const f = searchParams.get("filter");
+    if (f === "pending" || f === "approved" || f === "rejected") return f;
+    return "all";
+  });
   const [opsQuery, setOpsQuery] = useState("");
-  const [selectedOpId, setSelectedOpId] = useState<number | null>(null);
+  const [selectedOpId, setSelectedOpId] = useState<number | null>(() => {
+    const n = Number(searchParams.get("op"));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  });
   const [busyId, setBusyId] = useState<number | "create" | null>(null);
   const [tabBusy, setTabBusy] = useState(false);
   const [upiReady, setUpiReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const focusOpId = useMemo(() => {
+    const n = Number(searchParams.get("op"));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [searchParams]);
+  const filterFromUrl = useMemo((): OpsFilter => {
+    const f = searchParams.get("filter");
+    if (f === "pending" || f === "approved" || f === "rejected") return f;
+    return "all";
+  }, [searchParams]);
 
   useEffect(() => {
     if (tab === "upi") setUpiReady(true);
@@ -214,21 +231,40 @@ function AdminPaymentsInner() {
     setTab(tabFromUrl);
   }, [tabFromUrl]);
 
-  function selectTab(next: Tab) {
+  useEffect(() => {
+    if (tabFromUrl === "ops") setOpsFilter(filterFromUrl);
+  }, [tabFromUrl, filterFromUrl]);
+
+  function selectTab(next: Tab, extras?: { filter?: OpsFilter; op?: number | null }) {
     setTab(next);
-    router.replace(`/admin/payments?tab=${next}`);
+    const params = new URLSearchParams();
+    params.set("tab", next);
+    if (next === "ops") {
+      const f = extras?.filter ?? opsFilter;
+      if (f && f !== "all") params.set("filter", f);
+      const op = extras?.op !== undefined ? extras.op : selectedOpId;
+      if (op) params.set("op", String(op));
+    }
+    if (next === "upi") {
+      const status = searchParams.get("status");
+      const claim = searchParams.get("claim");
+      if (status) params.set("status", status);
+      if (claim) params.set("claim", claim);
+    }
+    router.replace(`/admin/payments?${params.toString()}`);
   }
 
   const loadOps = useCallback(async () => {
     const d = await api<{ ops: PaymentOp[] }>("/admin/payments/ops");
     setOps(d.ops);
     setSelectedOpId((cur) => {
+      if (focusOpId && d.ops.some((o) => o.id === focusOpId)) return focusOpId;
       if (cur && d.ops.some((o) => o.id === cur)) return cur;
       const pending = d.ops.find((o) => o.approvalStatus === "pending");
       return pending?.id ?? d.ops[0]?.id ?? null;
     });
     return d.ops;
-  }, []);
+  }, [focusOpId]);
 
   const load = useCallback(
     async (range: number) => {
@@ -515,7 +551,11 @@ function AdminPaymentsInner() {
 
       {upiReady ? (
         <div hidden={tab !== "upi"} className={tab === "upi" ? undefined : "payments-tab-park"}>
-          <UpiPaymentsPanel ref={upiSaveRef} />
+          <UpiPaymentsPanel
+            ref={upiSaveRef}
+            initialStatus={searchParams.get("status") || "pending"}
+            focusClaimId={Number(searchParams.get("claim")) || null}
+          />
         </div>
       ) : null}
 
@@ -836,7 +876,15 @@ function AdminPaymentsInner() {
               />
               <div className="admin-tabs">
                 {(["all", "pending", "approved", "rejected"] as OpsFilter[]).map((f) => (
-                  <button key={f} type="button" className={opsFilter === f ? "active" : ""} onClick={() => setOpsFilter(f)}>
+                  <button
+                    key={f}
+                    type="button"
+                    className={opsFilter === f ? "active" : ""}
+                    onClick={() => {
+                      setOpsFilter(f);
+                      selectTab("ops", { filter: f, op: selectedOpId });
+                    }}
+                  >
                     {f}
                   </button>
                 ))}

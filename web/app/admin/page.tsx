@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { formatAnalyticsBucket } from "@/components/admin/AnalyticsRangePills";
 import { uniqueTools } from "@/config/tools.config";
+import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
@@ -148,7 +149,7 @@ export default function AdminDashboardPage() {
           </span>
         </div>
         <div className="analytics-kpis">
-          <Link href="/admin/approvals" className={`result-card${inbox.total ? " dash-kpi-alert" : ""}`}>
+          <Link href={adminDeepLink.approvals()} className={`result-card${inbox.total ? " dash-kpi-alert" : ""}`}>
             <span>Approvals inbox</span>
             <strong>{inbox.total}</strong>
             <span className="analytics-delta">
@@ -156,24 +157,24 @@ export default function AdminDashboardPage() {
             </span>
           </Link>
           <Link
-            href="/admin/team?filter=pending"
+            href={adminDeepLink.approvals("user")}
             className={`result-card${inbox.users ? " dash-kpi-alert" : ""}`}
           >
             <span>Pending users</span>
             <strong>{inbox.users}</strong>
-            <span className="analytics-delta">Team → pending filter</span>
+            <span className="analytics-delta">Approvals → users</span>
           </Link>
-          <Link href="/admin/payments?tab=upi" className={`result-card${inbox.upiClaims ? " dash-kpi-alert" : ""}`}>
+          <Link href={adminDeepLink.upiClaimPending()} className={`result-card${inbox.upiClaims ? " dash-kpi-alert" : ""}`}>
             <span>UPI pending</span>
             <strong>{inbox.upiClaims}</strong>
             <span className="analytics-delta">{inr(inbox.upiAmountInr)}</span>
           </Link>
-          <Link href="/admin/subscriptions" className={`result-card${inbox.renewalsSoon ? " dash-kpi-warn" : ""}`}>
+          <Link href={adminDeepLink.subscriptions()} className={`result-card${inbox.renewalsSoon ? " dash-kpi-warn" : ""}`}>
             <span>Renewals ≤14d</span>
             <strong>{inbox.renewalsSoon}</strong>
             <span className="analytics-delta">Plans &amp; notice job</span>
           </Link>
-          <Link href="/admin/analytics" className={`result-card${t.limit_blocks ? " dash-kpi-warn" : ""}`}>
+          <Link href={adminDeepLink.analytics()} className={`result-card${t.limit_blocks ? " dash-kpi-warn" : ""}`}>
             <span>Limit blocks (30d)</span>
             <strong>{t.limit_blocks}</strong>
             <span className="analytics-delta">{conversion}% open → create</span>
@@ -218,7 +219,10 @@ export default function AdminDashboardPage() {
         </section>
 
         <div className="admin-grid dash-health-grid">
-          <Link href="/admin/gateways" className="panel admin-card dash-health-card">
+          <Link
+            href={health.gateways.unhealthy ? adminDeepLink.gateways("unhealthy") : adminDeepLink.gateways()}
+            className="panel admin-card dash-health-card"
+          >
             <h2>Gateways</h2>
             <strong>
               {health.gateways.enabled}/{health.gateways.total || "—"} enabled
@@ -229,21 +233,21 @@ export default function AdminDashboardPage() {
                 : "All enabled gateways look healthy"}
             </p>
           </Link>
-          <Link href="/admin/profiles" className="panel admin-card dash-health-card">
+          <Link href={adminDeepLink.profiles()} className="panel admin-card dash-health-card">
             <h2>Document delivery</h2>
             <strong>{health.delivery.failed7d} failed</strong>
             <p className={health.delivery.failed7d ? "analytics-delta is-down" : "muted"}>
               {health.delivery.pending7d} pending · last 7 days
             </p>
           </Link>
-          <Link href="/admin/audit" className="panel admin-card dash-health-card">
+          <Link href={adminDeepLink.audit()} className="panel admin-card dash-health-card">
             <h2>Audit risk</h2>
             <strong>{health.audit.highRisk7d}</strong>
             <p className={health.audit.highRisk7d ? "analytics-delta is-down" : "muted"}>
               High-risk events in 7 days
             </p>
           </Link>
-          <Link href="/admin/payments" className="panel admin-card dash-health-card">
+          <Link href={adminDeepLink.paymentSaas()} className="panel admin-card dash-health-card">
             <h2>Payment failures</h2>
             <strong>{health.payments.failedCount}</strong>
             <p className={health.payments.failedCount ? "analytics-delta is-down" : "muted"}>
@@ -259,7 +263,7 @@ export default function AdminDashboardPage() {
                 <h2>Usage pulse (30d)</h2>
                 <p className="muted">Opens, creates, and exports by {grain === "month" ? "month" : grain === "week" ? "week" : "day"}.</p>
               </div>
-              <Link href="/admin/analytics" className="btn btn-ghost btn-sm">
+              <Link href={adminDeepLink.analytics()} className="btn btn-ghost btn-sm">
                 Full analytics
               </Link>
             </div>
@@ -320,7 +324,7 @@ export default function AdminDashboardPage() {
                 <p className="muted">Collections health and SaaS billing.</p>
               </div>
               <div className="admin-form-row">
-                <Link href="/admin/payments" className="btn btn-ghost btn-sm">
+                <Link href={adminDeepLink.payments()} className="btn btn-ghost btn-sm">
                   Payments
                 </Link>
                 <Link href="/admin/subscriptions" className="btn btn-ghost btn-sm">
@@ -379,7 +383,7 @@ export default function AdminDashboardPage() {
               <h2>Top tools</h2>
               <p className="muted">Most used tools in the last 30 days.</p>
             </div>
-            <Link href="/admin/tools" className="btn btn-ghost btn-sm">
+            <Link href={adminDeepLink.tools()} className="btn btn-ghost btn-sm">
               Manage tools
             </Link>
           </div>
@@ -419,25 +423,25 @@ export default function AdminDashboardPage() {
         <section className="panel admin-card dash-quick-links">
           <h2>Quick links</h2>
           <div className="dash-link-row">
-            <Link href="/admin/team" className="btn btn-secondary btn-sm">
+            <Link href={adminDeepLink.users()} className="btn btn-secondary btn-sm">
               Team
             </Link>
-            <Link href="/admin/profiles" className="btn btn-secondary btn-sm">
+            <Link href={adminDeepLink.profiles()} className="btn btn-secondary btn-sm">
               Profiles
             </Link>
-            <Link href="/admin/gateways" className="btn btn-secondary btn-sm">
+            <Link href={adminDeepLink.gateways()} className="btn btn-secondary btn-sm">
               Gateways
             </Link>
-            <Link href="/admin/audit" className="btn btn-secondary btn-sm">
+            <Link href={adminDeepLink.audit()} className="btn btn-secondary btn-sm">
               Audit
             </Link>
-            <Link href="/admin/ops" className="btn btn-secondary btn-sm">
+            <Link href={adminDeepLink.ops()} className="btn btn-secondary btn-sm">
               Operations
             </Link>
-            <Link href="/admin/experience" className="btn btn-secondary btn-sm">
+            <Link href={adminDeepLink.experienceBranding()} className="btn btn-secondary btn-sm">
               Experience
             </Link>
-            <Link href="/admin/analytics" className="btn btn-secondary btn-sm">
+            <Link href={adminDeepLink.analytics()} className="btn btn-secondary btn-sm">
               Analytics
             </Link>
           </div>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { uniqueTools } from "@/config/tools.config";
+import { adminDeepLink } from "@/lib/admin-deep-links";
 
 export type LiveEvent = {
   id: number;
@@ -549,12 +550,12 @@ export function LiveActivityStream({
                               </Link>
                             ) : null}
                             {meta.aspect === "blocks" || meta.aspect === "upgrades" ? (
-                              <Link href="/admin/subscriptions" className="btn btn-secondary btn-sm">
+                              <Link href={adminDeepLink.subscriptions()} className="btn btn-secondary btn-sm">
                                 Review plans
                               </Link>
                             ) : null}
                             {ev.actorEmail ? (
-                              <Link href="/admin/team" className="btn btn-ghost btn-sm">
+                              <Link href={adminDeepLink.users()} className="btn btn-ghost btn-sm">
                                 Team directory
                               </Link>
                             ) : null}

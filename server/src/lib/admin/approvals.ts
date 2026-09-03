@@ -41,7 +41,14 @@ export async function createApproval(input: {
     eventType: "approval.requested",
     title: "Approval requested",
     body: `${input.entityType.replace(/_/g, " ")} · ${input.action} requires review${input.note ? `: ${input.note}` : "."}`,
-    href: "/admin/approvals",
+    href:
+      input.entityType === "business_profile"
+        ? "/admin/approvals?kind=profile"
+        : input.entityType === "payment_op"
+          ? "/admin/approvals?kind=payment_op"
+          : input.entityType === "user"
+            ? "/admin/approvals?kind=user"
+            : "/admin/approvals",
     entityType: input.entityType,
     entityId: input.entityId,
     organizationId: orgId,
