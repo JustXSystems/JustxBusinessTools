@@ -157,12 +157,12 @@ export default function AdminDashboardPage() {
             </span>
           </Link>
           <Link
-            href={adminDeepLink.approvals("user")}
+            href={adminDeepLink.userPending()}
             className={`result-card${inbox.users ? " dash-kpi-alert" : ""}`}
           >
             <span>Pending users</span>
             <strong>{inbox.users}</strong>
-            <span className="analytics-delta">Approvals → users</span>
+            <span className="analytics-delta">Users → pending filter</span>
           </Link>
           <Link href={adminDeepLink.upiClaimPending()} className={`result-card${inbox.upiClaims ? " dash-kpi-alert" : ""}`}>
             <span>UPI pending</span>

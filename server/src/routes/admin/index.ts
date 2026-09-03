@@ -143,7 +143,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Users awaiting approval",
       detail: `${users} teammate${users === 1 ? "" : "s"} cannot sign in until approved`,
       count: users,
-      href: adminDeepLink.approvals("user"),
+      href: adminDeepLink.userPending(),
     });
   }
   if (upiPending > 0) {
