@@ -133,6 +133,10 @@ export default function RegisterPage() {
   function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    processLogoFile(file);
+  }
+
+  function processLogoFile(file: File) {
     if (file.size > 2 * 1024 * 1024) {
       setError("Logo must be 2 MB or smaller");
       return;
@@ -140,6 +144,23 @@ export default function RegisterPage() {
     const reader = new FileReader();
     reader.onload = () => setLogo(String(reader.result));
     reader.readAsDataURL(file);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please drop an image file");
+      return;
+    }
+    processLogoFile(file);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -251,10 +272,14 @@ export default function RegisterPage() {
                   away; JustX can review the Business Profile later.
                 </p>
               ) : null}
-              <label className="field">
+              <div className="field">
                 <span>Company logo</span>
                 <div className="register-logo-row">
-                  <div className="logo-preview-lg">
+                  <div
+                    className="logo-preview-lg"
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                  >
                     {logo ? (
                       <img src={publicAssetUrl(logo)} alt="Logo preview" />
                     ) : (
@@ -268,7 +293,7 @@ export default function RegisterPage() {
                     </label>
                   )}
                 </div>
-              </label>
+              </div>
               <label className="field">
                 <span>Business name</span>
                 <input
