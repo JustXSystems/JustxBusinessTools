@@ -113,7 +113,7 @@ router.post("/register", async (req, res) => {
     if (existing) {
       const [userResult] = await conn.query(
         `INSERT INTO users (email, password_hash, name, phone, status)
-         VALUES (:email, :hash, :name, :phone, 'active')`,
+         VALUES (:email, :hash, :name, :phone, 'pending')`,
         { email, hash: passwordHash, name: name || null, phone },
       );
       userId = Number((userResult as { insertId: number }).insertId);
@@ -169,7 +169,7 @@ router.post("/register", async (req, res) => {
         if (!existing) throw err;
         const [userResult] = await conn.query(
           `INSERT INTO users (email, password_hash, name, phone, status)
-           VALUES (:email, :hash, :name, :phone, 'active')`,
+           VALUES (:email, :hash, :name, :phone, 'pending')`,
           { email, hash: passwordHash, name: name || null, phone },
         );
         userId = Number((userResult as { insertId: number }).insertId);
@@ -186,7 +186,7 @@ router.post("/register", async (req, res) => {
       if (!joinedExisting) {
         const [userResult] = await conn.query(
           `INSERT INTO users (email, password_hash, name, phone, status)
-           VALUES (:email, :hash, :name, :phone, 'active')`,
+           VALUES (:email, :hash, :name, :phone, 'pending')`,
           { email, hash: passwordHash, name: name || null, phone },
         );
         userId = Number((userResult as { insertId: number }).insertId);
@@ -224,34 +224,39 @@ router.post("/register", async (req, res) => {
 
     await conn.commit();
 
-    const token = await createSession(userId!, orgId, profileId);
-    setSessionCookie(res, token);
-    const user = await loadSessionUser(userId!, orgId, profileId);
+    // Self-registration always stays pending until Owner (join) or JBT admin (new Owner) approves.
     await logAudit(
       joinedExisting ? "auth.register.join" : "auth.register",
       "user",
       String(userId),
-      { email, gstin, joinedExisting },
+      { email, gstin, joinedExisting, status: "pending" },
       req.ip,
     );
     publishNotificationAsync({
       eventType: joinedExisting ? "auth.user_registered" : "admin.business_update",
-      title: joinedExisting ? "New user joined your business" : "New business registered",
+      title: joinedExisting ? "New user awaiting approval" : "New business Owner awaiting approval",
       body: joinedExisting
-        ? `${email} registered against GSTIN ${gstin} and is pending review.`
-        : `${email} created a new organization for GSTIN ${gstin}.`,
+        ? `${email} requested to join GSTIN ${gstin}. Approve as Staff or Viewer in Business Profile.`
+        : `${email} registered a new business for GSTIN ${gstin} as Owner. JBT admin approval required.`,
       organizationId: orgId,
       businessProfileId: profileId,
-      href: joinedExisting ? "/admin/team" : "/admin/profiles",
+      href: joinedExisting ? "/profile" : "/admin/team",
       entityType: "user",
       entityId: String(userId),
-      targetRoles: joinedExisting ? ["owner", "admin"] : ["admin", "owner"],
-      targetUserId: userId,
+      targetRoles: joinedExisting ? ["owner", "admin"] : ["admin"],
       dedupeKey: `auth-reg:${userId}`,
       severity: "attention",
       expiresInHours: 336,
     });
-    res.status(201).json({ user, joinedExisting });
+    const message = joinedExisting
+      ? "Request sent. The Business Profile Owner must approve you before you can sign in."
+      : "Account created. A JustX admin must approve your Owner registration before you can sign in.";
+    res.status(201).json({
+      pending: true,
+      joinedExisting,
+      email,
+      message,
+    });
   } catch (err) {
     await conn.rollback();
     throw err;
@@ -289,7 +294,7 @@ router.post("/login", async (req, res) => {
   if (r.status !== "active" || !r.password_hash) {
     const reason =
       r.status === "pending"
-        ? "Your account is awaiting admin approval"
+        ? "Your account is awaiting approval"
         : r.status === "suspended"
           ? "Your account is suspended"
           : r.status === "rejected"

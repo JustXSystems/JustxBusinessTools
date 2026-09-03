@@ -19,6 +19,7 @@ import { publicAssetUrl } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
 import { MfaSettingsPanel } from "@/components/profile/MfaSettingsPanel";
+import { TeamRequestsPanel } from "@/components/profile/TeamRequestsPanel";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -144,6 +145,8 @@ export default function ProfilePage() {
       ) : null}
 
       <MfaSettingsPanel />
+
+      {canEdit ? <TeamRequestsPanel /> : null}
 
       {error ? <div className="error-banner">{error}</div> : null}
       {message ? <div className="panel profile-success">{message}</div> : null}

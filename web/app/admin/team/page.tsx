@@ -106,6 +106,7 @@ export default function AdminTeamPage() {
     branchIds: [] as number[],
   });
   const [profile, setProfile] = useState({ name: "", phone: "", role: "staff" });
+  const [approveRole, setApproveRole] = useState<"staff" | "viewer">("staff");
   const [newPassword, setNewPassword] = useState("");
 
   const selected = members.find((m) => m.id === selectedId) ?? null;
@@ -272,6 +273,8 @@ export default function AdminTeamPage() {
                 <span className="tracker-row-title">{m.name || m.email}</span>
                 <span className="tracker-row-sub">
                   {m.email} · {m.role}
+                  {m.status === "pending" && m.role === "owner" ? " · new business" : null}
+                  {m.status === "pending" && m.role !== "owner" ? " · join request" : null}
                   {m.organizationName ? ` · ${m.organizationName}` : ""}
                   {m.gstin ? ` · ${m.gstin}` : ""}
                 </span>
@@ -363,7 +366,46 @@ export default function AdminTeamPage() {
               <div className="admin-form-row">
                 {selected.status === "pending" ? (
                   <>
-                    <button type="button" className="btn btn-primary" onClick={() => run("Approved — they can sign in.", () => api(`/admin/team/${selected.id}/approve`, { method: "POST" }).then(() => undefined))}>Approve access</button>
+                    {selected.role === "owner" ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() =>
+                          run("Owner approved — they can sign in.", () =>
+                            api(`/admin/team/${selected.id}/approve`, { method: "POST" }).then(() => undefined),
+                          )
+                        }
+                      >
+                        Approve Owner
+                      </button>
+                    ) : (
+                      <>
+                        <label className="field" style={{ minWidth: 140 }}>
+                          <span>Assign role</span>
+                          <select
+                            value={approveRole}
+                            onChange={(e) => setApproveRole(e.target.value as "staff" | "viewer")}
+                          >
+                            <option value="staff">Staff</option>
+                            <option value="viewer">Viewer</option>
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() =>
+                            run(`Approved as ${approveRole} — they can sign in.`, () =>
+                              api(`/admin/team/${selected.id}/approve`, {
+                                method: "POST",
+                                body: JSON.stringify({ role: approveRole }),
+                              }).then(() => undefined),
+                            )
+                          }
+                        >
+                          Approve access
+                        </button>
+                      </>
+                    )}
                     <button type="button" className="btn btn-secondary" onClick={() => run("Request declined.", () => api(`/admin/team/${selected.id}/reject`, { method: "POST" }).then(() => undefined))}>Reject</button>
                   </>
                 ) : null}

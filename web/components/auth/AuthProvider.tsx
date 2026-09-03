@@ -42,7 +42,7 @@ type AuthContextValue = {
     businessEmail?: string;
     logo?: string;
     homeToolIds?: string[];
-  }) => Promise<void>;
+  }) => Promise<{ pending: true; joinedExisting: boolean; email: string; message: string }>;
   logout: () => Promise<void>;
   switchBranch: (profileId: number) => Promise<void>;
   refresh: () => Promise<void>;
@@ -120,11 +120,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logo?: string;
       homeToolIds?: string[];
     }) => {
-      const data = await api<{ user: SessionUser; joinedExisting?: boolean }>("/auth/register", {
+      const data = await api<{
+        pending: true;
+        joinedExisting: boolean;
+        email: string;
+        message: string;
+      }>("/auth/register", {
         method: "POST",
         body: JSON.stringify(input),
       });
-      setUser(data.user);
+      // No session until Owner / JBT admin approves.
+      return {
+        pending: true as const,
+        joinedExisting: Boolean(data.joinedExisting),
+        email: data.email,
+        message: data.message,
+      };
     },
     [],
   );

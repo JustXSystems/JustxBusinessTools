@@ -31,7 +31,7 @@ router.get("/inbox", async (_req, res) => {
       scope,
     ),
     pool.query(
-      `SELECT u.id, u.email, u.name, u.created_at, o.name AS organization_name
+      `SELECT u.id, u.email, u.name, u.created_at, o.name AS organization_name, m.role
        FROM org_members m
        INNER JOIN users u ON u.id = m.user_id
        INNER JOIN organizations o ON o.id = m.organization_id
@@ -79,12 +79,16 @@ router.get("/inbox", async (_req, res) => {
       name: string | null;
       created_at: string | null;
       organization_name: string | null;
+      role: string;
     };
+    const role = String(r.role || "");
+    const kindLabel =
+      role === "owner" ? "New business Owner" : role ? `Join request (${role})` : "Join request";
     items.push({
       kind: "user",
       id: String(r.id),
       title: r.name || String(r.email),
-      subtitle: r.organization_name ? `User · ${r.organization_name}` : String(r.email),
+      subtitle: r.organization_name ? `${kindLabel} · ${r.organization_name}` : kindLabel,
       status: "pending",
       createdAt: r.created_at ? String(r.created_at) : null,
       href: `/admin/team`,

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
@@ -38,7 +37,6 @@ function stateFromGstin(gstin: string): [string, string] | null {
 
 export default function RegisterPage() {
   const { register } = useAuth();
-  const router = useRouter();
   const [gstin, setGstin] = useState("");
   const [lookup, setLookup] = useState<"idle" | "loading" | "done">("idle");
   const [lookedGstin, setLookedGstin] = useState("");
@@ -61,6 +59,11 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pendingResult, setPendingResult] = useState<{
+    joinedExisting: boolean;
+    email: string;
+    message: string;
+  } | null>(null);
 
   const gstinNorm = gstin.trim().toUpperCase();
   const gstinValid = GSTIN_RE.test(gstinNorm);
@@ -155,7 +158,7 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      await register({
+      const result = await register({
         email,
         password,
         name: name || undefined,
@@ -172,7 +175,11 @@ export default function RegisterPage() {
         logo: joining || !logo ? undefined : logo,
         homeToolIds: joining ? undefined : homeToolIds,
       });
-      router.push("/");
+      setPendingResult({
+        joinedExisting: result.joinedExisting,
+        email: result.email,
+        message: result.message,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
@@ -180,13 +187,35 @@ export default function RegisterPage() {
     }
   }
 
+  if (pendingResult) {
+    return (
+      <div className="login-page">
+        <div className="panel login-panel register-panel">
+          <h1>Awaiting approval</h1>
+          <p>{pendingResult.message}</p>
+          <p className="muted">
+            We registered <strong>{pendingResult.email}</strong>
+            {pendingResult.joinedExisting
+              ? ". You will be able to sign in after the Business Profile Owner (or a JustX admin) approves your request."
+              : ". You will be able to sign in after a JustX admin approves your Owner account."}
+          </p>
+          <p className="muted login-hint">
+            <Link href="/login">Back to sign in</Link>
+          </p>
+        </div>
+        <PoweredByFooter />
+      </div>
+    );
+  }
+
   return (
     <div className="login-page">
       <div className="panel login-panel register-panel">
         <h1>Register</h1>
         <p className="muted">
-          Enter GSTIN and tab out to load an existing business. If it is new, complete the business profile, then your
-          user details.
+          Enter GSTIN and tab out to load an existing business. New GSTIN creates an Owner account (JustX admin
+          approval required). Joining an existing GSTIN sends a request for the Business Owner to approve as Staff or
+          Viewer.
         </p>
         <form onSubmit={handleSubmit} className="login-form">
           <div className="register-grid">
@@ -209,10 +238,13 @@ export default function RegisterPage() {
               {locked ? (
                 <p className="muted">
                   This GSTIN already has a business profile. Details below are read-only. Enter your user details to
-                  join and share the subscription.
+                  request access — the Business Profile Owner will approve you as Staff or Viewer.
                 </p>
               ) : lookup === "done" && gstinValid ? (
-                <p className="muted">GSTIN not found. Enter the business profile details to create it.</p>
+                <p className="muted">
+                  GSTIN not found. Enter the business profile details to create it. Your Owner account will need JustX
+                  admin approval before you can sign in.
+                </p>
               ) : null}
               <label className="field">
                 <span>Company logo</span>
@@ -328,7 +360,7 @@ export default function RegisterPage() {
           </div>
           {error ? <p className="field-error">{error}</p> : null}
           <button type="submit" className="btn btn-primary" disabled={loading || lookup === "loading"}>
-            {loading ? "Saving…" : locked ? "Join business" : "Create account"}
+            {loading ? "Saving…" : locked ? "Request to join" : "Create account"}
           </button>
         </form>
         <p className="muted login-hint">

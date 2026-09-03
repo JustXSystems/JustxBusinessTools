@@ -334,13 +334,36 @@ router.post("/:userId/approve", async (req, res) => {
     res.status(member.status).json({ error: member.error });
     return;
   }
-  await pool.query(`UPDATE users SET status = 'active' WHERE id = :userId`, { userId });
-  await logAudit("team.approve", "user", String(userId), undefined, req.ip);
   const orgId = member.orgId;
+  const currentRole = await memberRole(orgId, userId);
+  const requested = String(req.body?.role ?? "").trim().toLowerCase();
+
+  let nextRole = currentRole;
+  if (currentRole === "owner") {
+    // New-GSTIN Owner accounts: activate only; role stays owner.
+    nextRole = "owner";
+  } else if (requested === "staff" || requested === "viewer") {
+    nextRole = requested;
+  } else if (currentRole === "staff" || currentRole === "viewer") {
+    nextRole = currentRole || "staff";
+  }
+
+  if (nextRole && nextRole !== currentRole) {
+    await pool.query(
+      `UPDATE org_members SET role = :role WHERE organization_id = :orgId AND user_id = :userId`,
+      { role: nextRole, orgId, userId },
+    );
+  }
+
+  await pool.query(`UPDATE users SET status = 'active' WHERE id = :userId`, { userId });
+  await logAudit("team.approve", "user", String(userId), { role: nextRole }, req.ip);
   await publishNotification({
     eventType: "team.member_approved",
     title: "Team member approved",
-    body: `User #${userId} is now active.`,
+    body:
+      currentRole === "owner"
+        ? `Owner account #${userId} is now active.`
+        : `User #${userId} is now active as ${nextRole}.`,
     href: "/admin/team",
     organizationId: orgId,
     entityType: "user",
@@ -351,7 +374,7 @@ router.post("/:userId/approve", async (req, res) => {
     dedupeKey: `team-approved:${userId}`,
     expiresInHours: 168,
   });
-  res.json({ ok: true });
+  res.json({ ok: true, role: nextRole });
 });
 
 router.post("/:userId/reject", async (req, res) => {
