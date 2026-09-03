@@ -494,10 +494,25 @@ function AdminProfilesInner() {
                     {selected.approvalStatus === "pending" ? (
                       <>
                         <input value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} placeholder="Rejection note" />
-                        <button type="button" className="btn btn-secondary" onClick={() => run("Branch rejected.", () => api(`/admin/profiles/${selected.id}/reject`, {
-                          method: "POST",
-                          body: JSON.stringify({ note: rejectNote || "Rejected" }),
-                        }).then(() => undefined))}>Reject</button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() =>
+                            run(
+                              "Business rejected. If you are a JustX admin, all org users were suspended and logged out.",
+                              () =>
+                                api(`/admin/profiles/${selected.id}/reject`, {
+                                  method: "POST",
+                                  body: JSON.stringify({ note: rejectNote || "Rejected" }),
+                                }).then(() => undefined),
+                            )
+                          }
+                        >
+                          Reject
+                        </button>
+                        <p className="muted">
+                          JustX admin reject suspends every user on this business and ends all their sessions immediately.
+                        </p>
                       </>
                     ) : null}
                     {!selected.isDefault && selected.approvalStatus === "approved" ? (

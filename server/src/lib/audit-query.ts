@@ -533,7 +533,7 @@ export async function getAuditOverview(daysRaw: unknown): Promise<AuditOverview>
 
     if (r.action === "auth.mfa_disable") mfaDisable.push(r);
     if (
-      ["team.suspend", "team.reset_password", "team.revoke_sessions", "team.remove", "team.role_matrix"].includes(
+      ["team.suspend", "org.suspend_access", "team.reset_password", "team.revoke_sessions", "team.remove", "team.role_matrix"].includes(
         r.action,
       )
     ) {

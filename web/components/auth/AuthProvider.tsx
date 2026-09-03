@@ -42,14 +42,22 @@ type AuthContextValue = {
     businessEmail?: string;
     logo?: string;
     homeToolIds?: string[];
-  }) => Promise<{
-    pending: true;
-    joinedExisting: boolean;
-    email: string;
-    title: string;
-    message: string;
-    detail: string;
-  }>;
+  }) => Promise<
+    | {
+        pending: true;
+        joinedExisting: boolean;
+        email: string;
+        title: string;
+        message: string;
+        detail: string;
+      }
+    | {
+        pending: false;
+        joinedExisting: false;
+        email: string;
+        user: SessionUser;
+      }
+  >;
   logout: () => Promise<void>;
   switchBranch: (profileId: number) => Promise<void>;
   refresh: () => Promise<void>;
@@ -128,24 +136,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       homeToolIds?: string[];
     }) => {
       const data = await api<{
-        pending: true;
+        pending: boolean;
         joinedExisting: boolean;
         email: string;
         title?: string;
-        message: string;
+        message?: string;
         detail?: string;
+        user?: SessionUser;
       }>("/auth/register", {
         method: "POST",
         body: JSON.stringify(input),
       });
-      // No session until Owner / JBT admin approves.
+      if (!data.pending && data.user) {
+        setUser(data.user);
+        return {
+          pending: false as const,
+          joinedExisting: false as const,
+          email: data.email,
+          user: data.user,
+        };
+      }
       return {
         pending: true as const,
         joinedExisting: Boolean(data.joinedExisting),
         email: data.email,
         title: data.title || "Awaiting approval",
-        message: data.message,
-        detail: data.detail || data.message,
+        message: data.message || "Your request is awaiting approval.",
+        detail: data.detail || data.message || "",
       };
     },
     [],

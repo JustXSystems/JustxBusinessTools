@@ -55,11 +55,11 @@ type RegistrationCopyForm = {
 };
 
 const DEFAULT_REG_COPY: RegistrationCopyForm = {
-  pendingOwnerTitle: "Awaiting approval",
+  pendingOwnerTitle: "Welcome — you're in",
   pendingOwnerMessage:
-    "Account created. A JustX admin must approve your Owner registration before you can sign in.",
+    "Your Owner account is ready. You can start using JustX Business Tools right away while JustX reviews your business profile.",
   pendingOwnerDetail:
-    "We registered {{email}}. You will be able to sign in after a JustX admin approves your Owner account.",
+    "Signed in as {{email}}. A JustX admin may review your Business Profile later; approval is not required to continue.",
   pendingJoinTitle: "Awaiting approval",
   pendingJoinMessage:
     "Request sent. The Business Profile Owner must approve you before you can sign in.",
@@ -502,13 +502,14 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
         </section>
 
         <section className="panel admin-card" style={{ marginTop: 16 }}>
-          <h2>Pending registration screen</h2>
+          <h2>Registration screen copy</h2>
           <p className="muted">
-            Shown after someone registers and waits for approval. Use <code>{"{{email}}"}</code> in the detail lines.
+            Join-request screens still show after someone registers against an existing GSTIN. New-GSTIN Owners sign in
+            immediately (these Owner fields are fallbacks only). Use <code>{"{{email}}"}</code> in detail lines.
           </p>
           <div className="admin-form-grid">
             <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>New GSTIN (Owner) — title</span>
+              <span>New GSTIN (Owner) — title (unused when auto-login succeeds)</span>
               <input
                 value={regCopy.pendingOwnerTitle}
                 onChange={(e) => setRegCopy({ ...regCopy, pendingOwnerTitle: e.target.value })}

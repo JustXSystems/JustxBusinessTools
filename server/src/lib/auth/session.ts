@@ -78,7 +78,7 @@ export async function destroySession(token: string): Promise<void> {
 export async function resolveSession(token: string): Promise<RequestContext | null> {
   const [rows] = await pool.query(
     `SELECT s.id AS session_id, s.user_id, s.organization_id, s.business_profile_id, s.expires_at,
-            m.role, u.email, COALESCE(u.is_platform_admin, 0) AS is_platform_admin
+            m.role, u.email, u.status, COALESCE(u.is_platform_admin, 0) AS is_platform_admin
      FROM sessions s
      INNER JOIN users u ON u.id = s.user_id
      LEFT JOIN org_members m ON m.organization_id = s.organization_id AND m.user_id = s.user_id
@@ -96,8 +96,14 @@ export async function resolveSession(token: string): Promise<RequestContext | nu
     expires_at: Date;
     role: string | null;
     email: string;
+    status: string;
     is_platform_admin: number;
   };
+
+  if (r.status !== "active") {
+    await pool.query(`DELETE FROM sessions WHERE user_id = :userId`, { userId: r.user_id });
+    return null;
+  }
 
   if (new Date(r.expires_at) < new Date()) {
     await pool.query(`DELETE FROM sessions WHERE id = :id`, { id: r.session_id });

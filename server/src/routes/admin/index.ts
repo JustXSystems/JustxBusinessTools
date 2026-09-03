@@ -130,8 +130,8 @@ router.get("/dashboard", async (_req, res) => {
     attention.push({
       id: "profiles",
       severity: "high",
-      title: "Branches awaiting approval",
-      detail: `${profiles} GST branch${profiles === 1 ? "" : "es"} pending review`,
+      title: "Businesses awaiting JustX review",
+      detail: `${profiles} business profile${profiles === 1 ? "" : "s"} in soft review (owners can already use JBT)`,
       count: profiles,
       href: adminDeepLink.approvals("profile"),
     });

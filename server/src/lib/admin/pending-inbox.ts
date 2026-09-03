@@ -85,7 +85,9 @@ export async function loadPendingInbox(): Promise<{
       kind: "profile",
       id: String(r.id),
       title: String(r.business_name),
-      subtitle: r.organization_name ? `Branch · ${r.organization_name}` : "Branch awaiting approval",
+      subtitle: r.organization_name
+        ? `New business · JustX review · ${r.organization_name}`
+        : "New business · awaiting JustX review (login not blocked)",
       status: "pending",
       createdAt: r.created_at ? String(r.created_at) : null,
       href: adminDeepLink.profilePending(r.id),

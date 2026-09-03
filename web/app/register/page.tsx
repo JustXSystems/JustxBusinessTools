@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
@@ -37,6 +38,7 @@ function stateFromGstin(gstin: string): [string, string] | null {
 
 export default function RegisterPage() {
   const { register } = useAuth();
+  const router = useRouter();
   const [gstin, setGstin] = useState("");
   const [lookup, setLookup] = useState<"idle" | "loading" | "done">("idle");
   const [lookedGstin, setLookedGstin] = useState("");
@@ -177,6 +179,10 @@ export default function RegisterPage() {
         logo: joining || !logo ? undefined : logo,
         homeToolIds: joining ? undefined : homeToolIds,
       });
+      if (!result.pending) {
+        router.replace("/");
+        return;
+      }
       setPendingResult({
         joinedExisting: result.joinedExisting,
         email: result.email,
@@ -212,9 +218,9 @@ export default function RegisterPage() {
       <div className="panel login-panel register-panel">
         <h1>Register</h1>
         <p className="muted">
-          Enter GSTIN and tab out to load an existing business. New GSTIN creates an Owner account (JustX admin
-          approval required). Joining an existing GSTIN sends a request for the Business Owner to approve as Staff or
-          Viewer.
+          Enter GSTIN and tab out to load an existing business. New GSTIN creates an Owner account you can use
+          immediately (JustX may review the Business Profile later). Joining an existing GSTIN sends a request for the
+          Business Owner to approve as Staff or Viewer.
         </p>
         <form onSubmit={handleSubmit} className="login-form">
           <div className="register-grid">
@@ -241,8 +247,8 @@ export default function RegisterPage() {
                 </p>
               ) : lookup === "done" && gstinValid ? (
                 <p className="muted">
-                  GSTIN not found. Enter the business profile details to create it. Your Owner account will need JustX
-                  admin approval before you can sign in.
+                  GSTIN not found. Enter the business profile details to create it. You will be signed in as Owner right
+                  away; JustX can review the Business Profile later.
                 </p>
               ) : null}
               <label className="field">

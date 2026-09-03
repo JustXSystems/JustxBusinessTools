@@ -137,8 +137,8 @@ function AdminApprovalsInner() {
       <section className="panel admin-card admin-page-head">
         <h2>Approvals inbox</h2>
         <p className="muted">
-          Pending branches, user registrations / join requests, payment-desk items, and UPI claims. Counts match the
-          Dashboard Approvals card. Filter by type below, or open the dedicated screen to manage details.
+          Pending branches (JustX soft review — Owners can already use JBT), join requests, payment-desk items, and UPI
+          claims. Rejecting a business as JustX admin suspends all users on that org and ends their sessions.
         </p>
       </section>
 

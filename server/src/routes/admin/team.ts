@@ -383,9 +383,61 @@ router.post("/:userId/reject", async (req, res) => {
     res.status(member.status).json({ error: member.error });
     return;
   }
+  const orgId = member.orgId;
+  const role = await memberRole(orgId, userId);
+
+  // JustX rejecting an Owner = reject the business: suspend whole org + revoke sessions.
+  if (role === "owner" && isPlatformAdmin()) {
+    const { suspendOrganizationAccess } = await import("../../lib/admin/org-suspend.js");
+    await pool.query(
+      `INSERT INTO business_profile_meta (business_profile_id, approval_status, reviewed_by, review_note)
+       SELECT p.id, 'rejected', :reviewer, :note
+       FROM business_profiles p
+       WHERE p.organization_id = :orgId
+       ON DUPLICATE KEY UPDATE approval_status = 'rejected', reviewed_by = :reviewer, review_note = :note`,
+      {
+        orgId,
+        reviewer: getActiveUserId(),
+        note: req.body?.note ?? "Owner / business rejected by JustX admin",
+      },
+    );
+    const suspended = await suspendOrganizationAccess(orgId, {
+      note: req.body?.note ?? "Owner rejected by JustX admin",
+      actorIp: req.ip,
+    });
+    await logAudit(
+      "team.reject",
+      "user",
+      String(userId),
+      { note: req.body?.note, orgSuspended: true, users: suspended.userIds.length },
+      req.ip,
+    );
+    await publishNotification({
+      eventType: "team.member_rejected",
+      title: "Business Owner rejected — org suspended",
+      body: `Owner #${userId} rejected. ${suspended.userIds.length} user(s) suspended and ${suspended.sessionsRevoked} session(s) ended.`,
+      href: `/admin/team?filter=suspended&user=${userId}`,
+      organizationId: orgId,
+      entityType: "user",
+      entityId: String(userId),
+      businessProfileId: null,
+      targetUserId: userId,
+      actorRole: "admin",
+      dedupeKey: `team-reject-org:${orgId}:${userId}`,
+      severity: "urgent",
+      expiresInHours: 336,
+    });
+    res.json({
+      ok: true,
+      orgSuspended: true,
+      suspendedUsers: suspended.userIds.length,
+      sessionsRevoked: suspended.sessionsRevoked,
+    });
+    return;
+  }
+
   await pool.query(`UPDATE users SET status = 'rejected' WHERE id = :userId`, { userId });
   await logAudit("team.reject", "user", String(userId), { note: req.body?.note }, req.ip);
-  const orgId = member.orgId;
   await publishNotification({
     eventType: "team.member_rejected",
     title: "Team member rejected",

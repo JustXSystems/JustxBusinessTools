@@ -54,6 +54,7 @@ const CATEGORY_BY_PREFIX: Array<{ prefix: string; category: AuditCategory }> = [
 const SEVERITY_BY_ACTION: Record<string, AuditSeverity> = {
   "auth.mfa_disable": "critical",
   "team.suspend": "critical",
+  "org.suspend_access": "critical",
   "team.reset_password": "critical",
   "team.revoke_sessions": "critical",
   "team.remove": "critical",
@@ -113,6 +114,7 @@ const LABEL_BY_ACTION: Record<string, string> = {
   "team.approve": "Approved team member",
   "team.reject": "Rejected team member",
   "team.suspend": "Suspended team member",
+  "org.suspend_access": "Suspended organization access",
   "team.reset_password": "Reset team member password",
   "team.verify": "Updated verification flags",
   "team.revoke_sessions": "Revoked all sessions",

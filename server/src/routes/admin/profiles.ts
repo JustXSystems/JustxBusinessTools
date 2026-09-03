@@ -448,12 +448,40 @@ router.post("/:id/approve", async (req, res) => {
 
 router.post("/:id/reject", async (req, res) => {
   const id = Number(req.params.id);
+  const { isPlatformAdmin } = await import("../../lib/platform-admin.js");
+  const [profileRows] = await pool.query(
+    `SELECT organization_id AS orgId FROM business_profiles
+     WHERE id = :id AND ${orgEqualsSql("organization_id")}
+     LIMIT 1`,
+    { id, ...orgScopeParams() },
+  );
+  const profile = Array.isArray(profileRows)
+    ? (profileRows[0] as { orgId: number } | undefined)
+    : undefined;
+  if (!profile) {
+    res.status(404).json({ error: "Profile not found" });
+    return;
+  }
+  const orgId = Number(profile.orgId);
+
   await pool.query(
     `INSERT INTO business_profile_meta (business_profile_id, approval_status, reviewed_by, review_note)
      VALUES (:id, 'rejected', :userId, :note)
      ON DUPLICATE KEY UPDATE approval_status = 'rejected', reviewed_by = :userId, review_note = :note`,
     { id, userId: getActiveUserId(), note: req.body?.note ?? "Rejected" },
   );
+
+  let suspended: { userIds: number[]; sessionsRevoked: number } | null = null;
+  // JustX admin reject of a business: lock out the whole org and end sessions immediately.
+  if (isPlatformAdmin()) {
+    const { suspendOrganizationAccess } = await import("../../lib/admin/org-suspend.js");
+    suspended = await suspendOrganizationAccess(orgId, {
+      note: req.body?.note ?? "Business profile rejected by JustX admin",
+      actorIp: req.ip,
+      profileId: id,
+    });
+  }
+
   const [metaRows] = await pool.query(
     `SELECT requested_by FROM business_profile_meta WHERE business_profile_id = :id LIMIT 1`,
     { id },
@@ -461,12 +489,23 @@ router.post("/:id/reject", async (req, res) => {
   const meta = Array.isArray(metaRows)
     ? (metaRows[0] as { requested_by: number | null } | undefined)
     : undefined;
+  await logAudit(
+    "profile.reject",
+    "business_profile",
+    String(id),
+    { note: req.body?.note, suspendedUsers: suspended?.userIds?.length ?? 0 },
+    req.ip,
+  );
   await publishNotification({
     eventType: "business.branch_rejected",
-    title: "Business branch rejected",
-    body: `Branch #${id} was rejected${req.body?.note ? `: ${req.body.note}` : "."}`,
+    title: suspended
+      ? "Business rejected — access suspended"
+      : "Business branch rejected",
+    body: suspended
+      ? `Business profile #${id} was rejected. ${suspended.userIds.length} user(s) suspended and ${suspended.sessionsRevoked} session(s) ended${req.body?.note ? `: ${req.body.note}` : "."}`
+      : `Branch #${id} was rejected${req.body?.note ? `: ${req.body.note}` : "."}`,
     href: "/admin/profiles",
-    organizationId: getActiveOrgId(),
+    organizationId: orgId,
     entityType: "business_profile",
     entityId: String(id),
     businessProfileId: id,
@@ -476,7 +515,11 @@ router.post("/:id/reject", async (req, res) => {
     severity: "urgent",
     expiresInHours: 336,
   });
-  res.json({ ok: true });
+  res.json({
+    ok: true,
+    suspendedUsers: suspended?.userIds.length ?? 0,
+    sessionsRevoked: suspended?.sessionsRevoked ?? 0,
+  });
 });
 
 router.post("/:id/unarchive", async (req, res) => {

@@ -12,11 +12,11 @@ export type RegistrationCopy = {
 };
 
 export const DEFAULT_REGISTRATION_COPY: RegistrationCopy = {
-  pendingOwnerTitle: "Awaiting approval",
+  pendingOwnerTitle: "Welcome — you're in",
   pendingOwnerMessage:
-    "Account created. A JustX admin must approve your Owner registration before you can sign in.",
+    "Your Owner account is ready. You can start using JustX Business Tools right away while JustX reviews your business profile.",
   pendingOwnerDetail:
-    "We registered {{email}}. You will be able to sign in after a JustX admin approves your Owner account.",
+    "Signed in as {{email}}. A JustX admin may review your Business Profile later; approval is not required to continue.",
   pendingJoinTitle: "Awaiting approval",
   pendingJoinMessage:
     "Request sent. The Business Profile Owner must approve you before you can sign in.",

@@ -190,7 +190,7 @@ router.post("/register", async (req, res) => {
       if (!joinedExisting) {
         const [userResult] = await conn.query(
           `INSERT INTO users (email, password_hash, name, phone, status)
-           VALUES (:email, :hash, :name, :phone, 'pending')`,
+           VALUES (:email, :hash, :name, :phone, 'active')`,
           { email, hash: passwordHash, name: name || null, phone },
         );
         userId = Number((userResult as { insertId: number }).insertId);
@@ -218,51 +218,86 @@ router.post("/register", async (req, res) => {
           `INSERT INTO subscriptions (business_profile_id, plan_id, status) VALUES (:profileId, 'free', 'active')`,
           { profileId },
         );
+        // Soft review queue for JustX — does not block Owner login or session.
         await conn.query(
-          `INSERT IGNORE INTO business_profile_meta (business_profile_id, approval_status)
-           VALUES (:profileId, 'approved')`,
-          { profileId },
+          `INSERT IGNORE INTO business_profile_meta (business_profile_id, approval_status, requested_by)
+           VALUES (:profileId, 'pending', :userId)`,
+          { profileId, userId },
         );
       }
     }
 
     await conn.commit();
 
-    // Self-registration always stays pending until Owner (join) or JBT admin (new Owner) approves.
+    if (joinedExisting) {
+      await logAudit(
+        "auth.register.join",
+        "user",
+        String(userId),
+        { email, gstin, joinedExisting: true, status: "pending" },
+        req.ip,
+      );
+      publishNotificationAsync({
+        eventType: "auth.user_registered",
+        title: "New user awaiting approval",
+        body: `${email} requested to join GSTIN ${gstin}. Approve as Staff or Viewer in Business Profile.`,
+        organizationId: orgId,
+        businessProfileId: profileId,
+        href: "/profile",
+        entityType: "user",
+        entityId: String(userId),
+        targetRoles: ["owner", "admin"],
+        dedupeKey: `auth-reg:${userId}`,
+        severity: "attention",
+        expiresInHours: 336,
+      });
+      const copy = await getRegistrationCopy();
+      res.status(201).json({
+        pending: true,
+        joinedExisting: true,
+        email,
+        title: copy.pendingJoinTitle,
+        message: copy.pendingJoinMessage,
+        detail: applyRegistrationPlaceholders(copy.pendingJoinDetail, email),
+      });
+      return;
+    }
+
+    // New business Owner: active immediately with session; JustX soft-reviews the Business Profile.
     await logAudit(
-      joinedExisting ? "auth.register.join" : "auth.register",
+      "auth.register",
       "user",
       String(userId),
-      { email, gstin, joinedExisting, status: "pending" },
+      { email, gstin, joinedExisting: false, status: "active", profileReview: "pending" },
       req.ip,
     );
     publishNotificationAsync({
-      eventType: joinedExisting ? "auth.user_registered" : "admin.business_update",
-      title: joinedExisting ? "New user awaiting approval" : "New business Owner awaiting approval",
-      body: joinedExisting
-        ? `${email} requested to join GSTIN ${gstin}. Approve as Staff or Viewer in Business Profile.`
-        : `${email} registered a new business for GSTIN ${gstin} as Owner. JBT admin approval required.`,
+      eventType: "admin.business_update",
+      title: "New business registered — review recommended",
+      body: `${email} registered GSTIN ${gstin} as Owner and can use JBT now. Review or reject the Business Profile if needed.`,
       organizationId: orgId,
       businessProfileId: profileId,
-      href: joinedExisting ? "/profile" : "/admin/approvals?kind=user",
-      entityType: "user",
-      entityId: String(userId),
-      targetRoles: joinedExisting ? ["owner", "admin"] : ["admin"],
+      href: `/admin/approvals?kind=profile`,
+      entityType: "business_profile",
+      entityId: String(profileId),
+      targetRoles: ["admin"],
       dedupeKey: `auth-reg:${userId}`,
       severity: "attention",
       expiresInHours: 336,
     });
-    const copy = await getRegistrationCopy();
-    const title = joinedExisting ? copy.pendingJoinTitle : copy.pendingOwnerTitle;
-    const message = joinedExisting ? copy.pendingJoinMessage : copy.pendingOwnerMessage;
-    const detailTemplate = joinedExisting ? copy.pendingJoinDetail : copy.pendingOwnerDetail;
+
+    const token = await createSession(userId, orgId, profileId);
+    setSessionCookie(res, token);
+    const user = await loadSessionUser(userId, orgId, profileId);
+    if (!user) {
+      res.status(500).json({ error: "Registration succeeded but session could not be created" });
+      return;
+    }
     res.status(201).json({
-      pending: true,
-      joinedExisting,
+      pending: false,
+      joinedExisting: false,
       email,
-      title,
-      message,
-      detail: applyRegistrationPlaceholders(detailTemplate, email),
+      user,
     });
   } catch (err) {
     await conn.rollback();
