@@ -1,0 +1,144 @@
+diff --git a/server/src/routes/admin/themes.ts b/server/src/routes/admin/themes.ts
+index 78250e3..09c25d7 100644
+--- a/server/src/routes/admin/themes.ts
++++ b/server/src/routes/admin/themes.ts
+@@ -28,11 +28,39 @@ const JUSTX_LIGHT = {
+   scheme: "light",
+ };
+ 
++/** JustX BOS — soft/calm system: white surfaces, low-saturation blue accent, IBM Plex type. */
++const JUSTX_BOS_LIGHT = {
++  accent: "#5B8DEF",
++  teal: "#34B27B",
++  accentStrong: "#4271D6",
++  bg0: "#F5F6F8",
++  bg1: "#FAFBFC",
++  bg2: "#FFFFFF",
++  radius: "14px",
++  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
++  scheme: "light",
++};
++
++/** JustX BOS Dark — same soft/calm philosophy, macOS Dark Mode adjacent. */
++const JUSTX_BOS_DARK = {
++  accent: "#6E9BFF",
++  teal: "#3DCB8F",
++  accentStrong: "#618DED",
++  bg0: "#1C1C1E",
++  bg1: "#262628",
++  bg2: "#2C2C2E",
++  radius: "14px",
++  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
++  scheme: "dark",
++};
++
+ const DEFAULT_TOKENS = { ...JUSTX_ELECTRIC };
+ 
+ const PRESETS = [
+   { name: "JustXSystems Electric", tokens: JUSTX_ELECTRIC },
+   { name: "JustXSystems Light", tokens: JUSTX_LIGHT },
++  { name: "JustX BOS (Light)", tokens: JUSTX_BOS_LIGHT },
++  { name: "JustX BOS (Dark)", tokens: JUSTX_BOS_DARK },
+   {
+     name: "Midnight Cyan",
+     tokens: {
+diff --git a/web/app/layout.tsx b/web/app/layout.tsx
+index 84ace6c..ff0868b 100644
+--- a/web/app/layout.tsx
++++ b/web/app/layout.tsx
+@@ -1,4 +1,5 @@
+ import type { Metadata, Viewport } from "next";
++import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+ import "./globals.css";
+ import { ClientInit } from "@/components/ClientInit";
+ import { AuthProvider } from "@/components/auth/AuthProvider";
+@@ -7,6 +8,24 @@ import { DocumentIconSync } from "@/components/branding/DocumentIconSync";
+ import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+ import { ShellRouter } from "@/components/ShellRouter";
+ 
++// Self-hosted by Next.js (no runtime request to Google Fonts). Only consumed
++// when the "JustX BOS" theme preset sets --font-sans/--font-mono to these
++// variables — every other preset keeps using system-ui, so this costs
++// nothing for tenants who don't switch themes.
++const plexSans = IBM_Plex_Sans({
++  subsets: ["latin"],
++  weight: ["400", "500", "600", "700"],
++  style: ["normal", "italic"],
++  variable: "--font-plex-sans",
++  display: "swap",
++});
++const plexMono = IBM_Plex_Mono({
++  subsets: ["latin"],
++  weight: ["400", "500", "600"],
++  variable: "--font-plex-mono",
++  display: "swap",
++});
++
+ export const metadata: Metadata = {
+   title: "JustXSystems",
+   description: "Quotations, invoices, stock, projects, and calculators for Indian businesses.",
+@@ -30,7 +49,7 @@ export const viewport: Viewport = {
+ 
+ export default function RootLayout({ children }: LayoutProps<"/">) {
+   return (
+-    <html lang="en" className="h-full">
++    <html lang="en" className={`h-full ${plexSans.variable} ${plexMono.variable}`}>
+       <body className="min-h-full">
+         <ClientInit />
+         <BrandingProvider>
+diff --git a/web/lib/theme.ts b/web/lib/theme.ts
+index 1556027..dccd40f 100644
+--- a/web/lib/theme.ts
++++ b/web/lib/theme.ts
+@@ -48,6 +48,36 @@ export const JUSTX_LIGHT: ThemeTokens = {
+   scheme: "light",
+ };
+ 
++/**
++ * JustX BOS — soft/calm system: white surfaces, soft shadows instead of glass,
++ * low-saturation blue accent, generous rounding, IBM Plex type. Mirrors the
++ * preset of the same name in server/src/routes/admin/themes.ts — keep in sync.
++ */
++export const JUSTX_BOS_LIGHT: ThemeTokens = {
++  accent: "#5B8DEF",
++  teal: "#34B27B",
++  accentStrong: "#4271D6",
++  bg0: "#F5F6F8",
++  bg1: "#FAFBFC",
++  bg2: "#FFFFFF",
++  radius: "14px",
++  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
++  scheme: "light",
++};
++
++/** JustX BOS Dark — same soft/calm philosophy, macOS Dark Mode adjacent. */
++export const JUSTX_BOS_DARK: ThemeTokens = {
++  accent: "#6E9BFF",
++  teal: "#3DCB8F",
++  accentStrong: "#618DED",
++  bg0: "#1C1C1E",
++  bg1: "#262628",
++  bg2: "#2C2C2E",
++  radius: "14px",
++  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
++  scheme: "dark",
++};
++
+ export const DEFAULT_THEME_TOKENS: ThemeTokens = { ...JUSTX_ELECTRIC };
+ 
+ function schemeOf(tokens: Partial<ThemeTokens>): ColorScheme {
+diff --git a/web/styles/jbt.css b/web/styles/jbt.css
+index a27a0bc..5147782 100644
+--- a/web/styles/jbt.css
++++ b/web/styles/jbt.css
+@@ -11,8 +11,8 @@ body {
+ 
+ body {
+   margin: 0;
+-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI",
+-    Roboto, "Helvetica Neue", Arial, sans-serif;
++  font-family: var(--font-sans, system-ui), -apple-system, BlinkMacSystemFont, "SF Pro Text",
++    "Segoe UI Variable", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+   background:
+     radial-gradient(900px 560px at 12% -8%, rgba(var(--accent-rgb), 0.1) 0%, transparent 60%),
+     radial-gradient(800px 520px at 108% 6%, rgba(var(--accent-rgb), 0.07) 0%, transparent 55%),

@@ -28,11 +28,39 @@ const JUSTX_LIGHT = {
   scheme: "light",
 };
 
+/** JustX BOS — soft/calm system: white surfaces, low-saturation blue accent, IBM Plex type. */
+const JUSTX_BOS_LIGHT = {
+  accent: "#5B8DEF",
+  teal: "#34B27B",
+  accentStrong: "#4271D6",
+  bg0: "#F5F6F8",
+  bg1: "#FAFBFC",
+  bg2: "#FFFFFF",
+  radius: "14px",
+  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
+  scheme: "light",
+};
+
+/** JustX BOS Dark — same soft/calm philosophy, macOS Dark Mode adjacent. */
+const JUSTX_BOS_DARK = {
+  accent: "#6E9BFF",
+  teal: "#3DCB8F",
+  accentStrong: "#618DED",
+  bg0: "#1C1C1E",
+  bg1: "#262628",
+  bg2: "#2C2C2E",
+  radius: "14px",
+  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
+  scheme: "dark",
+};
+
 const DEFAULT_TOKENS = { ...JUSTX_ELECTRIC };
 
 const PRESETS = [
   { name: "JustXSystems Electric", tokens: JUSTX_ELECTRIC },
   { name: "JustXSystems Light", tokens: JUSTX_LIGHT },
+  { name: "JustX BOS (Light)", tokens: JUSTX_BOS_LIGHT },
+  { name: "JustX BOS (Dark)", tokens: JUSTX_BOS_DARK },
   {
     name: "Midnight Cyan",
     tokens: {

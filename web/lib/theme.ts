@@ -48,6 +48,36 @@ export const JUSTX_LIGHT: ThemeTokens = {
   scheme: "light",
 };
 
+/**
+ * JustX BOS — soft/calm system: white surfaces, soft shadows instead of glass,
+ * low-saturation blue accent, generous rounding, IBM Plex type. Mirrors the
+ * preset of the same name in server/src/routes/admin/themes.ts — keep in sync.
+ */
+export const JUSTX_BOS_LIGHT: ThemeTokens = {
+  accent: "#5B8DEF",
+  teal: "#34B27B",
+  accentStrong: "#4271D6",
+  bg0: "#F5F6F8",
+  bg1: "#FAFBFC",
+  bg2: "#FFFFFF",
+  radius: "14px",
+  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
+  scheme: "light",
+};
+
+/** JustX BOS Dark — same soft/calm philosophy, macOS Dark Mode adjacent. */
+export const JUSTX_BOS_DARK: ThemeTokens = {
+  accent: "#6E9BFF",
+  teal: "#3DCB8F",
+  accentStrong: "#618DED",
+  bg0: "#1C1C1E",
+  bg1: "#262628",
+  bg2: "#2C2C2E",
+  radius: "14px",
+  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
+  scheme: "dark",
+};
+
 export const DEFAULT_THEME_TOKENS: ThemeTokens = { ...JUSTX_ELECTRIC };
 
 function schemeOf(tokens: Partial<ThemeTokens>): ColorScheme {
