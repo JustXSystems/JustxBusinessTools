@@ -423,7 +423,7 @@ export default function AdminDashboardPage() {
         <section className="panel admin-card dash-quick-links">
           <h2>Quick links</h2>
           <div className="dash-link-row">
-            <Link href={adminDeepLink.users()} className="btn btn-secondary btn-sm">
+            <Link href={adminDeepLink.users()} className="btn btn-primary btn-sm">
               Team
             </Link>
             <Link href={adminDeepLink.profiles()} className="btn btn-secondary btn-sm">

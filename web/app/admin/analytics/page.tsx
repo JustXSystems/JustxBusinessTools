@@ -219,7 +219,7 @@ export default function AdminAnalyticsPage() {
             <p className="muted">Org-wide product analytics — {analyticsRangeLabel(days)}.</p>
           </div>
           <div className="admin-form-row">
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => exportCsv(overview)}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => exportCsv(overview)}>
               Export CSV
             </button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => void runRollup()}>

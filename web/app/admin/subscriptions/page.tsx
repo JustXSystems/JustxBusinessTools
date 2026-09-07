@@ -354,7 +354,7 @@ export default function AdminSubscriptionsPage() {
                   </button>
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="btn btn-primary btn-sm"
                     disabled={saving || t.planId === "pro"}
                     onClick={() => void assign("pro", t.organizationId)}
                   >
@@ -406,7 +406,7 @@ export default function AdminSubscriptionsPage() {
                     <div className="admin-form-row">
                       <button
                         type="button"
-                        className="btn btn-secondary btn-sm"
+                        className="btn btn-primary btn-sm"
                         disabled={saving || active?.planId === plan.id}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -465,7 +465,7 @@ export default function AdminSubscriptionsPage() {
                   {!n.sentAt ? (
                     <button
                       type="button"
-                      className="btn btn-secondary btn-sm"
+                      className="btn btn-ghost btn-sm"
                       onClick={async () => {
                         await api(`/admin/subscriptions/notices/${n.id}/send`, { method: "POST" });
                         await reload();

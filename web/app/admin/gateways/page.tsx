@@ -637,7 +637,7 @@ function AdminGatewaysInner() {
                   <div className="admin-form-row">
                     <button
                       type="button"
-                      className="btn btn-secondary"
+                      className={selected.enabled ? "btn btn-destructive" : "btn btn-secondary"}
                       disabled={Boolean(busy)}
                       onClick={() => void toggleEnabled(selected)}
                     >
@@ -736,7 +736,7 @@ function AdminGatewaysInner() {
                   <div className="admin-form-row" style={{ marginBottom: 12 }}>
                     <button
                       type="button"
-                      className="btn btn-secondary btn-sm"
+                      className="btn btn-ghost btn-sm"
                       disabled={Boolean(busy)}
                       onClick={() => void injectSampleWebhook(selected)}
                     >

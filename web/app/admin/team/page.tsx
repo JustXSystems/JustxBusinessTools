@@ -445,11 +445,11 @@ function AdminTeamInner() {
                         </button>
                       </>
                     )}
-                    <button type="button" className="btn btn-secondary" onClick={() => run("Request declined.", () => api(`/admin/team/${selected.id}/reject`, { method: "POST" }).then(() => undefined))}>Reject</button>
+                    <button type="button" className="btn btn-destructive" onClick={() => run("Request declined.", () => api(`/admin/team/${selected.id}/reject`, { method: "POST" }).then(() => undefined))}>Reject</button>
                   </>
                 ) : null}
                 {selected.status === "active" ? (
-                  <button type="button" className="btn btn-secondary" onClick={() => run("Account suspended.", () => api(`/admin/team/${selected.id}/suspend`, { method: "POST" }).then(() => undefined))}>Suspend</button>
+                  <button type="button" className="btn btn-destructive" onClick={() => run("Account suspended.", () => api(`/admin/team/${selected.id}/suspend`, { method: "POST" }).then(() => undefined))}>Suspend</button>
                 ) : null}
                 {selected.status === "suspended" || selected.status === "rejected" ? (
                   <button type="button" className="btn btn-primary" onClick={() => run("Account reactivated.", () => api(`/admin/team/${selected.id}/approve`, { method: "POST" }).then(() => undefined))}>Reactivate</button>
@@ -485,7 +485,7 @@ function AdminTeamInner() {
                 }).then(() => { setNewPassword(""); }));
               }}>
                 <input type="password" minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (min 8)" required />
-                <button type="submit" className="btn btn-secondary">Reset password</button>
+                <button type="submit" className="btn btn-ghost">Reset password</button>
               </form>
               <div className="admin-kv-block">
                 <p className="muted">
@@ -493,12 +493,12 @@ function AdminTeamInner() {
                   {sessions.lastSeenAt ? ` · last sign-in ${String(sessions.lastSeenAt).slice(0, 16).replace("T", " ")}` : " · no live session"}
                 </p>
                 <div className="admin-form-row">
-                  <button type="button" className="btn btn-secondary" onClick={() => run("Signed out of other devices.", () => api(`/admin/team/${selected.id}/revoke-sessions`, { method: "POST" }).then(() => undefined))}>
+                  <button type="button" className="btn btn-destructive" onClick={() => run("Signed out of other devices.", () => api(`/admin/team/${selected.id}/revoke-sessions`, { method: "POST" }).then(() => undefined))}>
                     Sign out all sessions
                   </button>
                   <button
                     type="button"
-                    className="btn btn-ghost"
+                    className="btn btn-destructive"
                     onClick={() => {
                       if (!window.confirm(`Remove ${selected.email} from this organization?`)) return;
                       void run("Removed from organization.", async () => {

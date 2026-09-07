@@ -342,10 +342,10 @@ export default function AdminToolsPage() {
                 <option value="off">Flat list (no groups)</option>
               </select>
             </label>
-            <Link href="/admin/subscriptions" className="btn btn-ghost btn-sm">
+            <Link href="/admin/subscriptions" className="btn btn-secondary btn-sm">
               Packs & access
             </Link>
-            <Link href="/admin/analytics" className="btn btn-ghost btn-sm">
+            <Link href="/admin/analytics" className="btn btn-secondary btn-sm">
               Usage analytics
             </Link>
           </div>
@@ -503,7 +503,7 @@ export default function AdminToolsPage() {
                   <p className="muted">{selected.id}</p>
                 </div>
                 <div className="tm-order-btns">
-                  <Link href={`/admin/analytics/tools/${selected.id}`} className="btn btn-ghost btn-sm">
+                  <Link href={`/admin/analytics/tools/${selected.id}`} className="btn btn-secondary btn-sm">
                     Analytics
                   </Link>
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => void move(selected.id, -1)}>

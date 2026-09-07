@@ -240,7 +240,7 @@ export default function AdminOpsPage() {
               </a>
             ) : null}
             {links.errorsUi ? (
-              <a href={links.errorsUi} className="btn btn-secondary btn-sm" target="_blank" rel="noreferrer">
+              <a href={links.errorsUi} className="btn btn-ghost btn-sm" target="_blank" rel="noreferrer">
                 Errors UI
               </a>
             ) : null}

@@ -306,7 +306,7 @@ export default function SubscriptionPage() {
               </div>
             ) : null}
             {licensedCount > 0 ? (
-              <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void handleCancelLicenses()}>
+              <button type="button" className="btn btn-destructive btn-sm" disabled={busy} onClick={() => void handleCancelLicenses()}>
                 Cancel paid licenses
               </button>
             ) : null}
@@ -393,7 +393,7 @@ export default function SubscriptionPage() {
                               ) : null}
                               <button
                                 type="button"
-                                className={inCart ? "btn btn-secondary btn-sm" : "btn btn-ghost btn-sm"}
+                                className={inCart ? "btn btn-destructive btn-sm" : "btn btn-secondary btn-sm"}
                                 onClick={() => toggle(sku)}
                               >
                                 {inCart ? "Remove" : "Add to cart"}

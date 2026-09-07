@@ -169,7 +169,7 @@ export default function SubscriptionCheckoutPage() {
               <dd>{quote?.upi?.payeeName || subscription?.upi?.payeeName || "JustXSystems LLP"}</dd>
             </div>
           </dl>
-          <Link href="/subscription" className="btn btn-ghost btn-sm">
+          <Link href="/subscription" className="btn btn-secondary btn-sm">
             ← Edit tools
           </Link>
         </aside>

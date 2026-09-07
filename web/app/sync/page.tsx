@@ -340,7 +340,7 @@ export default function SyncCenterPage() {
           {fsa.supported ? (
             <button
               type="button"
-              className="btn btn-ghost"
+              className="btn btn-secondary"
               disabled={busy}
               onClick={() => void linkFolder()}
             >

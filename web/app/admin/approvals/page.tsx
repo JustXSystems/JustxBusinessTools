@@ -219,7 +219,7 @@ function AdminApprovalsInner() {
                       <span className="pill pill-warning">{item.status}</span>
                     </div>
                     <div className="tracker-actions">
-                      <Link href={item.href} className="btn btn-ghost btn-sm">
+                      <Link href={item.href} className="btn btn-secondary btn-sm">
                         Open
                       </Link>
                       <button
@@ -232,7 +232,7 @@ function AdminApprovalsInner() {
                       </button>
                       <button
                         type="button"
-                        className="btn btn-secondary btn-sm"
+                        className="btn btn-destructive btn-sm"
                         disabled={busyKey === rejectKey}
                         onClick={() => void act(item, "reject")}
                       >

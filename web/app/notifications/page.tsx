@@ -120,7 +120,7 @@ export default function NotificationsPage() {
         {unreadCount > 0 ? (
           <button
             type="button"
-            className="btn-ghost notif-mark-all"
+            className="btn btn-secondary notif-mark-all"
             disabled={busy}
             onClick={() => void onMarkAll()}
           >
@@ -209,7 +209,7 @@ export default function NotificationsPage() {
                   {!item.read && item.source === "event" ? (
                     <button
                       type="button"
-                      className="btn-ghost notif-read-btn"
+                      className="btn btn-secondary notif-read-btn"
                       disabled={busy}
                       onClick={(e) => {
                         e.preventDefault();

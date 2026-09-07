@@ -411,13 +411,13 @@ function AdminPaymentsInner() {
             </p>
           </div>
           <div className="admin-form-row">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void load(days)} disabled={loading}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void load(days)} disabled={loading}>
               {loading ? "Refreshing…" : "Refresh"}
             </button>
-            <Link href="/admin/gateways" className="btn btn-ghost btn-sm">
+            <Link href="/admin/gateways" className="btn btn-secondary btn-sm">
               Gateways
             </Link>
-            <Link href="/admin/subscriptions" className="btn btn-ghost btn-sm">
+            <Link href="/admin/subscriptions" className="btn btn-secondary btn-sm">
               Subscriptions
             </Link>
           </div>
@@ -960,7 +960,7 @@ function AdminPaymentsInner() {
                     </button>
                     <button
                       type="button"
-                      className="btn btn-secondary"
+                      className="btn btn-destructive"
                       disabled={busyId === selectedOp.id}
                       onClick={() => void reviewOp(selectedOp.id, "reject")}
                     >

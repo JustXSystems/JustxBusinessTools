@@ -178,7 +178,7 @@ export default function ProfilePage() {
                 {profile.logo ? (
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="btn btn-destructive btn-sm"
                     onClick={() => setProfile({ ...profile, logo: null })}
                   >
                     Remove

@@ -496,7 +496,7 @@ function AdminProfilesInner() {
                         <input value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} placeholder="Rejection note" />
                         <button
                           type="button"
-                          className="btn btn-secondary"
+                          className="btn btn-destructive"
                           onClick={() =>
                             run(
                               "Business rejected. If you are a JustX admin, all org users were suspended and logged out.",
@@ -531,7 +531,7 @@ function AdminProfilesInner() {
                     ) : (
                       <button
                         type="button"
-                        className="btn btn-ghost"
+                        className="btn btn-destructive"
                         onClick={() => {
                           const warn = selected.isDefault
                             ? `Archive default branch “${selected.businessName}”? It will leave the active directory. Another branch becomes default if one exists.`
