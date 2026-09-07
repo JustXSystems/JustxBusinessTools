@@ -55,7 +55,7 @@ export function ToolRecordTable({ config, rows, onEdit, onDelete, readOnly }: Pr
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEdit(row.id)}>
                     Edit
                   </button>
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => onDelete(row.id)}>
+                  <button type="button" className="btn btn-destructive btn-sm" onClick={() => onDelete(row.id)}>
                     Delete
                   </button>
                 </>

@@ -64,12 +64,12 @@ export function ConfirmModal({
       onClose={onClose}
       footer={
         <div className="modal-btns">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
             {cancelText}
           </button>
           <button
             type="button"
-            className={`btn btn-sm ${danger ? "btn-danger" : "btn-primary"}`}
+            className={`btn btn-sm ${danger ? "btn-destructive" : "btn-primary"}`}
             onClick={() => {
               onConfirm();
               onClose();

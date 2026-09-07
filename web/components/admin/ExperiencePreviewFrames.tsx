@@ -54,7 +54,7 @@ export function ExperiencePreviewFrames({
       </div>
 
       <div className="xp-preview-stage">
-        <div className="xp-phone" style={vars}>
+        <div className="xp-phone" style={vars} data-pack={tokens.pack?.trim() || "default"}>
           <div className="xp-phone-notch" aria-hidden />
           <div className="xp-phone-screen">
             {activeFrame === "splash" ? (

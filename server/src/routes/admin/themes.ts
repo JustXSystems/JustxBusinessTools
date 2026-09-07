@@ -39,6 +39,7 @@ const JUSTX_BOS_LIGHT = {
   radius: "14px",
   font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
   scheme: "light",
+  pack: "bos",
 };
 
 /** JustX BOS Dark — same soft/calm philosophy, macOS Dark Mode adjacent. */
@@ -52,6 +53,7 @@ const JUSTX_BOS_DARK = {
   radius: "14px",
   font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
   scheme: "dark",
+  pack: "bos",
 };
 
 const DEFAULT_TOKENS = { ...JUSTX_ELECTRIC };

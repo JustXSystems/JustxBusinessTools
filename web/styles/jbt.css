@@ -918,16 +918,6 @@ a {
   width: 100%;
 }
 
-.btn-ghost {
-  background: none;
-  color: var(--teal);
-  border: 1px dashed rgba(var(--accent-rgb), 0.4);
-}
-
-.btn-ghost:hover {
-  background: rgba(var(--accent-rgb), 0.08);
-}
-
 .items-editor {
   display: flex;
   flex-direction: column;
@@ -1178,18 +1168,143 @@ a {
   align-items: center;
   justify-content: center;
   gap: 7px;
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease,
+    color 0.16s ease, filter 0.16s ease, transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn:focus-visible {
+  outline: 2px solid rgba(var(--accent-rgb), 0.85);
+  outline-offset: 2px;
+}
+
+/* btn-primary: the one standout call-to-action per view (Save, Send, Approve, New X). */
 .btn-primary {
   background: var(--grad);
   color: #0b0d13;
   font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(0.94);
+  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.28), 0 0 0 4px rgba(var(--accent-rgb), 0.14);
+}
+
+/* btn-secondary: the default workhorse action (Create, Upload, Export, Assign...). */
 .btn-secondary {
   background: var(--glass-2);
   color: var(--text-hi);
   border: 1px solid var(--border-hair);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--border-hair-strong);
+  background: var(--glass-3);
+  box-shadow: var(--shadow-soft);
+}
+
+/* btn-ghost: quiet, low-emphasis or dismissive action (Cancel, Edit, Download, Ask AI). */
+.btn-ghost {
+  background: none;
+  color: var(--text-mid);
+  border: 1px solid var(--border-hair);
+  border-radius: var(--radius-pill);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--glass-hover);
+  color: var(--text-hi);
+  border-color: var(--border-hair-strong);
+}
+
+/* btn-destructive: irreversible / destructive action (Delete, Reject, Remove, Sign out). */
+.btn-danger,
+.btn-destructive {
+  background: rgba(239, 147, 147, 0.12);
+  color: var(--danger);
+  border: 1px solid rgba(239, 147, 147, 0.28);
+}
+
+.btn-danger:hover:not(:disabled),
+.btn-destructive:hover:not(:disabled) {
+  background: rgba(239, 147, 147, 0.2);
+  box-shadow: 0 2px 10px rgba(239, 147, 147, 0.18);
+}
+
+/* ---------- JustX BOS pack: exact button treatment from the BOS design system ---------- */
+[data-pack="bos"][data-scheme="light"] {
+  --bos-coral: #ee8b76;
+  --bos-coral-100: #fcebe7;
+  --bos-coral-600: #d4664f;
+  --bos-shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --bos-shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.05);
+  --bos-shadow-md: 0 3px 10px rgba(16, 24, 40, 0.11), 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
+[data-pack="bos"][data-scheme="dark"] {
+  --bos-coral: #ff9b85;
+  --bos-coral-100: #3d211c;
+  --bos-coral-600: #ffb09e;
+  --bos-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --bos-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
+  --bos-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+[data-pack="bos"] .btn {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+[data-pack="bos"] .btn-primary {
+  background: var(--accent-strong);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: var(--bos-shadow-sm);
+}
+
+[data-pack="bos"] .btn-primary:hover:not(:disabled) {
+  filter: brightness(0.9);
+  box-shadow: var(--bos-shadow-md), 0 0 0 4px rgba(var(--accent-rgb), 0.15);
+}
+
+[data-pack="bos"] .btn-secondary {
+  background: var(--glass-3);
+  box-shadow: var(--bos-shadow-xs);
+}
+
+[data-pack="bos"] .btn-secondary:hover:not(:disabled) {
+  box-shadow: var(--bos-shadow-sm);
+}
+
+[data-pack="bos"] .btn-ghost {
+  border-radius: var(--radius-pill);
+}
+
+[data-pack="bos"] .btn-danger,
+[data-pack="bos"] .btn-destructive {
+  background: var(--glass-3);
+  color: var(--bos-coral-600);
+  border: 1px solid var(--bos-coral);
+  box-shadow: var(--bos-shadow-xs);
+}
+
+[data-pack="bos"] .btn-danger:hover:not(:disabled),
+[data-pack="bos"] .btn-destructive:hover:not(:disabled) {
+  background: var(--bos-coral-100);
+  box-shadow: var(--bos-shadow-sm);
 }
 
 .btn-sm {
@@ -1386,16 +1501,6 @@ a {
   padding: 12px 16px;
   font-size: 13px;
   margin-bottom: 16px;
-}
-
-.btn-danger {
-  background: rgba(239, 147, 147, 0.12);
-  color: var(--danger);
-  border: 1px solid rgba(239, 147, 147, 0.28);
-}
-
-.btn-danger:hover {
-  background: rgba(239, 147, 147, 0.2);
 }
 
 .tracker-list {

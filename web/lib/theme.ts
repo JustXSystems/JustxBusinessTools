@@ -14,6 +14,8 @@ export type ThemeTokens = {
   accentStrong?: string;
   /** Surfaces + text contrast. Defaults to dark. */
   scheme?: ColorScheme;
+  /** Optional design-pack id (e.g. "bos") for CSS scoped beyond simple token substitution — see [data-pack] rules in jbt.css. */
+  pack?: string;
 };
 
 export type ThemeExportPayload = {
@@ -63,6 +65,7 @@ export const JUSTX_BOS_LIGHT: ThemeTokens = {
   radius: "14px",
   font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
   scheme: "light",
+  pack: "bos",
 };
 
 /** JustX BOS Dark — same soft/calm philosophy, macOS Dark Mode adjacent. */
@@ -76,6 +79,7 @@ export const JUSTX_BOS_DARK: ThemeTokens = {
   radius: "14px",
   font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
   scheme: "dark",
+  pack: "bos",
 };
 
 export const DEFAULT_THEME_TOKENS: ThemeTokens = { ...JUSTX_ELECTRIC };
@@ -231,6 +235,7 @@ export function parseThemeImport(raw: unknown): { name: string; tokens: ThemeTok
     font: String(tokensRaw.font ?? base.font),
     accentStrong: tokensRaw.accentStrong ? String(tokensRaw.accentStrong) : base.accentStrong,
     scheme,
+    pack: tokensRaw.pack ? String(tokensRaw.pack) : base.pack,
   };
   const name = String(obj.name ?? "Imported theme").trim() || "Imported theme";
   return { name, tokens };
@@ -243,6 +248,7 @@ export function applyThemeTokens(tokens: Partial<ThemeTokens> | null | undefined
   const scheme = schemeOf(tokens);
   root.dataset.scheme = scheme;
   root.style.colorScheme = scheme;
+  root.dataset.pack = tokens.pack?.trim() || "default";
 
   const accent = tokens.accent?.trim();
   const teal = tokens.teal?.trim() || accent;

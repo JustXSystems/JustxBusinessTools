@@ -818,7 +818,7 @@ export function QuotationGeneratorV1() {
                           <td>
                             <button
                               type="button"
-                              className="btn btn-danger btn-sm"
+                              className="btn btn-destructive btn-sm"
                               onClick={() =>
                                 patch((q) => ({ ...q, items: q.items.filter((x) => x.id !== it.id) }))
                               }
@@ -1117,7 +1117,7 @@ export function QuotationGeneratorV1() {
                       </button>
                       <button
                         type="button"
-                        className="btn btn-danger btn-sm"
+                        className="btn btn-destructive btn-sm"
                         onClick={async () => {
                           if (!confirm(`Delete ${q.quoteNo}?`)) return;
                           await api(`/quotation-v1/${q.id}`, { method: "DELETE" });

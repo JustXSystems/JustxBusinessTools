@@ -74,7 +74,7 @@ export function DocumentSavedList({
               Open
             </button>
             {!readOnly ? (
-              <button type="button" className="btn btn-danger btn-sm" onClick={() => onDelete(d.id)}>
+              <button type="button" className="btn btn-destructive btn-sm" onClick={() => onDelete(d.id)}>
                 Delete
               </button>
             ) : null}

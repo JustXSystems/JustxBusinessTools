@@ -363,7 +363,7 @@ function AdminProfilesInner() {
                     </button>
                   ) : null}
                   {creating ? (
-                    <button type="button" className="btn btn-secondary" onClick={() => { setCreating(false); setForm(emptyForm); }}>Cancel</button>
+                    <button type="button" className="btn btn-ghost" onClick={() => { setCreating(false); setForm(emptyForm); }}>Cancel</button>
                   ) : null}
                 </div>
               </div>

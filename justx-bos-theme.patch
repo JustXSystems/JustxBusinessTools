@@ -1,8 +1,8 @@
 diff --git a/server/src/routes/admin/themes.ts b/server/src/routes/admin/themes.ts
-index 78250e3..09c25d7 100644
+index 78250e3..42551d4 100644
 --- a/server/src/routes/admin/themes.ts
 +++ b/server/src/routes/admin/themes.ts
-@@ -28,11 +28,39 @@ const JUSTX_LIGHT = {
+@@ -28,11 +28,41 @@ const JUSTX_LIGHT = {
    scheme: "light",
  };
  
@@ -17,6 +17,7 @@ index 78250e3..09c25d7 100644
 +  radius: "14px",
 +  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
 +  scheme: "light",
++  pack: "bos",
 +};
 +
 +/** JustX BOS Dark — same soft/calm philosophy, macOS Dark Mode adjacent. */
@@ -30,6 +31,7 @@ index 78250e3..09c25d7 100644
 +  radius: "14px",
 +  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
 +  scheme: "dark",
++  pack: "bos",
 +};
 +
  const DEFAULT_TOKENS = { ...JUSTX_ELECTRIC };
@@ -42,6 +44,19 @@ index 78250e3..09c25d7 100644
    {
      name: "Midnight Cyan",
      tokens: {
+diff --git a/web/app/admin/profiles/page.tsx b/web/app/admin/profiles/page.tsx
+index 0935a67..51b1259 100644
+--- a/web/app/admin/profiles/page.tsx
++++ b/web/app/admin/profiles/page.tsx
+@@ -363,7 +363,7 @@ function AdminProfilesInner() {
+                     </button>
+                   ) : null}
+                   {creating ? (
+-                    <button type="button" className="btn btn-secondary" onClick={() => { setCreating(false); setForm(emptyForm); }}>Cancel</button>
++                    <button type="button" className="btn btn-ghost" onClick={() => { setCreating(false); setForm(emptyForm); }}>Cancel</button>
+                   ) : null}
+                 </div>
+               </div>
 diff --git a/web/app/layout.tsx b/web/app/layout.tsx
 index 84ace6c..ff0868b 100644
 --- a/web/app/layout.tsx
@@ -86,11 +101,152 @@ index 84ace6c..ff0868b 100644
        <body className="min-h-full">
          <ClientInit />
          <BrandingProvider>
+diff --git a/web/app/profile/page.tsx b/web/app/profile/page.tsx
+index bce23bf..38fb8ae 100644
+--- a/web/app/profile/page.tsx
++++ b/web/app/profile/page.tsx
+@@ -330,7 +330,7 @@ export default function ProfilePage() {
+               {canEdit ? (
+                 <button
+                   type="button"
+-                  className="btn btn-danger btn-sm"
++                  className="btn btn-destructive btn-sm"
+                   onClick={() =>
+                     patchSend({
+                       ...send,
+diff --git a/web/app/q/[token]/page.tsx b/web/app/q/[token]/page.tsx
+index edb7856..199e62f 100644
+--- a/web/app/q/[token]/page.tsx
++++ b/web/app/q/[token]/page.tsx
+@@ -96,7 +96,7 @@ export default function PublicQuoteApprovePage() {
+                   </button>
+                   <button
+                     type="button"
+-                    className="btn btn-danger"
++                    className="btn btn-destructive"
+                     disabled={busy}
+                     onClick={() => {
+                       if (confirm("Reject this quotation?")) void decide("rejected");
+diff --git a/web/app/sync/page.tsx b/web/app/sync/page.tsx
+index dc8d8f4..324dc03 100644
+--- a/web/app/sync/page.tsx
++++ b/web/app/sync/page.tsx
+@@ -449,7 +449,7 @@ export default function SyncCenterPage() {
+                   {!a.revokedAt ? (
+                     <button
+                       type="button"
+-                      className="btn btn-danger btn-sm"
++                      className="btn btn-destructive btn-sm"
+                       disabled={busy}
+                       onClick={() =>
+                         void revokeSyncAgent(a.id)
+diff --git a/web/components/admin/ExperiencePreviewFrames.tsx b/web/components/admin/ExperiencePreviewFrames.tsx
+index 05c368c..77cc2d9 100644
+--- a/web/components/admin/ExperiencePreviewFrames.tsx
++++ b/web/components/admin/ExperiencePreviewFrames.tsx
+@@ -54,7 +54,7 @@ export function ExperiencePreviewFrames({
+       </div>
+ 
+       <div className="xp-preview-stage">
+-        <div className="xp-phone" style={vars}>
++        <div className="xp-phone" style={vars} data-pack={tokens.pack?.trim() || "default"}>
+           <div className="xp-phone-notch" aria-hidden />
+           <div className="xp-phone-screen">
+             {activeFrame === "splash" ? (
+diff --git a/web/components/common/Modal.tsx b/web/components/common/Modal.tsx
+index 9e9aa75..b86196e 100644
+--- a/web/components/common/Modal.tsx
++++ b/web/components/common/Modal.tsx
+@@ -64,12 +64,12 @@ export function ConfirmModal({
+       onClose={onClose}
+       footer={
+         <div className="modal-btns">
+-          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
++          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
+             {cancelText}
+           </button>
+           <button
+             type="button"
+-            className={`btn btn-sm ${danger ? "btn-danger" : "btn-primary"}`}
++            className={`btn btn-sm ${danger ? "btn-destructive" : "btn-primary"}`}
+             onClick={() => {
+               onConfirm();
+               onClose();
+diff --git a/web/components/documents/DocumentSavedList.tsx b/web/components/documents/DocumentSavedList.tsx
+index 4282898..2c202d5 100644
+--- a/web/components/documents/DocumentSavedList.tsx
++++ b/web/components/documents/DocumentSavedList.tsx
+@@ -74,7 +74,7 @@ export function DocumentSavedList({
+               Open
+             </button>
+             {!readOnly ? (
+-              <button type="button" className="btn btn-danger btn-sm" onClick={() => onDelete(d.id)}>
++              <button type="button" className="btn btn-destructive btn-sm" onClick={() => onDelete(d.id)}>
+                 Delete
+               </button>
+             ) : null}
+diff --git a/web/components/quotation-v1/QuotationGeneratorV1.tsx b/web/components/quotation-v1/QuotationGeneratorV1.tsx
+index ac240ce..d9898e1 100644
+--- a/web/components/quotation-v1/QuotationGeneratorV1.tsx
++++ b/web/components/quotation-v1/QuotationGeneratorV1.tsx
+@@ -818,7 +818,7 @@ export function QuotationGeneratorV1() {
+                           <td>
+                             <button
+                               type="button"
+-                              className="btn btn-danger btn-sm"
++                              className="btn btn-destructive btn-sm"
+                               onClick={() =>
+                                 patch((q) => ({ ...q, items: q.items.filter((x) => x.id !== it.id) }))
+                               }
+@@ -1117,7 +1117,7 @@ export function QuotationGeneratorV1() {
+                       </button>
+                       <button
+                         type="button"
+-                        className="btn btn-danger btn-sm"
++                        className="btn btn-destructive btn-sm"
+                         onClick={async () => {
+                           if (!confirm(`Delete ${q.quoteNo}?`)) return;
+                           await api(`/quotation-v1/${q.id}`, { method: "DELETE" });
+diff --git a/web/components/site-survey-v1/SiteSurveyV1.tsx b/web/components/site-survey-v1/SiteSurveyV1.tsx
+index 4d644dd..4d31b78 100644
+--- a/web/components/site-survey-v1/SiteSurveyV1.tsx
++++ b/web/components/site-survey-v1/SiteSurveyV1.tsx
+@@ -1225,7 +1225,7 @@ export function SiteSurveyV1() {
+                     </button>
+                     <button
+                       type="button"
+-                      className="btn btn-danger btn-sm"
++                      className="btn btn-destructive btn-sm"
+                       onClick={async () => {
+                         if (!confirm(`Delete ${s.reportNo || "this draft"}?`)) return;
+                         await api(`/site-survey-v1/${s.id}`, { method: "DELETE" });
+diff --git a/web/components/tools/ToolRecordTable.tsx b/web/components/tools/ToolRecordTable.tsx
+index 52f33be..42fb5d6 100644
+--- a/web/components/tools/ToolRecordTable.tsx
++++ b/web/components/tools/ToolRecordTable.tsx
+@@ -55,7 +55,7 @@ export function ToolRecordTable({ config, rows, onEdit, onDelete, readOnly }: Pr
+                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEdit(row.id)}>
+                     Edit
+                   </button>
+-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => onDelete(row.id)}>
++                  <button type="button" className="btn btn-destructive btn-sm" onClick={() => onDelete(row.id)}>
+                     Delete
+                   </button>
+                 </>
 diff --git a/web/lib/theme.ts b/web/lib/theme.ts
-index 1556027..dccd40f 100644
+index 1556027..f5fcb3c 100644
 --- a/web/lib/theme.ts
 +++ b/web/lib/theme.ts
-@@ -48,6 +48,36 @@ export const JUSTX_LIGHT: ThemeTokens = {
+@@ -14,6 +14,8 @@ export type ThemeTokens = {
+   accentStrong?: string;
+   /** Surfaces + text contrast. Defaults to dark. */
+   scheme?: ColorScheme;
++  /** Optional design-pack id (e.g. "bos") for CSS scoped beyond simple token substitution — see [data-pack] rules in jbt.css. */
++  pack?: string;
+ };
+ 
+ export type ThemeExportPayload = {
+@@ -48,6 +50,38 @@ export const JUSTX_LIGHT: ThemeTokens = {
    scheme: "light",
  };
  
@@ -109,6 +265,7 @@ index 1556027..dccd40f 100644
 +  radius: "14px",
 +  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
 +  scheme: "light",
++  pack: "bos",
 +};
 +
 +/** JustX BOS Dark — same soft/calm philosophy, macOS Dark Mode adjacent. */
@@ -122,13 +279,30 @@ index 1556027..dccd40f 100644
 +  radius: "14px",
 +  font: "var(--font-plex-sans, 'IBM Plex Sans', system-ui)",
 +  scheme: "dark",
++  pack: "bos",
 +};
 +
  export const DEFAULT_THEME_TOKENS: ThemeTokens = { ...JUSTX_ELECTRIC };
  
  function schemeOf(tokens: Partial<ThemeTokens>): ColorScheme {
+@@ -201,6 +235,7 @@ export function parseThemeImport(raw: unknown): { name: string; tokens: ThemeTok
+     font: String(tokensRaw.font ?? base.font),
+     accentStrong: tokensRaw.accentStrong ? String(tokensRaw.accentStrong) : base.accentStrong,
+     scheme,
++    pack: tokensRaw.pack ? String(tokensRaw.pack) : base.pack,
+   };
+   const name = String(obj.name ?? "Imported theme").trim() || "Imported theme";
+   return { name, tokens };
+@@ -213,6 +248,7 @@ export function applyThemeTokens(tokens: Partial<ThemeTokens> | null | undefined
+   const scheme = schemeOf(tokens);
+   root.dataset.scheme = scheme;
+   root.style.colorScheme = scheme;
++  root.dataset.pack = tokens.pack?.trim() || "default";
+ 
+   const accent = tokens.accent?.trim();
+   const teal = tokens.teal?.trim() || accent;
 diff --git a/web/styles/jbt.css b/web/styles/jbt.css
-index a27a0bc..5147782 100644
+index a27a0bc..513e443 100644
 --- a/web/styles/jbt.css
 +++ b/web/styles/jbt.css
 @@ -11,8 +11,8 @@ body {
@@ -142,3 +316,183 @@ index a27a0bc..5147782 100644
    background:
      radial-gradient(900px 560px at 12% -8%, rgba(var(--accent-rgb), 0.1) 0%, transparent 60%),
      radial-gradient(800px 520px at 108% 6%, rgba(var(--accent-rgb), 0.07) 0%, transparent 55%),
+@@ -918,16 +918,6 @@ a {
+   width: 100%;
+ }
+ 
+-.btn-ghost {
+-  background: none;
+-  color: var(--teal);
+-  border: 1px dashed rgba(var(--accent-rgb), 0.4);
+-}
+-
+-.btn-ghost:hover {
+-  background: rgba(var(--accent-rgb), 0.08);
+-}
+-
+ .items-editor {
+   display: flex;
+   flex-direction: column;
+@@ -1178,20 +1168,145 @@ a {
+   align-items: center;
+   justify-content: center;
+   gap: 7px;
++  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease,
++    color 0.16s ease, filter 0.16s ease, transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
++}
++
++.btn:active {
++  transform: scale(0.97);
+ }
+ 
++.btn:disabled,
++.btn[disabled] {
++  opacity: 0.45;
++  cursor: not-allowed;
++  filter: none;
++  transform: none;
++  box-shadow: none;
++}
++
++.btn:focus-visible {
++  outline: 2px solid rgba(var(--accent-rgb), 0.85);
++  outline-offset: 2px;
++}
++
++/* btn-primary: the one standout call-to-action per view (Save, Send, Approve, New X). */
+ .btn-primary {
+   background: var(--grad);
+   color: #0b0d13;
+   font-weight: 700;
++  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+ }
+ 
++.btn-primary:hover:not(:disabled) {
++  filter: brightness(0.94);
++  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.28), 0 0 0 4px rgba(var(--accent-rgb), 0.14);
++}
++
++/* btn-secondary: the default workhorse action (Create, Upload, Export, Assign...). */
+ .btn-secondary {
+   background: var(--glass-2);
+   color: var(--text-hi);
+   border: 1px solid var(--border-hair);
+ }
+ 
++.btn-secondary:hover:not(:disabled) {
++  border-color: var(--border-hair-strong);
++  background: var(--glass-3);
++  box-shadow: var(--shadow-soft);
++}
++
++/* btn-ghost: quiet, low-emphasis or dismissive action (Cancel, Edit, Download, Ask AI). */
++.btn-ghost {
++  background: none;
++  color: var(--text-mid);
++  border: 1px solid var(--border-hair);
++  border-radius: var(--radius-pill);
++}
++
++.btn-ghost:hover:not(:disabled) {
++  background: var(--glass-hover);
++  color: var(--text-hi);
++  border-color: var(--border-hair-strong);
++}
++
++/* btn-destructive: irreversible / destructive action (Delete, Reject, Remove, Sign out). */
++.btn-danger,
++.btn-destructive {
++  background: rgba(239, 147, 147, 0.12);
++  color: var(--danger);
++  border: 1px solid rgba(239, 147, 147, 0.28);
++}
++
++.btn-danger:hover:not(:disabled),
++.btn-destructive:hover:not(:disabled) {
++  background: rgba(239, 147, 147, 0.2);
++  box-shadow: 0 2px 10px rgba(239, 147, 147, 0.18);
++}
++
++/* ---------- JustX BOS pack: exact button treatment from the BOS design system ---------- */
++[data-pack="bos"][data-scheme="light"] {
++  --bos-coral: #ee8b76;
++  --bos-coral-100: #fcebe7;
++  --bos-coral-600: #d4664f;
++  --bos-shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
++  --bos-shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.05);
++  --bos-shadow-md: 0 3px 10px rgba(16, 24, 40, 0.11), 0 1px 3px rgba(16, 24, 40, 0.06);
++}
++
++[data-pack="bos"][data-scheme="dark"] {
++  --bos-coral: #ff9b85;
++  --bos-coral-100: #3d211c;
++  --bos-coral-600: #ffb09e;
++  --bos-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
++  --bos-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
++  --bos-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
++}
++
++[data-pack="bos"] .btn {
++  border-radius: var(--radius-sm);
++  font-weight: 600;
++}
++
++[data-pack="bos"] .btn-primary {
++  background: var(--accent-strong);
++  color: #fff;
++  font-weight: 600;
++  box-shadow: var(--bos-shadow-sm);
++}
++
++[data-pack="bos"] .btn-primary:hover:not(:disabled) {
++  filter: brightness(0.9);
++  box-shadow: var(--bos-shadow-md), 0 0 0 4px rgba(var(--accent-rgb), 0.15);
++}
++
++[data-pack="bos"] .btn-secondary {
++  background: var(--glass-3);
++  box-shadow: var(--bos-shadow-xs);
++}
++
++[data-pack="bos"] .btn-secondary:hover:not(:disabled) {
++  box-shadow: var(--bos-shadow-sm);
++}
++
++[data-pack="bos"] .btn-ghost {
++  border-radius: var(--radius-pill);
++}
++
++[data-pack="bos"] .btn-danger,
++[data-pack="bos"] .btn-destructive {
++  background: var(--glass-3);
++  color: var(--bos-coral-600);
++  border: 1px solid var(--bos-coral);
++  box-shadow: var(--bos-shadow-xs);
++}
++
++[data-pack="bos"] .btn-danger:hover:not(:disabled),
++[data-pack="bos"] .btn-destructive:hover:not(:disabled) {
++  background: var(--bos-coral-100);
++  box-shadow: var(--bos-shadow-sm);
++}
++
+ .btn-sm {
+   padding: 8px 14px;
+   font-size: 11.5px;
+@@ -1388,16 +1503,6 @@ a {
+   margin-bottom: 16px;
+ }
+ 
+-.btn-danger {
+-  background: rgba(239, 147, 147, 0.12);
+-  color: var(--danger);
+-  border: 1px solid rgba(239, 147, 147, 0.28);
+-}
+-
+-.btn-danger:hover {
+-  background: rgba(239, 147, 147, 0.2);
+-}
+-
+ .tracker-list {
+   display: flex;
+   flex-direction: column;

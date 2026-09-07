@@ -449,7 +449,7 @@ export default function SyncCenterPage() {
                   {!a.revokedAt ? (
                     <button
                       type="button"
-                      className="btn btn-danger btn-sm"
+                      className="btn btn-destructive btn-sm"
                       disabled={busy}
                       onClick={() =>
                         void revokeSyncAgent(a.id)

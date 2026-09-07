@@ -96,7 +96,7 @@ export default function PublicQuoteApprovePage() {
                   </button>
                   <button
                     type="button"
-                    className="btn btn-danger"
+                    className="btn btn-destructive"
                     disabled={busy}
                     onClick={() => {
                       if (confirm("Reject this quotation?")) void decide("rejected");
