@@ -43,6 +43,7 @@ import {
   DEFAULT_CORPORATE_EMAIL_INTRO,
   normalizeQuotationEmailTemplateId,
   summarizeQuoteLineItems,
+  type QuotationEmailVars,
 } from "@/lib/quotation-email-templates";
 import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
 import { QuoteSheet } from "./QuoteSheet";
@@ -372,7 +373,7 @@ export function QuotationGeneratorV1() {
     return true;
   }
 
-  function messageVars(q: QuotationV1) {
+  function messageVars(q: QuotationV1): QuotationEmailVars {
     const t = computeTotals(q, company);
     const quoteLink =
       typeof window !== "undefined" && q.approvalToken
@@ -397,7 +398,19 @@ export function QuotationGeneratorV1() {
       quoteLink,
     };
     return {
-      ...placeholders,
+      customerName: placeholders.customerName,
+      quoteNo: placeholders.quoteNo,
+      typeLabel: placeholders.typeLabel,
+      date: placeholders.date,
+      validTill: placeholders.validTill,
+      grandTotal: placeholders.grandTotal,
+      grandTotalWords: placeholders.grandTotalWords,
+      companyName: placeholders.companyName,
+      companyPhone: placeholders.companyPhone,
+      companyEmail: placeholders.companyEmail,
+      companyAddress: placeholders.companyAddress,
+      companyGstin: placeholders.companyGstin,
+      quoteLink: placeholders.quoteLink,
       logoUrl: company.logo
         ? absolutePublicAssetUrl(
             company.logo,
@@ -418,15 +431,8 @@ export function QuotationGeneratorV1() {
     };
   }
 
-  function buildWhatsAppText(q: QuotationV1) {
-    const send = normalizeSendSettings(sendSettings);
-    const vars = messageVars(q);
-    const tpl =
-      send.whatsappMessage?.trim() ||
-      DEFAULT_WHATSAPP_MESSAGE ||
-      send.email.message ||
-      DEFAULT_SEND_SETTINGS.email.message;
-    return fillSendTemplate(tpl, {
+  function emailPlaceholders(vars: QuotationEmailVars): Record<string, string> {
+    return {
       customerName: vars.customerName,
       quoteNo: vars.quoteNo,
       typeLabel: vars.typeLabel,
@@ -437,8 +443,21 @@ export function QuotationGeneratorV1() {
       companyName: vars.companyName,
       companyPhone: vars.companyPhone,
       companyEmail: vars.companyEmail || "",
+      companyAddress: vars.companyAddress || "",
+      companyGstin: vars.companyGstin || "",
       quoteLink: vars.quoteLink || "",
-    });
+    };
+  }
+
+  function buildWhatsAppText(q: QuotationV1) {
+    const send = normalizeSendSettings(sendSettings);
+    const vars = messageVars(q);
+    const tpl =
+      send.whatsappMessage?.trim() ||
+      DEFAULT_WHATSAPP_MESSAGE ||
+      send.email.message ||
+      DEFAULT_SEND_SETTINGS.email.message;
+    return fillSendTemplate(tpl, emailPlaceholders(vars));
   }
 
   async function openSendModal(channel: SendChannel) {
@@ -455,6 +474,7 @@ export function QuotationGeneratorV1() {
     }
     const send = normalizeSendSettings(sendSettings);
     const vars = messageVars(saved);
+    const ph = emailPlaceholders(vars);
     const customerPhone = saved.customer.phone.replace(/\D/g, "");
     const defaults = [
       ...(customerPhone ? [`customer:${customerPhone}`] : []),
@@ -463,24 +483,7 @@ export function QuotationGeneratorV1() {
     setWaSelected(defaults);
     setWaExtra("");
     setWaMessage(
-      fillSendTemplate(
-        send.whatsappMessage?.trim() || DEFAULT_WHATSAPP_MESSAGE,
-        {
-          customerName: vars.customerName,
-          quoteNo: vars.quoteNo,
-          typeLabel: vars.typeLabel,
-          date: vars.date,
-          validTill: vars.validTill,
-          grandTotal: vars.grandTotal,
-          grandTotalWords: vars.grandTotalWords,
-          companyName: vars.companyName,
-          companyPhone: vars.companyPhone,
-          companyEmail: vars.companyEmail || "",
-          companyAddress: vars.companyAddress || "",
-          companyGstin: vars.companyGstin || "",
-          quoteLink: vars.quoteLink || "",
-        },
-      ),
+      fillSendTemplate(send.whatsappMessage?.trim() || DEFAULT_WHATSAPP_MESSAGE, ph),
     );
     setEmailTo(send.email.to.trim() || saved.customer.email || "");
     const ccConfigured = send.email.cc.trim();
@@ -489,19 +492,7 @@ export function QuotationGeneratorV1() {
         [company.salesEmail, company.managerEmail].filter(Boolean).join(", "),
     );
     setEmailSubject(
-      fillSendTemplate(send.email.subject || DEFAULT_SEND_SETTINGS.email.subject, {
-        customerName: vars.customerName,
-        quoteNo: vars.quoteNo,
-        typeLabel: vars.typeLabel,
-        date: vars.date,
-        validTill: vars.validTill,
-        grandTotal: vars.grandTotal,
-        grandTotalWords: vars.grandTotalWords,
-        companyName: vars.companyName,
-        companyPhone: vars.companyPhone,
-        companyEmail: vars.companyEmail || "",
-        quoteLink: vars.quoteLink || "",
-      }),
+      fillSendTemplate(send.email.subject || DEFAULT_SEND_SETTINGS.email.subject, ph),
     );
     const templateId = normalizeQuotationEmailTemplateId(send.email.templateId);
     setEmailTemplateId(templateId);
@@ -510,19 +501,7 @@ export function QuotationGeneratorV1() {
       vars,
       customPlainMessage: fillSendTemplate(
         send.email.message || DEFAULT_SEND_SETTINGS.email.message,
-        {
-          customerName: vars.customerName,
-          quoteNo: vars.quoteNo,
-          typeLabel: vars.typeLabel,
-          date: vars.date,
-          validTill: vars.validTill,
-          grandTotal: vars.grandTotal,
-          grandTotalWords: vars.grandTotalWords,
-          companyName: vars.companyName,
-          companyPhone: vars.companyPhone,
-          companyEmail: vars.companyEmail || "",
-          quoteLink: vars.quoteLink || "",
-        },
+        ph,
       ),
     });
     setEmailMessage(bodies.text);

@@ -14,22 +14,6 @@ import { normalizeDocumentAccentColor } from "@/lib/document-accent";
 import { fillSendTemplate } from "@/lib/types/business-profile";
 import { absolutePublicAssetUrl } from "@/lib/base-path";
 
-const SAMPLE_PLACEHOLDERS: Record<string, string> = {
-  customerName: "Acme Industries",
-  quoteNo: "Q-2026-0042",
-  typeLabel: "Solar EPC",
-  date: "08 Sep 2026",
-  validTill: "22 Sep 2026",
-  grandTotal: "2,45,800.00",
-  grandTotalWords: "Two Lakh Forty Five Thousand Eight Hundred Only",
-  companyName: "Your Company",
-  companyPhone: "+91 98765 43210",
-  companyEmail: "sales@example.com",
-  companyAddress: "123 Business Park, City",
-  companyGstin: "29ABCDE1234F1Z5",
-  quoteLink: "https://example.com/q/preview",
-};
-
 type Props = {
   templateId: QuotationEmailTemplateId;
   accentColor: string;
@@ -60,13 +44,25 @@ export function QuotationEmailTemplatePicker({
   onChange,
 }: Props) {
   const vars = useMemo<QuotationEmailVars>(() => {
-    const placeholders = {
-      ...SAMPLE_PLACEHOLDERS,
-      companyName: companyName?.trim() || SAMPLE_PLACEHOLDERS.companyName,
-      companyPhone: companyPhone?.trim() || SAMPLE_PLACEHOLDERS.companyPhone,
-      companyEmail: companyEmail?.trim() || SAMPLE_PLACEHOLDERS.companyEmail,
-      companyGstin: companyGstin?.trim() || SAMPLE_PLACEHOLDERS.companyGstin,
-      companyAddress: companyAddress?.trim() || SAMPLE_PLACEHOLDERS.companyAddress,
+    const name = companyName?.trim() || "Your Company";
+    const phone = companyPhone?.trim() || "+91 98765 43210";
+    const email = companyEmail?.trim() || "sales@example.com";
+    const gstin = companyGstin?.trim() || "29ABCDE1234F1Z5";
+    const address = companyAddress?.trim() || "123 Business Park, City";
+    const placeholders: Record<string, string> = {
+      customerName: "Acme Industries",
+      quoteNo: "Q-2026-0042",
+      typeLabel: "Solar EPC",
+      date: "08 Sep 2026",
+      validTill: "22 Sep 2026",
+      grandTotal: "2,45,800.00",
+      grandTotalWords: "Two Lakh Forty Five Thousand Eight Hundred Only",
+      companyName: name,
+      companyPhone: phone,
+      companyEmail: email,
+      companyAddress: address,
+      companyGstin: gstin,
+      quoteLink: "https://example.com/q/preview",
     };
     const sampleItems = summarizeQuoteLineItems([
       { desc: "Solar PV modules 540W", qty: 20, rate: 8500 },
@@ -76,13 +72,25 @@ export function QuotationEmailTemplatePicker({
       { desc: "Installation & commissioning", qty: 1, rate: 35000 },
       { desc: "AMC Year 1", qty: 1, rate: 15000 },
     ]);
-    return {
-      ...placeholders,
+    const resolved: QuotationEmailVars = {
+      customerName: placeholders.customerName,
+      quoteNo: placeholders.quoteNo,
+      typeLabel: placeholders.typeLabel,
+      date: placeholders.date,
+      validTill: placeholders.validTill,
+      grandTotal: placeholders.grandTotal,
+      grandTotalWords: placeholders.grandTotalWords,
+      companyName: name,
+      companyPhone: phone,
+      companyEmail: email,
+      companyAddress: address,
+      companyGstin: gstin,
+      quoteLink: placeholders.quoteLink,
       logoUrl: logoUrl
         ? absolutePublicAssetUrl(
             logoUrl,
             typeof window !== "undefined" ? window.location.origin : "",
-          )
+          ) || undefined
         : undefined,
       accentColor: normalizeDocumentAccentColor(accentColor),
       lineItems: sampleItems.lineItems,
@@ -93,6 +101,7 @@ export function QuotationEmailTemplatePicker({
         placeholders,
       ),
     };
+    return resolved;
   }, [
     accentColor,
     closing,
