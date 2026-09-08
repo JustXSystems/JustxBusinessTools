@@ -6,12 +6,34 @@ export type ProfileWhatsAppNumber = {
   phone: string;
 };
 
+export type QuotationEmailTemplateId = "plain" | "corporate";
+
 export type ProfileEmailDefaults = {
   to: string;
   cc: string;
   subject: string;
   message: string;
+  /** Quotation HTML vs plain layout — see web/lib/quotation-email-templates.ts */
+  templateId: QuotationEmailTemplateId;
+  intro: string;
+  closing: string;
+  replyTo: string;
 };
+
+export const DEFAULT_QUOTATION_EMAIL_TEMPLATE: QuotationEmailTemplateId = "corporate";
+
+export const DEFAULT_CORPORATE_EMAIL_INTRO =
+  "Greetings from {{companyName}}. Thank you for your interest in our products and services. We appreciate the opportunity and are pleased to share your quotation summary below.";
+
+export const DEFAULT_CORPORATE_EMAIL_CLOSING =
+  "Should you have any questions or require modifications, please feel free to reach out — we would be happy to assist. We look forward to your confirmation and to the opportunity of working together.";
+
+export function normalizeQuotationEmailTemplateId(raw: unknown): QuotationEmailTemplateId {
+  const v = String(raw ?? "").trim().toLowerCase();
+  if (v === "plain") return "plain";
+  if (v === "corporate") return "corporate";
+  return DEFAULT_QUOTATION_EMAIL_TEMPLATE;
+}
 
 /** Legacy fields kept for stored JSON compat — Drive send is client-side PDF download. */
 export type ProfileGoogleDriveSettings = {
@@ -50,6 +72,10 @@ export const DEFAULT_PROFILE_SEND_SETTINGS: ProfileSendSettings = {
     to: "",
     cc: "",
     subject: "{{companyName}} — Quotation {{quoteNo}}",
+    templateId: DEFAULT_QUOTATION_EMAIL_TEMPLATE,
+    intro: DEFAULT_CORPORATE_EMAIL_INTRO,
+    closing: DEFAULT_CORPORATE_EMAIL_CLOSING,
+    replyTo: "",
     message: `Dear {{customerName}},
 
 Please find our quotation details below:
@@ -126,6 +152,16 @@ export function normalizeProfileSendSettings(raw: unknown): ProfileSendSettings 
       cc: String(email.cc ?? DEFAULT_PROFILE_SEND_SETTINGS.email.cc).trim(),
       subject: String(email.subject ?? DEFAULT_PROFILE_SEND_SETTINGS.email.subject),
       message: String(email.message ?? DEFAULT_PROFILE_SEND_SETTINGS.email.message),
+      templateId: normalizeQuotationEmailTemplateId(
+        email.templateId ?? DEFAULT_PROFILE_SEND_SETTINGS.email.templateId,
+      ),
+      intro:
+        String(email.intro ?? DEFAULT_PROFILE_SEND_SETTINGS.email.intro).trim() ||
+        DEFAULT_CORPORATE_EMAIL_INTRO,
+      closing:
+        String(email.closing ?? DEFAULT_PROFILE_SEND_SETTINGS.email.closing).trim() ||
+        DEFAULT_CORPORATE_EMAIL_CLOSING,
+      replyTo: String(email.replyTo ?? DEFAULT_PROFILE_SEND_SETTINGS.email.replyTo).trim(),
     },
     googleDrive: {
       folderId: String(drive.folderId ?? "").trim(),

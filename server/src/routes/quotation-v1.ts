@@ -215,6 +215,13 @@ router.post("/send/email", async (req, res) => {
   const cc = String(req.body?.cc ?? "").trim();
   const subject = String(req.body?.subject ?? "").trim();
   const body = String(req.body?.message ?? req.body?.body ?? "").trim();
+  const htmlRaw = req.body?.html;
+  const html =
+    typeof htmlRaw === "string" && htmlRaw.trim().length > 0 ? htmlRaw.trim() : undefined;
+  const templateId = String(req.body?.templateId ?? "").trim() || undefined;
+  const replyTo = String(req.body?.replyTo ?? "").trim() || undefined;
+  const fromName = String(req.body?.fromName ?? "").trim() || undefined;
+  const fromEmail = String(req.body?.fromEmail ?? "").trim() || undefined;
   if (!to) {
     res.status(400).json({ error: "Email To is required" });
     return;
@@ -235,6 +242,15 @@ router.post("/send/email", async (req, res) => {
           cc: cc || undefined,
           subject,
           body,
+          html: html || undefined,
+          templateId,
+          replyTo,
+          fromName,
+          fromEmail,
+          from:
+            fromEmail && fromName
+              ? `${fromName} <${fromEmail}>`
+              : fromEmail || fromName || undefined,
           kind: "quotationv1.send",
           quotationId: req.body?.quotationId ?? null,
           quoteNo: req.body?.quoteNo ?? null,
@@ -252,7 +268,15 @@ router.post("/send/email", async (req, res) => {
       "quotationv1.send.email",
       "document",
       String(req.body?.quotationId ?? ""),
-      { quoteNo: req.body?.quoteNo, to, cc, via: webhook ? "webhook" : "mailto" },
+      {
+        quoteNo: req.body?.quoteNo,
+        to,
+        cc,
+        via: webhook ? "webhook" : "mailto",
+        templateId: templateId ?? null,
+        hasHtml: Boolean(html),
+        replyTo: replyTo ?? null,
+      },
       req.ip,
     );
     notifyDocumentOutbound({

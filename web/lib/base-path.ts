@@ -22,6 +22,35 @@ export function withBasePath(path: string): string {
 }
 
 /**
+ * Absolute https/http URL for email / outbound assets.
+ * Skips data: URLs (blocked by many mail clients) and returns "" when no origin.
+ */
+export function absolutePublicAssetUrl(
+  url: string,
+  origin?: string | null,
+): string {
+  const raw = String(url || "").trim();
+  if (!raw || /^data:/i.test(raw)) return "";
+  if (/^https?:\/\//i.test(raw)) return publicAssetUrl(raw);
+
+  const asset = publicAssetUrl(raw);
+  if (!asset || /^data:/i.test(asset)) return "";
+  if (/^https?:\/\//i.test(asset)) return asset;
+
+  const base = String(
+    origin ||
+      (typeof window !== "undefined" ? window.location.origin : "") ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.WEB_PUBLIC_ORIGIN ||
+      "",
+  )
+    .trim()
+    .replace(/\/$/, "");
+  if (!base) return "";
+  return `${base}${asset.startsWith("/") ? asset : `/${asset}`}`;
+}
+
+/**
  * Resolve a stored asset path for <img src> under basePath.
  * Rewrites `/api/files/...`, `/icons/...`, and mistaken absolute
  * `https://host/api/files/...` (missing /jbt) to the public app path.

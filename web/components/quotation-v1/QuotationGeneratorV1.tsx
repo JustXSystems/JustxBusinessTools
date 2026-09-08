@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fetchProfile } from "@/lib/api";
-import { publicAssetUrl, withBasePath } from "@/lib/base-path";
+import { publicAssetUrl, withBasePath, absolutePublicAssetUrl } from "@/lib/base-path";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useLiveRefresh, invalidateAdminData } from "@/hooks/useLiveRefresh";
 import {
@@ -37,6 +37,13 @@ import {
   type QuoteNotification,
 } from "@/lib/quotation-v1";
 import type { BusinessProfileSendSettings } from "@/lib/types/business-profile";
+import {
+  buildQuotationEmailBodies,
+  DEFAULT_CORPORATE_EMAIL_CLOSING,
+  DEFAULT_CORPORATE_EMAIL_INTRO,
+  normalizeQuotationEmailTemplateId,
+  summarizeQuoteLineItems,
+} from "@/lib/quotation-email-templates";
 import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
 import { QuoteSheet } from "./QuoteSheet";
 import "./quotation-v1.css";
@@ -129,6 +136,13 @@ export function QuotationGeneratorV1() {
   const [emailCc, setEmailCc] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
+  const [emailHtml, setEmailHtml] = useState<string | null>(null);
+  const [emailTemplateId, setEmailTemplateId] = useState(() =>
+    normalizeQuotationEmailTemplateId(DEFAULT_SEND_SETTINGS.email.templateId),
+  );
+  const [emailReplyTo, setEmailReplyTo] = useState("");
+  const [emailFromName, setEmailFromName] = useState("");
+  const [emailFromEmail, setEmailFromEmail] = useState("");
   const [approvalLink, setApprovalLink] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
@@ -360,7 +374,14 @@ export function QuotationGeneratorV1() {
 
   function messageVars(q: QuotationV1) {
     const t = computeTotals(q, company);
-    return {
+    const quoteLink =
+      typeof window !== "undefined" && q.approvalToken
+        ? `${window.location.origin}${withBasePath(`/q/${q.approvalToken}`)}`
+        : "";
+    const address = [company.address, company.state].filter(Boolean).join(", ");
+    const { lineItems, moreItemsCount } = summarizeQuoteLineItems(q.items);
+    const send = normalizeSendSettings(sendSettings);
+    const placeholders: Record<string, string> = {
       customerName: q.customer.name || "Customer",
       quoteNo: q.quoteNo || "",
       typeLabel: typeLabel(q),
@@ -370,24 +391,71 @@ export function QuotationGeneratorV1() {
       grandTotalWords: numToWordsIndian(t.grand),
       companyName: company.name,
       companyPhone: company.phone,
+      companyEmail: company.email || "",
+      companyAddress: address,
+      companyGstin: company.gstin || "",
+      quoteLink,
+    };
+    return {
+      ...placeholders,
+      logoUrl: company.logo
+        ? absolutePublicAssetUrl(
+            company.logo,
+            typeof window !== "undefined" ? window.location.origin : "",
+          )
+        : "",
+      accentColor: company.documentAccentColor || "",
+      lineItems,
+      moreItemsCount,
+      intro: fillSendTemplate(
+        send.email.intro?.trim() || DEFAULT_CORPORATE_EMAIL_INTRO,
+        placeholders,
+      ),
+      closing: fillSendTemplate(
+        send.email.closing?.trim() || DEFAULT_CORPORATE_EMAIL_CLOSING,
+        placeholders,
+      ),
     };
   }
 
   function buildWhatsAppText(q: QuotationV1) {
     const send = normalizeSendSettings(sendSettings);
+    const vars = messageVars(q);
     const tpl =
       send.whatsappMessage?.trim() ||
       DEFAULT_WHATSAPP_MESSAGE ||
       send.email.message ||
       DEFAULT_SEND_SETTINGS.email.message;
-    return fillSendTemplate(tpl, messageVars(q));
+    return fillSendTemplate(tpl, {
+      customerName: vars.customerName,
+      quoteNo: vars.quoteNo,
+      typeLabel: vars.typeLabel,
+      date: vars.date,
+      validTill: vars.validTill,
+      grandTotal: vars.grandTotal,
+      grandTotalWords: vars.grandTotalWords,
+      companyName: vars.companyName,
+      companyPhone: vars.companyPhone,
+      companyEmail: vars.companyEmail || "",
+      quoteLink: vars.quoteLink || "",
+    });
   }
 
-  function openSendModal(channel: SendChannel) {
-    if (!validateSaved(current)) return;
+  async function openSendModal(channel: SendChannel) {
+    const missing = getMissingRequiredFields(current);
+    if (missing.length) {
+      flash(`Please fill in before continuing: ${missing.join(", ")}.`, "err");
+      return;
+    }
+    // Persist first so the public /q/{token} link resolves for corporate CTA.
+    const saved = await saveQuote();
+    if (!saved?.approvalToken) {
+      flash("Could not prepare a public quotation link. Please Save and try again.", "err");
+      return;
+    }
     const send = normalizeSendSettings(sendSettings);
-    const vars = messageVars(current);
-    const customerPhone = current.customer.phone.replace(/\D/g, "");
+    const vars = messageVars(saved);
+    const customerPhone = saved.customer.phone.replace(/\D/g, "");
     const defaults = [
       ...(customerPhone ? [`customer:${customerPhone}`] : []),
       ...send.whatsappNumbers.filter((n) => n.phone).map((n) => n.id),
@@ -397,17 +465,76 @@ export function QuotationGeneratorV1() {
     setWaMessage(
       fillSendTemplate(
         send.whatsappMessage?.trim() || DEFAULT_WHATSAPP_MESSAGE,
-        vars,
+        {
+          customerName: vars.customerName,
+          quoteNo: vars.quoteNo,
+          typeLabel: vars.typeLabel,
+          date: vars.date,
+          validTill: vars.validTill,
+          grandTotal: vars.grandTotal,
+          grandTotalWords: vars.grandTotalWords,
+          companyName: vars.companyName,
+          companyPhone: vars.companyPhone,
+          companyEmail: vars.companyEmail || "",
+          companyAddress: vars.companyAddress || "",
+          companyGstin: vars.companyGstin || "",
+          quoteLink: vars.quoteLink || "",
+        },
       ),
     );
-    setEmailTo(send.email.to.trim() || current.customer.email || "");
+    setEmailTo(send.email.to.trim() || saved.customer.email || "");
     const ccConfigured = send.email.cc.trim();
     setEmailCc(
       ccConfigured ||
         [company.salesEmail, company.managerEmail].filter(Boolean).join(", "),
     );
-    setEmailSubject(fillSendTemplate(send.email.subject || DEFAULT_SEND_SETTINGS.email.subject, vars));
-    setEmailMessage(fillSendTemplate(send.email.message || DEFAULT_SEND_SETTINGS.email.message, vars));
+    setEmailSubject(
+      fillSendTemplate(send.email.subject || DEFAULT_SEND_SETTINGS.email.subject, {
+        customerName: vars.customerName,
+        quoteNo: vars.quoteNo,
+        typeLabel: vars.typeLabel,
+        date: vars.date,
+        validTill: vars.validTill,
+        grandTotal: vars.grandTotal,
+        grandTotalWords: vars.grandTotalWords,
+        companyName: vars.companyName,
+        companyPhone: vars.companyPhone,
+        companyEmail: vars.companyEmail || "",
+        quoteLink: vars.quoteLink || "",
+      }),
+    );
+    const templateId = normalizeQuotationEmailTemplateId(send.email.templateId);
+    setEmailTemplateId(templateId);
+    const bodies = buildQuotationEmailBodies({
+      templateId,
+      vars,
+      customPlainMessage: fillSendTemplate(
+        send.email.message || DEFAULT_SEND_SETTINGS.email.message,
+        {
+          customerName: vars.customerName,
+          quoteNo: vars.quoteNo,
+          typeLabel: vars.typeLabel,
+          date: vars.date,
+          validTill: vars.validTill,
+          grandTotal: vars.grandTotal,
+          grandTotalWords: vars.grandTotalWords,
+          companyName: vars.companyName,
+          companyPhone: vars.companyPhone,
+          companyEmail: vars.companyEmail || "",
+          quoteLink: vars.quoteLink || "",
+        },
+      ),
+    });
+    setEmailMessage(bodies.text);
+    setEmailHtml(bodies.html ?? null);
+    const replyTo =
+      send.email.replyTo.trim() ||
+      company.salesEmail.trim() ||
+      company.email.trim() ||
+      "";
+    setEmailReplyTo(replyTo);
+    setEmailFromName(company.name || "");
+    setEmailFromEmail(company.salesEmail.trim() || company.email.trim() || "");
     setSendChannel(channel);
     setSendOpen(true);
     if (channel === "whatsapp") {
@@ -1019,7 +1146,7 @@ export function QuotationGeneratorV1() {
                 type="button"
                 className="btn btn-secondary"
                 disabled={busy}
-                onClick={() => openSendModal("whatsapp")}
+                onClick={() => void openSendModal("whatsapp")}
               >
                 WhatsApp
               </button>
@@ -1027,7 +1154,7 @@ export function QuotationGeneratorV1() {
                 type="button"
                 className="btn btn-secondary"
                 disabled={busy}
-                onClick={() => openSendModal("email")}
+                onClick={() => void openSendModal("email")}
               >
                 Email
               </button>
@@ -1485,9 +1612,9 @@ export function QuotationGeneratorV1() {
             {sendChannel === "email" ? (
               <>
                 <p className="modal-msg">
-                  Preview the message, then Send. With an email webhook configured, the PDF attaches
-                  automatically; otherwise your mail app opens with this text. Use Download PDF only if you
-                  need to attach the file yourself.
+                  {emailTemplateId === "corporate"
+                    ? "Corporate HTML email uses your Document accent color. With a webhook, HTML + PDF are delivered; otherwise mailto opens with plain text."
+                    : "Preview the message, then Send. With an email webhook configured, the PDF attaches automatically; otherwise your mail app opens with this text."}
                 </p>
                 <div className="qgv1-grid2" style={{ marginTop: 8 }}>
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
@@ -1502,10 +1629,23 @@ export function QuotationGeneratorV1() {
                     <span>Subject</span>
                     <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />
                   </label>
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span>Message</span>
-                    <textarea rows={7} value={emailMessage} onChange={(e) => setEmailMessage(e.target.value)} />
-                  </label>
+                  {emailHtml ? (
+                    <div className="field" style={{ gridColumn: "1 / -1" }}>
+                      <span>Email preview</span>
+                      <iframe
+                        title="Quotation email preview"
+                        className="q-email-tpl-preview"
+                        style={{ height: 280 }}
+                        sandbox=""
+                        srcDoc={emailHtml}
+                      />
+                    </div>
+                  ) : (
+                    <label className="field" style={{ gridColumn: "1 / -1" }}>
+                      <span>Message</span>
+                      <textarea rows={7} value={emailMessage} onChange={(e) => setEmailMessage(e.target.value)} />
+                    </label>
+                  )}
                 </div>
                 <div className="modal-btns">
                   <button
@@ -1541,6 +1681,11 @@ export function QuotationGeneratorV1() {
                               cc: emailCc.trim(),
                               subject: emailSubject.trim(),
                               message: emailMessage,
+                              html: emailHtml || undefined,
+                              templateId: emailTemplateId,
+                              replyTo: emailReplyTo.trim() || undefined,
+                              fromName: emailFromName.trim() || undefined,
+                              fromEmail: emailFromEmail.trim() || undefined,
                               quotationId: current.id,
                               quoteNo: current.quoteNo,
                               filename: pdf?.filename,

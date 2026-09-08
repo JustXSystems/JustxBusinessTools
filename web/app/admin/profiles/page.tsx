@@ -3,8 +3,15 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
+import { QuotationEmailTemplatePicker } from "@/components/profile/QuotationEmailTemplatePicker";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { INDIAN_STATES } from "@/lib/types/business-profile";
+import { normalizeDocumentAccentColor } from "@/lib/document-accent";
+import {
+  DEFAULT_QUOTATION_EMAIL_TEMPLATE,
+  normalizeQuotationEmailTemplateId,
+  type QuotationEmailTemplateId,
+} from "@/lib/quotation-email-templates";
 import { api } from "@/lib/api";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -26,6 +33,8 @@ type Profile = {
   bankIfsc: string | null;
   bankUpi: string | null;
   terms: string | null;
+  documentAccentColor?: string;
+  emailTemplateId?: QuotationEmailTemplateId;
   isDefault: boolean;
   approvalStatus: string;
   reviewNote: string | null;
@@ -50,7 +59,7 @@ type Person = {
   implicit: boolean;
 };
 
-type Tab = "identity" | "address" | "bank" | "home" | "access" | "lifecycle";
+type Tab = "identity" | "address" | "bank" | "branding" | "home" | "access" | "lifecycle";
 type Filter = "all" | "pending" | "approved" | "archived" | "incomplete";
 
 const emptyForm = {
@@ -69,6 +78,8 @@ const emptyForm = {
   bankIfsc: "",
   bankUpi: "",
   terms: "",
+  documentAccentColor: normalizeDocumentAccentColor(null),
+  emailTemplateId: DEFAULT_QUOTATION_EMAIL_TEMPLATE as QuotationEmailTemplateId,
 };
 
 function statusClass(status: string) {
@@ -95,6 +106,8 @@ function fromProfile(p: Profile) {
     bankIfsc: p.bankIfsc ?? "",
     bankUpi: p.bankUpi ?? "",
     terms: p.terms ?? "",
+    documentAccentColor: normalizeDocumentAccentColor(p.documentAccentColor),
+    emailTemplateId: normalizeQuotationEmailTemplateId(p.emailTemplateId),
   };
 }
 
@@ -343,7 +356,7 @@ function AdminProfilesInner() {
               )}
               <div className="admin-tabs-bar">
                 <div className="admin-tabs" role="tablist">
-                  {(["identity", "address", "bank", "home", "access", "lifecycle"] as Tab[]).map((t) => (
+                  {(["identity", "address", "bank", "branding", "home", "access", "lifecycle"] as Tab[]).map((t) => (
                     <button
                       key={t}
                       type="button"
@@ -357,7 +370,7 @@ function AdminProfilesInner() {
                   ))}
                 </div>
                 <div className="admin-tabs-actions">
-                  {tab === "identity" || tab === "address" || tab === "bank" || tab === "home" ? (
+                  {tab === "identity" || tab === "address" || tab === "bank" || tab === "branding" || tab === "home" ? (
                     <button type="submit" form="profile-save-form" className="btn btn-primary">
                       {creating || !selectedId ? "Create (pending approval)" : "Save profile"}
                     </button>
@@ -432,6 +445,71 @@ function AdminProfilesInner() {
                     <label className="field" style={{ gridColumn: "1 / -1" }}><span>Invoice terms</span>
                       <textarea value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} rows={4} />
                     </label>
+                  </div>
+                ) : null}
+
+                {tab === "branding" ? (
+                  <div className="admin-stack">
+                    <p className="section-note">
+                      Document accent colors quotation sheets / PDFs. Quotation email template controls the
+                      branded HTML layout used when staff send quotations.
+                    </p>
+                    <div className="profile-accent-field">
+                      <label className="label" htmlFor="adminDocumentAccentColor">
+                        Document accent color
+                      </label>
+                      <div className="flex-row-wrap" style={{ alignItems: "center", gap: 10 }}>
+                        <input
+                          id="adminDocumentAccentColor"
+                          type="color"
+                          value={normalizeDocumentAccentColor(form.documentAccentColor)}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              documentAccentColor: normalizeDocumentAccentColor(e.target.value),
+                            })
+                          }
+                          aria-label="Document accent color"
+                          style={{
+                            width: 48,
+                            height: 36,
+                            padding: 2,
+                            borderRadius: 8,
+                            border: "1px solid var(--border-hair)",
+                            background: "transparent",
+                            cursor: "pointer",
+                          }}
+                        />
+                        <input
+                          className="mono"
+                          value={normalizeDocumentAccentColor(form.documentAccentColor)}
+                          onChange={(e) =>
+                            setForm({ ...form, documentAccentColor: e.target.value })
+                          }
+                          onBlur={() =>
+                            setForm((f) => ({
+                              ...f,
+                              documentAccentColor: normalizeDocumentAccentColor(f.documentAccentColor),
+                            }))
+                          }
+                          placeholder="#0f3d3e"
+                          style={{ maxWidth: 120 }}
+                          aria-label="Document accent color hex"
+                        />
+                      </div>
+                    </div>
+                    <QuotationEmailTemplatePicker
+                      templateId={normalizeQuotationEmailTemplateId(form.emailTemplateId)}
+                      accentColor={form.documentAccentColor}
+                      companyName={form.businessName}
+                      companyPhone={form.phone}
+                      companyEmail={form.email}
+                      onChange={(emailTemplateId) => setForm({ ...form, emailTemplateId })}
+                    />
+                    <p className="section-note">
+                      Intro, closing, and Reply-To text are edited on the Business Profile → Send Via
+                      panel for this branch. See <code>docs/EMAIL_WEBHOOK.md</code> for HTML delivery.
+                    </p>
                   </div>
                 ) : null}
 

@@ -28,7 +28,9 @@ import { publicAssetUrl } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
 import { MfaSettingsPanel } from "@/components/profile/MfaSettingsPanel";
+import { QuotationEmailTemplatePicker } from "@/components/profile/QuotationEmailTemplatePicker";
 import { TeamRequestsPanel } from "@/components/profile/TeamRequestsPanel";
+import { normalizeQuotationEmailTemplateId } from "@/lib/quotation-email-templates";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -296,8 +298,9 @@ export default function ProfilePage() {
                 />
               </div>
               <p className="section-note">
-                Used for quotation sheets, invoices/orders/POs, and site-survey PDF letterhead
-                (headings, borders, table headers). Owner and Admin can change this.
+                Used for quotation sheets, invoices/orders/POs, site-survey PDF letterhead
+                (headings, borders, table headers), and the corporate quotation email template.
+                Owner and Admin can change this.
               </p>
             </div>
           </div>
@@ -574,6 +577,24 @@ export default function ProfilePage() {
         </p>
 
         <h4 className="panel-subtitle">Email</h4>
+        <QuotationEmailTemplatePicker
+          templateId={normalizeQuotationEmailTemplateId(send.email.templateId)}
+          accentColor={profile.documentAccentColor}
+          companyName={profile.businessName}
+          companyPhone={profile.phone}
+          companyEmail={profile.email}
+          companyGstin={profile.gstin}
+          companyAddress={[profile.addressLine1, profile.addressLine2, profile.state]
+            .filter(Boolean)
+            .join(", ")}
+          logoUrl={profile.logo}
+          intro={send.email.intro}
+          closing={send.email.closing}
+          disabled={!canEdit}
+          onChange={(templateId) =>
+            patchSend({ ...send, email: { ...send.email, templateId } })
+          }
+        />
         <div className="field-row2">
           <label className="field">
             <span className="label">Default To (blank = customer email)</span>
@@ -608,21 +629,65 @@ export default function ProfilePage() {
           />
         </label>
         <label className="field">
-          <span className="label">Message template</span>
-          <textarea
-            rows={8}
-            value={send.email.message || DEFAULT_SEND_SETTINGS.email.message}
+          <span className="label">Reply-To (blank = company / sales email)</span>
+          <input
+            type="email"
+            value={send.email.replyTo}
             disabled={!canEdit}
             onChange={(e) =>
-              patchSend({ ...send, email: { ...send.email, message: e.target.value } })
+              patchSend({ ...send, email: { ...send.email, replyTo: e.target.value } })
             }
+            placeholder="sales@yourcompany.com"
           />
         </label>
+        {normalizeQuotationEmailTemplateId(send.email.templateId) === "plain" ? (
+          <label className="field">
+            <span className="label">Message template</span>
+            <textarea
+              rows={8}
+              value={send.email.message || DEFAULT_SEND_SETTINGS.email.message}
+              disabled={!canEdit}
+              onChange={(e) =>
+                patchSend({ ...send, email: { ...send.email, message: e.target.value } })
+              }
+            />
+          </label>
+        ) : (
+          <>
+            <label className="field">
+              <span className="label">Corporate intro</span>
+              <textarea
+                rows={3}
+                value={send.email.intro || DEFAULT_SEND_SETTINGS.email.intro}
+                disabled={!canEdit}
+                onChange={(e) =>
+                  patchSend({ ...send, email: { ...send.email, intro: e.target.value } })
+                }
+              />
+            </label>
+            <label className="field">
+              <span className="label">Corporate closing</span>
+              <textarea
+                rows={3}
+                value={send.email.closing || DEFAULT_SEND_SETTINGS.email.closing}
+                disabled={!canEdit}
+                onChange={(e) =>
+                  patchSend({ ...send, email: { ...send.email, closing: e.target.value } })
+                }
+              />
+            </label>
+            <p className="section-note">
+              Summary card, line items, accent colors, logo, GSTIN, and CTA stay fixed. Intro/closing
+              support the same {"{{placeholders}}"} as subject.
+            </p>
+          </>
+        )}
 
         <p className="section-note">
           Without <code>EMAIL_WEBHOOK_URL</code> on the API server, Send Via → Email opens the user’s mail
-          app and downloads the PDF to attach. With a webhook, the server posts To/CC/subject/body/PDF to
-          that URL for real delivery (SendGrid, n8n, etc.).
+          app with plain text and downloads the PDF to attach. With a webhook, the server posts
+          To/CC/subject/body/<strong>html</strong>/replyTo/from/PDF — map <code>html</code> in your
+          provider (see <code>docs/EMAIL_WEBHOOK.md</code>).
         </p>
       </div>
 

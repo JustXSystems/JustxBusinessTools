@@ -60,4 +60,16 @@ describe("base-path", () => {
     expect(publicAssetUrl("/icons/justx-logo.png")).toBe("/jbt/icons/justx-logo.png");
     expect(publicAssetUrl("https://cdn.example.com/logo.png")).toBe("https://cdn.example.com/logo.png");
   });
+
+  it("builds absolute email asset URLs and skips data URLs", async () => {
+    const { absolutePublicAssetUrl } = await import("@/lib/base-path");
+    process.env.NEXT_PUBLIC_BASE_PATH = "/jbt";
+    expect(absolutePublicAssetUrl("data:image/png;base64,xx")).toBe("");
+    expect(absolutePublicAssetUrl("/api/files/a.png", "https://justxsystems.com")).toBe(
+      "https://justxsystems.com/jbt/api/files/a.png",
+    );
+    expect(absolutePublicAssetUrl("https://cdn.example.com/logo.png")).toBe(
+      "https://cdn.example.com/logo.png",
+    );
+  });
 });

@@ -1,3 +1,11 @@
+import type { QuotationEmailTemplateId } from "@/lib/quotation-email-templates";
+import {
+  DEFAULT_CORPORATE_EMAIL_CLOSING,
+  DEFAULT_CORPORATE_EMAIL_INTRO,
+  DEFAULT_QUOTATION_EMAIL_TEMPLATE,
+  normalizeQuotationEmailTemplateId,
+} from "@/lib/quotation-email-templates";
+
 export type BusinessProfileSendSettings = {
   whatsappNumbers: Array<{ id: string; label: string; phone: string }>;
   /** WhatsApp chat text template (supports {{placeholders}}). */
@@ -7,6 +15,21 @@ export type BusinessProfileSendSettings = {
     cc: string;
     subject: string;
     message: string;
+    /**
+     * Quotation email layout.
+     * `corporate` = HTML branded with Document accent (webhook);
+     * `plain` = text-only (mailto-friendly).
+     */
+    templateId: QuotationEmailTemplateId;
+    /** Corporate intro paragraph ({{placeholders}}). Empty = default. */
+    intro: string;
+    /** Corporate closing paragraph ({{placeholders}}). Empty = default. */
+    closing: string;
+    /**
+     * Reply-To for webhook delivery. Blank = company sales/email.
+     * Plain addresses only (comma-separated ok).
+     */
+    replyTo: string;
   };
   googleDrive: {
     folderId: string;
@@ -37,6 +60,10 @@ export const DEFAULT_SEND_SETTINGS: BusinessProfileSendSettings = {
     to: "",
     cc: "",
     subject: "{{companyName}} — Quotation {{quoteNo}}",
+    templateId: DEFAULT_QUOTATION_EMAIL_TEMPLATE,
+    intro: DEFAULT_CORPORATE_EMAIL_INTRO,
+    closing: DEFAULT_CORPORATE_EMAIL_CLOSING,
+    replyTo: "",
     message: `Dear {{customerName}},
 
 Please find our quotation details below:
@@ -200,6 +227,16 @@ export function normalizeSendSettings(
       cc: String(emailRaw.cc ?? DEFAULT_SEND_SETTINGS.email.cc).trim(),
       subject: String(emailRaw.subject ?? DEFAULT_SEND_SETTINGS.email.subject),
       message: String(emailRaw.message ?? DEFAULT_SEND_SETTINGS.email.message),
+      templateId: normalizeQuotationEmailTemplateId(
+        emailRaw.templateId ?? DEFAULT_SEND_SETTINGS.email.templateId,
+      ),
+      intro:
+        String(emailRaw.intro ?? DEFAULT_SEND_SETTINGS.email.intro).trim() ||
+        DEFAULT_CORPORATE_EMAIL_INTRO,
+      closing:
+        String(emailRaw.closing ?? DEFAULT_SEND_SETTINGS.email.closing).trim() ||
+        DEFAULT_CORPORATE_EMAIL_CLOSING,
+      replyTo: String(emailRaw.replyTo ?? DEFAULT_SEND_SETTINGS.email.replyTo).trim(),
     },
     googleDrive: {
       folderId: String(driveRaw.folderId ?? "").trim(),

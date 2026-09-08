@@ -133,6 +133,8 @@ Copy [`.env.example`](../.env.example) → `server/.env`.
 | `TWILIO_*` / `MSG91_*` / `SMS_API_*` | OTP SMS credentials |
 | `ENABLE_MFA` | TOTP MFA APIs/UI (default on; set `false` to disable) |
 | `ERROR_WEBHOOK_URL` | Slack/Discord POST for API 500s / uncaught errors |
+| `EMAIL_WEBHOOK_URL` | Quotation/site-survey email handoff (JSON). **Map `html` for corporate templates** — see [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) |
+| `NOTIFY_EMAIL_WEBHOOK_URL` | Alias for `EMAIL_WEBHOOK_URL` |
 | `SENTRY_DSN` | Optional Sentry store endpoint (no SDK required) |
 | `DRIVE_TOKEN_SECRET` | Defaults to `JWT_SECRET` |
 | `UPLOAD_DIR` | Local upload path (default `./uploads`) |

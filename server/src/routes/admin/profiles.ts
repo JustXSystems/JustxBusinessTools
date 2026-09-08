@@ -9,6 +9,13 @@ import {
   normalizeHomeToolIdsInput,
   parseHomeToolIds,
 } from "../../lib/home-tools.js";
+import { ensureDocumentAccentColorColumn, normalizeDocumentAccentColor } from "../../lib/document-accent.js";
+import {
+  ensureSendSettingsColumn,
+  normalizeProfileSendSettings,
+  normalizeQuotationEmailTemplateId,
+  serializeProfileSendSettings,
+} from "../../lib/profile-send-settings.js";
 import { getActiveOrgId, getActiveUserId } from "../../lib/request-context.js";
 import { orgEqualsSql, orgScopeParams } from "../../lib/platform-admin.js";
 import { publishNotification } from "../../lib/notification-publish.js";
@@ -16,6 +23,7 @@ import { publishNotification } from "../../lib/notification-publish.js";
 const router = Router();
 
 function mapProfile(r: Record<string, unknown>) {
+  const send = normalizeProfileSendSettings(r.send_settings);
   return {
     id: Number(r.id),
     businessName: String(r.business_name ?? ""),
@@ -33,6 +41,8 @@ function mapProfile(r: Record<string, unknown>) {
     bankIfsc: (r.bank_ifsc as string | null) ?? null,
     bankUpi: (r.bank_upi as string | null) ?? null,
     terms: (r.terms as string | null) ?? null,
+    documentAccentColor: normalizeDocumentAccentColor(r.document_accent_color),
+    emailTemplateId: send.email.templateId,
     isDefault: Boolean(r.is_default),
     organizationId: r.organization_id == null ? null : Number(r.organization_id),
     organizationName: (r.organization_name as string | null) ?? null,
@@ -103,10 +113,13 @@ async function assertGstinAvailable(body: Record<string, unknown>, excludeProfil
 
 router.get("/", async (_req, res) => {
   await ensureHomeToolIdsColumn();
+  await ensureDocumentAccentColorColumn();
+  await ensureSendSettingsColumn();
   const [rows] = await pool.query(
     `SELECT p.id, p.organization_id, o.name AS organization_name, p.business_name, p.gstin, p.pan, p.address_line1, p.address_line2,
             p.state, p.state_code, p.phone, p.email, p.is_default, p.home_tool_ids,
             p.bank_name, p.bank_branch, p.bank_account, p.bank_ifsc, p.bank_upi, p.terms,
+            p.document_accent_color, p.send_settings,
             COALESCE(m.approval_status, 'approved') AS approval_status,
             m.review_note, m.archived_at,
             COALESCE(s.plan_id, 'free') AS plan_id,
@@ -140,6 +153,8 @@ router.get("/", async (_req, res) => {
 
 router.get("/:id", async (req, res) => {
   await ensureHomeToolIdsColumn();
+  await ensureDocumentAccentColorColumn();
+  await ensureSendSettingsColumn();
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) {
     res.status(400).json({ error: "Invalid profile" });
@@ -282,6 +297,8 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   await ensureHomeToolIdsColumn();
+  await ensureDocumentAccentColorColumn();
+  await ensureSendSettingsColumn();
   const orgId = getActiveOrgId();
   const id = Number(req.params.id);
   const body = (req.body ?? {}) as Record<string, unknown>;
@@ -318,6 +335,26 @@ router.put("/:id", async (req, res) => {
     return;
   }
 
+  const documentAccentColor =
+    body.documentAccentColor !== undefined
+      ? normalizeDocumentAccentColor(body.documentAccentColor)
+      : undefined;
+
+  let sendSettingsJson: string | undefined;
+  if (body.emailTemplateId !== undefined) {
+    const [curRows] = await pool.query(
+      `SELECT send_settings FROM business_profiles
+       WHERE id = :id AND ${orgEqualsSql("organization_id")}`,
+      { id, orgId },
+    );
+    const cur = Array.isArray(curRows)
+      ? (curRows[0] as { send_settings?: unknown } | undefined)
+      : undefined;
+    const merged = normalizeProfileSendSettings(cur?.send_settings);
+    merged.email.templateId = normalizeQuotationEmailTemplateId(body.emailTemplateId);
+    sendSettingsJson = JSON.stringify(serializeProfileSendSettings(merged));
+  }
+
   await pool.query(
     `UPDATE business_profiles SET
        business_name = COALESCE(:name, business_name),
@@ -336,6 +373,8 @@ router.put("/:id", async (req, res) => {
        bank_upi = :bankUpi,
        terms = :terms
        ${homeToolIds !== undefined ? ", home_tool_ids = :homeToolIds" : ""}
+       ${documentAccentColor !== undefined ? ", document_accent_color = :documentAccentColor" : ""}
+       ${sendSettingsJson !== undefined ? ", send_settings = :sendSettings" : ""}
      WHERE id = :id AND ${orgEqualsSql("organization_id")}`,
     {
       id,
@@ -358,6 +397,8 @@ router.put("/:id", async (req, res) => {
       bankUpi: blankToNull(body.bankUpi),
       terms: blankToNull(body.terms),
       ...(homeToolIds !== undefined ? { homeToolIds: JSON.stringify(homeToolIds) } : {}),
+      ...(documentAccentColor !== undefined ? { documentAccentColor } : {}),
+      ...(sendSettingsJson !== undefined ? { sendSettings: sendSettingsJson } : {}),
     },
   );
   await logAudit("profile.update", "business_profile", String(id), undefined, req.ip);
