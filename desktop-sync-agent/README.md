@@ -7,7 +7,7 @@ The agent also starts a **localhost bridge** (`http://127.0.0.1:17865`) so Owner
 - Click **Sync now (desktop agent)** in **Sync Center** (`/sync`)
 - Click **Open in Outlook** in **Email Outbox** (`/email-outbox`) — Windows + Outlook COM, PDF attached
 
-See [`docs/EMAIL_OUTBOX.md`](../docs/EMAIL_OUTBOX.md) for email variants.
+See [`docs/EMAIL_OUTBOX.md`](../docs/EMAIL_OUTBOX.md) for email variants and [`docs/SYNC_CENTER.md`](../docs/SYNC_CENTER.md) for full Sync Center / UNC setup.
 
 ## Recommended: Sync Center UI
 

@@ -1,6 +1,8 @@
 # Artifact delivery (company Drive / webhook / UNC)
 
-Full Owner steps: **[`SETUP.md`](SETUP.md)#client-companies-part-b**.
+**Complete Sync Center configuration:** [`SYNC_CENTER.md`](SYNC_CENTER.md)  
+Owner Drive steps (short): [`SETUP.md`](SETUP.md)#client-companies-part-b  
+Quotation emails (separate): [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)
 
 ## Model
 
@@ -29,5 +31,5 @@ Re-submitting the same quotation number therefore keeps one Drive file with revi
 | Per-profile OAuth | `server/src/lib/profile-drive-oauth.ts`, `server/src/routes/profile-drive.ts` |
 | Drive upload / revise | `server/src/lib/google-drive-upload.ts` |
 | Dispatch / retry | `server/src/lib/artifact-dispatch.ts` |
-| UI | `web/components/profile/DownloadFolderPanel.tsx` |
+| UI | `web/components/profile/DownloadFolderPanel.tsx`, `web/app/sync/page.tsx` |
 | UNC desktop agent | `desktop-sync-agent/` |

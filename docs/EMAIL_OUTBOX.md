@@ -1,97 +1,94 @@
-# Email delivery & Email Outbox — setup guide
+# Email Outbox — complete configuration guide
 
-JustX supports **three** ways to send quotation emails. Use the one that matches your company.
+**Route:** `/email-outbox` (sidebar → **Email Outbox**)  
+**Who:** Business Owners and Staff  
+**Creates rows:** Quotation → **Send Via → Email** (and retries from this page)  
+**Related:** [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) · [`SYNC_CENTER.md`](SYNC_CENTER.md) · [`SETUP.md`](SETUP.md)#email-delivery-configuration
 
-| Variant | Who configures | PDF attached automatically? | Corporate HTML? |
-|---------|----------------|----------------------------|-----------------|
-| **A. Email webhook** | JustX engineer (server `.env`) | Yes | Yes (`html` field) |
-| **B. Mail app (mailto)** | No server email setup | No — PDF downloads for manual attach | No (plain text only) |
-| **C. Outlook via desktop agent** | Staff PC + Sync Center agent | Yes (Outlook COM) | Plain body in Outlook; HTML still stored for webhook retry |
+Email Outbox is a **durable queue of quotation emails** for the current Business Profile. It is **not** the Notifications inbox and **not** Sync Center’s pending PDF files.
 
-**Email Outbox** (`/email-outbox`) stores every send attempt so staff can retry on another device or method.
+| Sidebar badge | Counts |
+|---------------|--------|
+| **Email Outbox** | `pending` + `failed` email drafts |
+| **Notifications** | Unread in-app alerts |
+| **Sync Center** | Pending **file** artifacts |
 
 ---
 
-## Variant A — Email webhook (recommended for production)
+## Configuration map (where everything lives)
 
-Automatic HTML + PDF delivery. No local Outlook required.
+| Setting | Where | Who | Notes |
+|---------|-------|-----|-------|
+| `EMAIL_WEBHOOK_URL` | VPS `/var/www/jbt/server/.env` (or local `server/.env`) | JustX engineer | HTTPS inbound webhook **you** create |
+| `NOTIFY_EMAIL_WEBHOOK_URL` | Same `.env` | Engineer | Alias only if `EMAIL_WEBHOOK_URL` empty |
+| Email template / accent / Reply-To | **Business Profile** → Send Via → Email | Owner | Also Admin → GST branches → Branding |
+| Default To / CC / subject text | Same Send Via panel | Owner | Prefills Quotation send modal |
+| Desktop agent token | **Sync Center** → Create token | Owner/Staff | Same agent as UNC sync |
+| Mail client | OS default app | Staff PC | Path B |
+| Outlook desktop | Windows + agent | Staff PC | Path C |
 
-### What are `EMAIL_WEBHOOK_URL` and `NOTIFY_EMAIL_WEBHOOK_URL`?
+---
 
-These are **not** values JustX generates for you. They are the **HTTPS URL of an inbound webhook you create** in an external automation / email tool.
+## Choose a delivery path
 
-| Env var | Meaning |
-|---------|---------|
-| **`EMAIL_WEBHOOK_URL`** | Preferred. When a staff user sends a quotation (or Email Outbox retries), the JustX **API POSTs JSON** to this URL. Your tool receives it and actually sends the email (SMTP, SendGrid, Microsoft 365, etc.). |
-| **`NOTIFY_EMAIL_WEBHOOK_URL`** | **Optional alias** for the same thing. JustX reads `EMAIL_WEBHOOK_URL` first; if empty, it uses `NOTIFY_EMAIL_WEBHOOK_URL`. Older setups and UPI notify also check this name. **Set only one** — prefer `EMAIL_WEBHOOK_URL`. |
+| Path | PDF auto-attached? | Corporate HTML? | Config burden |
+|------|-------------------|-----------------|---------------|
+| **A. Email webhook** | Yes | Yes (`html`) | Engineer: `.env` + automation |
+| **B. Mailto + outbox** | No (download + attach) | No (plain in mail app) | None on server |
+| **C. Outlook via agent** | Yes (COM) | Plain body in Outlook | Sync Center token + Windows |
 
-You do **not** buy or mint a “webhook key” from JustX. Flow:
+Recommended: **A** in production; **B** until then; **C** for Outlook Sent Items without a cloud webhook. Combine: A primary, B/C when webhook fails (row stays in Outbox).
 
+---
+
+## Path A — Automatic send (`EMAIL_WEBHOOK_URL`)
+
+### What to configure
+
+JustX does **not** generate this URL. You create an inbound webhook in an external tool; JustX POSTs JSON to it.
+
+| Env var | Prefer? | Meaning |
+|---------|---------|---------|
+| `EMAIL_WEBHOOK_URL` | Yes | Primary |
+| `NOTIFY_EMAIL_WEBHOOK_URL` | Only as fallback | Same purpose if primary empty |
+
+### Step-by-step
+
+#### 1) Create the webhook (outside JustX)
+
+Pick one:
+
+**n8n**  
+New workflow → **Webhook** trigger → POST → copy Production URL → add Send Email / SMTP / SendGrid → map body fields → **Activate**.
+
+**Make.com**  
+Webhooks → Custom webhook → copy `https://hook.…make.com/…` → Email / Microsoft 365 / SendGrid module → turn scenario **On**.
+
+**Zapier**  
+Webhooks by Zapier → Catch Hook → copy URL → Email/Gmail/SendGrid action → Publish.
+
+**Power Automate**  
+When an HTTP request is received → save → copy **HTTP POST URL** → Send an email (V2) → attach from `pdfBase64`.
+
+**Not valid as the URL:** SendGrid API key, SMTP password, Gmail app password (those belong **inside** the automation).
+
+**Optional test:** [webhook.site](https://webhook.site) URL → temporary `.env` → send one quote → confirm JSON → replace with real flow.
+
+#### 2) Put URL on the JustX API host
+
+**Production:**
+
+```bash
+nano /var/www/jbt/server/.env
 ```
-JustX API  --POST JSON-->  YOUR webhook URL  -->  your automation sends the email
-```
-
-### Where to get the URL (create it yourself)
-
-Pick **one** provider your company already uses (or create a free/paid account). Create a workflow whose **first step is “Webhook / HTTP Request received”**, copy the **production webhook URL** it shows, and paste that into `server/.env`.
-
-#### Option 1 — n8n (self-hosted or cloud)
-
-1. Open n8n → **New workflow**.
-2. Add trigger: **Webhook**.
-3. Method: **POST**. Path e.g. `jbt-email`.
-4. Click **Listen for test event** / activate the workflow.
-5. Copy the **Production URL**, e.g.  
-   `https://n8n.yourcompany.com/webhook/jbt-email`  
-   or cloud: `https://….app.n8n.cloud/webhook/….`
-6. Add next nodes: parse JSON body → **Send Email** / SendGrid / SMTP.
-7. Map fields from the POST body (`to`, `subject`, **`html`**, `pdfBase64`, …) — see table below.
-8. **Activate** the workflow (inactive webhooks return errors).
-
-#### Option 2 — Make.com (Integromat)
-
-1. Create a scenario → trigger **Webhooks → Custom webhook**.
-2. Click **Add** → copy the webhook address Make shows (looks like `https://hook.eu1.make.com/…`).
-3. Add a module: **Email** / **Microsoft 365 Email** / **SendGrid** → map JSON fields.
-4. Run once to “determine data structure”, then turn the scenario **On**.
-
-#### Option 3 — Zapier
-
-1. Create Zap → trigger **Webhooks by Zapier → Catch Hook**.
-2. Copy the **Custom Webhook URL** Zapier shows.
-3. Action: **Email by Zapier** / Gmail / Outlook / SendGrid → map fields (decode base64 for PDF if needed).
-4. Publish the Zap.
-
-#### Option 4 — Microsoft Power Automate / Azure Logic Apps
-
-1. Create flow → trigger **When an HTTP request is received**.
-2. Paste a JSON schema (or use “Use sample payload” from a test send).
-3. After save, Power Automate shows **HTTP POST URL** — that is your `EMAIL_WEBHOOK_URL`.
-4. Add **Send an email (V2)** / Office 365 Outlook → attach file from `pdfBase64`.
-
-#### Option 5 — SendGrid / Brevo / Mailgun “Inbound Parse” is the wrong direction
-
-Do **not** paste a generic marketing API key as the URL. JustX needs a URL that **accepts POST**. Typical pattern:
-
-1. Use n8n/Make/Zapier/Power Automate as above, **or**
-2. Host a tiny HTTPS endpoint that receives JSON and calls SendGrid’s **Mail Send** API with `html` + attachment.
-
-#### Quick local test (optional)
-
-Use [webhook.site](https://webhook.site): open the page, copy **Your unique URL**, temporarily set it as `EMAIL_WEBHOOK_URL`, send one quotation, confirm JSON appears. Then replace with your real automation URL. **Do not leave webhook.site in production** (emails won’t send).
-
-### Where to put the URL in JustX
-
-1. SSH / edit **`server/.env`** on the API host (production: `/var/www/jbt/server/.env`).
-2. Set **one** of:
 
 ```env
-EMAIL_WEBHOOK_URL=https://hook.eu1.make.com/xxxxxxxx
-# Prefer the line above. Only if you already use the old name:
-# NOTIFY_EMAIL_WEBHOOK_URL=https://same-or-other-hook.example/jbt-email
+EMAIL_WEBHOOK_URL=https://YOUR-PRODUCTION-WEBHOOK-URL
 ```
 
-3. Reload API so env is picked up:
+**Local:** `server/.env` (from `.env.example`).
+
+Reload:
 
 ```bash
 cd /var/www/jbt
@@ -99,201 +96,188 @@ pm2 reload ecosystem.config.cjs --update-env
 pm2 save
 ```
 
-4. In your automation, map JSON fields:
+#### 3) Map JSON in your automation
 
 | Field | Use as |
 |-------|--------|
-| `to` | To |
-| `cc` | CC |
-| `subject` | Subject |
-| `body` | Plain-text part |
-| **`html`** | **HTML body (required for corporate template)** |
-| `replyTo` | Reply-To |
-| `from` / `fromName` / `fromEmail` | From (if provider allows) |
-| `pdfBase64` + `filename` | PDF attachment |
-| `outboxId` / `quoteNo` | Logging |
+| `to`, `cc`, `subject` | Envelope |
+| `body` | Plain text part |
+| **`html`** | **HTML body (required for Corporate template)** |
+| `replyTo`, `fromName`, `fromEmail` | Headers if supported |
+| `pdfBase64` + `filename` | Attachment |
+| `outboxId`, `quoteNo` | Logging |
 
 Full contract: [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md).
 
-### Business Profile settings (Owner)
+#### 4) Business Profile branding (Owner)
 
-1. Sign in → **Business Profile**.
-2. Set **Document accent color** (colors the corporate email).
-3. Under **Send Via defaults → Email**:
-   - Choose **Corporate HTML** or **Plain text**
-   - Subject, Reply-To, intro/closing (corporate)
-4. **Admin → GST branches → Branding** can set accent + template per branch.
+1. **Business Profile**  
+2. Document accent color  
+3. **Send Via defaults → Email**: Corporate HTML or Plain; subject; Reply-To; intro/closing  
+4. Optional: **Admin → GST branches → Branding** per branch  
 
-### Staff usage
+#### 5) Staff test
 
-1. Quotation → **Send Via → Email** → Send.
-2. If webhook works: status **sent**, customer receives HTML + PDF.
-3. If webhook fails: item appears in **Email Outbox** as **failed** — use **Send via webhook** to retry.
+Quotation → Send Via → Email → Send.  
+Email Outbox: **sent** = success. **failed** = use **Send via webhook** to retry.
 
-### Checklist
+### Path A checklist
 
-- [ ] Created inbound webhook in n8n / Make / Zapier / Power Automate / custom
-- [ ] Copied **HTTPS production** URL into `EMAIL_WEBHOOK_URL` (or alias)
-- [ ] Reloaded API with `--update-env`
-- [ ] Automation maps **`html`**, not only `body`
-- [ ] Test send from Quotation; confirm inbox HTML + attachment
-- [ ] Profile template = Corporate; accent color set
+- [ ] Webhook created and **active**  
+- [ ] URL in `EMAIL_WEBHOOK_URL`  
+- [ ] API reloaded with `--update-env`  
+- [ ] Automation maps **`html`** and PDF  
+- [ ] Profile Corporate template + accent  
+- [ ] Test inbox shows HTML + attachment  
 
 ---
 
-## Variant B — Local mail app (no webhook)
+## Path B — Mailto + PDF download (no server email)
 
-Zero SMTP setup. Browser opens Outlook / Apple Mail / Gmail handler with To/CC/subject/body. **Browsers cannot attach PDFs to mailto** — JustX downloads the PDF so the user attaches it.
+### What to configure
 
-### Configuration required
+**Server:** leave `EMAIL_WEBHOOK_URL` empty.  
+**Optional:** Business Profile Send Via defaults (subject / message).  
+**PC:** default mail client (Outlook, Apple Mail, etc.).
 
-**None** on the server for email. Optional:
+### Staff flow
 
-- Business Profile email templates (subject / plain message / corporate intro)
-- Staff must have a default mail client registered on the device
-
-### Staff usage
-
-1. Quotation → Email → Send (with webhook **unset**).
-2. JustX:
-   - Saves draft to **Email Outbox** (`pending`)
-   - Downloads the PDF
-   - Opens `mailto:` with To/CC/subject/body
-3. User attaches the downloaded PDF in the mail client and sends.
-4. Later / another PC: open **Email Outbox** → **Open mail app** / **Download PDF** again.
-
-### Checklist
-
-- [ ] Device has a default email client
-- [ ] User knows to attach the downloaded PDF
-- [ ] Bookmark **Email Outbox** for retries
+1. Quotation → Email → Send.  
+2. JustX saves Outbox (`pending`), downloads PDF, opens `mailto:`.  
+3. User attaches downloaded PDF → Send in mail app.  
+4. Later: Email Outbox → **Open mail app** / **Download PDF**.
 
 ### Limits
 
-- Body length capped (~1800 chars) by mailto
-- No corporate HTML in the mail client via this path
-- Cross-device: outbox syncs via server; mail client must exist on the device you use to open
+- Browsers cannot attach files via `mailto:`  
+- Body length capped (~1800 chars)  
+- No corporate HTML in the mail client  
+- Need a mail client on the device you use to open  
+
+### Path B checklist
+
+- [ ] Webhook unset  
+- [ ] Default mail client works  
+- [ ] Staff know to attach the PDF  
+- [ ] Email Outbox bookmarked for retries  
 
 ---
 
-## Variant C — Open in Outlook with PDF (desktop agent)
+## Path C — Outlook with PDF (desktop agent)
 
-Best for Windows offices that live in desktop Outlook and do not want a cloud email webhook yet.
+Uses the **same** Sync Center desktop agent as UNC file sync.
 
-### Prerequisites
+### What to configure
 
-- Windows PC with **Microsoft Outlook** (desktop, COM-capable)
-- JustX **desktop sync agent** running (same as Sync Center)
-- Agent token for this Business Profile (`JBT_AGENT_TOKEN`)
+| Item | Where |
+|------|--------|
+| Agent token | Sync Center → **Create token + download launcher** |
+| Agent process | Run `.ps1` / `npm start` on Windows PC with Outlook |
+| Download Folder | Optional (needed for file sync; not required for Outlook-only) |
 
-### How to generate `JBT_AGENT_TOKEN`
+### Generate `JBT_AGENT_TOKEN`
 
-JustX **creates** this token for you. You do **not** invent a password or copy it from `.env.example`.
+1. Sign in as Owner/Staff on the correct Business Profile.  
+2. **Sync Center** → **Set up on this PC**.  
+3. Optional label → **Create token + download launcher**.  
+4. Token `jxsa_…` shown **once** + embedded in `.ps1`.  
+5. Lost → create new + **Revoke** old under Registered agents.
 
-| Step | Where | What happens |
-|------|--------|----------------|
-| 1 | Sign in as **Business Owner** or **Staff** | Same branch / Business Profile you want the agent to use |
-| 2 | Open **Sync Center** (`/sync`) | Sidebar → Sync Center |
-| 3 | Click **Set up on this PC** | Expands setup panel |
-| 4 | Optional: type an **Agent label** (e.g. `Accounts PC`) | Helps identify the machine later |
-| 5 | Click **Create token + download launcher** | API creates a token like `jxsa_…` (shown **once** on screen) and downloads `start-justx-sync-agent.ps1` |
-| 6 | Keep / copy the token | Use **Copy token**, or open the `.ps1` — it already sets `$env:JBT_AGENT_TOKEN = "jxsa_…"` |
-| 7 | Run the launcher on the Outlook PC | See below |
+Detailed agent env: [`SYNC_CENTER.md`](SYNC_CENTER.md)#23-desktop-agent-sync-unc--outlook.
 
-Notes:
-
-- Token format: `jxsa_` + random secret (generated server-side).
-- It is **scoped to the current Business Profile** and can be **Revoked** later under Sync Center → Registered agents.
-- Treat it like a password: anyone with the token can sync artifacts / open email compose for that profile.
-- If you lose the token, **create a new one** (and revoke the old agent). There is no “show token again” after the first display.
-
-### Step-by-step setup
-
-1. **Business Profile** → set Download Folder if you also use file sync (optional for email-only).
-2. Generate token + launcher as above (**Sync Center** → **Create token + download launcher**).
-3. On the Outlook PC, place the `.ps1` next to the repo (or inside `desktop-sync-agent`) and run:
+### Run agent + send
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\start-justx-sync-agent.ps1
 ```
 
-4. Keep the agent window open. Sync Center should show **Desktop agent: Connected**.
-5. Send a quotation by Email (or open **Email Outbox**).
-6. Click **Open in Outlook** on the outbox row.
-7. Outlook compose opens with To/CC/subject/body + **PDF attached** — review and Send.
+Keep window open → Sync Center: **Desktop agent: Connected**.  
+Email Outbox → **Open in Outlook** (browser and agent on **same** PC).
 
-### Agent env (manual start)
-
-If you prefer not to use the downloaded `.ps1`:
-
-1. Generate a token in Sync Center (step above) and **Copy token**.
-2. From `desktop-sync-agent/`:
+Manual:
 
 ```powershell
-$env:JBT_API_BASE = "https://justxsystems.com/jbt/api"   # your public API base ending in /api
-$env:JBT_AGENT_TOKEN = "jxsa_PASTE_THE_TOKEN_HERE"
-$env:JBT_BRIDGE_PORT = "17865"
+$env:JBT_API_BASE = "https://justxsystems.com/jbt/api"
+$env:JBT_AGENT_TOKEN = "jxsa_…"
+cd desktop-sync-agent
 npm start
 ```
 
-| Env | Where it comes from |
-|-----|---------------------|
-| `JBT_API_BASE` | Your JustX API root + `/api` (launcher fills this automatically from the browser). Prod example: `https://justxsystems.com/jbt/api`. Local: `http://localhost:4000/api`. |
-| `JBT_AGENT_TOKEN` | **Only** from Sync Center → Create token (or the downloaded `.ps1`). |
-| `JBT_BRIDGE_PORT` | Default `17865` — leave unless the port is taken. |
+### Path C checklist
 
-Bridge endpoint used by the UI: `POST http://127.0.0.1:17865/open-email` with `{ "outboxId": "eml_..." }`.
-
-### Checklist
-
-- [ ] Created token in Sync Center (not typed by hand)
-- [ ] Agent running on the same PC as the browser session used for **Open in Outlook**
-- [ ] Outlook installed and able to open via COM
-- [ ] Outbox item has a PDF (`artifactId` present)
-- [ ] Windows only (macOS/Linux agent returns a clear error)
+- [ ] Token from Sync Center (not invented)  
+- [ ] Agent online on this PC  
+- [ ] Desktop Outlook installed  
+- [ ] Outbox row has PDF  
+- [ ] Windows only  
 
 ### Limits
 
-- Outlook body is **plain text** (HTML remains available for webhook retry)
-- Agent must run on the PC that has Outlook
-- Not available in pure browser / mobile without the agent
+- Outlook body is plain text (HTML still stored for webhook retry)  
+- Agent must run on the Outlook PC  
 
 ---
 
-## Email Outbox UI
+## Email Outbox UI reference
 
-**Route:** `/email-outbox` (sidebar: **Email Outbox**)
+### Status values
 
-| Action | Needs |
-|--------|--------|
-| Send via webhook | Variant A configured |
-| Open mail app | Local mail client (Variant B) |
-| Download PDF | Artifact on the outbox row |
-| Open in Outlook | Variant C agent online |
-| Requeue / Cancel | Always (except cancel after sent) |
+| Status | Meaning |
+|--------|---------|
+| `pending` | Waiting for mailto / Outlook / later send |
+| `failed` | Webhook (or channel) failed — retry |
+| `opened` | Mail app / Outlook compose was opened |
+| `sent` | Webhook reported success |
+| `cancelled` | User cancelled |
 
-Pending items are profile-scoped (same branch as Sync Center). Log in on another device → same outbox → choose a method available on that device.
+### Actions
+
+| Button | Requires |
+|--------|----------|
+| **Send via webhook** | Path A configured on API |
+| **Open mail app** | Path B — local mail client |
+| **Download PDF** | Row has artifact |
+| **Open in Outlook** | Path C — agent online on this PC |
+| **Requeue** | Sets back toward pending |
+| **Cancel** | Stops further send attempts |
+
+Filters: **Pending** (pending+failed) vs **All**.
+
+### How rows get created
+
+1. Staff sends quotation email.  
+2. API creates outbox row (+ artifact PDF when provided).  
+3. If webhook configured and succeeds → `sent`.  
+4. Else → `pending` / `failed` and client may open mailto + download PDF.
 
 ---
 
-## Decision guide
+## Engineer vs Owner vs Staff
 
-```
-Need branded HTML + automatic PDF for all staff?
-  └─ Yes → Variant A (EMAIL_WEBHOOK_URL from your automation tool)
-Need zero server email setup today?
-  └─ Yes → Variant B (mailto + PDF download + Outbox)
-Need Outlook Sent folder + attachment without webhook?
-  └─ Yes → Variant C (Sync Center generates JBT_AGENT_TOKEN)
-```
+| Role | Configures |
+|------|------------|
+| **JustX engineer** | `EMAIL_WEBHOOK_URL` in `server/.env`, PM2 reload, optional automation hosting |
+| **Company Owner** | Profile email templates, accent; Sync Center token if needed |
+| **Staff** | Send quotations; Outbox actions; run agent on their PC if using C |
 
-You can combine: **A primary**, **B/C fallback** when webhook is down (failed rows stay in Outbox).
+---
+
+## Troubleshooting
+
+| Symptom | Check |
+|---------|--------|
+| Always mailto, never auto-send | `EMAIL_WEBHOOK_URL` empty or API not reloaded |
+| Webhook 4xx/5xx in Outbox | Automation inactive; wrong URL; mapping error |
+| HTML looks plain | Automation mapped `body` only — map **`html`** |
+| Open in Outlook disabled / errors | Agent not on this PC; not Windows; Outlook missing |
+| Wrong badge count | Fixed by route-specific badges; pending = pending+failed emails |
+| Wrong company emails | Branch / Business Profile switcher |
 
 ---
 
 ## Related docs
 
-- [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) — webhook JSON contract + how to obtain the URL  
-- [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) — desktop agent / Sync Center  
-- [`SETUP.md`](SETUP.md) — env reference  
-- Business Profile → Send Via — templates & accent color  
+- [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) — JSON contract  
+- [`SYNC_CENTER.md`](SYNC_CENTER.md) — agent + file delivery  
+- [`SETUP.md`](SETUP.md) — env + short email section  
+- `desktop-sync-agent/README.md` — `/open-email` bridge  
