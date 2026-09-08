@@ -134,8 +134,17 @@ router.get("/:token", async (req, res) => {
 router.post("/:token/decide", async (req, res) => {
   const token = String(req.params.token ?? "").trim();
   const decision = String(req.body?.decision ?? "").toLowerCase();
+  const approverName = String(req.body?.approverName ?? "").trim();
   if (decision !== "approved" && decision !== "rejected") {
     res.status(400).json({ error: "decision must be approved or rejected" });
+    return;
+  }
+  if (!approverName || approverName.length < 2) {
+    res.status(400).json({ error: "Approver name is required" });
+    return;
+  }
+  if (approverName.length > 120) {
+    res.status(400).json({ error: "Approver name is too long" });
     return;
   }
   const [rows] = await pool.query(
@@ -159,12 +168,20 @@ router.post("/:token/decide", async (req, res) => {
   const data = parseData(row.data);
   const now = new Date().toISOString();
   data.status = decision;
-  if (decision === "approved") data.approvedAt = now;
-  else data.rejectedAt = now;
+  if (decision === "approved") {
+    data.approvedAt = now;
+    data.approvedBy = approverName;
+  } else {
+    data.rejectedAt = now;
+    data.rejectedBy = approverName;
+  }
   const history = Array.isArray(data.history) ? [...(data.history as unknown[])] : [];
   history.push({
     ts: now,
-    event: decision === "approved" ? "Approved by customer" : "Rejected by customer",
+    event:
+      decision === "approved"
+        ? `Approved by ${approverName}`
+        : `Rejected by ${approverName}`,
   });
   data.history = history;
 
@@ -194,7 +211,7 @@ router.post("/:token/decide", async (req, res) => {
     publishNotificationAsync({
       eventType: decision === "approved" ? "document.quotation_approved" : "document.quotation_rejected",
       title: decision === "approved" ? "Quotation approved by customer" : "Quotation rejected by customer",
-      body: `${quoteNo ? `${quoteNo} · ` : ""}${party} ${decision} the quotation.`,
+      body: `${quoteNo ? `${quoteNo} · ` : ""}${approverName} ${decision} the quotation${party ? ` (${party})` : ""}.`,
       organizationId: orgId,
       businessProfileId: row.business_profile_id ?? null,
       href: `/tools/quotationv1`,
@@ -202,7 +219,7 @@ router.post("/:token/decide", async (req, res) => {
       entityId: String(row.id),
       dedupeKey: `quote-decide:${row.id}:${decision}`,
       severity: decision === "rejected" ? "urgent" : "attention",
-      meta: { decision, quoteNo },
+      meta: { decision, quoteNo, approverName, decidedAt: now },
       expiresInHours: 336,
     });
   }

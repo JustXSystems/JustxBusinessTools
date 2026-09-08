@@ -71,7 +71,9 @@ export type QuotationV1 = {
   approvalToken: string;
   financeSent: boolean;
   approvedAt?: string;
+  approvedBy?: string;
   rejectedAt?: string;
+  rejectedBy?: string;
   /** Letterhead frozen at save/send — used on public approve / PDF history. */
   companySnapshot?: CompanyProfileV1;
 };

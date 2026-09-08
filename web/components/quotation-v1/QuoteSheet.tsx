@@ -32,13 +32,37 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
       {q.status === "approved" ? (
         <div className="qgv1-stamp">
           APPROVED
-          <small>{fmtDate(q.approvedAt?.slice(0, 10) || q.date)}</small>
+          <small>
+            {q.approvedBy ? `${q.approvedBy} · ` : ""}
+            {q.approvedAt
+              ? new Date(q.approvedAt).toLocaleString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: true,
+                })
+              : fmtDate(q.date)}
+          </small>
         </div>
       ) : null}
       {q.status === "rejected" ? (
         <div className="qgv1-stamp rejected">
           REJECTED
-          <small>{fmtDate(q.rejectedAt?.slice(0, 10) || q.date)}</small>
+          <small>
+            {q.rejectedBy ? `${q.rejectedBy} · ` : ""}
+            {q.rejectedAt
+              ? new Date(q.rejectedAt).toLocaleString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: true,
+                })
+              : fmtDate(q.date)}
+          </small>
         </div>
       ) : null}
 
