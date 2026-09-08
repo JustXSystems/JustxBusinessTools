@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fetchProfile } from "@/lib/api";
 import { publicAssetUrl, withBasePath, absolutePublicAssetUrl } from "@/lib/base-path";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { useLiveRefresh, invalidateAdminData } from "@/hooks/useLiveRefresh";
+import { useLiveRefresh, invalidateAdminData, invalidateLiveData } from "@/hooks/useLiveRefresh";
 import {
   buildTerms,
   CATEGORIES,
@@ -1675,6 +1675,7 @@ export function QuotationGeneratorV1() {
                             pdfBase64: pdf?.pdfBase64,
                           }),
                         });
+                        invalidateLiveData("email-outbox");
                         if (!result.delivered) {
                           if (pdf?.pdfBase64) {
                             try {

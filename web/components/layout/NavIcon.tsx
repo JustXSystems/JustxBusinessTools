@@ -72,6 +72,13 @@ export function NavIcon({ id, className }: { id: NavIconId; className?: string }
           <path d="M10 19a2 2 0 0 0 4 0" />
         </Svg>
       );
+    case "email":
+      return (
+        <Svg {...props}>
+          <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+          <path d="m4 7.5 8 6 8-6" />
+        </Svg>
+      );
     case "subscription":
       return (
         <Svg {...props}>

@@ -14,8 +14,27 @@ import { SidebarSessionFooter } from "@/components/layout/SidebarSessionFooter";
 import { useSidebarLayout } from "@/components/layout/SidebarLayoutProvider";
 import { navigationConfig, type NavItem } from "@/config/navigation.config";
 import { NavIcon } from "@/components/layout/NavIcon";
+import { EmailOutboxDot } from "@/components/layout/EmailOutboxDot";
 import { NotificationDot } from "@/components/layout/NotificationDot";
 import { useSubscriptionContext } from "@/components/subscription/SubscriptionProvider";
+
+function navBadgeFor(href: string) {
+  if (href === "/notifications") {
+    return (
+      <span className="ds-nav-badge-slot">
+        <NotificationDot />
+      </span>
+    );
+  }
+  if (href === "/email-outbox") {
+    return (
+      <span className="ds-nav-badge-slot">
+        <EmailOutboxDot />
+      </span>
+    );
+  }
+  return undefined;
+}
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -72,12 +91,7 @@ export function DesktopSidebar() {
       label: item.label,
       icon: item.icon,
       active: isActive(pathname, item.href),
-      badge:
-        item.icon === "notifications" ? (
-          <span className="ds-nav-badge-slot">
-            <NotificationDot />
-          </span>
-        ) : undefined,
+      badge: navBadgeFor(item.href),
     })),
     ...navigationConfig.account.map((item) => ({
       href: item.href,
@@ -177,13 +191,7 @@ export function DesktopSidebar() {
               item={item}
               mini={mini}
               active={isActive(pathname, item.href)}
-              badge={
-                item.icon === "notifications" ? (
-                  <span className="ds-nav-badge-slot">
-                    <NotificationDot />
-                  </span>
-                ) : undefined
-              }
+              badge={navBadgeFor(item.href)}
             />
           ))}
         </div>

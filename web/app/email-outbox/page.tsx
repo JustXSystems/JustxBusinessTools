@@ -15,6 +15,7 @@ import {
   sendEmailOutboxWebhook,
   type EmailOutboxItem,
 } from "@/lib/email-outbox";
+import { invalidateLiveData } from "@/hooks/useLiveRefresh";
 
 function statusClass(status: string) {
   if (status === "sent") return "pill pill-success";
@@ -66,6 +67,7 @@ export default function EmailOutboxPage() {
     try {
       await fn();
       setMessage(label);
+      invalidateLiveData("email-outbox");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
