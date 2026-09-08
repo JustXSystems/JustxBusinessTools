@@ -16,13 +16,14 @@ export function canAccessAdmin(user: SessionUser | null | undefined): boolean {
 }
 
 /**
- * Business Owner may edit Business Profile details.
- * Admin / Staff / Viewer under the same profile see those details as read-only.
+ * Business Owner or org Admin may edit Business Profile details
+ * (including document accent color used by tool previews / PDFs).
+ * Staff / Viewer under the same profile see those details as read-only.
  */
 export function canEditBusinessProfile(user: SessionUser | null | undefined): boolean {
   if (!user) return false;
-  // Platform admins are not org members of customer profiles — Owner only.
-  return user.role === "owner";
+  // Platform admins are not org members of customer profiles.
+  return user.role === "owner" || user.role === "admin";
 }
 
 /** Owner / staff / org admin may run Sync Center and register a desktop agent. */

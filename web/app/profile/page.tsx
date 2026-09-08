@@ -14,6 +14,7 @@ import {
   type BusinessProfile,
   type BusinessProfileSendSettings,
 } from "@/lib/types/business-profile";
+import { normalizeDocumentAccentColor } from "@/lib/document-accent";
 import { fetchProfile, saveProfile } from "@/lib/api";
 import { publicAssetUrl } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
@@ -45,6 +46,7 @@ export default function ProfilePage() {
         setProfile({
           ...EMPTY_PROFILE,
           ...p,
+          documentAccentColor: normalizeDocumentAccentColor(p.documentAccentColor),
           sendSettings: normalizeSendSettings(p.sendSettings),
           homeToolIds: p.homeToolIds ?? catalogIds,
         });
@@ -61,7 +63,7 @@ export default function ProfilePage() {
 
   async function handleSave() {
     if (!canEdit) {
-      setError("Only the Business Owner can edit Business Profile details.");
+      setError("Only the Business Owner or Admin can edit Business Profile details.");
       return;
     }
     setSaving(true);
@@ -71,6 +73,7 @@ export default function ProfilePage() {
       const normalized = normalizeSendSettings(profile.sendSettings);
       const payload: BusinessProfile & { artifactWebhookSecret?: string } = {
         ...profile,
+        documentAccentColor: normalizeDocumentAccentColor(profile.documentAccentColor),
         sendSettings: {
           ...normalized,
           whatsappNumbers: normalized.whatsappNumbers.filter((n) => n.phone.trim()),
@@ -83,6 +86,7 @@ export default function ProfilePage() {
       setProfile({
         ...EMPTY_PROFILE,
         ...saved,
+        documentAccentColor: normalizeDocumentAccentColor(saved.documentAccentColor),
         sendSettings: normalizeSendSettings(saved.sendSettings),
         homeToolIds: saved.homeToolIds ?? catalogIds,
       });
@@ -138,8 +142,8 @@ export default function ProfilePage() {
         <div className="panel" style={{ marginBottom: 14 }}>
           <p className="section-note" style={{ margin: 0 }}>
             {user?.role === "staff"
-              ? "Staff can view Business Profile details but cannot edit them. Only the Business Owner can make changes."
-              : "Viewing as a team user — Business Profile details are read-only. Only the Business Owner can edit these settings."}
+              ? "Staff can view Business Profile details but cannot edit them. Only the Business Owner or Admin can make changes."
+              : "Viewing as a team user — Business Profile details are read-only. Only the Business Owner or Admin can edit these settings."}
           </p>
         </div>
       ) : null}
@@ -186,6 +190,69 @@ export default function ProfilePage() {
                 ) : null}
               </div>
             ) : null}
+            <div className="profile-accent-field" style={{ marginTop: 16 }}>
+              <label className="label" htmlFor="documentAccentColor">
+                Document accent color
+              </label>
+              <div className="flex-row-wrap" style={{ alignItems: "center", gap: 10 }}>
+                <input
+                  id="documentAccentColor"
+                  type="color"
+                  value={normalizeDocumentAccentColor(profile.documentAccentColor)}
+                  disabled={!canEdit}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      documentAccentColor: normalizeDocumentAccentColor(e.target.value),
+                    })
+                  }
+                  aria-label="Document accent color"
+                  style={{
+                    width: 48,
+                    height: 36,
+                    padding: 2,
+                    borderRadius: 8,
+                    border: "1px solid var(--border-hair)",
+                    background: "transparent",
+                    cursor: canEdit ? "pointer" : "default",
+                  }}
+                />
+                <input
+                  className="mono"
+                  value={normalizeDocumentAccentColor(profile.documentAccentColor)}
+                  disabled={!canEdit}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      documentAccentColor: e.target.value,
+                    })
+                  }
+                  onBlur={() =>
+                    setProfile((p) => ({
+                      ...p,
+                      documentAccentColor: normalizeDocumentAccentColor(p.documentAccentColor),
+                    }))
+                  }
+                  placeholder="#0f3d3e"
+                  style={{ maxWidth: 120 }}
+                  aria-label="Document accent color hex"
+                />
+                <span
+                  aria-hidden
+                  style={{
+                    display: "inline-block",
+                    width: 72,
+                    height: 8,
+                    borderRadius: 4,
+                    background: normalizeDocumentAccentColor(profile.documentAccentColor),
+                  }}
+                />
+              </div>
+              <p className="section-note">
+                Used for quotation sheets, invoices/orders/POs, and site-survey PDF letterhead
+                (headings, borders, table headers). Owner and Admin can change this.
+              </p>
+            </div>
           </div>
         </div>
       </div>

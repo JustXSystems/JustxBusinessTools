@@ -98,6 +98,8 @@ export type CompanyProfileV1 = {
   website: string;
   quotePrefix: string;
   place: string;
+  /** Letterhead / sheet accent from Business Profile (`#rrggbb`). */
+  documentAccentColor?: string;
 };
 
 export type QuoteTotals = {

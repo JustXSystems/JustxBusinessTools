@@ -15,6 +15,10 @@ import { requireWriteAccess } from "../middleware/require-write.js";
 import { publishNotificationAsync } from "../lib/notification-publish.js";
 import { notifyDocumentOutbound } from "../lib/notification-billing.js";
 import { withFileAccessToken } from "../lib/storage.js";
+import {
+  ensureDocumentAccentColorColumn,
+  normalizeDocumentAccentColor,
+} from "../lib/document-accent.js";
 
 const TOOL_ID = "sitesurveyv1";
 const COMPANY_KEY = "site_survey_v1_company";
@@ -99,9 +103,12 @@ async function loadActiveBusinessBrand(): Promise<{
   addressLine2: string | null;
   phone: string | null;
   email: string | null;
+  documentAccentColor: string;
 } | null> {
+  await ensureDocumentAccentColorColumn();
   const [rows] = await pool.query(
-    `SELECT business_name, logo_data_url, address_line1, address_line2, phone, email
+    `SELECT business_name, logo_data_url, address_line1, address_line2, phone, email,
+            document_accent_color
      FROM business_profiles WHERE id = :id LIMIT 1`,
     { id: getActiveProfileId() },
   );
@@ -114,6 +121,7 @@ async function loadActiveBusinessBrand(): Promise<{
             address_line2: string | null;
             phone: string | null;
             email: string | null;
+            document_accent_color?: string | null;
           }
         | undefined)
     : undefined;
@@ -125,6 +133,7 @@ async function loadActiveBusinessBrand(): Promise<{
     addressLine2: row.address_line2,
     phone: row.phone,
     email: row.email,
+    documentAccentColor: normalizeDocumentAccentColor(row.document_accent_color),
   };
 }
 
@@ -143,9 +152,15 @@ function mergeCompanyWithBusinessBrand(
     email: "",
     website: "",
     reportPrefix: "ZSS",
+    documentAccentColor: normalizeDocumentAccentColor(null),
     ...storedObj,
   };
-  if (!brand) return company;
+  if (!brand) {
+    return {
+      ...company,
+      documentAccentColor: normalizeDocumentAccentColor(company.documentAccentColor),
+    };
+  }
 
   const name = String(brand.businessName ?? "").trim();
   const addressFromProfile = [brand.addressLine1, brand.addressLine2]
@@ -167,6 +182,7 @@ function mergeCompanyWithBusinessBrand(
     email: storedEmail || brand.email || company.email,
     reportPrefix:
       storedPrefix && storedPrefix !== "ZSS" ? storedPrefix : prefixFromName || company.reportPrefix,
+    documentAccentColor: brand.documentAccentColor,
   };
 }
 

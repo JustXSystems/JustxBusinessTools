@@ -48,11 +48,13 @@ describe("mergeCompanyFromBusinessProfile", () => {
         logo: "/uploads/logo.png",
         phone: "111",
         addressLine1: "12 Main St",
+        documentAccentColor: "#224466",
       },
     );
     expect(merged.name).toBe("Acme Solar");
     expect(merged.logo).toBe("/uploads/logo.png");
     expect(merged.phone).toBe("999");
     expect(merged.address).toBe("12 Main St");
+    expect(merged.documentAccentColor).toBe("#224466");
   });
 });

@@ -2,8 +2,10 @@ import type { DocumentConfig } from "@/config/tools.config";
 import type { BusinessProfile } from "@/lib/types/business-profile";
 import type { DocumentState } from "@/lib/types/document";
 import { docComputeTotals, wordsTotal } from "@/lib/document-math";
+import { documentAccentCssVars } from "@/lib/document-accent";
 import { fmtDate, fmtINR } from "@/lib/format";
 import { publicAssetUrl } from "@/lib/base-path";
+import type { CSSProperties } from "react";
 
 type Props = {
   config: DocumentConfig;
@@ -15,9 +17,10 @@ export function DocumentPreview({ config, state, profile }: Props) {
   const { computed, totalQty, taxable, cgst, sgst, igst, totalTax, grand } =
     docComputeTotals(state);
   const words = wordsTotal(grand);
+  const accentStyle = documentAccentCssVars(profile.documentAccentColor) as CSSProperties;
 
   return (
-    <div className="doc-preview">
+    <div className="doc-preview" style={accentStyle}>
       <div className="dp-header">
         <div>
           {profile.logo ? (

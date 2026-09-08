@@ -1,4 +1,5 @@
 import type { CategoryKey, CompanyProfileV1, EngagementKey } from "./types";
+import { normalizeDocumentAccentColor } from "@/lib/document-accent";
 import {
   DEFAULT_SEND_SETTINGS,
   DEFAULT_WHATSAPP_MESSAGE,
@@ -215,6 +216,7 @@ export const DEFAULT_COMPANY: CompanyProfileV1 = {
   website: "",
   quotePrefix: "QT",
   place: "Bengaluru",
+  documentAccentColor: "#0f3d3e",
 };
 
 /** Fields we pull from the operator Business Profile for letterhead branding. */
@@ -227,6 +229,7 @@ export type BusinessProfileBrandSource = {
   gstin?: string | null;
   phone?: string | null;
   email?: string | null;
+  documentAccentColor?: string | null;
 };
 
 /**
@@ -242,6 +245,9 @@ export function mergeCompanyFromBusinessProfile(
       ...DEFAULT_COMPANY,
       ...company,
       logo: company.logo ?? null,
+      documentAccentColor: normalizeDocumentAccentColor(
+        company.documentAccentColor ?? DEFAULT_COMPANY.documentAccentColor,
+      ),
     };
   }
 
@@ -270,5 +276,8 @@ export function mergeCompanyFromBusinessProfile(
       base.quotePrefix && base.quotePrefix !== DEFAULT_COMPANY.quotePrefix
         ? base.quotePrefix
         : prefixFromName || base.quotePrefix,
+    documentAccentColor: normalizeDocumentAccentColor(
+      profile.documentAccentColor ?? base.documentAccentColor,
+    ),
   };
 }

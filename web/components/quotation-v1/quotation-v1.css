@@ -447,7 +447,8 @@
   padding: 12px;
 }
 
-/* Print / PDF sheet — keep light paper for documents */
+/* Print / PDF sheet — keep light paper for documents.
+   --q-teal-800 is overridden inline from Business Profile documentAccentColor. */
 .qgv1-sheet {
   --q-teal-800: #0f3d3e;
   --q-amber: #f2a93b;

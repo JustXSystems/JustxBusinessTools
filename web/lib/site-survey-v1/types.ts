@@ -91,6 +91,8 @@ export type SurveyCompanySnapshot = {
   email: string;
   website: string;
   reportPrefix: string;
+  /** Letterhead / PDF accent from Business Profile (`#rrggbb`). */
+  documentAccentColor?: string;
 };
 
 export type HistoryEvent = { ts: string; event: string };

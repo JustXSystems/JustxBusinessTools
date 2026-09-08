@@ -4,22 +4,32 @@ import { applianceSummaryLine, computeLoadSummary } from "./appliances";
 import { ALL_FIELDS, flowForType } from "./catalog";
 import { fmtRs, val, withFreshEstimate } from "./compute";
 import type { SiteSurveyV1, SurveyCompanySnapshot, SurveyPhoto } from "./types";
+import { documentAccentPdfPalette } from "@/lib/document-accent";
 
 type PdfDoc = jsPDF & { lastAutoTable?: { finalY: number } };
 
-/** Corporate report palette (aligned with Quotation / brand teal). */
-const C = {
-  ink: [15, 23, 42] as [number, number, number],
-  teal: [0, 120, 140] as [number, number, number],
-  tealDeep: [0, 95, 112] as [number, number, number],
-  tealHead: [0, 140, 158] as [number, number, number],
-  slate: [30, 41, 59] as [number, number, number],
-  muted: [100, 116, 139] as [number, number, number],
-  line: [203, 213, 225] as [number, number, number],
-  zebra: [248, 250, 252] as [number, number, number],
-  white: [255, 255, 255] as [number, number, number],
-  softTeal: [236, 250, 252] as [number, number, number],
-};
+type PdfRgb = [number, number, number];
+
+/** Corporate report palette — teal slots follow Business Profile document accent. */
+function makePalette(accentRaw: unknown) {
+  const accent = documentAccentPdfPalette(accentRaw);
+  return {
+    ink: [15, 23, 42] as PdfRgb,
+    teal: accent.teal,
+    tealDeep: accent.tealDeep,
+    tealHead: accent.tealHead,
+    slate: [30, 41, 59] as PdfRgb,
+    muted: [100, 116, 139] as PdfRgb,
+    line: [203, 213, 225] as PdfRgb,
+    zebra: [248, 250, 252] as PdfRgb,
+    white: [255, 255, 255] as PdfRgb,
+    softTeal: accent.softTeal,
+  };
+}
+
+type PdfPalette = ReturnType<typeof makePalette>;
+
+let C: PdfPalette = makePalette(undefined);
 
 const MARGIN_L = 14;
 const MARGIN_R = 196;
@@ -582,8 +592,13 @@ export async function buildSurveyPdf(
         ...company,
         name: company.name || survey.companySnapshot.name || "Site Survey Report",
         logo: company.logo || survey.companySnapshot.logo || null,
+        documentAccentColor:
+          company.documentAccentColor ||
+          survey.companySnapshot.documentAccentColor,
       }
     : company;
+
+  C = makePalette(brand.documentAccentColor);
 
   const doc = new jsPDF() as PdfDoc;
   const reportNo = survey.reportNo || "DRAFT";

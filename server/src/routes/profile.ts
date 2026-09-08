@@ -25,6 +25,10 @@ import {
   publicSendSettings,
   serializeProfileSendSettings,
 } from "../lib/profile-send-settings.js";
+import {
+  ensureDocumentAccentColorColumn,
+  normalizeDocumentAccentColor,
+} from "../lib/document-accent.js";
 import { getActiveOrgId, getActiveProfileId } from "../lib/request-context.js";
 import { gstinTakenByOther, isValidGstin, normalizeGstin } from "../lib/gstin.js";
 import {
@@ -57,6 +61,7 @@ type ProfileRow = {
   bank_ifsc: string | null;
   bank_upi: string | null;
   terms: string | null;
+  document_accent_color?: string | null;
   home_tool_ids?: unknown;
   send_settings?: unknown;
   download_folder?: string | null;
@@ -85,6 +90,7 @@ function toApi(row: ProfileRow, deliveryExtra?: ReturnType<typeof publicDelivery
     bankIfsc: row.bank_ifsc,
     bankUpi: row.bank_upi,
     terms: row.terms,
+    documentAccentColor: normalizeDocumentAccentColor(row.document_accent_color),
     homeToolIds: parseHomeToolIds(row.home_tool_ids),
     sendSettings: publicSendSettings(row.send_settings),
     downloadFolder: row.download_folder ?? null,
@@ -101,6 +107,7 @@ function toApi(row: ProfileRow, deliveryExtra?: ReturnType<typeof publicDelivery
 async function ensureProfileExtras() {
   await ensureHomeToolIdsColumn();
   await ensureSendSettingsColumn();
+  await ensureDocumentAccentColorColumn();
   await ensureArtifactDeliverySchema();
   await ensureDeliveryConfigColumns();
 }
@@ -255,6 +262,11 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
     artifactWebhookSecret = s ? s.slice(0, 255) : null;
   }
 
+  const documentAccentColor =
+    body.documentAccentColor !== undefined
+      ? normalizeDocumentAccentColor(body.documentAccentColor)
+      : undefined;
+
   await pool.query(
     `UPDATE business_profiles SET
       logo_data_url = :logo,
@@ -274,6 +286,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       bank_upi = :bankUpi,
       terms = :terms,
       send_settings = :sendSettings
+      ${documentAccentColor !== undefined ? ", document_accent_color = :documentAccentColor" : ""}
       ${homeToolIds !== undefined ? ", home_tool_ids = :homeToolIds" : ""}
       ${downloadFolder !== undefined ? ", download_folder = :downloadFolder" : ""}
       ${conflictPolicy !== undefined ? ", download_folder_conflict_policy = :conflictPolicy" : ""}
@@ -300,6 +313,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       bankUpi: body.bankUpi || null,
       terms: body.terms || null,
       sendSettings: JSON.stringify(sendSettings),
+      ...(documentAccentColor !== undefined ? { documentAccentColor } : {}),
       ...(homeToolIds !== undefined ? { homeToolIds: JSON.stringify(homeToolIds) } : {}),
       ...(downloadFolder !== undefined ? { downloadFolder } : {}),
       ...(conflictPolicy !== undefined ? { conflictPolicy } : {}),
@@ -317,7 +331,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
   publishNotificationAsync({
     eventType: "business.profile_updated",
     title: "Business profile updated",
-    body: `${row.business_name || "Branch"} details were updated by the owner.`,
+    body: `${row.business_name || "Branch"} details were updated.`,
     organizationId: getActiveOrgId(),
     businessProfileId: profileId,
     href: "/profile",

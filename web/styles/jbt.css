@@ -978,7 +978,7 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  border-bottom: 2px solid var(--blue-500);
+  border-bottom: 2px solid var(--doc-accent, var(--blue-500));
   padding-bottom: 12px;
 }
 
@@ -990,7 +990,7 @@ a {
 .doc-preview .dp-company-name {
   font-weight: 800;
   font-size: 18px;
-  color: var(--blue-500);
+  color: var(--doc-accent, var(--blue-500));
 }
 
 .doc-preview p {
@@ -999,7 +999,8 @@ a {
 }
 
 .doc-preview .dp-title-bar {
-  background: #eef3ff;
+  background: var(--doc-accent-soft, #eef3ff);
+  color: var(--doc-accent, var(--blue-500));
   text-align: center;
   padding: 8px;
   border-radius: 6px;
@@ -1023,7 +1024,8 @@ a {
 }
 
 .doc-preview th {
-  background: #eef3ff;
+  background: var(--doc-accent-soft, #eef3ff);
+  color: var(--doc-accent, inherit);
   text-align: left;
 }
 

@@ -1,6 +1,7 @@
 import { seedAppliances } from "./appliances";
 import { ALL_FIELDS, DEFAULT_COMPANY, fieldsForStep, flowForType, stepsForFlow } from "./catalog";
 import { todayISO, uid, val, withFreshEstimate } from "./compute";
+import { normalizeDocumentAccentColor } from "@/lib/document-accent";
 import type {
   InstallationType,
   SiteSurveyV1,
@@ -114,6 +115,7 @@ export function mergeCompanyFromBusinessProfile(
     phone?: string | null;
     email?: string | null;
     website?: string | null;
+    documentAccentColor?: string | null;
   } | null,
 ): SurveyCompanySnapshot {
   if (!profile) return { ...DEFAULT_COMPANY, ...stored };
@@ -139,6 +141,11 @@ export function mergeCompanyFromBusinessProfile(
       stored.reportPrefix && stored.reportPrefix !== "ZSS"
         ? stored.reportPrefix
         : prefixFromName || stored.reportPrefix || "ZSS",
+    documentAccentColor: normalizeDocumentAccentColor(
+      profile.documentAccentColor ??
+        stored.documentAccentColor ??
+        DEFAULT_COMPANY.documentAccentColor,
+    ),
   };
 }
 

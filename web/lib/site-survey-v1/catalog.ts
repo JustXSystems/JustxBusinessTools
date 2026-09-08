@@ -29,6 +29,7 @@ export const DEFAULT_COMPANY: SurveyCompanySnapshot = {
   email: "",
   website: "",
   reportPrefix: "ZSS",
+  documentAccentColor: "#0f3d3e",
 };
 
 export const SCHEMA_STEPS = fieldsSchema.steps as {

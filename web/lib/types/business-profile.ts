@@ -77,6 +77,12 @@ export type BusinessProfile = {
   bankIfsc: string | null;
   bankUpi: string | null;
   terms: string | null;
+  /**
+   * Accent used on tool document previews and generated PDFs
+   * (quote-sheet headings, borders, table headers, site-survey report, etc.).
+   * `#rrggbb`; defaults to quotation teal `#0f3d3e`.
+   */
+  documentAccentColor: string;
   /** Tools shown on home. null = all tools (legacy profiles). */
   homeToolIds: string[] | null;
   /** Profile-level WhatsApp / Email / Google Drive defaults for all tools. */
@@ -128,6 +134,7 @@ export const EMPTY_PROFILE: BusinessProfile = {
   bankIfsc: null,
   bankUpi: null,
   terms: null,
+  documentAccentColor: "#0f3d3e",
   homeToolIds: null,
   sendSettings: {
     ...DEFAULT_SEND_SETTINGS,

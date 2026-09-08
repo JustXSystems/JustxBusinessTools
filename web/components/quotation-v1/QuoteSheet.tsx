@@ -9,7 +9,9 @@ import {
   numToWordsIndian,
   typeLabel,
 } from "@/lib/quotation-v1";
+import { documentAccentCssVars } from "@/lib/document-accent";
 import { publicAssetUrl } from "@/lib/base-path";
+import type { CSSProperties } from "react";
 
 type Props = {
   quote: QuotationV1;
@@ -19,8 +21,14 @@ type Props = {
 
 export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
   const t = computeTotals(q, c);
+  const accentStyle = documentAccentCssVars(c.documentAccentColor) as CSSProperties;
   return (
-    <div id="quote-sheet" className="qgv1-sheet" data-show-breaks={showBreakMarkers ? "1" : "0"}>
+    <div
+      id="quote-sheet"
+      className="qgv1-sheet"
+      data-show-breaks={showBreakMarkers ? "1" : "0"}
+      style={accentStyle}
+    >
       {q.status === "approved" ? (
         <div className="qgv1-stamp">
           APPROVED

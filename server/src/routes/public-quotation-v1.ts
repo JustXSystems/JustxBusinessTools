@@ -2,6 +2,10 @@ import { Router } from "express";
 import { pool } from "../db.js";
 import { publishNotificationAsync } from "../lib/notification-publish.js";
 import { withFileAccessToken } from "../lib/storage.js";
+import {
+  ensureDocumentAccentColorColumn,
+  normalizeDocumentAccentColor,
+} from "../lib/document-accent.js";
 
 const TOOL_ID = "quotationv1";
 const router = Router();
@@ -39,10 +43,13 @@ async function companyForRecord(
       gstin: "",
       phone: "",
       email: "",
+      documentAccentColor: normalizeDocumentAccentColor(null),
     };
   }
+  await ensureDocumentAccentColorColumn();
   const [rows] = await pool.query(
-    `SELECT business_name, logo_data_url, address_line1, address_line2, state, gstin, phone, email
+    `SELECT business_name, logo_data_url, address_line1, address_line2, state, gstin, phone, email,
+            document_accent_color
      FROM business_profiles WHERE id = :id LIMIT 1`,
     { id: businessProfileId },
   );
@@ -57,6 +64,7 @@ async function companyForRecord(
             gstin: string | null;
             phone: string | null;
             email: string | null;
+            document_accent_color?: string | null;
           }
         | undefined)
     : undefined;
@@ -78,6 +86,7 @@ async function companyForRecord(
     website: "",
     quotePrefix: "QT",
     place: "",
+    documentAccentColor: normalizeDocumentAccentColor(row.document_accent_color),
   };
 }
 
