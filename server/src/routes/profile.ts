@@ -29,6 +29,13 @@ import {
   ensureDocumentAccentColorColumn,
   normalizeDocumentAccentColor,
 } from "../lib/document-accent.js";
+import {
+  ensureThemePresetColumn,
+  findPresetTokens,
+  normalizeThemePreset,
+  parseSavedThemeId,
+  THEME_PRESETS,
+} from "../lib/theme-presets.js";
 import { getActiveOrgId, getActiveProfileId } from "../lib/request-context.js";
 import { gstinTakenByOther, isValidGstin, normalizeGstin } from "../lib/gstin.js";
 import {
@@ -62,6 +69,7 @@ type ProfileRow = {
   bank_upi: string | null;
   terms: string | null;
   document_accent_color?: string | null;
+  theme_preset?: string | null;
   home_tool_ids?: unknown;
   send_settings?: unknown;
   download_folder?: string | null;
@@ -71,7 +79,59 @@ type ProfileRow = {
   artifact_webhook_secret?: string | null;
 };
 
-function toApi(row: ProfileRow, deliveryExtra?: ReturnType<typeof publicDeliveryConfig> | null) {
+async function loadOrgActiveThemeTokens(orgId: number): Promise<Record<string, string> | null> {
+  const [themeRows] = await pool.query(
+    `SELECT tokens FROM org_themes WHERE organization_id = :orgId AND is_active = 1 LIMIT 1`,
+    { orgId },
+  );
+  const themeRow = Array.isArray(themeRows) ? themeRows[0] : null;
+  if (!themeRow) return null;
+  const raw = (themeRow as { tokens: string | Record<string, unknown> }).tokens;
+  const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+  return (parsed ?? null) as Record<string, string> | null;
+}
+
+async function listOrgThemeOptions(orgId: number) {
+  const [rows] = await pool.query(
+    `SELECT id, name, is_active, tokens FROM org_themes WHERE organization_id = :orgId ORDER BY is_active DESC, id`,
+    { orgId },
+  );
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const r = row as {
+      id: number;
+      name: string;
+      is_active: number | boolean;
+      tokens: string | Record<string, unknown>;
+    };
+    const tokensRaw = r.tokens;
+    const tokens =
+      typeof tokensRaw === "string"
+        ? (JSON.parse(tokensRaw) as Record<string, string>)
+        : ((tokensRaw ?? {}) as Record<string, string>);
+    return {
+      id: Number(r.id),
+      name: String(r.name),
+      isActive: Boolean(r.is_active),
+      key: `saved:${Number(r.id)}`,
+      tokens,
+    };
+  });
+}
+
+function toApi(
+  row: ProfileRow,
+  deliveryExtra?: ReturnType<typeof publicDeliveryConfig> | null,
+  themeExtras?: {
+    orgThemes?: Array<{
+      id: number;
+      name: string;
+      isActive: boolean;
+      key: string;
+      tokens?: Record<string, string>;
+    }>;
+    organizationTheme?: Record<string, string> | null;
+  },
+) {
   return {
     id: row.id,
     logo: withFileAccessToken(row.logo_data_url),
@@ -91,6 +151,13 @@ function toApi(row: ProfileRow, deliveryExtra?: ReturnType<typeof publicDelivery
     bankUpi: row.bank_upi,
     terms: row.terms,
     documentAccentColor: normalizeDocumentAccentColor(row.document_accent_color),
+    themePreset: normalizeThemePreset(row.theme_preset),
+    themePresets: THEME_PRESETS.map((p) => ({
+      name: p.name,
+      tokens: p.tokens,
+    })),
+    orgThemes: themeExtras?.orgThemes ?? [],
+    organizationTheme: themeExtras?.organizationTheme ?? null,
     homeToolIds: parseHomeToolIds(row.home_tool_ids),
     sendSettings: publicSendSettings(row.send_settings),
     downloadFolder: row.download_folder ?? null,
@@ -108,6 +175,7 @@ async function ensureProfileExtras() {
   await ensureHomeToolIdsColumn();
   await ensureSendSettingsColumn();
   await ensureDocumentAccentColorColumn();
+  await ensureThemePresetColumn();
   await ensureArtifactDeliverySchema();
   await ensureDeliveryConfigColumns();
 }
@@ -169,10 +237,16 @@ router.get("/", async (_req, res) => {
   }
   const sendRaw = await maybeMigrateLegacySendSettings(profileId, row.send_settings);
   const cfg = await loadProfileDeliveryConfig(profileId);
+  const orgId = getActiveOrgId();
+  const [orgThemes, organizationTheme] = await Promise.all([
+    listOrgThemeOptions(orgId),
+    loadOrgActiveThemeTokens(orgId),
+  ]);
   res.json(
     toApi(
       { ...row, send_settings: sendRaw },
       cfg ? publicDeliveryConfig(cfg) : null,
+      { orgThemes, organizationTheme },
     ),
   );
 });
@@ -267,6 +341,32 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       ? normalizeDocumentAccentColor(body.documentAccentColor)
       : undefined;
 
+  let themePreset: string | null | undefined;
+  if (body.themePreset !== undefined) {
+    const normalized = normalizeThemePreset(body.themePreset);
+    if (normalized) {
+      const savedId = parseSavedThemeId(normalized);
+      if (savedId) {
+        const [themeRows] = await pool.query(
+          `SELECT id FROM org_themes WHERE id = :id AND organization_id = :orgId LIMIT 1`,
+          { id: savedId, orgId: getActiveOrgId() },
+        );
+        if (!Array.isArray(themeRows) || !themeRows[0]) {
+          res.status(400).json({ error: "Unknown organization theme for this profile" });
+          return;
+        }
+        themePreset = `saved:${savedId}`;
+      } else if (!findPresetTokens(normalized)) {
+        res.status(400).json({ error: "Unknown theme preset" });
+        return;
+      } else {
+        themePreset = normalized;
+      }
+    } else {
+      themePreset = null;
+    }
+  }
+
   await pool.query(
     `UPDATE business_profiles SET
       logo_data_url = :logo,
@@ -287,6 +387,8 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       terms = :terms,
       send_settings = :sendSettings
       ${documentAccentColor !== undefined ? ", document_accent_color = :documentAccentColor" : ""}
+      ${themePreset !== undefined ? ", theme_preset = :themePreset" : ""}
+      ${themePreset !== undefined ? ", config_version = config_version + 1" : ""}
       ${homeToolIds !== undefined ? ", home_tool_ids = :homeToolIds" : ""}
       ${downloadFolder !== undefined ? ", download_folder = :downloadFolder" : ""}
       ${conflictPolicy !== undefined ? ", download_folder_conflict_policy = :conflictPolicy" : ""}
@@ -314,6 +416,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       terms: body.terms || null,
       sendSettings: JSON.stringify(sendSettings),
       ...(documentAccentColor !== undefined ? { documentAccentColor } : {}),
+      ...(themePreset !== undefined ? { themePreset } : {}),
       ...(homeToolIds !== undefined ? { homeToolIds: JSON.stringify(homeToolIds) } : {}),
       ...(downloadFolder !== undefined ? { downloadFolder } : {}),
       ...(conflictPolicy !== undefined ? { conflictPolicy } : {}),
@@ -341,7 +444,12 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
     expiresInHours: 72,
   });
   const cfg = await loadProfileDeliveryConfig(profileId);
-  res.json(toApi(row, cfg ? publicDeliveryConfig(cfg) : null));
+  const orgId = getActiveOrgId();
+  const [orgThemes, organizationTheme] = await Promise.all([
+    listOrgThemeOptions(orgId),
+    loadOrgActiveThemeTokens(orgId),
+  ]);
+  res.json(toApi(row, cfg ? publicDeliveryConfig(cfg) : null, { orgThemes, organizationTheme }));
 });
 
 export default router;

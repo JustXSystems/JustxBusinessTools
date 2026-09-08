@@ -45,6 +45,10 @@ export type EffectiveConfig = {
   tools: PlatformToolDefinition[];
   catalog?: PlatformCatalogTool[];
   theme?: ThemeTokens | Record<string, string> | null;
+  /** Where the active UI theme came from. */
+  themeSource?: "profile" | "organization";
+  /** Profile override key when themeSource is profile. */
+  themePreset?: string | null;
 };
 
 type ConfigContextValue = {
@@ -78,6 +82,8 @@ function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefi
     tools: Array.isArray(data?.tools) ? data.tools : [],
     catalog: Array.isArray(data?.catalog) ? data.catalog : [],
     theme: data?.theme ?? null,
+    themeSource: data?.themeSource === "profile" ? "profile" : "organization",
+    themePreset: data?.themePreset ?? null,
   };
 }
 

@@ -36,6 +36,8 @@ import { startArtifactDispatchScheduler } from "./lib/artifact-dispatch.js";
 import { ensureProfileDriveSchema } from "./lib/profile-drive-oauth.js";
 import { ensureGstinUniqueness } from "./lib/gstin.js";
 import { ensureHomeToolIdsColumn } from "./lib/home-tools.js";
+import { ensureDocumentAccentColorColumn } from "./lib/document-accent.js";
+import { ensureThemePresetColumn } from "./lib/theme-presets.js";
 import { ensurePlatformAdminSchema } from "./lib/platform-admin.js";
 import { ensureNotificationSchema } from "./lib/notification-schema.js";
 import { isProductionRuntime, validateServerEnv } from "./lib/env.js";
@@ -64,6 +66,8 @@ void Promise.all([
   ensureGstinUniqueness(),
   ensurePlatformAdminSchema(),
   ensureHomeToolIdsColumn(),
+  ensureDocumentAccentColorColumn(),
+  ensureThemePresetColumn(),
   ensureNotificationSchema(),
   ensureArtifactDeliverySchema(),
   ensureProfileDriveSchema(),

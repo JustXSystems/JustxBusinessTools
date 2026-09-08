@@ -8,6 +8,7 @@ import {
   listOrgCatalog,
   type OrgCatalogTool,
 } from "../home-tools.js";
+import { resolveEffectiveTheme } from "../theme-presets.js";
 
 async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
   await pool.query(
@@ -30,6 +31,8 @@ export async function getEffectiveConfig(): Promise<{
   tools: Array<{ id: string; toolType: string; definition: Record<string, unknown> }>;
   catalog: OrgCatalogTool[];
   theme: Record<string, string> | null;
+  themeSource: "profile" | "organization";
+  themePreset: string | null;
 }> {
   const orgId = getActiveOrgId();
   const profileId = getActiveProfileId();
@@ -57,19 +60,19 @@ export async function getEffectiveConfig(): Promise<{
     }
   }
 
-  const [themeRows] = await pool.query(
-    `SELECT tokens FROM org_themes WHERE organization_id = :orgId AND is_active = 1 LIMIT 1`,
-    { orgId },
-  );
-  const themeRow = Array.isArray(themeRows) ? themeRows[0] : null;
-  let theme: Record<string, string> | null = null;
-  if (themeRow) {
-    const raw = (themeRow as { tokens: string | Record<string, unknown> }).tokens;
-    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    theme = parsed as Record<string, string>;
-  }
+  const resolved = await resolveEffectiveTheme({ orgId, profileId });
 
-  return { poweredBy, branding, toolGrouping, configVersion, tools, catalog, theme };
+  return {
+    poweredBy,
+    branding,
+    toolGrouping,
+    configVersion,
+    tools,
+    catalog,
+    theme: resolved.theme,
+    themeSource: resolved.themeSource,
+    themePreset: resolved.themePreset,
+  };
 }
 
 export async function listToolDefinitions(): Promise<

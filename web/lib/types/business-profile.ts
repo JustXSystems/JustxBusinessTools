@@ -83,6 +83,24 @@ export type BusinessProfile = {
    * `#rrggbb`; defaults to quotation teal `#0f3d3e`.
    */
   documentAccentColor: string;
+  /**
+   * UI theme override for this Business Profile.
+   * `null` = inherit Admin (organization) active theme.
+   * Otherwise a built-in preset name, or `saved:{orgThemeId}` for a saved org theme.
+   */
+  themePreset: string | null;
+  /** Built-in presets (from GET /profile). */
+  themePresets?: Array<{ name: string; tokens: Record<string, string> }>;
+  /** Saved organization themes available as overrides. */
+  orgThemes?: Array<{
+    id: number;
+    name: string;
+    isActive: boolean;
+    key: string;
+    tokens?: Record<string, string>;
+  }>;
+  /** Admin-active organization theme tokens (for “Org default” preview). */
+  organizationTheme?: Record<string, string> | null;
   /** Tools shown on home. null = all tools (legacy profiles). */
   homeToolIds: string[] | null;
   /** Profile-level WhatsApp / Email / Google Drive defaults for all tools. */
@@ -135,6 +153,10 @@ export const EMPTY_PROFILE: BusinessProfile = {
   bankUpi: null,
   terms: null,
   documentAccentColor: "#0f3d3e",
+  themePreset: null,
+  themePresets: [],
+  orgThemes: [],
+  organizationTheme: null,
   homeToolIds: null,
   sendSettings: {
     ...DEFAULT_SEND_SETTINGS,

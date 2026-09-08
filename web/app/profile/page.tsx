@@ -15,6 +15,14 @@ import {
   type BusinessProfileSendSettings,
 } from "@/lib/types/business-profile";
 import { normalizeDocumentAccentColor } from "@/lib/document-accent";
+import {
+  findThemePresetTokens,
+  normalizeThemePreset,
+  savedThemePresetKey,
+  THEME_PRESETS,
+} from "@/lib/theme-presets";
+import { applyThemeTokens, type ThemeTokens } from "@/lib/theme";
+import { invalidateLiveData } from "@/hooks/useLiveRefresh";
 import { fetchProfile, saveProfile } from "@/lib/api";
 import { publicAssetUrl } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
@@ -25,7 +33,7 @@ import { TeamRequestsPanel } from "@/components/profile/TeamRequestsPanel";
 export default function ProfilePage() {
   const { user } = useAuth();
   const canEdit = canEditBusinessProfile(user);
-  const { config } = usePlatformConfig();
+  const { config, refresh: refreshConfig } = usePlatformConfig();
   const platformTools = config?.tools ?? [];
   const catalogIds = useMemo(
     () => mergedHomeTools(platformTools).map((t) => t.id),
@@ -39,6 +47,11 @@ export default function ProfilePage() {
   const [webhookSecretDraft, setWebhookSecretDraft] = useState("");
 
   const send = normalizeSendSettings(profile.sendSettings);
+  const themePresets = profile.themePresets?.length
+    ? profile.themePresets
+    : THEME_PRESETS.map((p) => ({ name: p.name, tokens: p.tokens as Record<string, string> }));
+  const orgThemes = profile.orgThemes ?? [];
+  const selectedThemeKey = normalizeThemePreset(profile.themePreset) ?? "";
 
   useEffect(() => {
     fetchProfile()
@@ -47,6 +60,10 @@ export default function ProfilePage() {
           ...EMPTY_PROFILE,
           ...p,
           documentAccentColor: normalizeDocumentAccentColor(p.documentAccentColor),
+          themePreset: normalizeThemePreset(p.themePreset),
+          themePresets: p.themePresets ?? [],
+          orgThemes: p.orgThemes ?? [],
+          organizationTheme: p.organizationTheme ?? null,
           sendSettings: normalizeSendSettings(p.sendSettings),
           homeToolIds: p.homeToolIds ?? catalogIds,
         });
@@ -59,6 +76,29 @@ export default function ProfilePage() {
   function patchSend(next: BusinessProfileSendSettings) {
     if (!canEdit) return;
     setProfile((p) => ({ ...p, sendSettings: next }));
+  }
+
+  function previewTheme(presetKey: string | null) {
+    const key = normalizeThemePreset(presetKey);
+    if (!key) {
+      const orgTokens = profile.organizationTheme || config?.theme;
+      if (orgTokens) applyThemeTokens(orgTokens as ThemeTokens);
+      return;
+    }
+    const fromPreset = findThemePresetTokens(key);
+    if (fromPreset) {
+      applyThemeTokens(fromPreset);
+      return;
+    }
+    const org = orgThemes.find((t) => t.key === key || savedThemePresetKey(t.id) === key);
+    if (org?.tokens) applyThemeTokens(org.tokens as ThemeTokens);
+  }
+
+  function setThemePreset(next: string | null) {
+    if (!canEdit) return;
+    const normalized = normalizeThemePreset(next);
+    setProfile((p) => ({ ...p, themePreset: normalized }));
+    previewTheme(normalized);
   }
 
   async function handleSave() {
@@ -74,6 +114,7 @@ export default function ProfilePage() {
       const payload: BusinessProfile & { artifactWebhookSecret?: string } = {
         ...profile,
         documentAccentColor: normalizeDocumentAccentColor(profile.documentAccentColor),
+        themePreset: normalizeThemePreset(profile.themePreset),
         sendSettings: {
           ...normalized,
           whatsappNumbers: normalized.whatsappNumbers.filter((n) => n.phone.trim()),
@@ -87,11 +128,17 @@ export default function ProfilePage() {
         ...EMPTY_PROFILE,
         ...saved,
         documentAccentColor: normalizeDocumentAccentColor(saved.documentAccentColor),
+        themePreset: normalizeThemePreset(saved.themePreset),
+        themePresets: saved.themePresets ?? [],
+        orgThemes: saved.orgThemes ?? [],
+        organizationTheme: saved.organizationTheme ?? null,
         sendSettings: normalizeSendSettings(saved.sendSettings),
         homeToolIds: saved.homeToolIds ?? catalogIds,
       });
       setWebhookSecretDraft("");
-      setMessage("Business profile saved. Return to Home to see your tool list.");
+      invalidateLiveData("config");
+      await refreshConfig();
+      setMessage("Business profile saved. Theme and tools apply to this Business Profile.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -255,6 +302,86 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="panel">
+        <h3 className="panel-title">Theme preset</h3>
+        <p className="section-note">
+          Default follows the organization theme set in Admin. A selection here overrides that theme
+          for this Business Profile only (takes precedence for every user on this branch).
+        </p>
+        <label className="field">
+          <span className="label">Active theme for this profile</span>
+          <select
+            value={selectedThemeKey}
+            disabled={!canEdit}
+            onChange={(e) => setThemePreset(e.target.value || null)}
+          >
+            <option value="">Organization default (Admin)</option>
+            <optgroup label="Built-in presets">
+              {themePresets.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+            </optgroup>
+            {orgThemes.length ? (
+              <optgroup label="Saved organization themes">
+                {orgThemes.map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.name}
+                    {t.isActive ? " (Admin active)" : ""}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+          </select>
+        </label>
+        <div className="admin-theme-presets" style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            className="admin-theme-swatch"
+            disabled={!canEdit}
+            style={{
+              background: "linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 55%, var(--accent) 100%)",
+              borderColor: selectedThemeKey === "" ? "var(--accent)" : "var(--border-hair)",
+              outline: selectedThemeKey === "" ? "2px solid var(--accent)" : undefined,
+            }}
+            onClick={() => setThemePreset(null)}
+          >
+            <span style={{ color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.5)" }}>
+              Org default
+            </span>
+          </button>
+          {themePresets.map((p) => {
+            const tokens = p.tokens as ThemeTokens;
+            const active = selectedThemeKey === p.name;
+            return (
+              <button
+                key={p.name}
+                type="button"
+                className="admin-theme-swatch"
+                disabled={!canEdit}
+                style={{
+                  background: `linear-gradient(135deg, ${tokens.bg1} 0%, ${tokens.bg2} 55%, ${tokens.accent} 100%)`,
+                  borderColor: tokens.accent,
+                  outline: active ? `2px solid ${tokens.accent}` : undefined,
+                }}
+                onClick={() => setThemePreset(p.name)}
+              >
+                <span style={{ color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.5)" }}>{p.name}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="section-note" style={{ marginTop: 10 }}>
+          {selectedThemeKey
+            ? `Override active — this profile uses “${
+                orgThemes.find((t) => t.key === selectedThemeKey)?.name || selectedThemeKey
+              }”.`
+            : "Using Admin organization theme (no profile override)."}{" "}
+          Save to apply for all staff on this Business Profile.
+        </p>
       </div>
 
       <div className="panel">
