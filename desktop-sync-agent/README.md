@@ -2,15 +2,22 @@
 
 Copies pending tool artifacts from the JustXSystems API into the Business Profile **Download Folder** (local path, mapped drive, or UNC share reachable from this PC).
 
-The agent also starts a **localhost bridge** (`http://127.0.0.1:17865`) so Owners and Staff can click **Sync now (desktop agent)** in the web **Sync Center** (`/sync`).
+The agent also starts a **localhost bridge** (`http://127.0.0.1:17865`) so Owners and Staff can:
+
+- Click **Sync now (desktop agent)** in **Sync Center** (`/sync`)
+- Click **Open in Outlook** in **Email Outbox** (`/email-outbox`) — Windows + Outlook COM, PDF attached
+
+See [`docs/EMAIL_OUTBOX.md`](../docs/EMAIL_OUTBOX.md) for email variants.
 
 ## Recommended: Sync Center UI
 
 1. Open **Sync Center** in the web app (sidebar / mobile Sync).
 2. Ensure Download Folder is set on Business Profile (Owner).
 3. Click **Set up on this PC** → **Create token + download launcher**.
-4. Run the downloaded `start-justx-sync-agent.ps1` on a PC that can reach the share.
-5. Keep the agent window open. In Sync Center click **Sync now (desktop agent)**.
+   - This **generates** `JBT_AGENT_TOKEN` (`jxsa_…`) — shown once on screen and embedded in the `.ps1`.
+   - You do not invent this value; if lost, create a new token and revoke the old agent.
+4. Run the downloaded `start-justx-sync-agent.ps1` on a PC that can reach the share (and/or has Outlook for Email Outbox).
+5. Keep the agent window open. In Sync Center click **Sync now (desktop agent)**; for email use **Email Outbox → Open in Outlook**.
 
 Any Owner or Staff member can create their own agent token and complete sync for the branch queue.
 
@@ -43,8 +50,9 @@ Optional:
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Liveness |
-| GET | `/status` | Folder probe + last run |
+| GET | `/status` | Folder probe + last run + `outlookCompose` capability |
 | POST | `/sync-once` | Run one sync pass (used by Sync Center) |
+| POST | `/open-email` | Body `{ "outboxId": "eml_..." }` — fetch compose payload from API, open Outlook with PDF |
 
 ## Behavior
 

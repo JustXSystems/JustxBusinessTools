@@ -19,6 +19,12 @@ import {
   ensureDocumentAccentColorColumn,
   normalizeDocumentAccentColor,
 } from "../lib/document-accent.js";
+import {
+  createEmailOutbox,
+  emailWebhookConfigured,
+  mapOutboxPublic,
+  postEmailWebhookPayload,
+} from "../lib/email-outbox.js";
 
 const TOOL_ID = "quotationv1";
 const COMPANY_KEY = "quotation_v1_company";
@@ -222,6 +228,7 @@ router.post("/send/email", async (req, res) => {
   const replyTo = String(req.body?.replyTo ?? "").trim() || undefined;
   const fromName = String(req.body?.fromName ?? "").trim() || undefined;
   const fromEmail = String(req.body?.fromEmail ?? "").trim() || undefined;
+  const queueOnly = Boolean(req.body?.queueOnly);
   if (!to) {
     res.status(400).json({ error: "Email To is required" });
     return;
@@ -230,13 +237,13 @@ router.post("/send/email", async (req, res) => {
     res.status(400).json({ error: "Subject and message are required" });
     return;
   }
-  const webhook = process.env.EMAIL_WEBHOOK_URL ?? process.env.NOTIFY_EMAIL_WEBHOOK_URL;
+
+  const webhookOn = emailWebhookConfigured();
+  let outboxId: string | null = null;
   try {
-    if (webhook) {
-      const r = await fetch(webhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+    if (webhookOn && !queueOnly) {
+      try {
+        await postEmailWebhookPayload({
           channel: "email",
           to,
           cc: cc || undefined,
@@ -256,14 +263,107 @@ router.post("/send/email", async (req, res) => {
           quoteNo: req.body?.quoteNo ?? null,
           pdfBase64: req.body?.pdfBase64 ?? null,
           filename: req.body?.filename ?? null,
-        }),
-      });
-      if (!r.ok) {
-        throw new Error(`Email webhook ${r.status}: ${(await r.text()).slice(0, 180)}`);
+        });
+        const outbox = await createEmailOutbox({
+          toolId: "quotation-v1",
+          entityType: "quotation",
+          entityId: req.body?.quotationId ? String(req.body.quotationId) : null,
+          quoteNo: req.body?.quoteNo ? String(req.body.quoteNo) : null,
+          to,
+          cc,
+          subject,
+          body,
+          html: html ?? null,
+          templateId: templateId ?? null,
+          replyTo: replyTo ?? null,
+          fromName: fromName ?? null,
+          fromEmail: fromEmail ?? null,
+          filename: req.body?.filename ? String(req.body.filename) : null,
+          pdfBase64: req.body?.pdfBase64 ? String(req.body.pdfBase64) : null,
+          status: "sent",
+          lastChannel: "webhook",
+        });
+        outboxId = outbox.id;
+        await logAudit(
+          "quotationv1.send.email",
+          "document",
+          String(req.body?.quotationId ?? ""),
+          { quoteNo: req.body?.quoteNo, to, cc, via: "webhook", outboxId },
+          req.ip,
+        );
+        notifyDocumentOutbound({
+          channel: "email",
+          title: "Quotation emailed",
+          body: `${req.body?.quoteNo ?? "Quotation"} sent to ${to}${cc ? ` (cc ${cc})` : ""}.`,
+          entityType: "document",
+          entityId: String(req.body?.quotationId ?? ""),
+          href: "/tools/quotationv1",
+        });
+        res.json({
+          ok: true,
+          delivered: true,
+          via: "webhook",
+          outboxId,
+          outbox: mapOutboxPublic(outbox),
+        });
+        return;
+      } catch (err) {
+        // Fall through to pending outbox so staff can retry / mailto / Outlook.
+        console.warn("[quotation-v1:email] webhook failed — queuing outbox", err);
+        const outbox = await createEmailOutbox({
+          toolId: "quotation-v1",
+          entityType: "quotation",
+          entityId: req.body?.quotationId ? String(req.body.quotationId) : null,
+          quoteNo: req.body?.quoteNo ? String(req.body.quoteNo) : null,
+          to,
+          cc,
+          subject,
+          body,
+          html: html ?? null,
+          templateId: templateId ?? null,
+          replyTo: replyTo ?? null,
+          fromName: fromName ?? null,
+          fromEmail: fromEmail ?? null,
+          filename: req.body?.filename ? String(req.body.filename) : null,
+          pdfBase64: req.body?.pdfBase64 ? String(req.body.pdfBase64) : null,
+          status: "failed",
+          lastChannel: "webhook",
+          lastError: err instanceof Error ? err.message : "Webhook send failed",
+        });
+        outboxId = outbox.id;
+        res.status(502).json({
+          error: err instanceof Error ? err.message : "Email send failed",
+          outboxId,
+          outbox: mapOutboxPublic(outbox),
+          hint: "Saved to Email Outbox — retry webhook, open mail app, or Open in Outlook via desktop agent.",
+        });
+        return;
       }
-    } else {
-      console.log(`[quotation-v1:email] via=mailto-fallback to=${to} cc=${cc} subject=${subject}`);
     }
+
+    const outbox = await createEmailOutbox({
+      toolId: "quotation-v1",
+      entityType: "quotation",
+      entityId: req.body?.quotationId ? String(req.body.quotationId) : null,
+      quoteNo: req.body?.quoteNo ? String(req.body.quoteNo) : null,
+      to,
+      cc,
+      subject,
+      body,
+      html: html ?? null,
+      templateId: templateId ?? null,
+      replyTo: replyTo ?? null,
+      fromName: fromName ?? null,
+      fromEmail: fromEmail ?? null,
+      filename: req.body?.filename ? String(req.body.filename) : null,
+      pdfBase64: req.body?.pdfBase64 ? String(req.body.pdfBase64) : null,
+      status: "pending",
+      lastChannel: queueOnly ? "queued" : "mailto",
+    });
+    outboxId = outbox.id;
+    console.log(
+      `[quotation-v1:email] via=${queueOnly ? "queued" : "mailto-fallback"} outbox=${outboxId} to=${to}`,
+    );
     await logAudit(
       "quotationv1.send.email",
       "document",
@@ -272,39 +372,44 @@ router.post("/send/email", async (req, res) => {
         quoteNo: req.body?.quoteNo,
         to,
         cc,
-        via: webhook ? "webhook" : "mailto",
+        via: queueOnly ? "queued" : "mailto",
+        outboxId,
         templateId: templateId ?? null,
         hasHtml: Boolean(html),
-        replyTo: replyTo ?? null,
       },
       req.ip,
     );
     notifyDocumentOutbound({
       channel: "email",
-      title: "Quotation emailed",
-      body: `${req.body?.quoteNo ?? "Quotation"} sent to ${to}${cc ? ` (cc ${cc})` : ""}.`,
+      title: queueOnly ? "Quotation email queued" : "Quotation email ready",
+      body: queueOnly
+        ? `${req.body?.quoteNo ?? "Quotation"} saved to Email Outbox for ${to}.`
+        : `${req.body?.quoteNo ?? "Quotation"} — open mail app or Email Outbox for ${to}.`,
       entityType: "document",
       entityId: String(req.body?.quotationId ?? ""),
-      href: "/tools/quotationv1",
+      href: "/email-outbox",
     });
     res.json({
       ok: true,
-      delivered: Boolean(webhook),
-      via: webhook ? "webhook" : "mailto",
-      hint: webhook
-        ? undefined
-        : "No EMAIL_WEBHOOK_URL — client should open mailto and attach the downloaded PDF.",
+      delivered: false,
+      via: queueOnly ? "queued" : "mailto",
+      outboxId,
+      outbox: mapOutboxPublic(outbox),
+      webhookConfigured: webhookOn,
+      hint: queueOnly
+        ? "Saved to Email Outbox. Open Sync Center / Email Outbox to send later."
+        : "No EMAIL_WEBHOOK_URL — open mailto, download PDF to attach, or use Email Outbox → Open in Outlook (desktop agent).",
     });
   } catch (err) {
-    res.status(502).json({ error: err instanceof Error ? err.message : "Email send failed" });
+    res.status(502).json({
+      error: err instanceof Error ? err.message : "Email send failed",
+      outboxId,
+    });
   }
 });
 
-router.get("/send/email/status", (_req, res) => {
-  const webhook = Boolean(
-    (process.env.EMAIL_WEBHOOK_URL ?? process.env.NOTIFY_EMAIL_WEBHOOK_URL ?? "").trim(),
-  );
-  res.json({ webhookConfigured: webhook });
+router.get("/send/email/status", async (_req, res) => {
+  res.json({ webhookConfigured: emailWebhookConfigured() });
 });
 
 router.get("/send/whatsapp/status", (_req, res) => {

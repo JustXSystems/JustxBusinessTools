@@ -3,6 +3,7 @@ import { mkdir, writeFile, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { pool } from "../db.js";
 import { localUploadDir, uploadDriver } from "./storage.js";
+import { getActiveProfileId } from "./request-context.js";
 
 export type SyncStatus =
   | "pending"
@@ -314,7 +315,18 @@ export async function createArtifact(input: {
   conflictPolicy?: ConflictPolicy;
   meta?: Record<string, unknown>;
   retentionDays?: number;
-}): Promise<{ artifact: ReturnType<typeof toArtifactApi>; duplicateOf?: string }> {
+  /** When true, skip Google Drive / webhook / UNC dispatch (email outbox attachments). */
+  skipDispatch?: boolean;
+}): Promise<{
+  artifact: ReturnType<typeof toArtifactApi>;
+  duplicateOf?: string;
+  delivery?: {
+    ok: boolean;
+    channel: string;
+    status: string;
+    message?: string;
+  } | null;
+}> {
   await ensureArtifactDeliverySchema();
   const { buffer, mime } = decodeArtifactPayload(input.contentBase64, input.mimeType);
   const hash = contentHash(buffer);
@@ -382,6 +394,10 @@ export async function createArtifact(input: {
   const row = (Array.isArray(rows) ? rows[0] : null) as ArtifactRow;
   const artifact = toArtifactApi(row);
 
+  if (input.skipDispatch) {
+    return { artifact, duplicateOf: dup?.id, delivery: null };
+  }
+
   // Await cloud delivery (Drive / webhook) so Download PDF / Send Via actually publish
   // before the browser continues. UNC stays queued asynchronously.
   let delivery: {
@@ -414,6 +430,23 @@ export async function createArtifact(input: {
       },
     };
   }
+}
+
+export async function getArtifactRowById(id: string): Promise<ArtifactRow | null> {
+  await ensureArtifactDeliverySchema();
+  const [rows] = await pool.query(
+    `SELECT * FROM artifact_deliveries
+     WHERE id = :id AND business_profile_id = :profileId
+     LIMIT 1`,
+    { id, profileId: getActiveProfileId() },
+  );
+  return Array.isArray(rows) ? ((rows[0] as ArtifactRow) ?? null) : null;
+}
+
+export async function readArtifactBytesById(id: string): Promise<Buffer> {
+  const row = await getArtifactRowById(id);
+  if (!row) throw new Error("Artifact not found");
+  return readArtifactBlob(row.storage_key);
 }
 
 export function hashAgentToken(token: string): string {

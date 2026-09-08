@@ -1592,8 +1592,8 @@ export function QuotationGeneratorV1() {
               <>
                 <p className="modal-msg">
                   {emailTemplateId === "corporate"
-                    ? "Corporate HTML email uses your Document accent color. With a webhook, HTML + PDF are delivered; otherwise mailto opens with plain text."
-                    : "Preview the message, then Send. With an email webhook configured, the PDF attaches automatically; otherwise your mail app opens with this text."}
+                    ? "Corporate HTML uses your Document accent. With EMAIL_WEBHOOK_URL, HTML + PDF are delivered; otherwise the draft is saved to Email Outbox, mailto opens, and the PDF downloads for you to attach. Outlook+PDF needs the desktop agent."
+                    : "With an email webhook, the PDF attaches automatically. Otherwise Email Outbox saves the draft, mailto opens, and the PDF downloads for manual attach."}
                 </p>
                 <div className="qgv1-grid2" style={{ marginTop: 8 }}>
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
@@ -1651,28 +1651,48 @@ export function QuotationGeneratorV1() {
                         } catch {
                           pdf = null;
                         }
-                        const result = await api<{ ok: boolean; delivered: boolean; via: string }>(
-                          "/quotation-v1/send/email",
-                          {
-                            method: "POST",
-                            body: JSON.stringify({
-                              to: emailTo.trim(),
-                              cc: emailCc.trim(),
-                              subject: emailSubject.trim(),
-                              message: emailMessage,
-                              html: emailHtml || undefined,
-                              templateId: emailTemplateId,
-                              replyTo: emailReplyTo.trim() || undefined,
-                              fromName: emailFromName.trim() || undefined,
-                              fromEmail: emailFromEmail.trim() || undefined,
-                              quotationId: current.id,
-                              quoteNo: current.quoteNo,
-                              filename: pdf?.filename,
-                              pdfBase64: pdf?.pdfBase64,
-                            }),
-                          },
-                        );
+                        const result = await api<{
+                          ok: boolean;
+                          delivered: boolean;
+                          via: string;
+                          outboxId?: string;
+                          hint?: string;
+                        }>("/quotation-v1/send/email", {
+                          method: "POST",
+                          body: JSON.stringify({
+                            to: emailTo.trim(),
+                            cc: emailCc.trim(),
+                            subject: emailSubject.trim(),
+                            message: emailMessage,
+                            html: emailHtml || undefined,
+                            templateId: emailTemplateId,
+                            replyTo: emailReplyTo.trim() || undefined,
+                            fromName: emailFromName.trim() || undefined,
+                            fromEmail: emailFromEmail.trim() || undefined,
+                            quotationId: current.id,
+                            quoteNo: current.quoteNo,
+                            filename: pdf?.filename,
+                            pdfBase64: pdf?.pdfBase64,
+                          }),
+                        });
                         if (!result.delivered) {
+                          if (pdf?.pdfBase64) {
+                            try {
+                              const { pdfBase64ToBytes } = await import("@/lib/artifact-delivery");
+                              const bytes = pdfBase64ToBytes(pdf.pdfBase64);
+                              const blob = new Blob([bytes as BlobPart], {
+                                type: "application/pdf",
+                              });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = pdf.filename || "quotation.pdf";
+                              a.click();
+                              window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+                            } catch {
+                              /* mailto still useful */
+                            }
+                          }
                           const params = new URLSearchParams();
                           if (emailCc.trim()) params.set("cc", emailCc.trim());
                           params.set("subject", emailSubject.trim());
@@ -1684,13 +1704,14 @@ export function QuotationGeneratorV1() {
                           current.id,
                           result.delivered
                             ? `Quotation ${current.quoteNo} emailed to ${emailTo.trim()}.`
-                            : `Quotation ${current.quoteNo} opened in mail app for ${emailTo.trim()}.`,
+                            : `Quotation ${current.quoteNo} queued in Email Outbox for ${emailTo.trim()}.`,
                         );
                         setSendOpen(false);
                         flash(
                           result.delivered
                             ? "Email handed off to your email webhook."
-                            : "Opened your mail app with the message. Use Download PDF if you need to attach the file.",
+                            : result.hint ||
+                                "Saved to Email Outbox, opened mail app, and downloaded the PDF to attach. Retry anytime from Email Outbox.",
                         );
                       } catch (e) {
                         flash(e instanceof Error ? e.message : "Email send failed", "err");

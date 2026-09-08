@@ -684,10 +684,11 @@ export default function ProfilePage() {
         )}
 
         <p className="section-note">
-          Without <code>EMAIL_WEBHOOK_URL</code> on the API server, Send Via → Email opens the user’s mail
-          app with plain text and downloads the PDF to attach. With a webhook, the server posts
-          To/CC/subject/body/<strong>html</strong>/replyTo/from/PDF — map <code>html</code> in your
-          provider (see <code>docs/EMAIL_WEBHOOK.md</code>).
+          Without <code>EMAIL_WEBHOOK_URL</code> on the API server, Send Via → Email saves to{" "}
+          <Link href="/email-outbox">Email Outbox</Link>, opens the user’s mail app (plain text), and
+          downloads the PDF to attach — or use <strong>Open in Outlook</strong> with the desktop agent.
+          With a webhook, the server posts To/CC/subject/body/<strong>html</strong>/replyTo/from/PDF —
+          map <code>html</code> in your provider (see <code>docs/EMAIL_OUTBOX.md</code>).
         </p>
       </div>
 

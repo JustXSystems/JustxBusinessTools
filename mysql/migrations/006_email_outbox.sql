@@ -1,0 +1,38 @@
+-- Pending Email Outbox: durable drafts for quotation / survey email handoff.
+-- Applied by runPendingMigrations() on API startup.
+
+CREATE TABLE IF NOT EXISTS email_outbox (
+  id VARCHAR(64) NOT NULL,
+  organization_id INT UNSIGNED NOT NULL,
+  business_profile_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NULL,
+  tool_id VARCHAR(40) NOT NULL DEFAULT 'quotation-v1',
+  entity_type VARCHAR(40) NULL,
+  entity_id VARCHAR(64) NULL,
+  quote_no VARCHAR(80) NULL,
+  to_addr VARCHAR(512) NOT NULL,
+  cc_addr VARCHAR(1024) NULL,
+  subject VARCHAR(512) NOT NULL,
+  body_text MEDIUMTEXT NOT NULL,
+  body_html MEDIUMTEXT NULL,
+  template_id VARCHAR(40) NULL,
+  reply_to VARCHAR(512) NULL,
+  from_name VARCHAR(255) NULL,
+  from_email VARCHAR(255) NULL,
+  artifact_id VARCHAR(64) NULL,
+  filename VARCHAR(255) NULL,
+  status VARCHAR(24) NOT NULL DEFAULT 'pending',
+  last_error VARCHAR(1024) NULL,
+  last_channel VARCHAR(40) NULL,
+  attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
+  sent_at DATETIME NULL,
+  opened_at DATETIME NULL,
+  cancelled_at DATETIME NULL,
+  meta JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_email_outbox_profile_status (business_profile_id, status, created_at),
+  KEY idx_email_outbox_org (organization_id, created_at),
+  KEY idx_email_outbox_artifact (artifact_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

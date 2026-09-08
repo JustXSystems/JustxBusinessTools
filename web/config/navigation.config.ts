@@ -30,6 +30,7 @@ export const navigationConfig = {
     { href: "/", label: "Home", icon: "home" as const },
     { href: "/profile", label: "Business Profile", icon: "profile" as const },
     { href: "/sync", label: "Sync Center", icon: "sync" as const },
+    { href: "/email-outbox", label: "Email Outbox", icon: "notifications" as const },
     { href: "/notifications", label: "Notifications", icon: "notifications" as const },
   ],
   account: [
@@ -40,6 +41,7 @@ export const navigationConfig = {
     { href: "/", label: "Home", icon: "home" as const },
     { href: "/profile", label: "Business Profile", icon: "profile" as const },
     { href: "/sync", label: "Sync Center", icon: "sync" as const },
+    { href: "/email-outbox", label: "Email Outbox", icon: "notifications" as const },
     { href: "/notifications", label: "Notifications", icon: "notifications" as const },
   ],
   mobileBottom: [

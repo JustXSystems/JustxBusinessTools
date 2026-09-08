@@ -25,6 +25,7 @@ import quotationV1Router from "./routes/quotation-v1.js";
 import publicQuotationV1Router from "./routes/public-quotation-v1.js";
 import siteSurveyV1Router from "./routes/site-survey-v1.js";
 import artifactsRouter from "./routes/artifacts.js";
+import emailOutboxRouter from "./routes/email-outbox.js";
 import { requestContextMiddleware } from "./middleware/request-context.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
 import { requireBranchAccess } from "./middleware/require-write.js";
@@ -32,6 +33,7 @@ import { startAnalyticsRollupScheduler } from "./jobs/analytics-rollup.js";
 import { startRenewalNoticeScheduler } from "./jobs/renewal-notices.js";
 import { initSmsProvider } from "./lib/auth/init-sms.js";
 import { ensureArtifactDeliverySchema } from "./lib/artifact-delivery.js";
+import { ensureEmailOutboxSchema } from "./lib/email-outbox.js";
 import { startArtifactDispatchScheduler } from "./lib/artifact-dispatch.js";
 import { ensureProfileDriveSchema } from "./lib/profile-drive-oauth.js";
 import { ensureGstinUniqueness } from "./lib/gstin.js";
@@ -70,6 +72,7 @@ void Promise.all([
   ensureThemePresetColumn(),
   ensureNotificationSchema(),
   ensureArtifactDeliverySchema(),
+  ensureEmailOutboxSchema(),
   ensureProfileDriveSchema(),
   ensureMfaSchema(),
   runPendingMigrations(),
@@ -164,6 +167,7 @@ app.use("/api/public/status", publicStatusRouter);
 app.use("/api/quotation-v1", quotationV1Router);
 app.use("/api/site-survey-v1", siteSurveyV1Router);
 app.use("/api/artifacts", artifactsRouter);
+app.use("/api/email-outbox", emailOutboxRouter);
 
 app.use(
   (

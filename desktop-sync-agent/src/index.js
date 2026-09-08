@@ -15,9 +15,11 @@
  */
 
 import http from "node:http";
-import { access, mkdir, writeFile, rename as renameFile, stat } from "node:fs/promises";
+import { access, mkdir, writeFile, rename as renameFile, stat, unlink } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import path from "node:path";
+import os from "node:os";
+import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const API_BASE = (process.env.JBT_API_BASE ?? "http://localhost:4000/api").replace(/\/$/, "");
@@ -263,6 +265,101 @@ function sendJson(res, status, body, extraHeaders = {}) {
   res.end(payload);
 }
 
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      try {
+        const raw = Buffer.concat(chunks).toString("utf8");
+        resolve(raw ? JSON.parse(raw) : {});
+      } catch (err) {
+        reject(err);
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function runPowershell(script) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+      { windowsHide: true },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => {
+      stdout += String(d);
+    });
+    child.stderr.on("data", (d) => {
+      stderr += String(d);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve(stdout.trim());
+      else reject(new Error(stderr.trim() || stdout.trim() || `PowerShell exit ${code}`));
+    });
+  });
+}
+
+function psQuote(s) {
+  return `'${String(s ?? "").replace(/'/g, "''")}'`;
+}
+
+/** Open Outlook compose with PDF attachment (Windows + Outlook). */
+export async function openEmailCompose(outboxId) {
+  if (process.platform !== "win32") {
+    throw new Error("Open in Outlook is only supported on Windows with desktop Outlook installed");
+  }
+  const data = await api(`/email-outbox/${encodeURIComponent(outboxId)}/agent-compose`);
+  const compose = data.compose || {};
+  const to = compose.to || "";
+  const cc = compose.cc || "";
+  const subject = compose.subject || "";
+  const body = compose.body || "";
+  const filename = (compose.filename || "quotation.pdf").replace(/[<>:"/\\|?*]/g, "_");
+  if (!compose.pdfBase64) {
+    throw new Error("Outbox item has no PDF attachment");
+  }
+
+  const tmpDir = path.join(os.tmpdir(), "jbt-email");
+  await mkdir(tmpDir, { recursive: true });
+  const pdfPath = path.join(tmpDir, `${outboxId}_${filename}`);
+  await writeFile(pdfPath, Buffer.from(compose.pdfBase64, "base64"));
+
+  const script = `
+$ErrorActionPreference = 'Stop'
+try {
+  $outlook = New-Object -ComObject Outlook.Application
+} catch {
+  throw 'Microsoft Outlook is not installed or COM is unavailable on this PC'
+}
+$mail = $outlook.CreateItem(0)
+$mail.To = ${psQuote(to)}
+$mail.CC = ${psQuote(cc)}
+$mail.Subject = ${psQuote(subject)}
+$mail.Body = ${psQuote(body)}
+$mail.Attachments.Add(${psQuote(pdfPath)}) | Out-Null
+$mail.Display()
+'ok'
+`.trim();
+
+  try {
+    await runPowershell(script);
+    await api(`/email-outbox/${encodeURIComponent(outboxId)}/agent-opened`, {
+      method: "POST",
+      body: "{}",
+    }).catch(() => undefined);
+    return { ok: true, message: "Outlook compose opened with PDF attached", pdfPath };
+  } finally {
+    setTimeout(() => {
+      unlink(pdfPath).catch(() => undefined);
+    }, 60_000);
+  }
+}
+
 function startBridge() {
   const server = http.createServer(async (req, res) => {
     const cors = corsHeaders(req);
@@ -293,6 +390,7 @@ function startBridge() {
             lastFinishedAt: state.lastFinishedAt,
             startedAt: state.startedAt,
             pollMs: POLL_MS,
+            outlookCompose: process.platform === "win32",
           },
           cors,
         );
@@ -301,6 +399,17 @@ function startBridge() {
       if (req.method === "POST" && url.pathname === "/sync-once") {
         const result = await syncOnce();
         sendJson(res, 200, { ok: true, ...result }, cors);
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/open-email") {
+        const body = await readJsonBody(req);
+        const outboxId = String(body.outboxId || "").trim();
+        if (!outboxId) {
+          sendJson(res, 400, { error: "outboxId required" }, cors);
+          return;
+        }
+        const result = await openEmailCompose(outboxId);
+        sendJson(res, 200, result, cors);
         return;
       }
       sendJson(res, 404, { error: "Not found" }, cors);

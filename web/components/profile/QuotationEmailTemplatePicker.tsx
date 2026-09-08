@@ -162,7 +162,7 @@ export function QuotationEmailTemplatePicker({
         <p className="section-note">
           Corporate HTML uses your Document accent color
           ({normalizeDocumentAccentColor(accentColor)}). Webhook delivery must map the{" "}
-          <code>html</code> field (see <code>docs/EMAIL_WEBHOOK.md</code>). Without a webhook, mailto uses plain text.
+          <code>html</code> field (see <code>docs/EMAIL_OUTBOX.md</code>). Without a webhook, mailto uses plain text; drafts stay in Email Outbox.
         </p>
       </div>
     </div>

@@ -231,7 +231,9 @@ export default function SyncCenterPage() {
           <p className="section-note" style={{ marginTop: 4 }}>
             Each company (Business Profile) has its own destination. Staff only use JustX tools —
             documents go to the company Drive/webhook automatically. Use this page for status,
-            retries, and optional UNC agent setup.
+            retries, and optional UNC agent setup. Quotation emails:{" "}
+            <Link href="/email-outbox">Email Outbox</Link> (webhook, mailto, or Outlook via this
+            agent).
           </p>
         </div>
         <button
