@@ -68,7 +68,7 @@ Browser  →  https://justxsystems.com/jbt/...
 | Business Profile + company Drive folder | Customer **Owner** | Guide them via Profile UI (do not use personal Gmail) |
 | Staff invites / roles | Customer Owner / Admin | Approve users, assign tools |
 | Razorpay live keys / webhooks | JustXSystems (billing) | Dashboard + `RAZORPAY_*` env |
-| UNC desktop sync agent | Customer IT | See `desktop-sync-agent/` |
+| UNC desktop sync agent | Customer IT | Windows + Node 18+; [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent · `desktop-sync-agent/` (`-Install`, `health-check.ps1`) |
 
 **Role capabilities (default matrix)**
 

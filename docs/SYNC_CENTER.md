@@ -39,6 +39,45 @@ Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quo
 3. Owner must have an active Business Profile saved.  
 4. For Drive: JustX engineer must already have `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `server/.env` (same as Sign in with Google).
 
+### Customer PC — minimum software & environment (desktop agent)
+
+**Primary setup (recommended for staff):** Sync Center → **Download setup for this PC** → extract → double-click **Install JustX Sync Agent.cmd**. No separate Node.js or PowerShell skills required (portable Node is inside the zip).
+
+| Requirement | UNC / file sync | Outlook compose | Notes |
+|-------------|-----------------|-----------------|--------|
+| **Windows 10 or 11** | Required | Required | Agent and Outlook COM are Windows-only |
+| **Outbound HTTPS** to JustX API | Required | Required | Same host as the web app API |
+| **Setup zip from Sync Center** | Required | Required | Personalized zip includes token + portable Node |
+| **Write access to Download Folder** | If syncing files | Not required | UNC/share ACL, mapped drive, and/or VPN as needed |
+| **Desktop Microsoft Outlook** | Not required | Required | Classic Outlook with COM — not Outlook on the web alone |
+| **Chrome or Edge on the same PC** | Recommended | Recommended | Browser must reach local bridge `http://127.0.0.1:17865` |
+| **Node.js / PowerShell skills** | Not required | Not required | Included / used only behind the scenes |
+| **Git repo / developer tools** | Not required | Not required | Advanced IT path only |
+
+**Not required:** admin rights for normal per-user install, npm packages, Java, .NET SDK, or `EMAIL_WEBHOOK_URL` (cloud email Path A only).
+
+**Also required (process):**
+
+- Signed in as **Owner or Staff** on the correct Business Profile  
+- For file sync: Owner has set **Download Folder** (or use Drive/webhook and skip the agent)  
+- Local port **17865** free; Windows user logged on for auto-start  
+- Browser and agent on the **same** PC  
+
+**Operational caveats:**
+
+| Topic | Detail |
+|-------|--------|
+| **Per Windows user** | Install is per logged-on user (`%LOCALAPPDATA%`) |
+| **Classic Outlook** | Path C needs desktop Outlook COM |
+| **Corporate lockdown** | If Scheduled Task is blocked, Install adds a Startup shortcut fallback |
+| **Token privacy** | Setup zip + `config.json` contain `jxsa_…` — treat like a password |
+| **Pack missing on server** | Web deploy must run `pack-agent-artifacts` (downloads Node win-x64 at build). If Sync Center setup fails with pack 404, redeploy web |
+| **Drive / webhook only** | No agent required for PDFs when destination is Drive/webhook |
+
+**Verify:** after Install, Sync Center shows Connected, or run **Check Status.cmd**.
+
+**Advanced:** PowerShell launcher / slim `desktop-sync-agent.zip` still available under Sync Center → Advanced.
+
 ---
 
 ## Part 1 — Owner: Company document delivery (required for automatic PDFs)
@@ -145,21 +184,18 @@ If destination is UNC and path is empty, Sync Center shows a warning to set the 
 
 ### 2.3 Desktop agent sync (UNC / Outlook)
 
-#### Generate token (UI)
+#### Generate token (UI) + install (recommended)
 
 1. Sync Center → **Set up on this PC**.  
-2. Optional **Agent label** (e.g. `Accounts desk`).  
-3. **Create token + download launcher**.  
-4. Copy token once (`jxsa_…`) — also inside `start-justx-sync-agent.ps1`.  
-5. Place launcher next to the repo / `desktop-sync-agent` folder (script expects `desktop-sync-agent\src\index.js`).  
-6. On the PC that can write the Download Folder:
+2. Optional **PC label**.  
+3. Click **Download setup for this PC** → saves `JustX-Sync-Agent-Setup.zip`.  
+4. Extract the zip on the Windows PC.  
+5. Double-click **Install JustX Sync Agent.cmd** → wait for SUCCESS.  
+6. Return to Sync Center → **Desktop agent: Connected** → **Sync now** if needed.  
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start-justx-sync-agent.ps1
-```
+Uninstall: run **Uninstall JustX Sync Agent.cmd**. Status: **Check Status.cmd**.
 
-7. Keep window open → Sync Center shows **Desktop agent: Connected**.  
-8. **Sync now (desktop agent)**.
+**Advanced (IT / PowerShell):** Sync Center → Advanced → Download PowerShell launcher, or use `desktop-sync-agent\install-agent.ps1`. See `desktop-sync-agent/README.md`.
 
 #### Manual env (instead of `.ps1`)
 
@@ -185,11 +221,11 @@ npm start
 
 #### Revoke
 
-Sync Center → Registered agents → **Revoke**. Old launcher stops working; create a new token.
+Sync Center → Registered agents → **Revoke**. Old launcher / LocalAppData config stop working; create a new token and re-run `-Install`.
 
 #### Same agent for Email Outbox
 
-With agent running on Windows + Outlook installed: **Email Outbox → Open in Outlook**. No separate token.
+With agent running on Windows + Outlook installed: **Email Outbox → Open in Outlook**. No separate token. Use `-Install` so the agent is up after reboot.
 
 ---
 
@@ -222,10 +258,12 @@ With agent running on Windows + Outlook installed: **Email Outbox → Open in Ou
 | Symptom | Check |
 |---------|--------|
 | Pending never drops | Destination UNC without agent/FSA; Drive not connected; webhook failing |
-| Agent “Not detected” | Agent not running on **this** PC; firewall blocking 17865; wrong machine |
+| Agent “Not detected” | Agent not running on **this** PC; wrong machine; run Check Status.cmd |
+| Setup download fails / pack incomplete | Redeploy web so `JustX-Sync-Agent-win-x64.zip` is published (`npm run pack:agent`) |
+| Agent pack download fails | Slim `desktop-sync-agent.zip` 404 — same redeploy |
 | Folder not reachable | Path wrong; PC not on VPN; agent user lacks share ACL |
 | Badge / pending confusion | Sync Center pending = **files**; Email Outbox badge = **emails** |
-| Token lost | Create new token; revoke old agent |
+| Token lost | Download setup again (new token); revoke old agent |
 | Staff can’t edit path | Only Owner edits Profile delivery settings |
 
 ---

@@ -6,6 +6,11 @@ node_modules/
 # next.js
 web/.next/
 web/out/
+web/public/desktop-sync-agent.zip
+web/public/JustX-Sync-Agent-win-x64.zip
+
+# Portable Node cache for Windows agent pack
+desktop-sync-agent/.runtime-cache/
 
 # misc
 .DS_Store

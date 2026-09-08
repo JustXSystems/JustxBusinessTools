@@ -6,7 +6,9 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { canEditBusinessProfile, canUseSyncCenter } from "@/lib/auth-access";
 import {
   buildAgentLauncherScript,
+  downloadBinaryFile,
   downloadTextFile,
+  fetchAndPersonalizeWinSetup,
   fetchArtifactSyncSummary,
   fetchPendingArtifacts,
   fetchSyncAgents,
@@ -14,6 +16,7 @@ import {
   probeLocalAgent,
   registerSyncAgent,
   resolveAgentApiBase,
+  resolveAgentPackUrl,
   retryArtifact,
   revokeSyncAgent,
   syncPendingViaFsa,
@@ -22,6 +25,7 @@ import {
   type LocalAgentStatus,
   type SyncAgentRow,
 } from "@/lib/artifact-delivery";
+import { withBasePath } from "@/lib/base-path";
 import {
   getFsaSupport,
   pickDownloadFolder,
@@ -168,6 +172,34 @@ export default function SyncCenterPage() {
     }
   }
 
+  async function createTokenAndWinSetup() {
+    setBusy(true);
+    setError("");
+    setNewToken(null);
+    try {
+      const profile = await fetchProfile().catch(() => null);
+      const res = await registerSyncAgent(
+        agentLabel.trim() || `${user?.name || user?.email || "Staff"} PC`,
+      );
+      setNewToken(res.token);
+      const zipBytes = await fetchAndPersonalizeWinSetup({
+        apiBase: resolveAgentApiBase(),
+        agentToken: res.token,
+        downloadFolder: profile?.downloadFolder ?? downloadFolder,
+      });
+      downloadBinaryFile("JustX-Sync-Agent-Setup.zip", zipBytes);
+      setMessage(
+        "Setup downloaded. Extract the zip, double-click Install JustX Sync Agent.cmd, then return here.",
+      );
+      setSetupOpen(true);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create setup");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function createTokenAndLauncher() {
     setBusy(true);
     setError("");
@@ -182,10 +214,11 @@ export default function SyncCenterPage() {
         token: res.token,
         apiBase: resolveAgentApiBase(),
         downloadFolder: profile?.downloadFolder ?? downloadFolder,
+        agentPackUrl: resolveAgentPackUrl(),
       });
       downloadTextFile("start-justx-sync-agent.ps1", script);
       setMessage(
-        "Agent token created and launcher downloaded. Run the .ps1 on a PC that can reach the share, then click Sync now (desktop agent).",
+        "Advanced launcher downloaded. Run: powershell -ExecutionPolicy Bypass -File .\\start-justx-sync-agent.ps1 -Install",
       );
       setSetupOpen(true);
       await refresh();
@@ -376,26 +409,33 @@ export default function SyncCenterPage() {
           </button>
         </div>
         <p className="section-note">
-          Owners and Staff can each create a token, download a launcher, and run the agent on any PC
-          that reaches the share. The Sync Center then detects the local bridge and completes sync.
+          For Windows PCs: download the setup zip, extract it, and double-click Install. No Node.js
+          install and no PowerShell needed. Use Outlook desktop only if you need Email Outbox → Open
+          in Outlook.
         </p>
 
         {setupOpen ? (
           <div className="sync-setup">
             <ol className="sync-setup-steps">
-              <li>Confirm the Download Folder path is set on Business Profile.</li>
-              <li>Create a token and download the PowerShell launcher (below).</li>
               <li>
-                On the PC with share access, open PowerShell and run:{" "}
-                <code>powershell -ExecutionPolicy Bypass -File .\\start-justx-sync-agent.ps1</code>
+                Optional for file sync: set Download Folder on Business Profile. Skip if you only
+                need Outlook compose.
               </li>
               <li>
-                Keep the agent window open. Return here and click{" "}
-                <strong>Sync now (desktop agent)</strong>.
+                Click <strong>Download setup for this PC</strong> (saves{" "}
+                <code>JustX-Sync-Agent-Setup.zip</code>).
+              </li>
+              <li>
+                Extract the zip → open the folder → double-click{" "}
+                <strong>Install JustX Sync Agent.cmd</strong> → wait for SUCCESS.
+              </li>
+              <li>
+                Come back here and refresh. Status should show{" "}
+                <strong>Desktop agent: Connected on this PC</strong>.
               </li>
             </ol>
             <label className="field">
-              <span className="label">Agent label (optional)</span>
+              <span className="label">PC label (optional)</span>
               <input
                 value={agentLabel}
                 onChange={(e) => setAgentLabel(e.target.value)}
@@ -407,9 +447,9 @@ export default function SyncCenterPage() {
                 type="button"
                 className="btn btn-primary"
                 disabled={busy}
-                onClick={() => void createTokenAndLauncher()}
+                onClick={() => void createTokenAndWinSetup()}
               >
-                Create token + download launcher
+                Download setup for this PC
               </button>
               {newToken ? (
                 <button type="button" className="btn btn-secondary" onClick={() => void copyToken()}>
@@ -422,11 +462,51 @@ export default function SyncCenterPage() {
                 Token (shown once): <code>{newToken}</code>
               </p>
             ) : null}
-            <p className="section-note" style={{ marginTop: 10 }}>
-              Manual start from repo: set <code>JBT_API_BASE</code> / <code>JBT_AGENT_TOKEN</code>, then{" "}
-              <code>npm start</code> in <code>desktop-sync-agent</code>. Bridge listens on{" "}
-              <code>{LOCAL_AGENT_BRIDGE}</code>.
-            </p>
+            {agentOnline ? (
+              <p className="section-note" style={{ marginTop: 10 }}>
+                Desktop agent is connected on this PC.
+              </p>
+            ) : (
+              <p className="section-note" style={{ marginTop: 10 }}>
+                After Install, if still Not detected: run Check Status.cmd in the setup folder, and
+                confirm this browser is on the same Windows PC.
+              </p>
+            )}
+
+            <details style={{ marginTop: 16 }}>
+              <summary className="section-note" style={{ cursor: "pointer" }}>
+                Advanced (PowerShell / IT)
+              </summary>
+              <div style={{ marginTop: 10 }}>
+                <p className="section-note">
+                  Base pack (no token):{" "}
+                  <a href={withBasePath("/JustX-Sync-Agent-win-x64.zip")}>
+                    JustX-Sync-Agent-win-x64.zip
+                  </a>
+                  {" · "}
+                  <a href={withBasePath("/desktop-sync-agent.zip")}>desktop-sync-agent.zip</a>
+                  {" · "}
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={busy}
+                    onClick={() => void createTokenAndLauncher()}
+                  >
+                    Download PowerShell launcher
+                  </button>
+                </p>
+                <p className="section-note">
+                  PowerShell:{" "}
+                  <code>
+                    powershell -ExecutionPolicy Bypass -File
+                    &quot;%USERPROFILE%\Downloads\start-justx-sync-agent.ps1&quot; -Install
+                  </code>
+                </p>
+                <p className="section-note">
+                  Bridge: <code>{LOCAL_AGENT_BRIDGE}</code>
+                </p>
+              </div>
+            </details>
           </div>
         ) : null}
 

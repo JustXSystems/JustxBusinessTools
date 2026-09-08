@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import { apiUrl, getApiBase } from "@/lib/api-base";
+import { withBasePath } from "@/lib/base-path";
 import {
   getFsaSupport,
   pickDownloadFolder,
@@ -196,16 +197,37 @@ export function resolveAgentApiBase(): string {
   return "http://localhost:4000/api";
 }
 
+/** Absolute URL for the published agent zip (under Next public + basePath). */
+export function resolveAgentPackUrl(): string {
+  if (typeof window === "undefined") return "/desktop-sync-agent.zip";
+  const path = withBasePath("/desktop-sync-agent.zip");
+  return `${window.location.origin}${path}`;
+}
+
 export function buildAgentLauncherScript(input: {
   token: string;
   apiBase: string;
   downloadFolder?: string | null;
+  agentPackUrl?: string | null;
 }): string {
   const folderLine = input.downloadFolder
     ? `$env:JBT_DOWNLOAD_FOLDER = @'\n${input.downloadFolder}\n'@`
     : "# $env:JBT_DOWNLOAD_FOLDER = '\\\\fileserver\\shared\\business-artifacts'";
+  const packUrl = (input.agentPackUrl || "").replace(/"/g, '`"');
   return `# JustXSystems Desktop Sync Agent launcher
-# Generated from Sync Center — keep this file private (contains your agent token).
+# Generated from Sync Center - keep this file private (contains your agent token).
+#
+# Usage (customer PC needs only Windows + Node.js 18+):
+#   .\\start-justx-sync-agent.ps1 -Install     # download agent pack if needed, auto-start at logon
+#   .\\start-justx-sync-agent.ps1 -Health
+#   .\\start-justx-sync-agent.ps1 -Uninstall
+#   .\\start-justx-sync-agent.ps1              # foreground run (after install or with local sources)
+
+param(
+  [switch]$Install,
+  [switch]$Uninstall,
+  [switch]$Health
+)
 
 $ErrorActionPreference = "Stop"
 $env:JBT_API_BASE = "${input.apiBase.replace(/"/g, '`"')}"
@@ -213,21 +235,105 @@ $env:JBT_AGENT_TOKEN = "${input.token.replace(/"/g, '`"')}"
 ${folderLine}
 $env:JBT_POLL_MS = "15000"
 $env:JBT_BRIDGE_PORT = "17865"
+$AgentPackUrl = "${packUrl}"
 
-$root = Join-Path $PSScriptRoot ".."
-if (-not (Test-Path (Join-Path $root "desktop-sync-agent\\src\\index.js"))) {
-  $root = Join-Path $PSScriptRoot "."
+function Find-AgentDir {
+  $candidates = @(
+    (Join-Path $PSScriptRoot "desktop-sync-agent"),
+    (Join-Path (Join-Path $PSScriptRoot "..") "desktop-sync-agent"),
+    $PSScriptRoot,
+    (Join-Path $env:LOCALAPPDATA "JustX\\sync-agent\\src-pack\\desktop-sync-agent")
+  )
+  foreach ($dir in $candidates) {
+    if (Test-Path (Join-Path $dir "src\\index.js")) { return $dir }
+  }
+  $probe = $PSScriptRoot
+  for ($i = 0; $i -lt 6; $i++) {
+    $dir = Join-Path $probe "desktop-sync-agent"
+    if (Test-Path (Join-Path $dir "src\\index.js")) { return $dir }
+    $parent = Split-Path $probe -Parent
+    if (-not $parent -or $parent -eq $probe) { break }
+    $probe = $parent
+  }
+  return $null
 }
-$agentDir = Join-Path $root "desktop-sync-agent"
-if (-not (Test-Path (Join-Path $agentDir "src\\index.js"))) {
-  Write-Host "Place this script next to the JustxBusinessTools repo (or inside desktop-sync-agent)." -ForegroundColor Yellow
-  Write-Host "Expected: desktop-sync-agent\\src\\index.js" -ForegroundColor Yellow
+
+function Get-InstallScriptPath([string]$AgentDir) {
+  if ($AgentDir -and (Test-Path (Join-Path $AgentDir "install-agent.ps1"))) {
+    return Join-Path $AgentDir "install-agent.ps1"
+  }
+  $local = Join-Path $env:LOCALAPPDATA "JustX\\sync-agent\\install-agent.ps1"
+  if (Test-Path $local) { return $local }
+  return $null
+}
+
+function Ensure-AgentSources {
+  $dir = Find-AgentDir
+  if ($dir) { return $dir }
+  if (-not $AgentPackUrl) {
+    Write-Host "No local desktop-sync-agent and no AgentPackUrl in this launcher." -ForegroundColor Yellow
+    Write-Host "Re-download the launcher from Sync Center after deploy, or place desktop-sync-agent next to this script." -ForegroundColor Yellow
+    exit 1
+  }
+  $installRoot = Join-Path $env:LOCALAPPDATA "JustX\\sync-agent"
+  $packRoot = Join-Path $installRoot "src-pack"
+  $zipPath = Join-Path $env:TEMP ("jbt-agent-" + [guid]::NewGuid().ToString("n") + ".zip")
+  New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+  Write-Host "Downloading agent pack..." -ForegroundColor Cyan
+  Write-Host $AgentPackUrl -ForegroundColor DarkGray
+  try {
+    Invoke-WebRequest -Uri $AgentPackUrl -OutFile $zipPath -UseBasicParsing -TimeoutSec 120
+  } catch {
+    Write-Host "Download failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Check that $AgentPackUrl is reachable (web deploy must publish desktop-sync-agent.zip)." -ForegroundColor Yellow
+    exit 1
+  }
+  if (Test-Path $packRoot) { Remove-Item $packRoot -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $packRoot | Out-Null
+  Expand-Archive -LiteralPath $zipPath -DestinationPath $packRoot -Force
+  Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+  $nested = Join-Path $packRoot "desktop-sync-agent"
+  if (Test-Path (Join-Path $nested "src\\index.js")) { return $nested }
+  if (Test-Path (Join-Path $packRoot "src\\index.js")) { return $packRoot }
+  Write-Host "Agent pack zip did not contain src\\index.js" -ForegroundColor Red
   exit 1
 }
 
-Set-Location $agentDir
-Write-Host "Starting sync agent (bridge http://127.0.0.1:17865)…" -ForegroundColor Cyan
-Write-Host "Keep this window open. Use Sync Center → Sync now (desktop agent) in the browser." -ForegroundColor Cyan
+$agentDir = Ensure-AgentSources
+$installScript = Get-InstallScriptPath $agentDir
+if (-not $installScript) {
+  Write-Host "install-agent.ps1 not found next to agent sources." -ForegroundColor Red
+  exit 1
+}
+
+if ($Uninstall) {
+  $u = Join-Path (Split-Path $installScript -Parent) "uninstall-agent.ps1"
+  if (-not (Test-Path $u)) { $u = Join-Path $agentDir "uninstall-agent.ps1" }
+  & $u
+  exit $LASTEXITCODE
+}
+if ($Health) {
+  $h = Join-Path (Split-Path $installScript -Parent) "health-check.ps1"
+  if (-not (Test-Path $h)) { $h = Join-Path $agentDir "health-check.ps1" }
+  & $h -LauncherScript $PSCommandPath
+  exit $LASTEXITCODE
+}
+if ($Install) {
+  & $installScript -LauncherScript $PSCommandPath -AgentSourceDir $agentDir -AgentPackUrl $AgentPackUrl
+  exit $LASTEXITCODE
+}
+
+# Foreground: prefer installed app copy if present
+$runtime = Join-Path $env:LOCALAPPDATA "JustX\\sync-agent\\app"
+if (Test-Path (Join-Path $runtime "src\\index.js")) {
+  $cfg = Join-Path $env:LOCALAPPDATA "JustX\\sync-agent\\config.ps1"
+  if (Test-Path $cfg) { . $cfg }
+  Set-Location $runtime
+} else {
+  Set-Location $agentDir
+}
+Write-Host "Starting sync agent (bridge http://127.0.0.1:17865)..." -ForegroundColor Cyan
+Write-Host "Tip: run with -Install once to auto-start at Windows logon." -ForegroundColor DarkGray
 node .\\src\\index.js
 `;
 }

@@ -5,36 +5,78 @@
  * Polls / can be triggered from the web Sync Center via a localhost bridge
  * (http://127.0.0.1:17865) so staff/owners can click "Sync now" in the UI.
  *
- * Env:
- *   JBT_API_BASE   — e.g. https://app.example.com/api
- *   JBT_AGENT_TOKEN — jxsa_... from Sync Center
- *   JBT_DOWNLOAD_FOLDER — optional override
- *   JBT_POLL_MS — default 15000 (set 0 to disable background poll; UI-only)
- *   JBT_BRIDGE_PORT — default 17865
- *   JBT_BRIDGE_ORIGIN — CORS allowlist comma-separated (default *)
+ * Config (env wins over config.json):
+ *   JBT_API_BASE / apiBase
+ *   JBT_AGENT_TOKEN / agentToken
+ *   JBT_DOWNLOAD_FOLDER / downloadFolder
+ *   JBT_POLL_MS / pollMs
+ *   JBT_BRIDGE_PORT / bridgePort
+ *   JBT_BRIDGE_ORIGIN
+ *   JBT_CONFIG — optional path to config.json
  */
 
 import http from "node:http";
 import { access, mkdir, writeFile, rename as renameFile, stat, unlink } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
 import { constants as fsConstants } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 
-const API_BASE = (process.env.JBT_API_BASE ?? "http://localhost:4000/api").replace(/\/$/, "");
-const TOKEN = process.env.JBT_AGENT_TOKEN ?? "";
-const POLL_MS = Number(process.env.JBT_POLL_MS ?? 15000);
-const BRIDGE_PORT = Math.min(Math.max(Number(process.env.JBT_BRIDGE_PORT) || 17865, 1024), 65535);
+export const AGENT_VERSION = "1.1.0";
+
+function loadFileConfig() {
+  const candidates = [];
+  if (process.env.JBT_CONFIG) candidates.push(process.env.JBT_CONFIG);
+  candidates.push(path.join(process.cwd(), "config.json"));
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    // app/src -> install root config.json
+    candidates.push(path.join(here, "..", "..", "config.json"));
+    candidates.push(path.join(here, "..", "config.json"));
+  } catch {
+    // ignore
+  }
+  for (const p of candidates) {
+    try {
+      if (!p || !existsSync(p)) continue;
+      const text = readFileSync(p, "utf8").replace(/^\uFEFF/, "");
+      const raw = JSON.parse(text);
+      if (raw && typeof raw === "object") return { ...raw, _configPath: p };
+    } catch {
+      // try next
+    }
+  }
+  return {};
+}
+
+const fileCfg = loadFileConfig();
+if (!process.env.JBT_DOWNLOAD_FOLDER && fileCfg.downloadFolder) {
+  process.env.JBT_DOWNLOAD_FOLDER = String(fileCfg.downloadFolder);
+}
+
+const API_BASE = String(process.env.JBT_API_BASE || fileCfg.apiBase || "http://localhost:4000/api").replace(
+  /\/$/,
+  "",
+);
+const TOKEN = String(process.env.JBT_AGENT_TOKEN || fileCfg.agentToken || "");
+const POLL_MS = Number(process.env.JBT_POLL_MS ?? fileCfg.pollMs ?? 15000);
+const BRIDGE_PORT = Math.min(
+  Math.max(Number(process.env.JBT_BRIDGE_PORT || fileCfg.bridgePort) || 17865, 1024),
+  65535,
+);
 const BRIDGE_ORIGINS = String(process.env.JBT_BRIDGE_ORIGIN ?? "*")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+const PACK_VERSION = String(fileCfg.packVersion || AGENT_VERSION);
 const ONCE = process.argv.includes("--once");
 const NO_BRIDGE = process.argv.includes("--no-bridge");
 
 if (!TOKEN.startsWith("jxsa_")) {
-  console.error("Set JBT_AGENT_TOKEN to a token from Sync Center → Connect desktop agent");
+  console.error("Set JBT_AGENT_TOKEN (or config.json agentToken) from Sync Center → Download setup");
   process.exit(1);
 }
 
@@ -371,7 +413,18 @@ function startBridge() {
     const url = new URL(req.url || "/", `http://127.0.0.1:${BRIDGE_PORT}`);
     try {
       if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
-        sendJson(res, 200, { ok: true, service: "jbt-sync-agent", startedAt: state.startedAt }, cors);
+        sendJson(
+          res,
+          200,
+          {
+            ok: true,
+            service: "jbt-sync-agent",
+            version: AGENT_VERSION,
+            packVersion: PACK_VERSION,
+            startedAt: state.startedAt,
+          },
+          cors,
+        );
         return;
       }
       if (req.method === "GET" && url.pathname === "/status") {
@@ -381,6 +434,8 @@ function startBridge() {
           {
             ok: true,
             running: state.running,
+            version: AGENT_VERSION,
+            packVersion: PACK_VERSION,
             apiBase: API_BASE,
             folder: state.folder,
             folderOk: state.folderOk,
@@ -429,9 +484,30 @@ function startBridge() {
   return server;
 }
 
+async function bridgeAlreadyHealthy() {
+  try {
+    const res = await fetch(`http://127.0.0.1:${BRIDGE_PORT}/health`, {
+      signal: AbortSignal.timeout(900),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Boolean(data?.ok && data?.service === "jbt-sync-agent");
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
-  console.log(`JustX sync agent → ${API_BASE}`);
-  if (!NO_BRIDGE && !ONCE) startBridge();
+  console.log(`JustX sync agent v${AGENT_VERSION} → ${API_BASE}`);
+  if (fileCfg._configPath) console.log(`Config: ${fileCfg._configPath}`);
+
+  if (!NO_BRIDGE && !ONCE) {
+    if (await bridgeAlreadyHealthy()) {
+      console.log(`Bridge already healthy on http://127.0.0.1:${BRIDGE_PORT} — exiting.`);
+      process.exit(0);
+    }
+    startBridge();
+  }
 
   if (ONCE) {
     const result = await syncOnce();

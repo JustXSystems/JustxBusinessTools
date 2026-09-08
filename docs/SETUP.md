@@ -205,11 +205,12 @@ Optional UI (Owner): **Business Profile → Send Via defaults → Email** (templ
 
 **Where generated:** web app only — **not** in `.env` on the server.
 
+**Customer PC minimum:** Windows 10/11 + Sync Center **Download setup for this PC** (double-click Install). Outlook desktop if using Open in Outlook. No separate Node install. Full table: [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent.
+
 1. Sign in as Owner/Staff → **Sync Center** (`/sync`).
-2. **Set up on this PC** → **Create token + download launcher**.
-3. Token appears once as `jxsa_…` and is written into `start-justx-sync-agent.ps1` as `$env:JBT_AGENT_TOKEN`.
-4. On the Windows PC with Outlook, run that `.ps1` (keep window open).
-5. **Email Outbox** → **Open in Outlook**.
+2. **Set up on this PC** → **Download setup for this PC**.
+3. Extract zip → double-click **Install JustX Sync Agent.cmd**.
+4. **Email Outbox** → **Open in Outlook**.
 
 Manual start: copy the token from Sync Center into:
 

@@ -1,63 +1,48 @@
 # JustXSystems Desktop Sync Agent
 
-Copies pending tool artifacts from the JustXSystems API into the Business Profile **Download Folder** (local path, mapped drive, or UNC share reachable from this PC).
+Copies pending tool artifacts from the JustXSystems API into the Business Profile **Download Folder**, and opens a localhost bridge for Sync Center / Email Outbox → Outlook.
 
-The agent also starts a **localhost bridge** (`http://127.0.0.1:17865`) so Owners and Staff can:
+## Customer setup (non-technical)
 
-- Click **Sync now (desktop agent)** in **Sync Center** (`/sync`)
-- Click **Open in Outlook** in **Email Outbox** (`/email-outbox`) — Windows + Outlook COM, PDF attached
+1. In JustX → **Sync Center** → **Set up on this PC**
+2. Click **Download setup for this PC**
+3. Extract `JustX-Sync-Agent-Setup.zip`
+4. Double-click **Install JustX Sync Agent.cmd**
+5. Return to Sync Center — should show **Connected**
 
-See [`docs/EMAIL_OUTBOX.md`](../docs/EMAIL_OUTBOX.md) for email variants and [`docs/SYNC_CENTER.md`](../docs/SYNC_CENTER.md) for full Sync Center / UNC setup.
+No separate Node.js install. Portable Node is inside the zip.
 
-## Recommended: Sync Center UI
+Optional: **Check Status.cmd** · **Uninstall JustX Sync Agent.cmd**
 
-1. Open **Sync Center** in the web app (sidebar / mobile Sync).
-2. Ensure Download Folder is set on Business Profile (Owner).
-3. Click **Set up on this PC** → **Create token + download launcher**.
-   - This **generates** `JBT_AGENT_TOKEN` (`jxsa_…`) — shown once on screen and embedded in the `.ps1`.
-   - You do not invent this value; if lost, create a new token and revoke the old agent.
-4. Run the downloaded `start-justx-sync-agent.ps1` on a PC that can reach the share (and/or has Outlook for Email Outbox).
-5. Keep the agent window open. In Sync Center click **Sync now (desktop agent)**; for email use **Email Outbox → Open in Outlook**.
+## Engineer: build packs
 
-Any Owner or Staff member can create their own agent token and complete sync for the branch queue.
-
-## Manual CLI setup
-
-```powershell
-cd desktop-sync-agent
-$env:JBT_API_BASE = "https://your-host/api"   # or http://localhost:4000/api
-$env:JBT_AGENT_TOKEN = "jxsa_..."
-npm start
+```bash
+npm run pack:agent -w web
+# or: node scripts/pack-agent-artifacts.mjs
 ```
 
-One-shot sync (no bridge):
+Produces:
+
+- `web/public/JustX-Sync-Agent-win-x64.zip` — primary Windows setup (Node win-x64 + CMD installers)
+- `web/public/desktop-sync-agent.zip` — slim sources for advanced PowerShell bootstrap
+
+First Windows pack build downloads Node 20 win-x64 into `desktop-sync-agent/.runtime-cache/` (gitignored). VPS deploy needs outbound HTTPS to `nodejs.org` once.
+
+## Advanced / PowerShell
+
+See Sync Center → Advanced, or:
 
 ```powershell
-npm run sync-once
+powershell -ExecutionPolicy Bypass -File .\install-agent.ps1 -LauncherScript "$env:USERPROFILE\Downloads\start-justx-sync-agent.ps1"
 ```
 
-Optional:
-
-| Env | Purpose |
-|-----|---------|
-| `JBT_DOWNLOAD_FOLDER` | Override profile path |
-| `JBT_POLL_MS` | Background poll interval (default `15000`; `0` = UI-only) |
-| `JBT_BRIDGE_PORT` | Local control port (default `17865`) |
-| `JBT_BRIDGE_ORIGIN` | CORS allowlist (default `*`) |
-
-## Bridge API (localhost only)
+## Bridge API (localhost)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | Liveness |
-| GET | `/status` | Folder probe + last run + `outlookCompose` capability |
-| POST | `/sync-once` | Run one sync pass (used by Sync Center) |
-| POST | `/open-email` | Body `{ "outboxId": "eml_..." }` — fetch compose payload from API, open Outlook with PDF |
+| GET | `/health` | Liveness + version |
+| GET | `/status` | Folder probe + Outlook capability |
+| POST | `/sync-once` | One sync pass |
+| POST | `/open-email` | Outlook compose with PDF |
 
-## Behavior
-
-- Polls `GET /api/artifacts?pending=1` (unless `JBT_POLL_MS=0`)
-- Probes folder writability via `/api/artifacts/agent/probe`
-- Downloads content, writes atomically (`*.jbt-partial` → final name)
-- Applies conflict policy from the profile
-- Acks `synced` / `failed` / `skipped_duplicate`
+Docs: [`docs/SYNC_CENTER.md`](../docs/SYNC_CENTER.md) · [`docs/EMAIL_OUTBOX.md`](../docs/EMAIL_OUTBOX.md)

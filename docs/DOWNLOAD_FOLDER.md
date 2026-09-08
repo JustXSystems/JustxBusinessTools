@@ -1,6 +1,7 @@
 # Artifact delivery (company Drive / webhook / UNC)
 
 **Complete Sync Center configuration:** [`SYNC_CENTER.md`](SYNC_CENTER.md)  
+**Customer PC minimum (desktop agent):** Windows + Node 18+; Sync Center launcher `-Install` downloads the agent pack (no repo). See [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent  
 Owner Drive steps (short): [`SETUP.md`](SETUP.md)#client-companies-part-b  
 Quotation emails (separate): [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)
 

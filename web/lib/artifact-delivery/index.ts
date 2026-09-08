@@ -302,10 +302,18 @@ export {
   probeLocalAgent,
   triggerLocalAgentSync,
   resolveAgentApiBase,
+  resolveAgentPackUrl,
   buildAgentLauncherScript,
   downloadTextFile,
   LOCAL_AGENT_BRIDGE,
 } from "@/lib/artifact-delivery/sync-center";
+export {
+  resolveWinSetupPackUrl,
+  fetchAndPersonalizeWinSetup,
+  downloadBinaryFile,
+  buildAgentConfigJson,
+  AGENT_PACK_VERSION,
+} from "@/lib/artifact-delivery/win-setup-pack";
 export type {
   ArtifactListItem,
   SyncAgentRow,

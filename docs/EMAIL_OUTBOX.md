@@ -167,6 +167,19 @@ Email Outbox: **sent** = success. **failed** = use **Send via webhook** to retry
 
 Uses the **same** Sync Center desktop agent as UNC file sync.
 
+### Customer PC — minimum requirements
+
+| Requirement | Needed? | Notes |
+|-------------|---------|--------|
+| Windows 10/11 | Yes | Path C is Windows-only |
+| Sync Center setup zip + Install.cmd | Yes | No separate Node.js install |
+| Outbound HTTPS to JustX API | Yes | Token auth to API |
+| **Desktop Outlook** (COM) | Yes | Classic Outlook COM — not web-only / New Outlook without COM |
+| Chrome/Edge on **same PC** as agent | Yes | Outbox talks to `127.0.0.1:17865` |
+| Download Folder / UNC | No | Only if also syncing files |
+
+Canonical full matrix + site caveats: [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent.
+
 ### What to configure
 
 | Item | Where |
@@ -187,12 +200,22 @@ Detailed agent env: [`SYNC_CENTER.md`](SYNC_CENTER.md)#23-desktop-agent-sync-unc
 
 ### Run agent + send
 
+**Recommended (non-technical):** Sync Center → **Download setup for this PC** → extract → double-click **Install JustX Sync Agent.cmd**.
+
+**Advanced:**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-justx-sync-agent.ps1 -Install
+```
+
+Sync Center: **Desktop agent: Connected**.  
+Email Outbox → **Open in Outlook** (browser and agent on **same** PC).
+
+Foreground only:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\start-justx-sync-agent.ps1
 ```
-
-Keep window open → Sync Center: **Desktop agent: Connected**.  
-Email Outbox → **Open in Outlook** (browser and agent on **same** PC).
 
 Manual:
 
@@ -203,10 +226,14 @@ cd desktop-sync-agent
 npm start
 ```
 
+Health / remove: `-Health` / `-Uninstall` on the launcher, or `health-check.ps1` / `uninstall-agent.ps1` in `desktop-sync-agent`.
+
 ### Path C checklist
 
+- [ ] Customer PC meets [minimum requirements](#customer-pc--minimum-requirements) (Windows, Node 18+, Outlook, …)  
 - [ ] Token from Sync Center (not invented)  
-- [ ] Agent online on this PC  
+- [ ] Agent installed (`-Install`) or running on this PC  
+- [ ] Sync Center shows Connected (or `health-check.ps1` OK)  
 - [ ] Desktop Outlook installed  
 - [ ] Outbox row has PDF  
 - [ ] Windows only  
