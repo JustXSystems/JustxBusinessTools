@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Pack a deployable release tarball (run on Linux CI after npm ci + web build).
+# Pack a deployable release tarball (run on Linux CI after web build).
 # Usage: ./scripts/pack-release.sh [output.tgz]
 #
-# Prunes devDependencies before packing (runtime needs tsx in server dependencies).
+# Intentionally omits node_modules — VPS runs `npm ci --omit=dev` (or reuses
+# live node_modules when package-lock.json is unchanged). Keeps SCP small/fast.
 # Writes <output>.sha256 alongside the tarball.
 set -euo pipefail
 
@@ -20,13 +21,10 @@ if [[ ! -d web/.next ]]; then
   echo "ERROR: web/.next missing — run production web build first." >&2
   exit 1
 fi
-if [[ ! -d node_modules ]]; then
-  echo "ERROR: node_modules missing — run npm ci first." >&2
+if [[ ! -f package-lock.json ]]; then
+  echo "ERROR: package-lock.json missing." >&2
   exit 1
 fi
-
-echo "==> Prune devDependencies for smaller runtime artifact"
-npm prune --omit=dev
 
 META_DIR="$(mktemp -d)"
 trap 'rm -rf "$META_DIR"' EXIT
@@ -39,14 +37,16 @@ cat >"$META_DIR/RELEASE.json" <<EOF
   "node": "$NODE_VER",
   "basePath": "${NEXT_PUBLIC_BASE_PATH:-/jbt}",
   "packager": "scripts/pack-release.sh",
-  "prunedDev": true
+  "includesNodeModules": false,
+  "vpsInstall": "npm ci --omit=dev"
 }
 EOF
 
-echo "==> Packing release ${SHORT_SHA} → ${OUT_ABS}"
+echo "==> Packing slim release ${SHORT_SHA} → ${OUT_ABS} (no node_modules)"
 
 chmod +x scripts/*.sh 2>/dev/null || true
 
+# Exclude bulky / non-runtime trees. web/.next is included (minus cache).
 tar -czf "$OUT_ABS" \
   --exclude='.git' \
   --exclude='.github' \
@@ -55,15 +55,18 @@ tar -czf "$OUT_ABS" \
   --exclude='android' \
   --exclude='e2e' \
   --exclude='docs' \
+  --exclude='deploy' \
   --exclude='test-results' \
   --exclude='playwright-report' \
   --exclude='blob-report' \
+  --exclude='node_modules' \
+  --exclude='**/node_modules' \
   --exclude='server/.env' \
   --exclude='server/uploads' \
   --exclude='uploads' \
   --exclude='web/.next/cache' \
+  --exclude='web/.next/trace' \
   --exclude='desktop-sync-agent/.runtime-cache' \
-  --exclude='node_modules/.cache' \
   --exclude='jbt-release.tgz' \
   --exclude='jbt-release-*.tgz' \
   -C "$ROOT" \
@@ -71,14 +74,12 @@ tar -czf "$OUT_ABS" \
   package-lock.json \
   ecosystem.config.cjs \
   .env.example \
-  node_modules \
   web \
   server \
   shared \
   scripts \
   mysql \
   desktop-sync-agent \
-  deploy \
   -C "$META_DIR" \
   RELEASE.json
 
@@ -87,4 +88,4 @@ tar -czf "$OUT_ABS" \
   sha256sum "$(basename "$OUT_ABS")" | tee "$(basename "$OUT_ABS").sha256"
 )
 ls -lh "$OUT_ABS" "${OUT_ABS}.sha256"
-echo "==> Pack OK (${SHORT_SHA})"
+echo "==> Pack OK (${SHORT_SHA}) — install deps on VPS"

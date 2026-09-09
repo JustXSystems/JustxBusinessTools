@@ -15,18 +15,17 @@ On-call / incident runbooks: [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md).
 
 ```
 git push master
-  → GitHub Actions build (npm cache + Next cache)
-  → npm prune --omit=dev + pack jbt-release.tgz (+ .sha256)
+  → GitHub Actions build (npm + Next + agent Node caches)
+  → pack slim jbt-release.tgz (source + web/.next, **no** node_modules)
   → scp to VPS + checksum verify
   → scripts/vps-release.sh
-       ├─ preflight (disk, rsync, pm2, …)
-       ├─ extract to /var/www/jbt-releases/<sha>
-       ├─ optional DB backup
-       ├─ migrate/seeds on stage (live still old)
-       ├─ atomic swap: jbt → jbt.old ; jbt.new → jbt
+       ├─ extract stage
+       ├─ reuse live node_modules if lockfile unchanged, else npm ci --omit=dev
+       ├─ optional DB backup / migrate / seeds on stage
+       ├─ rsync into /var/www/jbt (or mv if /var/www writable)
        ├─ pm2 reload
-       ├─ health: API + web :3002/jbt
-       └─ on failure: auto-restore jbt.old (default on)
+       ├─ health: API + web
+       └─ auto-rollback on failure
 ```
 
 **Mutable data** lives in `/var/www/jbt-shared/` (`server.env`, `uploads/`, `server-uploads/`) and is symlinked into each release.  

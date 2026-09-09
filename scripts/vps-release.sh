@@ -31,7 +31,7 @@ AUTO_ROLLBACK="${AUTO_ROLLBACK:-true}"
 KEEP_RELEASES="${KEEP_RELEASES:-3}"
 RELEASE_ID="${RELEASE_ID:-}"
 RELEASE_SHA256="${RELEASE_SHA256:-}"
-MIN_FREE_MB="${MIN_FREE_MB:-2048}"
+MIN_FREE_MB="${MIN_FREE_MB:-1024}"
 WEB_PORT="${WEB_PORT:-3002}"
 WEB_BASE_PATH="${WEB_BASE_PATH:-/jbt}"
 
@@ -155,8 +155,32 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE"
 tar -xzf "$RELEASE_TGZ" -C "$STAGE"
 
-if [[ ! -f "$STAGE/package.json" || ! -d "$STAGE/web/.next" || ! -d "$STAGE/node_modules" ]]; then
-  die "release tarball incomplete (need package.json, web/.next, node_modules)"
+if [[ ! -f "$STAGE/package.json" || ! -d "$STAGE/web/.next" ]]; then
+  die "release tarball incomplete (need package.json, web/.next)"
+fi
+
+install_stage_deps() {
+  echo "==> Install production deps on stage"
+  if [[ -d "$STAGE/node_modules" && -f "$STAGE/package-lock.json" ]]; then
+    echo "    tarball already includes node_modules — skip npm ci"
+    return 0
+  fi
+  # Fast path: reuse live node_modules when lockfile unchanged
+  if [[ -f "$LIVE/package-lock.json" && -d "$LIVE/node_modules" ]] \
+    && cmp -s "$STAGE/package-lock.json" "$LIVE/package-lock.json"; then
+    echo "    reusing live node_modules (package-lock.json unchanged)"
+    mkdir -p "$STAGE/node_modules"
+    rsync -a "$LIVE/node_modules/" "$STAGE/node_modules/"
+    return 0
+  fi
+  echo "    npm ci --omit=dev (lockfile changed or first install)"
+  (cd "$STAGE" && npm ci --omit=dev)
+}
+
+install_stage_deps
+
+if [[ ! -d "$STAGE/node_modules" ]]; then
+  die "node_modules missing after install"
 fi
 
 link_shared_into() {

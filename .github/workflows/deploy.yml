@@ -102,6 +102,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - name: Cache Sync Agent Node win-x64 zip
+        uses: actions/cache@v4
+        with:
+          path: desktop-sync-agent/.runtime-cache
+          key: agent-node-win-${{ runner.os }}-v20.18.1
+          restore-keys: |
+            agent-node-win-${{ runner.os }}-
+
       - name: Install dependencies
         run: npm ci
 
@@ -114,20 +122,23 @@ jobs:
       - name: Cache Next.js build
         uses: actions/cache@v4
         with:
-          path: web/.next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('web/**/*.js', 'web/**/*.jsx', 'web/**/*.ts', 'web/**/*.tsx', 'web/**/*.css') }}
+          path: |
+            web/.next/cache
+            ~/.cache/next-swc
+          key: nextjs-${{ runner.os }}-node${{ env.NODE_VERSION }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('web/**/*.js', 'web/**/*.jsx', 'web/**/*.ts', 'web/**/*.tsx', 'web/**/*.css') }}
           restore-keys: |
-            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
-            nextjs-${{ runner.os }}-
+            nextjs-${{ runner.os }}-node${{ env.NODE_VERSION }}-${{ hashFiles('package-lock.json') }}-
+            nextjs-${{ runner.os }}-node${{ env.NODE_VERSION }}-
 
       - name: Build web (production /jbt)
         run: npm run build -w web
 
-      - name: Pack release tarball
+      - name: Pack slim release tarball
         run: |
           chmod +x scripts/pack-release.sh
           ./scripts/pack-release.sh jbt-release.tgz
           test -f jbt-release.tgz.sha256
+          ls -lh jbt-release.tgz
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
