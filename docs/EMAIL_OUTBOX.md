@@ -226,6 +226,8 @@ powershell -ExecutionPolicy Bypass -File .\start-justx-sync-agent.ps1 -Install
 Sync Center: **Desktop agent: Connected**.  
 Email Outbox → **Open in Outlook** (browser and agent on **same** PC).
 
+**Connected ≠ Outlook ready:** the bridge can be up while the agent still fails API calls. Production config must use `JBT_API_BASE=https://justxsystems.com/jbt/api` (**with `/jbt`**). Diagnose: `Invoke-RestMethod http://127.0.0.1:17865/status` and `%LOCALAPPDATA%\JustX\sync-agent\agent.log`. Details: [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
+
 Foreground only:
 
 ```powershell
@@ -245,10 +247,11 @@ Health / remove: `-Health` / `-Uninstall` on the launcher, or `health-check.ps1`
 
 ### Path C checklist
 
-- [ ] Customer PC meets [minimum requirements](#customer-pc--minimum-requirements) (Windows, Node 18+, Outlook, …)  
+- [ ] Customer PC meets [minimum requirements](#customer-pc--minimum-requirements) (Windows, Outlook, …)  
 - [ ] Token from Sync Center (not invented)  
 - [ ] Agent installed (`-Install`) or running on this PC  
 - [ ] Sync Center shows Connected (or `health-check.ps1` OK)  
+- [ ] Production: `status.apiBase` is `https://justxsystems.com/jbt/api` (not `…/api` without `/jbt`)  
 - [ ] Desktop Outlook installed  
 - [ ] Outbox row has PDF  
 - [ ] Windows only  
@@ -257,6 +260,7 @@ Health / remove: `-Health` / `-Uninstall` on the launcher, or `health-check.ps1`
 
 - Outlook body is plain text (HTML still stored for webhook retry)  
 - Agent must run on the Outlook PC  
+- Same agent/`apiBase` issues that block UNC sync also block Open in Outlook  
 
 ---
 
@@ -311,7 +315,7 @@ Filters: **Pending** (pending+failed) vs **All**.
 | Always mailto, never auto-send | `EMAIL_WEBHOOK_URL` empty or API not reloaded |
 | Webhook 4xx/5xx in Outbox | Automation inactive; wrong URL; mapping error |
 | HTML looks plain | Automation mapped `body` only — map **`html`** |
-| Open in Outlook disabled / errors | Agent not on this PC; not Windows; Outlook missing |
+| Open in Outlook disabled / errors | Agent not on this PC; not Windows; Outlook missing; wrong `apiBase` (must include `/jbt` in prod); API 403 — see [`SYNC_CENTER.md`](SYNC_CENTER.md)#troubleshooting |
 | Wrong badge count | Fixed by route-specific badges; pending = pending+failed emails |
 | Wrong company emails | Branch / Business Profile switcher |
 

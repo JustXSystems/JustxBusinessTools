@@ -262,7 +262,9 @@ Optional UI (Owner): **Business Profile → Send Via defaults → Email** (templ
 1. Sign in as Owner/Staff → **Sync Center** (`/sync`).
 2. **Set up on this PC** → **Download setup for this PC**.
 3. Extract zip → double-click **Install JustX Sync Agent.cmd**.
-4. **Email Outbox** → **Open in Outlook**.
+4. Confirm Sync Center shows **Connected**, then **Email Outbox** → **Open in Outlook**.
+
+**Important:** Connected only means the local bridge (`http://127.0.0.1:17865`) is up. Production agent config must use `JBT_API_BASE=https://justxsystems.com/jbt/api` (**with `/jbt`**). See [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
 
 Manual start: copy the token from Sync Center into:
 
@@ -280,24 +282,26 @@ These are **two different queues**. Full “who needs what / what syncs / how it
 
 | Guide | Covers |
 |-------|--------|
-| **[`SYNC_CENTER.md`](SYNC_CENTER.md)** | Who needs Sync Center; which tools’ PDFs; all Company document delivery variants (Drive / artifact webhook / UNC); desktop setup; troubleshooting |
+| **[`SYNC_CENTER.md`](SYNC_CENTER.md)** | Who needs Sync Center; which tools’ PDFs; all Company document delivery variants (Drive / artifact webhook / UNC / **local folder**); desktop setup; **Connected vs sync**; troubleshooting |
 | **[`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)** | Who needs Email Outbox; paths A/B/C; when Sync Center agent is required for Outlook |
 
 **Short reminder**
 
 | Feature | Who typically needs it | What it moves |
 |---------|------------------------|---------------|
-| **Company document delivery** (Profile) | Every company that wants PDFs in Drive/webhook/UNC | Quotation + Site Survey PDFs (file artifacts) |
-| **Sync Center** `/sync` | UNC companies; Outlook Path C; status/retry | Same file queue + agent install UI |
+| **Company document delivery** (Profile) | Every company that wants PDFs in Drive/webhook/UNC/local folder | Quotation + Site Survey PDFs (file artifacts) |
+| **Sync Center** `/sync` | UNC/local-folder companies; Outlook Path C; status/retry | Same file queue + agent install UI |
 | **Email Outbox** `/email-outbox` | Anyone sending quotations by email | Email drafts (not the Sync Center file list) |
 
 Do not confuse:
 
 - Profile **artifact webhook** (files) ≠ `EMAIL_WEBHOOK_URL` (emails)  
 - Sync Center **pending files** ≠ Email Outbox **pending emails**  
-- Desktop agent token is created in **Sync Center** (UNC sync **and/or** Outlook compose)  
+- Desktop agent token is created in **Sync Center** (UNC/local sync **and/or** Outlook compose)  
+- **Desktop agent Connected** ≠ files already synced — verify Pending clears / check `…/status`  
 - **Not every customer needs the desktop agent** — Drive/webhook + email webhook need none
 
+**Local folder document delivery (quick):** Owner sets Profile destination UNC + **Download Folder path** (e.g. `C:\JustX\Artifacts`) → Save → install agent → Sync now. Step-by-step: [`SYNC_CENTER.md`](SYNC_CENTER.md)#14-company-file-server--download-folder-path-unc--optional.
 ---
 
 ## Client companies (Part B)
@@ -350,6 +354,8 @@ Platform Google OAuth is **not** required. Owner still saves a Business Profile.
 | PDFs in SharePoint / OneDrive | Destination **Corporate webhook** + Power Automate HTTP URL — [`SYNC_CENTER.md`](SYNC_CENTER.md)#13-corporate-artifact-webhook-sharepoint--onedrive--power-automate |
 | PDFs on file server / synced folder | **Download Folder path** + Sync Center setup on one PC — [`SYNC_CENTER.md`](SYNC_CENTER.md)#14-company-file-server--download-folder-path-unc--optional |
 | Email only | Leave company destination none/unset; use Email Outbox paths A/B/C — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) |
+
+**Local absolute paths work** (e.g. `C:\JustX\Artifacts`) — same as UNC; the desktop agent (or browser folder sync) writes on that PC. After install, production `apiBase` must be `https://justxsystems.com/jbt/api` — see [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
 
 Staff log in with **email/password** (or Phone OTP if enabled). They never need a Google account.
 

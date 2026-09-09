@@ -176,7 +176,7 @@ Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quo
 | **Pack missing on server** | Web deploy must run `pack-agent-artifacts` (downloads Node win-x64 at build). If Sync Center setup fails with pack 404, redeploy web |
 | **Drive / webhook only** | No agent required for PDFs when destination is Drive/webhook |
 
-**Verify:** after Install, Sync Center shows Connected, or run **Check Status.cmd**.
+**Verify:** after Install, Sync Center shows Connected, **and** Sync now clears Pending (see [Connected ≠ sync OK](#connected--sync-ok) below). Or run **Check Status.cmd**.
 
 **Advanced:** PowerShell launcher / slim `desktop-sync-agent.zip` still available under Sync Center → Advanced.
 
@@ -362,15 +362,21 @@ Z:\JustX
 
 #### Setup steps (Owner + one PC)
 
-1. Business Profile → Company document delivery → destination **Company file server (UNC)** or **Auto** (with Download Folder set as fallback).  
-2. **Show UNC / file-server options**.  
-3. Paste **Download Folder path**.  
-4. Conflict policy → usually **Overwrite**.  
-5. Profile **Save**.  
-6. Sync Center → **Download setup for this PC** → Install on a machine that can write that path (VPN/share ACL / OneDrive signed in).  
-7. Test PDF → pending should clear; file appears in the folder (and syncs to cloud if using OneDrive/SharePoint sync).
+1. Create the target folder in File Explorer (example: `C:\JustX\Artifacts`).  
+2. Click the address bar → copy the **full absolute path**.  
+3. Business Profile → Company document delivery → destination **Company file server (UNC)** or **Auto** (with Download Folder set as fallback).  
+4. **Show UNC / file-server options**.  
+5. Paste **Download Folder path** (e.g. `C:\JustX\Artifacts` or `\\fileserver\shared\JustX`).  
+6. Conflict policy → usually **Overwrite**.  
+7. Profile **Save**.  
+8. Sync Center → confirm **Download Folder** shows that path.  
+9. Sync Center → **Download setup for this PC** → Install on a machine that can write that path (VPN/share ACL / OneDrive signed in).  
+10. Sync Center → **Desktop agent: Connected** → **Sync now (desktop agent)** (or wait for poll).  
+11. Test PDF → Pending should clear; file appears in the folder (and syncs to cloud if using OneDrive/SharePoint sync).
 
 If destination is UNC and path is empty, Sync Center warns you to set the path.
+
+**Local folder is fully supported** — it does not have to be a UNC share. Any absolute Windows path this PC can write works (`C:\…`, `D:\…`, OneDrive sync path, or `\\server\share\…`).
 
 #### Choosing webhook vs Download Folder for Microsoft 365
 
@@ -420,20 +426,51 @@ If destination is UNC and path is empty, Sync Center warns you to set the path.
 3. Click **Download setup for this PC** → saves `JustX-Sync-Agent-Setup.zip`.  
 4. Extract the zip on the Windows PC.  
 5. Double-click **Install JustX Sync Agent.cmd** → wait for SUCCESS.  
-6. Return to Sync Center → **Desktop agent: Connected** → **Sync now** if needed.  
+6. Return to Sync Center → **Desktop agent: Connected** → **Sync now** if Pending &gt; 0.  
+7. Confirm Pending drops and files land in the Download Folder (Connected alone is not enough — see below).
 
 Uninstall: run **Uninstall JustX Sync Agent.cmd**. Status: **Check Status.cmd**.
 
 **Advanced (IT / PowerShell):** Sync Center → Advanced → Download PowerShell launcher, or use `desktop-sync-agent\install-agent.ps1`. See `desktop-sync-agent/README.md`.
+
+#### Connected ≠ sync OK
+
+| UI / probe | Means | Does **not** mean |
+|------------|--------|-------------------|
+| **Desktop agent: Connected** (`http://127.0.0.1:17865`) | Local bridge is up on **this** PC | API auth, folder write, or Pending clearing |
+| **Sync now** succeeds | Agent fetched pending items and wrote files | — |
+| Pending stays &gt; 0 | Sync failed or never reached the real API | Agent is “broken” solely because of the folder path |
+
+**Production `JBT_API_BASE` must include `/jbt`:**
+
+| Environment | Correct `apiBase` / `JBT_API_BASE` | Wrong |
+|-------------|-------------------------------------|--------|
+| Production | `https://justxsystems.com/jbt/api` | `https://justxsystems.com/api` (hits marketing site HTML) |
+| Local dev | `http://localhost:4000/api` | — |
+
+Install writes `%LOCALAPPDATA%\JustX\sync-agent\config.json`. After Install, verify:
+
+```powershell
+# Bridge + last sync result
+Invoke-RestMethod http://127.0.0.1:17865/status | ConvertTo-Json -Depth 5
+
+# Config (do not share agentToken)
+Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\config.json"
+Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
+```
+
+`status.apiBase` must be the **correct** URL above. If sync fails, `lastError` / `lastResult.message` / `agent.log` show the real reason (wrong API base, folder inaccessible, auth error).
+
+**Immediate workaround if agent API sync fails:** Sync Center → **Link folder in this browser** → pick the same folder → **Sync now (this browser)** (uses your login session, not the agent token).
 
 #### Manual env (instead of `.ps1`)
 
 ```powershell
 cd desktop-sync-agent
 npm install   # once
-$env:JBT_API_BASE = "https://justxsystems.com/jbt/api"
+$env:JBT_API_BASE = "https://justxsystems.com/jbt/api"   # must include /jbt in production
 $env:JBT_AGENT_TOKEN = "jxsa_PASTE_FROM_SYNC_CENTER"
-$env:JBT_DOWNLOAD_FOLDER = "\\fileserver\shared\JustX-Artifacts"   # optional override
+$env:JBT_DOWNLOAD_FOLDER = "C:\JustX\Artifacts"   # optional override of Profile path
 $env:JBT_POLL_MS = "15000"      # 0 = only sync when UI clicks
 $env:JBT_BRIDGE_PORT = "17865"
 npm start
@@ -441,8 +478,8 @@ npm start
 
 | Env | Required? | Where from |
 |-----|-----------|------------|
-| `JBT_API_BASE` | Yes | Public API ending in `/api` (launcher sets from browser). Local: `http://localhost:4000/api` |
-| `JBT_AGENT_TOKEN` | Yes | **Only** Sync Center → Create token |
+| `JBT_API_BASE` | Yes | **Production:** `https://justxsystems.com/jbt/api`. **Local:** `http://localhost:4000/api`. Launcher / setup zip should set this from the browser (`/jbt` base path included). |
+| `JBT_AGENT_TOKEN` | Yes | **Only** Sync Center → Create token / Download setup |
 | `JBT_DOWNLOAD_FOLDER` | No | Overrides Profile Download Folder for this PC |
 | `JBT_POLL_MS` | No | Background poll; default `15000`; `0` = UI-triggered only |
 | `JBT_BRIDGE_PORT` | No | Default `17865` |
@@ -467,12 +504,14 @@ With agent running on Windows + Outlook installed: **Email Outbox → Open in Ou
 - [ ] Staff never open Sync Center for normal work  
 - [ ] Sync Center used only if something is pending/failed  
 
-### UNC company
+### UNC / local folder company
 
-- [ ] Owner: Destination Auto or UNC → set Download Folder path → Save  
-- [ ] Staff or Owner: Sync Center → Create token + run agent on share-reachable PC  
-- [ ] Sync now (desktop agent) or wait for poll  
-- [ ] Or: Link folder in browser + Sync now (this browser)  
+- [ ] Owner: Destination **UNC** (or Auto) → paste absolute **Download Folder path** (e.g. `C:\JustX\Artifacts`) → Save  
+- [ ] Sync Center shows that Download Folder path  
+- [ ] Staff or Owner: Sync Center → Download setup → Install on a PC that can write the folder  
+- [ ] Sync Center: **Connected** + `status.apiBase` is `…/jbt/api` in production  
+- [ ] **Sync now (desktop agent)** (or wait for poll) → Pending → 0; files in folder  
+- [ ] Fallback: **Link folder in this browser** + **Sync now (this browser)**  
 
 ### Artifact webhook company
 
@@ -486,14 +525,19 @@ With agent running on Windows + Outlook installed: **Email Outbox → Open in Ou
 
 | Symptom | Check |
 |---------|--------|
-| Pending never drops | Destination UNC without agent/FSA; Drive not connected; webhook failing |
+| **Connected but Pending never drops / Sync now no-op** | Open `http://127.0.0.1:17865/status` — inspect `apiBase`, `lastError`, `lastResult`. Read `%LOCALAPPDATA%\JustX\sync-agent\agent.log` |
+| **`apiBase` is `https://justxsystems.com/api` (no `/jbt`)** | Wrong — must be `https://justxsystems.com/jbt/api`. Fix `config.json`, restart agent (or re-download setup after a web build that includes base-path fix). Wrong URL returns HTML and sync reports “No Download Folder…” falsely |
+| **`No Download Folder configured…` in log/status** | Often wrong `apiBase` (above). Else Owner must Save Download Folder on Profile; Sync Center must show the path |
+| **`No access to this business branch` (403)** | Agent token rejected by API branch ACL — deploy API fix that marks agent auth (`viaAgentToken`); or use **Sync now (this browser)** until deployed. Re-download setup only after API is fixed if token/profile mismatch suspected |
+| Pending never drops (other) | Destination UNC without agent/FSA; Drive not connected; webhook failing |
 | Agent “Not detected” | Agent not running on **this** PC; wrong machine; run Check Status.cmd |
 | Setup download fails / pack incomplete | Redeploy web so `JustX-Sync-Agent-win-x64.zip` is published (`npm run pack:agent`) |
 | Agent pack download fails | Slim `desktop-sync-agent.zip` 404 — same redeploy |
-| Folder not reachable | Path wrong; PC not on VPN; agent user lacks share ACL |
+| Folder not reachable | Path wrong; PC not on VPN; agent user lacks share ACL; create folder first |
 | Badge / pending confusion | Sync Center pending = **files**; Email Outbox badge = **emails** |
 | Token lost | Download setup again (new token); revoke old agent |
 | Staff can’t edit path | Only Owner edits Profile delivery settings |
+| Open in Outlook fails while Connected | Same API/`apiBase`/auth issues as file sync; classic desktop Outlook required |
 
 ---
 

@@ -10,6 +10,8 @@ Related docs (do not duplicate full setup here):
 |-----|----------|
 | [`SETUP.md`](SETUP.md) | Env vars, Google OAuth once, client Drive onboarding |
 | [`DEPLOY.md`](DEPLOY.md) | First-time VPS, GitHub Actions, nginx, PM2 |
+| [`SYNC_CENTER.md`](SYNC_CENTER.md) | UNC/local folder + desktop agent; Connected vs sync; `…/jbt/api` |
+| [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) | Quotation email paths A/B/C (Outlook agent) |
 | [`OBSERVABILITY.md`](OBSERVABILITY.md) | Grafana/Loki/Prometheus, Admin Operations, Sentry/GlitchTip |
 | [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) | Artifact delivery channels & filename policies |
 | [`.env.example`](../.env.example) | Env template → `server/.env` on the VPS |
@@ -68,7 +70,7 @@ Browser  →  https://justxsystems.com/jbt/...
 | Business Profile + company Drive folder | Customer **Owner** | Guide them via Profile UI (do not use personal Gmail) |
 | Staff invites / roles | Customer Owner / Admin | Approve users, assign tools |
 | Razorpay live keys / webhooks | JustXSystems (billing) | Dashboard + `RAZORPAY_*` env |
-| UNC desktop sync agent | Customer IT | Windows + Node 18+; [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent · `desktop-sync-agent/` (`-Install`, `health-check.ps1`) |
+| UNC desktop sync agent | Customer IT | Windows; Sync Center setup zip (portable Node); [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok · `apiBase` must be `…/jbt/api` |
 
 **Role capabilities (default matrix)**
 
@@ -339,12 +341,13 @@ ORDER BY created_at;
 |---------|--------------|--------|
 | Connect button missing / OAuth fails | Platform Google env / redirect URI | Fix JustX `.env` + Console (not the customer) |
 | Connected but no files | Wrong folder; destination `none`; token revoked | Owner reconnect + verify folder + destination Auto/Drive |
-| Only one PC “works” | Misunderstanding — delivery is **server-side**, not a local folder | Explain model; optional UNC agent for LAN shares |
+| Only one PC “works” | Misunderstanding — Drive/webhook are **server-side**, not a local folder | Explain model; optional UNC agent for LAN/local folders |
+| UNC Connected but Pending stuck | Wrong `apiBase` (`…/api` without `/jbt`) or agent 403 | Check `127.0.0.1:17865/status` + `agent.log`; fix to `…/jbt/api`; browser Sync now workaround — [`SYNC_CENTER.md`](SYNC_CENTER.md)#troubleshooting |
 | `failed` after token revoke | Owner changed password / revoked app | Reconnect Drive |
 | Same filename confusion | Overwrite vs Rename vs Skip policy | See [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) |
 | Large upload timeouts | nginx `proxy_read_timeout` / body size | Conf example uses 120s / 32m — match Express 30mb |
 
-Webhook / UNC alternatives: [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md), `desktop-sync-agent/`.
+Webhook / UNC alternatives: [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md), [`SYNC_CENTER.md`](SYNC_CENTER.md), `desktop-sync-agent/`.
 
 ---
 

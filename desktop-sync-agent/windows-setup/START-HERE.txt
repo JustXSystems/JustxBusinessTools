@@ -8,6 +8,8 @@ For non-technical staff (Windows PC):
 3. Wait for "SUCCESS", then close the window.
 4. Open JustX Sync Center in your browser on THIS same PC.
    It should show: Desktop agent Connected.
+5. If files are waiting: click Sync now (desktop agent).
+   Confirm Pending goes to 0 and PDFs appear in your company folder.
 
 Optional:
 - Check Status.cmd     - see if the agent is running
@@ -15,5 +17,8 @@ Optional:
 
 Notes:
 - You do NOT need to install Node.js yourself (it is included).
+- Connected means the agent is running on this PC — also confirm Sync now clears Pending.
 - Outlook desktop is only needed for Email Outbox -> Open in Outlook.
 - Keep this setup zip private (it contains your company agent token).
+- Support: if Sync now fails, ask IT to check config.json apiBase is
+  https://justxsystems.com/jbt/api (must include /jbt).

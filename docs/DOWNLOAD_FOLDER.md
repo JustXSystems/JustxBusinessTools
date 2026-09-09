@@ -12,10 +12,12 @@ Quotation emails (separate): [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)
 | Google Drive (most common) | Connect company Drive + folder | Just use tools | Rarely (status/retry) |
 | SharePoint / OneDrive (cloud) | **Webhook URL** from Power Automate | Just use tools | Rarely (status/retry) |
 | Artifact webhook (n8n/Make/…) | Webhook URL on profile | Just use tools | Rarely (status/retry) |
-| UNC / file share / synced folder | **Download Folder path** | One PC runs desktop agent | **Yes** |
+| UNC / file share / **local folder** | **Download Folder path** (absolute or UNC) | One PC runs desktop agent | **Yes** |
 | Email-only (no company folder) | Destination `none` / leave unset | Email Outbox paths | Only if Outlook Path C |
 
-**How to obtain Webhook URL, secret, and Download Folder path (incl. SharePoint/OneDrive):** see [`SYNC_CENTER.md`](SYNC_CENTER.md)#13-corporate-artifact-webhook-sharepoint--onedrive--power-automate and [`SYNC_CENTER.md`](SYNC_CENTER.md)#14-company-file-server--download-folder-path-unc--optional.
+**How to obtain Webhook URL, secret, and Download Folder path (incl. SharePoint/OneDrive / local `C:\…`):** see [`SYNC_CENTER.md`](SYNC_CENTER.md)#13-corporate-artifact-webhook-sharepoint--onedrive--power-automate and [`SYNC_CENTER.md`](SYNC_CENTER.md)#14-company-file-server--download-folder-path-unc--optional.
+
+**Agent gotcha:** Sync Center **Connected** only proves `127.0.0.1:17865` is up. Production agent `apiBase` must be `https://justxsystems.com/jbt/api`. Diagnose + browser-sync workaround: [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
 
 ## What gets delivered
 
@@ -29,7 +31,7 @@ Quotation emails (separate): [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)
 |---------------------------|------------------|---------|
 | **Webhook URL** | Power Automate → “When an HTTP request is received” → **HTTP POST URL** | `https://prod-….logic.azure.com/workflows/…` |
 | **Webhook secret** | You invent it (optional) | Long random string; not a Microsoft secret |
-| **Download Folder path** | File Explorer address bar on a writable folder | `\\server\share\JustX` or `C:\Users\…\OneDrive - Co\JustX` |
+| **Download Folder path** | File Explorer address bar on a writable folder | `\\server\share\JustX` or `C:\JustX\Artifacts` or `C:\Users\…\OneDrive - Co\JustX` |
 | **Company file server section** | UI: **Show UNC / file-server options** | Reveals Download Folder + conflict policy |
 
 Do **not** paste a SharePoint browser link or OneDrive sharing link into Webhook URL or Download Folder — those are not valid for these fields.
