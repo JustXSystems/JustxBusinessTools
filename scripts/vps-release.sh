@@ -161,28 +161,60 @@ if [[ ! -f "$STAGE/package.json" || ! -d "$STAGE/web/.next" ]]; then
   die "release tarball incomplete (need package.json, web/.next)"
 fi
 
+# Must match what PM2 actually starts (web next + server tsx/otel).
+verify_runtime_deps() {
+  local root="$1"
+  local label="${2:-$root}"
+  local missing=()
+  local p
+  for p in \
+    "$root/node_modules/next" \
+    "$root/node_modules/.bin/next" \
+    "$root/node_modules/.bin/tsx" \
+    "$root/node_modules/@opentelemetry/sdk-node" \
+    "$root/node_modules/express" \
+    "$root/node_modules/tsx"; do
+    if [[ ! -e "$p" ]]; then
+      missing+=("$p")
+    fi
+  done
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    echo "ERROR: incomplete node_modules in $label:" >&2
+    printf '  - %s\n' "${missing[@]}" >&2
+    return 1
+  fi
+  return 0
+}
+
 install_stage_deps() {
   echo "==> Install production deps on stage"
   if [[ -d "$STAGE/node_modules" && -f "$STAGE/package-lock.json" && "$FORCE_NPM_CI" != "true" ]]; then
-    echo "    tarball already includes node_modules — skip npm ci"
-    return 0
+    if verify_runtime_deps "$STAGE" "tarball node_modules"; then
+      echo "    tarball already includes complete node_modules — skip npm ci"
+      return 0
+    fi
+    echo "    tarball node_modules incomplete — will npm ci"
+    rm -rf "$STAGE/node_modules"
   fi
-  # Fast path: reuse live node_modules when lockfile unchanged (unless forced)
+  # Fast path: reuse live node_modules when lockfile unchanged AND live deps are complete
   if [[ "$FORCE_NPM_CI" != "true" ]] \
     && [[ -f "$LIVE/package-lock.json" && -d "$LIVE/node_modules" ]] \
-    && cmp -s "$STAGE/package-lock.json" "$LIVE/package-lock.json"; then
-    echo "    reusing live node_modules (package-lock.json unchanged)"
+    && cmp -s "$STAGE/package-lock.json" "$LIVE/package-lock.json" \
+    && verify_runtime_deps "$LIVE" "live node_modules"; then
+    echo "    reusing live node_modules (package-lock.json unchanged + deps OK)"
     mkdir -p "$STAGE/node_modules"
     rsync -a "$LIVE/node_modules/" "$STAGE/node_modules/"
+    verify_runtime_deps "$STAGE" "stage after reuse" || die "reused node_modules still incomplete"
     return 0
   fi
   if [[ "$FORCE_NPM_CI" == "true" ]]; then
     echo "    FORCE_NPM_CI=true — fresh npm ci --omit=dev"
     rm -rf "$STAGE/node_modules"
   else
-    echo "    npm ci --omit=dev (lockfile changed or first install)"
+    echo "    npm ci --omit=dev (lockfile changed, live incomplete, or first install)"
   fi
   (cd "$STAGE" && npm ci --omit=dev)
+  verify_runtime_deps "$STAGE" "stage after npm ci" || die "npm ci left incomplete node_modules"
 }
 
 install_stage_deps
@@ -384,6 +416,8 @@ else
   fi
   activate_release_rsync "$STAGE"
 fi
+
+verify_runtime_deps "$LIVE" "live after activate" || die "live tree missing runtime deps after activate"
 
 SWAP_DONE=1
 rollback_live() {
