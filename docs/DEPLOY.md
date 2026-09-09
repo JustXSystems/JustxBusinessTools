@@ -422,6 +422,7 @@ DEPLOY_BRANCH=HEAD ./scripts/vps-deploy.sh
 | OAuth mismatch | Google redirect URIs must include `/jbt/api/...` |
 | `Illegal mix of collations` | See prior notes / run `ALTER TABLE … CONVERT TO … utf8mb4_unicode_ci` |
 
-### lightningcss native binary (CI + VPS fallback)
+### CSS native binaries on Linux CI (oxide + lightningcss)
 
-Windows-generated lockfiles often omit `lightningcss-linux-x64-gnu`. Before `next build` on Linux, run `scripts/ensure-lightningcss-native.sh` (wired into GitHub Actions and `vps-deploy.sh`). The CI artifact path does not rebuild CSS on the VPS.
+Windows-generated lockfiles often omit `@tailwindcss/oxide-linux-x64-gnu` and `lightningcss-linux-x64-gnu`.  
+Before `next build` on Linux, `scripts/ensure-css-native-linux.sh` installs and verifies them (GitHub Actions + `vps-deploy.sh`).

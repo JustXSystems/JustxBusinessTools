@@ -105,10 +105,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Ensure lightningcss Linux native binary
+      # Windows lockfiles omit Linux optional natives (oxide + lightningcss).
+      - name: Ensure Linux CSS native bindings
         run: |
-          chmod +x scripts/ensure-lightningcss-native.sh
-          ./scripts/ensure-lightningcss-native.sh
+          chmod +x scripts/ensure-css-native-linux.sh
+          ./scripts/ensure-css-native-linux.sh
 
       - name: Cache Next.js build
         uses: actions/cache@v4

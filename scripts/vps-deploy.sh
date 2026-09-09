@@ -60,9 +60,9 @@ fi
 echo "==> npm ci"
 npm ci
 
-# Windows lockfiles often omit the Linux lightningcss optional binary (Tailwind/PostCSS).
-chmod +x scripts/ensure-lightningcss-native.sh
-./scripts/ensure-lightningcss-native.sh
+# Windows lockfiles often omit Linux Tailwind/lightningcss optional natives.
+chmod +x scripts/ensure-css-native-linux.sh
+./scripts/ensure-css-native-linux.sh
 
 echo "==> Build web (basePath=${BASE_PATH}, webpack)"
 export NODE_ENV=production
