@@ -24,16 +24,37 @@ describe("win-setup-pack", () => {
     const base = zipSync({
       [`${WIN_SETUP_ROOT}/Install JustX Sync Agent.cmd`]: strToU8("@echo off\n"),
       [`${WIN_SETUP_ROOT}/runtime/node.exe`]: strToU8("fake-node"),
-      [`${WIN_SETUP_ROOT}/app/src/index.js`]: strToU8("console.log(1)"),
+      [`${WIN_SETUP_ROOT}/app/src/index.js`]: strToU8(
+        'export const AGENT_VERSION = "1.1.3";\nconsole.log(1)\n',
+      ),
       [`${WIN_SETUP_ROOT}/START-HERE.txt`]: strToU8("hello"),
     });
     const personalized = personalizeWinSetupZip(base, {
       apiBase: "https://example.com/api",
       agentToken: "jxsa_abc",
+      packVersion: "1.1.3",
     });
     const cfg = readZipTextEntry(personalized, `${WIN_SETUP_ROOT}/config.json`);
     expect(cfg).toBeTruthy();
     expect(JSON.parse(cfg!).agentToken).toBe("jxsa_abc");
+    expect(JSON.parse(cfg!).packVersion).toBe("1.1.3");
     expect(readZipTextEntry(personalized, `${WIN_SETUP_ROOT}/START-HERE.txt`)).toContain("hello");
+  });
+
+  it("rejects zip whose AGENT_VERSION does not match expected packVersion", () => {
+    const base = zipSync({
+      [`${WIN_SETUP_ROOT}/Install JustX Sync Agent.cmd`]: strToU8("@echo off\n"),
+      [`${WIN_SETUP_ROOT}/runtime/node.exe`]: strToU8("fake-node"),
+      [`${WIN_SETUP_ROOT}/app/src/index.js`]: strToU8(
+        'export const AGENT_VERSION = "1.1.0";\n',
+      ),
+    });
+    expect(() =>
+      personalizeWinSetupZip(base, {
+        apiBase: "https://example.com/api",
+        agentToken: "jxsa_abc",
+        packVersion: "1.1.3",
+      }),
+    ).toThrow(/agent 1\.1\.0.*expects 1\.1\.3/i);
   });
 });

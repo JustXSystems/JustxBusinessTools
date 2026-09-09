@@ -76,7 +76,7 @@ start "" /MIN "%INSTALL%\run-agent.cmd"
 rem Give the bridge a moment
 timeout /t 3 /nobreak >nul
 
-"%INSTALL%\runtime\node.exe" -e "fetch('http://127.0.0.1:17865/health').then(r=>r.json()).then(j=>{if(!j.ok)process.exit(2)}).catch(()=>process.exit(2))" >nul 2>&1
+"%INSTALL%\runtime\node.exe" -e "fetch('http://127.0.0.1:17865/health').then(r=>r.json()).then(j=>{console.log('AGENT_VERSION='+j.version);console.log('PACK_VERSION='+(j.packVersion||''));if(!j.ok)process.exit(2);if(!j.version)process.exit(3)}).catch(()=>process.exit(2))"
 if errorlevel 1 (
   echo.
   echo  Agent was started, but Sync Center may still show Not connected.
@@ -85,6 +85,7 @@ if errorlevel 1 (
 ) else (
   echo.
   echo  SUCCESS. The agent is running on this PC.
+  echo  Confirm AGENT_VERSION above is 1.1.3 or newer for Outlook HTML.
   echo  Go back to Sync Center in your browser - it should show Connected.
   echo  You can close this window.
 )

@@ -324,13 +324,11 @@ Corporate HTML in Outlook needs agent **≥ 1.1.3**. Reinstalling from Sync Cent
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:17865/health
-# expect: version = "1.1.3" (or higher)
-
-Invoke-RestMethod http://127.0.0.1:17865/status | ConvertTo-Json -Depth 5
-# expect: version >= 1.1.3, apiBase = https://justxsystems.com/jbt/api
+# expect: version = "1.1.3" (or higher)  ← THIS is the running code
+# packVersion alone can lie if an old zip was personalized with a new stamp
 ```
 
-If `version` is still `1.1.0` / `1.1.1` / `1.1.2`: the downloaded zip was old — ship a new pack (below), then Sync Center → Download setup → Install again.
+If `version` is still `1.1.0` / `1.1.1` / `1.1.2` while `packVersion` says `1.1.3`: the VPS win zip still has old `index.js` — ship a new pack (below), then Sync Center → Download setup → Install again. Do not trust `packVersion` without matching `version`.
 
 #### Confirm in CI / deploy (engineer)
 
@@ -476,7 +474,7 @@ Filters: **Pending** = `pending` + `failed` + `opened` (UI note: “Pending / fa
 | HTML looks plain (webhook) | Automation mapped `body` only — map **`html`** |
 | Expected HTML but see plain text (B/C) | Path B mailto is always plain. Use **Open in Outlook** with agent ≥ 1.1.3. Full HTML without a staff PC = Path A webhook |
 | Open in Outlook HTML still plain | Agent &lt; 1.1.3, or still using mailto / Open mail app, or Sync Center zip never repacked. Confirm `/health` → `version`; redeploy with `pack_win_agent=true`; reinstall — [Confirm agent version](#confirm-agent-version--113-path-c--html) |
-| Reinstalled agent but version still old | Deploy skipped win pack (`JBT_SKIP_WIN_AGENT_PACK=1` / `pack_win_agent` false). VPS kept previous zip. Re-run Deploy with **`pack_win_agent=true`**, then download setup again |
+| Reinstalled agent but version still old / HTML still plain | **Classic trap:** Sync Center stamps `config.packVersion` from web (e.g. 1.1.3) onto the VPS zip’s **old** `index.js` (e.g. 1.1.0). `/health` → `version` is the real code; `packVersion` alone is not enough. Confirm `version` ≥ 1.1.3. Redeploy with **`pack_win_agent=true`**. Newer web rejects mismatched zips on Download setup. |
 | CI “Node 20 deprecated” / cache key `v20.18.1` | Actions runner warning only — not agent app version. Portable Node in zip is pinned separately; look for `AGENT_VERSION` / `PACK_VERSION.txt` in Build web logs |
 | Body shows `+` and `%0A` | Old mailto form-encoding — redeploy web with `buildMailtoHref`; new send |
 | Open mail app / Outlook do nothing | Outlook **Add Account** stuck; New Outlook; hung process — [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c) |

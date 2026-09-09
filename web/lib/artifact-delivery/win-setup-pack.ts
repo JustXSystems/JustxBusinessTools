@@ -34,16 +34,46 @@ export function buildAgentConfigJson(input: AgentSetupConfig): string {
   )}\n`;
 }
 
+/** Parse `export const AGENT_VERSION = "…"` from packed app/src/index.js. */
+export function readAgentVersionFromIndexJs(source: string): string | null {
+  const m = /export\s+const\s+AGENT_VERSION\s*=\s*["']([^"']+)["']/.exec(source);
+  return m?.[1] ?? null;
+}
+
+function readEmbeddedAgentVersion(entries: Record<string, Uint8Array>): string | null {
+  const key = Object.keys(entries).find((k) =>
+    k.replace(/\\/g, "/").endsWith("app/src/index.js"),
+  );
+  if (!key) return null;
+  return readAgentVersionFromIndexJs(strFromU8(entries[key]));
+}
+
 /**
  * Take the published base Windows pack and inject config.json for this token.
+ * Fails if the zip's AGENT_VERSION does not match the expected pack version
+ * (prevents stamping packVersion 1.1.3 onto an old 1.1.0 index.js).
  */
 export function personalizeWinSetupZip(
   baseZipBytes: Uint8Array,
   config: AgentSetupConfig,
 ): Uint8Array {
   const entries = unzipSync(baseZipBytes);
+  const expected = config.packVersion || AGENT_PACK_VERSION;
+  const embedded = readEmbeddedAgentVersion(entries);
+  if (!embedded) {
+    throw new Error(
+      "Setup pack is missing app/src/index.js AGENT_VERSION — rebuild with npm run pack:agent:win",
+    );
+  }
+  if (embedded !== expected) {
+    throw new Error(
+      `Windows setup zip has agent ${embedded} but web expects ${expected}. ` +
+        `Redeploy with pack_win_agent=true so JustX-Sync-Agent-win-x64.zip is rebuilt on the VPS.`,
+    );
+  }
+
   const configPath = `${WIN_SETUP_ROOT}/config.json`;
-  entries[configPath] = strToU8(buildAgentConfigJson(config));
+  entries[configPath] = strToU8(buildAgentConfigJson({ ...config, packVersion: embedded }));
 
   // Sanity: required install entry must exist
   const installKey = Object.keys(entries).find((k) =>
