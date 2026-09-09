@@ -46,6 +46,14 @@ echo "==> Packing slim release ${SHORT_SHA} → ${OUT_ABS} (no node_modules)"
 
 chmod +x scripts/*.sh 2>/dev/null || true
 
+EXCLUDE_WIN=()
+if [[ "${JBT_INCLUDE_WIN_AGENT:-0}" != "1" ]]; then
+  EXCLUDE_WIN=(--exclude='web/public/JustX-Sync-Agent-win-x64.zip')
+  echo "    excluding JustX-Sync-Agent-win-x64.zip (preserved on VPS)"
+else
+  echo "    including JustX-Sync-Agent-win-x64.zip"
+fi
+
 # Exclude bulky / non-runtime trees. web/.next is included (minus cache).
 tar -czf "$OUT_ABS" \
   --exclude='.git' \
@@ -66,6 +74,7 @@ tar -czf "$OUT_ABS" \
   --exclude='uploads' \
   --exclude='web/.next/cache' \
   --exclude='web/.next/trace' \
+  "${EXCLUDE_WIN[@]}" \
   --exclude='desktop-sync-agent/.runtime-cache' \
   --exclude='jbt-release.tgz' \
   --exclude='jbt-release-*.tgz' \

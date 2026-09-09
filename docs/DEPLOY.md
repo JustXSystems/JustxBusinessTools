@@ -337,6 +337,8 @@ Push-to-`master` always uses the safe defaults (no exotic tasks).
 | Input | Default | Purpose |
 |-------|---------|---------|
 | `deploy_enabled` | `true` | Set `false` to **build + upload artifact only** (no VPS change) |
+| `pack_win_agent` | `false` | Rebuild+ship ~28MB Windows agent zip (rare; VPS keeps existing zip) |
+| `force_cache_rebuild` | `false` | Delete repo Actions caches, cold-build Next/npm, force VPS `npm ci` (rewrites caches) |
 | `run_migrations` | `true` | Apply `mysql/migrations` on **stage before** live swap |
 | `backup_db` | `false` | Run `backup-jbt.sh` (MySQL dump) before migrations |
 | `seed_tools` | `false` | Re-seed tool catalog (`db:seed:tools`) |
@@ -365,6 +367,12 @@ Example: refresh tool definitions:
 
 1. Run workflow  
 2. `seed_tools` = true
+
+Example: force every cache to rebuild (slower run; writes fresh CI caches):
+
+1. Run workflow  
+2. `force_cache_rebuild` = true  
+3. Optionally also `pack_win_agent` = true if the Windows agent zip must refresh
 
 ---
 

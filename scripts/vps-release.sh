@@ -13,6 +13,7 @@
 #   RELEASE_ID, DEPLOY_PATH, RELEASES_DIR, SHARED_DIR
 #   RUN_MIGRATIONS, SEED_TOOLS, BACKUP_DB, PM2_MODE, POST_DEPLOY_TASK
 #   HEALTH_CHECK, AUTO_ROLLBACK, KEEP_RELEASES
+#   FORCE_NPM_CI       true|false — skip node_modules reuse; always npm ci
 #   RELEASE_SHA256   expected sha256 hex (or path to .sha256 file)
 #   MIN_FREE_MB      default 2048
 set -euo pipefail
@@ -32,6 +33,7 @@ KEEP_RELEASES="${KEEP_RELEASES:-3}"
 RELEASE_ID="${RELEASE_ID:-}"
 RELEASE_SHA256="${RELEASE_SHA256:-}"
 MIN_FREE_MB="${MIN_FREE_MB:-1024}"
+FORCE_NPM_CI="${FORCE_NPM_CI:-false}"
 WEB_PORT="${WEB_PORT:-3002}"
 WEB_BASE_PATH="${WEB_BASE_PATH:-/jbt}"
 
@@ -161,19 +163,25 @@ fi
 
 install_stage_deps() {
   echo "==> Install production deps on stage"
-  if [[ -d "$STAGE/node_modules" && -f "$STAGE/package-lock.json" ]]; then
+  if [[ -d "$STAGE/node_modules" && -f "$STAGE/package-lock.json" && "$FORCE_NPM_CI" != "true" ]]; then
     echo "    tarball already includes node_modules — skip npm ci"
     return 0
   fi
-  # Fast path: reuse live node_modules when lockfile unchanged
-  if [[ -f "$LIVE/package-lock.json" && -d "$LIVE/node_modules" ]] \
+  # Fast path: reuse live node_modules when lockfile unchanged (unless forced)
+  if [[ "$FORCE_NPM_CI" != "true" ]] \
+    && [[ -f "$LIVE/package-lock.json" && -d "$LIVE/node_modules" ]] \
     && cmp -s "$STAGE/package-lock.json" "$LIVE/package-lock.json"; then
     echo "    reusing live node_modules (package-lock.json unchanged)"
     mkdir -p "$STAGE/node_modules"
     rsync -a "$LIVE/node_modules/" "$STAGE/node_modules/"
     return 0
   fi
-  echo "    npm ci --omit=dev (lockfile changed or first install)"
+  if [[ "$FORCE_NPM_CI" == "true" ]]; then
+    echo "    FORCE_NPM_CI=true — fresh npm ci --omit=dev"
+    rm -rf "$STAGE/node_modules"
+  else
+    echo "    npm ci --omit=dev (lockfile changed or first install)"
+  fi
   (cd "$STAGE" && npm ci --omit=dev)
 }
 
@@ -323,10 +331,11 @@ mkdir -p "$LIVE"
 
 activate_release_rsync() {
   local src="$1"
-  echo "==> Sync release → live (preserve .git)"
+  echo "==> Sync release → live (preserve .git + win agent zip)"
   link_shared_into "$src"
   rsync -a --delete \
     --exclude '.git/' \
+    --exclude 'web/public/JustX-Sync-Agent-win-x64.zip' \
     "$src"/ "$LIVE"/
   link_shared_into "$LIVE"
 }
@@ -336,7 +345,16 @@ activate_release_mv() {
   echo "==> Prepare swap tree at $LIVE_NEW"
   rm -rf "$LIVE_NEW"
   mkdir -p "$LIVE_NEW"
-  rsync -a "$src"/ "$LIVE_NEW"/
+  rsync -a \
+    --exclude '.git/' \
+    --exclude 'web/public/JustX-Sync-Agent-win-x64.zip' \
+    "$src"/ "$LIVE_NEW"/
+  # Preserve win agent zip from current live if present
+  if [[ -f "$LIVE/web/public/JustX-Sync-Agent-win-x64.zip" ]]; then
+    mkdir -p "$LIVE_NEW/web/public"
+    cp -a "$LIVE/web/public/JustX-Sync-Agent-win-x64.zip" \
+      "$LIVE_NEW/web/public/JustX-Sync-Agent-win-x64.zip"
+  fi
   link_shared_into "$LIVE_NEW"
 
   echo "==> Atomic swap: $LIVE → $LIVE_OLD ; $LIVE_NEW → $LIVE"

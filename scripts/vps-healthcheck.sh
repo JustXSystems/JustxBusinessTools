@@ -14,7 +14,7 @@ WEB_BASE_PATH="${WEB_BASE_PATH%/}"
 [[ "$WEB_BASE_PATH" == "/" ]] && WEB_BASE_PATH=""
 
 echo "==> Health check (API :${API_PORT})"
-sleep 3
+sleep 1
 curl -fsS "http://127.0.0.1:${API_PORT}/api/health" | tee /dev/stderr | grep -q '"ok"'
 echo
 

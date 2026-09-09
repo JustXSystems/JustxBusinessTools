@@ -1,10 +1,10 @@
-# Deploy JBT to Hostinger VPS (build on GitHub → artifact → PM2)
+# Deploy JBT to Hostinger VPS (build on GitHub → slim artifact → PM2)
 #
 # Required GitHub Secrets:
 #   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
 #
-# Hardened flow: CI build+prune+sha256 → scp → verify → migrate on stage →
-# atomic swap → PM2 → API+web health → auto-rollback on failure
+# Single job (no artifact upload/download round-trip). Slim tarball omits
+# node_modules and the ~28MB Windows agent zip (preserved on VPS).
 #
 # See docs/DEPLOY.md
 
@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy_enabled:
-        description: "Deploy artifact to VPS after build"
+        description: "Deploy to VPS after build"
         type: boolean
         default: true
       run_migrations:
@@ -34,6 +34,14 @@ on:
         default: false
       seed_tools:
         description: "Re-seed tool definitions catalog"
+        type: boolean
+        default: false
+      pack_win_agent:
+        description: "Rebuild+ship JustX-Sync-Agent-win-x64.zip (~28MB, slow)"
+        type: boolean
+        default: false
+      force_cache_rebuild:
+        description: "Delete+rebuild CI caches (npm/Next/SWC/agent) and force VPS npm ci"
         type: boolean
         default: false
       pm2_mode:
@@ -77,17 +85,33 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  actions: write
+
 env:
   NODE_VERSION: "20"
   NEXT_PUBLIC_BASE_PATH: /jbt
   WEB_BASE_PATH: /jbt
+  JBT_SKIP_WIN_AGENT_PACK: "1"
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    outputs:
-      short_sha: ${{ steps.meta.outputs.short_sha }}
+    timeout-minutes: 35
+    env:
+      RUN_MIGRATIONS: ${{ inputs.run_migrations != false }}
+      BACKUP_DB: ${{ inputs.backup_db == true }}
+      SEED_TOOLS: ${{ inputs.seed_tools == true }}
+      PM2_MODE: ${{ inputs.pm2_mode || 'reload' }}
+      POST_DEPLOY_TASK: ${{ inputs.post_deploy_task || 'none' }}
+      HEALTH_CHECK: ${{ inputs.health_check != false }}
+      AUTO_ROLLBACK: ${{ inputs.auto_rollback != false }}
+      KEEP_RELEASES: ${{ inputs.keep_releases || '3' }}
+      DO_DEPLOY: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_enabled }}
+      PACK_WIN_AGENT: ${{ inputs.pack_win_agent == true }}
+      FORCE_CACHE_REBUILD: ${{ inputs.force_cache_rebuild == true }}
+      FORCE_NPM_CI: ${{ inputs.force_cache_rebuild == true }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -96,6 +120,26 @@ jobs:
         id: meta
         run: echo "short_sha=${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
 
+      - name: Delete Actions caches (force rebuild)
+        if: ${{ env.FORCE_CACHE_REBUILD == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "==> force_cache_rebuild: deleting repo Actions caches"
+          # Delete all caches for this repo so the next save writes fresh entries.
+          mapfile -t IDS < <(gh cache list -R "${{ github.repository }}" --limit 100 --json id -q '.[].id' || true)
+          if [[ ${#IDS[@]} -eq 0 ]]; then
+            echo "    no caches listed"
+          else
+            for id in "${IDS[@]}"; do
+              echo "    delete cache id=$id"
+              gh cache delete "$id" -R "${{ github.repository }}" || true
+            done
+          fi
+          rm -rf ~/.npm web/.next/cache ~/.cache/next-swc desktop-sync-agent/.runtime-cache
+          echo "==> local cache dirs cleared"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -103,6 +147,7 @@ jobs:
           cache: npm
 
       - name: Cache Sync Agent Node win-x64 zip
+        if: ${{ env.PACK_WIN_AGENT == 'true' }}
         uses: actions/cache@v4
         with:
           path: desktop-sync-agent/.runtime-cache
@@ -113,7 +158,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Windows lockfiles omit Linux optional natives (oxide + lightningcss).
       - name: Ensure Linux CSS native bindings
         run: |
           chmod +x scripts/ensure-css-native-linux.sh
@@ -131,55 +175,23 @@ jobs:
             nextjs-${{ runner.os }}-node${{ env.NODE_VERSION }}-
 
       - name: Build web (production /jbt)
+        env:
+          JBT_SKIP_WIN_AGENT_PACK: ${{ env.PACK_WIN_AGENT == 'true' && '0' || '1' }}
         run: npm run build -w web
 
       - name: Pack slim release tarball
         run: |
           chmod +x scripts/pack-release.sh
+          if [[ "${{ env.PACK_WIN_AGENT }}" == "true" && -f web/public/JustX-Sync-Agent-win-x64.zip ]]; then
+            echo "==> Including win agent zip in this release"
+            export JBT_INCLUDE_WIN_AGENT=1
+          fi
           ./scripts/pack-release.sh jbt-release.tgz
-          test -f jbt-release.tgz.sha256
           ls -lh jbt-release.tgz
+          test -f jbt-release.tgz.sha256
 
-      - name: Upload release artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: jbt-release-${{ steps.meta.outputs.short_sha }}
-          path: |
-            jbt-release.tgz
-            jbt-release.tgz.sha256
-          if-no-files-found: error
-          retention-days: 14
-
-  deploy:
-    needs: build
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_enabled }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      RUN_MIGRATIONS: ${{ inputs.run_migrations != false }}
-      BACKUP_DB: ${{ inputs.backup_db == true }}
-      SEED_TOOLS: ${{ inputs.seed_tools == true }}
-      PM2_MODE: ${{ inputs.pm2_mode || 'reload' }}
-      POST_DEPLOY_TASK: ${{ inputs.post_deploy_task || 'none' }}
-      HEALTH_CHECK: ${{ inputs.health_check != false }}
-      AUTO_ROLLBACK: ${{ inputs.auto_rollback != false }}
-      KEEP_RELEASES: ${{ inputs.keep_releases || '3' }}
-      RELEASE_ID: ${{ needs.build.outputs.short_sha }}
-    steps:
-      - name: Download release artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: jbt-release-${{ needs.build.outputs.short_sha }}
-          path: dist
-
-      - name: Prepare files for SCP
-        run: |
-          mv dist/jbt-release.tgz ./jbt-release.tgz
-          mv dist/jbt-release.tgz.sha256 ./jbt-release.tgz.sha256
-          ls -lh jbt-release.tgz jbt-release.tgz.sha256
-          sha256sum -c jbt-release.tgz.sha256
-
-      - name: Upload tarball + checksum to VPS
+      - name: Upload tarball to VPS
+        if: ${{ env.DO_DEPLOY == 'true' }}
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -190,6 +202,7 @@ jobs:
           overwrite: true
 
       - name: Apply release over SSH
+        if: ${{ env.DO_DEPLOY == 'true' }}
         uses: appleboy/ssh-action@v1.2.0
         env:
           RUN_MIGRATIONS: ${{ env.RUN_MIGRATIONS }}
@@ -200,14 +213,15 @@ jobs:
           HEALTH_CHECK: ${{ env.HEALTH_CHECK }}
           AUTO_ROLLBACK: ${{ env.AUTO_ROLLBACK }}
           KEEP_RELEASES: ${{ env.KEEP_RELEASES }}
-          RELEASE_ID: ${{ env.RELEASE_ID }}
+          FORCE_NPM_CI: ${{ env.FORCE_NPM_CI }}
+          RELEASE_ID: ${{ steps.meta.outputs.short_sha }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script_stop: true
           command_timeout: 20m
-          envs: RUN_MIGRATIONS,BACKUP_DB,SEED_TOOLS,PM2_MODE,POST_DEPLOY_TASK,HEALTH_CHECK,AUTO_ROLLBACK,KEEP_RELEASES,RELEASE_ID
+          envs: RUN_MIGRATIONS,BACKUP_DB,SEED_TOOLS,PM2_MODE,POST_DEPLOY_TASK,HEALTH_CHECK,AUTO_ROLLBACK,KEEP_RELEASES,FORCE_NPM_CI,RELEASE_ID
           script: |
             set -euo pipefail
             LIVE="${{ secrets.DEPLOY_PATH }}"
@@ -239,5 +253,6 @@ jobs:
             export HEALTH_CHECK
             export AUTO_ROLLBACK
             export KEEP_RELEASES
+            export FORCE_NPM_CI
             "$TMP/scripts/vps-release.sh"
             rm -rf "$TMP"
