@@ -435,15 +435,13 @@ router.post("/mfa/verify", async (req, res) => {
 });
 
 router.get("/methods", async (_req, res) => {
-  const sms = (process.env.SMS_PROVIDER ?? "console").toLowerCase();
-  const phoneOtp =
-    process.env.ENABLE_PHONE_OTP === "true" || (sms !== "console" && process.env.ENABLE_PHONE_OTP !== "false");
-  const googleCfg = await getGoogleOAuthConfig();
-  const google = Boolean(googleCfg);
+  const { resolveSmsOtp, resolveGoogleOAuthConfig } = await import("../lib/integrations/resolvers.js");
+  const [sms, googleCfg] = await Promise.all([resolveSmsOtp(), resolveGoogleOAuthConfig()]);
+  const phoneOtp = Boolean(sms.phoneOtpEnabled);
   res.json({
     password: true,
     phoneOtp,
-    google,
+    google: Boolean(googleCfg),
     mfa: process.env.ENABLE_MFA !== "false",
   });
 });

@@ -3,7 +3,20 @@ import { encryptSecret, decryptSecret } from "../secret-box.js";
 
 export type IntegrationStatus = "not_configured" | "disabled" | "active" | "error";
 
-export type IntegrationId = "google_oauth" | "email_webhook";
+export type IntegrationId =
+  | "google_oauth"
+  | "email_webhook"
+  | "whatsapp"
+  | "sms_otp"
+  | "error_webhook";
+
+export const INTEGRATION_IDS: IntegrationId[] = [
+  "google_oauth",
+  "email_webhook",
+  "whatsapp",
+  "sms_otp",
+  "error_webhook",
+];
 
 export type IntegrationRow = {
   id: IntegrationId;
@@ -68,6 +81,20 @@ function decryptSecrets(enc: string | null): Record<string, string> {
   }
 }
 
+function emptyRow(id: IntegrationId): IntegrationRow {
+  return {
+    id,
+    enabled: false,
+    config: {},
+    secrets: {},
+    status: "not_configured",
+    statusDetail: null,
+    lastCheckedAt: null,
+    updatedAt: null,
+    updatedBy: null,
+  };
+}
+
 export async function getIntegration(id: IntegrationId): Promise<IntegrationRow | null> {
   await ensurePlatformIntegrationsSchema();
   const [rows] = await pool.query(
@@ -91,25 +118,9 @@ export async function getIntegration(id: IntegrationId): Promise<IntegrationRow 
 }
 
 export async function listIntegrations(): Promise<IntegrationRow[]> {
-  await ensurePlatformIntegrationsSchema();
-  const ids: IntegrationId[] = ["google_oauth", "email_webhook"];
   const out: IntegrationRow[] = [];
-  for (const id of ids) {
-    const row = await getIntegration(id);
-    if (row) out.push(row);
-    else {
-      out.push({
-        id,
-        enabled: false,
-        config: {},
-        secrets: {},
-        status: "not_configured",
-        statusDetail: null,
-        lastCheckedAt: null,
-        updatedAt: null,
-        updatedBy: null,
-      });
-    }
+  for (const id of INTEGRATION_IDS) {
+    out.push((await getIntegration(id)) ?? emptyRow(id));
   }
   return out;
 }
@@ -118,7 +129,6 @@ export async function upsertIntegration(input: {
   id: IntegrationId;
   enabled: boolean;
   config: Record<string, unknown>;
-  /** Partial secrets; omit keys or blank to keep existing */
   secretsPatch?: Record<string, string | null | undefined>;
   status?: IntegrationStatus;
   statusDetail?: string | null;
@@ -131,7 +141,7 @@ export async function upsertIntegration(input: {
     for (const [k, v] of Object.entries(input.secretsPatch)) {
       if (v == null) continue;
       const trimmed = String(v).trim();
-      if (!trimmed) continue; // blank = keep
+      if (!trimmed || trimmed.startsWith("••••")) continue;
       secrets[k] = trimmed;
     }
   }
@@ -182,10 +192,9 @@ export async function updateIntegrationStatus(
   invalidateIntegrationCache();
 }
 
-type CacheBundle = {
+export type CacheBundle = {
   at: number;
-  google: IntegrationRow | null;
-  email: IntegrationRow | null;
+  byId: Partial<Record<IntegrationId, IntegrationRow | null>>;
 };
 
 let cache: CacheBundle | null = null;
@@ -197,11 +206,13 @@ export function invalidateIntegrationCache(): void {
 
 export async function loadIntegrationCache(): Promise<CacheBundle> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache;
-  const [google, email] = await Promise.all([
-    getIntegration("google_oauth"),
-    getIntegration("email_webhook"),
-  ]);
-  cache = { at: Date.now(), google, email };
+  const byId: CacheBundle["byId"] = {};
+  await Promise.all(
+    INTEGRATION_IDS.map(async (id) => {
+      byId[id] = await getIntegration(id);
+    }),
+  );
+  cache = { at: Date.now(), byId };
   return cache;
 }
 
@@ -210,4 +221,8 @@ export function maskSecret(value: string | undefined | null): string | null {
   if (!s) return null;
   if (s.length <= 4) return "••••";
   return `••••${s.slice(-4)}`;
+}
+
+export function dbExplicitlyDisables(row: IntegrationRow | null | undefined): boolean {
+  return Boolean(row && row.enabled === false && (row.updatedAt || Object.keys(row.config).length));
 }

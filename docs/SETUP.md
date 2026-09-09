@@ -136,7 +136,7 @@ Sign in to [Google Cloud Console](https://console.cloud.google.com/).
 | Login | `https://justxsystems.com/jbt/api/auth/google/callback` | `http://localhost:4000/api/auth/google/callback` |
 | Company Drive | `https://justxsystems.com/jbt/api/profile/drive/callback` | `http://localhost:4000/api/profile/drive/callback` |
 
-Put Client ID + Secret only in `server/.env`. Never commit them.
+Put Client ID + Secret in **Admin → Integrations** (preferred) or `server/.env` as fallback. Never commit them.
 
 ---
 

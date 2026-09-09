@@ -76,7 +76,9 @@ async function sendEmail(to: string, subject: string, body: string, kind: string
 
 async function sendWhatsapp(to: string, body: string, kind: string, claimId?: number) {
   if (!to) return;
-  const url = process.env.WHATSAPP_WEBHOOK_URL ?? process.env.NOTIFY_WHATSAPP_WEBHOOK_URL;
+  const { resolveWhatsApp } = await import("../integrations/resolvers.js");
+  const resolved = await resolveWhatsApp();
+  const url = resolved?.webhookUrl;
   try {
     if (url) {
       await postWebhook(url, { channel: "whatsapp", to, message: body, kind });

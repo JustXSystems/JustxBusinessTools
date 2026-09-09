@@ -291,8 +291,8 @@ router.get("/send/email/status", async (_req, res) => {
   res.json({ webhookConfigured: webhook });
 });
 
-router.get("/send/whatsapp/status", (_req, res) => {
-  res.json(getWhatsAppDeliveryConfig());
+router.get("/send/whatsapp/status", async (_req, res) => {
+  res.json(await getWhatsAppDeliveryConfig());
 });
 
 router.post("/send/whatsapp", async (req, res) => {
@@ -321,14 +321,14 @@ router.post("/send/whatsapp", async (req, res) => {
     return;
   }
 
-  const cfg = getWhatsAppDeliveryConfig();
+  const cfg = await getWhatsAppDeliveryConfig();
   if (!cfg.canAutoAttach) {
     res.json({
       ok: true,
       delivered: false,
       via: "manual",
       hint:
-        "Configure WHATSAPP_ACCESS_TOKEN + WHATSAPP_PHONE_NUMBER_ID (Cloud API) or WHATSAPP_WEBHOOK_URL for automatic PDF delivery. Browser WhatsApp links cannot attach files.",
+        "Configure WhatsApp under Admin → Integrations (Cloud API or webhook) for automatic PDF delivery. Browser WhatsApp links cannot attach files.",
     });
     return;
   }

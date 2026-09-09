@@ -1,8 +1,9 @@
 /**
  * WhatsApp Cloud API helpers (Meta Graph).
- * Required env: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID
- * Optional: WHATSAPP_API_VERSION (default v21.0), WHATSAPP_WEBHOOK_URL
+ * Credentials: Admin → Integrations (preferred) or WHATSAPP_* env.
  */
+
+import { resolveWhatsApp } from "./integrations/resolvers.js";
 
 export type WhatsAppDeliveryConfig = {
   cloudConfigured: boolean;
@@ -11,25 +12,31 @@ export type WhatsAppDeliveryConfig = {
   canAutoAttach: boolean;
 };
 
-export function getWhatsAppDeliveryConfig(): WhatsAppDeliveryConfig {
-  const token = (process.env.WHATSAPP_ACCESS_TOKEN ?? "").trim();
-  const phoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID ?? "").trim();
-  const webhook = (process.env.WHATSAPP_WEBHOOK_URL ?? "").trim();
-  const cloudConfigured = Boolean(token && phoneNumberId);
-  const webhookConfigured = Boolean(webhook);
+export async function getWhatsAppDeliveryConfig(): Promise<WhatsAppDeliveryConfig> {
+  const resolved = await resolveWhatsApp();
+  if (!resolved) {
+    return { cloudConfigured: false, webhookConfigured: false, canAutoAttach: false };
+  }
   return {
-    cloudConfigured,
-    webhookConfigured,
-    canAutoAttach: cloudConfigured || webhookConfigured,
+    cloudConfigured: resolved.cloudConfigured,
+    webhookConfigured: resolved.webhookConfigured,
+    canAutoAttach: resolved.canAutoAttach,
   };
 }
 
-function apiVersion() {
-  return (process.env.WHATSAPP_API_VERSION ?? "v21.0").trim() || "v21.0";
+async function waCreds() {
+  const resolved = await resolveWhatsApp();
+  return {
+    token: resolved?.accessToken ?? "",
+    phoneNumberId: resolved?.phoneNumberId ?? "",
+    webhook: resolved?.webhookUrl ?? "",
+    apiVersion: resolved?.apiVersion ?? "v21.0",
+  };
 }
 
-function graphBase() {
-  return `https://graph.facebook.com/${apiVersion()}`;
+function graphBase(version: string) {
+  const v = (version || "v21.0").trim() || "v21.0";
+  return `https://graph.facebook.com/${v}`;
 }
 
 export function normalizeWaPhone(raw: string): string {
@@ -44,6 +51,7 @@ async function uploadDocument(params: {
   phoneNumberId: string;
   filename: string;
   pdfBuffer: Buffer;
+  apiVersion: string;
 }): Promise<string> {
   const form = new FormData();
   form.append("messaging_product", "whatsapp");
@@ -54,7 +62,7 @@ async function uploadDocument(params: {
     params.filename.endsWith(".pdf") ? params.filename : `${params.filename}.pdf`,
   );
 
-  const res = await fetch(`${graphBase()}/${params.phoneNumberId}/media`, {
+  const res = await fetch(`${graphBase(params.apiVersion)}/${params.phoneNumberId}/media`, {
     method: "POST",
     headers: { Authorization: `Bearer ${params.token}` },
     body: form,
@@ -80,9 +88,10 @@ async function sendDocumentMessage(params: {
   mediaId: string;
   filename: string;
   caption: string;
+  apiVersion: string;
 }): Promise<void> {
   const caption = params.caption.slice(0, 1024);
-  const res = await fetch(`${graphBase()}/${params.phoneNumberId}/messages`, {
+  const res = await fetch(`${graphBase(params.apiVersion)}/${params.phoneNumberId}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${params.token}`,
@@ -106,16 +115,16 @@ async function sendDocumentMessage(params: {
   }
 }
 
-/** If message is longer than caption limit, send a text message first. */
 async function sendTextMessage(params: {
   token: string;
   phoneNumberId: string;
   to: string;
   body: string;
+  apiVersion: string;
 }): Promise<void> {
   const body = params.body.slice(0, 4096);
   if (!body.trim()) return;
-  const res = await fetch(`${graphBase()}/${params.phoneNumberId}/messages`, {
+  const res = await fetch(`${graphBase(params.apiVersion)}/${params.phoneNumberId}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${params.token}`,
@@ -141,8 +150,8 @@ export async function sendWhatsAppCloudDocuments(params: {
   filename: string;
   pdfBase64: string;
 }): Promise<{ sent: string[]; errors: Array<{ phone: string; error: string }> }> {
-  const token = (process.env.WHATSAPP_ACCESS_TOKEN ?? "").trim();
-  const phoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID ?? "").trim();
+  const creds = await waCreds();
+  const { token, phoneNumberId, apiVersion } = creds;
   if (!token || !phoneNumberId) {
     throw new Error("WhatsApp Cloud API is not configured");
   }
@@ -160,6 +169,7 @@ export async function sendWhatsAppCloudDocuments(params: {
     phoneNumberId,
     filename: params.filename,
     pdfBuffer,
+    apiVersion,
   });
 
   const message = params.message.trim();
@@ -171,7 +181,7 @@ export async function sendWhatsAppCloudDocuments(params: {
   for (const to of unique) {
     try {
       if (useSeparateText) {
-        await sendTextMessage({ token, phoneNumberId, to, body: message });
+        await sendTextMessage({ token, phoneNumberId, to, body: message, apiVersion });
       }
       await sendDocumentMessage({
         token,
@@ -180,6 +190,7 @@ export async function sendWhatsAppCloudDocuments(params: {
         mediaId,
         filename: params.filename,
         caption,
+        apiVersion,
       });
       sent.push(to);
     } catch (err) {
@@ -194,9 +205,9 @@ export async function sendWhatsAppCloudDocuments(params: {
 }
 
 export async function postWhatsAppWebhook(payload: Record<string, unknown>): Promise<void> {
-  const webhook = (process.env.WHATSAPP_WEBHOOK_URL ?? "").trim();
-  if (!webhook) throw new Error("WHATSAPP_WEBHOOK_URL is not configured");
-  const r = await fetch(webhook, {
+  const creds = await waCreds();
+  if (!creds.webhook) throw new Error("WhatsApp webhook is not configured");
+  const r = await fetch(creds.webhook, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

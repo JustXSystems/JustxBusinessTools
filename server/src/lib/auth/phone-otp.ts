@@ -34,6 +34,14 @@ function hashOtp(code: string): string {
 }
 
 export async function requestPhoneOtp(phone: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { refreshSmsProviderFromIntegrations } = await import("./init-sms.js");
+  const { resolveSmsOtp } = await import("../integrations/resolvers.js");
+  await refreshSmsProviderFromIntegrations();
+  const sms = await resolveSmsOtp();
+  if (!sms.phoneOtpEnabled) {
+    return { ok: false, error: "Phone OTP is not enabled on this platform" };
+  }
+
   const normalized = normalizePhone(phone);
   if (normalized.replace(/\D/g, "").length < 10) {
     return { ok: false, error: "Valid phone number required" };

@@ -50,7 +50,15 @@ export async function reportError(
     kind: context.extra?.kind,
   });
 
-  const webhook = process.env.ERROR_WEBHOOK_URL?.trim();
+  const webhookResolved = await (async () => {
+    try {
+      const { resolveErrorWebhook } = await import("./integrations/resolvers.js");
+      return await resolveErrorWebhook();
+    } catch {
+      return null;
+    }
+  })();
+  const webhook = webhookResolved?.url ?? process.env.ERROR_WEBHOOK_URL?.trim();
   if (webhook) {
     try {
       await fetch(webhook, {

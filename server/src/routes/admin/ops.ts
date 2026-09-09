@@ -199,7 +199,16 @@ router.get("/overview", async (_req, res) => {
     config: {
       logFormat: process.env.LOG_FORMAT || (process.env.NODE_ENV === "production" ? "json" : "text"),
       sentryConfigured: Boolean(process.env.SENTRY_DSN?.trim()),
-      webhookConfigured: Boolean(process.env.ERROR_WEBHOOK_URL?.trim()),
+      webhookConfigured: Boolean(
+        (await (async () => {
+          try {
+            const { resolveErrorWebhook } = await import("../../lib/integrations/resolvers.js");
+            return Boolean(await resolveErrorWebhook());
+          } catch {
+            return Boolean(process.env.ERROR_WEBHOOK_URL?.trim());
+          }
+        })()),
+      ),
       grafanaConfigured: Boolean(grafanaBase),
       otelConfigured: ["1", "true", "yes", "on"].includes(
         (process.env.OTEL_ENABLED ?? "").trim().toLowerCase(),

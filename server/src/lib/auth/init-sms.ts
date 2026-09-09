@@ -5,8 +5,58 @@ import {
   TwilioSmsProvider,
 } from "./sms-providers.js";
 import { setSmsProvider } from "./phone-otp.js";
+import type { ResolvedSmsOtp } from "../integrations/resolvers.js";
 
-/** Select SMS provider from environment. Defaults to console logging in dev. */
+/** Apply a resolved SMS config (Admin Integrations or env). */
+export function applySmsProvider(cfg: ResolvedSmsOtp): void {
+  if (!cfg.phoneOtpEnabled || cfg.provider === "console") {
+    setSmsProvider(new ConsoleSmsProvider());
+    return;
+  }
+
+  if (cfg.provider === "twilio") {
+    if (!cfg.twilioAccountSid || !cfg.twilioAuthToken || !cfg.twilioFromNumber) {
+      console.warn("[SMS] Twilio credentials incomplete — using console");
+      setSmsProvider(new ConsoleSmsProvider());
+      return;
+    }
+    setSmsProvider(
+      new TwilioSmsProvider(cfg.twilioAccountSid, cfg.twilioAuthToken, cfg.twilioFromNumber),
+    );
+    return;
+  }
+
+  if (cfg.provider === "msg91") {
+    if (!cfg.msg91AuthKey) {
+      console.warn("[SMS] MSG91 auth key missing — using console");
+      setSmsProvider(new ConsoleSmsProvider());
+      return;
+    }
+    setSmsProvider(new Msg91SmsProvider(cfg.msg91AuthKey, cfg.msg91TemplateId ?? undefined));
+    return;
+  }
+
+  if (cfg.provider === "http") {
+    if (!cfg.smsApiUrl) {
+      console.warn("[SMS] HTTP SMS_API_URL missing — using console");
+      setSmsProvider(new ConsoleSmsProvider());
+      return;
+    }
+    setSmsProvider(
+      new HttpSmsProvider(
+        cfg.smsApiUrl,
+        cfg.smsApiKey ?? undefined,
+        cfg.smsPhoneField,
+        cfg.smsMessageField,
+      ),
+    );
+    return;
+  }
+
+  setSmsProvider(new ConsoleSmsProvider());
+}
+
+/** Select SMS provider from environment (startup). Admin DB overrides applied on demand. */
 export function initSmsProvider(): void {
   const provider = (process.env.SMS_PROVIDER ?? "console").toLowerCase();
 
@@ -57,4 +107,11 @@ export function initSmsProvider(): void {
   }
 
   setSmsProvider(new ConsoleSmsProvider());
+}
+
+/** Refresh SMS provider from Admin Integrations (DB) with env fallback. */
+export async function refreshSmsProviderFromIntegrations(): Promise<void> {
+  const { resolveSmsOtp } = await import("../integrations/resolvers.js");
+  const cfg = await resolveSmsOtp();
+  applySmsProvider(cfg);
 }
