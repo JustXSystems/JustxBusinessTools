@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 
-export const AGENT_VERSION = "1.1.2";
+export const AGENT_VERSION = "1.1.3";
 
 function loadFileConfig() {
   const candidates = [];
@@ -355,6 +355,30 @@ function runPowershell(script) {
   });
 }
 
+/** Run a .ps1 file — required for large HTML bodies (Windows -Command max ~8191 chars). */
+function runPowershellFile(scriptPath) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath],
+      { windowsHide: true },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => {
+      stdout += String(d);
+    });
+    child.stderr.on("data", (d) => {
+      stderr += String(d);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve(stdout.trim());
+      else reject(new Error(stderr.trim() || stdout.trim() || `PowerShell exit ${code}`));
+    });
+  });
+}
+
 function psQuote(s) {
   return `'${String(s ?? "").replace(/'/g, "''")}'`;
 }
@@ -379,14 +403,20 @@ export async function openEmailCompose(outboxId) {
   const tmpDir = path.join(os.tmpdir(), "jbt-email");
   await mkdir(tmpDir, { recursive: true });
   const pdfPath = path.join(tmpDir, `${outboxId}_${filename}`);
+  const bodyPath = path.join(tmpDir, `${outboxId}_body.txt`);
+  const htmlPath = path.join(tmpDir, `${outboxId}_body.html`);
+  const ps1Path = path.join(tmpDir, `${outboxId}_open.ps1`);
   await writeFile(pdfPath, Buffer.from(compose.pdfBase64, "base64"));
 
-  // Base64 avoids PowerShell quoting issues for long bodies / HTML.
-  const bodyB64 = Buffer.from(body, "utf8").toString("base64");
-  const htmlB64 = html ? Buffer.from(html, "utf8").toString("base64") : "";
+  // Corporate HTML is often >8KB. Never put it on powershell -Command (Windows limit ~8191).
+  // Write body/html to temp files and drive Outlook from a -File script.
+  const useHtml = Boolean(html);
+  if (useHtml) {
+    await writeFile(htmlPath, html, "utf8");
+  } else {
+    await writeFile(bodyPath, body, "utf8");
+  }
 
-  // Outlook: set BodyFormat=olFormatHTML (2) and HTMLBody only when we have HTML.
-  // Setting .Body first forces plain format and many builds ignore a later HTMLBody.
   const script = `
 $ErrorActionPreference = 'Stop'
 try {
@@ -399,26 +429,37 @@ $mail.To = ${psQuote(to)}
 $mail.CC = ${psQuote(cc)}
 $mail.Subject = ${psQuote(subject)}
 ${
-  htmlB64
-    ? `$html = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String(${psQuote(htmlB64)}))
+  useHtml
+    ? `$html = Get-Content -LiteralPath ${psQuote(htmlPath)} -Raw -Encoding UTF8
+if (-not $html) { throw 'HTML body file was empty' }
 $mail.BodyFormat = 2
-$mail.HTMLBody = $html`
-    : `$plain = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String(${psQuote(bodyB64)}))
+$mail.HTMLBody = $html
+if ($mail.BodyFormat -ne 2) { throw 'Outlook refused HTML body format (BodyFormat=' + $mail.BodyFormat + ')' }`
+    : `$plain = Get-Content -LiteralPath ${psQuote(bodyPath)} -Raw -Encoding UTF8
 $mail.BodyFormat = 1
 $mail.Body = $plain`
 }
 $mail.Attachments.Add(${psQuote(pdfPath)}) | Out-Null
-$mail.Display()
-'ok'
+$mail.Display($true) | Out-Null
+Write-Output 'ok'
 `.trim();
 
+  await writeFile(ps1Path, script, "utf8");
+
   try {
-    await runPowershell(script);
+    await runPowershellFile(ps1Path);
     await api(`/email-outbox/${encodeURIComponent(outboxId)}/agent-opened`, {
       method: "POST",
       body: "{}",
     }).catch(() => undefined);
-    return { ok: true, message: "Outlook compose opened with PDF attached", pdfPath };
+    return {
+      ok: true,
+      message: useHtml
+        ? "Outlook compose opened with HTML body and PDF attached"
+        : "Outlook compose opened with PDF attached",
+      pdfPath,
+      html: useHtml,
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await api(`/email-outbox/${encodeURIComponent(outboxId)}/agent-open-failed`, {
@@ -429,6 +470,9 @@ $mail.Display()
   } finally {
     setTimeout(() => {
       unlink(pdfPath).catch(() => undefined);
+      unlink(bodyPath).catch(() => undefined);
+      unlink(htmlPath).catch(() => undefined);
+      unlink(ps1Path).catch(() => undefined);
     }, 60_000);
   }
 }

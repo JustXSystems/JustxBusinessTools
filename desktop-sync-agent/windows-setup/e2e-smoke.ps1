@@ -23,7 +23,7 @@ $config = @{
   downloadFolder = $null
   pollMs = 15000
   bridgePort = 17865
-  packVersion = "1.1.0"
+  packVersion = "1.1.3"
 } | ConvertTo-Json -Compress
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText((Join-Path $root "config.json"), $config, $utf8NoBom)

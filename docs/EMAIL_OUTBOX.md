@@ -65,7 +65,7 @@ Recommended: **A** in production for HTML delivered to the customer inbox withou
 | Body shows `Dear+Customer,%0A%0A…` | Broken mailto encoding (spaces as `+`). Fixed by `buildMailtoHref` (`%20`) — redeploy web; see [Mailto encoding](#mailto-encoding-spaces-as--and-0a). |
 | Open mail app / Open in Outlook do nothing | Often Outlook stuck on **Add Account**, **New Outlook** without COM, or hung `OUTLOOK.exe` — see [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c). |
 | UNC works but email fails | Expected to be independent; email does not use Download Folder. |
-| Open in Outlook still plain after HTML send | Agent must be **≥ 1.1.1** (`BodyFormat=2` + `HTMLBody`). Re-install from Sync Center or copy updated `index.js`. Check `http://127.0.0.1:17865/status` → `version`. |
+| Open in Outlook still plain after HTML send | Agent must be **≥ 1.1.3** (HTML via temp file + `HTMLBody`; older agents truncated large HTML on PowerShell `-Command`). Check `http://127.0.0.1:17865/status` → `version`. Re-download setup after web pack rebuild. |
 
 ---
 
@@ -322,7 +322,7 @@ Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
 ### Path C limits
 
 - Mailto / **Open mail app** cannot carry Corporate HTML — use **Open in Outlook** / **Open HTML in Outlook** (or Path A).  
-- Agent **≥ 1.1.1** sets Outlook `BodyFormat = HTML` + `HTMLBody` when outbox has `body_html`. Older agents only set plain `Body`.  
+- Agent **≥ 1.1.3** writes Corporate HTML to a temp file and sets Outlook `BodyFormat = HTML` + `HTMLBody` (avoids Windows ~8K `-Command` limit that made large HTML fall back to plain). Older packs stay plain.  
 - Agent must run on the Outlook PC with classic Outlook COM.  
 - Same `apiBase` / auth issues that block UNC sync also block compose.  
 - Never invent `JBT_AGENT_TOKEN` — only Sync Center.
@@ -408,7 +408,7 @@ Filters: **Pending** (pending+failed) vs **All**.
 | Webhook 4xx/5xx in Outbox | Automation inactive; wrong URL; mapping error |
 | HTML looks plain (webhook) | Automation mapped `body` only — map **`html`** |
 | Expected HTML but see plain text (B/C) | Path B mailto is always plain. Use **Open in Outlook** with agent ≥ 1.1.1. Full HTML without a staff PC = Path A webhook |
-| Open in Outlook HTML still plain | Agent version &lt; 1.1.1, or COM set `.Body` only — reinstall agent / confirm `status.version` ≥ 1.1.1; classic Outlook |
+| Open in Outlook HTML still plain | Agent version &lt; 1.1.3, or still using mailto / Open mail app. Confirm `status.version` ≥ 1.1.3; classic Outlook; Open in Outlook only |
 | Body shows `+` and `%0A` | Old mailto form-encoding — redeploy web with `buildMailtoHref`; new send |
 | Open mail app / Outlook do nothing | Outlook **Add Account** stuck; New Outlook; hung process — [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c) |
 | Open in Outlook times out / hangs | COM hang (`New-Object Outlook.Application`); close `olk`; restart classic Outlook; COM probe |

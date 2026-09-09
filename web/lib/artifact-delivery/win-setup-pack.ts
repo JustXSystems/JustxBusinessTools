@@ -3,7 +3,7 @@ import { withBasePath } from "@/lib/base-path";
 
 export const WIN_SETUP_PACK_PATH = "/JustX-Sync-Agent-win-x64.zip";
 export const WIN_SETUP_ROOT = "JustX-Sync-Agent";
-export const AGENT_PACK_VERSION = "1.1.0";
+export const AGENT_PACK_VERSION = "1.1.3";
 
 export type AgentSetupConfig = {
   apiBase: string;
