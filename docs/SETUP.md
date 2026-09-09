@@ -224,25 +224,27 @@ npm start   # inside desktop-sync-agent/
 
 ## Sync Center & Email Outbox
 
-These are **two different queues**. Full configuration (every field, who edits it, and where):
+These are **two different queues**. Full “who needs what / what syncs / how it works”:
 
 | Guide | Covers |
 |-------|--------|
-| **[`SYNC_CENTER.md`](SYNC_CENTER.md)** | Business Profile destination (Drive / artifact webhook / UNC), conflict policy, Sync Center UI, browser FSA sync, desktop agent token & env, troubleshooting |
-| **[`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)** | `EMAIL_WEBHOOK_URL`, mailto path, Outlook via agent, Outbox actions & statuses, branding |
+| **[`SYNC_CENTER.md`](SYNC_CENTER.md)** | Who needs Sync Center; which tools’ PDFs; all Company document delivery variants (Drive / artifact webhook / UNC); desktop setup; troubleshooting |
+| **[`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)** | Who needs Email Outbox; paths A/B/C; when Sync Center agent is required for Outlook |
 
 **Short reminder**
 
-| Feature | Configure primarily in | Purpose |
-|---------|------------------------|---------|
-| Sync Center `/sync` | Profile → Company document delivery + Sync Center agent | Company **PDF/file** delivery & UNC sync |
-| Email Outbox `/email-outbox` | `server/.env` email webhook + Profile Send Via + optional Sync Center agent | Quotation **emails** |
+| Feature | Who typically needs it | What it moves |
+|---------|------------------------|---------------|
+| **Company document delivery** (Profile) | Every company that wants PDFs in Drive/webhook/UNC | Quotation + Site Survey PDFs (file artifacts) |
+| **Sync Center** `/sync` | UNC companies; Outlook Path C; status/retry | Same file queue + agent install UI |
+| **Email Outbox** `/email-outbox` | Anyone sending quotations by email | Email drafts (not the Sync Center file list) |
 
 Do not confuse:
 
 - Profile **artifact webhook** (files) ≠ `EMAIL_WEBHOOK_URL` (emails)  
 - Sync Center **pending files** ≠ Email Outbox **pending emails**  
-- `JBT_AGENT_TOKEN` is created only in **Sync Center** (used for UNC sync and Outlook compose)
+- Desktop agent token is created in **Sync Center** (UNC sync **and/or** Outlook compose)  
+- **Not every customer needs the desktop agent** — Drive/webhook + email webhook need none
 
 ---
 
@@ -283,7 +285,7 @@ Give this section to each paying customer. **Only the Business Profile Owner** c
 | Connected, no files | Wrong folder link; reconnect; destination Auto/Drive |
 | Only one PC “works” | Delivery is server-side via Owner connection — not a personal PC folder |
 
-Advanced alternatives (webhook / UNC agent): see [`SYNC_CENTER.md`](SYNC_CENTER.md), [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) and `desktop-sync-agent/`.
+Advanced alternatives (webhook / UNC agent): see [`SYNC_CENTER.md`](SYNC_CENTER.md) (**§1.3 SharePoint/OneDrive webhook**, **§1.4 Download Folder path**), [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) and `desktop-sync-agent/`.  
 Email send paths: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md).
 
 ---

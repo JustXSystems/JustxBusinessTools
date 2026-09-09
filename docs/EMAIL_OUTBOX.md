@@ -11,7 +11,22 @@ Email Outbox is a **durable queue of quotation emails** for the current Business
 |---------------|--------|
 | **Email Outbox** | `pending` + `failed` email drafts |
 | **Notifications** | Unread in-app alerts |
-| **Sync Center** | Pending **file** artifacts |
+| **Sync Center** | Pending **file** artifacts (company document delivery) |
+
+---
+
+## Who needs Email Outbox vs Sync Center?
+
+| Goal | Use | Sync Center setup zip? |
+|------|-----|------------------------|
+| File quotation/survey PDFs to **company Drive / webhook / UNC** | **Company document delivery** (+ Sync Center only for UNC/status) | Only for **UNC** (or Outlook Path C) |
+| **Send** the quotation by email | **Email Outbox** (this guide) | Only for **Path C — Open in Outlook** |
+| Drive/webhook filing **and** email webhook | Both features, separately | Usually **no** agent |
+| UNC filing **and** Outlook compose | Both use the **same** desktop agent | **Yes** — install once |
+
+Filing a PDF to the company folder and emailing a customer are **independent**. Doing Send Via → Email does **not** by itself run Company document delivery (email attachments use `skipDispatch`). Staff who need the PDF in Drive/UNC must also use the tool’s company submit/deliver action (or rely on whatever flow your process defines).
+
+Full “who / what / how” for files: [`SYNC_CENTER.md`](SYNC_CENTER.md)#who-needs-sync-center.
 
 ---
 

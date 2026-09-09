@@ -1,9 +1,112 @@
 # Sync Center — complete configuration guide
 
 **Route:** `/sync` (sidebar → **Sync Center**)  
-**Who can use it:** Business Owners and Staff (same Business Profile / branch)  
+**Who can open it:** Business Owners and Staff (same Business Profile / branch)  
 **Related UI:** Business Profile → **Company document delivery**  
 **Related:** Email Outbox Outlook compose uses the **same desktop agent** — see [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)
+
+---
+
+## Who needs Sync Center?
+
+| Audience | Need Sync Center day-to-day? | Why |
+|----------|------------------------------|-----|
+| **Most companies (Google Drive or artifact webhook)** | **Rarely** | Owner sets destination on Business Profile once; PDFs deliver automatically. Staff only generate documents. |
+| **Company using UNC / file-server path** | **Yes (one PC)** | Pending files wait until a desktop agent or browser folder sync writes them to the share. |
+| **Company using Email Outbox → Open in Outlook** | **Yes (Outlook PC)** | Same desktop agent; install once via Sync Center setup zip. |
+| **Anyone after a failed Drive/webhook delivery** | **Sometimes** | Open Sync Center to see pending/failed files and click **Retry**. |
+| **Staff on Drive-only companies** | **No** | They never connect Drive and normally never open Sync Center. |
+| **JustX engineer** | Platform only | Google OAuth client / server `.env` — not per-customer Sync Center. |
+
+**Short answer:** Sync Center is a **status / retry / UNC / Outlook-agent** page. It is **not** required for every customer. Drive/webhook companies configure **Company document delivery** on the profile; Sync Center is optional unless something fails or they use UNC/Outlook.
+
+---
+
+## What does Sync Center sync? (and what it does not)
+
+### Company **files** (artifacts) — Sync Center pending list
+
+These are **PDF/file documents** staged for **Company document delivery** (Business Profile destination):
+
+| Currently wired tools | What gets delivered |
+|-----------------------|---------------------|
+| **Quotation V1** | Quotation PDF when staff submit / archive to company |
+| **Site Survey V1** | Survey PDF when staff deliver/export to company |
+
+Flow: tool → `deliverToolArtifact` → server `artifact_deliveries` row → destination (Drive / artifact webhook / UNC queue).
+
+**All Company document delivery variants:**
+
+| Profile destination | Automatic? | Sync Center role |
+|---------------------|------------|------------------|
+| **Auto** | Tries Drive → else artifact webhook → else UNC | Status; agent only if it falls through to UNC |
+| **Company Google Drive** | Yes (server uploads) | Status / Retry if upload failed |
+| **Corporate artifact webhook** | Yes (server POST) | Status / Retry if webhook failed |
+| **UNC / file server** | No — queued as **pending** | **Desktop agent** or **browser folder sync** must run |
+| **Browser download only (`none`)** | No company folder | Optional local FSA / download only |
+
+Same-filename policy (overwrite / rename / skip) applies to Drive and UNC/browser folder. See Part 1 below.
+
+### Quotation **emails** — Email Outbox (separate queue)
+
+| Email path | Sync Center needed? | What happens |
+|------------|---------------------|--------------|
+| **A. `EMAIL_WEBHOOK_URL`** | No | Server POSTs email JSON (+ PDF) to your automation |
+| **B. Mailto** | No | Browser opens mail app; staff attach PDF manually |
+| **C. Open in Outlook** | **Yes** (desktop agent on that PC) | Agent opens Outlook with PDF attached — does **not** copy files to Drive/UNC |
+
+Email outbox PDF attachments are stored as artifacts with **`skipDispatch`** — they are **not** pushed through Company document delivery / Sync Center pending for Drive/UNC. Sending email and filing the company PDF are **two different actions**.
+
+### Explicit non-goals
+
+| Not handled by Sync Center | Where it lives |
+|----------------------------|----------------|
+| Sending quotation emails | [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) |
+| Notifications inbox | Notifications UI |
+| Choosing Drive vs webhook vs UNC | **Business Profile → Company document delivery** (Owner) |
+| Platform Google OAuth client | JustX `server/.env` |
+
+**Badges:** Sync Center counts **pending files**. Email Outbox counts **pending/failed emails**. Do not mix them.
+
+---
+
+## How it works (end-to-end)
+
+```mermaid
+flowchart TD
+  staff[Staff uses Quotation or Site Survey]
+  stage[Stage PDF as artifact]
+  dest{Company document delivery destination}
+  drive[Google Drive upload on server]
+  hook[Artifact webhook POST on server]
+  unc[Queue pending for UNC]
+  agent[Desktop agent or browser FSA]
+  share[Company file share / folder]
+  email[Quotation Send Via Email]
+  outbox[Email Outbox queue]
+  whEmail[EMAIL_WEBHOOK_URL]
+  outlook[Desktop agent Open in Outlook]
+
+  staff --> stage
+  stage --> dest
+  dest -->|Drive or Auto with Drive| drive
+  dest -->|Webhook or Auto with webhook| hook
+  dest -->|UNC or Auto fallback| unc
+  unc --> agent --> share
+  staff --> email --> outbox
+  outbox --> whEmail
+  outbox --> outlook
+```
+
+1. **Owner** sets destination on Business Profile (once per company/branch).  
+2. **Staff** generate a PDF in a tool (Quotation / Site Survey).  
+3. Server stages an artifact and **dispatches** immediately for Drive/webhook, or **queues pending** for UNC.  
+4. **Sync Center** shows company delivery status, pending UNC files, retries, and desktop-agent connection.  
+5. Separately, **Send Via → Email** creates an Email Outbox row (webhook / mailto / Outlook agent).
+
+Desktop agent (optional): one install per Windows user/PC via Sync Center **Download setup for this PC**. Same agent serves UNC file sync **and** Outlook compose.
+
+---
 
 Sync Center is the **status / retry / optional UNC sync** page. Most companies only need Owner setup on **Business Profile**; staff then generate PDFs and files land automatically (Drive/webhook). Use Sync Center when:
 
@@ -20,11 +123,10 @@ Sync Center is the **status / retry / optional UNC sync** page. Most companies o
 |---------|-------------------|-----|-----------|
 | Destination mode (`auto` / Drive / webhook / UNC / none) | **Business Profile** → Company document delivery | Owner | MySQL profile |
 | Company Google Drive OAuth + folder | Same panel → Connect / Save folder | Owner | Encrypted on profile |
-| Artifact webhook URL + secret | Same panel (or Advanced) | Owner | Profile |
-| Download Folder UNC path | Same panel → Show UNC options | Owner | Profile |
+| Artifact webhook URL + secret | Same panel — **how to get:** [§1.3](#13-corporate-artifact-webhook-sharepoint--onedrive--power-automate) | Owner | Profile |
+| Download Folder UNC path | Same panel → Show UNC options — **how to get:** [§1.4](#14-company-file-server--download-folder-path-unc--optional) | Owner | Profile |
 | Same-filename / conflict policy | Same panel | Owner | Profile |
-| Desktop agent token (`JBT_AGENT_TOKEN`) | **Sync Center** → Create token + download launcher | Owner or Staff | DB agent row + your `.ps1` |
-| Agent runtime env | Launcher `.ps1` or PowerShell on the PC | Staff PC | Local process only |
+| Desktop agent setup | **Sync Center** → Download setup for this PC | Owner or Staff | LocalAppData + agent row |
 | Browser-linked folder (FSA) | Sync Center → Link folder in this browser | Staff (Chrome/Edge) | Browser IndexedDB (this browser only) |
 | Platform Google OAuth client | VPS `server/.env` (`GOOGLE_CLIENT_*`) | JustX engineer | Server env |
 
@@ -123,33 +225,160 @@ Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quo
 | Connected but no uploads | Folder not saved; reconnect; destination not Auto/Drive |
 | Wrong company files | Wrong Business Profile selected in branch switcher |
 
-### 1.3 Corporate artifact webhook (optional)
+### 1.3 Corporate artifact webhook (SharePoint / OneDrive / Power Automate)
 
-**Different from** `EMAIL_WEBHOOK_URL` (emails). This is **per Business Profile** for PDF/files.
+**Different from** `EMAIL_WEBHOOK_URL` (emails). This is **per Business Profile** for **PDF/files**.
 
-1. Destination = **Auto** or **Corporate webhook**, or open **Show UNC / file-server options** / webhook section.  
-2. Paste **Webhook URL** (Power Automate / Logic Apps / n8n that accepts file POSTs).  
-3. Optional **Webhook secret** (leave blank to keep existing).  
-4. Profile **Save**.
+JustX does **not** generate the Webhook URL. You create an HTTPS inbound webhook in Microsoft Power Automate (or n8n/Make), then paste that URL into Business Profile.
 
-Your flow must accept whatever JSON/multipart the JustX artifact dispatcher sends (see code / ops notes if customizing).
+#### What each field means
 
-### 1.4 UNC / Download Folder (optional)
+| Field in Business Profile | What it is | How you get it |
+|---------------------------|------------|----------------|
+| **Webhook URL** | Public `https://…` endpoint that accepts JustX’s JSON POST when a PDF is ready | Created in Power Automate / Logic Apps / n8n / Make (steps below) |
+| **Webhook secret (optional)** | A password **you invent** (not from Microsoft). If set, JustX sends header `X-JustX-Signature: sha256=…` so your flow can verify the body | Type any long random string (e.g. password manager). Leave blank to skip signing. Leave blank later to **keep** a saved secret. |
 
-1. Click **Show UNC / file-server options** (or set destination to **UNC**).  
-2. **Download Folder path** examples:
+#### Recommended: SharePoint or OneDrive via Power Automate
+
+Use this when the company wants files in **SharePoint document library** or **OneDrive for Business**, without Google Drive.
+
+**Step A — Create the flow (company Microsoft 365 admin / Owner with flow rights)**
+
+1. Open [Power Automate](https://make.powerautomate.com) signed in with the **company** work account.  
+2. **Create** → **Automated cloud flow** (or Instant → skip trigger and add “When an HTTP request is received”).  
+3. Trigger: **When an HTTP request is received**.  
+4. After you **save** the flow once, open the trigger again and copy **HTTP POST URL**  
+   - Looks like: `https://prod-xx.westus.logic.azure.com:443/workflows/…/triggers/manual/paths/invoke?api-version=…&sp=…&sv=…&sig=…`  
+   - That full URL **is** your **Webhook URL** for JustX.  
+5. Optional: in the trigger, paste a sample JSON schema (Request Body JSON Schema) so dynamic content is easier:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "event": { "type": "string" },
+    "artifactId": { "type": "string" },
+    "toolId": { "type": "string" },
+    "filename": { "type": "string" },
+    "mimeType": { "type": "string" },
+    "contentBase64": { "type": "string" },
+    "contentHash": { "type": "string" },
+    "byteSize": { "type": "number" },
+    "timestamp": { "type": "string" }
+  }
+}
+```
+
+6. Add action **Create file** (OneDrive for Business) **or** **Create file** (SharePoint):  
+   - **Folder path / Site Address + Folder Path:** pick the company library folder (e.g. `/Shared Documents/JustX` or `/Quotations`).  
+   - **File name:** use dynamic content `filename` from the trigger.  
+   - **File content:** use expression to decode base64, e.g.  
+     `base64ToBinary(triggerBody()?['contentBase64'])`  
+7. **Save** the flow and turn it **On**.  
+8. Copy the **HTTP POST URL** again if it changed after save.
+
+**Step B — Paste into JustX (Owner)**
+
+1. Business Profile → **Company document delivery**.  
+2. Destination = **Corporate webhook** (or **Auto** if Drive is not connected).  
+3. **Webhook URL** = the Power Automate HTTP POST URL from Step A.  
+4. **Webhook secret (optional):** invent a long secret; store the same value in your flow if you add a condition on `X-JustX-Signature`. Or leave blank.  
+5. Profile **Save**.  
+6. Generate a test Quotation/Site Survey PDF → confirm the file appears in SharePoint/OneDrive.  
+7. Sync Center → Company automatic delivery should look ready; pending should clear for webhook successes.
+
+#### What JustX POSTs (artifact webhook)
+
+```http
+POST <Webhook URL>
+Content-Type: application/json
+X-JustX-Event: artifact.ready
+X-JustX-Artifact-Id: art_…
+X-JustX-Signature: sha256=<hex>   # only if secret is set
+```
+
+Body (JSON) includes at least: `event`, `artifactId`, `toolId`, `filename`, `mimeType`, `byteSize`, `contentHash`, `contentBase64`, `timestamp`, plus org/profile/user ids.
+
+#### Alternatives to Power Automate
+
+| Tool | How to get Webhook URL |
+|------|-------------------------|
+| **n8n** | Workflow → Webhook node → Production URL |
+| **Make.com** | Webhooks → Custom webhook → copy URL |
+| **Azure Logic Apps** | Same pattern as Power Automate (“When a HTTP request is received”) |
+| **Your API** | Any HTTPS endpoint that accepts the JSON above and stores the file |
+
+**Not valid as Webhook URL:** SharePoint site URL, OneDrive folder link, Graph API key alone, or email address. Those are destinations *inside* the automation — JustX only needs the **inbound HTTPS webhook**.
+
+#### Webhook secret — detail
+
+- Optional. Improves authenticity if the URL leaks.  
+- You **choose** the string; Microsoft does not give it to you.  
+- If set, verify: HMAC-SHA256 of the **raw JSON body** with your secret; compare to header value after `sha256=`.  
+- If you leave the field blank on a later Save, JustX **keeps** the previously stored secret.
+
+---
+
+### 1.4 Company file server / Download Folder path (UNC — optional)
+
+Use this when files should land on a **Windows path** the office PC can write (on-prem file server, mapped drive, or a folder synced by the **OneDrive/SharePoint sync client**).
+
+#### What each field means
+
+| Field | What it is | How you get it |
+|-------|------------|----------------|
+| **Company file server (optional)** | UI section under **Show UNC / file-server options** | Click that button on Business Profile → Company document delivery |
+| **Download Folder path** | Absolute Windows or UNC path where the **desktop agent** (or browser folder sync) writes PDFs | From File Explorer address bar on a PC that can see the folder (examples below) |
+| **Conflict policy** | overwrite / rename / skip when the same filename exists | Owner chooses in the same panel |
+
+JustX does **not** invent this path. The Owner (or IT) decides the folder and pastes the path.
+
+#### Path examples
 
 ```text
 \\fileserver\shared\JustX-Artifacts
-D:\CompanyShare\Quotations
+\\fileserver\departments\Sales\Quotations
+D:\CompanyShare\JustX
 Z:\JustX
 ```
 
-3. Set conflict policy (overwrite / rename / skip).  
-4. Profile **Save**.  
-5. Continue to **Part 2** (desktop agent) or browser FSA sync.
+**OneDrive (sync client on a Windows PC):**
 
-If destination is UNC and path is empty, Sync Center shows a warning to set the path.
+1. In File Explorer, open the synced OneDrive / “OneDrive - Contoso” folder.  
+2. Create e.g. `JustX-Artifacts`.  
+3. Click the address bar → copy the full path, e.g.  
+   `C:\Users\alex\OneDrive - Contoso\JustX-Artifacts`  
+4. Paste that as **Download Folder path**.  
+5. Install the Sync Center desktop agent **on a PC that keeps that OneDrive folder signed in and syncing** (often a always-on office PC).
+
+**SharePoint library via sync client:**
+
+1. Open the SharePoint document library in the browser → **Sync** (OneDrive sync).  
+2. After sync, open the local folder in Explorer (e.g. `C:\Users\alex\Contoso\Sales - Documents\JustX`).  
+3. Copy that path into **Download Folder path**.  
+4. Same rule: desktop agent must run on a machine where that sync folder is available and writable.
+
+**Pure cloud SharePoint/OneDrive without a sync PC:** prefer **§1.3 Corporate webhook** (Power Automate Create file) instead of UNC. A UNC/local path cannot reach SharePoint online by itself.
+
+#### Setup steps (Owner + one PC)
+
+1. Business Profile → Company document delivery → destination **Company file server (UNC)** or **Auto** (with Download Folder set as fallback).  
+2. **Show UNC / file-server options**.  
+3. Paste **Download Folder path**.  
+4. Conflict policy → usually **Overwrite**.  
+5. Profile **Save**.  
+6. Sync Center → **Download setup for this PC** → Install on a machine that can write that path (VPN/share ACL / OneDrive signed in).  
+7. Test PDF → pending should clear; file appears in the folder (and syncs to cloud if using OneDrive/SharePoint sync).
+
+If destination is UNC and path is empty, Sync Center warns you to set the path.
+
+#### Choosing webhook vs Download Folder for Microsoft 365
+
+| Goal | Prefer |
+|------|--------|
+| Files appear in SharePoint/OneDrive with **no always-on office PC** | **Webhook URL** + Power Automate (§1.3) |
+| Files land on a **local/UNC share** or synced folder on a known PC | **Download Folder path** + desktop agent (§1.4) |
+| Google Workspace | **Company Google Drive** (§1.2), not these fields |
 
 ---
 

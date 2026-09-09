@@ -324,8 +324,10 @@ export function DownloadFolderPanel({
         <div style={{ marginTop: 16 }}>
           <h4 className="panel-subtitle">Corporate webhook (optional alternative)</h4>
           <p className="section-note">
-            Same multi-tenant idea for SharePoint: one webhook per company. All staff documents
-            post to that flow automatically.
+            For SharePoint / OneDrive: create a Power Automate flow with trigger &quot;When an HTTP
+            request is received&quot;, copy its HTTP POST URL here, then Create file into your library.
+            Webhook secret is optional (you invent it). Full steps: docs/SYNC_CENTER.md §1.3.
+            Not the same as EMAIL_WEBHOOK_URL (emails).
           </p>
           <label className="field">
             <span className="label">Webhook URL</span>
@@ -339,7 +341,7 @@ export function DownloadFolderPanel({
           <label className="field">
             <span className="label">
               Webhook secret{" "}
-              {artifactWebhookSecretConfigured ? "(saved — leave blank to keep)" : "(optional)"}
+              {artifactWebhookSecretConfigured ? "(saved — leave blank to keep)" : "(optional — you invent)"}
             </span>
             <input
               type="password"
@@ -368,8 +370,9 @@ export function DownloadFolderPanel({
         <div style={{ marginTop: 8 }}>
           <h4 className="panel-subtitle">Company file server (optional)</h4>
           <p className="section-note">
-            Only if this company needs a Windows share. Install one desktop agent on an office PC —
-            all staff still only use JustX; files queue to the company path automatically.
+            Windows path the desktop agent can write (UNC share, mapped drive, or OneDrive/SharePoint
+            sync-client folder from File Explorer address bar). Pure cloud SharePoint without a sync
+            PC: use Webhook URL + Power Automate instead. Steps: docs/SYNC_CENTER.md §1.4.
           </p>
           <label className="field">
             <span className="label">Download Folder path</span>

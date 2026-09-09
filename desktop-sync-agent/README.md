@@ -2,6 +2,10 @@
 
 Copies pending tool artifacts from the JustXSystems API into the Business Profile **Download Folder**, and opens a localhost bridge for Sync Center / Email Outbox → Outlook.
 
+**Who needs this agent?** Only companies using **UNC file sync** and/or **Email Outbox → Open in Outlook**. Drive/webhook PDF delivery and email webhook send do **not** need it. See [`docs/SYNC_CENTER.md`](../docs/SYNC_CENTER.md)#who-needs-sync-center.
+
+**What it syncs:** pending **file** artifacts (today Quotation V1 + Site Survey V1 PDFs queued for UNC). It does **not** send emails; Outlook Path C only opens a compose window with the PDF attached.
+
 ## Customer setup (non-technical)
 
 1. In JustX → **Sync Center** → **Set up on this PC**

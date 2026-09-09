@@ -1,15 +1,46 @@
 # Artifact delivery (company Drive / webhook / UNC)
 
-**Complete Sync Center configuration:** [`SYNC_CENTER.md`](SYNC_CENTER.md)  
-**Customer PC minimum (desktop agent):** Windows + Node 18+; Sync Center launcher `-Install` downloads the agent pack (no repo). See [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent  
+**Complete Sync Center guide (who / what / how):** [`SYNC_CENTER.md`](SYNC_CENTER.md)  
+**Customer PC (desktop agent):** [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent  
 Owner Drive steps (short): [`SETUP.md`](SETUP.md)#client-companies-part-b  
 Quotation emails (separate): [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)
 
+## Who this is for
+
+| Company type | Owner sets | Staff | Sync Center |
+|--------------|------------|-------|-------------|
+| Google Drive (most common) | Connect company Drive + folder | Just use tools | Rarely (status/retry) |
+| SharePoint / OneDrive (cloud) | **Webhook URL** from Power Automate | Just use tools | Rarely (status/retry) |
+| Artifact webhook (n8n/Make/…) | Webhook URL on profile | Just use tools | Rarely (status/retry) |
+| UNC / file share / synced folder | **Download Folder path** | One PC runs desktop agent | **Yes** |
+| Email-only (no company folder) | Destination `none` / leave unset | Email Outbox paths | Only if Outlook Path C |
+
+**How to obtain Webhook URL, secret, and Download Folder path (incl. SharePoint/OneDrive):** see [`SYNC_CENTER.md`](SYNC_CENTER.md)#13-corporate-artifact-webhook-sharepoint--onedrive--power-automate and [`SYNC_CENTER.md`](SYNC_CENTER.md)#14-company-file-server--download-folder-path-unc--optional.
+
+## What gets delivered
+
+**Files (this guide / Sync Center):** PDFs from tools that call company delivery — today **Quotation V1** and **Site Survey V1**.
+
+**Emails:** separate — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md). Emailing a quotation does **not** replace Company document delivery.
+
+## Field cheat sheet
+
+| Field on Business Profile | You get it from… | Example |
+|---------------------------|------------------|---------|
+| **Webhook URL** | Power Automate → “When an HTTP request is received” → **HTTP POST URL** | `https://prod-….logic.azure.com/workflows/…` |
+| **Webhook secret** | You invent it (optional) | Long random string; not a Microsoft secret |
+| **Download Folder path** | File Explorer address bar on a writable folder | `\\server\share\JustX` or `C:\Users\…\OneDrive - Co\JustX` |
+| **Company file server section** | UI: **Show UNC / file-server options** | Reveals Download Folder + conflict policy |
+
+Do **not** paste a SharePoint browser link or OneDrive sharing link into Webhook URL or Download Folder — those are not valid for these fields.
+
 ## Model
 
-1. Business Profile **Owner** connects the **company** Google account and a shared folder.
+1. Business Profile **Owner** chooses destination (Auto / Drive / webhook / UNC / none) and connects Drive or sets webhook/UNC as needed.
 2. Staff use their own JBT logins; they never connect Drive.
-3. The server uploads PDFs with the profile’s stored token into that company folder.
+3. On submit/deliver, the server stages an artifact and:
+   - **Drive / webhook:** uploads or POSTs immediately  
+   - **UNC:** leaves **pending** until desktop agent or browser folder sync writes the file  
 
 Platform `.env` only needs one `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`. Per-company tokens are encrypted on each Business Profile.
 
