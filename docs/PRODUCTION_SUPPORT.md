@@ -11,7 +11,7 @@ Related docs (do not duplicate full setup here):
 | [`SETUP.md`](SETUP.md) | Env vars, Google OAuth once, client Drive onboarding |
 | [`DEPLOY.md`](DEPLOY.md) | First-time VPS, GitHub Actions, nginx, PM2 |
 | [`SYNC_CENTER.md`](SYNC_CENTER.md) | UNC/local folder + desktop agent; Connected vs sync; `…/jbt/api` |
-| [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) | Quotation email paths A/B/C (Outlook agent) |
+| [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) | Quotation email paths A/B/C; Outlook prep; mailto encoding; Open in Outlook |
 | [`OBSERVABILITY.md`](OBSERVABILITY.md) | Grafana/Loki/Prometheus, Admin Operations, Sentry/GlitchTip |
 | [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) | Artifact delivery channels & filename policies |
 | [`.env.example`](../.env.example) | Env template → `server/.env` on the VPS |
@@ -343,6 +343,8 @@ ORDER BY created_at;
 | Connected but no files | Wrong folder; destination `none`; token revoked | Owner reconnect + verify folder + destination Auto/Drive |
 | Only one PC “works” | Misunderstanding — Drive/webhook are **server-side**, not a local folder | Explain model; optional UNC agent for LAN/local folders |
 | UNC Connected but Pending stuck | Wrong `apiBase` (`…/api` without `/jbt`) or agent 403 | Check `127.0.0.1:17865/status` + `agent.log`; fix to `…/jbt/api`; browser Sync now workaround — [`SYNC_CENTER.md`](SYNC_CENTER.md)#troubleshooting |
+| Open mail app / Outlook body shows `+` / `%0A` | Mailto form-encoding | Redeploy web (`buildMailtoHref`); see [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#mailto-encoding-spaces-as--and-0a |
+| Open in Outlook hangs / Add Account | Classic Outlook not ready; New Outlook (`olk`); COM blocked | [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#prep-classic-outlook-on-windows-paths-b--c |
 | `failed` after token revoke | Owner changed password / revoked app | Reconnect Drive |
 | Same filename confusion | Overwrite vs Rename vs Skip policy | See [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) |
 | Large upload timeouts | nginx `proxy_read_timeout` / body size | Conf example uses 120s / 32m — match Express 30mb |

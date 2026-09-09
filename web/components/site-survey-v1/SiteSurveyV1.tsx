@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fetchProfile } from "@/lib/api";
 import { publicAssetUrl } from "@/lib/base-path";
+import { buildMailtoHref } from "@/lib/mailto";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useLiveRefresh, invalidateAdminData } from "@/hooks/useLiveRefresh";
 import {
@@ -861,11 +862,12 @@ export function SiteSurveyV1() {
         }),
       });
       if (!result.delivered) {
-        const params = new URLSearchParams();
-        if (emailCc.trim()) params.set("cc", emailCc.trim());
-        params.set("subject", emailSubject.trim());
-        params.set("body", emailMessage.slice(0, 1800));
-        window.location.href = `mailto:${emailTo.trim()}?${params.toString()}`;
+        window.location.href = buildMailtoHref({
+          to: emailTo.trim(),
+          cc: emailCc.trim(),
+          subject: emailSubject.trim(),
+          body: emailMessage,
+        });
       }
       setSendOpen(false);
       flash(

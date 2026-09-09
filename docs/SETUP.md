@@ -253,18 +253,25 @@ Leave email webhook unset in Admin and `.env`. Staff send → draft goes to **Em
 
 Optional UI (Owner): **Business Profile → Send Via defaults → Email** (template, subject, Reply-To, intro/closing).
 
+**Windows:** classic Outlook must handle `mailto:` (finish **Add Account**; prefer classic over New Outlook). Mailto must use `%20` encoding — see [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#mailto-encoding-spaces-as--and-0a. Full steps: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#path-b--mailto--pdf-download-no-server-email.
+
+**Note:** Path B is **plain text only** — corporate HTML in the customer inbox requires Path A.
+
 ### Path C — `JBT_AGENT_TOKEN` (Outlook)
 
 **Where generated:** web app only — **not** in `.env` on the server.
 
-**Customer PC minimum:** Windows 10/11 + Sync Center **Download setup for this PC** (double-click Install). Outlook desktop if using Open in Outlook. No separate Node install. Full table: [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent.
+**Customer PC minimum:** Windows 10/11 + Sync Center **Download setup for this PC** (double-click Install). **Classic** Outlook desktop (COM) if using Open in Outlook — New Outlook (`olk`) alone is not enough. No separate Node install. Full table: [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent.
 
 1. Sign in as Owner/Staff → **Sync Center** (`/sync`).
 2. **Set up on this PC** → **Download setup for this PC**.
 3. Extract zip → double-click **Install JustX Sync Agent.cmd**.
-4. Confirm Sync Center shows **Connected**, then **Email Outbox** → **Open in Outlook**.
+4. Confirm Sync Center shows **Connected**, then prep classic Outlook (Inbox + COM) — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#prep-classic-outlook-on-windows-paths-b--c.
+5. **Email Outbox** → **Open in Outlook**.
 
 **Important:** Connected only means the local bridge (`http://127.0.0.1:17865`) is up. Production agent config must use `JBT_API_BASE=https://justxsystems.com/jbt/api` (**with `/jbt`**). See [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
+
+**UNC already working?** Do not change Download Folder for email — same agent; follow [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#end-to-end-unc-already-working--add-email-only.
 
 Manual start: copy the token from Sync Center into:
 
@@ -283,7 +290,7 @@ These are **two different queues**. Full “who needs what / what syncs / how it
 | Guide | Covers |
 |-------|--------|
 | **[`SYNC_CENTER.md`](SYNC_CENTER.md)** | Who needs Sync Center; which tools’ PDFs; all Company document delivery variants (Drive / artifact webhook / UNC / **local folder**); desktop setup; **Connected vs sync**; troubleshooting |
-| **[`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)** | Who needs Email Outbox; paths A/B/C; when Sync Center agent is required for Outlook |
+| **[`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)** | Who needs Email Outbox; paths A/B/C; Outlook prep (Add Account / New Outlook / COM); mailto `+` encoding; UNC-already-working email checklist |
 
 **Short reminder**
 

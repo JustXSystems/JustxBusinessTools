@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import { LOCAL_AGENT_BRIDGE, probeLocalAgent } from "@/lib/artifact-delivery";
+import { buildMailtoHref } from "@/lib/mailto";
 
 export type EmailOutboxItem = {
   id: string;
@@ -67,11 +68,12 @@ export async function requeueEmailOutbox(id: string) {
 }
 
 export function openMailtoForOutbox(item: EmailOutboxItem) {
-  const params = new URLSearchParams();
-  if (item.cc.trim()) params.set("cc", item.cc.trim());
-  params.set("subject", item.subject);
-  params.set("body", item.body.slice(0, 1800));
-  window.location.href = `mailto:${item.to}?${params.toString()}`;
+  window.location.href = buildMailtoHref({
+    to: item.to,
+    cc: item.cc,
+    subject: item.subject,
+    body: item.body,
+  });
 }
 
 export async function downloadOutboxPdf(item: EmailOutboxItem) {

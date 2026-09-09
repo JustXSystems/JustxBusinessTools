@@ -491,7 +491,9 @@ Sync Center → Registered agents → **Revoke**. Old launcher / LocalAppData co
 
 #### Same agent for Email Outbox
 
-With agent running on Windows + Outlook installed: **Email Outbox → Open in Outlook**. No separate token. Use `-Install` so the agent is up after reboot.
+With agent running on Windows + **classic** Outlook (COM) installed: **Email Outbox → Open in Outlook**. No separate token. Use Install so the agent is up after reboot.
+
+**Before Open in Outlook:** finish Outlook **Add Account**, turn off New Outlook, confirm COM — full steps in [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#prep-classic-outlook-on-windows-paths-b--c. Mailto body with literal `+` / `%0A`: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#mailto-encoding-spaces-as--and-0a.
 
 ---
 
@@ -537,7 +539,7 @@ With agent running on Windows + Outlook installed: **Email Outbox → Open in Ou
 | Badge / pending confusion | Sync Center pending = **files**; Email Outbox badge = **emails** |
 | Token lost | Download setup again (new token); revoke old agent |
 | Staff can’t edit path | Only Owner edits Profile delivery settings |
-| Open in Outlook fails while Connected | Same API/`apiBase`/auth issues as file sync; classic desktop Outlook required |
+| Open in Outlook fails while Connected | Same API/`apiBase`/auth issues as file sync; classic desktop Outlook required; COM hang / Add Account / New Outlook — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#troubleshooting |
 
 ---
 

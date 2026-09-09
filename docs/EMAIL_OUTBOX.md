@@ -19,12 +19,14 @@ Email Outbox is a **durable queue of quotation emails** for the current Business
 
 | Goal | Use | Sync Center setup zip? |
 |------|-----|------------------------|
-| File quotation/survey PDFs to **company Drive / webhook / UNC** | **Company document delivery** (+ Sync Center only for UNC/status) | Only for **UNC** (or Outlook Path C) |
+| File quotation/survey PDFs to **company Drive / webhook / UNC / local folder** | **Company document delivery** (+ Sync Center only for UNC/status) | Only for **UNC/local folder** (or Outlook Path C) |
 | **Send** the quotation by email | **Email Outbox** (this guide) | Only for **Path C — Open in Outlook** |
 | Drive/webhook filing **and** email webhook | Both features, separately | Usually **no** agent |
-| UNC filing **and** Outlook compose | Both use the **same** desktop agent | **Yes** — install once |
+| UNC/local filing **and** Outlook compose | Both use the **same** desktop agent | **Yes** — install once |
 
-Filing a PDF to the company folder and emailing a customer are **independent**. Doing Send Via → Email does **not** by itself run Company document delivery (email attachments use `skipDispatch`). Staff who need the PDF in Drive/UNC must also use the tool’s company submit/deliver action (or rely on whatever flow your process defines).
+Filing a PDF to the company folder and emailing a customer are **independent**. Doing Send Via → Email does **not** by itself run Company document delivery (email attachments use `skipDispatch`). Staff who need the PDF in Drive/UNC must also use the tool’s company submit/deliver action.
+
+**If UNC / Download Folder already works:** you do **not** change Profile document-delivery settings for email. Use this guide only for Paths A/B/C below. Same desktop agent can serve both file sync and Outlook.
 
 Full “who / what / how” for files: [`SYNC_CENTER.md`](SYNC_CENTER.md)#who-needs-sync-center.
 
@@ -34,13 +36,14 @@ Full “who / what / how” for files: [`SYNC_CENTER.md`](SYNC_CENTER.md)#who-ne
 
 | Setting | Where | Who | Notes |
 |---------|-------|-----|-------|
-| `EMAIL_WEBHOOK_URL` | VPS Admin → Integrations (preferred) or `server/.env` | Platform admin | HTTPS inbound webhook **you** create |
+| `EMAIL_WEBHOOK_URL` | **Admin → Integrations** (preferred) or `server/.env` | Platform admin | HTTPS inbound webhook **you** create |
 | `NOTIFY_EMAIL_WEBHOOK_URL` | Same `.env` fallback | Engineer | Alias only if Admin / primary empty |
 | Email template / accent / Reply-To | **Business Profile** → Send Via → Email | Owner | Also Admin → GST branches → Branding |
 | Default To / CC / subject text | Same Send Via panel | Owner | Prefills Quotation send modal |
-| Desktop agent token | **Sync Center** → Create token | Owner/Staff | Same agent as UNC sync |
-| Mail client | OS default app | Staff PC | Path B |
-| Outlook desktop | Windows + agent | Staff PC | Path C |
+| Desktop agent token | **Sync Center** → Download setup | Owner/Staff | Same agent as UNC sync |
+| Mail client / `mailto` handler | Windows default apps | Staff PC | Path B |
+| Classic Outlook (COM) | Windows desktop | Staff PC | Path C — **not** New Outlook alone |
+| Download Folder / UNC | Business Profile | Owner | **Not required for email** |
 
 ---
 
@@ -48,11 +51,35 @@ Full “who / what / how” for files: [`SYNC_CENTER.md`](SYNC_CENTER.md)#who-ne
 
 | Path | PDF auto-attached? | Corporate HTML? | Config burden |
 |------|-------------------|-----------------|---------------|
-| **A. Email webhook** | Yes | Yes (`html`) | Engineer: `.env` + automation |
-| **B. Mailto + outbox** | No (download + attach) | No (plain in mail app) | None on server |
-| **C. Outlook via agent** | Yes (COM) | Plain body in Outlook | Sync Center token + Windows |
+| **A. Email webhook** | Yes | Yes (`html` field) | Platform admin + automation |
+| **B. Mailto + outbox** | No (download + attach) | **No** — plain text only in mail app | None on server; working default mail client |
+| **C. Outlook via agent** | Yes (COM) | HTML if outbox stored `html` **and** agent supports `HTMLBody`; else plain | Sync Center agent + **classic** Outlook COM |
 
-Recommended: **A** in production; **B** until then; **C** for Outlook Sent Items without a cloud webhook. Combine: A primary, B/C when webhook fails (row stays in Outbox).
+Recommended: **A** in production for real HTML; **B** until then (plain body + attach PDF); **C** for Outlook Sent Items with PDF attached without a cloud webhook. Combine: A primary, B/C when webhook fails (row stays in Outbox).
+
+**Important expectations**
+
+| Expectation | Reality |
+|-------------|---------|
+| “I designed HTML email in Profile” | Full HTML in the **customer’s inbox** needs **Path A**. Path B never sends HTML. Path C can open HTML in Outlook compose when HTML was stored on the outbox row. |
+| Body shows `Dear+Customer,%0A%0A…` | Broken mailto encoding (spaces as `+`). Fixed by `buildMailtoHref` (`%20`) — redeploy web; see [Mailto encoding](#mailto-encoding-spaces-as--and-0a). |
+| Open mail app / Open in Outlook do nothing | Often Outlook stuck on **Add Account**, **New Outlook** without COM, or hung `OUTLOOK.exe` — see [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c). |
+| UNC works but email fails | Expected to be independent; email does not use Download Folder. |
+
+---
+
+## Create an Email Outbox draft (all paths)
+
+Nothing appears in Email Outbox until staff send from a tool.
+
+1. Sign in at https://justxsystems.com/jbt/ on the correct Business Profile / branch.  
+2. Open **Quotation** (or Site Survey where email send exists).  
+3. Generate/save so a PDF can be built.  
+4. **Send Via → Email**: fill **To** (required), optional CC / subject / message.  
+5. Send. API creates an outbox row (+ PDF artifact when provided).  
+6. Open **Email Outbox** (`/email-outbox`) → **Pending** — confirm a row with To/Subject and (for Path C) a PDF.
+
+Optional Owner polish (not required to send): **Business Profile → Send Via defaults → Email** (template Corporate/Plain, subject, Reply-To, intro/closing).
 
 ---
 
@@ -64,7 +91,7 @@ JustX does **not** generate this URL. You create an inbound webhook in an extern
 
 | Env var | Prefer? | Meaning |
 |---------|---------|---------|
-| `EMAIL_WEBHOOK_URL` | Yes | Primary |
+| `EMAIL_WEBHOOK_URL` | Yes (or Admin Integrations) | Primary |
 | `NOTIFY_EMAIL_WEBHOOK_URL` | Only as fallback | Same purpose if primary empty |
 
 ### Step-by-step
@@ -73,25 +100,21 @@ JustX does **not** generate this URL. You create an inbound webhook in an extern
 
 Pick one:
 
-**n8n**  
-New workflow → **Webhook** trigger → POST → copy Production URL → add Send Email / SMTP / SendGrid → map body fields → **Activate**.
+**n8n** — New workflow → **Webhook** trigger → POST → copy Production URL → Send Email / SMTP / SendGrid → map fields → **Activate**.
 
-**Make.com**  
-Webhooks → Custom webhook → copy `https://hook.…make.com/…` → Email / Microsoft 365 / SendGrid module → turn scenario **On**.
+**Make.com** — Webhooks → Custom webhook → copy `https://hook.…make.com/…` → Email module → scenario **On**.
 
-**Zapier**  
-Webhooks by Zapier → Catch Hook → copy URL → Email/Gmail/SendGrid action → Publish.
+**Zapier** — Webhooks by Zapier → Catch Hook → Email/Gmail/SendGrid → Publish.
 
-**Power Automate**  
-When an HTTP request is received → save → copy **HTTP POST URL** → Send an email (V2) → attach from `pdfBase64`.
+**Power Automate** — When an HTTP request is received → **HTTP POST URL** → Send an email (V2) → attach from `pdfBase64`.
 
 **Not valid as the URL:** SendGrid API key, SMTP password, Gmail app password (those belong **inside** the automation).
 
-**Optional test:** [webhook.site](https://webhook.site) URL → temporary `.env` → send one quote → confirm JSON → replace with real flow.
+#### 2) Put URL on JustX
 
-#### 2) Put URL on the JustX API host
+**Preferred:** platform admin → **Admin → Integrations → Email webhook** → paste → Enable → Save → **Send test POST**.
 
-**Production:**
+**Fallback `.env`:**
 
 ```bash
 nano /var/www/jbt/server/.env
@@ -100,10 +123,6 @@ nano /var/www/jbt/server/.env
 ```env
 EMAIL_WEBHOOK_URL=https://YOUR-PRODUCTION-WEBHOOK-URL
 ```
-
-**Local:** `server/.env` (from `.env.example`).
-
-Reload:
 
 ```bash
 cd /var/www/jbt
@@ -124,25 +143,17 @@ pm2 save
 
 Full contract: [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md).
 
-#### 4) Business Profile branding (Owner)
+#### 4) Staff test
 
-1. **Business Profile**  
-2. Document accent color  
-3. **Send Via defaults → Email**: Corporate HTML or Plain; subject; Reply-To; intro/closing  
-4. Optional: **Admin → GST branches → Branding** per branch  
-
-#### 5) Staff test
-
-Quotation → Send Via → Email → Send.  
-Email Outbox: **sent** = success. **failed** = use **Send via webhook** to retry.
+Quotation → Send Via → Email. Email Outbox: **sent** = success. **failed** = **Send via webhook** to retry.
 
 ### Path A checklist
 
 - [ ] Webhook created and **active**  
-- [ ] URL in `EMAIL_WEBHOOK_URL`  
-- [ ] API reloaded with `--update-env`  
+- [ ] URL in Admin Integrations or `EMAIL_WEBHOOK_URL`  
+- [ ] API reloaded if using `.env`  
 - [ ] Automation maps **`html`** and PDF  
-- [ ] Profile Corporate template + accent  
+- [ ] Profile Corporate template + accent (optional)  
 - [ ] Test inbox shows HTML + attachment  
 
 ---
@@ -151,36 +162,110 @@ Email Outbox: **sent** = success. **failed** = use **Send via webhook** to retry
 
 ### What to configure
 
-**Server:** leave `EMAIL_WEBHOOK_URL` empty.  
-**Optional:** Business Profile Send Via defaults (subject / message).  
-**PC:** default mail client (Outlook, Apple Mail, etc.).
+**Server:** leave email webhook unset.  
+**Optional:** Business Profile Send Via defaults.  
+**PC:** working **default mail app** that handles `mailto:` (classic Outlook recommended on Windows).
 
-### Staff flow
+### Prep classic Outlook on Windows (Paths B + C)
 
-1. Quotation → Email → Send.  
-2. JustX saves Outbox (`pending`), downloads PDF, opens `mailto:`.  
-3. User attaches downloaded PDF → Send in mail app.  
-4. Later: Email Outbox → **Open mail app** / **Download PDF**.
+Both **Open mail app** and **Open in Outlook** fail if classic Outlook is stuck or New Outlook owns the UI.
 
-### Limits
+#### 1) See what is running
 
-- Browsers cannot attach files via `mailto:`  
-- Body length capped (~1800 chars)  
-- No corporate HTML in the mail client  
-- Need a mail client on the device you use to open  
+```powershell
+Get-Process OUTLOOK, olk -ErrorAction SilentlyContinue |
+  Format-Table Id, ProcessName, MainWindowTitle, Responding -AutoSize
+```
+
+| Process | Meaning |
+|---------|---------|
+| `OUTLOOK` + title **Add Account** | Finish account setup — Inbox not ready |
+| `olk` | **New Outlook** (Store) — weak/no COM; turn off for Path C |
+| `OUTLOOK` + Inbox title | Classic Outlook ready |
+
+#### 2) Finish Add Account / restart Outlook
+
+```powershell
+Stop-Process -Name OUTLOOK, olk -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+Start-Process "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
+```
+
+1. Complete **Add Account** until a real **Inbox** appears.  
+2. Turn **New Outlook** toggle **Off** if shown.  
+3. Manually **New Email** once to confirm compose works.
+
+#### 3) Confirm `mailto` outside JustX
+
+```powershell
+Start-Process "mailto:your.email@example.com?subject=JBT%20test&body=Mailto%20works"
+```
+
+**Expected:** compose opens with readable subject/body (spaces, not `+`).  
+If not: **Settings → Apps → Default apps** → set **Email** / **MAILTO** to **Outlook** (classic), not Outlook (new).
+
+#### 4) Confirm COM for Path C (optional here; required for C)
+
+```powershell
+Stop-Process -Name olk -Force -ErrorAction SilentlyContinue
+$o = New-Object -ComObject Outlook.Application
+$m = $o.CreateItem(0)
+$m.Subject = "JBT COM OK"
+$m.Display()
+"COM worked"
+```
+
+Must return in a few seconds with a compose window. If it hangs, classic Outlook is still blocked — repeat steps 1–2.
+
+### Staff flow (Path B)
+
+1. Quotation → Email → Send (creates Outbox `pending`, may auto-download PDF and open mailto).  
+2. Or Email Outbox → pending row → **Download PDF** first.  
+3. Click **Open mail app** (browser may ask to open Outlook → Allow).  
+4. In the mail client: **Attach** the downloaded PDF → **Send**.  
+5. Outbox status moves toward **opened** after mark-opened.
+
+### Manual fallback (always works if Download PDF works)
+
+1. Email Outbox → **Download PDF**.  
+2. Open Outlook or Gmail yourself.  
+3. New message → copy To / Subject / body from the Outbox row.  
+4. Attach PDF → Send.
+
+### Mailto encoding (spaces as `+` and `%0A`)
+
+**Symptom:** body looks like `Dear+Customer,%0A%0APlease+find+attached…`.
+
+**Cause:** older UI built `mailto:` with `URLSearchParams`, which uses form-encoding (`+` for spaces). Many Outlook builds show that literally.
+
+**Fix:** use RFC 6068 percent-encoding (`%20`) via `web/lib/mailto.ts` (`buildMailtoHref`). After web deploy, send a **new** email and use **Open mail app** again.
+
+```text
+Wrong:  mailto:a@x.com?body=Dear+Customer,%0A%0APlease…
+Right:  mailto:a@x.com?body=Dear%20Customer%0A%0APlease…
+```
+
+### Path B limits
+
+- Browsers cannot attach files via `mailto:` — always **Download PDF** + attach.  
+- Body length capped (~1800 chars).  
+- **No corporate HTML** in the mail client (plain only).  
+- Requires a working OS mail handler (prep section above).
 
 ### Path B checklist
 
-- [ ] Webhook unset  
-- [ ] Default mail client works  
-- [ ] Staff know to attach the PDF  
-- [ ] Email Outbox bookmarked for retries  
+- [ ] Webhook unset (or ignore Path A buttons)  
+- [ ] Outlook Inbox ready / mailto probe works  
+- [ ] Pending outbox row exists  
+- [ ] **Download PDF** succeeds  
+- [ ] **Open mail app** opens compose with normal spaces (after mailto fix deploy)  
+- [ ] Staff attach PDF before Send  
 
 ---
 
 ## Path C — Outlook with PDF (desktop agent)
 
-Uses the **same** Sync Center desktop agent as UNC file sync.
+Uses the **same** Sync Center desktop agent as UNC / local-folder file sync.
 
 ### Customer PC — minimum requirements
 
@@ -188,79 +273,79 @@ Uses the **same** Sync Center desktop agent as UNC file sync.
 |-------------|---------|--------|
 | Windows 10/11 | Yes | Path C is Windows-only |
 | Sync Center setup zip + Install.cmd | Yes | No separate Node.js install |
-| Outbound HTTPS to JustX API | Yes | Token auth to API |
-| **Desktop Outlook** (COM) | Yes | Classic Outlook COM — not web-only / New Outlook without COM |
-| Chrome/Edge on **same PC** as agent | Yes | Outbox talks to `127.0.0.1:17865` |
+| Outbound HTTPS to JustX API | Yes | Token auth; production base must include `/jbt` |
+| **Classic desktop Outlook** (COM) | Yes | Not Outlook on the web alone; New Outlook (`olk`) is insufficient |
+| Chrome/Edge on **same PC** as agent | Yes | Outbox talks to `http://127.0.0.1:17865` |
 | Download Folder / UNC | No | Only if also syncing files |
 
-Canonical full matrix + site caveats: [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent.
+Canonical agent matrix: [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent · Connected vs sync: [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
 
 ### What to configure
 
 | Item | Where |
 |------|--------|
-| Agent token | Sync Center → **Create token + download launcher** |
-| Agent process | Run `.ps1` / `npm start` on Windows PC with Outlook |
-| Download Folder | Optional (needed for file sync; not required for Outlook-only) |
+| Agent install + token | Sync Center → **Download setup for this PC** |
+| Classic Outlook ready | [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c) |
+| Download Folder | Optional (UNC only) |
 
-### Generate `JBT_AGENT_TOKEN`
+### Install agent (if not already for UNC)
 
-1. Sign in as Owner/Staff on the correct Business Profile.  
-2. **Sync Center** → **Set up on this PC**.  
-3. Optional label → **Create token + download launcher**.  
-4. Token `jxsa_…` shown **once** + embedded in `.ps1`.  
-5. Lost → create new + **Revoke** old under Registered agents.
-
-Detailed agent env: [`SYNC_CENTER.md`](SYNC_CENTER.md)#23-desktop-agent-sync-unc--outlook.
-
-### Run agent + send
-
-**Recommended (non-technical):** Sync Center → **Download setup for this PC** → extract → double-click **Install JustX Sync Agent.cmd**.
-
-**Advanced:**
+1. Sync Center → **Set up on this PC** → **Download setup for this PC**.  
+2. Extract zip → **Install JustX Sync Agent.cmd**.  
+3. Sync Center shows **Desktop agent: Connected**.  
+4. Verify API base:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start-justx-sync-agent.ps1 -Install
+Invoke-RestMethod http://127.0.0.1:17865/status | ConvertTo-Json -Depth 5
+# apiBase must be https://justxsystems.com/jbt/api  (with /jbt)
+Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
 ```
 
-Sync Center: **Desktop agent: Connected**.  
-Email Outbox → **Open in Outlook** (browser and agent on **same** PC).
+### Send with Open in Outlook
 
-**Connected ≠ Outlook ready:** the bridge can be up while the agent still fails API calls. Production config must use `JBT_API_BASE=https://justxsystems.com/jbt/api` (**with `/jbt`**). Diagnose: `Invoke-RestMethod http://127.0.0.1:17865/status` and `%LOCALAPPDATA%\JustX\sync-agent\agent.log`. Details: [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
+1. Complete [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c) (COM probe must succeed).  
+2. Create pending outbox row with **PDF** ([Create draft](#create-an-email-outbox-draft-all-paths)).  
+3. Email Outbox: Desktop agent **Online**; button enabled (disabled if no agent or no `artifactId`).  
+4. Click **Open in Outlook** — wait up to ~30–90s for large PDFs.  
+5. Outlook compose opens with To/Subject/body (+ HTML when available) and **PDF attached**.  
+6. Click **Send** in Outlook. Status → **opened**.
 
-Foreground only:
+### Path C checklist
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start-justx-sync-agent.ps1
-```
+- [ ] Classic Outlook Inbox ready; New Outlook off; COM probe OK  
+- [ ] Agent Connected; `apiBase` = `https://justxsystems.com/jbt/api`  
+- [ ] Pending row has PDF  
+- [ ] **Open in Outlook** opens compose with attachment  
+- [ ] Windows only  
 
-Manual:
+### Path C limits
+
+- Mailto / Open mail app still cannot carry full HTML.  
+- Open in Outlook prefers `HTMLBody` when outbox `body_html` is set and agent pack supports it; otherwise plain `Body`.  
+- Agent must run on the Outlook PC.  
+- Same `apiBase` / auth issues that block UNC sync also block compose.  
+- Never invent `JBT_AGENT_TOKEN` — only Sync Center.
+
+Manual agent start:
 
 ```powershell
 $env:JBT_API_BASE = "https://justxsystems.com/jbt/api"
 $env:JBT_AGENT_TOKEN = "jxsa_…"
-cd desktop-sync-agent
+# from desktop-sync-agent install or sources
 npm start
 ```
 
-Health / remove: `-Health` / `-Uninstall` on the launcher, or `health-check.ps1` / `uninstall-agent.ps1` in `desktop-sync-agent`.
+---
 
-### Path C checklist
+## End-to-end: UNC already working — add email only
 
-- [ ] Customer PC meets [minimum requirements](#customer-pc--minimum-requirements) (Windows, Outlook, …)  
-- [ ] Token from Sync Center (not invented)  
-- [ ] Agent installed (`-Install`) or running on this PC  
-- [ ] Sync Center shows Connected (or `health-check.ps1` OK)  
-- [ ] Production: `status.apiBase` is `https://justxsystems.com/jbt/api` (not `…/api` without `/jbt`)  
-- [ ] Desktop Outlook installed  
-- [ ] Outbox row has PDF  
-- [ ] Windows only  
+Typical customer who already has `C:\JustX\Artifacts` (or UNC) syncing:
 
-### Limits
-
-- Outlook body is plain text (HTML still stored for webhook retry)  
-- Agent must run on the Outlook PC  
-- Same agent/`apiBase` issues that block UNC sync also block Open in Outlook  
+1. **Do not change** Download Folder / UNC for email.  
+2. Run [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c).  
+3. Prefer Path B immediately: Quotation email → Outbox → **Download PDF** → **Open mail app** (or manual attach).  
+4. Path C: same agent → **Open in Outlook** after COM works.  
+5. Optional later: Path A webhook for automatic HTML + PDF.
 
 ---
 
@@ -281,9 +366,9 @@ Health / remove: `-Health` / `-Uninstall` on the launcher, or `health-check.ps1`
 | Button | Requires |
 |--------|----------|
 | **Send via webhook** | Path A configured on API |
-| **Open mail app** | Path B — local mail client |
+| **Open mail app** | Path B — working `mailto` handler |
 | **Download PDF** | Row has artifact |
-| **Open in Outlook** | Path C — agent online on this PC |
+| **Open in Outlook** | Path C — agent online on this PC + PDF |
 | **Requeue** | Sets back toward pending |
 | **Cancel** | Stops further send attempts |
 
@@ -302,9 +387,9 @@ Filters: **Pending** (pending+failed) vs **All**.
 
 | Role | Configures |
 |------|------------|
-| **JustX engineer** | `EMAIL_WEBHOOK_URL` in `server/.env`, PM2 reload, optional automation hosting |
-| **Company Owner** | Profile email templates, accent; Sync Center token if needed |
-| **Staff** | Send quotations; Outbox actions; run agent on their PC if using C |
+| **JustX engineer** | Admin Integrations / `EMAIL_WEBHOOK_URL`, PM2, automation hosting |
+| **Company Owner** | Profile email templates, accent; Sync Center setup if Path C / UNC |
+| **Staff** | Send quotations; Outbox actions; Outlook ready on their PC for B/C |
 
 ---
 
@@ -312,18 +397,42 @@ Filters: **Pending** (pending+failed) vs **All**.
 
 | Symptom | Check |
 |---------|--------|
-| Always mailto, never auto-send | `EMAIL_WEBHOOK_URL` empty or API not reloaded |
+| Always mailto, never auto-send | Email webhook empty or API not reloaded |
 | Webhook 4xx/5xx in Outbox | Automation inactive; wrong URL; mapping error |
-| HTML looks plain | Automation mapped `body` only — map **`html`** |
-| Open in Outlook disabled / errors | Agent not on this PC; not Windows; Outlook missing; wrong `apiBase` (must include `/jbt` in prod); API 403 — see [`SYNC_CENTER.md`](SYNC_CENTER.md)#troubleshooting |
-| Wrong badge count | Fixed by route-specific badges; pending = pending+failed emails |
+| HTML looks plain (webhook) | Automation mapped `body` only — map **`html`** |
+| Expected HTML but see plain text (B/C) | Path B is always plain. Path C HTML only with stored `html` + supporting agent. Full HTML inbox = Path A |
+| Body shows `+` and `%0A` | Old mailto form-encoding — redeploy web with `buildMailtoHref`; new send |
+| Open mail app / Outlook do nothing | Outlook **Add Account** stuck; New Outlook; hung process — [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c) |
+| Open in Outlook times out / hangs | COM hang (`New-Object Outlook.Application`); close `olk`; restart classic Outlook; COM probe |
+| Open in Outlook disabled | Agent offline; or row has no PDF (`artifactId`) |
+| Agent Connected but compose fails | Check `apiBase` (`…/jbt/api`), `agent.log`, [`SYNC_CENTER.md`](SYNC_CENTER.md)#troubleshooting |
+| UNC Pending stuck vs email | Separate queues — Sync Center = files; Email Outbox = emails |
+| Wrong badge count | Outbox pending = pending+failed **emails** |
 | Wrong company emails | Branch / Business Profile switcher |
+
+### Diagnostic commands (Windows)
+
+```powershell
+# Agent bridge
+Invoke-RestMethod http://127.0.0.1:17865/status | ConvertTo-Json -Depth 5
+Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\config.json"
+Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
+
+# Outlook processes
+Get-Process OUTLOOK, olk -ErrorAction SilentlyContinue |
+  Format-Table Id, ProcessName, MainWindowTitle, Responding -AutoSize
+
+# mailto probe
+Start-Process "mailto:you@example.com?subject=JBT%20test&body=Mailto%20works"
+```
 
 ---
 
 ## Related docs
 
 - [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) — JSON contract  
-- [`SYNC_CENTER.md`](SYNC_CENTER.md) — agent + file delivery  
+- [`SYNC_CENTER.md`](SYNC_CENTER.md) — agent + UNC/local folder delivery · Connected ≠ sync  
 - [`SETUP.md`](SETUP.md) — env + short email section  
+- [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) — file delivery channels (not email)  
 - `desktop-sync-agent/README.md` — `/open-email` bridge  
+- `web/lib/mailto.ts` — correct mailto percent-encoding  

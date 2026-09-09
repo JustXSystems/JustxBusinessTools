@@ -369,6 +369,7 @@ export async function openEmailCompose(outboxId) {
   const cc = compose.cc || "";
   const subject = compose.subject || "";
   const body = compose.body || "";
+  const html = String(compose.html || "").trim();
   const filename = (compose.filename || "quotation.pdf").replace(/[<>:"/\\|?*]/g, "_");
   if (!compose.pdfBase64) {
     throw new Error("Outbox item has no PDF attachment");
@@ -378,6 +379,10 @@ export async function openEmailCompose(outboxId) {
   await mkdir(tmpDir, { recursive: true });
   const pdfPath = path.join(tmpDir, `${outboxId}_${filename}`);
   await writeFile(pdfPath, Buffer.from(compose.pdfBase64, "base64"));
+
+  // Base64 avoids PowerShell quoting issues for long bodies / HTML.
+  const bodyB64 = Buffer.from(body, "utf8").toString("base64");
+  const htmlB64 = html ? Buffer.from(html, "utf8").toString("base64") : "";
 
   const script = `
 $ErrorActionPreference = 'Stop'
@@ -390,7 +395,14 @@ $mail = $outlook.CreateItem(0)
 $mail.To = ${psQuote(to)}
 $mail.CC = ${psQuote(cc)}
 $mail.Subject = ${psQuote(subject)}
-$mail.Body = ${psQuote(body)}
+$plain = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String(${psQuote(bodyB64)}))
+$mail.Body = $plain
+${
+  htmlB64
+    ? `$html = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String(${psQuote(htmlB64)}))
+$mail.HTMLBody = $html`
+    : ""
+}
 $mail.Attachments.Add(${psQuote(pdfPath)}) | Out-Null
 $mail.Display()
 'ok'

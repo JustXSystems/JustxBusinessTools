@@ -23,7 +23,7 @@ Quotation emails (separate): [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)
 
 **Files (this guide / Sync Center):** PDFs from tools that call company delivery — today **Quotation V1** and **Site Survey V1**.
 
-**Emails:** separate — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md). Emailing a quotation does **not** replace Company document delivery.
+**Emails:** separate — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) (Paths A/B/C, Outlook prep, mailto encoding). Emailing a quotation does **not** replace Company document delivery. UNC already working? Add email without changing Download Folder — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#end-to-end-unc-already-working--add-email-only.
 
 ## Field cheat sheet
 

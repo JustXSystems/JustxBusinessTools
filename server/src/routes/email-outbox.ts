@@ -162,6 +162,7 @@ router.get("/:id/agent-compose", async (req, res) => {
       cc: row.cc_addr ?? "",
       subject: row.subject,
       body: row.body_text,
+      html: row.body_html ?? "",
       filename: row.filename || "quotation.pdf",
       pdfBase64,
       artifactId: row.artifact_id,

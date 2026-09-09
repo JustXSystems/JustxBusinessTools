@@ -79,6 +79,6 @@ npm start
 | GET | `/health` | Liveness + version |
 | GET | `/status` | `apiBase`, last sync result/error, folder probe, Outlook capability |
 | POST | `/sync-once` | One sync pass |
-| POST | `/open-email` | Outlook compose with PDF |
+| POST | `/open-email` | Outlook compose with PDF (classic COM; prefer HTMLBody when API sends `html`) |
 
-Docs: [`docs/SYNC_CENTER.md`](../docs/SYNC_CENTER.md) · [`docs/EMAIL_OUTBOX.md`](../docs/EMAIL_OUTBOX.md)
+Docs: [`docs/SYNC_CENTER.md`](../docs/SYNC_CENTER.md) · [`docs/EMAIL_OUTBOX.md`](../docs/EMAIL_OUTBOX.md) (Outlook prep, mailto encoding, Open in Outlook)

@@ -46,6 +46,7 @@ import {
   type QuotationEmailVars,
 } from "@/lib/quotation-email-templates";
 import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
+import { buildMailtoHref } from "@/lib/mailto";
 import { QuoteSheet } from "./QuoteSheet";
 import "./quotation-v1.css";
 
@@ -1694,11 +1695,12 @@ export function QuotationGeneratorV1() {
                               /* mailto still useful */
                             }
                           }
-                          const params = new URLSearchParams();
-                          if (emailCc.trim()) params.set("cc", emailCc.trim());
-                          params.set("subject", emailSubject.trim());
-                          params.set("body", emailMessage.slice(0, 1800));
-                          window.location.href = `mailto:${emailTo.trim()}?${params.toString()}`;
+                          window.location.href = buildMailtoHref({
+                            to: emailTo.trim(),
+                            cc: emailCc.trim(),
+                            subject: emailSubject.trim(),
+                            body: emailMessage,
+                          });
                         }
                         await saveQuote("sent");
                         await pushNotif(
