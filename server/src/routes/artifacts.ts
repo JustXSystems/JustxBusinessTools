@@ -203,7 +203,7 @@ router.get("/sync-summary", async (_req, res) => {
     counts,
     pending:
       (counts.pending ?? 0) + (counts.failed ?? 0) + (counts.conflict ?? 0),
-    delivery: cfg ? publicDeliveryConfig(cfg) : null,
+    delivery: cfg ? await publicDeliveryConfig(cfg) : null,
   });
 });
 

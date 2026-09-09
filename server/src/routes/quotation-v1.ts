@@ -238,7 +238,7 @@ router.post("/send/email", async (req, res) => {
     return;
   }
 
-  const webhookOn = emailWebhookConfigured();
+  const webhookOn = await emailWebhookConfigured();
   let outboxId: string | null = null;
   try {
     if (webhookOn && !queueOnly) {
@@ -409,7 +409,7 @@ router.post("/send/email", async (req, res) => {
 });
 
 router.get("/send/email/status", async (_req, res) => {
-  res.json({ webhookConfigured: emailWebhookConfigured() });
+  res.json({ webhookConfigured: await emailWebhookConfigured() });
 });
 
 router.get("/send/whatsapp/status", (_req, res) => {

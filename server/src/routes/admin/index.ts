@@ -14,6 +14,7 @@ import skusRouter from "./skus.js";
 import subscriptionsRouter from "./subscriptions.js";
 import teamRouter from "./team.js";
 import themesRouter from "./themes.js";
+import integrationsRouter from "./integrations.js";
 
 const router = Router();
 
@@ -278,5 +279,6 @@ router.use("/subscriptions", subscriptionsRouter);
 router.use("/gateways", gatewaysRouter);
 router.use("/themes", themesRouter);
 router.use("/config", configRouter);
+router.use("/integrations", integrationsRouter);
 
 export default router;

@@ -16,6 +16,7 @@ export type NavIconId =
   | "experience"
   | "audit"
   | "ops"
+  | "integrations"
   | "logout"
   | "arrowLeft"
   | "sync";

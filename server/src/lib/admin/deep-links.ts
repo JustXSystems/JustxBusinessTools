@@ -42,6 +42,7 @@ export const adminDeepLink = {
   gateways: (filter?: "unhealthy" | "enabled" | "live" | "off" | "test") =>
     filter ? `/admin/gateways?filter=${filter}` : "/admin/gateways",
   audit: () => "/admin/audit",
+  integrations: () => "/admin/integrations",
   subscriptions: () => "/admin/subscriptions",
   ops: () => "/admin/ops",
 } as const;

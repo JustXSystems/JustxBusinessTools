@@ -34,8 +34,8 @@ Full “who / what / how” for files: [`SYNC_CENTER.md`](SYNC_CENTER.md)#who-ne
 
 | Setting | Where | Who | Notes |
 |---------|-------|-----|-------|
-| `EMAIL_WEBHOOK_URL` | VPS `/var/www/jbt/server/.env` (or local `server/.env`) | JustX engineer | HTTPS inbound webhook **you** create |
-| `NOTIFY_EMAIL_WEBHOOK_URL` | Same `.env` | Engineer | Alias only if `EMAIL_WEBHOOK_URL` empty |
+| `EMAIL_WEBHOOK_URL` | VPS Admin → Integrations (preferred) or `server/.env` | Platform admin | HTTPS inbound webhook **you** create |
+| `NOTIFY_EMAIL_WEBHOOK_URL` | Same `.env` fallback | Engineer | Alias only if Admin / primary empty |
 | Email template / accent / Reply-To | **Business Profile** → Send Via → Email | Owner | Also Admin → GST branches → Branding |
 | Default To / CC / subject text | Same Send Via panel | Owner | Prefills Quotation send modal |
 | Desktop agent token | **Sync Center** → Create token | Owner/Staff | Same agent as UNC sync |

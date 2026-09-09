@@ -52,6 +52,7 @@ export const adminNavigation: AdminNavSection[] = [
     id: "security",
     label: "Security",
     items: [
+      { href: "/admin/integrations", label: "Integrations", icon: "integrations" },
       { href: "/admin/audit", label: "Audit", icon: "audit" },
       { href: "/admin/ops", label: "Operations", icon: "ops" },
     ],

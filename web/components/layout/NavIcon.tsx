@@ -171,6 +171,15 @@ export function NavIcon({ id, className }: { id: NavIconId; className?: string }
           <circle cx="19" cy="17" r="2" />
         </Svg>
       );
+    case "integrations":
+      return (
+        <Svg {...props}>
+          <path d="M8 12h8" />
+          <path d="M12 8v8" />
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        </Svg>
+      );
     case "logout":
       return (
         <Svg {...props}>

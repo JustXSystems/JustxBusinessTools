@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { pool } from "../../db.js";
+import { resolveGoogleOAuthConfig } from "../integrations/resolvers.js";
 import { hashPassword, createSession, setSessionCookie } from "./session.js";
 import type { Response } from "express";
 
@@ -7,19 +8,27 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
 
-export function getGoogleOAuthConfig() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri =
-    process.env.GOOGLE_REDIRECT_URI ??
-    `${process.env.API_PUBLIC_URL ?? "http://localhost:4000"}/api/auth/google/callback`;
+export type GoogleOAuthConfig = {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  driveRedirectUri: string;
+};
 
-  if (!clientId || !clientSecret) return null;
-  return { clientId, clientSecret, redirectUri };
+/** Prefer Admin → Integrations (DB); fall back to GOOGLE_* env. */
+export async function getGoogleOAuthConfig(): Promise<GoogleOAuthConfig | null> {
+  const resolved = await resolveGoogleOAuthConfig();
+  if (!resolved) return null;
+  return {
+    clientId: resolved.clientId,
+    clientSecret: resolved.clientSecret,
+    redirectUri: resolved.redirectUri,
+    driveRedirectUri: resolved.driveRedirectUri,
+  };
 }
 
-export function buildGoogleAuthUrl(state: string): string | null {
-  const cfg = getGoogleOAuthConfig();
+export async function buildGoogleAuthUrl(state: string): Promise<string | null> {
+  const cfg = await getGoogleOAuthConfig();
   if (!cfg) return null;
 
   const params = new URLSearchParams({
@@ -46,7 +55,7 @@ type GoogleUserInfo = {
 };
 
 async function exchangeCode(code: string): Promise<string | null> {
-  const cfg = getGoogleOAuthConfig();
+  const cfg = await getGoogleOAuthConfig();
   if (!cfg) return null;
 
   const res = await fetch(GOOGLE_TOKEN_URL, {

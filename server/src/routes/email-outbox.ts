@@ -20,7 +20,7 @@ router.get("/status", async (_req, res) => {
   await ensureEmailOutboxSchema();
   const pending = await listEmailOutbox({ pendingOnly: true, limit: 200 });
   res.json({
-    webhookConfigured: emailWebhookConfigured(),
+    webhookConfigured: await emailWebhookConfigured(),
     pendingCount: pending.length,
   });
 });
@@ -34,7 +34,7 @@ router.get("/", async (req, res) => {
   const rows = await listEmailOutbox({ pendingOnly, status, limit });
   res.json({
     items: rows.map(mapOutboxPublic),
-    webhookConfigured: emailWebhookConfigured(),
+    webhookConfigured: await emailWebhookConfigured(),
   });
 });
 
@@ -44,7 +44,7 @@ router.get("/:id", async (req, res) => {
     res.status(404).json({ error: "Outbox item not found" });
     return;
   }
-  res.json({ item: mapOutboxPublic(row), webhookConfigured: emailWebhookConfigured() });
+  res.json({ item: mapOutboxPublic(row), webhookConfigured: await emailWebhookConfigured() });
 });
 
 router.post("/", requireWriteAccess, async (req, res) => {
@@ -79,10 +79,10 @@ router.post("/", requireWriteAccess, async (req, res) => {
 
 router.post("/:id/send-webhook", requireWriteAccess, async (req, res) => {
   try {
-    if (!emailWebhookConfigured()) {
+    if (!(await emailWebhookConfigured())) {
       res.status(400).json({
         error:
-          "EMAIL_WEBHOOK_URL is not configured on the API server. Use Open mail app or Open in Outlook (desktop agent).",
+          "Email webhook is not configured. Ask a platform admin to set it under Admin → Integrations, or use Open mail app / Open in Outlook (desktop agent).",
       });
       return;
     }

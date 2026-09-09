@@ -120,7 +120,7 @@ async function listOrgThemeOptions(orgId: number) {
 
 function toApi(
   row: ProfileRow,
-  deliveryExtra?: ReturnType<typeof publicDeliveryConfig> | null,
+  deliveryExtra?: Awaited<ReturnType<typeof publicDeliveryConfig>> | null,
   themeExtras?: {
     orgThemes?: Array<{
       id: number;
@@ -245,7 +245,7 @@ router.get("/", async (_req, res) => {
   res.json(
     toApi(
       { ...row, send_settings: sendRaw },
-      cfg ? publicDeliveryConfig(cfg) : null,
+      cfg ? await publicDeliveryConfig(cfg) : null,
       { orgThemes, organizationTheme },
     ),
   );
@@ -449,7 +449,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
     listOrgThemeOptions(orgId),
     loadOrgActiveThemeTokens(orgId),
   ]);
-  res.json(toApi(row, cfg ? publicDeliveryConfig(cfg) : null, { orgThemes, organizationTheme }));
+  res.json(toApi(row, cfg ? await publicDeliveryConfig(cfg) : null, { orgThemes, organizationTheme }));
 });
 
 export default router;

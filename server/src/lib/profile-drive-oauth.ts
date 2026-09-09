@@ -47,23 +47,26 @@ export async function ensureProfileDriveSchema(): Promise<void> {
   await schemaReady;
 }
 
-export function isDriveOAuthClientConfigured(): boolean {
-  return Boolean(getGoogleOAuthConfig());
+export async function isDriveOAuthClientConfigured(): Promise<boolean> {
+  return Boolean(await getGoogleOAuthConfig());
 }
 
-export function driveConnectRedirectUri(): string {
+export async function driveConnectRedirectUri(): Promise<string> {
+  const cfg = await getGoogleOAuthConfig();
+  if (cfg?.driveRedirectUri) return cfg.driveRedirectUri;
   return (
     process.env.GOOGLE_DRIVE_REDIRECT_URI ??
     `${process.env.API_PUBLIC_URL ?? "http://localhost:4000"}/api/profile/drive/callback`
   );
 }
 
-export function buildDriveConnectUrl(state: string): string | null {
-  const cfg = getGoogleOAuthConfig();
+export async function buildDriveConnectUrl(state: string): Promise<string | null> {
+  const cfg = await getGoogleOAuthConfig();
   if (!cfg) return null;
+  const redirectUri = cfg.driveRedirectUri || (await driveConnectRedirectUri());
   const params = new URLSearchParams({
     client_id: cfg.clientId,
-    redirect_uri: driveConnectRedirectUri(),
+    redirect_uri: redirectUri,
     response_type: "code",
     scope: DRIVE_SCOPES,
     state,
@@ -82,8 +85,9 @@ type TokenResponse = {
 };
 
 export async function exchangeDriveCode(code: string): Promise<TokenResponse | null> {
-  const cfg = getGoogleOAuthConfig();
+  const cfg = await getGoogleOAuthConfig();
   if (!cfg) return null;
+  const redirectUri = cfg.driveRedirectUri || (await driveConnectRedirectUri());
   const res = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -91,7 +95,7 @@ export async function exchangeDriveCode(code: string): Promise<TokenResponse | n
       code,
       client_id: cfg.clientId,
       client_secret: cfg.clientSecret,
-      redirect_uri: driveConnectRedirectUri(),
+      redirect_uri: redirectUri,
       grant_type: "authorization_code",
     }),
   });
@@ -100,7 +104,7 @@ export async function exchangeDriveCode(code: string): Promise<TokenResponse | n
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<TokenResponse | null> {
-  const cfg = getGoogleOAuthConfig();
+  const cfg = await getGoogleOAuthConfig();
   if (!cfg) return null;
   const res = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",

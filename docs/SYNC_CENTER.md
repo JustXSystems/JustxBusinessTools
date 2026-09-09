@@ -128,7 +128,7 @@ Sync Center is the **status / retry / optional UNC sync** page. Most companies o
 | Same-filename / conflict policy | Same panel | Owner | Profile |
 | Desktop agent setup | **Sync Center** → Download setup for this PC | Owner or Staff | LocalAppData + agent row |
 | Browser-linked folder (FSA) | Sync Center → Link folder in this browser | Staff (Chrome/Edge) | Browser IndexedDB (this browser only) |
-| Platform Google OAuth client | VPS `server/.env` (`GOOGLE_CLIENT_*`) | JustX engineer | Server env |
+| Platform Google OAuth client | **Admin → Integrations** (preferred) or VPS `server/.env` (`GOOGLE_CLIENT_*`) | JustX engineer / platform admin | Admin DB or server env |
 
 Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quotation emails**, not PDF file delivery. (Profile **artifact** webhook is separate.)
 
@@ -139,7 +139,7 @@ Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quo
 1. Sign in at https://justxsystems.com/jbt (or local).  
 2. Select the correct **branch / Business Profile** (Branch switcher).  
 3. Owner must have an active Business Profile saved.  
-4. For Drive: JustX engineer must already have `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `server/.env` (same as Sign in with Google).
+4. For **Company Google Drive** only: platform admin enables Google under **Admin → Integrations** (or `GOOGLE_CLIENT_ID` / `SECRET` in `.env`). Not required for webhook/UNC/email-only companies (see [`SETUP.md`](SETUP.md)#is-google-cloud-oauth-mandatory).
 
 ### Customer PC — minimum software & environment (desktop agent)
 

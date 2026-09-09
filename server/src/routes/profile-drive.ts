@@ -65,16 +65,16 @@ router.get("/status", async (_req, res) => {
   const drive = await getProfileDrivePublic(profileId);
   res.json({
     ...drive,
-    oauthClientConfigured: isDriveOAuthClientConfigured(),
+    oauthClientConfigured: await isDriveOAuthClientConfigured(),
   });
 });
 
 /** Start Google Drive OAuth for this Business Profile (Owner). */
-router.get("/connect", requireWriteAccess, requireBusinessProfileOwner, (req, res) => {
-  if (!isDriveOAuthClientConfigured()) {
+router.get("/connect", requireWriteAccess, requireBusinessProfileOwner, async (req, res) => {
+  if (!(await isDriveOAuthClientConfigured())) {
     res.status(503).json({
       error:
-        "Google OAuth is not configured on the platform. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (same as Google login).",
+        "Google OAuth is not configured on the platform. Ask a platform admin to enable it under Admin → Integrations (or set GOOGLE_CLIENT_ID / SECRET).",
     });
     return;
   }
@@ -86,7 +86,7 @@ router.get("/connect", requireWriteAccess, requireBusinessProfileOwner, (req, re
     exp: Date.now() + 15 * 60 * 1000,
     nonce: Math.random().toString(36).slice(2),
   });
-  const url = buildDriveConnectUrl(state);
+  const url = await buildDriveConnectUrl(state);
   if (!url) {
     res.status(503).json({ error: "Could not build Google Drive connect URL" });
     return;

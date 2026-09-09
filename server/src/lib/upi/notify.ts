@@ -49,7 +49,9 @@ async function postWebhook(url: string, payload: Record<string, unknown>): Promi
 }
 
 async function sendEmail(to: string, subject: string, body: string, kind: string, claimId?: number) {
-  const url = process.env.EMAIL_WEBHOOK_URL ?? process.env.NOTIFY_EMAIL_WEBHOOK_URL;
+  const { resolveEmailWebhook } = await import("../integrations/resolvers.js");
+  const resolved = await resolveEmailWebhook();
+  const url = resolved?.url;
   try {
     if (url) {
       await postWebhook(url, { channel: "email", to, subject, body, kind });

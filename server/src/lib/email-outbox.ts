@@ -100,15 +100,15 @@ function newOutboxId() {
   return `eml_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`;
 }
 
-export function emailWebhookConfigured(): boolean {
-  return Boolean(
-    (process.env.EMAIL_WEBHOOK_URL ?? process.env.NOTIFY_EMAIL_WEBHOOK_URL ?? "").trim(),
-  );
+/** Prefer Admin → Integrations (DB); fall back to EMAIL_WEBHOOK_URL env. */
+export async function getEmailWebhookUrl(): Promise<string | null> {
+  const { resolveEmailWebhook } = await import("./integrations/resolvers.js");
+  const resolved = await resolveEmailWebhook();
+  return resolved?.url ?? null;
 }
 
-export function getEmailWebhookUrl(): string | null {
-  const u = (process.env.EMAIL_WEBHOOK_URL ?? process.env.NOTIFY_EMAIL_WEBHOOK_URL ?? "").trim();
-  return u || null;
+export async function emailWebhookConfigured(): Promise<boolean> {
+  return Boolean(await getEmailWebhookUrl());
 }
 
 export function mapOutboxPublic(row: EmailOutboxRow) {
@@ -328,7 +328,7 @@ export async function updateEmailOutboxStatus(
 }
 
 export async function postEmailWebhookPayload(payload: Record<string, unknown>): Promise<void> {
-  const webhook = getEmailWebhookUrl();
+  const webhook = await getEmailWebhookUrl();
   if (!webhook) throw new Error("EMAIL_WEBHOOK_URL is not configured");
   const r = await fetch(webhook, {
     method: "POST",

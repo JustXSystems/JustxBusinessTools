@@ -1,7 +1,7 @@
 # Quotation email webhook (`EMAIL_WEBHOOK_URL`)
 
-When staff use **Quotation → Send Via → Email**, the API posts a JSON payload to
-`EMAIL_WEBHOOK_URL` (or `NOTIFY_EMAIL_WEBHOOK_URL`) if set. Without it, the browser opens
+When staff use **Quotation → Send Via → Email**, the API posts a JSON payload to the resolved email webhook
+(**Admin → Integrations** preferred, else `EMAIL_WEBHOOK_URL` / `NOTIFY_EMAIL_WEBHOOK_URL`). Without it, the browser opens
 `mailto:` with **plain text only** (HTML is not supported by mailto), downloads the PDF,
 and saves a row in **Email Outbox** for retry / Outlook.
 
@@ -9,10 +9,10 @@ Full setup for webhook vs mailto vs Outlook agent: [`EMAIL_OUTBOX.md`](EMAIL_OUT
 
 ---
 
-## Where do these env values come from?
+## Where do these values come from?
 
-**JustX does not issue `EMAIL_WEBHOOK_URL` or `NOTIFY_EMAIL_WEBHOOK_URL`.**  
-They are the **public HTTPS URL of a webhook you create** in an external tool. JustX’s API will `POST` application/json to that URL when someone sends (or retries) an email.
+**JustX does not issue the webhook URL.**  
+It is the **public HTTPS URL of a webhook you create** in an external tool. Prefer saving it under **Admin → Integrations**; `.env` remains a bootstrap fallback. JustX’s API will `POST` application/json to that URL when someone sends (or retries) an email.
 
 | Variable | Role |
 |----------|------|

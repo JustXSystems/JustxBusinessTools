@@ -438,7 +438,8 @@ router.get("/methods", async (_req, res) => {
   const sms = (process.env.SMS_PROVIDER ?? "console").toLowerCase();
   const phoneOtp =
     process.env.ENABLE_PHONE_OTP === "true" || (sms !== "console" && process.env.ENABLE_PHONE_OTP !== "false");
-  const google = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  const googleCfg = await getGoogleOAuthConfig();
+  const google = Boolean(googleCfg);
   res.json({
     password: true,
     phoneOtp,
@@ -570,9 +571,9 @@ router.post("/switch-branch", requireAuth, async (req, res) => {
   res.status(400).json({ error: "No active session" });
 });
 
-router.get("/google", (_req, res) => {
+router.get("/google", async (_req, res) => {
   const state = crypto.randomBytes(16).toString("hex");
-  const url = buildGoogleAuthUrl(state);
+  const url = await buildGoogleAuthUrl(state);
   if (!url) {
     res.status(503).json({ error: "Google OAuth is not configured" });
     return;
@@ -587,7 +588,7 @@ router.get("/google", (_req, res) => {
 });
 
 router.get("/google/callback", async (req, res) => {
-  const cfg = getGoogleOAuthConfig();
+  const cfg = await getGoogleOAuthConfig();
   if (!cfg) {
     res.redirect(`${webAppUrl("/login")}?error=oauth_not_configured`);
     return;

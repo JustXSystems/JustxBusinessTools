@@ -148,7 +148,7 @@ export function resolveEffectiveDestination(
   return "none";
 }
 
-export function publicDeliveryConfig(cfg: ProfileDeliveryConfig) {
+export async function publicDeliveryConfig(cfg: ProfileDeliveryConfig) {
   const effective = resolveEffectiveDestination(cfg);
   return {
     artifactDestination: cfg.artifactDestination,
@@ -159,7 +159,7 @@ export function publicDeliveryConfig(cfg: ProfileDeliveryConfig) {
       folderLabel: cfg.driveFolderLabel,
       connected: cfg.driveConnected,
       email: cfg.driveEmail,
-      oauthClientConfigured: isDriveOAuthClientConfigured(),
+      oauthClientConfigured: await isDriveOAuthClientConfigured(),
       /** Optional platform SA — not required for multi-tenant OAuth. */
       serverServiceAccountConfigured: isGoogleDriveConfigured(),
       serviceAccountEmail: driveFolderHint(),

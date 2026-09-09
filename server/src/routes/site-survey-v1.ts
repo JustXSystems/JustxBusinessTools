@@ -219,7 +219,9 @@ router.post("/send/email", async (req, res) => {
     res.status(400).json({ error: "Subject and message are required" });
     return;
   }
-  const webhook = process.env.EMAIL_WEBHOOK_URL ?? process.env.NOTIFY_EMAIL_WEBHOOK_URL;
+  const { resolveEmailWebhook } = await import("../lib/integrations/resolvers.js");
+  const resolved = await resolveEmailWebhook();
+  const webhook = resolved?.url;
   try {
     if (webhook) {
       const r = await fetch(webhook, {
@@ -283,10 +285,9 @@ router.post("/send/email", async (req, res) => {
   }
 });
 
-router.get("/send/email/status", (_req, res) => {
-  const webhook = Boolean(
-    (process.env.EMAIL_WEBHOOK_URL ?? process.env.NOTIFY_EMAIL_WEBHOOK_URL ?? "").trim(),
-  );
+router.get("/send/email/status", async (_req, res) => {
+  const { resolveEmailWebhook } = await import("../lib/integrations/resolvers.js");
+  const webhook = Boolean(await resolveEmailWebhook());
   res.json({ webhookConfigured: webhook });
 });
 
