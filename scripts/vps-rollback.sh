@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Roll live app back to a previously staged release directory (atomic swap).
+# Roll live app back to a previously staged release directory.
 # Usage:
 #   RELEASE_ID=<sha> ./scripts/vps-rollback.sh
 # Optional: DEPLOY_PATH, RELEASES_DIR, SHARED_DIR, PM2_MODE, HEALTH_CHECK
@@ -15,8 +15,6 @@ WEB_PORT="${WEB_PORT:-3002}"
 WEB_BASE_PATH="${WEB_BASE_PATH:-/jbt}"
 
 LIVE="$DEPLOY_PATH"
-LIVE_NEW="${DEPLOY_PATH}.new"
-LIVE_OLD="${DEPLOY_PATH}.old"
 CURRENT_FILE="$RELEASES_DIR/CURRENT"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -24,7 +22,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 if [[ -z "$RELEASE_ID" ]]; then
   echo "ERROR: set RELEASE_ID to a folder under $RELEASES_DIR" >&2
   echo "Available:" >&2
-  ls -1 "$RELEASES_DIR" 2>/dev/null | grep -vE '^(incoming|CURRENT|PREVIOUS)$' || true
+  ls -1 "$RELEASES_DIR" 2>/dev/null | grep -vE '^(incoming|CURRENT|PREVIOUS|live-next|live-prev|live-failed)$' || true
   if [[ -f "$CURRENT_FILE" ]]; then
     echo "CURRENT=$(cat "$CURRENT_FILE")" >&2
   fi
@@ -34,6 +32,7 @@ fi
 STAGE="$RELEASES_DIR/$RELEASE_ID"
 [[ -d "$STAGE" && -f "$STAGE/package.json" ]] || die "release not found: $STAGE"
 [[ -f "$SHARED_DIR/server.env" ]] || die "missing $SHARED_DIR/server.env"
+[[ -w "$LIVE" ]] || die "LIVE path not writable: $LIVE"
 
 case "$PM2_MODE" in
   reload|restart|none) ;;
@@ -54,17 +53,10 @@ link_shared_into() {
   ln -sfn "$SHARED_DIR/uploads" "$root/uploads"
 }
 
-echo "==> Rollback to $RELEASE_ID (atomic)"
-rm -rf "$LIVE_NEW"
-mkdir -p "$LIVE_NEW"
-rsync -a "$STAGE"/ "$LIVE_NEW"/
-link_shared_into "$LIVE_NEW"
-
-rm -rf "$LIVE_OLD"
-if [[ -e "$LIVE" || -L "$LIVE" ]]; then
-  mv "$LIVE" "$LIVE_OLD"
-fi
-mv "$LIVE_NEW" "$LIVE"
+echo "==> Rollback to $RELEASE_ID → $LIVE (in-place rsync)"
+link_shared_into "$STAGE"
+rsync -a --delete --exclude '.git/' "$STAGE"/ "$LIVE"/
+link_shared_into "$LIVE"
 
 cd "$LIVE"
 case "$PM2_MODE" in
@@ -85,6 +77,5 @@ if [[ "$HEALTH_CHECK" == "true" ]]; then
 fi
 
 echo "$RELEASE_ID" >"$CURRENT_FILE"
-rm -rf "$LIVE_OLD" "$LIVE_NEW"
 echo "==> Rollback OK ($RELEASE_ID)"
 echo "NOTE: DB schema is not automatically reversed. Restore a SQL backup if needed."

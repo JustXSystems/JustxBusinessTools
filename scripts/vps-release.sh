@@ -36,11 +36,14 @@ WEB_PORT="${WEB_PORT:-3002}"
 WEB_BASE_PATH="${WEB_BASE_PATH:-/jbt}"
 
 LIVE="$DEPLOY_PATH"
-LIVE_NEW="${DEPLOY_PATH}.new"
-LIVE_OLD="${DEPLOY_PATH}.old"
-LIVE_FAILED="${DEPLOY_PATH}.failed"
+# Swap helpers live under RELEASES_DIR (deploy-owned). Creating /var/www/jbt.new
+# requires write on /var/www, which deploy usually lacks.
+LIVE_NEW="$RELEASES_DIR/live-next"
+LIVE_OLD="$RELEASES_DIR/live-prev"
+LIVE_FAILED="$RELEASES_DIR/live-failed"
 CURRENT_FILE="$RELEASES_DIR/CURRENT"
 PREVIOUS_FILE="$RELEASES_DIR/PREVIOUS"
+SWAP_MODE="rsync" # rsync (default) | mv (only if parent of LIVE is writable)
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -104,6 +107,8 @@ echo "==> Verify artifact checksum"
 verify_checksum
 
 mkdir -p "$RELEASES_DIR" "$SHARED_DIR/uploads" "$SHARED_DIR/server-uploads"
+[[ -w "$RELEASES_DIR" ]] || die "RELEASES_DIR not writable: $RELEASES_DIR (chown deploy)"
+[[ -w "$SHARED_DIR" ]] || die "SHARED_DIR not writable: $SHARED_DIR (chown deploy)"
 
 if [[ ! -f "$SHARED_DIR/server.env" ]]; then
   if [[ -f "$LIVE/server/.env" && ! -L "$LIVE/server/.env" ]]; then
@@ -274,36 +279,85 @@ if [[ -f "$CURRENT_FILE" ]]; then
   PREV_ID="$(tr -d ' \r\n' <"$CURRENT_FILE")"
 fi
 
-echo "==> Prepare atomic swap target $LIVE_NEW"
-rm -rf "$LIVE_NEW"
-mkdir -p "$LIVE_NEW"
-rsync -a "$STAGE"/ "$LIVE_NEW"/
-link_shared_into "$LIVE_NEW"
-
 # Remember previous pointer for ops
 if [[ -n "$PREV_ID" ]]; then
   echo "$PREV_ID" >"$PREVIOUS_FILE"
 fi
 
-echo "==> Atomic swap: $LIVE → $LIVE_OLD ; $LIVE_NEW → $LIVE"
-rm -rf "$LIVE_OLD"
-if [[ -e "$LIVE" || -L "$LIVE" ]]; then
-  mv "$LIVE" "$LIVE_OLD"
+PARENT_DIR="$(dirname "$LIVE")"
+if [[ -w "$PARENT_DIR" ]]; then
+  SWAP_MODE="mv"
+  echo "==> Parent $PARENT_DIR is writable — using atomic mv swap"
+else
+  SWAP_MODE="rsync"
+  echo "==> Parent $PARENT_DIR not writable by $(id -un) — using in-place rsync into $LIVE"
 fi
-mv "$LIVE_NEW" "$LIVE"
+
+# Ensure live exists and is writable (content owned by deploy)
+mkdir -p "$LIVE"
+[[ -w "$LIVE" ]] || die "LIVE path not writable: $LIVE (chown to deploy)"
+
+activate_release_rsync() {
+  local src="$1"
+  echo "==> Sync release → live (preserve .git)"
+  link_shared_into "$src"
+  rsync -a --delete \
+    --exclude '.git/' \
+    "$src"/ "$LIVE"/
+  link_shared_into "$LIVE"
+}
+
+activate_release_mv() {
+  local src="$1"
+  echo "==> Prepare swap tree at $LIVE_NEW"
+  rm -rf "$LIVE_NEW"
+  mkdir -p "$LIVE_NEW"
+  rsync -a "$src"/ "$LIVE_NEW"/
+  link_shared_into "$LIVE_NEW"
+
+  echo "==> Atomic swap: $LIVE → $LIVE_OLD ; $LIVE_NEW → $LIVE"
+  rm -rf "$LIVE_OLD"
+  if [[ -e "$LIVE" || -L "$LIVE" ]]; then
+    # Prefer moving into releases (same FS) when possible
+    if [[ -w "$RELEASES_DIR" ]]; then
+      rm -rf "$LIVE_OLD"
+      mv "$LIVE" "$LIVE_OLD"
+    else
+      mv "$LIVE" "${LIVE}.old.$$"
+      LIVE_OLD="${LIVE}.old.$$"
+    fi
+  fi
+  mv "$LIVE_NEW" "$LIVE"
+}
+
+if [[ "$SWAP_MODE" == "mv" ]]; then
+  activate_release_mv "$STAGE"
+else
+  # Snapshot current live into releases for emergency rollback (best-effort)
+  if [[ -f "$LIVE/package.json" ]]; then
+    echo "==> Snapshot current live → $LIVE_OLD (best-effort)"
+    rm -rf "$LIVE_OLD"
+    mkdir -p "$LIVE_OLD"
+    rsync -a --exclude '.git/' "$LIVE"/ "$LIVE_OLD"/ || true
+  fi
+  activate_release_rsync "$STAGE"
+fi
 
 SWAP_DONE=1
 rollback_live() {
-  echo "==> AUTO-ROLLBACK: restoring previous live tree" >&2
-  if [[ ! -e "$LIVE_OLD" && ! -L "$LIVE_OLD" ]]; then
-    echo "ERROR: no $LIVE_OLD to restore" >&2
+  echo "==> AUTO-ROLLBACK: restoring previous release" >&2
+  local restored=0
+  if [[ -n "$PREV_ID" && -d "$RELEASES_DIR/$PREV_ID" && -f "$RELEASES_DIR/$PREV_ID/package.json" ]]; then
+    echo "    from staged release $PREV_ID" >&2
+    activate_release_rsync "$RELEASES_DIR/$PREV_ID" && restored=1
+  elif [[ -d "$LIVE_OLD" && -f "$LIVE_OLD/package.json" ]]; then
+    echo "    from $LIVE_OLD snapshot" >&2
+    activate_release_rsync "$LIVE_OLD" && restored=1
+  fi
+  if [[ "$restored" -ne 1 ]]; then
+    echo "ERROR: no previous release available to restore" >&2
     return 1
   fi
-  rm -rf "$LIVE_FAILED"
-  if [[ -e "$LIVE" || -L "$LIVE" ]]; then
-    mv "$LIVE" "$LIVE_FAILED" || true
-  fi
-  mv "$LIVE_OLD" "$LIVE"
   apply_pm2 "$LIVE" || true
   if [[ "$HEALTH_CHECK" == "true" ]]; then
     run_health "$LIVE" || echo "WARN: health still failing after rollback" >&2
@@ -338,24 +392,25 @@ echo "$RELEASE_ID" >"$CURRENT_FILE"
 # Keep git metadata for emergency ./scripts/vps-deploy.sh fallback
 if [[ -d "$LIVE_OLD/.git" && ! -e "$LIVE/.git" ]]; then
   echo "==> Preserving .git from previous live tree"
-  mv "$LIVE_OLD/.git" "$LIVE/.git"
+  mv "$LIVE_OLD/.git" "$LIVE/.git" || true
 fi
 
-# Keep LIVE.old briefly as emergency; prune older failed/old trees + release dirs
 echo "==> Pruning old release dirs (keep $KEEP_RELEASES)"
 # shellcheck disable=SC2012
-ls -1dt "$RELEASES_DIR"/*/ 2>/dev/null | grep -v '/incoming/' | tail -n +"$((KEEP_RELEASES + 1))" | while read -r old; do
-  # Never delete the release we just activated if listed
+ls -1dt "$RELEASES_DIR"/*/ 2>/dev/null \
+  | grep -vE '/(incoming|live-next|live-prev|live-failed)/$' \
+  | tail -n +"$((KEEP_RELEASES + 1))" \
+  | while read -r old; do
   [[ "$old" == "$STAGE/" || "$old" == "$STAGE" ]] && continue
   echo "    rm $old"
   rm -rf "$old"
 done
 
-# Remove previous live.old after successful health (stage dirs remain for rollback script)
-rm -rf "$LIVE_OLD" "$LIVE_FAILED" "$LIVE_NEW"
+rm -rf "$LIVE_NEW" "$LIVE_FAILED"
+# Keep LIVE_OLD snapshot until next successful deploy overwrites it
 
 if [[ "$RELEASE_TGZ" == "$RELEASES_DIR/incoming/"* ]]; then
   rm -f "$RELEASE_TGZ" "${RELEASE_TGZ}.sha256"
 fi
 
-echo "==> Deploy OK (atomic release $RELEASE_ID)"
+echo "==> Deploy OK (release $RELEASE_ID, swap=$SWAP_MODE)"

@@ -30,6 +30,8 @@ git push master
 ```
 
 **Mutable data** lives in `/var/www/jbt-shared/` (`server.env`, `uploads/`, `server-uploads/`) and is symlinked into each release.  
+Live path stays `/var/www/jbt`. Swap staging uses `/var/www/jbt-releases/` (deploy-owned) — **not** `/var/www/jbt.new` (that needs write on `/var/www`).  
+If `/var/www` is not writable by `deploy` (typical), release applies via **in-place rsync** into `/var/www/jbt`.  
 **VPS does not run `next build` on normal deploys.**  
 Emergency fallback: `./scripts/vps-deploy.sh` (git pull + build on the server).
 
