@@ -109,7 +109,7 @@ export function normalizeClockDisplayVisible(raw: unknown): boolean {
 }
 
 export function normalizeClockDisplaySettings(
-  input: Partial<ClockDisplaySettings> | null | undefined,
+  input: { visible?: unknown; format?: unknown } | null | undefined,
 ): ClockDisplaySettings {
   return {
     visible: normalizeClockDisplayVisible(input?.visible),
