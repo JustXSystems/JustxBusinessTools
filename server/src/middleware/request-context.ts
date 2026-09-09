@@ -33,13 +33,32 @@ async function resolveArtifactAgent(
         | undefined)
     : undefined;
   if (!row) return null;
+  // Prefer the minting user's org role so owner-created agents are not treated as
+  // limited staff (branch_access ACL). Token is already scoped to one profile.
+  let role: RequestContext["role"] = "staff";
+  try {
+    const [userRows] = await pool.query(
+      `SELECT role FROM users WHERE id = :id AND organization_id = :orgId LIMIT 1`,
+      { id: row.user_id, orgId: row.organization_id },
+    );
+    const u = Array.isArray(userRows)
+      ? (userRows[0] as { role?: string } | undefined)
+      : undefined;
+    const r = String(u?.role ?? "").toLowerCase();
+    if (r === "owner" || r === "admin" || r === "staff" || r === "viewer") {
+      role = r;
+    }
+  } catch {
+    // keep staff fallback
+  }
   return {
     userId: row.user_id,
     organizationId: row.organization_id,
     businessProfileId: row.business_profile_id,
-    role: "staff",
+    role,
     sessionId: null,
     isPlatformAdmin: false,
+    viaAgentToken: true,
   };
 }
 

@@ -8,7 +8,7 @@ if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
 $root = Join-Path $stage "JustX-Sync-Agent"
 
-$api = "https://justxsystems.com/api"
+$api = "https://justxsystems.com/jbt/api"
 $token = "jxsa_test_placeholder"
 $launcher = Join-Path $env:USERPROFILE "Downloads\start-justx-sync-agent.ps1"
 if (Test-Path $launcher) {

@@ -10,6 +10,8 @@ export type RequestContext = {
   role: OrgRole | "legacy";
   sessionId: number | null;
   isPlatformAdmin: boolean;
+  /** Desktop sync agent Bearer token — already scoped to businessProfileId. */
+  viaAgentToken?: boolean;
 };
 
 const store = new AsyncLocalStorage<RequestContext>();

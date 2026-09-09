@@ -105,13 +105,21 @@ async function api(pathname, init) {
     headers: { ...headers(), ...(init?.headers ?? {}) },
   });
   const text = await res.text();
+  const contentType = res.headers.get("content-type") || "";
   let data = {};
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    data = { error: text };
+    const snippet = text.replace(/\s+/g, " ").slice(0, 120);
+    throw new Error(
+      `API returned non-JSON (${res.status}) from ${API_BASE}${pathname}. ` +
+        `Check JBT_API_BASE (production must end with /jbt/api). Got: ${snippet}`,
+    );
   }
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  if (contentType && !contentType.includes("json") && text && !Object.keys(data).length) {
+    throw new Error(`API returned unexpected content-type ${contentType} from ${API_BASE}`);
+  }
   return data;
 }
 

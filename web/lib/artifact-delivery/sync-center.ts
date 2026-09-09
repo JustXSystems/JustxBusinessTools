@@ -192,7 +192,8 @@ export function resolveAgentApiBase(): string {
   const configured = getApiBase();
   if (configured) return `${configured}/api`;
   if (typeof window !== "undefined") {
-    return `${window.location.origin}/api`;
+    // Production is under NEXT_PUBLIC_BASE_PATH=/jbt → https://host/jbt/api
+    return `${window.location.origin}${withBasePath("/api")}`;
   }
   return "http://localhost:4000/api";
 }

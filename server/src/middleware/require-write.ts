@@ -37,6 +37,12 @@ export async function requireBranchAccess(
     next();
     return;
   }
+  // Desktop agent tokens are minted for one Business Profile already — do not
+  // re-apply session branch_access ACL (owners forced to "staff" used to 403).
+  if (ctx.viaAgentToken) {
+    next();
+    return;
+  }
 
   try {
     const ok = await userHasBranchAccess(ctx.userId!, ctx.businessProfileId, ctx.role);
