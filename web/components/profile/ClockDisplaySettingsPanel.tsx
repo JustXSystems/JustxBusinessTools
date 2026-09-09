@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   CLOCK_DISPLAY_FORMATS,
   CLOCK_DISPLAY_TZ_LABEL,
   CLOCK_FORMAT_GROUPS,
   clockDisplayNeedsSeconds,
+  formatClockDisplay,
   getClockChromeParts,
+  getClockDisplayFormatMeta,
   normalizeClockDisplaySettings,
   type ClockDisplayFormatId,
   type ClockDisplaySettings,
@@ -19,6 +21,19 @@ type Props = {
   onChange: (next: ClockDisplaySettings) => void;
 };
 
+function useLiveNow(format: ClockDisplayFormatId, active: boolean) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!active) return;
+    const ms = clockDisplayNeedsSeconds(format) ? 1000 : 15_000;
+    const tick = () => setNow(new Date());
+    tick();
+    const id = window.setInterval(tick, ms);
+    return () => window.clearInterval(id);
+  }, [format, active]);
+  return now;
+}
+
 function StatusClockPreview({
   format,
   visible,
@@ -28,13 +43,7 @@ function StatusClockPreview({
   visible: boolean;
   poweredByText: string;
 }) {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const ms = clockDisplayNeedsSeconds(format) ? 1000 : 15_000;
-    const id = window.setInterval(() => setNow(new Date()), ms);
-    return () => window.clearInterval(id);
-  }, [format]);
-
+  const now = useLiveNow(format, true);
   const parts = getClockChromeParts(now, format);
 
   return (
@@ -70,8 +79,115 @@ function StatusClockPreview({
         </span>
       </div>
       <p className="clock-status-mock-caption">
-        Desktop status bar · India Standard Time · not shown on mobile bottom nav
+        Desktop status bar · IST · hidden on mobile bottom nav
       </p>
+    </div>
+  );
+}
+
+function FormatPicker({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: ClockDisplayFormatId;
+  disabled?: boolean;
+  onChange: (id: ClockDisplayFormatId) => void;
+}) {
+  const listId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const now = useLiveNow(value, true);
+  const meta = getClockDisplayFormatMeta(value);
+
+  const grouped = useMemo(
+    () =>
+      CLOCK_FORMAT_GROUPS.map((g) => ({
+        ...g,
+        formats: CLOCK_DISPLAY_FORMATS.filter((f) => f.group === g.id),
+      })),
+    [],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div
+      className={`clock-format-picker${open ? " is-open" : ""}${disabled ? " is-disabled" : ""}`}
+      ref={rootRef}
+    >
+      <span className="label" id={`${listId}-label`}>
+        Presentation format
+      </span>
+      <button
+        type="button"
+        className="clock-format-trigger"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-labelledby={`${listId}-label`}
+        aria-controls={listId}
+        onClick={() => {
+          if (!disabled) setOpen((v) => !v);
+        }}
+      >
+        <span className="clock-format-trigger-main">
+          <span className="clock-format-trigger-name">{meta.label}</span>
+          <span className="clock-format-trigger-sample">{formatClockDisplay(now, value)}</span>
+        </span>
+        <span className="clock-format-trigger-meta">
+          <span className="clock-format-trigger-group">
+            {CLOCK_FORMAT_GROUPS.find((g) => g.id === meta.group)?.label}
+          </span>
+          <span className="clock-format-chevron" aria-hidden />
+        </span>
+      </button>
+
+      {open ? (
+        <div className="clock-format-menu" role="listbox" id={listId} aria-labelledby={`${listId}-label`}>
+          {grouped.map((group) => (
+            <div key={group.id} className="clock-format-menu-group" role="group" aria-label={group.label}>
+              <div className="clock-format-menu-heading">{group.label}</div>
+              {group.formats.map((f) => {
+                const selected = value === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    className={`clock-format-option${selected ? " is-selected" : ""}`}
+                    onClick={() => {
+                      onChange(f.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <span className="clock-format-option-copy">
+                      <span className="clock-format-option-name">{f.label}</span>
+                      <span className="clock-format-option-tone">{f.tone}</span>
+                    </span>
+                    <span className="clock-format-option-sample">{formatClockDisplay(now, f.id)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -84,15 +200,6 @@ export function ClockDisplaySettingsPanel({
 }: Props) {
   const settings = normalizeClockDisplaySettings(value);
 
-  const grouped = useMemo(
-    () =>
-      CLOCK_FORMAT_GROUPS.map((g) => ({
-        ...g,
-        formats: CLOCK_DISPLAY_FORMATS.filter((f) => f.group === g.id),
-      })),
-    [],
-  );
-
   function patch(partial: Partial<ClockDisplaySettings>) {
     if (disabled) return;
     onChange(normalizeClockDisplaySettings({ ...settings, ...partial }));
@@ -101,18 +208,18 @@ export function ClockDisplaySettingsPanel({
   return (
     <div className="clock-display-panel">
       <div className="clock-display-panel-head">
-        <div>
-          <h3 className="panel-title" style={{ marginBottom: 4 }}>
-            Status bar date &amp; time
-          </h3>
-          <p className="section-note" style={{ margin: 0 }}>
-            A quiet corporate clock in the desktop footer — left of Powered by. Staff see the same
-            format across this Business Profile.
-          </p>
-        </div>
+        <h3 className="panel-title" style={{ marginBottom: 4 }}>
+          Status bar date &amp; time
+        </h3>
+        <p className="section-note" style={{ margin: 0 }}>
+          Quiet IST clock on the desktop footer, left of Powered by. Same format for every user on
+          this Business Profile.
+        </p>
       </div>
 
-      <label className={`clock-display-switch${settings.visible ? " is-on" : ""}${disabled ? " is-disabled" : ""}`}>
+      <label
+        className={`clock-display-switch${settings.visible ? " is-on" : ""}${disabled ? " is-disabled" : ""}`}
+      >
         <span className="clock-display-switch-track" aria-hidden>
           <span className="clock-display-switch-thumb" />
         </span>
@@ -127,8 +234,8 @@ export function ClockDisplaySettingsPanel({
           <strong>{settings.visible ? "Visible on desktop status bar" : "Hidden from status bar"}</strong>
           <span>
             {settings.visible
-              ? "Live IST clock for every signed-in user on this profile."
-              : "Footer shows branding only. Turn on when field teams need a shared wall clock."}
+              ? "Live clock for signed-in users on this profile."
+              : "Footer shows branding only."}
           </span>
         </span>
       </label>
@@ -139,43 +246,12 @@ export function ClockDisplaySettingsPanel({
         poweredByText={poweredByText}
       />
 
-      <div className={`clock-format-gallery${settings.visible ? "" : " is-dimmed"}`}>
-        <div className="clock-format-gallery-head">
-          <span className="label">Presentation format</span>
-          <span className="clock-format-gallery-hint">Tap a card — preview updates instantly</span>
-        </div>
-
-        {grouped.map((group) => (
-          <div key={group.id} className="clock-format-group">
-            <div className="clock-format-group-label">
-              <span>{group.label}</span>
-              <span>{group.hint}</span>
-            </div>
-            <div className="clock-format-grid" role="radiogroup" aria-label={group.label}>
-              {group.formats.map((f) => {
-                const selected = settings.format === f.id;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    disabled={disabled || !settings.visible}
-                    className={`clock-format-card${selected ? " is-selected" : ""}`}
-                    onClick={() => patch({ format: f.id })}
-                  >
-                    <span className="clock-format-card-top">
-                      <span className="clock-format-card-name">{f.label}</span>
-                      {selected ? <span className="clock-format-card-check" aria-hidden>✓</span> : null}
-                    </span>
-                    <span className="clock-format-card-sample">{f.example}</span>
-                    <span className="clock-format-card-tone">{f.tone}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      <div className={settings.visible ? undefined : "clock-format-picker-wrap is-dimmed"}>
+        <FormatPicker
+          value={settings.format}
+          disabled={disabled || !settings.visible}
+          onChange={(format) => patch({ format })}
+        />
       </div>
     </div>
   );
