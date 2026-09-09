@@ -473,7 +473,7 @@ Outlook Corporate HTML and several bridge fixes require a **minimum agent app ve
 | Inside built zip | `JustX-Sync-Agent/PACK_VERSION.txt` and `app/src/index.js` (`AGENT_VERSION`) |
 | In CI | Deploy with **`pack_win_agent=true`**; **Build web** log prints `AGENT_VERSION` / pack version from the zip |
 
-**Critical:** ordinary `push` deploys set `PACK_WIN_AGENT=false` and **skip** rebuilding `web/public/JustX-Sync-Agent-win-x64.zip` (`JBT_SKIP_WIN_AGENT_PACK=1`). The VPS **keeps the previous zip**. Reinstalling from Sync Center then reinstalls the **old** agent. To ship a new agent version: **Actions → Deploy → Run workflow** with **`pack_win_agent` = true**, confirm Build web logs show `JBT_SKIP_WIN_AGENT_PACK=0` and `agent=1.1.3` (or current), then customers **Download setup** again.
+**Critical:** Deploy **auto-rebuilds** `JustX-Sync-Agent-win-x64.zip` when agent-related paths change (see [`DEPLOY.md`](DEPLOY.md)#auto-pack-windows-sync-agent). Unrelated pushes skip the pack and the VPS **keeps the previous zip**. Reinstalling from Sync Center then reinstalls whatever is on the VPS. Force with workflow input **`pack_win_agent` = true** if needed. Confirm **Decide win agent pack** / Build web logs show `PACK_WIN_AGENT=true` and the packed `AGENT_VERSION`.
 
 **Not the app version:** GitHub’s “Node 20 is being deprecated” on Actions, or cache key `agent-node-win-*-v20.18.1` — that is the **portable Node runtime** pinned inside the customer zip / CI cache, separate from `AGENT_VERSION`.
 

@@ -332,10 +332,10 @@ If `version` is still `1.1.0` / `1.1.1` / `1.1.2` while `packVersion` says `1.1.
 
 #### Confirm in CI / deploy (engineer)
 
-1. **Actions → Deploy → Run workflow** with **`pack_win_agent` = true** (required to rebuild the win zip).  
-   - Default `push` to `master`: `PACK_WIN_AGENT=false` → log may say `Skipping JustX-Sync-Agent-win-x64.zip (JBT_SKIP_WIN_AGENT_PACK=1)` → **VPS zip unchanged**.  
-   - Job-level env can still show `JBT_SKIP_WIN_AGENT_PACK: 1`; only the **Build web** step overrides it to `0` when packing.
-2. In **Build web** logs, expect:
+1. Push agent-related changes to `master`, **or** **Actions → Deploy → Run workflow** (optional **`pack_win_agent` = true** to force).  
+   - Deploy step **Decide win agent pack** auto-sets `PACK_WIN_AGENT=true` when these change: `desktop-sync-agent/**`, pack scripts, `win-setup-pack.ts`.  
+   - If unchanged: skip pack → VPS keeps previous zip (intentional).  
+2. In **Build web** logs, expect when packing:
    - `PACK_WIN_AGENT=true` and `JBT_SKIP_WIN_AGENT_PACK=0`
    - `Source AGENT_VERSION:` / `export const AGENT_VERSION = "1.1.3"`
    - `Sync Agent pack version: 1.1.3`
@@ -347,19 +347,19 @@ unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/PACK_VERSION.t
 unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/app/src/index.js | grep AGENT_VERSION
 ```
 
-Full deploy knobs: [`DEPLOY.md`](DEPLOY.md)#advanced-cd--workflow_dispatch-options · pack details: `desktop-sync-agent/README.md`.
+Full deploy knobs: [`DEPLOY.md`](DEPLOY.md)#auto-pack-windows-sync-agent · pack details: `desktop-sync-agent/README.md`.
 
 ### Engineer ship order (Path C HTML fix → customers)
 
 Do this whenever `AGENT_VERSION` / Outlook bridge changes (e.g. 1.1.3):
 
-1. Merge code with `AGENT_VERSION` bumped in `desktop-sync-agent/src/index.js` (keep `AGENT_PACK_VERSION` in sync).  
-2. **Actions → Deploy → Run workflow**: `deploy_enabled=true`, **`pack_win_agent=true`**.  
+1. Merge/push code with `AGENT_VERSION` bumped in `desktop-sync-agent/src/index.js` (keep `AGENT_PACK_VERSION` in sync).  
+2. Deploy runs automatically on push — confirm **Decide win agent pack** → `PACK_WIN_AGENT=true` (or force with `pack_win_agent=true`).  
 3. Confirm **Build web** logs: `JBT_SKIP_WIN_AGENT_PACK=0`, packed `agent=…` matches source.  
 4. After VPS swap: Sync Center → **Download setup for this PC** → Install (do not reuse an old extracted folder).  
 5. On PC: `/health` → `version` matches; COM probe OK; Email Outbox → **Open HTML in Outlook** on a new Corporate send.
 
-Skipping step 2 leaves the old zip on the VPS — reinstall alone will not upgrade the agent.
+If Decide step skipped packing while you expected a new agent, check that your commit touched the watched agent paths (not docs-only).
 
 ### Send with Open in Outlook
 
@@ -459,7 +459,7 @@ Filters: **Pending** = `pending` + `failed` + `opened` (UI note: “Pending / fa
 
 | Role | Configures |
 |------|------------|
-| **JustX engineer** | Admin Integrations / `EMAIL_WEBHOOK_URL`, PM2, automation hosting; Deploy with **`pack_win_agent=true`** when shipping a new desktop agent |
+| **JustX engineer** | Admin Integrations / `EMAIL_WEBHOOK_URL`, PM2, automation hosting; agent path changes auto-pack on Deploy (or force **`pack_win_agent=true`**) |
 | **Company Owner** | Profile email templates, accent; Sync Center setup if Path C / UNC |
 | **Staff** | Send quotations; Outbox actions; Outlook ready on their PC for B/C; confirm `/health` version after install |
 
@@ -474,7 +474,7 @@ Filters: **Pending** = `pending` + `failed` + `opened` (UI note: “Pending / fa
 | HTML looks plain (webhook) | Automation mapped `body` only — map **`html`** |
 | Expected HTML but see plain text (B/C) | Path B mailto is always plain. Use **Open in Outlook** with agent ≥ 1.1.3. Full HTML without a staff PC = Path A webhook |
 | Open in Outlook HTML still plain | Agent &lt; 1.1.3, or still using mailto / Open mail app, or Sync Center zip never repacked. Confirm `/health` → `version`; redeploy with `pack_win_agent=true`; reinstall — [Confirm agent version](#confirm-agent-version--113-path-c--html) |
-| Reinstalled agent but version still old / HTML still plain | **Classic trap:** Sync Center stamps `config.packVersion` from web (e.g. 1.1.3) onto the VPS zip’s **old** `index.js` (e.g. 1.1.0). `/health` → `version` is the real code; `packVersion` alone is not enough. Confirm `version` ≥ 1.1.3. Redeploy with **`pack_win_agent=true`**. Newer web rejects mismatched zips on Download setup. |
+| Reinstalled agent but version still old / HTML still plain | **Classic trap:** Sync Center stamps `config.packVersion` from web onto a VPS zip with old `index.js`. `/health` → `version` is the real code. Confirm Decide/Build packed the zip (`PACK_WIN_AGENT=true`). Newer web rejects mismatched zips on Download setup. |
 | CI “Node 20 deprecated” / cache key `v20.18.1` | Actions runner warning only — not agent app version. Portable Node in zip is pinned separately; look for `AGENT_VERSION` / `PACK_VERSION.txt` in Build web logs |
 | Body shows `+` and `%0A` | Old mailto form-encoding — redeploy web with `buildMailtoHref`; new send |
 | Open mail app / Outlook do nothing | Outlook **Add Account** stuck; New Outlook; hung process — [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c) |

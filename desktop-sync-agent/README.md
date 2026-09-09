@@ -55,7 +55,7 @@ Produces:
 - `web/public/JustX-Sync-Agent-win-x64.zip` — primary Windows setup (Node win-x64 + CMD installers)
 - `web/public/desktop-sync-agent.zip` — slim sources for advanced PowerShell bootstrap
 
-`JBT_SKIP_WIN_AGENT_PACK=1` skips the ~28MB win zip (CI default on push). Set unset/`0` (or Deploy input **`pack_win_agent=true`**) to rebuild it.
+`JBT_SKIP_WIN_AGENT_PACK=1` skips the ~28MB win zip. CI sets this automatically: **skip** when no agent path changes; **pack** when `desktop-sync-agent/**` (or pack scripts / `win-setup-pack.ts`) change, or when Deploy input **`pack_win_agent=true`**. See [`docs/DEPLOY.md`](../docs/DEPLOY.md)#auto-pack-windows-sync-agent.
 
 First Windows pack build downloads Node **20.18.1** win-x64 into `desktop-sync-agent/.runtime-cache/` (gitignored). That portable runtime is **not** the agent app version.
 
@@ -72,11 +72,9 @@ Setup zip / launcher must embed `JBT_API_BASE` with the app **base path** (`/jbt
 **Ship a new version to production customers**
 
 1. Bump `AGENT_VERSION` (and keep `AGENT_PACK_VERSION` aligned).  
-2. GitHub Actions → **Deploy** → **`pack_win_agent` = true**.  
+2. Push to `master` — Deploy **auto-packs** the win zip when agent paths change (or force **`pack_win_agent` = true`).  
 3. Build web log must show `JBT_SKIP_WIN_AGENT_PACK=0` and the packed `AGENT_VERSION`.  
 4. Customer: Sync Center → Download setup → Install → confirm `/health` → `version`.
-
-Ordinary push deploys **do not** refresh the VPS win zip. Details: [`docs/DEPLOY.md`](../docs/DEPLOY.md)#advanced-cd--workflow_dispatch-options · [`docs/EMAIL_OUTBOX.md`](../docs/EMAIL_OUTBOX.md)#confirm-agent-version--113-path-c--html.
 
 **Actions Node 20 deprecation warning:** CI runner / `actions/cache` only — ignore for agent version confirmation.
 

@@ -4,7 +4,9 @@
 #   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
 #
 # Single job (no artifact upload/download round-trip). Slim tarball omits
-# node_modules and the ~28MB Windows agent zip (preserved on VPS).
+# node_modules. JustX-Sync-Agent-win-x64.zip is rebuilt automatically when
+# agent-related paths change (or when pack_win_agent=true); otherwise the VPS
+# keeps the previous zip.
 #
 # See docs/DEPLOY.md
 
@@ -37,7 +39,7 @@ on:
         type: boolean
         default: false
       pack_win_agent:
-        description: "Rebuild+ship JustX-Sync-Agent-win-x64.zip (~28MB, slow)"
+        description: "Force rebuild+ship JustX-Sync-Agent-win-x64.zip (~28MB). Auto-on when agent paths change."
         type: boolean
         default: false
       force_cache_rebuild:
@@ -109,16 +111,40 @@ jobs:
       AUTO_ROLLBACK: ${{ inputs.auto_rollback != false }}
       KEEP_RELEASES: ${{ inputs.keep_releases || '3' }}
       DO_DEPLOY: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_enabled }}
-      PACK_WIN_AGENT: ${{ inputs.pack_win_agent == true }}
       FORCE_CACHE_REBUILD: ${{ inputs.force_cache_rebuild == true }}
       FORCE_NPM_CI: ${{ inputs.force_cache_rebuild == true }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Need history so we can detect agent path changes vs previous commit.
+          fetch-depth: 0
 
       - name: Resolve release id
         id: meta
         run: echo "short_sha=${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+
+      - name: Decide win agent pack
+        id: win_agent
+        env:
+          FORCE_PACK_WIN_AGENT: ${{ github.event_name == 'workflow_dispatch' && inputs.pack_win_agent == true }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/should-pack-win-agent.sh
+          OUT="$(./scripts/should-pack-win-agent.sh)"
+          echo "$OUT"
+          PACK="$(printf '%s\n' "$OUT" | awk -F= '/^pack=/{print $2; exit}')"
+          REASON="$(printf '%s\n' "$OUT" | awk -F= '/^reason=/{print substr($0,index($0,"=")+1); exit}')"
+          echo "pack=${PACK}" >> "$GITHUB_OUTPUT"
+          echo "reason=${REASON}" >> "$GITHUB_OUTPUT"
+          if [[ "$PACK" == "true" ]]; then
+            echo "PACK_WIN_AGENT=true" >> "$GITHUB_ENV"
+          else
+            echo "PACK_WIN_AGENT=false" >> "$GITHUB_ENV"
+          fi
+          echo "==> PACK_WIN_AGENT=${PACK} — ${REASON}"
 
       - name: Delete Actions caches (force rebuild)
         if: ${{ env.FORCE_CACHE_REBUILD == 'true' }}
@@ -195,7 +221,7 @@ jobs:
             echo "==> AGENT_VERSION inside zip index.js:"
             unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/app/src/index.js | grep -E 'export const AGENT_VERSION' || true
           else
-            echo "==> Skipped win agent pack (enable workflow input pack_win_agent=true to rebuild zip)"
+            echo "==> Skipped win agent pack (no agent path changes; set pack_win_agent=true to force)"
           fi
 
       - name: Pack slim release tarball
