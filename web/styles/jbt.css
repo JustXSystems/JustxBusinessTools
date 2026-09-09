@@ -1505,6 +1505,123 @@ a {
   margin-bottom: 16px;
 }
 
+/* Global flash stack ? visible ?60s for errors (see lib/app-flash.ts) */
+.app-flash-host {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  left: auto;
+  z-index: 12000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(420px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.app-flash {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm, 10px);
+  border: 1px solid var(--border-hair-strong, rgba(255, 255, 255, 0.16));
+  background: var(--bg-2, #141820);
+  color: var(--text-hi, #f3f5f8);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  animation: app-flash-in 0.22s ease-out;
+}
+
+.app-flash-error {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: linear-gradient(180deg, rgba(80, 18, 18, 0.96), rgba(40, 12, 12, 0.96));
+  color: #fecaca;
+}
+
+.app-flash-warn {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: linear-gradient(180deg, rgba(70, 45, 8, 0.96), rgba(36, 24, 6, 0.96));
+  color: #fde68a;
+}
+
+.app-flash-ok {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: linear-gradient(180deg, rgba(14, 55, 32, 0.96), rgba(10, 32, 20, 0.96));
+  color: #bbf7d0;
+}
+
+.app-flash-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-flash-label {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+
+.app-flash-msg {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.app-flash-dismiss {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.85;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 6px 10px;
+}
+
+.app-flash-dismiss-text {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.app-flash-dismiss:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes app-flash-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .app-flash-host {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+}
+
 .tracker-list {
   display: flex;
   flex-direction: column;

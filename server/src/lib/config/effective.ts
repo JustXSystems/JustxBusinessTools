@@ -14,6 +14,11 @@ import {
   normalizeClockDisplaySettings,
   type ClockDisplaySettings,
 } from "../clock-display.js";
+import {
+  ensureFlashDisplayColumns,
+  normalizeFlashDisplaySettings,
+  type FlashDisplaySettings,
+} from "../flash-display.js";
 
 async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
   await pool.query(
@@ -39,6 +44,7 @@ export async function getEffectiveConfig(): Promise<{
   themeSource: "profile" | "organization";
   themePreset: string | null;
   clockDisplay: ClockDisplaySettings;
+  flashDisplay: FlashDisplaySettings;
 }> {
   const orgId = getActiveOrgId();
   const profileId = getActiveProfileId();
@@ -50,8 +56,10 @@ export async function getEffectiveConfig(): Promise<{
   ]);
 
   await ensureClockDisplayColumns();
+  await ensureFlashDisplayColumns();
   const [profileRows] = await pool.query(
-    `SELECT config_version, clock_display_visible, clock_display_format
+    `SELECT config_version, clock_display_visible, clock_display_format,
+            flash_error_seconds, flash_ok_seconds
      FROM business_profiles WHERE id = :id`,
     { id: profileId },
   );
@@ -61,6 +69,8 @@ export async function getEffectiveConfig(): Promise<{
             config_version?: number;
             clock_display_visible?: number | boolean | null;
             clock_display_format?: string | null;
+            flash_error_seconds?: number | null;
+            flash_ok_seconds?: number | null;
           }
         | undefined)
     : undefined;
@@ -68,6 +78,10 @@ export async function getEffectiveConfig(): Promise<{
   const clockDisplay = normalizeClockDisplaySettings({
     visible: profile?.clock_display_visible,
     format: profile?.clock_display_format,
+  });
+  const flashDisplay = normalizeFlashDisplaySettings({
+    errorSeconds: profile?.flash_error_seconds,
+    okSeconds: profile?.flash_ok_seconds,
   });
 
   await ensureBuiltinCatalogRows(orgId);
@@ -93,6 +107,7 @@ export async function getEffectiveConfig(): Promise<{
     themeSource: resolved.themeSource,
     themePreset: resolved.themePreset,
     clockDisplay,
+    flashDisplay,
   };
 }
 

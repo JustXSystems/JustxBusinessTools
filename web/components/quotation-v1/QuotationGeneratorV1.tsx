@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fetchProfile } from "@/lib/api";
+import { flashAppError, flashAppOk } from "@/lib/app-flash";
 import { publicAssetUrl, withBasePath, absolutePublicAssetUrl } from "@/lib/base-path";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useLiveRefresh, invalidateAdminData, invalidateLiveData } from "@/hooks/useLiveRefresh";
@@ -125,7 +126,6 @@ export function QuotationGeneratorV1() {
   const [history, setHistory] = useState<QuoteHistoryRow[]>([]);
   const [notifications, setNotifications] = useState<QuoteNotification[]>([]);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ msg: string; kind: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
@@ -154,8 +154,8 @@ export function QuotationGeneratorV1() {
   const isSaved = Boolean(current.quoteNo && snapshotOf(current) === lastSaved);
 
   const flash = useCallback((msg: string, kind = "ok") => {
-    setToast({ msg, kind });
-    window.setTimeout(() => setToast(null), 4200);
+    if (kind === "err") flashAppError(msg);
+    else flashAppOk(msg);
   }, []);
 
   const reloadMeta = useCallback(async () => {
@@ -1778,15 +1778,6 @@ export function QuotationGeneratorV1() {
               </button>
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {toast ? (
-        <div className={`qgv1-toast ${toast.kind}`}>
-          {toast.msg}
-          <button type="button" onClick={() => setToast(null)}>
-            ✕
-          </button>
         </div>
       ) : null}
     </div>

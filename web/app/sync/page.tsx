@@ -32,6 +32,7 @@ import {
   probeFsaFolder,
 } from "@/lib/artifact-delivery/fsa";
 import { fetchProfile } from "@/lib/api";
+import { flashAppError, flashAppOk, flashAppWarn } from "@/lib/app-flash";
 
 export default function SyncCenterPage() {
   const { user } = useAuth();
@@ -58,6 +59,19 @@ export default function SyncCenterPage() {
     serviceAccountEmail: string | null;
     driveConfigured: boolean;
   } | null>(null);
+
+  const showError = useCallback((msg: string) => {
+    setError(msg);
+    flashAppError(msg);
+  }, []);
+  const showWarn = useCallback((msg: string) => {
+    setError(msg);
+    flashAppWarn(msg);
+  }, []);
+  const showOk = useCallback((msg: string) => {
+    setMessage(msg);
+    flashAppOk(msg);
+  }, []);
 
   const fsa = getFsaSupport();
 
@@ -100,11 +114,11 @@ export default function SyncCenterPage() {
         setFsaLabel("Not available in this browser");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load sync status");
+      showError(err instanceof Error ? err.message : "Could not load sync status");
     } finally {
       setLoading(false);
     }
-  }, [allowed, fsa.supported]);
+  }, [allowed, fsa.supported, showError]);
 
   useEffect(() => {
     void refresh();
@@ -118,14 +132,14 @@ export default function SyncCenterPage() {
     setError("");
     try {
       const result = await syncPendingViaFsa(conflictPolicy);
-      setMessage(
+      showOk(
         result.failed
           ? `Synced ${result.synced}, failed ${result.failed}. ${result.errors[0] || ""}`
           : `Synced ${result.synced} file(s) to ${result.folderName || "linked folder"}.`,
       );
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Browser sync failed");
+      showError(err instanceof Error ? err.message : "Browser sync failed");
     } finally {
       setBusy(false);
     }
@@ -138,9 +152,9 @@ export default function SyncCenterPage() {
     try {
       const result = await triggerLocalAgentSync();
       if (result.inaccessible) {
-        setError(result.message || "Download Folder not reachable from the agent PC");
+        showError(result.message || "Download Folder not reachable from the agent PC");
       } else {
-        setMessage(
+        showOk(
           `Desktop agent synced ${result.synced ?? 0} file(s)` +
             (result.failed ? `, failed ${result.failed}` : "") +
             ".",
@@ -148,7 +162,7 @@ export default function SyncCenterPage() {
       }
       await refresh();
     } catch (err) {
-      setError(
+      showError(
         err instanceof Error
           ? `${err.message} — is the desktop agent running on this PC?`
           : "Could not reach local agent",
@@ -164,9 +178,9 @@ export default function SyncCenterPage() {
     try {
       const handle = await pickDownloadFolder();
       setFsaLabel(`Linked: ${handle.name}`);
-      setMessage("Folder linked in this browser. Click Sync now (this browser).");
+      showOk("Folder linked in this browser. Click Sync now (this browser).");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not link folder");
+      showError(err instanceof Error ? err.message : "Could not link folder");
     } finally {
       setBusy(false);
     }
@@ -187,14 +201,21 @@ export default function SyncCenterPage() {
         agentToken: res.token,
         downloadFolder: profile?.downloadFolder ?? downloadFolder,
       });
-      downloadBinaryFile("JustX-Sync-Agent-Setup.zip", zipBytes);
-      setMessage(
-        "Setup downloaded. Extract the zip, double-click Install JustX Sync Agent.cmd, then return here.",
-      );
+      downloadBinaryFile("JustX-Sync-Agent-Setup.zip", zipBytes.zip);
+      if (zipBytes.warning) {
+        showWarn(zipBytes.warning);
+        showOk(
+          `Setup downloaded (agent ${zipBytes.agentVersion}). Extract → Install JustX Sync Agent.cmd. Note: server zip is behind this web build — see warning.`,
+        );
+      } else {
+        showOk(
+          `Setup downloaded (agent ${zipBytes.agentVersion}). Extract the zip, double-click Install JustX Sync Agent.cmd, then return here.`,
+        );
+      }
       setSetupOpen(true);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create setup");
+      showError(err instanceof Error ? err.message : "Could not create setup");
     } finally {
       setBusy(false);
     }
@@ -217,13 +238,13 @@ export default function SyncCenterPage() {
         agentPackUrl: resolveAgentPackUrl(),
       });
       downloadTextFile("start-justx-sync-agent.ps1", script);
-      setMessage(
+      showOk(
         "Advanced launcher downloaded. Run: powershell -ExecutionPolicy Bypass -File .\\start-justx-sync-agent.ps1 -Install",
       );
       setSetupOpen(true);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create agent");
+      showError(err instanceof Error ? err.message : "Could not create agent");
     } finally {
       setBusy(false);
     }
@@ -233,9 +254,9 @@ export default function SyncCenterPage() {
     if (!newToken) return;
     try {
       await navigator.clipboard.writeText(newToken);
-      setMessage("Token copied to clipboard.");
+      showOk("Token copied to clipboard.");
     } catch {
-      setError("Could not copy token");
+      showError("Could not copy token");
     }
   }
 
@@ -449,7 +470,7 @@ export default function SyncCenterPage() {
                 disabled={busy}
                 onClick={() => void createTokenAndWinSetup()}
               >
-                Download setup for this PC
+                {busy ? "Preparing setup…" : "Download setup for this PC"}
               </button>
               {newToken ? (
                 <button type="button" className="btn btn-secondary" onClick={() => void copyToken()}>
@@ -457,6 +478,16 @@ export default function SyncCenterPage() {
                 </button>
               ) : null}
             </div>
+            {error ? (
+              <p className="section-note sync-msg-err" style={{ marginTop: 10 }}>
+                {error}
+              </p>
+            ) : null}
+            {message && setupOpen ? (
+              <p className="section-note sync-msg-ok" style={{ marginTop: 10 }}>
+                {message}
+              </p>
+            ) : null}
             {newToken ? (
               <p className="section-note" style={{ marginTop: 10, wordBreak: "break-all" }}>
                 Token (shown once): <code>{newToken}</code>
@@ -536,7 +567,7 @@ export default function SyncCenterPage() {
                       onClick={() =>
                         void revokeSyncAgent(a.id)
                           .then(() => refresh())
-                          .catch((err: Error) => setError(err.message))
+                          .catch((err: Error) => showError(err.message))
                       }
                     >
                       Revoke
@@ -576,7 +607,7 @@ export default function SyncCenterPage() {
                     onClick={() =>
                       void retryArtifact(item.id)
                         .then(() => refresh())
-                        .catch((err: Error) => setError(err.message))
+                        .catch((err: Error) => showError(err.message))
                     }
                   >
                     Retry

@@ -50,13 +50,14 @@ function readEmbeddedAgentVersion(entries: Record<string, Uint8Array>): string |
 
 /**
  * Take the published base Windows pack and inject config.json for this token.
- * Fails if the zip's AGENT_VERSION does not match the expected pack version
- * (prevents stamping packVersion 1.1.3 onto an old 1.1.0 index.js).
+ * Always stamps packVersion from the zip's AGENT_VERSION (honest).
+ * If the zip is older/newer than AGENT_PACK_VERSION, returns a warning — does not
+ * block the download (staff still need UNC install); Sync Center should show it.
  */
 export function personalizeWinSetupZip(
   baseZipBytes: Uint8Array,
   config: AgentSetupConfig,
-): Uint8Array {
+): { zip: Uint8Array; agentVersion: string; warning?: string } {
   const entries = unzipSync(baseZipBytes);
   const expected = config.packVersion || AGENT_PACK_VERSION;
   const embedded = readEmbeddedAgentVersion(entries);
@@ -65,11 +66,13 @@ export function personalizeWinSetupZip(
       "Setup pack is missing app/src/index.js AGENT_VERSION — rebuild with npm run pack:agent:win",
     );
   }
+
+  let warning: string | undefined;
   if (embedded !== expected) {
-    throw new Error(
-      `Windows setup zip has agent ${embedded} but web expects ${expected}. ` +
-        `Redeploy with pack_win_agent=true so JustX-Sync-Agent-win-x64.zip is rebuilt on the VPS.`,
-    );
+    warning =
+      `Server setup zip is agent ${embedded}, but this app build expects ${expected}. ` +
+      `Download will use ${embedded}. Engineer: redeploy so JustX-Sync-Agent-win-x64.zip is rebuilt ` +
+      `(agent path changes auto-pack, or pack_win_agent=true).`;
   }
 
   const configPath = `${WIN_SETUP_ROOT}/config.json`;
@@ -89,7 +92,7 @@ export function personalizeWinSetupZip(
     throw new Error("Setup pack is missing runtime/node.exe — redeploy web pack");
   }
 
-  return zipSync(entries, { level: 6 });
+  return { zip: zipSync(entries, { level: 6 }), agentVersion: embedded, warning };
 }
 
 export function downloadBinaryFile(filename: string, bytes: Uint8Array, mime = "application/zip") {
@@ -107,7 +110,9 @@ export function downloadBinaryFile(filename: string, bytes: Uint8Array, mime = "
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-export async function fetchAndPersonalizeWinSetup(config: AgentSetupConfig): Promise<Uint8Array> {
+export async function fetchAndPersonalizeWinSetup(
+  config: AgentSetupConfig,
+): Promise<{ zip: Uint8Array; agentVersion: string; warning?: string }> {
   const url = resolveWinSetupPackUrl();
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {

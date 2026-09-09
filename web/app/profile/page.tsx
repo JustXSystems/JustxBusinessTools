@@ -24,6 +24,7 @@ import {
 import { applyThemeTokens, type ThemeTokens } from "@/lib/theme";
 import { invalidateLiveData } from "@/hooks/useLiveRefresh";
 import { fetchProfile, saveProfile } from "@/lib/api";
+import { flashAppError, flashAppOk } from "@/lib/app-flash";
 import { publicAssetUrl } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
@@ -31,8 +32,10 @@ import { MfaSettingsPanel } from "@/components/profile/MfaSettingsPanel";
 import { QuotationEmailTemplatePicker } from "@/components/profile/QuotationEmailTemplatePicker";
 import { TeamRequestsPanel } from "@/components/profile/TeamRequestsPanel";
 import { ClockDisplaySettingsPanel } from "@/components/profile/ClockDisplaySettingsPanel";
+import { FlashDisplaySettingsPanel } from "@/components/profile/FlashDisplaySettingsPanel";
 import { normalizeQuotationEmailTemplateId } from "@/lib/quotation-email-templates";
 import { normalizeClockDisplaySettings } from "@/lib/clock-display";
+import { normalizeFlashDisplaySettings } from "@/lib/flash-display";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -69,11 +72,15 @@ export default function ProfilePage() {
           orgThemes: p.orgThemes ?? [],
           organizationTheme: p.organizationTheme ?? null,
           clockDisplay: normalizeClockDisplaySettings(p.clockDisplay),
+          flashDisplay: normalizeFlashDisplaySettings(p.flashDisplay),
           sendSettings: normalizeSendSettings(p.sendSettings),
           homeToolIds: p.homeToolIds ?? catalogIds,
         });
       })
-      .catch((err: Error) => setError(err.message))
+      .catch((err: Error) => {
+        setError(err.message);
+        flashAppError(err.message);
+      })
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -108,7 +115,9 @@ export default function ProfilePage() {
 
   async function handleSave() {
     if (!canEdit) {
-      setError("Only the Business Owner or Admin can edit Business Profile details.");
+      const msg = "Only the Business Owner or Admin can edit Business Profile details.";
+      setError(msg);
+      flashAppError(msg);
       return;
     }
     setSaving(true);
@@ -121,6 +130,7 @@ export default function ProfilePage() {
         documentAccentColor: normalizeDocumentAccentColor(profile.documentAccentColor),
         themePreset: normalizeThemePreset(profile.themePreset),
         clockDisplay: normalizeClockDisplaySettings(profile.clockDisplay),
+        flashDisplay: normalizeFlashDisplaySettings(profile.flashDisplay),
         sendSettings: {
           ...normalized,
           whatsappNumbers: normalized.whatsappNumbers.filter((n) => n.phone.trim()),
@@ -139,6 +149,7 @@ export default function ProfilePage() {
         orgThemes: saved.orgThemes ?? [],
         organizationTheme: saved.organizationTheme ?? null,
         clockDisplay: normalizeClockDisplaySettings(saved.clockDisplay),
+        flashDisplay: normalizeFlashDisplaySettings(saved.flashDisplay),
         sendSettings: normalizeSendSettings(saved.sendSettings),
         homeToolIds: saved.homeToolIds ?? catalogIds,
       });
@@ -146,8 +157,11 @@ export default function ProfilePage() {
       invalidateLiveData("config");
       await refreshConfig();
       setMessage("Business profile saved. Theme and tools apply to this Business Profile.");
+      flashAppOk("Business profile saved. Theme and tools apply to this Business Profile.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      const msg = err instanceof Error ? err.message : "Save failed";
+      setError(msg);
+      flashAppError(msg);
     } finally {
       setSaving(false);
     }
@@ -400,6 +414,17 @@ export default function ProfilePage() {
           onChange={(clockDisplay) => {
             if (!canEdit) return;
             setProfile((p) => ({ ...p, clockDisplay }));
+          }}
+        />
+      </div>
+
+      <div className="panel">
+        <FlashDisplaySettingsPanel
+          value={normalizeFlashDisplaySettings(profile.flashDisplay)}
+          disabled={!canEdit}
+          onChange={(flashDisplay) => {
+            if (!canEdit) return;
+            setProfile((p) => ({ ...p, flashDisplay }));
           }}
         />
       </div>

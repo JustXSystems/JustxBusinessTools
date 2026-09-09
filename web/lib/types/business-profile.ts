@@ -11,6 +11,12 @@ import {
   normalizeClockDisplaySettings,
   type ClockDisplaySettings,
 } from "@/lib/clock-display";
+import {
+  DEFAULT_FLASH_ERROR_SECONDS,
+  DEFAULT_FLASH_OK_SECONDS,
+  normalizeFlashDisplaySettings,
+  type FlashDisplaySettings,
+} from "@/lib/flash-display";
 
 export type BusinessProfileSendSettings = {
   whatsappNumbers: Array<{ id: string; label: string; phone: string }>;
@@ -139,6 +145,11 @@ export type BusinessProfile = {
    * Owner/Admin toggles visibility and picks a format (IST).
    */
   clockDisplay: ClockDisplaySettings;
+  /**
+   * How long top-right error/success banners stay visible (seconds).
+   * Staff can always Close early.
+   */
+  flashDisplay: FlashDisplaySettings;
   /** Tools shown on home. null = all tools (legacy profiles). */
   homeToolIds: string[] | null;
   /** Profile-level WhatsApp / Email / Google Drive defaults for all tools. */
@@ -198,6 +209,10 @@ export const EMPTY_PROFILE: BusinessProfile = {
   clockDisplay: {
     visible: DEFAULT_CLOCK_DISPLAY_VISIBLE,
     format: DEFAULT_CLOCK_DISPLAY_FORMAT,
+  },
+  flashDisplay: {
+    errorSeconds: DEFAULT_FLASH_ERROR_SECONDS,
+    okSeconds: DEFAULT_FLASH_OK_SECONDS,
   },
   homeToolIds: null,
   sendSettings: {

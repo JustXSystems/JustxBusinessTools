@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-base";
 import { extractDriveFolderId } from "@/lib/types/business-profile";
 import { fetchArtifactSyncSummary } from "@/lib/artifact-delivery";
+import { flashAppError } from "@/lib/app-flash";
 
 type Destination = "auto" | "google_drive" | "webhook" | "unc_agent" | "none";
 
@@ -54,8 +55,13 @@ export function DownloadFolderPanel({
   const [folderLabelDraft, setFolderLabelDraft] = useState("Business artifacts");
   const [busy, setBusy] = useState(false);
   const [localMsg, setLocalMsg] = useState("");
-  const [localErr, setLocalErr] = useState("");
+  const [localErr, setLocalErrState] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  function setLocalErr(msg: string) {
+    setLocalErrState(msg);
+    if (msg.trim()) flashAppError(msg);
+  }
 
   const refresh = useCallback(async () => {
     try {

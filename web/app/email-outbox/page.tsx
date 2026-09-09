@@ -16,6 +16,7 @@ import {
   type EmailOutboxItem,
 } from "@/lib/email-outbox";
 import { invalidateLiveData } from "@/hooks/useLiveRefresh";
+import { flashAppError, flashAppOk } from "@/lib/app-flash";
 
 function statusClass(status: string) {
   if (status === "sent") return "pill pill-success";
@@ -36,6 +37,15 @@ export default function EmailOutboxPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const showError = useCallback((msg: string) => {
+    setError(msg);
+    flashAppError(msg);
+  }, []);
+  const showOk = useCallback((msg: string) => {
+    setMessage(msg);
+    flashAppOk(msg);
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!allowed) return;
     setError("");
@@ -48,11 +58,11 @@ export default function EmailOutboxPage() {
       setWebhookConfigured(list.webhookConfigured);
       setAgentOnline(Boolean(local?.ok));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load email outbox");
+      showError(err instanceof Error ? err.message : "Could not load email outbox");
     } finally {
       setLoading(false);
     }
-  }, [allowed, pendingOnly]);
+  }, [allowed, pendingOnly, showError]);
 
   useEffect(() => {
     void refresh();
@@ -66,11 +76,11 @@ export default function EmailOutboxPage() {
     setError("");
     try {
       await fn();
-      setMessage(label);
+      showOk(label);
       invalidateLiveData("email-outbox");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Action failed");
+      showError(err instanceof Error ? err.message : "Action failed");
       invalidateLiveData("email-outbox");
       await refresh();
     } finally {

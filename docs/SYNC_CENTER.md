@@ -549,7 +549,7 @@ With agent running on Windows + **classic** Outlook (COM) installed: **Email Out
 | **`No access to this business branch` (403)** | Agent token rejected by API branch ACL — deploy API fix that marks agent auth (`viaAgentToken`); or use **Sync now (this browser)** until deployed. Re-download setup only after API is fixed if token/profile mismatch suspected |
 | Pending never drops (other) | Destination UNC without agent/FSA; Drive not connected; webhook failing |
 | Agent “Not detected” | Agent not running on **this** PC; wrong machine; run Check Status.cmd |
-| Setup download fails / pack incomplete | Redeploy web so packs exist; for win zip use `pack_win_agent=true` or local `npm run pack:agent:win -w web` |
+| Setup download fails / no file saved | Look for red error under the button (often version mismatch or missing zip). Zip must exist at `/jbt/JustX-Sync-Agent-win-x64.zip`. Redeploy with agent auto-pack / `pack_win_agent`. Browser may block popups — allow downloads. |
 | Agent reinstalled but `/health` version old | Win pack was skipped on deploy — VPS zip stale. Redeploy with **`pack_win_agent=true`**, then Download setup again — [Confirm version](#confirm-desktop-agent-version-in-build--on-pc) |
 | Agent pack download fails | Slim `desktop-sync-agent.zip` 404 — same redeploy |
 | Folder not reachable | Path wrong; PC not on VPN; agent user lacks share ACL; create folder first |

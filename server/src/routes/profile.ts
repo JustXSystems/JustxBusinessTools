@@ -41,6 +41,11 @@ import {
   normalizeClockDisplaySettings,
   type ClockDisplaySettings,
 } from "../lib/clock-display.js";
+import {
+  ensureFlashDisplayColumns,
+  normalizeFlashDisplaySettings,
+  type FlashDisplaySettings,
+} from "../lib/flash-display.js";
 import { getActiveOrgId, getActiveProfileId } from "../lib/request-context.js";
 import { gstinTakenByOther, isValidGstin, normalizeGstin } from "../lib/gstin.js";
 import {
@@ -77,6 +82,8 @@ type ProfileRow = {
   theme_preset?: string | null;
   clock_display_visible?: number | boolean | null;
   clock_display_format?: string | null;
+  flash_error_seconds?: number | null;
+  flash_ok_seconds?: number | null;
   home_tool_ids?: unknown;
   send_settings?: unknown;
   download_folder?: string | null;
@@ -169,6 +176,10 @@ function toApi(
       visible: row.clock_display_visible,
       format: row.clock_display_format,
     }),
+    flashDisplay: normalizeFlashDisplaySettings({
+      errorSeconds: row.flash_error_seconds,
+      okSeconds: row.flash_ok_seconds,
+    }),
     homeToolIds: parseHomeToolIds(row.home_tool_ids),
     sendSettings: publicSendSettings(row.send_settings),
     downloadFolder: row.download_folder ?? null,
@@ -188,6 +199,7 @@ async function ensureProfileExtras() {
   await ensureDocumentAccentColorColumn();
   await ensureThemePresetColumn();
   await ensureClockDisplayColumns();
+  await ensureFlashDisplayColumns();
   await ensureArtifactDeliverySchema();
   await ensureDeliveryConfigColumns();
 }
@@ -384,6 +396,11 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
     clockDisplay = normalizeClockDisplaySettings(body.clockDisplay);
   }
 
+  let flashDisplay: FlashDisplaySettings | undefined;
+  if (body.flashDisplay !== undefined) {
+    flashDisplay = normalizeFlashDisplaySettings(body.flashDisplay);
+  }
+
   await pool.query(
     `UPDATE business_profiles SET
       logo_data_url = :logo,
@@ -405,8 +422,17 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       send_settings = :sendSettings
       ${documentAccentColor !== undefined ? ", document_accent_color = :documentAccentColor" : ""}
       ${themePreset !== undefined ? ", theme_preset = :themePreset" : ""}
-      ${themePreset !== undefined || clockDisplay !== undefined ? ", config_version = config_version + 1" : ""}
+      ${
+        themePreset !== undefined || clockDisplay !== undefined || flashDisplay !== undefined
+          ? ", config_version = config_version + 1"
+          : ""
+      }
       ${clockDisplay !== undefined ? ", clock_display_visible = :clockVisible, clock_display_format = :clockFormat" : ""}
+      ${
+        flashDisplay !== undefined
+          ? ", flash_error_seconds = :flashErrorSeconds, flash_ok_seconds = :flashOkSeconds"
+          : ""
+      }
       ${homeToolIds !== undefined ? ", home_tool_ids = :homeToolIds" : ""}
       ${downloadFolder !== undefined ? ", download_folder = :downloadFolder" : ""}
       ${conflictPolicy !== undefined ? ", download_folder_conflict_policy = :conflictPolicy" : ""}
@@ -437,6 +463,12 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       ...(themePreset !== undefined ? { themePreset } : {}),
       ...(clockDisplay !== undefined
         ? { clockVisible: clockDisplay.visible ? 1 : 0, clockFormat: clockDisplay.format }
+        : {}),
+      ...(flashDisplay !== undefined
+        ? {
+            flashErrorSeconds: flashDisplay.errorSeconds,
+            flashOkSeconds: flashDisplay.okSeconds,
+          }
         : {}),
       ...(homeToolIds !== undefined ? { homeToolIds: JSON.stringify(homeToolIds) } : {}),
       ...(downloadFolder !== undefined ? { downloadFolder } : {}),

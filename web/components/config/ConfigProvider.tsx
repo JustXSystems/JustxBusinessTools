@@ -29,6 +29,13 @@ import {
   normalizeClockDisplaySettings,
   type ClockDisplaySettings,
 } from "@/lib/clock-display";
+import {
+  DEFAULT_FLASH_ERROR_SECONDS,
+  DEFAULT_FLASH_OK_SECONDS,
+  normalizeFlashDisplaySettings,
+  type FlashDisplaySettings,
+} from "@/lib/flash-display";
+import { configureAppFlashDurations } from "@/lib/app-flash";
 
 export type PlatformToolDefinition = {
   id: string;
@@ -57,6 +64,8 @@ export type EffectiveConfig = {
   themePreset?: string | null;
   /** Footer date/time chrome (Business Profile). */
   clockDisplay?: ClockDisplaySettings;
+  /** Top-right toast durations (Business Profile). */
+  flashDisplay?: FlashDisplaySettings;
 };
 
 type ConfigContextValue = {
@@ -81,6 +90,10 @@ const DEFAULT_CONFIG: EffectiveConfig = {
     visible: DEFAULT_CLOCK_DISPLAY_VISIBLE,
     format: DEFAULT_CLOCK_DISPLAY_FORMAT,
   },
+  flashDisplay: {
+    errorSeconds: DEFAULT_FLASH_ERROR_SECONDS,
+    okSeconds: DEFAULT_FLASH_OK_SECONDS,
+  },
 };
 
 function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefined): EffectiveConfig {
@@ -97,6 +110,7 @@ function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefi
     themeSource: data?.themeSource === "profile" ? "profile" : "organization",
     themePreset: data?.themePreset ?? null,
     clockDisplay: normalizeClockDisplaySettings(data?.clockDisplay),
+    flashDisplay: normalizeFlashDisplaySettings(data?.flashDisplay),
   };
 }
 
@@ -135,6 +149,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     applyThemeTokens(config?.theme as ThemeTokens | null | undefined);
   }, [config?.theme]);
 
+  useEffect(() => {
+    configureAppFlashDurations(config?.flashDisplay ?? null);
+  }, [config?.flashDisplay]);
+
   const getToolDefinition = useCallback(
     (toolId: string) => config?.tools.find((t) => t.id === toolId),
     [config],
@@ -168,4 +186,9 @@ export function usePoweredByText(): string {
 export function useClockDisplaySettings(): ClockDisplaySettings {
   const ctx = useContext(ConfigContext);
   return normalizeClockDisplaySettings(ctx?.config?.clockDisplay);
+}
+
+export function useFlashDisplaySettings(): FlashDisplaySettings {
+  const ctx = useContext(ConfigContext);
+  return normalizeFlashDisplaySettings(ctx?.config?.flashDisplay);
 }

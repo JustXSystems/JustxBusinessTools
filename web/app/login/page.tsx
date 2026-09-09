@@ -8,6 +8,7 @@ import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { usePlatformBranding } from "@/components/branding/BrandingProvider";
 import { apiUrl, withBasePath } from "@/lib/api-base";
 import { requestPhoneOtp } from "@/lib/api";
+import { flashAppError } from "@/lib/app-flash";
 
 type AuthMethods = { password: boolean; phoneOtp: boolean; google: boolean; mfa: boolean };
 
@@ -27,10 +28,15 @@ export default function LoginPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [mfaToken, setMfaToken] = useState("");
   const [mfaCode, setMfaCode] = useState("");
-  const [error, setError] = useState("");
+  const [error, setErrorState] = useState("");
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [fieldsUnlocked, setFieldsUnlocked] = useState(false);
+
+  function setError(msg: string) {
+    setErrorState(msg);
+    if (msg.trim()) flashAppError(msg);
+  }
 
   useEffect(() => {
     setMounted(true);
