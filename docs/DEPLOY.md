@@ -422,6 +422,6 @@ DEPLOY_BRANCH=HEAD ./scripts/vps-deploy.sh
 | OAuth mismatch | Google redirect URIs must include `/jbt/api/...` |
 | `Illegal mix of collations` | See prior notes / run `ALTER TABLE … CONVERT TO … utf8mb4_unicode_ci` |
 
-### lightningcss / Turbopack (fallback builds only)
+### lightningcss native binary (CI + VPS fallback)
 
-Next.js 16 defaults to Turbopack, which can fail loading the `lightningcss` native `.node` binary. Production builds use webpack. CI (Linux) ships the correct native deps inside the artifact. Only the **VPS local-build fallback** needs the workaround in `vps-deploy.sh`.
+Windows-generated lockfiles often omit `lightningcss-linux-x64-gnu`. Before `next build` on Linux, run `scripts/ensure-lightningcss-native.sh` (wired into GitHub Actions and `vps-deploy.sh`). The CI artifact path does not rebuild CSS on the VPS.

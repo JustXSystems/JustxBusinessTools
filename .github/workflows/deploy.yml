@@ -105,6 +105,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Ensure lightningcss Linux native binary
+        run: |
+          chmod +x scripts/ensure-lightningcss-native.sh
+          ./scripts/ensure-lightningcss-native.sh
+
       - name: Cache Next.js build
         uses: actions/cache@v4
         with:

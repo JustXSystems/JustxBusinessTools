@@ -61,18 +61,8 @@ echo "==> npm ci"
 npm ci
 
 # Windows lockfiles often omit the Linux lightningcss optional binary (Tailwind/PostCSS).
-if [[ "$(uname -s)" == "Linux" && "$(uname -m)" == "x86_64" ]]; then
-  if [[ ! -d node_modules/lightningcss-linux-x64-gnu ]]; then
-    echo "==> Installing lightningcss Linux native binary"
-    npm install --no-save --no-package-lock lightningcss-linux-x64-gnu@1.32.0
-  fi
-  if [[ -f node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node \
-     && -d node_modules/lightningcss \
-     && ! -f node_modules/lightningcss/lightningcss.linux-x64-gnu.node ]]; then
-    cp -f node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node \
-      node_modules/lightningcss/lightningcss.linux-x64-gnu.node
-  fi
-fi
+chmod +x scripts/ensure-lightningcss-native.sh
+./scripts/ensure-lightningcss-native.sh
 
 echo "==> Build web (basePath=${BASE_PATH}, webpack)"
 export NODE_ENV=production
