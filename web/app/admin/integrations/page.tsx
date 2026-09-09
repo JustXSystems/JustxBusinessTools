@@ -7,9 +7,10 @@ import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import Link from "next/link";
 
 type IntegrationStatus = "not_configured" | "disabled" | "active" | "error";
+type Pane = "google_oauth" | "email_webhook";
 
 type IntegrationPublic = {
-  id: "google_oauth" | "email_webhook";
+  id: Pane;
   label: string;
   description: string;
   enabled: boolean;
@@ -44,33 +45,59 @@ function statusLabel(status: IntegrationStatus) {
   return "Error";
 }
 
-function FieldGuide({ children }: { children: ReactNode }) {
-  return <p className="muted small" style={{ margin: "0.35rem 0 0", lineHeight: 1.45 }}>{children}</p>;
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="integ-field">
+      <label className="integ-label">{label}</label>
+      {children}
+      {hint ? <p className="integ-hint">{hint}</p> : null}
+    </div>
+  );
 }
 
-function GuideBox({ title, children }: { title: string; children: ReactNode }) {
+function SwitchRow({
+  checked,
+  onChange,
+  title,
+  description,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  title: string;
+  description: string;
+}) {
   return (
-    <div
-      className="muted small"
-      style={{
-        marginTop: "0.85rem",
-        padding: "0.85rem 1rem",
-        border: "1px solid var(--border, rgba(0,0,0,0.08))",
-        borderRadius: 8,
-        lineHeight: 1.5,
-      }}
-    >
-      <strong style={{ display: "block", marginBottom: "0.4rem", color: "var(--text-mid, inherit)" }}>
-        {title}
-      </strong>
-      {children}
-    </div>
+    <label className="integ-switch">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="integ-switch-copy">
+        <strong>{title}</strong>
+        <span>{description}</span>
+      </span>
+    </label>
+  );
+}
+
+function HelpDetails({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <details className="integ-help">
+      <summary>{summary}</summary>
+      <div className="integ-help-body">{children}</div>
+    </details>
   );
 }
 
 export default function AdminIntegrationsPage() {
   const { user } = useAuth();
   const isPlatform = Boolean(user?.isPlatformAdmin);
+  const [pane, setPane] = useState<Pane>("google_oauth");
   const [data, setData] = useState<ListResponse | null>(null);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
@@ -148,7 +175,7 @@ export default function AdminIntegrationsPage() {
         "/admin/integrations/google_oauth/test",
         { method: "POST", body: "{}" },
       );
-      setMsg(res.message ? `${res.message} (source: ${res.source ?? "—"})` : "Google test OK");
+      setMsg(res.message ? `${res.message} (${res.source ?? "—"})` : "Google credentials OK");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Test failed");
@@ -188,7 +215,7 @@ export default function AdminIntegrationsPage() {
         "/admin/integrations/email_webhook/test",
         { method: "POST", body: "{}" },
       );
-      setMsg(res.message ? `${res.message} (source: ${res.source ?? "—"})` : "Webhook test OK");
+      setMsg(res.message ? `${res.message} (${res.source ?? "—"})` : "Webhook test OK");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Test failed");
@@ -203,7 +230,7 @@ export default function AdminIntegrationsPage() {
       await navigator.clipboard.writeText(value);
       setMsg(`Copied ${label}.`);
     } catch {
-      setError(`Could not copy ${label} — select the value manually.`);
+      setError(`Could not copy ${label}.`);
     }
   }
 
@@ -212,10 +239,7 @@ export default function AdminIntegrationsPage() {
       <div className="admin-page">
         <section className="panel admin-card">
           <h2>Integrations</h2>
-          <p className="muted">
-            Platform-wide Google OAuth and email webhook settings are managed by JustX platform admins
-            only.
-          </p>
+          <p className="muted">Platform integrations are available to JustX platform admins only.</p>
         </section>
       </div>
     );
@@ -228,366 +252,357 @@ export default function AdminIntegrationsPage() {
   const email = data.integrations.find((i) => i.id === "email_webhook");
 
   return (
-    <div className="admin-page">
+    <div className="admin-page integ-page">
       <section className="panel admin-card admin-page-head">
-        <div>
-          <h2>Integrations</h2>
-          <p className="muted">
-            Optional platform services. Values saved here override <code>server/.env</code> without a
-            PM2 reload. Bootstrap secrets (JWT, DB, CORS) stay in env only.
-          </p>
-        </div>
-        <GuideBox title="When to use this screen">
-          <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
-            <li>
-              <strong>Google OAuth</strong> — only if you want Sign in with Google and/or Company Google
-              Drive delivery. The app boots fine without it (email/password, webhook/UNC delivery still
-              work).
-            </li>
-            <li>
-              <strong>Email webhook</strong> — only for automatic HTML + PDF email send (Path A). Staff
-              can still use mailto or Outlook via Sync Center without this.
-            </li>
-            <li>
-              After Save + Test succeed here, you may remove matching keys from{" "}
-              <code>server/.env</code> on the VPS. Until then, env remains a fallback.
-            </li>
-          </ul>
-          <p style={{ margin: "0.55rem 0 0" }}>{data.hints.migrateNote}</p>
-        </GuideBox>
-        {msg ? <p className="muted">{msg}</p> : null}
-        {error ? <p className="field-error">{error}</p> : null}
-      </section>
-
-      <section className="panel admin-card">
         <div className="analytics-toolbar">
           <div>
-            <h3>Status</h3>
-            <p className="muted small">
-              Live resolved config. Source <code>db</code> = this screen; <code>env</code> = still
-              reading from <code>.env</code> because nothing enabled here yet (or incomplete save).
+            <h2>Integrations</h2>
+            <p className="muted">
+              Optional platform services. Changes take effect immediately and override matching{" "}
+              <code>.env</code> values.
             </p>
           </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={Boolean(busy)}
+            onClick={() => void load()}
+          >
+            Refresh
+          </button>
         </div>
+
         <div className="analytics-kpis">
-          {[google, email].filter(Boolean).map((item) => (
-            <article key={item!.id} className="result-card">
-              <span>{item!.label}</span>
-              <strong>
-                <span className={statusPill(item!.status)}>{statusLabel(item!.status)}</span>
-              </strong>
-              <span className="analytics-delta">
-                {item!.source ? `Source: ${item!.source}` : "No source"}
-                {item!.statusDetail ? ` · ${item!.statusDetail}` : ""}
+          <button
+            type="button"
+            className={`result-card${pane === "google_oauth" ? " is-selected" : ""}`}
+            onClick={() => setPane("google_oauth")}
+          >
+            <span>Google OAuth</span>
+            <strong>
+              <span className={statusPill(google?.status ?? "not_configured")}>
+                {statusLabel(google?.status ?? "not_configured")}
               </span>
-            </article>
-          ))}
+            </strong>
+            <span className="analytics-delta">
+              {google?.source ? `Source · ${google.source}` : "Optional · login & Drive"}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`result-card${pane === "email_webhook" ? " is-selected" : ""}`}
+            onClick={() => setPane("email_webhook")}
+          >
+            <span>Email webhook</span>
+            <strong>
+              <span className={statusPill(email?.status ?? "not_configured")}>
+                {statusLabel(email?.status ?? "not_configured")}
+              </span>
+            </strong>
+            <span className="analytics-delta">
+              {email?.source ? `Source · ${email.source}` : "Optional · Path A auto-send"}
+            </span>
+          </button>
         </div>
       </section>
 
-      <section className="panel admin-card">
-        <h3>Google OAuth</h3>
-        <p className="muted">
-          One platform OAuth client for the whole SaaS: login + each Business Profile Owner connecting
-          company Drive. Create the client once in{" "}
-          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">
-            Google Cloud Console → Credentials
-          </a>{" "}
-          (OAuth 2.0 Client ID, type <strong>Web application</strong>). Typical owner account:{" "}
-          <code>justxsystems@gmail.com</code> — any Google Cloud project works.
-        </p>
+      {(msg || error) && (
+        <div className={`integ-banner${error ? " is-error" : ""}`}>
+          {error || msg}
+        </div>
+      )}
 
-        <GuideBox title="Setup checklist (Google)">
-          <ol style={{ margin: 0, paddingLeft: "1.1rem" }}>
-            <li>Enable Google APIs you need (at least Google Drive API for company folder upload).</li>
-            <li>
-              Create OAuth client → add <strong>both</strong> Authorized redirect URIs shown below
-              (exact match, including <code>/jbt</code> in production).
-            </li>
-            <li>
-              Copy Client ID + Client secret into the fields → check <strong>Enabled</strong> →{" "}
-              <strong>Save Google</strong> → <strong>Test credentials</strong>.
-            </li>
-            <li>
-              Confirm login page shows “Sign in with Google”, then have a Profile Owner use{" "}
-              <Link href="/profile">Business Profile → Connect company Google Drive</Link>.
-            </li>
-          </ol>
-          <p style={{ margin: "0.55rem 0 0" }}>
-            Skip entirely if customers only use artifact webhook (SharePoint/OneDrive), UNC + Sync
-            Center agent, or email Paths B/C.
-          </p>
-        </GuideBox>
+      <div className="admin-tabs-bar">
+        <div className="admin-tabs">
+          <button
+            type="button"
+            className={pane === "google_oauth" ? "active" : ""}
+            onClick={() => setPane("google_oauth")}
+          >
+            Google OAuth
+          </button>
+          <button
+            type="button"
+            className={pane === "email_webhook" ? "active" : ""}
+            onClick={() => setPane("email_webhook")}
+          >
+            Email webhook
+          </button>
+        </div>
+      </div>
 
-        <div className="admin-form-grid" style={{ marginTop: "1rem", alignItems: "start" }}>
-          <div>
-            <label className="admin-form-row">
-              <input
-                type="checkbox"
-                checked={googleForm.enabled}
-                onChange={(e) => setGoogleForm((f) => ({ ...f, enabled: e.target.checked }))}
-              />
-              <span>Enabled</span>
-            </label>
-            <FieldGuide>
-              When checked and credentials are complete, Sign in with Google and Drive connect become
-              available. Uncheck to turn Google off platform-wide even if <code>GOOGLE_*</code> still
-              exist in <code>.env</code>. Leave unchecked if you are not using Google.
-            </FieldGuide>
-          </div>
+      <div className="admin-page-scroll">
+        {pane === "google_oauth" ? (
+          <section className="panel admin-card integ-panel">
+            <header className="integ-panel-head">
+              <div>
+                <h3>Google OAuth</h3>
+                <p>
+                  One platform client for Sign in with Google and Company Drive connect. Skip if
+                  customers use webhook, UNC, or email-only delivery.
+                </p>
+              </div>
+              {google?.statusDetail ? (
+                <span className="integ-meta">{google.statusDetail}</span>
+              ) : null}
+            </header>
 
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label>
-              Client ID
-              <input
-                value={googleForm.clientId}
-                onChange={(e) => setGoogleForm((f) => ({ ...f, clientId: e.target.value }))}
-                placeholder="123456789-xxxx.apps.googleusercontent.com"
-                autoComplete="off"
-              />
-            </label>
-            <FieldGuide>
-              Public identifier from Google Cloud → Credentials → your OAuth 2.0 Client. Ends with{" "}
-              <code>.apps.googleusercontent.com</code>. Same client is used for login and Drive —
-              do not create a second client unless you intentionally rotate credentials. Changing this
-              after companies connected Drive usually means Owners must reconnect on Business Profile.
-            </FieldGuide>
-          </div>
+            <SwitchRow
+              checked={googleForm.enabled}
+              onChange={(enabled) => setGoogleForm((f) => ({ ...f, enabled }))}
+              title="Enable Google OAuth"
+              description="Turns Sign in with Google and Drive connect on or off for the whole platform."
+            />
 
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label>
-              Client secret
-              <input
-                type="password"
-                value={googleForm.clientSecret}
-                onChange={(e) => setGoogleForm((f) => ({ ...f, clientSecret: e.target.value }))}
-                placeholder={
-                  google?.publicConfig.clientSecretConfigured
-                    ? "Leave blank to keep the stored secret"
-                    : "GOCSPX-…"
+            <div className="integ-form">
+              <Field
+                label="Client ID"
+                hint={
+                  <>
+                    From Google Cloud → Credentials → OAuth 2.0 Client (Web). Ends with{" "}
+                    <code>.apps.googleusercontent.com</code>. Changing this may require Owners to
+                    reconnect Drive.
+                  </>
                 }
-                autoComplete="new-password"
-              />
-            </label>
-            <FieldGuide>
-              Private value from the same OAuth client (“Client secret”). Stored encrypted in the
-              database. Leave blank when editing other fields to keep the current secret. Paste a new
-              value only when rotating. Never commit this to git or put it in the web frontend env.
-            </FieldGuide>
-          </div>
+              >
+                <input
+                  value={googleForm.clientId}
+                  onChange={(e) => setGoogleForm((f) => ({ ...f, clientId: e.target.value }))}
+                  placeholder="….apps.googleusercontent.com"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </Field>
 
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label>
-              Support / owner email (optional)
-              <input
-                value={googleForm.supportEmail}
-                onChange={(e) => setGoogleForm((f) => ({ ...f, supportEmail: e.target.value }))}
-                placeholder="justxsystems@gmail.com"
-              />
-            </label>
-            <FieldGuide>
-              Optional note of which Google account owns the Cloud project (for your ops team). Not
-              used at runtime for OAuth. Does not grant Google access by itself.
-            </FieldGuide>
-          </div>
-        </div>
+              <Field
+                label="Client secret"
+                hint="Stored encrypted. Leave blank when editing other fields to keep the current secret."
+              >
+                <input
+                  type="password"
+                  value={googleForm.clientSecret}
+                  onChange={(e) => setGoogleForm((f) => ({ ...f, clientSecret: e.target.value }))}
+                  placeholder={
+                    google?.publicConfig.clientSecretConfigured
+                      ? "••••••••  (unchanged)"
+                      : "GOCSPX-…"
+                  }
+                  autoComplete="new-password"
+                />
+              </Field>
 
-        <GuideBox title="Authorized redirect URIs (paste into Google Cloud exactly)">
-          <p style={{ margin: "0 0 0.5rem" }}>
-            Google Cloud → your OAuth client → <strong>Authorized redirect URIs</strong>. Both URIs
-            below are derived from <code>API_PUBLIC_URL</code> / override env on the server — they are
-            not editable here.
-          </p>
-          <div style={{ display: "grid", gap: "0.55rem" }}>
-            <div>
-              <div>
-                <strong>1. Sign-in callback</strong>
-              </div>
-              <code style={{ wordBreak: "break-all" }}>{data.hints.redirectUriLogin}</code>
-              <div className="btn-row" style={{ marginTop: 6 }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => void copyText("login redirect URI", data.hints.redirectUriLogin)}
-                >
-                  Copy login URI
-                </button>
-              </div>
-              <FieldGuide>
-                Used by <code>/api/auth/google/callback</code> after “Sign in with Google”.
-              </FieldGuide>
+              <Field
+                label="Project owner email"
+                hint="Optional ops note (e.g. justxsystems@gmail.com). Not used at runtime."
+              >
+                <input
+                  value={googleForm.supportEmail}
+                  onChange={(e) => setGoogleForm((f) => ({ ...f, supportEmail: e.target.value }))}
+                  placeholder="justxsystems@gmail.com"
+                  autoComplete="off"
+                />
+              </Field>
             </div>
-            <div>
-              <div>
-                <strong>2. Drive connect callback</strong>
+
+            <div className="integ-uri-block">
+              <div className="integ-uri-head">
+                <h4>Authorized redirect URIs</h4>
+                <p>Paste both into Google Cloud Console exactly. Derived from server API public URL.</p>
               </div>
-              <code style={{ wordBreak: "break-all" }}>{data.hints.redirectUriDrive}</code>
-              <div className="btn-row" style={{ marginTop: 6 }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => void copyText("Drive redirect URI", data.hints.redirectUriDrive)}
-                >
-                  Copy Drive URI
-                </button>
+              <div className="integ-uri-list">
+                <div className="integ-uri-row">
+                  <div>
+                    <span className="integ-uri-label">Sign-in callback</span>
+                    <code>{data.hints.redirectUriLogin}</code>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => void copyText("sign-in URI", data.hints.redirectUriLogin)}
+                  >
+                    Copy
+                  </button>
+                </div>
+                <div className="integ-uri-row">
+                  <div>
+                    <span className="integ-uri-label">Drive connect callback</span>
+                    <code>{data.hints.redirectUriDrive}</code>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => void copyText("Drive URI", data.hints.redirectUriDrive)}
+                  >
+                    Copy
+                  </button>
+                </div>
               </div>
-              <FieldGuide>
-                Used when a Profile Owner connects company Drive (
-                <code>/api/profile/drive/callback</code>). Missing this URI is the usual cause of
-                “redirect_uri_mismatch” on Drive connect.
-              </FieldGuide>
             </div>
-          </div>
-        </GuideBox>
 
-        <div className="btn-row" style={{ marginTop: "1rem" }}>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={Boolean(busy)}
-            onClick={() => void saveGoogle()}
-          >
-            {busy === "google-save" ? "Saving…" : "Save Google"}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={Boolean(busy)}
-            onClick={() => void testGoogle()}
-          >
-            {busy === "google-test" ? "Testing…" : "Test credentials"}
-          </button>
-        </div>
-        <FieldGuide>
-          <strong>Test credentials</strong> asks Google whether the Client ID + secret are accepted
-          (no user login). Save first if you just pasted new values.
-        </FieldGuide>
-      </section>
+            <div className="integ-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={Boolean(busy)}
+                onClick={() => void saveGoogle()}
+              >
+                {busy === "google-save" ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={Boolean(busy)}
+                onClick={() => void testGoogle()}
+              >
+                {busy === "google-test" ? "Testing…" : "Test credentials"}
+              </button>
+              <a
+                className="btn btn-ghost"
+                href="https://console.cloud.google.com/apis/credentials"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Google Cloud
+              </a>
+            </div>
 
-      <section className="panel admin-card">
-        <h3>Email webhook (Path A — automatic send)</h3>
-        <p className="muted">
-          JustX does <strong>not</strong> send SMTP mail itself. Path A posts JSON (including HTML
-          body + PDF) to <strong>your</strong> automation, which then sends the real email via
-          SendGrid, Gmail, Microsoft 365, etc.
-        </p>
+            <HelpDetails summary="Setup guide — Google OAuth">
+              <ol>
+                <li>
+                  In{" "}
+                  <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer">
+                    Google Cloud Console
+                  </a>
+                  , create or select a project and enable the <strong>Google Drive API</strong>.
+                </li>
+                <li>
+                  Configure the OAuth consent screen (app name JustX Business Tools; support email e.g.{" "}
+                  <code>justxsystems@gmail.com</code>).
+                </li>
+                <li>
+                  Create an OAuth client ID → type <strong>Web application</strong>.
+                </li>
+                <li>
+                  Authorized JavaScript origins: <code>https://justxsystems.com</code> (and{" "}
+                  <code>http://localhost:3000</code> for local).
+                </li>
+                <li>Authorized redirect URIs: copy both URIs from the block above.</li>
+                <li>Paste Client ID + secret here → Enable → Save → Test credentials.</li>
+                <li>
+                  Verify login shows Sign in with Google, then have a Profile Owner connect Drive on{" "}
+                  <Link href="/profile">Business Profile</Link>.
+                </li>
+              </ol>
+              <p>
+                Not required for SharePoint/OneDrive artifact webhooks, UNC + Sync Center, or email Paths
+                B/C.
+              </p>
+            </HelpDetails>
+          </section>
+        ) : (
+          <section className="panel admin-card integ-panel">
+            <header className="integ-panel-head">
+              <div>
+                <h3>Email webhook</h3>
+                <p>
+                  Path A automatic send. JustX POSTs email JSON to your automation; it is not SMTP and
+                  not a SendGrid key.
+                </p>
+              </div>
+              {email?.statusDetail ? (
+                <span className="integ-meta">{email.statusDetail}</span>
+              ) : null}
+            </header>
 
-        <GuideBox title="What to put here vs what not to">
-          <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
-            <li>
-              <strong>Put:</strong> the HTTPS inbound webhook URL from n8n, Make (Integromat), Zapier,
-              Power Automate (“When an HTTP request is received”), or similar.
-            </li>
-            <li>
-              <strong>Do not put:</strong> a SendGrid/API key, Gmail app password, SMTP host, or any
-              JustX <code>/api/…</code> path — those belong inside your automation, not here.
-            </li>
-            <li>
-              This is <strong>not</strong> the Business Profile “artifact / corporate webhook” used for
-              PDF file delivery to SharePoint/OneDrive. That stays on{" "}
-              <Link href="/profile">Business Profile</Link>.
-            </li>
-          </ul>
-        </GuideBox>
+            <SwitchRow
+              checked={emailForm.enabled}
+              onChange={(enabled) => setEmailForm((f) => ({ ...f, enabled }))}
+              title="Enable email webhook"
+              description="When on, Quotation / Site Survey / Email Outbox can auto-send via this URL."
+            />
 
-        <GuideBox title="Setup checklist (email Path A)">
-          <ol style={{ margin: 0, paddingLeft: "1.1rem" }}>
-            <li>
-              In your automation tool, create a flow triggered by an inbound webhook / Catch Hook /
-              HTTP request.
-            </li>
-            <li>Copy the <strong>production</strong> HTTPS URL (not the test/listen URL if they differ).</li>
-            <li>
-              Paste below → check <strong>Enabled</strong> → <strong>Save email webhook</strong> →{" "}
-              <strong>Send test POST</strong> (your flow should receive a sample payload).
-            </li>
-            <li>
-              Map at least: <code>to</code>, <code>subject</code>, <code>html</code> (preferred) or{" "}
-              <code>body</code>, plus <code>pdfBase64</code> + <code>filename</code> for the attachment.
-            </li>
-            <li>
-              Live test: Quotation → Send Via → Email.{" "}
-              <Link href="/email-outbox">Email Outbox</Link> should show <strong>sent</strong> when the
-              webhook returns HTTP 2xx.
-            </li>
-          </ol>
-        </GuideBox>
+            <div className="integ-form">
+              <Field
+                label="Webhook URL"
+                hint={
+                  <>
+                    HTTPS inbound hook from n8n, Make, Zapier, or Power Automate. Not a JustX{" "}
+                    <code>/api/…</code> path, and not the Profile artifact webhook used for SharePoint
+                    files.
+                  </>
+                }
+              >
+                <input
+                  value={emailForm.url}
+                  onChange={(e) => setEmailForm((f) => ({ ...f, url: e.target.value }))}
+                  placeholder="https://hook.eu1.make.com/…  or  https://…/webhook/…"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </Field>
+            </div>
 
-        <GuideBox title="If you skip Path A (still fully supported)">
-          <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
-            <li>
-              <strong>Path B — mailto:</strong> leave this integration disabled / empty. Staff send
-              opens the mail app; PDF downloads for manual attach; draft stays in Email Outbox.
-            </li>
-            <li>
-              <strong>Path C — Outlook + PDF:</strong> install the Sync Center desktop agent on a
-              Windows PC, then use Email Outbox → Open in Outlook. No webhook required.
-            </li>
-          </ul>
-        </GuideBox>
+            <div className="integ-note-grid">
+              <article>
+                <h4>Use this for</h4>
+                <p>Automatic HTML + PDF email (Path A) for quotations, site surveys, and outbox retries.</p>
+              </article>
+              <article>
+                <h4>Skip this for</h4>
+                <p>
+                  Path B mailto, or Path C Outlook via{" "}
+                  <Link href="/sync">Sync Center</Link> desktop agent — no webhook needed.
+                </p>
+              </article>
+            </div>
 
-        <div className="admin-form-grid" style={{ marginTop: "1rem", alignItems: "start" }}>
-          <div>
-            <label className="admin-form-row">
-              <input
-                type="checkbox"
-                checked={emailForm.enabled}
-                onChange={(e) => setEmailForm((f) => ({ ...f, enabled: e.target.checked }))}
-              />
-              <span>Enabled</span>
-            </label>
-            <FieldGuide>
-              When checked with a valid URL, quotation / site survey / Email Outbox “send webhook”
-              posts to this hook automatically. Uncheck to force Path B/C even if a URL is saved or{" "}
-              <code>EMAIL_WEBHOOK_URL</code> remains in <code>.env</code>.
-            </FieldGuide>
-          </div>
+            <div className="integ-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={Boolean(busy)}
+                onClick={() => void saveEmail()}
+              >
+                {busy === "email-save" ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={Boolean(busy)}
+                onClick={() => void testEmail()}
+              >
+                {busy === "email-test" ? "Testing…" : "Send test POST"}
+              </button>
+              <Link href="/email-outbox" className="btn btn-ghost">
+                Open Email Outbox
+              </Link>
+            </div>
 
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label>
-              Webhook URL
-              <input
-                value={emailForm.url}
-                onChange={(e) => setEmailForm((f) => ({ ...f, url: e.target.value }))}
-                placeholder="https://hook.eu1.make.com/xxxxxxxx  or  https://…/webhook/…"
-                autoComplete="off"
-              />
-            </label>
-            <FieldGuide>
-              Must be <code>https://…</code> (or <code>http://</code> only for private lab testing).
-              Example shapes: Make <code>hook.*.make.com/…</code>, n8n{" "}
-              <code>…/webhook/…</code>, Zapier Catch Hook, Power Automate HTTP trigger URL. One URL
-              serves all email Path A traffic (quotations, site surveys, outbox retries, UPI notify
-              email). After this is saved and working, you can remove{" "}
-              <code>EMAIL_WEBHOOK_URL</code> from the VPS <code>.env</code>.
-            </FieldGuide>
-          </div>
-        </div>
-
-        <div className="btn-row" style={{ marginTop: "1rem" }}>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={Boolean(busy)}
-            onClick={() => void saveEmail()}
-          >
-            {busy === "email-save" ? "Saving…" : "Save email webhook"}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={Boolean(busy)}
-            onClick={() => void testEmail()}
-          >
-            {busy === "email-test" ? "Testing…" : "Send test POST"}
-          </button>
-        </div>
-        <FieldGuide>
-          <strong>Send test POST</strong> posts a small JSON payload (
-          <code>kind: admin.integration.test</code>, <code>dryRun: true</code>) to the resolved URL.
-          Your automation should accept it (HTTP 2xx). Save first if you just changed the URL.
-        </FieldGuide>
-      </section>
+            <HelpDetails summary="Setup guide — Email Path A">
+              <ol>
+                <li>
+                  In n8n / Make / Zapier / Power Automate, create a flow triggered by an inbound webhook.
+                </li>
+                <li>Copy the production HTTPS URL and paste it above.</li>
+                <li>Enable → Save → Send test POST (expect HTTP 2xx in your automation).</li>
+                <li>
+                  Map at least <code>to</code>, <code>subject</code>, <code>html</code>,{" "}
+                  <code>pdfBase64</code>, and <code>filename</code>.
+                </li>
+                <li>
+                  Live check: Quotation → Send Via → Email → confirm{" "}
+                  <Link href="/email-outbox">Email Outbox</Link> shows sent.
+                </li>
+              </ol>
+              <p>
+                After this works, you may remove <code>EMAIL_WEBHOOK_URL</code> from{" "}
+                <code>server/.env</code>. Until then, env remains a fallback when nothing is enabled
+                here.
+              </p>
+            </HelpDetails>
+          </section>
+        )}
+      </div>
     </div>
   );
 }
