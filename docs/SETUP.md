@@ -91,11 +91,11 @@ npm run dev        # web :3000, API :4000
 
 ## Production deploy
 
-Supported path: **[`DEPLOY.md`](DEPLOY.md)** (GitHub Actions → SSH → PM2).
+Supported path: **[`DEPLOY.md`](DEPLOY.md)** (GitHub Actions builds artifact → SCP → PM2).
 
 1. Hostinger DNS: `A` for `@` and `www` → `193.203.161.219`
 2. One-time VPS setup + `server/.env` + nginx `/jbt` (ports **3002** / **4002**)
-3. Push to `master` (or run the **Deploy** workflow)
+3. Push to `master` (or run the **Deploy** workflow with optional CD inputs)
 
 ### Production checklist (JustX)
 

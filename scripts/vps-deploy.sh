@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
-# Runs ON the VPS after git update (called by GitHub Actions or manually).
-# Prerequisites: Node 20+, npm, PM2, server/.env already configured.
+# Manual / emergency deploy ON the VPS (git pull + npm ci + Next build).
+# Prefer GitHub Actions artifact deploy (scripts/vps-release.sh) for normal releases.
+#
+# Optional CD controls (same allowlist as vps-release.sh):
+#   DEPLOY_BRANCH      (default: master)
+#   RUN_MIGRATIONS     true|false (default: true)
+#   SEED_TOOLS         true|false (default: false)
+#   PM2_MODE           reload|restart|restart_api|restart_web|restart_worker|none (default: reload)
+#   POST_DEPLOY_TASK   none|seed_tools|seed_admin|analytics_rollup (default: none)
+#   HEALTH_CHECK       true|false (default: true)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,15 +16,36 @@ cd "$ROOT"
 
 BRANCH="${DEPLOY_BRANCH:-master}"
 BASE_PATH="${NEXT_PUBLIC_BASE_PATH:-/jbt}"
+RUN_MIGRATIONS="${RUN_MIGRATIONS:-true}"
+SEED_TOOLS="${SEED_TOOLS:-false}"
+PM2_MODE="${PM2_MODE:-reload}"
+POST_DEPLOY_TASK="${POST_DEPLOY_TASK:-none}"
+HEALTH_CHECK="${HEALTH_CHECK:-true}"
 
-echo "==> Deploying JBT from $(pwd) (branch=${BRANCH})"
+echo "==> Deploying JBT from $(pwd) (branch=${BRANCH}, local-build fallback)"
+echo "    migrations=$RUN_MIGRATIONS seed_tools=$SEED_TOOLS pm2=$PM2_MODE task=$POST_DEPLOY_TASK health=$HEALTH_CHECK"
+
+case "$PM2_MODE" in
+  reload|restart|restart_api|restart_web|restart_worker|none) ;;
+  *)
+    echo "ERROR: invalid PM2_MODE='$PM2_MODE'" >&2
+    exit 1
+    ;;
+esac
+
+case "$POST_DEPLOY_TASK" in
+  none|seed_tools|seed_admin|analytics_rollup) ;;
+  *)
+    echo "ERROR: invalid POST_DEPLOY_TASK='$POST_DEPLOY_TASK'" >&2
+    exit 1
+    ;;
+esac
 
 if [[ ! -f server/.env ]]; then
   echo "ERROR: server/.env missing. Create it once (see docs/DEPLOY.md)." >&2
   exit 1
 fi
 
-# Load API port for health check (default 4002)
 API_PORT=4002
 if grep -qE '^PORT=' server/.env; then
   API_PORT="$(grep -E '^PORT=' server/.env | head -1 | cut -d= -f2- | tr -d '\r')"
@@ -45,45 +74,79 @@ if [[ "$(uname -s)" == "Linux" && "$(uname -m)" == "x86_64" ]]; then
   fi
 fi
 
-echo "==> Build web (basePath=${BASE_PATH}, webpack — Turbopack breaks lightningcss .node on VPS)"
+echo "==> Build web (basePath=${BASE_PATH}, webpack)"
 export NODE_ENV=production
 export NEXT_PUBLIC_BASE_PATH="$BASE_PATH"
 export WEB_BASE_PATH="$BASE_PATH"
 npm run build -w web
 
-echo "==> Apply pending DB migrations"
-npm run db:migrate -w server || echo "WARN: migrations failed — check logs / mysql/migrations"
-
-echo "==> PM2 reload"
-if pm2 describe justx-jbt-api >/dev/null 2>&1; then
-  pm2 reload ecosystem.config.cjs --update-env
-else
-  pm2 start ecosystem.config.cjs
-fi
-pm2 save
-
-echo "==> Health check"
-sleep 3
-curl -fsS "http://127.0.0.1:${API_PORT}/api/health" | tee /dev/stderr | grep -q '"ok"'
-echo
-
-echo "==> Post-deploy checks"
-curl -fsS "http://127.0.0.1:${API_PORT}/api/config/branding" | tee /dev/stderr | grep -q '"branding"'
-curl -fsS "http://127.0.0.1:${API_PORT}/api/public/status" | tee /dev/stderr | grep -q '"ok"'
-# Public quote with nonsense token must be 404 (not 401 auth wall)
-QUOTE_CODE="$(curl -sS -o /tmp/jbt_quote_probe.json -w '%{http_code}' "http://127.0.0.1:${API_PORT}/api/public/quotation-v1/deploy-probe-token" || true)"
-if [[ "$QUOTE_CODE" != "404" ]]; then
-  echo "WARN: public quotation probe expected HTTP 404, got ${QUOTE_CODE:-none}" >&2
-  cat /tmp/jbt_quote_probe.json 2>/dev/null || true
-fi
-if command -v pm2 >/dev/null 2>&1; then
-  for app in justx-jbt-api justx-jbt-web justx-jbt-worker; do
-    if ! pm2 describe "$app" >/dev/null 2>&1; then
-      echo "ERROR: PM2 app missing: $app" >&2
+run_task() {
+  local task="$1"
+  case "$task" in
+    none) ;;
+    seed_tools) npm run db:seed:tools -w server ;;
+    seed_admin) npm run db:seed -w server ;;
+    analytics_rollup) npm run analytics:rollup -w server ;;
+    *)
+      echo "ERROR: unhandled task '$task'" >&2
       exit 1
-    fi
-  done
-  echo "PM2 apps present: api, web, worker"
+      ;;
+  esac
+}
+
+if [[ "$RUN_MIGRATIONS" == "true" ]]; then
+  echo "==> Apply pending DB migrations"
+  npm run db:migrate -w server
+else
+  echo "==> Skipping migrations"
 fi
-echo
-echo "==> Deploy OK"
+
+if [[ "$SEED_TOOLS" == "true" ]]; then
+  echo "==> Seed tool definitions"
+  npm run db:seed:tools -w server
+fi
+
+run_task "$POST_DEPLOY_TASK"
+
+case "$PM2_MODE" in
+  none)
+    echo "==> Skipping PM2"
+    ;;
+  reload)
+    echo "==> PM2 reload"
+    if pm2 describe justx-jbt-api >/dev/null 2>&1; then
+      pm2 reload ecosystem.config.cjs --update-env
+    else
+      pm2 start ecosystem.config.cjs
+    fi
+    pm2 save
+    ;;
+  restart)
+    echo "==> PM2 restart (all)"
+    if pm2 describe justx-jbt-api >/dev/null 2>&1; then
+      pm2 restart ecosystem.config.cjs --update-env
+    else
+      pm2 start ecosystem.config.cjs
+    fi
+    pm2 save
+    ;;
+  restart_api)
+    pm2 restart justx-jbt-api --update-env
+    pm2 save
+    ;;
+  restart_web)
+    pm2 restart justx-jbt-web --update-env
+    pm2 save
+    ;;
+  restart_worker)
+    pm2 restart justx-jbt-worker --update-env
+    pm2 save
+    ;;
+esac
+
+if [[ "$HEALTH_CHECK" == "true" ]]; then
+  export API_PORT
+  bash "$ROOT/scripts/vps-healthcheck.sh"
+fi
+
+echo "==> Deploy OK (local-build fallback)"

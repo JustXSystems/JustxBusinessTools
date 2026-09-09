@@ -174,10 +174,10 @@ Memory cap: API/web restart at **512M**; worker at **768M** (`ecosystem.config.c
 ### Deploy (normal)
 
 1. Merge / push to `master` (docs-only pushes are ignored by the workflow).  
-2. Or: GitHub → **Actions** → **Deploy** → **Run workflow**.  
-3. Remote runs `scripts/vps-deploy.sh`: `git reset --hard` → `npm ci` → web build (`/jbt`, webpack) → `pm2 reload` → health check.
+2. Or: GitHub → **Actions** → **Deploy** → **Run workflow** (optional CD inputs — see [`DEPLOY.md`](DEPLOY.md)).  
+3. CI builds + packs artifact → checksum → migrate on stage → atomic swap → PM2 → API+web health (auto-rollback on failure).
 
-Manual:
+Emergency / offline (build on VPS):
 
 ```bash
 cd /var/www/jbt
@@ -186,14 +186,27 @@ cd /var/www/jbt
 
 ### Rollback
 
+Prefer a previous staged artifact:
+
+```bash
+ls /var/www/jbt-releases
+cat /var/www/jbt-releases/CURRENT
+RELEASE_ID=<short_sha> /var/www/jbt/scripts/vps-rollback.sh
+```
+
+Failed deploys with `auto_rollback=true` restore the previous live tree automatically. Schema is not reversed — use `~/backups` SQL if needed.
+
+Git + local-build fallback:
+
 ```bash
 cd /var/www/jbt
 git fetch origin
 git reset --hard <known_good_sha>
-./scripts/vps-deploy.sh
+# Avoid re-fetch overwrite: build + reload without resetting to origin/master
+export NEXT_PUBLIC_BASE_PATH=/jbt
+npm ci && npm run build -w web
+pm2 reload ecosystem.config.cjs --update-env
 ```
-
-Note: `vps-deploy.sh` hard-resets to `origin/master` by default (`DEPLOY_BRANCH`). For a pinned SHA, reset then either temporarily point branch or run build + `pm2 reload` manually without fetching over your pin.
 
 ### Schema / seed (rare — prefer migrations from release notes)
 
@@ -506,8 +519,9 @@ LIMIT 50;
 |-------------|-----|
 | `Permission denied (publickey)` | Public key not in `deploy` `authorized_keys`, or secret is `.pub` by mistake |
 | `server/.env missing` | Recreate `/var/www/jbt/server/.env` |
-| `DEPLOY_PATH` / `cd` fails | Secret path ≠ real clone path |
-| Build / lightningcss | Script installs Linux binary; ensure Node 20+; web build uses webpack |
+| `DEPLOY_PATH` / apply fails | Secret path ≠ real live app path |
+| **build** job / Next / npm | Fix on CI (Node 20, lockfile); VPS is not compiling |
+| SCP `/tmp/jbt-release.tgz` missing | Re-run workflow; check SCP step |
 | Health check failed after reload | API crash — read PM2 logs / env validation |
 
 Re-test SSH from a laptop with the same key before debugging Actions.
@@ -554,7 +568,7 @@ Clear old backups if safe; investigate upload growth; consider S3 for logos if l
 **After every production deploy**
 
 - [ ] Health 200  
-- [ ] `/api/public/status` + branding probe (also run by `vps-deploy.sh`)  
+- [ ] `/api/public/status` + branding probe (also run by `vps-healthcheck.sh`)  
 - [ ] Login page loads under `/jbt`  
 - [ ] PM2 api + web + **worker** present  
 - [ ] One authenticated API call (e.g. open Profile)  
@@ -639,14 +653,16 @@ pm2 logs justx-jbt-api --lines 80
 | API restart loop | Logs: `Invalid server environment` → fix prod env |
 | OAuth mismatch | Google Console URI = `.env` incl. `/jbt/api/...` |
 | One customer no PDF | Owner reconnect company Drive; check `artifact_deliveries` |
-| Bad deploy | `git reset --hard <good_sha>` then build+reload (see §5) |
+| Bad deploy | Prefer `RELEASE_ID=… ./scripts/vps-rollback.sh` (see §5) |
 
 ### Safe commands
 
 ```bash
 pm2 restart justx-jbt-api justx-jbt-web justx-jbt-worker
 pm2 reload ecosystem.config.cjs --update-env && pm2 save
-./scripts/vps-deploy.sh          # pulls origin/master
+./scripts/vps-release.sh         # normal path needs RELEASE_TGZ from CI
+./scripts/vps-deploy.sh          # emergency: pulls origin/master + builds on VPS
+./scripts/vps-rollback.sh        # restore /var/www/jbt-releases/<id>
 ./scripts/backup-jbt.sh          # DB + uploads
 ./scripts/health-monitor.sh      # public health probe
 sudo nginx -t && sudo systemctl reload nginx
@@ -673,7 +689,10 @@ mysql -u justx_user -p -h 127.0.0.1 justx_systems -e "SELECT 1"
 | `/var/www/jbt` | App root |
 | `/var/www/jbt/server/.env` | Secrets |
 | `/var/www/jbt/ecosystem.config.cjs` | PM2 apps |
-| `/var/www/jbt/scripts/vps-deploy.sh` | Deploy entrypoint |
+| `/var/www/jbt/scripts/vps-release.sh` | Normal CD entrypoint (CI artifact) |
+| `/var/www/jbt/scripts/vps-deploy.sh` | Emergency local-build deploy |
+| `/var/www/jbt/scripts/vps-rollback.sh` | Restore staged release under `/var/www/jbt-releases` |
+| `/var/www/jbt-shared/` | Persistent `server.env` + uploads (symlinked into live) |
 | `/home/deploy/.ssh/authorized_keys` | CI + operator SSH |
 
 ### Operator SSH (Windows)

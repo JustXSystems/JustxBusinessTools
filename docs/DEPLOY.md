@@ -1,4 +1,4 @@
-# Production deploy — GitHub Actions + PM2
+# Production deploy — GitHub Actions (CI build) + PM2
 
 **URL:** https://justxsystems.com/jbt/  
 **VPS:** `deploy@193.203.161.219` (Hostinger KVM)  
@@ -14,12 +14,24 @@ On-call / incident runbooks: [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md).
 ## How it works
 
 ```
-git push → GitHub Actions → SSH to VPS → scripts/vps-deploy.sh
-                                              ├─ git pull
-                                              ├─ npm ci
-                                              ├─ build web (/jbt)
-                                              └─ pm2 reload
+git push master
+  → GitHub Actions build (npm cache + Next cache)
+  → npm prune --omit=dev + pack jbt-release.tgz (+ .sha256)
+  → scp to VPS + checksum verify
+  → scripts/vps-release.sh
+       ├─ preflight (disk, rsync, pm2, …)
+       ├─ extract to /var/www/jbt-releases/<sha>
+       ├─ optional DB backup
+       ├─ migrate/seeds on stage (live still old)
+       ├─ atomic swap: jbt → jbt.old ; jbt.new → jbt
+       ├─ pm2 reload
+       ├─ health: API + web :3002/jbt
+       └─ on failure: auto-restore jbt.old (default on)
 ```
+
+**Mutable data** lives in `/var/www/jbt-shared/` (`server.env`, `uploads/`, `server-uploads/`) and is symlinked into each release.  
+**VPS does not run `next build` on normal deploys.**  
+Emergency fallback: `./scripts/vps-deploy.sh` (git pull + build on the server).
 
 ---
 
@@ -31,7 +43,7 @@ SSH as root or a sudo user.
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git curl build-essential nginx certbot python3-certbot-nginx mysql-server
+sudo apt-get install -y git curl build-essential nginx certbot python3-certbot-nginx mysql-server rsync
 
 # Node 20
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
@@ -58,11 +70,15 @@ Linux only trusts SSH logins listed in that user’s `~/.ssh/authorized_keys` fi
 ### 1.3 Clone the app
 
 ```bash
-sudo mkdir -p /var/www/jbt
-sudo chown -R deploy:deploy /var/www/jbt
+sudo mkdir -p /var/www/jbt /var/www/jbt-releases /var/www/jbt-shared
+sudo chown -R deploy:deploy /var/www/jbt /var/www/jbt-releases /var/www/jbt-shared
 sudo -u deploy git clone https://github.com/JustXSystems/JustxBusinessTools.git /var/www/jbt
 cd /var/www/jbt
 ```
+
+`jbt-releases/` stores staged artifact trees (for rollback).  
+`jbt-shared/` holds `server.env` + uploads (created/bootstrapped on first hardened deploy).  
+Live app path stays `/var/www/jbt` (atomic directory swap on each release).
 
 ### 1.4 MySQL (manual — clear and once)
 
@@ -173,7 +189,7 @@ curl -sI http://127.0.0.1:3002/jbt
 
 ## Part 2 — GitHub Actions secrets (do once)
 
-These secrets let GitHub Actions **SSH into the VPS** and run `scripts/vps-deploy.sh`.  
+These secrets let GitHub Actions **SCP the release** and **SSH into the VPS** to run `scripts/vps-release.sh`.  
 Finish **Part 1** first (clone at `/var/www/jbt`, `server/.env`, MySQL, nginx, first PM2 start).
 
 ### 2.1 What each secret means
@@ -184,6 +200,8 @@ Finish **Part 1** first (clone at `/var/www/jbt`, `server/.env`, MySQL, nginx, f
 | `DEPLOY_USER` | Linux login user | `deploy` |
 | `DEPLOY_SSH_KEY` | **Private** SSH key (full file) | Contents of `jbt_deploy` (not `.pub`) |
 | `DEPLOY_PATH` | App directory on the server | `/var/www/jbt` |
+
+Releases are stored next to the live app: `/var/www/jbt-releases` (sibling of `DEPLOY_PATH`).
 
 ### 2.2 Create an SSH key (on your Windows PC)
 
@@ -242,7 +260,8 @@ On the VPS:
 ```bash
 ls /var/www/jbt
 ls /var/www/jbt/server/.env
-ls /var/www/jbt/scripts/vps-deploy.sh
+sudo mkdir -p /var/www/jbt-releases /var/www/jbt-shared
+sudo chown deploy:deploy /var/www/jbt-releases /var/www/jbt-shared
 ```
 
 If `/var/www/jbt` is missing, complete Part 1.3–1.7 first.  
@@ -288,21 +307,63 @@ Do **not** paste the `.pub` file into `DEPLOY_SSH_KEY`.
 ### 2.6 Run a deploy
 
 - Push a commit to **`master`**, or  
-- **Actions** → workflow **Deploy** → **Run workflow**
+- **Actions** → workflow **Deploy** → **Run workflow** (optional CD inputs below)
 
-Watch the job log. On success it SSHs in, runs `./scripts/vps-deploy.sh`, and health-checks the API.
+Watch the job log: **build** packs the artifact; **deploy** SCPs it and runs `vps-release.sh`.
 
 ### 2.7 Manual deploy (without Actions)
 
-On the VPS as `deploy`:
+**Preferred emergency path** (build on the VPS):
 
 ```bash
 cd /var/www/jbt
 ./scripts/vps-deploy.sh
 ```
 
-Workflow file: [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)  
-Remote script: [`scripts/vps-deploy.sh`](../scripts/vps-deploy.sh)
+Same allowlisted env knobs as Actions (`RUN_MIGRATIONS`, `SEED_TOOLS`, `PM2_MODE`, `POST_DEPLOY_TASK`, `HEALTH_CHECK`).
+
+Workflow: [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)  
+Release apply: [`scripts/vps-release.sh`](../scripts/vps-release.sh)  
+Local-build fallback: [`scripts/vps-deploy.sh`](../scripts/vps-deploy.sh)
+
+---
+
+## Advanced CD — workflow_dispatch options
+
+**Actions → Deploy → Run workflow** exposes optional controls.  
+Push-to-`master` always uses the safe defaults (no exotic tasks).
+
+| Input | Default | Purpose |
+|-------|---------|---------|
+| `deploy_enabled` | `true` | Set `false` to **build + upload artifact only** (no VPS change) |
+| `run_migrations` | `true` | Apply `mysql/migrations` on **stage before** live swap |
+| `backup_db` | `false` | Run `backup-jbt.sh` (MySQL dump) before migrations |
+| `seed_tools` | `false` | Re-seed tool catalog (`db:seed:tools`) |
+| `pm2_mode` | `reload` | `reload` · `restart` · `restart_api` · `restart_web` · `restart_worker` · `none` |
+| `post_deploy_task` | `none` | Allowlisted: `none` · `seed_tools` · `seed_admin` · `analytics_rollup` |
+| `health_check` | `true` | API + web (`:3002/jbt`) + PM2 probes |
+| `auto_rollback` | `true` | Restore previous live tree if health fails after swap |
+| `keep_releases` | `3` | Staged dirs under `/var/www/jbt-releases` |
+
+**Rules**
+
+- Ordinary schema changes → commit under `mysql/migrations` (auto on deploy).
+- Occasional known ops → checkbox / allowlisted `post_deploy_task`.
+- `seed_admin` is intentional and rare — not for routine deploys.
+- Migrations run **before** the live swap; a migrate failure leaves the old app serving.
+- Auto-rollback restores **code** only — DB migrations are forward-only (use `backup_db` + SQL restore if you must reverse schema).
+- There is **no** free-text “run any shell” input.
+
+Example: ship code with DB backup first:
+
+1. Run workflow  
+2. `backup_db` = true  
+3. `run_migrations` = true  
+
+Example: refresh tool definitions:
+
+1. Run workflow  
+2. `seed_tools` = true
 
 ---
 
@@ -315,13 +376,26 @@ pm2 logs justx-jbt-web --lines 80
 pm2 restart justx-jbt-api justx-jbt-web
 ```
 
-Rollback = redeploy an older commit:
+### Rollback (artifact releases)
+
+```bash
+ls /var/www/jbt-releases
+cat /var/www/jbt-releases/CURRENT   # active sha
+cat /var/www/jbt-releases/PREVIOUS  # prior sha (if set)
+RELEASE_ID=<previous_short_sha> /var/www/jbt/scripts/vps-rollback.sh
+```
+
+Auto-rollback already runs when a deploy fails health checks (`auto_rollback=true`).  
+Manual rollback restores **code** only; schema is not reversed — restore `~/backups/justx_systems_*.sql.gz` if needed.
+
+### Rollback (git + local build fallback)
 
 ```bash
 cd /var/www/jbt
 git fetch origin
 git reset --hard <commit_sha>
-./scripts/vps-deploy.sh
+DEPLOY_BRANCH=HEAD ./scripts/vps-deploy.sh
+# or: skip fetch by temporarily adjusting the script flow — prefer artifact rollback above
 ```
 
 ---
@@ -331,30 +405,23 @@ git reset --hard <commit_sha>
 | Issue | Fix |
 |-------|-----|
 | Actions: `Permission denied (publickey)` | Public key not in `/home/deploy/.ssh/authorized_keys`, or secret is the **.pub** file by mistake |
-| Actions: `DEPLOY_PATH` / `cd` fails | Path wrong or clone missing — fix Part 1.3 |
+| Actions: `DEPLOY_PATH` / apply fails | Path wrong or clone missing — fix Part 1.3 |
 | Actions: `server/.env missing` | Create `/var/www/jbt/server/.env` (Part 1.5) |
+| Actions: SCP / checksum fail | Re-run workflow; confirm both `.tgz` and `.sha256` uploaded |
+| Disk full / preflight | Free space under `/var/www` (need ~3× artifact size); prune `jbt-releases` / backups |
+| Health fail then auto-rollback | Read Actions log; fix app bug; previous live tree restored automatically |
+| Web probe fail (`:3002`) | `pm2 logs justx-jbt-web`; confirm `NEXT_PUBLIC_BASE_PATH=/jbt` |
+| Shared env missing | Ensure `/var/www/jbt-shared/server.env` (bootstrapped from first deploy) |
 | Local `ssh -i …` fails | Same key/user/host as secrets; fix this before debugging Actions |
-| Build fail | Node 20+ on VPS; `npm ci` needs lockfile |
-| `Cannot find module '../lightningcss.linux-x64-gnu.node'` | Turbopack can’t load the native binary — build with webpack: `cd web && npx next build --webpack` (repo `web` build script already uses `--webpack`) |
+| Build fail on CI | Node 20; lockfile; check **build** job logs (not VPS) |
+| `Cannot find module '../lightningcss…'` on **fallback** VPS build | `vps-deploy.sh` installs Linux binary; prefer CI artifact path |
 | `JWT_SECRET` / env errors | `server/.env` incomplete — API exits on bad prod env |
 | MySQL 1819 | Stronger `DB_PASSWORD` (upper+lower+digit+special) |
 | `users` missing / `Duplicate column 'home_tool_ids'` | `admin_schema.sql` aborted mid-file — pull latest, then re-run from `admin_schema.sql` onward (see Part 1.4) |
 | 502 from nginx | `pm2 status`; ports 3002/4002 listening |
 | OAuth mismatch | Google redirect URIs must include `/jbt/api/...` |
-| `Illegal mix of collations` (`utf8mb4_unicode_ci` vs `utf8mb4_0900_ai_ci`) | Runtime tables created without COLLATE on MySQL 8 — deploy latest (auto-converts) or run: `ALTER TABLE org_subscription_items CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;` (also `org_tool_licenses`, `checkout_intents`, `product_bundle_items` if needed) |
+| `Illegal mix of collations` | See prior notes / run `ALTER TABLE … CONVERT TO … utf8mb4_unicode_ci` |
 
-### lightningcss / Turbopack on VPS
+### lightningcss / Turbopack (fallback builds only)
 
-Next.js 16 defaults to Turbopack, which fails loading the `lightningcss` native `.node` binary in PostCSS. Production builds use webpack:
-
-```bash
-cd /var/www/jbt
-# ensure Linux binary exists (once)
-test -d node_modules/lightningcss-linux-x64-gnu \
-  || npm install --no-save lightningcss-linux-x64-gnu@1.32.0
-cp -n node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node \
-  node_modules/lightningcss/ 2>/dev/null || true
-
-export NEXT_PUBLIC_BASE_PATH=/jbt
-cd web && npx next build --webpack
-```
+Next.js 16 defaults to Turbopack, which can fail loading the `lightningcss` native `.node` binary. Production builds use webpack. CI (Linux) ships the correct native deps inside the artifact. Only the **VPS local-build fallback** needs the workaround in `vps-deploy.sh`.

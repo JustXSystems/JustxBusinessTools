@@ -1,12 +1,12 @@
-# Deploy JBT to Hostinger VPS (PM2 over SSH)
+# Deploy JBT to Hostinger VPS (build on GitHub → artifact → PM2)
 #
-# Required GitHub Secrets (repo → Settings → Secrets and variables → Actions):
-#   DEPLOY_HOST    = 193.203.161.219
-#   DEPLOY_USER    = deploy
-#   DEPLOY_SSH_KEY = private key PEM (public key in deploy@server authorized_keys)
-#   DEPLOY_PATH    = /var/www/jbt
+# Required GitHub Secrets:
+#   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
 #
-# See docs/DEPLOY.md for one-time server setup.
+# Hardened flow: CI build+prune+sha256 → scp → verify → migrate on stage →
+# atomic swap → PM2 → API+web health → auto-rollback on failure
+#
+# See docs/DEPLOY.md
 
 name: Deploy
 
@@ -19,28 +19,208 @@ on:
       - "android/**"
       - "docs/**"
   workflow_dispatch:
+    inputs:
+      deploy_enabled:
+        description: "Deploy artifact to VPS after build"
+        type: boolean
+        default: true
+      run_migrations:
+        description: "Apply pending DB migrations (on stage, before swap)"
+        type: boolean
+        default: true
+      backup_db:
+        description: "Run MySQL backup before migrations"
+        type: boolean
+        default: false
+      seed_tools:
+        description: "Re-seed tool definitions catalog"
+        type: boolean
+        default: false
+      pm2_mode:
+        description: "PM2 apply mode after release"
+        type: choice
+        options:
+          - reload
+          - restart
+          - restart_api
+          - restart_web
+          - restart_worker
+          - none
+        default: reload
+      post_deploy_task:
+        description: "Allowlisted post-deploy task (seed_admin is rare/dangerous)"
+        type: choice
+        options:
+          - none
+          - seed_tools
+          - seed_admin
+          - analytics_rollup
+        default: none
+      health_check:
+        description: "Run post-deploy API + web health probes"
+        type: boolean
+        default: true
+      auto_rollback:
+        description: "Restore previous live tree if health fails after swap"
+        type: boolean
+        default: true
+      keep_releases:
+        description: "Release folders to retain on VPS"
+        type: choice
+        options:
+          - "3"
+          - "5"
+          - "10"
+        default: "3"
 
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+env:
+  NODE_VERSION: "20"
+  NEXT_PUBLIC_BASE_PATH: /jbt
+  WEB_BASE_PATH: /jbt
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      short_sha: ${{ steps.meta.outputs.short_sha }}
     steps:
-      - name: Deploy over SSH
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release id
+        id: meta
+        run: echo "short_sha=${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('web/**/*.js', 'web/**/*.jsx', 'web/**/*.ts', 'web/**/*.tsx', 'web/**/*.css') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+
+      - name: Build web (production /jbt)
+        run: npm run build -w web
+
+      - name: Pack release tarball
+        run: |
+          chmod +x scripts/pack-release.sh
+          ./scripts/pack-release.sh jbt-release.tgz
+          test -f jbt-release.tgz.sha256
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jbt-release-${{ steps.meta.outputs.short_sha }}
+          path: |
+            jbt-release.tgz
+            jbt-release.tgz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  deploy:
+    needs: build
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_enabled }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RUN_MIGRATIONS: ${{ inputs.run_migrations != false }}
+      BACKUP_DB: ${{ inputs.backup_db == true }}
+      SEED_TOOLS: ${{ inputs.seed_tools == true }}
+      PM2_MODE: ${{ inputs.pm2_mode || 'reload' }}
+      POST_DEPLOY_TASK: ${{ inputs.post_deploy_task || 'none' }}
+      HEALTH_CHECK: ${{ inputs.health_check != false }}
+      AUTO_ROLLBACK: ${{ inputs.auto_rollback != false }}
+      KEEP_RELEASES: ${{ inputs.keep_releases || '3' }}
+      RELEASE_ID: ${{ needs.build.outputs.short_sha }}
+    steps:
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jbt-release-${{ needs.build.outputs.short_sha }}
+          path: dist
+
+      - name: Prepare files for SCP
+        run: |
+          mv dist/jbt-release.tgz ./jbt-release.tgz
+          mv dist/jbt-release.tgz.sha256 ./jbt-release.tgz.sha256
+          ls -lh jbt-release.tgz jbt-release.tgz.sha256
+          sha256sum -c jbt-release.tgz.sha256
+
+      - name: Upload tarball + checksum to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "jbt-release.tgz,jbt-release.tgz.sha256"
+          target: /tmp
+          overwrite: true
+
+      - name: Apply release over SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          RUN_MIGRATIONS: ${{ env.RUN_MIGRATIONS }}
+          BACKUP_DB: ${{ env.BACKUP_DB }}
+          SEED_TOOLS: ${{ env.SEED_TOOLS }}
+          PM2_MODE: ${{ env.PM2_MODE }}
+          POST_DEPLOY_TASK: ${{ env.POST_DEPLOY_TASK }}
+          HEALTH_CHECK: ${{ env.HEALTH_CHECK }}
+          AUTO_ROLLBACK: ${{ env.AUTO_ROLLBACK }}
+          KEEP_RELEASES: ${{ env.KEEP_RELEASES }}
+          RELEASE_ID: ${{ env.RELEASE_ID }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script_stop: true
-          command_timeout: 25m
+          command_timeout: 20m
+          envs: RUN_MIGRATIONS,BACKUP_DB,SEED_TOOLS,PM2_MODE,POST_DEPLOY_TASK,HEALTH_CHECK,AUTO_ROLLBACK,KEEP_RELEASES,RELEASE_ID
           script: |
             set -euo pipefail
-            cd "${{ secrets.DEPLOY_PATH }}"
-            export DEPLOY_BRANCH=master
-            export NEXT_PUBLIC_BASE_PATH=/jbt
-            chmod +x scripts/vps-deploy.sh
-            ./scripts/vps-deploy.sh
+            LIVE="${{ secrets.DEPLOY_PATH }}"
+            RELEASES="$(dirname "$LIVE")/jbt-releases"
+            SHARED="$(dirname "$LIVE")/jbt-shared"
+            mkdir -p "$RELEASES/incoming" "$SHARED"
+            TGZ_SRC="/tmp/jbt-release.tgz"
+            SUM_SRC="/tmp/jbt-release.tgz.sha256"
+            test -f "$TGZ_SRC"
+            test -f "$SUM_SRC"
+            TGZ="$RELEASES/incoming/jbt-release-${RELEASE_ID}.tgz"
+            SUM="$TGZ.sha256"
+            mv -f "$TGZ_SRC" "$TGZ"
+            mv -f "$SUM_SRC" "$SUM"
+            TMP="$(mktemp -d)"
+            tar -xzf "$TGZ" -C "$TMP" scripts/vps-release.sh scripts/vps-healthcheck.sh
+            chmod +x "$TMP/scripts/vps-release.sh" "$TMP/scripts/vps-healthcheck.sh"
+            export RELEASE_TGZ="$TGZ"
+            export RELEASE_SHA256="$SUM"
+            export DEPLOY_PATH="$LIVE"
+            export RELEASES_DIR="$RELEASES"
+            export SHARED_DIR="$SHARED"
+            export RELEASE_ID
+            export RUN_MIGRATIONS
+            export BACKUP_DB
+            export SEED_TOOLS
+            export PM2_MODE
+            export POST_DEPLOY_TASK
+            export HEALTH_CHECK
+            export AUTO_ROLLBACK
+            export KEEP_RELEASES
+            "$TMP/scripts/vps-release.sh"
+            rm -rf "$TMP"

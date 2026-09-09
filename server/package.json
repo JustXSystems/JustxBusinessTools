@@ -29,6 +29,7 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.14.3",
+    "tsx": "^4.20.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -38,7 +39,6 @@
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.19.11",
-    "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   }
