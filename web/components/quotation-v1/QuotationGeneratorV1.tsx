@@ -1593,8 +1593,8 @@ export function QuotationGeneratorV1() {
               <>
                 <p className="modal-msg">
                   {emailTemplateId === "corporate"
-                    ? "Corporate HTML uses your Document accent. With EMAIL_WEBHOOK_URL, HTML + PDF are delivered; otherwise the draft is saved to Email Outbox, mailto opens, and the PDF downloads for you to attach. Outlook+PDF needs the desktop agent."
-                    : "With an email webhook, the PDF attaches automatically. Otherwise Email Outbox saves the draft, mailto opens, and the PDF downloads for manual attach."}
+                    ? "Corporate HTML uses your Document accent. With an email webhook, HTML + PDF go to the inbox. Otherwise the draft is saved to Email Outbox and Open in Outlook (desktop agent + classic Outlook) shows HTML + PDF. Mailto is plain text only."
+                    : "With an email webhook, the PDF attaches automatically. Otherwise Email Outbox saves the draft; Open in Outlook attaches the PDF, or use mailto + download."}
                 </p>
                 <div className="qgv1-grid2" style={{ marginTop: 8 }}>
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
@@ -1678,7 +1678,25 @@ export function QuotationGeneratorV1() {
                         });
                         invalidateLiveData("email-outbox");
                         if (!result.delivered) {
-                          if (pdf?.pdfBase64) {
+                          let openedViaOutlook = false;
+                          // Corporate HTML cannot go through mailto — prefer desktop Outlook agent.
+                          if (result.outboxId && (emailHtml || pdf?.pdfBase64)) {
+                            try {
+                              const { openOutboxInOutlook } = await import("@/lib/email-outbox");
+                              const r = await openOutboxInOutlook(result.outboxId);
+                              openedViaOutlook = Boolean(r.ok);
+                              if (!r.ok && emailHtml) {
+                                flash(
+                                  r.error ||
+                                    "Could not open Outlook with HTML. Start the Sync Center agent and use classic Outlook, or Email Outbox → Open in Outlook.",
+                                  "err",
+                                );
+                              }
+                            } catch {
+                              openedViaOutlook = false;
+                            }
+                          }
+                          if (!openedViaOutlook && pdf?.pdfBase64) {
                             try {
                               const { pdfBase64ToBytes } = await import("@/lib/artifact-delivery");
                               const bytes = pdfBase64ToBytes(pdf.pdfBase64);
@@ -1692,15 +1710,17 @@ export function QuotationGeneratorV1() {
                               a.click();
                               window.setTimeout(() => URL.revokeObjectURL(url), 5000);
                             } catch {
-                              /* mailto still useful */
+                              /* continue */
                             }
                           }
-                          window.location.href = buildMailtoHref({
-                            to: emailTo.trim(),
-                            cc: emailCc.trim(),
-                            subject: emailSubject.trim(),
-                            body: emailMessage,
-                          });
+                          if (!openedViaOutlook && !emailHtml) {
+                            window.location.href = buildMailtoHref({
+                              to: emailTo.trim(),
+                              cc: emailCc.trim(),
+                              subject: emailSubject.trim(),
+                              body: emailMessage,
+                            });
+                          }
                         }
                         await saveQuote("sent");
                         await pushNotif(
@@ -1713,8 +1733,11 @@ export function QuotationGeneratorV1() {
                         flash(
                           result.delivered
                             ? "Email handed off to your email webhook."
-                            : result.hint ||
-                                "Saved to Email Outbox, opened mail app, and downloaded the PDF to attach. Retry anytime from Email Outbox.",
+                            : emailHtml
+                              ? result.hint ||
+                                "Saved to Email Outbox. Corporate HTML opens in Outlook via the desktop agent (mailto is plain text only)."
+                              : result.hint ||
+                                "Saved to Email Outbox. Open mail app or Open in Outlook from Email Outbox; attach the PDF if needed.",
                         );
                       } catch (e) {
                         flash(e instanceof Error ? e.message : "Email send failed", "err");

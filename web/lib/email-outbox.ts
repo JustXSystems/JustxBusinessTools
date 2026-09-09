@@ -53,6 +53,17 @@ export async function markEmailOutboxOpened(id: string, channel = "mailto") {
   });
 }
 
+export async function markEmailOutboxOpenFailed(
+  id: string,
+  error: string,
+  channel = "outlook_agent",
+) {
+  return api<{ item: EmailOutboxItem }>(`/email-outbox/${id}/mark-open-failed`, {
+    method: "POST",
+    body: JSON.stringify({ error, channel }),
+  });
+}
+
 export async function cancelEmailOutbox(id: string) {
   return api<{ item: EmailOutboxItem }>(`/email-outbox/${id}/cancel`, {
     method: "POST",
@@ -95,7 +106,7 @@ export async function downloadOutboxPdf(item: EmailOutboxItem) {
   window.setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-/** Ask desktop agent to open Outlook with attachment (Windows). */
+/** Ask desktop agent to open Outlook with attachment (Windows). Prefers HTMLBody when outbox has html. */
 export async function openOutboxInOutlook(outboxId: string): Promise<{
   ok: boolean;
   message?: string;
@@ -103,6 +114,11 @@ export async function openOutboxInOutlook(outboxId: string): Promise<{
 }> {
   const local = await probeLocalAgent();
   if (!local?.ok) {
+    await markEmailOutboxOpenFailed(
+      outboxId,
+      "Desktop agent not detected on this PC",
+      "outlook_agent",
+    ).catch(() => undefined);
     return {
       ok: false,
       error:
@@ -121,14 +137,75 @@ export async function openOutboxInOutlook(outboxId: string): Promise<{
       message?: string;
     };
     if (!res.ok || !data.ok) {
-      return { ok: false, error: data.error || `Agent returned ${res.status}` };
+      const err = data.error || `Agent returned ${res.status}`;
+      // Agent ≥1.1.2 also reports agent-open-failed; this covers older agents / bridge errors.
+      await markEmailOutboxOpenFailed(outboxId, err, "outlook_agent").catch(() => undefined);
+      return { ok: false, error: err };
     }
+    // Agent calls agent-opened on success; keep a session mark as backup for older agents.
     await markEmailOutboxOpened(outboxId, "outlook_agent").catch(() => undefined);
     return { ok: true, message: data.message || "Outlook compose opened." };
   } catch {
-    return {
-      ok: false,
-      error: "Could not reach desktop agent bridge (127.0.0.1:17865).",
-    };
+    const err = "Could not reach desktop agent bridge (127.0.0.1:17865).";
+    await markEmailOutboxOpenFailed(outboxId, err, "outlook_agent").catch(() => undefined);
+    return { ok: false, error: err };
   }
+}
+
+/**
+ * Prefer Outlook agent when HTML (or PDF attach) is needed — mailto cannot carry HTML.
+ * Falls back to mailto plain text when agent is offline.
+ * Mailto does NOT mark the row opened (cannot verify the draft appeared).
+ */
+export async function openOutboxBestEffort(item: EmailOutboxItem): Promise<{
+  ok: boolean;
+  via: "outlook_agent" | "mailto";
+  message?: string;
+  error?: string;
+}> {
+  const wantsHtml = Boolean(item.html?.trim());
+  const canOutlook = Boolean(item.artifactId);
+  if (wantsHtml || canOutlook) {
+    const local = await probeLocalAgent();
+    if (local?.ok && item.artifactId) {
+      const r = await openOutboxInOutlook(item.id);
+      if (r.ok) {
+        return {
+          ok: true,
+          via: "outlook_agent",
+          message: wantsHtml
+            ? "Opened Outlook with HTML body and PDF attached."
+            : r.message,
+        };
+      }
+      if (wantsHtml) {
+        return {
+          ok: false,
+          via: "outlook_agent",
+          error:
+            (r.error || "Outlook open failed") +
+            " HTML cannot be sent via mailto — fix classic Outlook/COM or use Email webhook (Path A).",
+        };
+      }
+    } else if (wantsHtml) {
+      await markEmailOutboxOpenFailed(
+        item.id,
+        "Corporate HTML needs desktop agent + classic Outlook",
+        "mailto",
+      ).catch(() => undefined);
+      return {
+        ok: false,
+        via: "mailto",
+        error:
+          "Corporate HTML needs Open in Outlook (desktop agent + classic Outlook) or an Email webhook. Mailto is plain text only.",
+      };
+    }
+  }
+  openMailtoForOutbox(item);
+  // Do not mark opened — mailto is fire-and-forget; keep pending until staff cancel or webhook send.
+  return {
+    ok: true,
+    via: "mailto",
+    message: "Mail app requested (plain text). Item stays pending until you Cancel or send via webhook.",
+  };
 }

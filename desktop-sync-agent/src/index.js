@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 
-export const AGENT_VERSION = "1.1.0";
+export const AGENT_VERSION = "1.1.2";
 
 function loadFileConfig() {
   const candidates = [];
@@ -333,9 +333,10 @@ function readJsonBody(req) {
 
 function runPowershell(script) {
   return new Promise((resolve, reject) => {
+    // Avoid -NonInteractive: Outlook.Display() can fail under that flag on some hosts.
     const child = spawn(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
       { windowsHide: true },
     );
     let stdout = "";
@@ -384,6 +385,8 @@ export async function openEmailCompose(outboxId) {
   const bodyB64 = Buffer.from(body, "utf8").toString("base64");
   const htmlB64 = html ? Buffer.from(html, "utf8").toString("base64") : "";
 
+  // Outlook: set BodyFormat=olFormatHTML (2) and HTMLBody only when we have HTML.
+  // Setting .Body first forces plain format and many builds ignore a later HTMLBody.
   const script = `
 $ErrorActionPreference = 'Stop'
 try {
@@ -395,13 +398,14 @@ $mail = $outlook.CreateItem(0)
 $mail.To = ${psQuote(to)}
 $mail.CC = ${psQuote(cc)}
 $mail.Subject = ${psQuote(subject)}
-$plain = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String(${psQuote(bodyB64)}))
-$mail.Body = $plain
 ${
   htmlB64
     ? `$html = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String(${psQuote(htmlB64)}))
+$mail.BodyFormat = 2
 $mail.HTMLBody = $html`
-    : ""
+    : `$plain = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String(${psQuote(bodyB64)}))
+$mail.BodyFormat = 1
+$mail.Body = $plain`
 }
 $mail.Attachments.Add(${psQuote(pdfPath)}) | Out-Null
 $mail.Display()
@@ -415,6 +419,13 @@ $mail.Display()
       body: "{}",
     }).catch(() => undefined);
     return { ok: true, message: "Outlook compose opened with PDF attached", pdfPath };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await api(`/email-outbox/${encodeURIComponent(outboxId)}/agent-open-failed`, {
+      method: "POST",
+      body: JSON.stringify({ error: msg }),
+    }).catch(() => undefined);
+    throw err;
   } finally {
     setTimeout(() => {
       unlink(pdfPath).catch(() => undefined);

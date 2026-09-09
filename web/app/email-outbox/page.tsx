@@ -9,7 +9,7 @@ import {
   cancelEmailOutbox,
   downloadOutboxPdf,
   fetchEmailOutbox,
-  openMailtoForOutbox,
+  openOutboxBestEffort,
   openOutboxInOutlook,
   requeueEmailOutbox,
   sendEmailOutboxWebhook,
@@ -71,6 +71,8 @@ export default function EmailOutboxPage() {
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
+      invalidateLiveData("email-outbox");
+      await refresh();
     } finally {
       setBusyId(null);
     }
@@ -144,7 +146,7 @@ export default function EmailOutboxPage() {
         <div className="panel sync-stat">
           <span className="sync-stat-label">Items</span>
           <strong className="sync-stat-value">{loading ? "…" : items.length}</strong>
-          <span className="section-note">{pendingOnly ? "Pending / failed" : "All statuses"}</span>
+          <span className="section-note">{pendingOnly ? "Pending / failed / opened" : "All statuses"}</span>
         </div>
       </div>
 
@@ -152,16 +154,16 @@ export default function EmailOutboxPage() {
         <h3 className="panel-title">How to send</h3>
         <ol className="sync-setup-steps">
           <li>
-            <strong>Webhook (best)</strong> — JustX engineer sets <code>EMAIL_WEBHOOK_URL</code>; use{" "}
+            <strong>Webhook (best for HTML inbox)</strong> — Admin → Integrations Email webhook; use{" "}
             <em>Send via webhook</em> for HTML + PDF.
           </li>
           <li>
-            <strong>Mail app</strong> — <em>Open mail app</em> prefills To/CC/subject/body;{" "}
-            <em>Download PDF</em> then attach manually (browsers cannot auto-attach).
+            <strong>Open HTML in Outlook / Open in Outlook</strong> — desktop agent + classic Outlook;
+            Corporate HTML + PDF. Mailto cannot carry HTML.
           </li>
           <li>
-            <strong>Outlook + PDF</strong> — run desktop agent on this PC, then{" "}
-            <em>Open in Outlook</em> (Windows Outlook COM).
+            <strong>Open mail app</strong> — plain text only; <em>Download PDF</em> then attach
+            manually.
           </li>
         </ol>
         <p className="section-note">
@@ -219,22 +221,27 @@ export default function EmailOutboxPage() {
                         type="button"
                         className="btn btn-secondary btn-sm"
                         disabled={Boolean(busyId)}
+                        title={
+                          item.html
+                            ? "Corporate HTML: uses Outlook agent when available (mailto is plain text only)"
+                            : "Open default mail app (plain text); attach PDF separately"
+                        }
                         onClick={() =>
-                          void run(item.id, "Mail app opened. Attach the downloaded PDF if needed.", async () => {
-                            if (item.artifactId) {
+                          void run(item.id, "Opening mail…", async () => {
+                            // For plain drafts, still offer PDF download before mailto.
+                            if (item.artifactId && !item.html) {
                               try {
                                 await downloadOutboxPdf(item);
                               } catch {
-                                /* mailto still useful */
+                                /* continue */
                               }
                             }
-                            openMailtoForOutbox(item);
-                            const { markEmailOutboxOpened } = await import("@/lib/email-outbox");
-                            await markEmailOutboxOpened(item.id, "mailto");
+                            const r = await openOutboxBestEffort(item);
+                            if (!r.ok) throw new Error(r.error || "Could not open mail");
                           })
                         }
                       >
-                        Open mail app
+                        {item.html ? "Open HTML in Outlook" : "Open mail app"}
                       </button>
                       <button
                         type="button"
@@ -245,13 +252,21 @@ export default function EmailOutboxPage() {
                             ? "Start desktop agent from Sync Center"
                             : !item.artifactId
                               ? "No PDF on this draft"
-                              : "Open Outlook with PDF attached (Windows)"
+                              : item.html
+                                ? "Open Outlook with HTML body + PDF (Windows classic Outlook)"
+                                : "Open Outlook with PDF attached (Windows)"
                         }
                         onClick={() =>
-                          void run(item.id, "Outlook compose requested.", async () => {
-                            const r = await openOutboxInOutlook(item.id);
-                            if (!r.ok) throw new Error(r.error || "Outlook open failed");
-                          })
+                          void run(
+                            item.id,
+                            item.html
+                              ? "Outlook opened with HTML + PDF."
+                              : "Outlook compose requested.",
+                            async () => {
+                              const r = await openOutboxInOutlook(item.id);
+                              if (!r.ok) throw new Error(r.error || "Outlook open failed");
+                            },
+                          )
                         }
                       >
                         Open in Outlook
@@ -272,13 +287,13 @@ export default function EmailOutboxPage() {
                       Download PDF
                     </button>
                   ) : null}
-                  {item.status === "failed" || item.status === "cancelled" ? (
+                  {item.status === "failed" || item.status === "cancelled" || item.status === "opened" ? (
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
                       disabled={Boolean(busyId)}
                       onClick={() =>
-                        void run(item.id, "Requeued.", async () => {
+                        void run(item.id, "Requeued as pending.", async () => {
                           await requeueEmailOutbox(item.id);
                         })
                       }

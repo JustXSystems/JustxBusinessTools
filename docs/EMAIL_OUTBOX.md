@@ -9,7 +9,7 @@ Email Outbox is a **durable queue of quotation emails** for the current Business
 
 | Sidebar badge | Counts |
 |---------------|--------|
-| **Email Outbox** | `pending` + `failed` email drafts |
+| **Email Outbox** | `pending` + `failed` + `opened` (still actionable) |
 | **Notifications** | Unread in-app alerts |
 | **Sync Center** | Pending **file** artifacts (company document delivery) |
 
@@ -53,18 +53,19 @@ Full “who / what / how” for files: [`SYNC_CENTER.md`](SYNC_CENTER.md)#who-ne
 |------|-------------------|-----------------|---------------|
 | **A. Email webhook** | Yes | Yes (`html` field) | Platform admin + automation |
 | **B. Mailto + outbox** | No (download + attach) | **No** — plain text only in mail app | None on server; working default mail client |
-| **C. Outlook via agent** | Yes (COM) | HTML if outbox stored `html` **and** agent supports `HTMLBody`; else plain | Sync Center agent + **classic** Outlook COM |
+| **C. Outlook via agent** | Yes (COM) | **Yes** — Corporate `html` via Outlook `HTMLBody` (agent ≥ 1.1.1 + classic Outlook) | Sync Center agent + **classic** Outlook COM |
 
-Recommended: **A** in production for real HTML; **B** until then (plain body + attach PDF); **C** for Outlook Sent Items with PDF attached without a cloud webhook. Combine: A primary, B/C when webhook fails (row stays in Outbox).
+Recommended: **A** in production for HTML delivered to the customer inbox without a staff PC; **C** when you want HTML compose + PDF on Windows without a webhook; **B** only for plain-text mailto. Combine: A primary, B/C when webhook fails.
 
 **Important expectations**
 
 | Expectation | Reality |
 |-------------|---------|
-| “I designed HTML email in Profile” | Full HTML in the **customer’s inbox** needs **Path A**. Path B never sends HTML. Path C can open HTML in Outlook compose when HTML was stored on the outbox row. |
+| “I set Corporate HTML in the app” | HTML is **stored** on the outbox row. To **see** it: Path **A** (webhook) or Path **C** (**Open in Outlook** / **Open HTML in Outlook**). Path B mailto is always plain. |
 | Body shows `Dear+Customer,%0A%0A…` | Broken mailto encoding (spaces as `+`). Fixed by `buildMailtoHref` (`%20`) — redeploy web; see [Mailto encoding](#mailto-encoding-spaces-as--and-0a). |
 | Open mail app / Open in Outlook do nothing | Often Outlook stuck on **Add Account**, **New Outlook** without COM, or hung `OUTLOOK.exe` — see [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c). |
 | UNC works but email fails | Expected to be independent; email does not use Download Folder. |
+| Open in Outlook still plain after HTML send | Agent must be **≥ 1.1.1** (`BodyFormat=2` + `HTMLBody`). Re-install from Sync Center or copy updated `index.js`. Check `http://127.0.0.1:17865/status` → `version`. |
 
 ---
 
@@ -320,9 +321,9 @@ Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
 
 ### Path C limits
 
-- Mailto / Open mail app still cannot carry full HTML.  
-- Open in Outlook prefers `HTMLBody` when outbox `body_html` is set and agent pack supports it; otherwise plain `Body`.  
-- Agent must run on the Outlook PC.  
+- Mailto / **Open mail app** cannot carry Corporate HTML — use **Open in Outlook** / **Open HTML in Outlook** (or Path A).  
+- Agent **≥ 1.1.1** sets Outlook `BodyFormat = HTML` + `HTMLBody` when outbox has `body_html`. Older agents only set plain `Body`.  
+- Agent must run on the Outlook PC with classic Outlook COM.  
 - Same `apiBase` / auth issues that block UNC sync also block compose.  
 - Never invent `JBT_AGENT_TOKEN` — only Sync Center.
 
@@ -353,13 +354,19 @@ Typical customer who already has `C:\JustX\Artifacts` (or UNC) syncing:
 
 ### Status values
 
-| Status | Meaning |
-|--------|---------|
-| `pending` | Waiting for mailto / Outlook / later send |
-| `failed` | Webhook (or channel) failed — retry |
-| `opened` | Mail app / Outlook compose was opened |
-| `sent` | Webhook reported success |
-| `cancelled` | User cancelled |
+| Status | Meaning | In Pending list / badge? |
+|--------|---------|--------------------------|
+| `pending` | Waiting for mailto / Outlook / webhook | Yes |
+| `failed` | Webhook or **open draft** failed — retry | Yes |
+| `opened` | Outlook compose reported success (staff should still Send in Outlook) | Yes — stays until Cancel or webhook **sent** |
+| `sent` | Webhook reported success | No |
+| `cancelled` | User cancelled | No |
+
+**Open-draft rules**
+
+- Outlook open **failure** → status `failed` + `lastError`; pending count does **not** clear; action buttons stay.  
+- Mailto does **not** auto-mark `opened` (cannot verify the draft appeared).  
+- Only **sent** / **cancelled** leave the actionable queue.
 
 ### Actions
 
@@ -400,14 +407,16 @@ Filters: **Pending** (pending+failed) vs **All**.
 | Always mailto, never auto-send | Email webhook empty or API not reloaded |
 | Webhook 4xx/5xx in Outbox | Automation inactive; wrong URL; mapping error |
 | HTML looks plain (webhook) | Automation mapped `body` only — map **`html`** |
-| Expected HTML but see plain text (B/C) | Path B is always plain. Path C HTML only with stored `html` + supporting agent. Full HTML inbox = Path A |
+| Expected HTML but see plain text (B/C) | Path B mailto is always plain. Use **Open in Outlook** with agent ≥ 1.1.1. Full HTML without a staff PC = Path A webhook |
+| Open in Outlook HTML still plain | Agent version &lt; 1.1.1, or COM set `.Body` only — reinstall agent / confirm `status.version` ≥ 1.1.1; classic Outlook |
 | Body shows `+` and `%0A` | Old mailto form-encoding — redeploy web with `buildMailtoHref`; new send |
 | Open mail app / Outlook do nothing | Outlook **Add Account** stuck; New Outlook; hung process — [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c) |
 | Open in Outlook times out / hangs | COM hang (`New-Object Outlook.Application`); close `olk`; restart classic Outlook; COM probe |
 | Open in Outlook disabled | Agent offline; or row has no PDF (`artifactId`) |
 | Agent Connected but compose fails | Check `apiBase` (`…/jbt/api`), `agent.log`, [`SYNC_CENTER.md`](SYNC_CENTER.md)#troubleshooting |
 | UNC Pending stuck vs email | Separate queues — Sync Center = files; Email Outbox = emails |
-| Wrong badge count | Outbox pending = pending+failed **emails** |
+| Open in Outlook fails but item vanishes from Pending | Fixed: failures → `failed` (stay in queue); Pending includes `opened`. Redeploy API + web; agent ≥ 1.1.2 reports `agent-open-failed` |
+| Wrong badge count | Outbox badge = pending+failed+opened **emails** |
 | Wrong company emails | Branch / Business Profile switcher |
 
 ### Diagnostic commands (Windows)

@@ -108,6 +108,22 @@ router.post("/:id/mark-opened", requireWriteAccess, async (req, res) => {
   res.json({ item: mapOutboxPublic(row) });
 });
 
+/** Record a failed open attempt — stays in pending badge (status=failed). */
+router.post("/:id/mark-open-failed", requireWriteAccess, async (req, res) => {
+  const err = String(req.body?.error ?? "Failed to open mail draft").slice(0, 500);
+  const row = await updateEmailOutboxStatus(String(req.params.id), {
+    status: "failed",
+    lastChannel: String(req.body?.channel ?? "outlook_agent"),
+    lastError: err,
+    incrementAttempt: true,
+  });
+  if (!row) {
+    res.status(404).json({ error: "Outbox item not found" });
+    return;
+  }
+  res.json({ item: mapOutboxPublic(row) });
+});
+
 router.post("/:id/cancel", requireWriteAccess, async (req, res) => {
   const existing = await getEmailOutboxById(String(req.params.id));
   if (!existing) {
@@ -175,6 +191,22 @@ router.post("/:id/agent-opened", async (req, res) => {
     status: "opened",
     lastChannel: "outlook_agent",
     lastError: null,
+    incrementAttempt: true,
+  });
+  if (!row) {
+    res.status(404).json({ error: "Outbox item not found" });
+    return;
+  }
+  res.json({ ok: true, item: mapOutboxPublic(row) });
+});
+
+/** Agent reports compose failed — keep item in pending queue as failed. */
+router.post("/:id/agent-open-failed", async (req, res) => {
+  const err = String(req.body?.error ?? "Outlook compose failed").slice(0, 500);
+  const row = await updateEmailOutboxStatus(String(req.params.id), {
+    status: "failed",
+    lastChannel: "outlook_agent",
+    lastError: err,
     incrementAttempt: true,
   });
   if (!row) {

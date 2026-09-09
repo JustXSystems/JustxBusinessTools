@@ -277,7 +277,9 @@ export async function listEmailOutbox(opts?: {
     profileId: getActiveProfileId(),
   };
   if (pendingOnly) {
-    where += ` AND status IN ('pending','failed')`;
+    // Keep "opened" in the actionable queue until sent/cancelled — compose may have
+    // failed silently or staff still need to Send / retry.
+    where += ` AND status IN ('pending','failed','opened')`;
   } else if (status) {
     where += ` AND status = :status`;
     params.status = status;
