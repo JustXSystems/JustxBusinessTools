@@ -161,55 +161,102 @@ if [[ ! -f "$STAGE/package.json" || ! -d "$STAGE/web/.next" ]]; then
   die "release tarball incomplete (need package.json, web/.next)"
 fi
 
-# Must match what PM2 actually starts (web next + server tsx/otel).
+# npm workspaces often nest runtime deps (lockfile has web/node_modules/next,
+# server/node_modules/@opentelemetry/*) — not only the repo-root node_modules.
+dep_exists_any() {
+  local p
+  for p in "$@"; do
+    [[ -e "$p" ]] && return 0
+  done
+  return 1
+}
+
+# Args: root [label] [quiet]
+# quiet=1 → no ERROR spam (used when probing whether to reuse live modules)
 verify_runtime_deps() {
   local root="$1"
   local label="${2:-$root}"
+  local quiet="${3:-0}"
   local missing=()
-  local p
-  for p in \
+
+  dep_exists_any \
     "$root/node_modules/next" \
+    "$root/web/node_modules/next" \
+    || missing+=("next (root or web/node_modules)")
+
+  dep_exists_any \
     "$root/node_modules/.bin/next" \
+    "$root/web/node_modules/.bin/next" \
+    || missing+=("next bin")
+
+  dep_exists_any \
+    "$root/node_modules/tsx" \
+    "$root/server/node_modules/tsx" \
+    || missing+=("tsx")
+
+  dep_exists_any \
     "$root/node_modules/.bin/tsx" \
+    "$root/server/node_modules/.bin/tsx" \
+    || missing+=("tsx bin")
+
+  dep_exists_any \
     "$root/node_modules/@opentelemetry/sdk-node" \
+    "$root/server/node_modules/@opentelemetry/sdk-node" \
+    || missing+=("@opentelemetry/sdk-node (root or server/node_modules)")
+
+  dep_exists_any \
     "$root/node_modules/express" \
-    "$root/node_modules/tsx"; do
-    if [[ ! -e "$p" ]]; then
-      missing+=("$p")
-    fi
-  done
+    "$root/server/node_modules/express" \
+    || missing+=("express")
+
   if [[ "${#missing[@]}" -gt 0 ]]; then
-    echo "ERROR: incomplete node_modules in $label:" >&2
-    printf '  - %s\n' "${missing[@]}" >&2
+    if [[ "$quiet" != "1" ]]; then
+      echo "ERROR: incomplete node_modules in $label:" >&2
+      printf '  - %s\n' "${missing[@]}" >&2
+    fi
     return 1
   fi
   return 0
 }
 
+# Copy workspace-local node_modules too (next/otel are often not hoisted).
+rsync_node_modules_tree() {
+  local src="$1"
+  local dst="$2"
+  local sub
+  mkdir -p "$dst/node_modules"
+  rsync -a "$src/node_modules/" "$dst/node_modules/"
+  for sub in web server shared; do
+    if [[ -d "$src/$sub/node_modules" ]]; then
+      mkdir -p "$dst/$sub/node_modules"
+      rsync -a "$src/$sub/node_modules/" "$dst/$sub/node_modules/"
+    fi
+  done
+}
+
 install_stage_deps() {
   echo "==> Install production deps on stage"
   if [[ -d "$STAGE/node_modules" && -f "$STAGE/package-lock.json" && "$FORCE_NPM_CI" != "true" ]]; then
-    if verify_runtime_deps "$STAGE" "tarball node_modules"; then
+    if verify_runtime_deps "$STAGE" "tarball node_modules" 1; then
       echo "    tarball already includes complete node_modules — skip npm ci"
       return 0
     fi
     echo "    tarball node_modules incomplete — will npm ci"
-    rm -rf "$STAGE/node_modules"
+    rm -rf "$STAGE/node_modules" "$STAGE/web/node_modules" "$STAGE/server/node_modules"
   fi
   # Fast path: reuse live node_modules when lockfile unchanged AND live deps are complete
   if [[ "$FORCE_NPM_CI" != "true" ]] \
     && [[ -f "$LIVE/package-lock.json" && -d "$LIVE/node_modules" ]] \
     && cmp -s "$STAGE/package-lock.json" "$LIVE/package-lock.json" \
-    && verify_runtime_deps "$LIVE" "live node_modules"; then
+    && verify_runtime_deps "$LIVE" "live node_modules" 1; then
     echo "    reusing live node_modules (package-lock.json unchanged + deps OK)"
-    mkdir -p "$STAGE/node_modules"
-    rsync -a "$LIVE/node_modules/" "$STAGE/node_modules/"
+    rsync_node_modules_tree "$LIVE" "$STAGE"
     verify_runtime_deps "$STAGE" "stage after reuse" || die "reused node_modules still incomplete"
     return 0
   fi
   if [[ "$FORCE_NPM_CI" == "true" ]]; then
     echo "    FORCE_NPM_CI=true — fresh npm ci --omit=dev"
-    rm -rf "$STAGE/node_modules"
+    rm -rf "$STAGE/node_modules" "$STAGE/web/node_modules" "$STAGE/server/node_modules"
   else
     echo "    npm ci --omit=dev (lockfile changed, live incomplete, or first install)"
   fi
