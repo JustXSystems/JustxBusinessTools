@@ -36,6 +36,11 @@ import {
   parseSavedThemeId,
   THEME_PRESETS,
 } from "../lib/theme-presets.js";
+import {
+  ensureClockDisplayColumns,
+  normalizeClockDisplaySettings,
+  type ClockDisplaySettings,
+} from "../lib/clock-display.js";
 import { getActiveOrgId, getActiveProfileId } from "../lib/request-context.js";
 import { gstinTakenByOther, isValidGstin, normalizeGstin } from "../lib/gstin.js";
 import {
@@ -70,6 +75,8 @@ type ProfileRow = {
   terms: string | null;
   document_accent_color?: string | null;
   theme_preset?: string | null;
+  clock_display_visible?: number | boolean | null;
+  clock_display_format?: string | null;
   home_tool_ids?: unknown;
   send_settings?: unknown;
   download_folder?: string | null;
@@ -158,6 +165,10 @@ function toApi(
     })),
     orgThemes: themeExtras?.orgThemes ?? [],
     organizationTheme: themeExtras?.organizationTheme ?? null,
+    clockDisplay: normalizeClockDisplaySettings({
+      visible: row.clock_display_visible,
+      format: row.clock_display_format,
+    }),
     homeToolIds: parseHomeToolIds(row.home_tool_ids),
     sendSettings: publicSendSettings(row.send_settings),
     downloadFolder: row.download_folder ?? null,
@@ -176,6 +187,7 @@ async function ensureProfileExtras() {
   await ensureSendSettingsColumn();
   await ensureDocumentAccentColorColumn();
   await ensureThemePresetColumn();
+  await ensureClockDisplayColumns();
   await ensureArtifactDeliverySchema();
   await ensureDeliveryConfigColumns();
 }
@@ -367,6 +379,11 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
     }
   }
 
+  let clockDisplay: ClockDisplaySettings | undefined;
+  if (body.clockDisplay !== undefined) {
+    clockDisplay = normalizeClockDisplaySettings(body.clockDisplay);
+  }
+
   await pool.query(
     `UPDATE business_profiles SET
       logo_data_url = :logo,
@@ -388,7 +405,8 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       send_settings = :sendSettings
       ${documentAccentColor !== undefined ? ", document_accent_color = :documentAccentColor" : ""}
       ${themePreset !== undefined ? ", theme_preset = :themePreset" : ""}
-      ${themePreset !== undefined ? ", config_version = config_version + 1" : ""}
+      ${themePreset !== undefined || clockDisplay !== undefined ? ", config_version = config_version + 1" : ""}
+      ${clockDisplay !== undefined ? ", clock_display_visible = :clockVisible, clock_display_format = :clockFormat" : ""}
       ${homeToolIds !== undefined ? ", home_tool_ids = :homeToolIds" : ""}
       ${downloadFolder !== undefined ? ", download_folder = :downloadFolder" : ""}
       ${conflictPolicy !== undefined ? ", download_folder_conflict_policy = :conflictPolicy" : ""}
@@ -417,6 +435,9 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       sendSettings: JSON.stringify(sendSettings),
       ...(documentAccentColor !== undefined ? { documentAccentColor } : {}),
       ...(themePreset !== undefined ? { themePreset } : {}),
+      ...(clockDisplay !== undefined
+        ? { clockVisible: clockDisplay.visible ? 1 : 0, clockFormat: clockDisplay.format }
+        : {}),
       ...(homeToolIds !== undefined ? { homeToolIds: JSON.stringify(homeToolIds) } : {}),
       ...(downloadFolder !== undefined ? { downloadFolder } : {}),
       ...(conflictPolicy !== undefined ? { conflictPolicy } : {}),

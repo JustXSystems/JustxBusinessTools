@@ -9,6 +9,11 @@ import {
   type OrgCatalogTool,
 } from "../home-tools.js";
 import { resolveEffectiveTheme } from "../theme-presets.js";
+import {
+  ensureClockDisplayColumns,
+  normalizeClockDisplaySettings,
+  type ClockDisplaySettings,
+} from "../clock-display.js";
 
 async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
   await pool.query(
@@ -33,6 +38,7 @@ export async function getEffectiveConfig(): Promise<{
   theme: Record<string, string> | null;
   themeSource: "profile" | "organization";
   themePreset: string | null;
+  clockDisplay: ClockDisplaySettings;
 }> {
   const orgId = getActiveOrgId();
   const profileId = getActiveProfileId();
@@ -43,12 +49,26 @@ export async function getEffectiveConfig(): Promise<{
     getToolGrouping(),
   ]);
 
+  await ensureClockDisplayColumns();
   const [profileRows] = await pool.query(
-    `SELECT config_version FROM business_profiles WHERE id = :id`,
+    `SELECT config_version, clock_display_visible, clock_display_format
+     FROM business_profiles WHERE id = :id`,
     { id: profileId },
   );
-  const profile = Array.isArray(profileRows) ? profileRows[0] : null;
-  const configVersion = Number((profile as { config_version?: number } | null)?.config_version) || 1;
+  const profile = Array.isArray(profileRows)
+    ? (profileRows[0] as
+        | {
+            config_version?: number;
+            clock_display_visible?: number | boolean | null;
+            clock_display_format?: string | null;
+          }
+        | undefined)
+    : undefined;
+  const configVersion = Number(profile?.config_version) || 1;
+  const clockDisplay = normalizeClockDisplaySettings({
+    visible: profile?.clock_display_visible,
+    format: profile?.clock_display_format,
+  });
 
   await ensureBuiltinCatalogRows(orgId);
   const [tools, catalog] = await Promise.all([listToolDefinitions(), listOrgCatalog(orgId)]);
@@ -72,6 +92,7 @@ export async function getEffectiveConfig(): Promise<{
     theme: resolved.theme,
     themeSource: resolved.themeSource,
     themePreset: resolved.themePreset,
+    clockDisplay,
   };
 }
 

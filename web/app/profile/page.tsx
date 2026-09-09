@@ -30,7 +30,9 @@ import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
 import { MfaSettingsPanel } from "@/components/profile/MfaSettingsPanel";
 import { QuotationEmailTemplatePicker } from "@/components/profile/QuotationEmailTemplatePicker";
 import { TeamRequestsPanel } from "@/components/profile/TeamRequestsPanel";
+import { ClockDisplaySettingsPanel } from "@/components/profile/ClockDisplaySettingsPanel";
 import { normalizeQuotationEmailTemplateId } from "@/lib/quotation-email-templates";
+import { normalizeClockDisplaySettings } from "@/lib/clock-display";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -66,6 +68,7 @@ export default function ProfilePage() {
           themePresets: p.themePresets ?? [],
           orgThemes: p.orgThemes ?? [],
           organizationTheme: p.organizationTheme ?? null,
+          clockDisplay: normalizeClockDisplaySettings(p.clockDisplay),
           sendSettings: normalizeSendSettings(p.sendSettings),
           homeToolIds: p.homeToolIds ?? catalogIds,
         });
@@ -117,6 +120,7 @@ export default function ProfilePage() {
         ...profile,
         documentAccentColor: normalizeDocumentAccentColor(profile.documentAccentColor),
         themePreset: normalizeThemePreset(profile.themePreset),
+        clockDisplay: normalizeClockDisplaySettings(profile.clockDisplay),
         sendSettings: {
           ...normalized,
           whatsappNumbers: normalized.whatsappNumbers.filter((n) => n.phone.trim()),
@@ -134,6 +138,7 @@ export default function ProfilePage() {
         themePresets: saved.themePresets ?? [],
         orgThemes: saved.orgThemes ?? [],
         organizationTheme: saved.organizationTheme ?? null,
+        clockDisplay: normalizeClockDisplaySettings(saved.clockDisplay),
         sendSettings: normalizeSendSettings(saved.sendSettings),
         homeToolIds: saved.homeToolIds ?? catalogIds,
       });
@@ -385,6 +390,18 @@ export default function ProfilePage() {
             : "Using Admin organization theme (no profile override)."}{" "}
           Save to apply for all staff on this Business Profile.
         </p>
+      </div>
+
+      <div className="panel">
+        <ClockDisplaySettingsPanel
+          value={normalizeClockDisplaySettings(profile.clockDisplay)}
+          disabled={!canEdit}
+          poweredByText={config?.poweredBy?.text}
+          onChange={(clockDisplay) => {
+            if (!canEdit) return;
+            setProfile((p) => ({ ...p, clockDisplay }));
+          }}
+        />
       </div>
 
       <div className="panel">

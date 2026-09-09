@@ -5,6 +5,12 @@ import {
   DEFAULT_QUOTATION_EMAIL_TEMPLATE,
   normalizeQuotationEmailTemplateId,
 } from "@/lib/quotation-email-templates";
+import {
+  DEFAULT_CLOCK_DISPLAY_FORMAT,
+  DEFAULT_CLOCK_DISPLAY_VISIBLE,
+  normalizeClockDisplaySettings,
+  type ClockDisplaySettings,
+} from "@/lib/clock-display";
 
 export type BusinessProfileSendSettings = {
   whatsappNumbers: Array<{ id: string; label: string; phone: string }>;
@@ -128,6 +134,11 @@ export type BusinessProfile = {
   }>;
   /** Admin-active organization theme tokens (for “Org default” preview). */
   organizationTheme?: Record<string, string> | null;
+  /**
+   * Footer chrome: live date/time next to Powered by.
+   * Owner/Admin toggles visibility and picks a format (IST).
+   */
+  clockDisplay: ClockDisplaySettings;
   /** Tools shown on home. null = all tools (legacy profiles). */
   homeToolIds: string[] | null;
   /** Profile-level WhatsApp / Email / Google Drive defaults for all tools. */
@@ -184,6 +195,10 @@ export const EMPTY_PROFILE: BusinessProfile = {
   themePresets: [],
   orgThemes: [],
   organizationTheme: null,
+  clockDisplay: {
+    visible: DEFAULT_CLOCK_DISPLAY_VISIBLE,
+    format: DEFAULT_CLOCK_DISPLAY_FORMAT,
+  },
   homeToolIds: null,
   sendSettings: {
     ...DEFAULT_SEND_SETTINGS,

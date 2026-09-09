@@ -23,6 +23,12 @@ import {
   readContingencyJson,
   writeContingencyJson,
 } from "@/lib/live-first";
+import {
+  DEFAULT_CLOCK_DISPLAY_FORMAT,
+  DEFAULT_CLOCK_DISPLAY_VISIBLE,
+  normalizeClockDisplaySettings,
+  type ClockDisplaySettings,
+} from "@/lib/clock-display";
 
 export type PlatformToolDefinition = {
   id: string;
@@ -49,6 +55,8 @@ export type EffectiveConfig = {
   themeSource?: "profile" | "organization";
   /** Profile override key when themeSource is profile. */
   themePreset?: string | null;
+  /** Footer date/time chrome (Business Profile). */
+  clockDisplay?: ClockDisplaySettings;
 };
 
 type ConfigContextValue = {
@@ -69,6 +77,10 @@ const DEFAULT_CONFIG: EffectiveConfig = {
   configVersion: 1,
   tools: [],
   catalog: [],
+  clockDisplay: {
+    visible: DEFAULT_CLOCK_DISPLAY_VISIBLE,
+    format: DEFAULT_CLOCK_DISPLAY_FORMAT,
+  },
 };
 
 function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefined): EffectiveConfig {
@@ -84,6 +96,7 @@ function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefi
     theme: data?.theme ?? null,
     themeSource: data?.themeSource === "profile" ? "profile" : "organization",
     themePreset: data?.themePreset ?? null,
+    clockDisplay: normalizeClockDisplaySettings(data?.clockDisplay),
   };
 }
 
@@ -150,4 +163,9 @@ export function usePoweredByText(): string {
   const ctx = useContext(ConfigContext);
   // Optional-chain poweredBy too — contingency/partial payloads can omit it.
   return ctx?.config?.poweredBy?.text ?? DEFAULT_POWERED_BY.text;
+}
+
+export function useClockDisplaySettings(): ClockDisplaySettings {
+  const ctx = useContext(ConfigContext);
+  return normalizeClockDisplaySettings(ctx?.config?.clockDisplay);
 }
