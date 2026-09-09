@@ -21,12 +21,20 @@ const outDir = path.join(root, "web", "public");
 const outFile = path.join(outDir, "JustX-Sync-Agent-win-x64.zip");
 const cacheDir = path.join(agentDir, ".runtime-cache");
 
-/** Pin Node 20 LTS win-x64 for reproducible customer packs. */
+/** Pin Node 20 LTS win-x64 for reproducible customer packs (portable runtime inside the zip). */
 const NODE_VERSION = "20.18.1";
 const NODE_DIST = `node-v${NODE_VERSION}-win-x64`;
 const NODE_ZIP = `https://nodejs.org/dist/v${NODE_VERSION}/${NODE_DIST}.zip`;
 
-const PACK_VERSION = "1.1.0";
+/** Keep in sync with `export const AGENT_VERSION` in desktop-sync-agent/src/index.js */
+function readAgentVersion() {
+  const indexJs = fs.readFileSync(path.join(agentDir, "src", "index.js"), "utf8");
+  const m = /export const AGENT_VERSION\s*=\s*["']([^"']+)["']/.exec(indexJs);
+  if (!m) {
+    throw new Error("Could not parse AGENT_VERSION from desktop-sync-agent/src/index.js");
+  }
+  return m[1];
+}
 
 const SETUP_FILES = [
   "START-HERE.txt",
@@ -121,6 +129,10 @@ async function main() {
   if (!fs.existsSync(setupDir)) throw new Error(`Missing windows-setup: ${setupDir}`);
   fs.mkdirSync(outDir, { recursive: true });
 
+  const PACK_VERSION = readAgentVersion();
+  console.log(`==> Sync Agent pack version: ${PACK_VERSION} (from desktop-sync-agent/src/index.js)`);
+  console.log(`==> Portable Node runtime: ${NODE_VERSION}-win-x64 (customer PC; unrelated to Actions runner Node)`);
+
   const nodeExe = await ensureNodeExe();
   const files = [];
   const prefix = "JustX-Sync-Agent";
@@ -133,7 +145,10 @@ async function main() {
   addFile(files, `${prefix}/app/package.json`, path.join(agentDir, "package.json"));
   files.push({
     name: `${prefix}/PACK_VERSION.txt`,
-    data: Buffer.from(`${PACK_VERSION}\nnode=${NODE_VERSION}-win-x64\n`, "utf8"),
+    data: Buffer.from(
+      `agent=${PACK_VERSION}\nnode=${NODE_VERSION}-win-x64\nsource=desktop-sync-agent/src/index.js AGENT_VERSION\n`,
+      "utf8",
+    ),
   });
 
   const zip = buildZip(files);
@@ -143,8 +158,9 @@ async function main() {
   fs.writeFileSync(outFile, zip);
   const sha = createHash("sha256").update(zip).digest("hex").slice(0, 12);
   console.log(
-    `Packed ${files.length} files -> ${path.relative(root, outFile)} (${zip.length} bytes, sha256:${sha}, pack ${PACK_VERSION})`,
+    `Packed ${files.length} files -> ${path.relative(root, outFile)} (${zip.length} bytes, sha256:${sha}, agent ${PACK_VERSION})`,
   );
+  console.log(`==> Confirm: unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/PACK_VERSION.txt`);
 }
 
 main().catch((err) => {

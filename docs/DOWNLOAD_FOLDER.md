@@ -17,13 +17,13 @@ Quotation emails (separate): [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)
 
 **How to obtain Webhook URL, secret, and Download Folder path (incl. SharePoint/OneDrive / local `C:\…`):** see [`SYNC_CENTER.md`](SYNC_CENTER.md)#13-corporate-artifact-webhook-sharepoint--onedrive--power-automate and [`SYNC_CENTER.md`](SYNC_CENTER.md)#14-company-file-server--download-folder-path-unc--optional.
 
-**Agent gotcha:** Sync Center **Connected** only proves `127.0.0.1:17865` is up. Production agent `apiBase` must be `https://justxsystems.com/jbt/api`. Diagnose + browser-sync workaround: [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
+**Agent gotcha:** Sync Center **Connected** only proves `127.0.0.1:17865` is up. Production agent `apiBase` must be `https://justxsystems.com/jbt/api`. Diagnose + browser-sync workaround: [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok. Shipping a new agent build requires Deploy **`pack_win_agent=true`** — [`SYNC_CENTER.md`](SYNC_CENTER.md)#confirm-desktop-agent-version-in-build--on-pc.
 
 ## What gets delivered
 
 **Files (this guide / Sync Center):** PDFs from tools that call company delivery — today **Quotation V1** and **Site Survey V1**.
 
-**Emails:** separate — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) (Paths A/B/C, Outlook prep, mailto encoding). Emailing a quotation does **not** replace Company document delivery. UNC already working? Add email without changing Download Folder — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#end-to-end-unc-already-working--add-email-only.
+**Emails:** separate — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) (Paths A/B/C, Outlook prep, mailto encoding, agent ≥ 1.1.3 for HTML). Emailing a quotation does **not** replace Company document delivery. UNC already working? Add email without changing Download Folder — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#end-to-end-unc-already-working--add-email-only.
 
 ## Field cheat sheet
 

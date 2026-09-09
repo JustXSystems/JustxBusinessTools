@@ -337,7 +337,7 @@ Push-to-`master` always uses the safe defaults (no exotic tasks).
 | Input | Default | Purpose |
 |-------|---------|---------|
 | `deploy_enabled` | `true` | Set `false` to **build + upload artifact only** (no VPS change) |
-| `pack_win_agent` | `false` | Rebuild+ship ~28MB Windows agent zip (rare; VPS keeps existing zip) |
+| `pack_win_agent` | `false` | Rebuild+ship ~28MB `JustX-Sync-Agent-win-x64.zip`. **Required** when `AGENT_VERSION` / Outlook HTML / agent bridge changes. Default `push` deploys **skip** this pack (`JBT_SKIP_WIN_AGENT_PACK=1`); VPS keeps the previous zip so Sync Center downloads stay on the old agent until you enable this. |
 | `force_cache_rebuild` | `false` | Delete repo Actions caches, cold-build Next/npm, force VPS `npm ci` (rewrites caches) |
 | `run_migrations` | `true` | Apply `mysql/migrations` on **stage before** live swap |
 | `backup_db` | `false` | Run `backup-jbt.sh` (MySQL dump) before migrations |
@@ -373,6 +373,26 @@ Example: force every cache to rebuild (slower run; writes fresh CI caches):
 1. Run workflow  
 2. `force_cache_rebuild` = true  
 3. Optionally also `pack_win_agent` = true if the Windows agent zip must refresh
+
+Example: ship a new desktop agent (e.g. Outlook HTML fix, `AGENT_VERSION` bump):
+
+1. Confirm source: `desktop-sync-agent/src/index.js` → `export const AGENT_VERSION = "…"` (keep `AGENT_PACK_VERSION` aligned)  
+2. Run workflow with **`pack_win_agent` = true** (and `deploy_enabled` = true)  
+3. In **Build web** logs confirm:
+   - `JBT_SKIP_WIN_AGENT_PACK=0`
+   - `Sync Agent pack version: …` matching `AGENT_VERSION`
+   - unzip grep of `AGENT_VERSION` inside the zip (workflow prints this when packing)
+4. After deploy: customer **Sync Center → Download setup → Install** again (fresh zip; do not reuse an old extract)  
+5. On PC: `Invoke-RestMethod http://127.0.0.1:17865/health` → `version` matches  
+6. Staff: Email Outbox → **Open HTML in Outlook** on a Corporate send  
+
+Full Path C engineer checklist: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#engineer-ship-order-path-c-html-fix--customers
+
+**Notes**
+
+- Job-level env may still list `JBT_SKIP_WIN_AGENT_PACK: 1` (workflow default). The **Build web** step overrides it when `PACK_WIN_AGENT=true`.  
+- Actions “Node 20 deprecated” / cache key `agent-node-win-*-v20.18.1` = portable **Node runtime** for the customer zip, **not** the agent app version.  
+- Details: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#confirm-agent-version--113-path-c--html · [`SYNC_CENTER.md`](SYNC_CENTER.md)#confirm-desktop-agent-version-in-build--on-pc
 
 ---
 

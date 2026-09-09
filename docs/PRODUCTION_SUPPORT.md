@@ -10,8 +10,9 @@ Related docs (do not duplicate full setup here):
 |-----|----------|
 | [`SETUP.md`](SETUP.md) | Env vars, Google OAuth once, client Drive onboarding |
 | [`DEPLOY.md`](DEPLOY.md) | First-time VPS, GitHub Actions, nginx, PM2 |
-| [`SYNC_CENTER.md`](SYNC_CENTER.md) | UNC/local folder + desktop agent; Connected vs sync; `…/jbt/api` |
-| [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) | Quotation email paths A/B/C; Outlook prep; mailto encoding; Open in Outlook |
+| [`SYNC_CENTER.md`](SYNC_CENTER.md) | UNC/local folder + desktop agent; Connected vs sync; `…/jbt/api`; agent version / pack |
+| [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) | Quotation email paths A/B/C; Outlook prep; mailto encoding; Open in Outlook; confirm ≥ 1.1.3 |
+| [`DEPLOY.md`](DEPLOY.md) | Deploy inputs — set `pack_win_agent` when shipping a new agent zip |
 | [`OBSERVABILITY.md`](OBSERVABILITY.md) | Grafana/Loki/Prometheus, Admin Operations, Sentry/GlitchTip |
 | [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) | Artifact delivery channels & filename policies |
 | [`.env.example`](../.env.example) | Env template → `server/.env` on the VPS |
@@ -345,6 +346,8 @@ ORDER BY created_at;
 | UNC Connected but Pending stuck | Wrong `apiBase` (`…/api` without `/jbt`) or agent 403 | Check `127.0.0.1:17865/status` + `agent.log`; fix to `…/jbt/api`; browser Sync now workaround — [`SYNC_CENTER.md`](SYNC_CENTER.md)#troubleshooting |
 | Open mail app / Outlook body shows `+` / `%0A` | Mailto form-encoding | Redeploy web (`buildMailtoHref`); see [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#mailto-encoding-spaces-as--and-0a |
 | Open in Outlook hangs / Add Account | Classic Outlook not ready; New Outlook (`olk`); COM blocked | [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#prep-classic-outlook-on-windows-paths-b--c |
+| Open in Outlook HTML still plain | Agent &lt; 1.1.3 or win zip never repacked | `/health` → `version`; Deploy with **`pack_win_agent=true`**; reinstall — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#confirm-agent-version--113-path-c--html |
+| Reinstalled agent, version unchanged | Push deploy skipped win pack | Redeploy with `pack_win_agent=true`; confirm Build web logs show packed `AGENT_VERSION` |
 | `failed` after token revoke | Owner changed password / revoked app | Reconnect Drive |
 | Same filename confusion | Overwrite vs Rename vs Skip policy | See [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) |
 | Large upload timeouts | nginx `proxy_read_timeout` / body size | Conf example uses 120s / 32m — match Express 30mb |

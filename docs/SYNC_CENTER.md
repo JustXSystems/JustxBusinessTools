@@ -173,7 +173,7 @@ Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quo
 | **Classic Outlook** | Path C needs desktop Outlook COM |
 | **Corporate lockdown** | If Scheduled Task is blocked, Install adds a Startup shortcut fallback |
 | **Token privacy** | Setup zip + `config.json` contain `jxsa_…` — treat like a password |
-| **Pack missing on server** | Web deploy must run `pack-agent-artifacts` (downloads Node win-x64 at build). If Sync Center setup fails with pack 404, redeploy web |
+| **Pack missing on server** | Web deploy must run `pack-agent-artifacts`. Win-x64 zip (~28MB) is **skipped** unless `pack_win_agent=true` (CI) or `JBT_SKIP_WIN_AGENT_PACK` unset locally. If Sync Center setup fails with pack 404, or agent version stays old after “redeploy”, enable win pack — [Confirm desktop agent version](#confirm-desktop-agent-version-in-build--on-pc) |
 | **Drive / webhook only** | No agent required for PDFs when destination is Drive/webhook |
 
 **Verify:** after Install, Sync Center shows Connected, **and** Sync now clears Pending (see [Connected ≠ sync OK](#connected--sync-ok) below). Or run **Check Status.cmd**.
@@ -463,6 +463,22 @@ Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
 
 **Immediate workaround if agent API sync fails:** Sync Center → **Link folder in this browser** → pick the same folder → **Sync now (this browser)** (uses your login session, not the agent token).
 
+#### Confirm desktop agent version (in build + on PC)
+
+Outlook Corporate HTML and several bridge fixes require a **minimum agent app version** (today **≥ 1.1.3**). Source of truth: `desktop-sync-agent/src/index.js` → `export const AGENT_VERSION`.
+
+| Check | How |
+|-------|-----|
+| On PC after Install | `Invoke-RestMethod http://127.0.0.1:17865/health` → `version` |
+| Inside built zip | `JustX-Sync-Agent/PACK_VERSION.txt` and `app/src/index.js` (`AGENT_VERSION`) |
+| In CI | Deploy with **`pack_win_agent=true`**; **Build web** log prints `AGENT_VERSION` / pack version from the zip |
+
+**Critical:** ordinary `push` deploys set `PACK_WIN_AGENT=false` and **skip** rebuilding `web/public/JustX-Sync-Agent-win-x64.zip` (`JBT_SKIP_WIN_AGENT_PACK=1`). The VPS **keeps the previous zip**. Reinstalling from Sync Center then reinstalls the **old** agent. To ship a new agent version: **Actions → Deploy → Run workflow** with **`pack_win_agent` = true**, confirm Build web logs show `JBT_SKIP_WIN_AGENT_PACK=0` and `agent=1.1.3` (or current), then customers **Download setup** again.
+
+**Not the app version:** GitHub’s “Node 20 is being deprecated” on Actions, or cache key `agent-node-win-*-v20.18.1` — that is the **portable Node runtime** pinned inside the customer zip / CI cache, separate from `AGENT_VERSION`.
+
+Canonical detail for Email Path C: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#confirm-agent-version--113-path-c--html · Deploy input: [`DEPLOY.md`](DEPLOY.md)#advanced-cd--workflow_dispatch-options.
+
 #### Manual env (instead of `.ps1`)
 
 ```powershell
@@ -491,9 +507,9 @@ Sync Center → Registered agents → **Revoke**. Old launcher / LocalAppData co
 
 #### Same agent for Email Outbox
 
-With agent running on Windows + **classic** Outlook (COM) installed: **Email Outbox → Open in Outlook**. No separate token. Use Install so the agent is up after reboot.
+With agent running on Windows + **classic** Outlook (COM) installed: **Email Outbox → Open in Outlook** / **Open HTML in Outlook**. No separate token. Use Install so the agent is up after reboot.
 
-**Before Open in Outlook:** finish Outlook **Add Account**, turn off New Outlook, confirm COM — full steps in [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#prep-classic-outlook-on-windows-paths-b--c. Mailto body with literal `+` / `%0A`: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#mailto-encoding-spaces-as--and-0a.
+**Before Open in Outlook:** finish Outlook **Add Account**, turn off New Outlook, confirm COM — full steps in [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#prep-classic-outlook-on-windows-paths-b--c. Mailto body with literal `+` / `%0A`: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#mailto-encoding-spaces-as--and-0a. Corporate HTML needs agent **≥ 1.1.3** and a deploy that ran **`pack_win_agent=true`** — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#confirm-agent-version--113-path-c--html · [engineer ship order](EMAIL_OUTBOX.md#engineer-ship-order-path-c-html-fix--customers).
 
 ---
 
@@ -533,19 +549,21 @@ With agent running on Windows + **classic** Outlook (COM) installed: **Email Out
 | **`No access to this business branch` (403)** | Agent token rejected by API branch ACL — deploy API fix that marks agent auth (`viaAgentToken`); or use **Sync now (this browser)** until deployed. Re-download setup only after API is fixed if token/profile mismatch suspected |
 | Pending never drops (other) | Destination UNC without agent/FSA; Drive not connected; webhook failing |
 | Agent “Not detected” | Agent not running on **this** PC; wrong machine; run Check Status.cmd |
-| Setup download fails / pack incomplete | Redeploy web so `JustX-Sync-Agent-win-x64.zip` is published (`npm run pack:agent`) |
+| Setup download fails / pack incomplete | Redeploy web so packs exist; for win zip use `pack_win_agent=true` or local `npm run pack:agent:win -w web` |
+| Agent reinstalled but `/health` version old | Win pack was skipped on deploy — VPS zip stale. Redeploy with **`pack_win_agent=true`**, then Download setup again — [Confirm version](#confirm-desktop-agent-version-in-build--on-pc) |
 | Agent pack download fails | Slim `desktop-sync-agent.zip` 404 — same redeploy |
 | Folder not reachable | Path wrong; PC not on VPN; agent user lacks share ACL; create folder first |
 | Badge / pending confusion | Sync Center pending = **files**; Email Outbox badge = **emails** |
 | Token lost | Download setup again (new token); revoke old agent |
 | Staff can’t edit path | Only Owner edits Profile delivery settings |
-| Open in Outlook fails while Connected | Same API/`apiBase`/auth issues as file sync; classic desktop Outlook required; COM hang / Add Account / New Outlook — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#troubleshooting |
+| Open in Outlook fails while Connected | Same API/`apiBase`/auth issues as file sync; classic desktop Outlook required; agent **≥ 1.1.3** for Corporate HTML; COM hang / Add Account / New Outlook — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#troubleshooting |
 
 ---
 
 ## Related docs
 
 - [`SETUP.md`](SETUP.md) — platform env, client Drive Part B  
-- [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) — quotation email paths + Outlook  
+- [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) — quotation email paths + Outlook · [agent ≥ 1.1.3](EMAIL_OUTBOX.md#confirm-agent-version--113-path-c--html)  
+- [`DEPLOY.md`](DEPLOY.md) — `pack_win_agent` to ship a new win agent zip  
 - [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) — short model + conflict policy  
-- `desktop-sync-agent/README.md` — bridge API  
+- `desktop-sync-agent/README.md` — bridge API · pack version  

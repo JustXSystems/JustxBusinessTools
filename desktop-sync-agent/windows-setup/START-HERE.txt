@@ -19,6 +19,8 @@ Notes:
 - You do NOT need to install Node.js yourself (it is included).
 - Connected means the agent is running on this PC — also confirm Sync now clears Pending.
 - Outlook desktop is only needed for Email Outbox -> Open in Outlook.
+- For HTML email in Outlook, Check Status / IT can confirm agent version
+  (http://127.0.0.1:17865/health) is 1.1.3 or newer after a fresh Download setup.
 - Keep this setup zip private (it contains your company agent token).
 - Support: if Sync now fails, ask IT to check config.json apiBase is
   https://justxsystems.com/jbt/api (must include /jbt).

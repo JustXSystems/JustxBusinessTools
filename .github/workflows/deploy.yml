@@ -177,7 +177,26 @@ jobs:
       - name: Build web (production /jbt)
         env:
           JBT_SKIP_WIN_AGENT_PACK: ${{ env.PACK_WIN_AGENT == 'true' && '0' || '1' }}
-        run: npm run build -w web
+        run: |
+          echo "==> PACK_WIN_AGENT=${{ env.PACK_WIN_AGENT }}"
+          echo "==> JBT_SKIP_WIN_AGENT_PACK=${JBT_SKIP_WIN_AGENT_PACK}"
+          if [[ -f desktop-sync-agent/src/index.js ]]; then
+            echo "==> Source AGENT_VERSION:"
+            grep -E 'export const AGENT_VERSION' desktop-sync-agent/src/index.js || true
+          fi
+          npm run build -w web
+          if [[ "${{ env.PACK_WIN_AGENT }}" == "true" ]]; then
+            if [[ ! -f web/public/JustX-Sync-Agent-win-x64.zip ]]; then
+              echo "::error::PACK_WIN_AGENT=true but JustX-Sync-Agent-win-x64.zip was not built"
+              exit 1
+            fi
+            echo "==> Packed agent version file:"
+            unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/PACK_VERSION.txt || true
+            echo "==> AGENT_VERSION inside zip index.js:"
+            unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/app/src/index.js | grep -E 'export const AGENT_VERSION' || true
+          else
+            echo "==> Skipped win agent pack (enable workflow input pack_win_agent=true to rebuild zip)"
+          fi
 
       - name: Pack slim release tarball
         run: |

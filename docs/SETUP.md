@@ -255,7 +255,7 @@ Optional UI (Owner): **Business Profile → Send Via defaults → Email** (templ
 
 **Windows:** classic Outlook must handle `mailto:` (finish **Add Account**; prefer classic over New Outlook). Mailto must use `%20` encoding — see [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#mailto-encoding-spaces-as--and-0a. Full steps: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#path-b--mailto--pdf-download-no-server-email.
 
-**Note:** Path B is **plain text only** — corporate HTML in the customer inbox requires Path A.
+**Note:** Path B is **plain text only** — corporate HTML in the customer inbox requires Path A or Path C (**Open HTML in Outlook**, agent ≥ 1.1.3). Mailto does **not** mark the outbox row `opened`.
 
 ### Path C — `JBT_AGENT_TOKEN` (Outlook)
 
@@ -267,7 +267,8 @@ Optional UI (Owner): **Business Profile → Send Via defaults → Email** (templ
 2. **Set up on this PC** → **Download setup for this PC**.
 3. Extract zip → double-click **Install JustX Sync Agent.cmd**.
 4. Confirm Sync Center shows **Connected**, then prep classic Outlook (Inbox + COM) — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#prep-classic-outlook-on-windows-paths-b--c.
-5. **Email Outbox** → **Open in Outlook**.
+5. Confirm agent **≥ 1.1.3** for Corporate HTML: `Invoke-RestMethod http://127.0.0.1:17865/health` → `version`. If still old after reinstall, Deploy with **`pack_win_agent=true`**, then download setup again — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#confirm-agent-version--113-path-c--html.
+6. **Email Outbox** → **Open in Outlook** (not **Open mail app** for HTML).
 
 **Important:** Connected only means the local bridge (`http://127.0.0.1:17865`) is up. Production agent config must use `JBT_API_BASE=https://justxsystems.com/jbt/api` (**with `/jbt`**). See [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
 
@@ -289,8 +290,9 @@ These are **two different queues**. Full “who needs what / what syncs / how it
 
 | Guide | Covers |
 |-------|--------|
-| **[`SYNC_CENTER.md`](SYNC_CENTER.md)** | Who needs Sync Center; which tools’ PDFs; all Company document delivery variants (Drive / artifact webhook / UNC / **local folder**); desktop setup; **Connected vs sync**; troubleshooting |
-| **[`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)** | Who needs Email Outbox; paths A/B/C; Outlook prep (Add Account / New Outlook / COM); mailto `+` encoding; UNC-already-working email checklist |
+| **[`SYNC_CENTER.md`](SYNC_CENTER.md)** | Who needs Sync Center; which tools’ PDFs; all Company document delivery variants (Drive / artifact webhook / UNC / **local folder**); desktop setup; **Connected vs sync**; **agent version / `pack_win_agent`**; troubleshooting |
+| **[`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)** | Who needs Email Outbox; paths A/B/C; Outlook prep; mailto `+` encoding; **confirm agent ≥ 1.1.3**; UNC-already-working email checklist |
+| **[`DEPLOY.md`](DEPLOY.md)** | CD options including **`pack_win_agent`** to ship a new Sync Agent zip |
 
 **Short reminder**
 

@@ -53,7 +53,7 @@ Full “who / what / how” for files: [`SYNC_CENTER.md`](SYNC_CENTER.md)#who-ne
 |------|-------------------|-----------------|---------------|
 | **A. Email webhook** | Yes | Yes (`html` field) | Platform admin + automation |
 | **B. Mailto + outbox** | No (download + attach) | **No** — plain text only in mail app | None on server; working default mail client |
-| **C. Outlook via agent** | Yes (COM) | **Yes** — Corporate `html` via Outlook `HTMLBody` (agent ≥ 1.1.1 + classic Outlook) | Sync Center agent + **classic** Outlook COM |
+| **C. Outlook via agent** | Yes (COM) | **Yes** — Corporate `html` via Outlook `HTMLBody` (**agent ≥ 1.1.3** + classic Outlook) | Sync Center agent + **classic** Outlook COM |
 
 Recommended: **A** in production for HTML delivered to the customer inbox without a staff PC; **C** when you want HTML compose + PDF on Windows without a webhook; **B** only for plain-text mailto. Combine: A primary, B/C when webhook fails.
 
@@ -65,7 +65,7 @@ Recommended: **A** in production for HTML delivered to the customer inbox withou
 | Body shows `Dear+Customer,%0A%0A…` | Broken mailto encoding (spaces as `+`). Fixed by `buildMailtoHref` (`%20`) — redeploy web; see [Mailto encoding](#mailto-encoding-spaces-as--and-0a). |
 | Open mail app / Open in Outlook do nothing | Often Outlook stuck on **Add Account**, **New Outlook** without COM, or hung `OUTLOOK.exe` — see [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c). |
 | UNC works but email fails | Expected to be independent; email does not use Download Folder. |
-| Open in Outlook still plain after HTML send | Agent must be **≥ 1.1.3** (HTML via temp file + `HTMLBody`; older agents truncated large HTML on PowerShell `-Command`). Check `http://127.0.0.1:17865/status` → `version`. Re-download setup after web pack rebuild. |
+| Open in Outlook still plain after HTML send | Agent must be **≥ 1.1.3** (HTML via temp file + `HTMLBody`; older agents truncated large HTML on PowerShell `-Command`). Confirm version — [Confirm agent version ≥ 1.1.3](#confirm-agent-version--113-path-c--html). Re-download setup only after a deploy that **repacked** the win zip (`pack_win_agent=true`). |
 
 ---
 
@@ -76,9 +76,10 @@ Nothing appears in Email Outbox until staff send from a tool.
 1. Sign in at https://justxsystems.com/jbt/ on the correct Business Profile / branch.  
 2. Open **Quotation** (or Site Survey where email send exists).  
 3. Generate/save so a PDF can be built.  
-4. **Send Via → Email**: fill **To** (required), optional CC / subject / message.  
-5. Send. API creates an outbox row (+ PDF artifact when provided).  
-6. Open **Email Outbox** (`/email-outbox`) → **Pending** — confirm a row with To/Subject and (for Path C) a PDF.
+4. **Send Via → Email**: fill **To** (required), optional CC / subject / message. Choose **Corporate** template if you need HTML.  
+5. Send. API creates an outbox row (+ PDF artifact when provided); Corporate stores `body_html` on the row.  
+6. If email webhook is configured and succeeds → status **`sent`** (may never appear as Pending).  
+7. Else: Quotation UI **prefers desktop Outlook** when agent is online and a PDF exists (required for Corporate HTML). Otherwise mailto (plain) + PDF download. Open **Email Outbox** (`/email-outbox`) → **Pending** — confirm To/Subject and (for Path C) a PDF.
 
 Optional Owner polish (not required to send): **Business Profile → Send Via defaults → Email** (template Corporate/Plain, subject, Reply-To, intro/closing).
 
@@ -220,11 +221,11 @@ Must return in a few seconds with a compose window. If it hangs, classic Outlook
 
 ### Staff flow (Path B)
 
-1. Quotation → Email → Send (creates Outbox `pending`, may auto-download PDF and open mailto).  
+1. Quotation → Email → Send (creates Outbox `pending`; may auto-download PDF and open mailto for **plain** templates).  
 2. Or Email Outbox → pending row → **Download PDF** first.  
 3. Click **Open mail app** (browser may ask to open Outlook → Allow).  
 4. In the mail client: **Attach** the downloaded PDF → **Send**.  
-5. Outbox status moves toward **opened** after mark-opened.
+5. Row stays **`pending`** after mailto (mailto cannot verify the draft opened). Use **Cancel** when done, or leave it until webhook **sent**. Do **not** expect status → `opened` from Path B alone.
 
 ### Manual fallback (always works if Download PDF works)
 
@@ -261,6 +262,7 @@ Right:  mailto:a@x.com?body=Dear%20Customer%0A%0APlease…
 - [ ] **Download PDF** succeeds  
 - [ ] **Open mail app** opens compose with normal spaces (after mailto fix deploy)  
 - [ ] Staff attach PDF before Send  
+- [ ] Row remains **pending** after mailto (expected — Cancel when finished)  
 
 ---
 
@@ -299,30 +301,94 @@ Canonical agent matrix: [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-
 ```powershell
 Invoke-RestMethod http://127.0.0.1:17865/status | ConvertTo-Json -Depth 5
 # apiBase must be https://justxsystems.com/jbt/api  (with /jbt)
+# version must be >= 1.1.3 for Corporate HTML in Outlook
 Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
 ```
+
+### Confirm agent version ≥ 1.1.3 (Path C + HTML)
+
+Corporate HTML in Outlook needs agent **≥ 1.1.3**. Reinstalling from Sync Center only helps if production’s **`JustX-Sync-Agent-win-x64.zip` was rebuilt and shipped** in that deploy. Ordinary `push` deploys **skip** the ~28MB win pack (VPS keeps the old zip).
+
+#### Where `1.1.3` lives in source / pack
+
+| Location | What it is |
+|----------|------------|
+| `desktop-sync-agent/src/index.js` → `AGENT_VERSION = "1.1.3"` | Runtime `/health` + `/status` → `version` (source of truth) |
+| `web/lib/artifact-delivery/win-setup-pack.ts` → `AGENT_PACK_VERSION` | Written into setup `config.json` as `packVersion` |
+| Pack script `scripts/pack-justx-sync-agent-win.mjs` | Reads `AGENT_VERSION` from `index.js`; writes `JustX-Sync-Agent/PACK_VERSION.txt` inside the zip |
+| Built zip → `JustX-Sync-Agent/app/src/index.js` | What Sync Center downloads and Install.cmd copies |
+
+**Not the agent version:** GitHub Actions “Node 20 is being deprecated” / runner Node 24. That is the **CI runner**. The customer zip still pins portable **Node 20.18.1 win-x64** on purpose (`NODE_VERSION` in the pack script). Cache keys like `agent-node-win-Linux-v20.18.1` are that portable runtime download, not app version `1.1.3`.
+
+#### Confirm on the customer PC (after install)
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:17865/health
+# expect: version = "1.1.3" (or higher)
+
+Invoke-RestMethod http://127.0.0.1:17865/status | ConvertTo-Json -Depth 5
+# expect: version >= 1.1.3, apiBase = https://justxsystems.com/jbt/api
+```
+
+If `version` is still `1.1.0` / `1.1.1` / `1.1.2`: the downloaded zip was old — ship a new pack (below), then Sync Center → Download setup → Install again.
+
+#### Confirm in CI / deploy (engineer)
+
+1. **Actions → Deploy → Run workflow** with **`pack_win_agent` = true** (required to rebuild the win zip).  
+   - Default `push` to `master`: `PACK_WIN_AGENT=false` → log may say `Skipping JustX-Sync-Agent-win-x64.zip (JBT_SKIP_WIN_AGENT_PACK=1)` → **VPS zip unchanged**.  
+   - Job-level env can still show `JBT_SKIP_WIN_AGENT_PACK: 1`; only the **Build web** step overrides it to `0` when packing.
+2. In **Build web** logs, expect:
+   - `PACK_WIN_AGENT=true` and `JBT_SKIP_WIN_AGENT_PACK=0`
+   - `Source AGENT_VERSION:` / `export const AGENT_VERSION = "1.1.3"`
+   - `Sync Agent pack version: 1.1.3`
+   - `Packed agent version file:` (`agent=1.1.3` …) and `AGENT_VERSION inside zip index.js:`
+3. Optional local check of a built zip:
+
+```bash
+unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/PACK_VERSION.txt
+unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/app/src/index.js | grep AGENT_VERSION
+```
+
+Full deploy knobs: [`DEPLOY.md`](DEPLOY.md)#advanced-cd--workflow_dispatch-options · pack details: `desktop-sync-agent/README.md`.
+
+### Engineer ship order (Path C HTML fix → customers)
+
+Do this whenever `AGENT_VERSION` / Outlook bridge changes (e.g. 1.1.3):
+
+1. Merge code with `AGENT_VERSION` bumped in `desktop-sync-agent/src/index.js` (keep `AGENT_PACK_VERSION` in sync).  
+2. **Actions → Deploy → Run workflow**: `deploy_enabled=true`, **`pack_win_agent=true`**.  
+3. Confirm **Build web** logs: `JBT_SKIP_WIN_AGENT_PACK=0`, packed `agent=…` matches source.  
+4. After VPS swap: Sync Center → **Download setup for this PC** → Install (do not reuse an old extracted folder).  
+5. On PC: `/health` → `version` matches; COM probe OK; Email Outbox → **Open HTML in Outlook** on a new Corporate send.
+
+Skipping step 2 leaves the old zip on the VPS — reinstall alone will not upgrade the agent.
 
 ### Send with Open in Outlook
 
 1. Complete [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c) (COM probe must succeed).  
-2. Create pending outbox row with **PDF** ([Create draft](#create-an-email-outbox-draft-all-paths)).  
-3. Email Outbox: Desktop agent **Online**; button enabled (disabled if no agent or no `artifactId`).  
-4. Click **Open in Outlook** — wait up to ~30–90s for large PDFs.  
-5. Outlook compose opens with To/Subject/body (+ HTML when available) and **PDF attached**.  
-6. Click **Send** in Outlook. Status → **opened**.
+2. Confirm [agent version ≥ 1.1.3](#confirm-agent-version--113-path-c--html).  
+3. Create pending outbox row with **PDF** ([Create draft](#create-an-email-outbox-draft-all-paths)). Corporate template should have HTML stored on the row.  
+4. Email Outbox: Desktop agent **Online**; **Open in Outlook** / **Open HTML in Outlook** enabled (disabled if no agent or no `artifactId`).  
+5. Click that button — wait up to ~30–90s for large PDFs.  
+6. Outlook compose opens with To/Subject, **HTML body** (when present), and **PDF attached**.  
+7. Click **Send** in Outlook. Status → **`opened`** (still listed under Pending until Cancel or webhook **sent**).
+
+If open fails: status → **`failed`** + `lastError`; row stays in Pending; fix Outlook/agent and retry (or **Requeue**).
 
 ### Path C checklist
 
 - [ ] Classic Outlook Inbox ready; New Outlook off; COM probe OK  
 - [ ] Agent Connected; `apiBase` = `https://justxsystems.com/jbt/api`  
+- [ ] `/health` → `version` **≥ 1.1.3** (re-download after `pack_win_agent=true` deploy if not)  
 - [ ] Pending row has PDF  
-- [ ] **Open in Outlook** opens compose with attachment  
+- [ ] **Open in Outlook** (not **Open mail app**) opens compose with HTML + attachment  
 - [ ] Windows only  
 
 ### Path C limits
 
 - Mailto / **Open mail app** cannot carry Corporate HTML — use **Open in Outlook** / **Open HTML in Outlook** (or Path A).  
 - Agent **≥ 1.1.3** writes Corporate HTML to a temp file and sets Outlook `BodyFormat = HTML` + `HTMLBody` (avoids Windows ~8K `-Command` limit that made large HTML fall back to plain). Older packs stay plain.  
+- Reinstall from Sync Center does **not** upgrade the agent unless production zip was rebuilt (`pack_win_agent=true`).  
 - Agent must run on the Outlook PC with classic Outlook COM.  
 - Same `apiBase` / auth issues that block UNC sync also block compose.  
 - Never invent `JBT_AGENT_TOKEN` — only Sync Center.
@@ -344,9 +410,10 @@ Typical customer who already has `C:\JustX\Artifacts` (or UNC) syncing:
 
 1. **Do not change** Download Folder / UNC for email.  
 2. Run [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c).  
-3. Prefer Path B immediately: Quotation email → Outbox → **Download PDF** → **Open mail app** (or manual attach).  
-4. Path C: same agent → **Open in Outlook** after COM works.  
-5. Optional later: Path A webhook for automatic HTML + PDF.
+3. Confirm agent version: `Invoke-RestMethod http://127.0.0.1:17865/health` → `version` **≥ 1.1.3**. If older, engineer ships zip with **`pack_win_agent=true`**, then Sync Center → Download setup → Install again.  
+4. Prefer Path B for a quick plain-text test: Quotation email → Outbox → **Download PDF** → **Open mail app** (or manual attach).  
+5. Path C for Corporate HTML + PDF: same agent → Email Outbox → **Open in Outlook** / **Open HTML in Outlook** (not Open mail app).  
+6. Optional later: Path A webhook for automatic HTML + PDF without a staff PC.
 
 ---
 
@@ -370,23 +437,23 @@ Typical customer who already has `C:\JustX\Artifacts` (or UNC) syncing:
 
 ### Actions
 
-| Button | Requires |
-|--------|----------|
-| **Send via webhook** | Path A configured on API |
-| **Open mail app** | Path B — working `mailto` handler |
-| **Download PDF** | Row has artifact |
-| **Open in Outlook** | Path C — agent online on this PC + PDF |
-| **Requeue** | Sets back toward pending |
-| **Cancel** | Stops further send attempts |
+| Button | Requires | Notes |
+|--------|----------|-------|
+| **Send via webhook** | Path A configured on API | |
+| **Open mail app** | Path B — working `mailto` handler | Plain text only; does **not** mark `opened` |
+| **Download PDF** | Row has artifact | Always needed for Path B attach |
+| **Open in Outlook** / **Open HTML in Outlook** | Path C — agent online on this PC + PDF | Label is **Open HTML in Outlook** when row has `html`; needs agent ≥ 1.1.3 |
+| **Requeue** | `failed` / `opened` / `cancelled` | Sets status back toward `pending` |
+| **Cancel** | Actionable row | Stops further send attempts |
 
-Filters: **Pending** (pending+failed) vs **All**.
+Filters: **Pending** = `pending` + `failed` + `opened` (UI note: “Pending / failed / opened”) vs **All**.
 
 ### How rows get created
 
-1. Staff sends quotation email.  
-2. API creates outbox row (+ artifact PDF when provided).  
+1. Staff sends quotation email (Quotation / Site Survey).  
+2. API creates outbox row (+ artifact PDF when provided); Corporate template stores **`body_html`**.  
 3. If webhook configured and succeeds → `sent`.  
-4. Else → `pending` / `failed` and client may open mailto + download PDF.
+4. Else → `pending` / `failed`. Client **prefers desktop Outlook** when HTML and/or PDF + agent online; otherwise mailto (plain) + optional PDF download. HTML never goes through mailto.
 
 ---
 
@@ -394,9 +461,9 @@ Filters: **Pending** (pending+failed) vs **All**.
 
 | Role | Configures |
 |------|------------|
-| **JustX engineer** | Admin Integrations / `EMAIL_WEBHOOK_URL`, PM2, automation hosting |
+| **JustX engineer** | Admin Integrations / `EMAIL_WEBHOOK_URL`, PM2, automation hosting; Deploy with **`pack_win_agent=true`** when shipping a new desktop agent |
 | **Company Owner** | Profile email templates, accent; Sync Center setup if Path C / UNC |
-| **Staff** | Send quotations; Outbox actions; Outlook ready on their PC for B/C |
+| **Staff** | Send quotations; Outbox actions; Outlook ready on their PC for B/C; confirm `/health` version after install |
 
 ---
 
@@ -407,8 +474,10 @@ Filters: **Pending** (pending+failed) vs **All**.
 | Always mailto, never auto-send | Email webhook empty or API not reloaded |
 | Webhook 4xx/5xx in Outbox | Automation inactive; wrong URL; mapping error |
 | HTML looks plain (webhook) | Automation mapped `body` only — map **`html`** |
-| Expected HTML but see plain text (B/C) | Path B mailto is always plain. Use **Open in Outlook** with agent ≥ 1.1.1. Full HTML without a staff PC = Path A webhook |
-| Open in Outlook HTML still plain | Agent version &lt; 1.1.3, or still using mailto / Open mail app. Confirm `status.version` ≥ 1.1.3; classic Outlook; Open in Outlook only |
+| Expected HTML but see plain text (B/C) | Path B mailto is always plain. Use **Open in Outlook** with agent ≥ 1.1.3. Full HTML without a staff PC = Path A webhook |
+| Open in Outlook HTML still plain | Agent &lt; 1.1.3, or still using mailto / Open mail app, or Sync Center zip never repacked. Confirm `/health` → `version`; redeploy with `pack_win_agent=true`; reinstall — [Confirm agent version](#confirm-agent-version--113-path-c--html) |
+| Reinstalled agent but version still old | Deploy skipped win pack (`JBT_SKIP_WIN_AGENT_PACK=1` / `pack_win_agent` false). VPS kept previous zip. Re-run Deploy with **`pack_win_agent=true`**, then download setup again |
+| CI “Node 20 deprecated” / cache key `v20.18.1` | Actions runner warning only — not agent app version. Portable Node in zip is pinned separately; look for `AGENT_VERSION` / `PACK_VERSION.txt` in Build web logs |
 | Body shows `+` and `%0A` | Old mailto form-encoding — redeploy web with `buildMailtoHref`; new send |
 | Open mail app / Outlook do nothing | Outlook **Add Account** stuck; New Outlook; hung process — [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c) |
 | Open in Outlook times out / hangs | COM hang (`New-Object Outlook.Application`); close `olk`; restart classic Outlook; COM probe |
@@ -422,7 +491,8 @@ Filters: **Pending** (pending+failed) vs **All**.
 ### Diagnostic commands (Windows)
 
 ```powershell
-# Agent bridge
+# Agent bridge + version
+Invoke-RestMethod http://127.0.0.1:17865/health
 Invoke-RestMethod http://127.0.0.1:17865/status | ConvertTo-Json -Depth 5
 Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\config.json"
 Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
@@ -440,8 +510,9 @@ Start-Process "mailto:you@example.com?subject=JBT%20test&body=Mailto%20works"
 ## Related docs
 
 - [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) — JSON contract  
-- [`SYNC_CENTER.md`](SYNC_CENTER.md) — agent + UNC/local folder delivery · Connected ≠ sync  
+- [`SYNC_CENTER.md`](SYNC_CENTER.md) — agent + UNC/local folder delivery · Connected ≠ sync · [agent version / pack](SYNC_CENTER.md#confirm-desktop-agent-version-in-build--on-pc)  
+- [`DEPLOY.md`](DEPLOY.md)#advanced-cd--workflow_dispatch-options — `pack_win_agent`  
 - [`SETUP.md`](SETUP.md) — env + short email section  
 - [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) — file delivery channels (not email)  
-- `desktop-sync-agent/README.md` — `/open-email` bridge  
+- `desktop-sync-agent/README.md` — `/open-email` bridge · pack version  
 - `web/lib/mailto.ts` — correct mailto percent-encoding  

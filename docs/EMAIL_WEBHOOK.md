@@ -1,9 +1,7 @@
 # Quotation email webhook (`EMAIL_WEBHOOK_URL`)
 
 When staff use **Quotation → Send Via → Email**, the API posts a JSON payload to the resolved email webhook
-(**Admin → Integrations** preferred, else `EMAIL_WEBHOOK_URL` / `NOTIFY_EMAIL_WEBHOOK_URL`). Without it, the browser opens
-`mailto:` with **plain text only** (HTML is not supported by mailto), downloads the PDF,
-and saves a row in **Email Outbox** for retry / Outlook.
+(**Admin → Integrations** preferred, else `EMAIL_WEBHOOK_URL` / `NOTIFY_EMAIL_WEBHOOK_URL`). Without it, JustX saves a row in **Email Outbox** and prefers **Open in Outlook** (desktop agent, agent ≥ 1.1.3 for Corporate HTML + PDF) when available; otherwise **`mailto:`** with **plain text only** (HTML is not supported by mailto) and a PDF download for manual attach.
 
 Full setup for webhook vs mailto vs Outlook agent: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md).
 
@@ -24,13 +22,13 @@ It is the **public HTTPS URL of a webhook you create** in an external tool. Pref
 1. Choose a tool that can **receive HTTP POST** and then **send email** (n8n, Make.com, Zapier, Power Automate, Logic Apps, or your own HTTPS endpoint).
 2. Create a workflow whose trigger is **Webhook / Catch Hook / When an HTTP request is received**.
 3. Copy the **production webhook URL** the tool displays (must start with `https://`).
-4. Paste it into the API host’s **`server/.env`**:
+4. Paste it into **Admin → Integrations → Email webhook** (preferred), or the API host’s **`server/.env`**:
 
 ```env
 EMAIL_WEBHOOK_URL=https://n8n.example.com/webhook/jbt-email
 ```
 
-5. Reload the API (`pm2 reload … --update-env` or restart) so the new env is loaded.
+5. If using `.env`, reload the API (`pm2 reload … --update-env` or restart) so the new env is loaded.
 6. Map the JSON body fields (especially **`html`** and `pdfBase64`) to your “Send Email” action.
 7. Send a test quotation from JustX and confirm the customer inbox.
 
