@@ -408,14 +408,39 @@ fi
 mkdir -p "$LIVE"
 [[ -w "$LIVE" ]] || die "LIVE path not writable: $LIVE (chown to deploy)"
 
+WIN_AGENT_ZIP_REL="web/public/JustX-Sync-Agent-win-x64.zip"
+
+# When the release tarball includes a newly packed win agent zip, install it.
+# When it does not, keep the current live zip (ordinary deploys skip the ~28MB pack).
+install_or_preserve_win_agent_zip() {
+  local dest_root="$1"
+  local src_root="${2:-}"
+  mkdir -p "$dest_root/web/public"
+  if [[ -n "$src_root" && -f "$src_root/$WIN_AGENT_ZIP_REL" ]]; then
+    echo "==> Installing win agent zip from this release"
+    cp -a "$src_root/$WIN_AGENT_ZIP_REL" "$dest_root/$WIN_AGENT_ZIP_REL"
+    return 0
+  fi
+  if [[ -f "$LIVE/$WIN_AGENT_ZIP_REL" ]]; then
+    if [[ ! -f "$dest_root/$WIN_AGENT_ZIP_REL" ]]; then
+      echo "==> Preserving live win agent zip (release did not include one)"
+      cp -a "$LIVE/$WIN_AGENT_ZIP_REL" "$dest_root/$WIN_AGENT_ZIP_REL"
+    fi
+  else
+    echo "==> No win agent zip in release or live (Sync Center setup download will 404 until packed)"
+  fi
+}
+
 activate_release_rsync() {
   local src="$1"
-  echo "==> Sync release → live (preserve .git + win agent zip)"
+  echo "==> Sync release → live (preserve .git; win agent zip only if missing from release)"
   link_shared_into "$src"
-  rsync -a --delete \
-    --exclude '.git/' \
-    --exclude 'web/public/JustX-Sync-Agent-win-x64.zip' \
-    "$src"/ "$LIVE"/
+  local rsync_excludes=(--exclude '.git/')
+  if [[ ! -f "$src/$WIN_AGENT_ZIP_REL" ]]; then
+    rsync_excludes+=(--exclude "$WIN_AGENT_ZIP_REL")
+  fi
+  rsync -a --delete "${rsync_excludes[@]}" "$src"/ "$LIVE"/
+  install_or_preserve_win_agent_zip "$LIVE" "$src"
   link_shared_into "$LIVE"
 }
 
@@ -424,16 +449,14 @@ activate_release_mv() {
   echo "==> Prepare swap tree at $LIVE_NEW"
   rm -rf "$LIVE_NEW"
   mkdir -p "$LIVE_NEW"
-  rsync -a \
-    --exclude '.git/' \
-    --exclude 'web/public/JustX-Sync-Agent-win-x64.zip' \
-    "$src"/ "$LIVE_NEW"/
-  # Preserve win agent zip from current live if present
-  if [[ -f "$LIVE/web/public/JustX-Sync-Agent-win-x64.zip" ]]; then
-    mkdir -p "$LIVE_NEW/web/public"
-    cp -a "$LIVE/web/public/JustX-Sync-Agent-win-x64.zip" \
-      "$LIVE_NEW/web/public/JustX-Sync-Agent-win-x64.zip"
+  local rsync_excludes=(--exclude '.git/')
+  # Always copy release contents; if zip is absent from src, exclude so we can
+  # restore from live below without rsync deleting a placeholder path mid-copy.
+  if [[ ! -f "$src/$WIN_AGENT_ZIP_REL" ]]; then
+    rsync_excludes+=(--exclude "$WIN_AGENT_ZIP_REL")
   fi
+  rsync -a "${rsync_excludes[@]}" "$src"/ "$LIVE_NEW"/
+  install_or_preserve_win_agent_zip "$LIVE_NEW" "$src"
   link_shared_into "$LIVE_NEW"
 
   echo "==> Atomic swap: $LIVE → $LIVE_OLD ; $LIVE_NEW → $LIVE"

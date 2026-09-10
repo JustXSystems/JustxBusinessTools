@@ -405,6 +405,7 @@ Full Path C engineer checklist: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#engineer-sh
 **Notes**
 
 - Job-level env may still list `JBT_SKIP_WIN_AGENT_PACK: 1` (workflow default). The **Build web** step overrides it when `PACK_WIN_AGENT=true`.  
+- On the VPS, `vps-release.sh` **installs** `JustX-Sync-Agent-win-x64.zip` when the release tarball includes it; otherwise it **preserves** the live zip. Earlier builds always preserved live and never applied a newly packed zip — that is fixed. After shipping the fix, run one Deploy with **`pack_win_agent=true`** so the 1.1.3 zip actually lands on the VPS.  
 - Actions “Node 20 deprecated” / cache key `agent-node-win-*-v20.18.1` = portable **Node runtime** for the customer zip, **not** the agent app version. That cache only speeds `node.exe` download; it does **not** reuse an old agent `index.js`.  
 - Details: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#confirm-agent-version--113-path-c--html · [`SYNC_CENTER.md`](SYNC_CENTER.md)#confirm-desktop-agent-version-in-build--on-pc
 
