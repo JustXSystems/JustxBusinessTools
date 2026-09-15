@@ -603,6 +603,9 @@ export function QuotationGeneratorV1() {
           <div className="tool-header-title">Quotation Generator V1</div>
           <div className="tool-header-sub">
             Draft · submit to company delivery · PDF · WhatsApp / Email
+            {user?.role
+              ? ` · ${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}`
+              : ""}
             {user?.email ? ` · ${user.email}` : ""}
           </div>
         </div>

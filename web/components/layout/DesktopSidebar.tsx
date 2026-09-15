@@ -174,6 +174,7 @@ export function DesktopSidebar() {
               <SidebarIdentityChip
                 name={user?.name}
                 email={user?.email}
+                role={user?.role}
                 mini={mini}
               />
               <SidebarAttachmentToggle mini={mini} />

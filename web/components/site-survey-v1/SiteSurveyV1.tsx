@@ -916,6 +916,9 @@ export function SiteSurveyV1() {
           <div className="tool-header-title">Site Survey Generator V1</div>
           <div className="tool-header-sub">
             Structured solar site survey · load estimate · branded PDF report
+            {user?.role
+              ? ` · ${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}`
+              : ""}
             {user?.email ? ` · ${user.email}` : ""}
           </div>
         </div>

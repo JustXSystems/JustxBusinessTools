@@ -151,6 +151,7 @@ function AdminShellInner({ children }: { children: ReactNode }) {
                   <SidebarIdentityChip
                     name={user?.name}
                     email={user?.email}
+                    role={user?.isPlatformAdmin ? "Platform admin" : user?.role}
                     mini={mini}
                   />
                   <SidebarAttachmentToggle mini={mini} />
