@@ -8,11 +8,11 @@ Related docs (do not duplicate full setup here):
 
 | Doc | Use when |
 |-----|----------|
+| [`ROLES.md`](ROLES.md) | Admin / Owner / Staff / Viewer menu ACL; Admin login → `/admin` |
 | [`SETUP.md`](SETUP.md) | Env vars, Google OAuth once, client Drive onboarding |
-| [`DEPLOY.md`](DEPLOY.md) | First-time VPS, GitHub Actions, nginx, PM2 |
-| [`SYNC_CENTER.md`](SYNC_CENTER.md) | UNC/local folder + desktop agent; Connected vs sync; `…/jbt/api`; agent version / pack |
-| [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) | Quotation email paths A/B/C; Outlook prep; mailto encoding; Open in Outlook; confirm ≥ 1.1.3 |
-| [`DEPLOY.md`](DEPLOY.md) | Deploy inputs — set `pack_win_agent` when shipping a new agent zip |
+| [`DEPLOY.md`](DEPLOY.md) | First-time VPS, GitHub Actions, nginx, PM2; set `pack_win_agent` when shipping a new agent zip |
+| [`SYNC_CENTER.md`](SYNC_CENTER.md) | UNC/local folder + desktop agent (**Owner/Admin**); Connected vs sync; `…/jbt/api`; agent version / pack |
+| [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) | Quotation email paths A/B/C (**Owner/Staff**); Outlook prep; mailto encoding; Open in Outlook; confirm ≥ 1.1.3 |
 | [`OBSERVABILITY.md`](OBSERVABILITY.md) | Grafana/Loki/Prometheus, Admin Operations, Sentry/GlitchTip |
 | [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) | Artifact delivery channels & filename policies |
 | [`.env.example`](../.env.example) | Env template → `server/.env` on the VPS |
@@ -71,19 +71,24 @@ Browser  →  https://justxsystems.com/jbt/...
 | Business Profile + company Drive folder | Customer **Owner** | Guide them via Profile UI (do not use personal Gmail) |
 | Staff invites / roles | Customer Owner / Admin | Approve users, assign tools |
 | Razorpay live keys / webhooks | JustXSystems (billing) | Dashboard + `RAZORPAY_*` env |
-| UNC desktop sync agent | Customer IT | Windows; Sync Center setup zip (portable Node); [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok · `apiBase` must be `…/jbt/api` |
+| UNC desktop sync agent | Customer **Owner** / IT | Windows; Sync Center setup zip (Owner/Admin only — [`ROLES.md`](ROLES.md)); [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok · `apiBase` must be `…/jbt/api` |
 
-**Role capabilities (default matrix)**
+**Role capabilities (default matrix + menu ACL)**
 
-| Role | Admin console `/admin` | Billing | Write records | Approve users | Manage branches / tools |
-|------|------------------------|---------|---------------|---------------|-------------------------|
-| Owner | No (uses Profile app) | Yes | Yes | Yes | Yes |
-| Admin | **Yes** | Yes | Yes | Yes | Yes |
-| Staff | No | No | Yes | No | No |
-| Viewer | No | No | No | No | No |
+Canonical detail: [`ROLES.md`](ROLES.md).
 
-Hard rule: only **Admin** role opens the admin console (`adminConsole`).
+| Role | Admin console `/admin` | Login lands on | Billing | Write tool records | Approve users | Manage branches / tools | Sync Center | Email Outbox | Notifications | Business Profile |
+|------|------------------------|----------------|---------|--------------------|---------------|-------------------------|-------------|--------------|---------------|------------------|
+| Owner | No (uses Profile app) | Operator Home | Yes | Yes | Yes | Yes | R/W | R/W | R/W | R/W |
+| Admin | **Yes** | **Admin Console** | Yes | Yes | Yes | Yes | R/W | R/W | R/W | R/W |
+| Staff | No | Operator Home | No | Yes | No | No | — | R/W | Read | Read |
+| Viewer | No | Operator Home | No | Yes (My Tools) | No | No | — | — | — | — |
 
+Hard rules:
+
+- Only **Admin** role (and platform admins) opens the admin console (`adminConsole`).
+- **Staff** and **Viewer** cannot open Sync Center; **Viewer** cannot open Email Outbox / Notifications / Business Profile.
+- Org **Admin** login redirects to `/admin`, not Operator Home.
 ---
 
 ## 3. Severity & triage

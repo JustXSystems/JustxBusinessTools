@@ -1,9 +1,9 @@
 # Email Outbox — complete configuration guide
 
 **Route:** `/email-outbox` (sidebar → **Email Outbox**)  
-**Who:** Business Owners and Staff  
+**Who:** **Business Owners** and **Staff** (and Admin with full access). **Viewer** cannot open Email Outbox — see [`ROLES.md`](ROLES.md).  
 **Creates rows:** Quotation → **Send Via → Email** (and retries from this page)  
-**Related:** [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) · [`SYNC_CENTER.md`](SYNC_CENTER.md) · [`SETUP.md`](SETUP.md)#email-delivery-configuration
+**Related:** [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) · [`SYNC_CENTER.md`](SYNC_CENTER.md) · [`SETUP.md`](SETUP.md)#email-delivery-configuration · [`ROLES.md`](ROLES.md)
 
 Email Outbox is a **durable queue of quotation emails** for the current Business Profile. It is **not** the Notifications inbox and **not** Sync Center’s pending PDF files.
 
@@ -40,7 +40,7 @@ Full “who / what / how” for files: [`SYNC_CENTER.md`](SYNC_CENTER.md)#who-ne
 | `NOTIFY_EMAIL_WEBHOOK_URL` | Same `.env` fallback | Engineer | Alias only if Admin / primary empty |
 | Email template / accent / Reply-To | **Business Profile** → Send Via → Email | Owner | Also Admin → GST branches → Branding |
 | Default To / CC / subject text | Same Send Via panel | Owner | Prefills Quotation send modal |
-| Desktop agent token | **Sync Center** → Download setup | Owner/Staff | Same agent as UNC sync |
+| Desktop agent token | **Sync Center** → Download setup | **Owner or Admin** (Staff cannot open Sync Center) | Same agent as UNC sync; install once on the Outlook PC |
 | Mail client / `mailto` handler | Windows default apps | Staff PC | Path B |
 | Classic Outlook (COM) | Windows desktop | Staff PC | Path C — **not** New Outlook alone |
 | Download Folder / UNC | Business Profile | Owner | **Not required for email** |
@@ -287,13 +287,15 @@ Canonical agent matrix: [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-
 
 | Item | Where |
 |------|--------|
-| Agent install + token | Sync Center → **Download setup for this PC** |
+| Agent install + token | Sync Center → **Download setup for this PC** (**Owner/Admin**) |
 | Classic Outlook ready | [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c) |
 | Download Folder | Optional (UNC only) |
 
 ### Install agent (if not already for UNC)
 
-1. Sync Center → **Set up on this PC** → **Download setup for this PC**.  
+**Who:** **Owner or Admin** must sign in on that Windows PC and open Sync Center. Staff cannot open Sync Center; after the agent is installed they use **Email Outbox** only.
+
+1. Sign in as **Owner (or Admin)** → Sync Center → **Set up on this PC** → **Download setup for this PC**.  
 2. Extract zip → **Install JustX Sync Agent.cmd**.  
 3. Sync Center shows **Desktop agent: Connected**.  
 4. Verify API base:
@@ -455,13 +457,15 @@ Filters: **Pending** = `pending` + `failed` + `opened` (UI note: “Pending / fa
 
 ---
 
-## Engineer vs Owner vs Staff
+## Engineer vs Owner vs Staff vs Viewer
 
-| Role | Configures |
-|------|------------|
+| Role | Configures / uses |
+|------|-------------------|
 | **JustX engineer** | Admin Integrations / `EMAIL_WEBHOOK_URL`, PM2, automation hosting; agent path changes auto-pack on Deploy (or force **`pack_win_agent=true`**) |
-| **Company Owner** | Profile email templates, accent; Sync Center setup if Path C / UNC |
-| **Staff** | Send quotations; Outbox actions; Outlook ready on their PC for B/C; confirm `/health` version after install |
+| **Admin** | Admin Console; may also use Operator Email Outbox / Sync Center with full access; login lands on `/admin` — [`ROLES.md`](ROLES.md) |
+| **Company Owner** | Profile email templates, accent; **Sync Center** setup if Path C / UNC; Email Outbox R/W |
+| **Staff** | Send quotations; Email Outbox actions; Outlook ready on their PC for B/C (agent installed by Owner); **no** Sync Center menu |
+| **Viewer** | No Email Outbox — Home + My Tools only |
 
 ---
 
@@ -507,6 +511,7 @@ Start-Process "mailto:you@example.com?subject=JBT%20test&body=Mailto%20works"
 
 ## Related docs
 
+- [`ROLES.md`](ROLES.md) — who can open Email Outbox vs Sync Center  
 - [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) — JSON contract  
 - [`SYNC_CENTER.md`](SYNC_CENTER.md) — agent + UNC/local folder delivery · Connected ≠ sync · [agent version / pack](SYNC_CENTER.md#confirm-desktop-agent-version-in-build--on-pc)  
 - [`DEPLOY.md`](DEPLOY.md)#advanced-cd--workflow_dispatch-options — `pack_win_agent`  

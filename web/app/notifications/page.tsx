@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { useLocale } from "@/components/i18n/LocaleProvider";
+import { canViewNotifications } from "@/lib/auth-access";
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -27,6 +29,8 @@ const SEVERITY_PILL: Record<NotificationSeverity, string> = {
 
 export default function NotificationsPage() {
   const { t } = useLocale();
+  const { user } = useAuth();
+  const allowed = canViewNotifications(user);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [categories, setCategories] = useState<
     Array<{ id: NotificationCategory; label: string; count: number }>
@@ -40,6 +44,10 @@ export default function NotificationsPage() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
+    if (!allowed) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -54,9 +62,9 @@ export default function NotificationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, allowed]);
 
-  useLiveRefresh(load, { intervalMs: 30_000 });
+  useLiveRefresh(load, { intervalMs: 30_000, enabled: allowed });
 
   const filtered = useMemo(() => {
     return items.filter((item) => {
@@ -66,6 +74,20 @@ export default function NotificationsPage() {
       return item.category === filter;
     });
   }, [items, filter]);
+
+  if (!allowed) {
+    return (
+      <div className="page">
+        <h1 className="page-title">Notifications</h1>
+        <p className="section-note">
+          Notifications are available to Business Owners and Staff on this Business Profile.
+        </p>
+        <Link href="/" className="btn btn-secondary">
+          Back to Home
+        </Link>
+      </div>
+    );
+  }
 
   async function onMarkRead(item: NotificationItem) {
     if (item.read || item.source !== "event") return;

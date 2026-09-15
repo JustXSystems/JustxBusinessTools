@@ -1,9 +1,9 @@
 # Sync Center — complete configuration guide
 
 **Route:** `/sync` (sidebar → **Sync Center**)  
-**Who can open it:** Business Owners and Staff (same Business Profile / branch)  
+**Who can open it:** **Business Owner** or **Admin** only (same Business Profile / branch). Staff and Viewer **cannot** open Sync Center — see [`ROLES.md`](ROLES.md).  
 **Related UI:** Business Profile → **Company document delivery**  
-**Related:** Email Outbox Outlook compose uses the **same desktop agent** — see [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)
+**Related:** Email Outbox Outlook compose uses the **same desktop agent** — see [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md). Staff use Email Outbox; **Owner/Admin** install the agent here.
 
 ---
 
@@ -11,14 +11,14 @@
 
 | Audience | Need Sync Center day-to-day? | Why |
 |----------|------------------------------|-----|
-| **Most companies (Google Drive or artifact webhook)** | **Rarely** | Owner sets destination on Business Profile once; PDFs deliver automatically. Staff only generate documents. |
-| **Company using UNC / file-server path** | **Yes (one PC)** | Pending files wait until a desktop agent or browser folder sync writes them to the share. |
-| **Company using Email Outbox → Open in Outlook** | **Yes (Outlook PC)** | Same desktop agent; install once via Sync Center setup zip. |
-| **Anyone after a failed Drive/webhook delivery** | **Sometimes** | Open Sync Center to see pending/failed files and click **Retry**. |
-| **Staff on Drive-only companies** | **No** | They never connect Drive and normally never open Sync Center. |
-| **JustX engineer** | Platform only | Google OAuth client / server `.env` — not per-customer Sync Center. |
+| **Most companies (Google Drive or artifact webhook)** | **Rarely** | Owner sets destination on Business Profile once; PDFs deliver automatically. Staff only generate documents (My Tools). |
+| **Company using UNC / file-server path** | **Yes (Owner on one PC)** | Pending files wait until a desktop agent or browser folder sync writes them to the share. |
+| **Company using Email Outbox → Open in Outlook** | **Yes (Owner installs on Outlook PC)** | Same desktop agent; Owner/Admin download setup zip once. Staff then use Email Outbox only. |
+| **Owner after a failed Drive/webhook delivery** | **Sometimes** | Open Sync Center to see pending/failed files and click **Retry**. |
+| **Staff / Viewer** | **No** | No Sync Center menu. Staff use tools + Email Outbox; Viewer uses Home + My Tools. |
+| **JustX engineer / Admin** | Platform / org Admin | Google OAuth client / Admin Console — not day-to-day customer Sync Center (Admin may open Sync Center with full access). |
 
-**Short answer:** Sync Center is a **status / retry / UNC / Outlook-agent** page. It is **not** required for every customer. Drive/webhook companies configure **Company document delivery** on the profile; Sync Center is optional unless something fails or they use UNC/Outlook.
+**Short answer:** Sync Center is a **status / retry / UNC / Outlook-agent** page for **Owner (and Admin)**. It is **not** required for every customer. Drive/webhook companies configure **Company document delivery** on the profile; Sync Center is optional unless something fails or they use UNC/Outlook.
 
 ---
 
@@ -101,19 +101,19 @@ flowchart TD
 1. **Owner** sets destination on Business Profile (once per company/branch).  
 2. **Staff** generate a PDF in a tool (Quotation / Site Survey).  
 3. Server stages an artifact and **dispatches** immediately for Drive/webhook, or **queues pending** for UNC.  
-4. **Sync Center** shows company delivery status, pending UNC files, retries, and desktop-agent connection.  
-5. Separately, **Send Via → Email** creates an Email Outbox row (webhook / mailto / Outlook agent).
+4. **Owner (or Admin)** opens **Sync Center** for company delivery status, pending UNC files, retries, and desktop-agent connection.  
+5. Separately, **Send Via → Email** creates an Email Outbox row (webhook / mailto / Outlook agent) — Owner/Staff use Email Outbox; Staff never need Sync Center for day-to-day send.
 
-Desktop agent (optional): one install per Windows user/PC via Sync Center **Download setup for this PC**. Same agent serves UNC file sync **and** Outlook compose.
+Desktop agent (optional): one install per Windows user/PC via Sync Center **Download setup for this PC** (**Owner or Admin** signed in). Same agent serves UNC file sync **and** Outlook compose for Staff on that PC.
 
 ---
 
-Sync Center is the **status / retry / optional UNC sync** page. Most companies only need Owner setup on **Business Profile**; staff then generate PDFs and files land automatically (Drive/webhook). Use Sync Center when:
+Sync Center is the **status / retry / optional UNC sync** page for **Owner/Admin**. Most companies only need Owner setup on **Business Profile**; staff then generate PDFs and files land automatically (Drive/webhook). Use Sync Center when:
 
 - Delivery failed and you need retries  
 - Destination is a Windows **UNC / file share** (desktop agent)  
 - You want to sync via **this browser** (Chrome/Edge File System Access)  
-- You need a desktop agent for **Email Outbox → Open in Outlook**
+- You need a desktop agent for **Email Outbox → Open in Outlook** (install as Owner; Staff use Outbox after)
 
 ---
 
@@ -126,8 +126,8 @@ Sync Center is the **status / retry / optional UNC sync** page. Most companies o
 | Artifact webhook URL + secret | Same panel — **how to get:** [§1.3](#13-corporate-artifact-webhook-sharepoint--onedrive--power-automate) | Owner | Profile |
 | Download Folder UNC path | Same panel → Show UNC options — **how to get:** [§1.4](#14-company-file-server--download-folder-path-unc--optional) | Owner | Profile |
 | Same-filename / conflict policy | Same panel | Owner | Profile |
-| Desktop agent setup | **Sync Center** → Download setup for this PC | Owner or Staff | LocalAppData + agent row |
-| Browser-linked folder (FSA) | Sync Center → Link folder in this browser | Staff (Chrome/Edge) | Browser IndexedDB (this browser only) |
+| Desktop agent setup | **Sync Center** → Download setup for this PC | **Owner or Admin** | LocalAppData + agent row |
+| Browser-linked folder (FSA) | Sync Center → Link folder in this browser | **Owner or Admin** (Chrome/Edge) | Browser IndexedDB (this browser only) |
 | Platform Google OAuth client | **Admin → Integrations** (preferred) or VPS `server/.env` (`GOOGLE_CLIENT_*`) | JustX engineer / platform admin | Admin DB or server env |
 
 Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quotation emails**, not PDF file delivery. (Profile **artifact** webhook is separate.)
@@ -143,7 +143,7 @@ Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quo
 
 ### Customer PC — minimum software & environment (desktop agent)
 
-**Primary setup (recommended for staff):** Sync Center → **Download setup for this PC** → extract → double-click **Install JustX Sync Agent.cmd**. No separate Node.js or PowerShell skills required (portable Node is inside the zip).
+**Primary setup (Owner/Admin on the office PC):** Sync Center → **Download setup for this PC** → extract → double-click **Install JustX Sync Agent.cmd**. No separate Node.js or PowerShell skills required (portable Node is inside the zip). Staff do not open Sync Center — after install, they use tools and Email Outbox only.
 
 | Requirement | UNC / file sync | Outlook compose | Notes |
 |-------------|-----------------|-----------------|--------|
@@ -160,7 +160,7 @@ Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quo
 
 **Also required (process):**
 
-- Signed in as **Owner or Staff** on the correct Business Profile  
+- Signed in as **Owner or Admin** on the correct Business Profile (Staff/Viewer cannot open Sync Center)  
 - For file sync: Owner has set **Download Folder** (or use Drive/webhook and skip the agent)  
 - Local port **17865** free; Windows user logged on for auto-start  
 - Browser and agent on the **same** PC  
@@ -390,7 +390,7 @@ If destination is UNC and path is empty, Sync Center warns you to set the path.
 
 ## Part 2 — Sync Center page (status & manual sync)
 
-**Where:** Sidebar → **Sync Center** (`/sync`)
+**Where:** Sidebar → **Sync Center** (`/sync`) — visible to **Owner** and **Admin** only ([`ROLES.md`](ROLES.md))
 
 ### 2.1 What each panel means
 
@@ -518,24 +518,24 @@ With agent running on Windows + **classic** Outlook (COM) installed: **Email Out
 ### Drive-only company (recommended)
 
 - [ ] Owner: Profile → Connect Drive → Save folder → Overwrite policy → Save  
-- [ ] Test PDF appears in Drive  
-- [ ] Staff never open Sync Center for normal work  
-- [ ] Sync Center used only if something is pending/failed  
+- [ ] Test PDF appears in Drive (Staff generate via My Tools)  
+- [ ] Staff/Viewer never have Sync Center in the sidebar  
+- [ ] Owner opens Sync Center only if something is pending/failed  
 
 ### UNC / local folder company
 
 - [ ] Owner: Destination **UNC** (or Auto) → paste absolute **Download Folder path** (e.g. `C:\JustX\Artifacts`) → Save  
-- [ ] Sync Center shows that Download Folder path  
-- [ ] Staff or Owner: Sync Center → Download setup → Install on a PC that can write the folder  
+- [ ] Owner: Sync Center shows that Download Folder path  
+- [ ] Owner (or Admin): Sync Center → Download setup → Install on a PC that can write the folder  
 - [ ] Sync Center: **Connected** + `status.apiBase` is `…/jbt/api` in production  
 - [ ] **Sync now (desktop agent)** (or wait for poll) → Pending → 0; files in folder  
-- [ ] Fallback: **Link folder in this browser** + **Sync now (this browser)**  
+- [ ] Fallback: Owner **Link folder in this browser** + **Sync now (this browser)**  
 
 ### Artifact webhook company
 
 - [ ] Owner: set destination + webhook URL (+ secret) → Save  
 - [ ] Confirm automation receives posts  
-- [ ] Sync Center for failures / status  
+- [ ] Owner: Sync Center for failures / status  
 
 ---
 
@@ -555,13 +555,15 @@ With agent running on Windows + **classic** Outlook (COM) installed: **Email Out
 | Folder not reachable | Path wrong; PC not on VPN; agent user lacks share ACL; create folder first |
 | Badge / pending confusion | Sync Center pending = **files**; Email Outbox badge = **emails** |
 | Token lost | Download setup again (new token); revoke old agent |
-| Staff can’t edit path | Only Owner edits Profile delivery settings |
+| Staff can’t edit path | Only Owner/Admin edit Profile delivery settings; Staff see Profile read-only |
+| Staff can’t open Sync Center | By design — [`ROLES.md`](ROLES.md). Owner installs agent; Staff use Email Outbox / My Tools |
 | Open in Outlook fails while Connected | Same API/`apiBase`/auth issues as file sync; classic desktop Outlook required; agent **≥ 1.1.3** for Corporate HTML; COM hang / Add Account / New Outlook — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#troubleshooting |
 
 ---
 
 ## Related docs
 
+- [`ROLES.md`](ROLES.md) — Admin / Owner / Staff / Viewer; who can open Sync Center  
 - [`SETUP.md`](SETUP.md) — platform env, client Drive Part B  
 - [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) — quotation email paths + Outlook · [agent ≥ 1.1.3](EMAIL_OUTBOX.md#confirm-agent-version--113-path-c--html)  
 - [`DEPLOY.md`](DEPLOY.md) — `pack_win_agent` to ship a new win agent zip  

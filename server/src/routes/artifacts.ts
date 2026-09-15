@@ -25,8 +25,10 @@ import {
   getActiveOrgId,
   getActiveProfileId,
   getActiveUserId,
+  getRequestContext,
 } from "../lib/request-context.js";
 import { requireWriteAccess } from "../middleware/require-write.js";
+import { requireAreaAccess } from "../middleware/require-area-access.js";
 
 const router = Router();
 
@@ -154,12 +156,30 @@ router.post("/", requireWriteAccess, async (req, res) => {
   }
 });
 
-/** List artifacts for the active branch (agent + UI sync queue). */
+/** List artifacts for the active branch (agent + Owner Sync Center queue). */
 router.get("/", async (req, res) => {
   const auth = await resolveAgentAuth(req);
   if (!auth) {
     res.status(401).json({ error: "Invalid agent token" });
     return;
+  }
+  if (auth.mode === "session") {
+    // Staff/Viewer must not browse the Sync Center pending queue via API.
+    const ctx = getRequestContext();
+    if (ctx?.userId && !ctx.viaAgentToken) {
+      const role = ctx.role;
+      const ok =
+        ctx.isPlatformAdmin ||
+        role === "owner" ||
+        role === "admin" ||
+        role === "legacy";
+      if (!ok) {
+        res.status(403).json({
+          error: "Sync Center access requires Business Owner or Admin",
+        });
+        return;
+      }
+    }
   }
   const status = String(req.query.status ?? "").trim();
   const pendingOnly = status === "pending" || String(req.query.pending ?? "") === "1";
@@ -184,7 +204,7 @@ router.get("/", async (req, res) => {
   });
 });
 
-router.get("/sync-summary", async (_req, res) => {
+router.get("/sync-summary", requireAreaAccess("syncCenter"), async (_req, res) => {
   const profileId = getActiveProfileId();
   const [rows] = await pool.query(
     `SELECT sync_status, COUNT(*) AS c FROM artifact_deliveries
@@ -208,7 +228,7 @@ router.get("/sync-summary", async (_req, res) => {
 });
 
 /** Manually re-run automatic cloud/UNC dispatch for one artifact. */
-router.post("/:id/dispatch", requireWriteAccess, async (req, res) => {
+router.post("/:id/dispatch", requireAreaAccess("syncCenter"), requireWriteAccess, async (req, res) => {
   const id = String(req.params.id);
   const row = await loadArtifact(id, getActiveProfileId());
   if (!row) {
@@ -227,7 +247,7 @@ router.post("/:id/dispatch", requireWriteAccess, async (req, res) => {
 });
 
 /** Register optional desktop sync agent for this branch. */
-router.post("/agent/register", requireWriteAccess, async (req, res) => {
+router.post("/agent/register", requireAreaAccess("syncCenter"), requireWriteAccess, async (req, res) => {
   const token = mintAgentToken();
   const id = `agent_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const label = String(req.body?.label ?? "Desktop Sync Agent").slice(0, 120);
@@ -274,8 +294,8 @@ router.post("/agent/probe", async (req, res) => {
   res.json({ ok: true });
 });
 
-/** List registered desktop agents for this branch (staff/owner Sync Center). */
-router.get("/agents", async (_req, res) => {
+/** List registered desktop agents for this branch (Owner Sync Center). */
+router.get("/agents", requireAreaAccess("syncCenter"), async (_req, res) => {
   const [rows] = await pool.query(
     `SELECT id, label, last_seen_at, last_probe_ok, last_probe_path, last_probe_error,
             revoked_at, created_at, user_id
@@ -315,7 +335,7 @@ router.get("/agents", async (_req, res) => {
   res.json({ items });
 });
 
-router.post("/agents/:id/revoke", requireWriteAccess, async (req, res) => {
+router.post("/agents/:id/revoke", requireAreaAccess("syncCenter"), requireWriteAccess, async (req, res) => {
   const id = String(req.params.id);
   const [result] = await pool.query(
     `UPDATE artifact_sync_agents SET revoked_at = NOW()
@@ -467,7 +487,7 @@ router.post("/:id/ack", requireWriteAccess, async (req, res) => {
   res.json(toArtifactApi(updated!));
 });
 
-router.post("/:id/retry", requireWriteAccess, async (req, res) => {
+router.post("/:id/retry", requireAreaAccess("syncCenter"), requireWriteAccess, async (req, res) => {
   const row = await loadArtifact(String(req.params.id), getActiveProfileId());
   if (!row) {
     res.status(404).json({ error: "Artifact not found" });

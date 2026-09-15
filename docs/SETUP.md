@@ -10,6 +10,7 @@ Production support / on-call: [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md).
 |-----|---------|
 | JustX engineer / admin | [Local development](#local-development) · [Production deploy](#production-deploy) · [Google OAuth](#google-oauth-once) · [Environment reference](#environment-reference) · [Email delivery](#email-delivery-configuration) · [Sync Center & Email Outbox](#sync-center--email-outbox) |
 | JustX on-call / ops | [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md) |
+| Roles & menu access | [`ROLES.md`](ROLES.md) |
 | Customer company Owner | [Client companies](#client-companies-part-b) |
 
 ---
@@ -202,7 +203,7 @@ JustX does **not** send SMTP mail by itself. Choose one path (you can combine A 
 |------|-----------------|-----|
 | **A. Automatic HTML + PDF** | Create webhook → paste URL in **Admin → Integrations** (preferred) or `EMAIL_WEBHOOK_URL` in `.env` | Platform admin / JustX engineer |
 | **B. Mail app + PDF download** | Nothing required | Staff (default if A unset) |
-| **C. Outlook with PDF attached** | **Sync Center** in the web UI generates `JBT_AGENT_TOKEN` | Owner / Staff on a Windows PC |
+| **C. Outlook with PDF attached** | **Sync Center** in the web UI generates `JBT_AGENT_TOKEN` | **Owner or Admin** on a Windows PC (Staff use Email Outbox after install) |
 
 Canonical detail (field mapping, provider clicks, agent steps): **[`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)** · JSON contract: **[`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md)** · Sync Center / UNC / Drive: **[`SYNC_CENTER.md`](SYNC_CENTER.md)**.
 
@@ -263,12 +264,12 @@ Optional UI (Owner): **Business Profile → Send Via defaults → Email** (templ
 
 **Customer PC minimum:** Windows 10/11 + Sync Center **Download setup for this PC** (double-click Install). **Classic** Outlook desktop (COM) if using Open in Outlook — New Outlook (`olk`) alone is not enough. No separate Node install. Full table: [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent.
 
-1. Sign in as Owner/Staff → **Sync Center** (`/sync`).
+1. Sign in as **Owner or Admin** → **Sync Center** (`/sync`). Staff cannot open Sync Center — [`ROLES.md`](ROLES.md).
 2. **Set up on this PC** → **Download setup for this PC**.
 3. Extract zip → double-click **Install JustX Sync Agent.cmd**.
 4. Confirm Sync Center shows **Connected**, then prep classic Outlook (Inbox + COM) — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#prep-classic-outlook-on-windows-paths-b--c.
 5. Confirm agent **≥ 1.1.3** for Corporate HTML: `Invoke-RestMethod http://127.0.0.1:17865/health` → `version`. If still old after reinstall, Deploy with **`pack_win_agent=true`**, then download setup again — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#confirm-agent-version--113-path-c--html.
-6. **Email Outbox** → **Open in Outlook** (not **Open mail app** for HTML).
+6. **Staff** (or Owner) use **Email Outbox** → **Open in Outlook** (not **Open mail app** for HTML).
 
 **Important:** Connected only means the local bridge (`http://127.0.0.1:17865`) is up. Production agent config must use `JBT_API_BASE=https://justxsystems.com/jbt/api` (**with `/jbt`**). See [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
 
@@ -290,25 +291,27 @@ These are **two different queues**. Full “who needs what / what syncs / how it
 
 | Guide | Covers |
 |-------|--------|
-| **[`SYNC_CENTER.md`](SYNC_CENTER.md)** | Who needs Sync Center; which tools’ PDFs; all Company document delivery variants (Drive / artifact webhook / UNC / **local folder**); desktop setup; **Connected vs sync**; **agent version / `pack_win_agent`**; troubleshooting |
-| **[`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)** | Who needs Email Outbox; paths A/B/C; Outlook prep; mailto `+` encoding; **confirm agent ≥ 1.1.3**; UNC-already-working email checklist |
+| **[`ROLES.md`](ROLES.md)** | Admin / Owner / Staff / Viewer hierarchy; who can open Sync Center, Email Outbox, Admin Console; login landing |
+| **[`SYNC_CENTER.md`](SYNC_CENTER.md)** | Who needs Sync Center (**Owner/Admin**); which tools’ PDFs; all Company document delivery variants (Drive / artifact webhook / UNC / **local folder**); desktop setup; **Connected vs sync**; **agent version / `pack_win_agent`**; troubleshooting |
+| **[`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)** | Who needs Email Outbox (**Owner/Staff**); paths A/B/C; Outlook prep; mailto `+` encoding; **confirm agent ≥ 1.1.3**; UNC-already-working email checklist |
 | **[`DEPLOY.md`](DEPLOY.md)** | CD options including **`pack_win_agent`** to ship a new Sync Agent zip |
 
 **Short reminder**
 
 | Feature | Who typically needs it | What it moves |
 |---------|------------------------|---------------|
-| **Company document delivery** (Profile) | Every company that wants PDFs in Drive/webhook/UNC/local folder | Quotation + Site Survey PDFs (file artifacts) |
-| **Sync Center** `/sync` | UNC/local-folder companies; Outlook Path C; status/retry | Same file queue + agent install UI |
-| **Email Outbox** `/email-outbox` | Anyone sending quotations by email | Email drafts (not the Sync Center file list) |
+| **Company document delivery** (Profile) | Owner configures; Staff generate PDFs via My Tools | Quotation + Site Survey PDFs (file artifacts) |
+| **Sync Center** `/sync` | **Owner / Admin** only — UNC/local-folder; Outlook agent install; status/retry | Same file queue + agent install UI |
+| **Email Outbox** `/email-outbox` | **Owner / Staff** sending quotations by email | Email drafts (not the Sync Center file list) |
 
 Do not confuse:
 
 - Profile **artifact webhook** (files) ≠ `EMAIL_WEBHOOK_URL` (emails)  
 - Sync Center **pending files** ≠ Email Outbox **pending emails**  
-- Desktop agent token is created in **Sync Center** (UNC/local sync **and/or** Outlook compose)  
+- Desktop agent token is created in **Sync Center** by **Owner/Admin** (UNC/local sync **and/or** Outlook compose)  
 - **Desktop agent Connected** ≠ files already synced — verify Pending clears / check `…/status`  
-- **Not every customer needs the desktop agent** — Drive/webhook + email webhook need none
+- **Not every customer needs the desktop agent** — Drive/webhook + email webhook need none  
+- **Staff never open Sync Center** — see [`ROLES.md`](ROLES.md)
 
 **Local folder document delivery (quick):** Owner sets Profile destination UNC + **Download Folder path** (e.g. `C:\JustX\Artifacts`) → Save → install agent → Sync now. Step-by-step: [`SYNC_CENTER.md`](SYNC_CENTER.md)#14-company-file-server--download-folder-path-unc--optional.
 ---

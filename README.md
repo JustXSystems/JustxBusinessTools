@@ -13,9 +13,12 @@ Multi-tenant business tools for quotations, site surveys, and more — by **Just
 | Goal | Document |
 |------|----------|
 | **This file** | Overview + local development |
+| **Roles & access** (Admin / Owner / Staff / Viewer) | [`docs/ROLES.md`](docs/ROLES.md) |
 | **Product setup** (OAuth, env, clients) | [`docs/SETUP.md`](docs/SETUP.md) |
 | **Production deploy** (VPS + GitHub Actions + PM2) | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
 | **Production support** (on-call, runbooks, triage) | [`docs/PRODUCTION_SUPPORT.md`](docs/PRODUCTION_SUPPORT.md) |
+| **Sync Center** (Owner/Admin) | [`docs/SYNC_CENTER.md`](docs/SYNC_CENTER.md) |
+| **Email Outbox** (Owner/Staff) | [`docs/EMAIL_OUTBOX.md`](docs/EMAIL_OUTBOX.md) |
 | **Env template** | [`.env.example`](.env.example) → `server/.env` |
 | **Mobile (Capacitor)** | [`docs/MOBILE.md`](docs/MOBILE.md) |
 | Desktop UNC sync | [`desktop-sync-agent/README.md`](desktop-sync-agent/README.md) |

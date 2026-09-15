@@ -8,15 +8,17 @@ Copies pending tool artifacts from the JustXSystems API into the Business Profil
 
 ## Customer setup (non-technical)
 
+**Who:** Business **Owner** or **Admin** (Staff cannot open Sync Center — see [`docs/ROLES.md`](../docs/ROLES.md)).
+
 1. Owner: Business Profile → Company document delivery → destination **UNC** → paste **Download Folder path** (e.g. `C:\JustX\Artifacts`) → Save  
-2. In JustX → **Sync Center** → **Set up on this PC**  
+2. Sign in as **Owner or Admin** → **Sync Center** → **Set up on this PC**  
 3. Click **Download setup for this PC**  
 4. Extract `JustX-Sync-Agent-Setup.zip`  
 5. Double-click **Install JustX Sync Agent.cmd**  
 6. Return to Sync Center — should show **Connected**  
 7. Click **Sync now (desktop agent)** and confirm Pending → 0 and files appear in the folder  
 
-No separate Node.js install. Portable Node is inside the zip.
+No separate Node.js install. Portable Node is inside the zip. After install, **Staff** use My Tools and Email Outbox on that PC without opening Sync Center.
 
 Optional: **Check Status.cmd** · **Uninstall JustX Sync Agent.cmd**
 

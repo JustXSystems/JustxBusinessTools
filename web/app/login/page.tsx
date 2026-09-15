@@ -66,8 +66,8 @@ export default function LoginPage() {
       !next.startsWith("/register")
         ? canAdmin || !next.startsWith("/admin")
           ? next
-          : "/"
-        : user?.isPlatformAdmin
+          : "/admin"
+        : canAdmin
           ? "/admin"
           : "/";
     window.location.assign(withBasePath(dest));

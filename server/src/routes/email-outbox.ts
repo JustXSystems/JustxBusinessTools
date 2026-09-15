@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireWriteAccess } from "../middleware/require-write.js";
+import { requireAreaAccess } from "../middleware/require-area-access.js";
 import {
   createEmailOutbox,
   emailWebhookConfigured,
@@ -15,6 +16,8 @@ import { readArtifactBytesById } from "../lib/artifact-delivery.js";
 import { logAudit } from "../lib/audit.js";
 
 const router = Router();
+
+router.use(requireAreaAccess("emailOutbox"));
 
 router.get("/status", async (_req, res) => {
   await ensureEmailOutboxSchema();

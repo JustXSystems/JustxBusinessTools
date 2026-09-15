@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { canUseSyncCenter } from "@/lib/auth-access";
+import { canUseEmailOutbox } from "@/lib/auth-access";
 import { probeLocalAgent } from "@/lib/artifact-delivery";
 import {
   cancelEmailOutbox,
@@ -27,7 +27,7 @@ function statusClass(status: string) {
 
 export default function EmailOutboxPage() {
   const { user } = useAuth();
-  const allowed = canUseSyncCenter(user);
+  const allowed = canUseEmailOutbox(user);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [items, setItems] = useState<EmailOutboxItem[]>([]);

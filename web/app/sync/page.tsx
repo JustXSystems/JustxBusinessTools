@@ -265,7 +265,8 @@ export default function SyncCenterPage() {
       <div className="page">
         <h1 className="page-title">Sync Center</h1>
         <p className="section-note">
-          Only Business Owners and Staff can sync artifacts to the Download Folder.
+          Only Business Owners (and Admins) can open Sync Center. Staff use JustX tools —
+          company PDFs deliver automatically from Business Profile settings.
         </p>
         <Link href="/" className="btn btn-secondary">
           Back to Home
@@ -284,7 +285,7 @@ export default function SyncCenterPage() {
           <h1 className="page-title">Sync Center</h1>
           <p className="section-note" style={{ marginTop: 4 }}>
             Each company (Business Profile) has its own destination. Staff only use JustX tools —
-            documents go to the company Drive/webhook automatically. Use this page for status,
+            documents go to the company Drive/webhook automatically. Owners use this page for status,
             retries, and optional UNC agent setup. Quotation emails:{" "}
             <Link href="/email-outbox">Email Outbox</Link> (webhook, mailto, or Outlook via this
             agent).

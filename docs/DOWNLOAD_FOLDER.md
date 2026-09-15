@@ -1,19 +1,20 @@
 # Artifact delivery (company Drive / webhook / UNC)
 
 **Complete Sync Center guide (who / what / how):** [`SYNC_CENTER.md`](SYNC_CENTER.md)  
+**Role hierarchy (who can open Sync Center):** [`ROLES.md`](ROLES.md)  
 **Customer PC (desktop agent):** [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-software--environment-desktop-agent  
 Owner Drive steps (short): [`SETUP.md`](SETUP.md)#client-companies-part-b  
 Quotation emails (separate): [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)
 
 ## Who this is for
 
-| Company type | Owner sets | Staff | Sync Center |
-|--------------|------------|-------|-------------|
-| Google Drive (most common) | Connect company Drive + folder | Just use tools | Rarely (status/retry) |
-| SharePoint / OneDrive (cloud) | **Webhook URL** from Power Automate | Just use tools | Rarely (status/retry) |
-| Artifact webhook (n8n/Make/…) | Webhook URL on profile | Just use tools | Rarely (status/retry) |
-| UNC / file share / **local folder** | **Download Folder path** (absolute or UNC) | One PC runs desktop agent | **Yes** |
-| Email-only (no company folder) | Destination `none` / leave unset | Email Outbox paths | Only if Outlook Path C |
+| Company type | Owner sets | Staff | Sync Center (Owner/Admin only) |
+|--------------|------------|-------|--------------------------------|
+| Google Drive (most common) | Connect company Drive + folder | Just use My Tools | Rarely (status/retry) |
+| SharePoint / OneDrive (cloud) | **Webhook URL** from Power Automate | Just use My Tools | Rarely (status/retry) |
+| Artifact webhook (n8n/Make/…) | Webhook URL on profile | Just use My Tools | Rarely (status/retry) |
+| UNC / file share / **local folder** | **Download Folder path** (absolute or UNC) | Generate PDFs; Owner installs agent on one PC | **Yes** (Owner/Admin) |
+| Email-only (no company folder) | Destination `none` / leave unset | Email Outbox paths | Only if Outlook Path C (Owner installs agent) |
 
 **How to obtain Webhook URL, secret, and Download Folder path (incl. SharePoint/OneDrive / local `C:\…`):** see [`SYNC_CENTER.md`](SYNC_CENTER.md)#13-corporate-artifact-webhook-sharepoint--onedrive--power-automate and [`SYNC_CENTER.md`](SYNC_CENTER.md)#14-company-file-server--download-folder-path-unc--optional.
 

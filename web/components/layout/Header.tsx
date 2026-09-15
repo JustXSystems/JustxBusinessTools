@@ -6,7 +6,7 @@ import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { NavIcon } from "@/components/layout/NavIcon";
-import { navigationConfig } from "@/config/navigation.config";
+import { mobileNavForUser } from "@/config/navigation.config";
 
 /** Mobile-only chrome. Desktop navigation lives in the left sidebar. */
 export function Header() {
@@ -34,10 +34,12 @@ export function Header() {
 
 export function BottomNavigation() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const items = mobileNavForUser(user);
 
   return (
     <nav className="bottom-nav no-print" aria-label="Primary">
-      {navigationConfig.mobileBottom.map((item) => {
+      {items.map((item) => {
         const active =
           item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
         return (

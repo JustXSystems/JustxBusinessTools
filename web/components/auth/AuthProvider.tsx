@@ -11,7 +11,7 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api, verifyPhoneOtp as verifyPhoneOtpApi } from "@/lib/api";
-import { canAccessAdmin } from "@/lib/auth-access";
+import { canAccessAdmin, canAccessPath } from "@/lib/auth-access";
 import { clearSubscriptionSnapshot } from "@/lib/subscription-cache";
 import { clearToolCart } from "@/lib/tool-cart";
 import type { SessionUser } from "@/lib/types/auth";
@@ -94,6 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.replace("/login?next=" + encodeURIComponent(pathname));
     } else if (user && !canAccessAdmin(user) && pathname.startsWith("/admin")) {
       router.replace("/");
+    } else if (user && !isPublic && !canAccessPath(user, pathname)) {
+      router.replace(canAccessAdmin(user) ? "/admin" : "/");
     }
   }, [loading, user, pathname, router]);
 

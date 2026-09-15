@@ -396,9 +396,9 @@ Example: ship a new desktop agent (e.g. Outlook HTML fix, `AGENT_VERSION` bump):
    - `PACK_WIN_AGENT=true` / `JBT_SKIP_WIN_AGENT_PACK=0`
    - `Sync Agent pack version: …` matching `AGENT_VERSION`
    - unzip grep of `AGENT_VERSION` inside the zip  
-4. After deploy: customer **Sync Center → Download setup → Install** again (fresh zip; do not reuse an old extract)  
+4. After deploy: **Owner/Admin** → **Sync Center → Download setup → Install** again (fresh zip; do not reuse an old extract)  
 5. On PC: `Invoke-RestMethod http://127.0.0.1:17865/health` → `version` matches  
-6. Staff: Email Outbox → **Open HTML in Outlook** on a Corporate send  
+6. Staff: Email Outbox → **Open HTML in Outlook** on a Corporate send (Staff do not open Sync Center — [`ROLES.md`](ROLES.md))  
 
 Full Path C engineer checklist: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#engineer-ship-order-path-c-html-fix--customers
 

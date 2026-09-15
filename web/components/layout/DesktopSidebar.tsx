@@ -12,7 +12,7 @@ import { SidebarIdentityChip } from "@/components/layout/SidebarIdentityChip";
 import { SidebarResizeHandle } from "@/components/layout/SidebarResizeHandle";
 import { SidebarSessionFooter } from "@/components/layout/SidebarSessionFooter";
 import { useSidebarLayout } from "@/components/layout/SidebarLayoutProvider";
-import { navigationConfig, type NavItem } from "@/config/navigation.config";
+import { operatorNavForUser, type NavItem } from "@/config/navigation.config";
 import { NavIcon } from "@/components/layout/NavIcon";
 import { EmailOutboxDot } from "@/components/layout/EmailOutboxDot";
 import { NotificationDot } from "@/components/layout/NotificationDot";
@@ -85,15 +85,17 @@ export function DesktopSidebar() {
       ? `${licensedCount} tool${licensedCount === 1 ? "" : "s"}`
       : subscription?.planName || "Freemium";
 
+  const { workspace, account } = operatorNavForUser(user);
+
   const floatItems = [
-    ...navigationConfig.workspace.map((item) => ({
+    ...workspace.map((item) => ({
       href: item.href,
       label: item.label,
       icon: item.icon,
       active: isActive(pathname, item.href),
       badge: navBadgeFor(item.href),
     })),
-    ...navigationConfig.account.map((item) => ({
+    ...account.map((item) => ({
       href: item.href,
       label: item.label,
       icon: item.icon,
@@ -186,7 +188,7 @@ export function DesktopSidebar() {
       <nav className="desktop-sidebar-nav" aria-label="Primary">
         <div className="ds-nav-section">
           {!mini && !compact ? <p className="ds-nav-section-label">Workspace</p> : null}
-          {navigationConfig.workspace.map((item) => (
+          {workspace.map((item) => (
             <NavLink
               key={item.href}
               item={item}
@@ -199,7 +201,7 @@ export function DesktopSidebar() {
 
         <div className="ds-nav-section">
           {!mini && !compact ? <p className="ds-nav-section-label">Account</p> : null}
-          {navigationConfig.account.map((item) => (
+          {account.map((item) => (
             <NavLink
               key={item.href}
               item={item}

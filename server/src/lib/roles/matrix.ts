@@ -57,8 +57,9 @@ export const DEFAULT_ROLE_MATRIX: RoleMatrix = {
   viewer: {
     adminConsole: false,
     billing: false,
-    writeRecords: false,
-    exportData: false,
+    // Viewer may use My Tools (quotations / surveys); menu ACL hides other areas.
+    writeRecords: true,
+    exportData: true,
     approveUsers: false,
     manageBranches: false,
     manageTools: false,
@@ -69,7 +70,7 @@ const CONFIG_KEY = "role_permissions";
 
 function normalizeMatrix(raw: unknown): RoleMatrix {
   const base = structuredClone(DEFAULT_ROLE_MATRIX);
-  if (!raw || typeof raw !== "object") return enforceAdminConsoleRules(base);
+  if (!raw || typeof raw !== "object") return enforceRoleHierarchyRules(base);
   const obj = raw as Record<string, unknown>;
   for (const role of Object.keys(base) as RoleKey[]) {
     const row = obj[role];
@@ -79,15 +80,18 @@ function normalizeMatrix(raw: unknown): RoleMatrix {
       if (typeof caps[cap] === "boolean") base[role][cap] = caps[cap];
     }
   }
-  return enforceAdminConsoleRules(base);
+  return enforceRoleHierarchyRules(base);
 }
 
-/** Hard rule: only Admin role may use the admin console. */
-function enforceAdminConsoleRules(matrix: RoleMatrix): RoleMatrix {
+/** Hard rules aligned with Operator / Admin Console role hierarchy. */
+function enforceRoleHierarchyRules(matrix: RoleMatrix): RoleMatrix {
   matrix.owner.adminConsole = false;
   matrix.admin.adminConsole = true;
   matrix.staff.adminConsole = false;
   matrix.viewer.adminConsole = false;
+  // Viewer may use My Tools (quotations / surveys); menu ACL hides other areas.
+  matrix.viewer.writeRecords = true;
+  matrix.viewer.exportData = true;
   return matrix;
 }
 
@@ -97,7 +101,7 @@ export async function getRoleMatrix(): Promise<RoleMatrix> {
     { key: CONFIG_KEY },
   );
   const row = Array.isArray(rows) ? (rows[0] as { value: unknown } | undefined) : undefined;
-  if (!row) return enforceAdminConsoleRules(structuredClone(DEFAULT_ROLE_MATRIX));
+  if (!row) return enforceRoleHierarchyRules(structuredClone(DEFAULT_ROLE_MATRIX));
   let parsed: unknown = row.value;
   if (typeof row.value === "string") {
     try {
@@ -112,7 +116,7 @@ export async function getRoleMatrix(): Promise<RoleMatrix> {
 }
 
 export async function saveRoleMatrix(input: unknown): Promise<RoleMatrix> {
-  const matrix = enforceAdminConsoleRules(normalizeMatrix(input));
+  const matrix = enforceRoleHierarchyRules(normalizeMatrix(input));
   // Owner keeps business capabilities; adminConsole stays locked off.
   matrix.owner = {
     ...DEFAULT_ROLE_MATRIX.owner,
@@ -122,6 +126,12 @@ export async function saveRoleMatrix(input: unknown): Promise<RoleMatrix> {
   matrix.admin = {
     ...matrix.admin,
     adminConsole: true,
+  };
+  matrix.viewer = {
+    ...matrix.viewer,
+    adminConsole: false,
+    writeRecords: true,
+    exportData: true,
   };
   await pool.query(
     `INSERT INTO platform_config (config_key, value) VALUES (:key, :value)

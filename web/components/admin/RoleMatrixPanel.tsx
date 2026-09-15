@@ -47,6 +47,7 @@ export function RoleMatrixPanel() {
     // Locked capabilities / roles.
     if (role === "owner") return;
     if (cap === "adminConsole") return;
+    if (role === "viewer" && (cap === "writeRecords" || cap === "exportData")) return;
     setMatrix({
       ...matrix,
       [role]: { ...matrix[role], [cap]: !matrix[role][cap] },
@@ -79,8 +80,9 @@ export function RoleMatrixPanel() {
         <div>
           <h2>Role permission matrix</h2>
           <p className="muted">
-            Admin alone can open <code>/admin</code>. Owner edits Business Profile; Staff can view it
-            read-only. Owner row and Admin Console column are locked.
+            Admin alone can open <code>/admin</code>. Owner edits Business Profile and Sync Center;
+            Staff can view Profile and use Email Outbox / My Tools; Viewer sees Home and My Tools
+            only. Owner row and Admin Console column are locked.
           </p>
         </div>
         <div className="admin-form-row">
