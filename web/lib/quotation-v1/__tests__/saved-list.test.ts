@@ -59,6 +59,7 @@ describe("quotation-v1 saved list helpers", () => {
     q.gstOverride = { mode: "auto", cgst: null, sgst: null, igst: null };
     q.status = "submitted";
     q.followUpDate = "2026-04-01";
+    q.preparedBy = "Ravi";
     const company = { ...DEFAULT_COMPANY, state: "Karnataka" };
     const row = buildSavedQuoteListRow(q, company);
     expect(row.companyName).toBe("Zigma");
@@ -66,6 +67,7 @@ describe("quotation-v1 saved list helpers", () => {
     expect(row.basicTotal).toBe(2000);
     expect(row.grandTotal).toBe(row.totalQuotationValue);
     expect(row.followUpDateRaw).toBe("2026-04-01");
+    expect(row.preparedBy).toBe("Ravi");
   });
 
   it("filters by status, city, query, follow-up, and value", () => {
@@ -77,6 +79,7 @@ describe("quotation-v1 saved list helpers", () => {
     a.customer.company = "Zigma";
     a.customer.city = "Mysuru";
     a.followUpDate = "2020-01-01";
+    a.preparedBy = "Ravi";
     a.items = [{ id: "1", desc: "Panels", qty: 1, rate: 10000, gst: 0, discount: 0 }];
     a.extraCharge = { label: "x", amount: 0, gst: 0 };
     a.gstOverride = { mode: "auto", cgst: null, sgst: null, igst: null };
@@ -88,6 +91,7 @@ describe("quotation-v1 saved list helpers", () => {
     b.customer.company = "Acme";
     b.customer.city = "Bengaluru";
     b.followUpDate = "";
+    b.preparedBy = "Anita";
     b.items = [{ id: "1", desc: "Battery", qty: 1, rate: 500, gst: 0, discount: 0 }];
     b.extraCharge = { label: "x", amount: 0, gst: 0 };
     b.gstOverride = { mode: "auto", cgst: null, sgst: null, igst: null };
@@ -102,5 +106,6 @@ describe("quotation-v1 saved list helpers", () => {
       filterSavedQuotations(list, company, { ...EMPTY_SAVED_FILTERS, followUp: "overdue" }, "2026-01-01"),
     ).toEqual([a]);
     expect(filterSavedQuotations(list, company, { ...EMPTY_SAVED_FILTERS, valueMin: "1000" })).toEqual([a]);
+    expect(filterSavedQuotations(list, company, { ...EMPTY_SAVED_FILTERS, preparedBy: "Anita" })).toEqual([b]);
   });
 });

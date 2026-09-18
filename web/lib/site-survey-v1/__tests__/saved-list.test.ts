@@ -56,6 +56,7 @@ describe("site-survey-v1 saved list helpers", () => {
     s.values.f_city = "Mysuru";
     s.values.f_date = "2026-02-01";
     s.values.f_followup = "2026-04-01";
+    s.values.sv_name = "Ravi Kumar";
     s.estimate = {
       flow: "residential",
       type: "Residential Rooftop",
@@ -74,6 +75,7 @@ describe("site-survey-v1 saved list helpers", () => {
     expect(row.city).toBe("Mysuru");
     expect(row.followUpDateRaw).toBe("2026-04-01");
     expect(row.estimatedCost).toBe(180000);
+    expect(row.preparedBy).toBe("Ravi Kumar");
   });
 
   it("filters by status, city, query, follow-up, and cost", () => {
@@ -85,6 +87,7 @@ describe("site-survey-v1 saved list helpers", () => {
     a.values.f_name = "Zigma";
     a.values.f_city = "Mysuru";
     a.values.f_followup = "2020-01-01";
+    a.values.sv_name = "Ravi";
     a.estimate = {
       flow: "residential",
       type: "Residential Rooftop",
@@ -106,6 +109,7 @@ describe("site-survey-v1 saved list helpers", () => {
     b.values.f_name = "Acme";
     b.values.f_city = "Bengaluru";
     b.values.f_followup = "";
+    b.values.sv_name = "Anita";
     b.estimate = {
       flow: "epc",
       type: "Ground Mount",
@@ -127,5 +131,6 @@ describe("site-survey-v1 saved list helpers", () => {
       filterSavedSurveys(list, { ...EMPTY_SAVED_SURVEY_FILTERS, followUp: "overdue" }, "2026-01-01"),
     ).toEqual([a]);
     expect(filterSavedSurveys(list, { ...EMPTY_SAVED_SURVEY_FILTERS, costMin: "100000" })).toEqual([a]);
+    expect(filterSavedSurveys(list, { ...EMPTY_SAVED_SURVEY_FILTERS, preparedBy: "Anita" })).toEqual([b]);
   });
 });

@@ -18,6 +18,7 @@ export type SavedSurveyListRow = {
   status: SurveyStatus;
   followUpDate: string;
   followUpDateRaw: string;
+  preparedBy: string;
 };
 
 export type SurveyFollowUpFilter = "all" | "overdue" | "upcoming" | "none" | "set";
@@ -27,6 +28,7 @@ export type SavedSurveyFilters = {
   statuses: SurveyStatus[];
   installationTypes: InstallationType[];
   city: string;
+  preparedBy: string;
   surveyFrom: string;
   surveyTo: string;
   followUp: SurveyFollowUpFilter;
@@ -41,6 +43,7 @@ export const EMPTY_SAVED_SURVEY_FILTERS: SavedSurveyFilters = {
   statuses: [],
   installationTypes: [],
   city: "",
+  preparedBy: "",
   surveyFrom: "",
   surveyTo: "",
   followUp: "all",
@@ -65,6 +68,14 @@ export function surveyCityDisplay(s: SiteSurveyV1): string {
 
 export function surveyCompanyDisplay(s: SiteSurveyV1): string {
   return val(s.values, "f_name").trim() || "Unnamed";
+}
+
+export function surveyPreparedByDisplay(s: SiteSurveyV1): string {
+  return (
+    val(s.values, "sv_name").trim() ||
+    val(s.values, "sv2_name").trim() ||
+    "—"
+  );
 }
 
 /** Compact summary: capacity + system type / notes. */
@@ -121,6 +132,7 @@ export function buildSavedSurveyListRow(s: SiteSurveyV1): SavedSurveyListRow {
     status: s.status,
     followUpDate: followRaw ? fmtDisplayDate(followRaw) : "—",
     followUpDateRaw: followRaw,
+    preparedBy: surveyPreparedByDisplay(s),
   };
 }
 
@@ -133,12 +145,22 @@ export function uniqueSurveyCities(list: SiteSurveyV1[]): string[] {
   return [...set].sort((a, b) => a.localeCompare(b));
 }
 
+export function uniqueSurveyPreparedBy(list: SiteSurveyV1[]): string[] {
+  const set = new Set<string>();
+  for (const s of list) {
+    const name = surveyPreparedByDisplay(s);
+    if (name && name !== "—") set.add(name);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
 export function countActiveSurveyFilters(f: SavedSurveyFilters): number {
   let n = 0;
   if (f.query.trim()) n += 1;
   if (f.statuses.length) n += 1;
   if (f.installationTypes.length) n += 1;
   if (f.city) n += 1;
+  if (f.preparedBy) n += 1;
   if (f.surveyFrom || f.surveyTo) n += 1;
   if (f.followUp !== "all") n += 1;
   if (f.followUpFrom || f.followUpTo) n += 1;
@@ -171,6 +193,7 @@ export function filterSavedSurveys(
     if (statusSet && !statusSet.has(row.status)) return false;
     if (typeSet && !typeSet.has(row.installationType)) return false;
     if (filters.city && row.city !== filters.city) return false;
+    if (filters.preparedBy && row.preparedBy !== filters.preparedBy) return false;
 
     if (qText) {
       const hay = [
@@ -181,8 +204,11 @@ export function filterSavedSurveys(
         row.installationType,
         row.capacityLabel,
         row.status,
+        row.preparedBy,
         val(s.values, "f_phone"),
         val(s.values, "f_address"),
+        val(s.values, "sv_name"),
+        val(s.values, "sv2_name"),
       ]
         .map((x) => String(x ?? "").toLowerCase())
         .join(" ");
@@ -230,6 +256,7 @@ export const SAVED_SURVEY_EXPORT_HEADERS = [
   "Estimated Cost",
   "Status",
   "Follow-up Date",
+  "Prepared By",
 ] as const;
 
 export function savedSurveyExportRows(
@@ -249,6 +276,7 @@ export function savedSurveyExportRows(
       "Estimated Cost": Number(row.estimatedCost.toFixed(2)),
       Status: row.status,
       "Follow-up Date": row.followUpDateRaw || "",
+      "Prepared By": row.preparedBy === "—" ? "" : row.preparedBy,
     };
   });
 }
@@ -302,6 +330,7 @@ export async function exportSavedSurveysPdf(
       row.estimatedCostLabel,
       row.status,
       row.followUpDate,
+      row.preparedBy,
     ];
   });
 
@@ -319,12 +348,15 @@ export async function exportSavedSurveysPdf(
         "Est. Cost",
         "Status",
         "Follow-up",
+        "Prepared By",
       ],
     ],
-    body: body.length ? body : [["—", "—", "—", "—", "—", "No surveys", "—", "—", "—", "—"]],
+    body: body.length
+      ? body
+      : [["—", "—", "—", "—", "—", "No surveys", "—", "—", "—", "—", "—"]],
     styles: {
-      fontSize: 7.5,
-      cellPadding: 2.2,
+      fontSize: 7,
+      cellPadding: 2,
       overflow: "linebreak",
       valign: "middle",
       textColor: [30, 41, 59],
@@ -335,20 +367,21 @@ export async function exportSavedSurveysPdf(
       fillColor: [15, 23, 42],
       textColor: [255, 255, 255],
       fontStyle: "bold",
-      fontSize: 7.5,
+      fontSize: 7,
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0: { cellWidth: 26, fontStyle: "bold" },
-      1: { cellWidth: 22 },
-      2: { cellWidth: 30 },
-      3: { cellWidth: 20 },
-      4: { cellWidth: 28 },
-      5: { cellWidth: 42 },
-      6: { cellWidth: 22 },
-      7: { cellWidth: 24, halign: "right" },
-      8: { cellWidth: 18 },
-      9: { cellWidth: 22 },
+      0: { cellWidth: 24, fontStyle: "bold" },
+      1: { cellWidth: 20 },
+      2: { cellWidth: 26 },
+      3: { cellWidth: 18 },
+      4: { cellWidth: 24 },
+      5: { cellWidth: 36 },
+      6: { cellWidth: 18 },
+      7: { cellWidth: 22, halign: "right" },
+      8: { cellWidth: 16 },
+      9: { cellWidth: 20 },
+      10: { cellWidth: 24 },
     },
     margin: { left: 14, right: 14 },
   });

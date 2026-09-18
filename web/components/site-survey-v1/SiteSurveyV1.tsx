@@ -32,6 +32,7 @@ import {
   filterSavedSurveys,
   countActiveSurveyFilters,
   uniqueSurveyCities,
+  uniqueSurveyPreparedBy,
   exportSavedSurveysExcel,
   exportSavedSurveysPdf,
   EMPTY_SAVED_SURVEY_FILTERS,
@@ -601,6 +602,7 @@ export function SiteSurveyV1() {
   const safeStepIndex = Math.min(stepIndex, steps.length - 1);
   const filteredList = useMemo(() => filterSavedSurveys(list, savedFilters), [list, savedFilters]);
   const savedCityOptions = useMemo(() => uniqueSurveyCities(list), [list]);
+  const savedPreparedByOptions = useMemo(() => uniqueSurveyPreparedBy(list), [list]);
   const activeFilterCount = useMemo(() => countActiveSurveyFilters(savedFilters), [savedFilters]);
 
   const flash = useCallback((msg: string, kind = "ok") => {
@@ -1404,6 +1406,20 @@ export function SiteSurveyV1() {
                       </select>
                     </label>
                     <label className="ssv1-field">
+                      <span>Prepared By</span>
+                      <select
+                        value={savedFilters.preparedBy}
+                        onChange={(e) => patchSavedFilters({ preparedBy: e.target.value })}
+                      >
+                        <option value="">All</option>
+                        {savedPreparedByOptions.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="ssv1-field">
                       <span>Follow-up</span>
                       <select
                         value={savedFilters.followUp}
@@ -1528,6 +1544,7 @@ export function SiteSurveyV1() {
                         <th className="num">Est. Cost</th>
                         <th>Status</th>
                         <th>Follow-up</th>
+                        <th>Prepared By</th>
                         <th className="actions">Actions</th>
                       </tr>
                     </thead>
@@ -1555,6 +1572,7 @@ export function SiteSurveyV1() {
                               <span className={`pill pill-${statusPillClass(row.status)}`}>{row.status}</span>
                             </td>
                             <td className="nowrap">{row.followUpDate}</td>
+                            <td className="nowrap">{row.preparedBy}</td>
                             <td className="actions">
                               <div className="ssv1-saved-actions">
                                 <button

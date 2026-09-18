@@ -38,6 +38,7 @@ import {
   filterSavedQuotations,
   countActiveSavedFilters,
   uniqueSavedCities,
+  uniqueSavedPreparedBy,
   EMPTY_SAVED_FILTERS,
   SAVED_STATUS_OPTIONS,
   type SavedQuoteFilters,
@@ -173,6 +174,7 @@ export function QuotationGeneratorV1() {
     [list, company, savedFilters],
   );
   const savedCityOptions = useMemo(() => uniqueSavedCities(list), [list]);
+  const savedPreparedByOptions = useMemo(() => uniqueSavedPreparedBy(list), [list]);
   const activeFilterCount = useMemo(() => countActiveSavedFilters(savedFilters), [savedFilters]);
 
   const flash = useCallback((msg: string, kind = "ok") => {
@@ -1401,6 +1403,20 @@ export function QuotationGeneratorV1() {
                         </select>
                       </label>
                       <label className="field">
+                        <span>Prepared By</span>
+                        <select
+                          value={savedFilters.preparedBy}
+                          onChange={(e) => patchSavedFilters({ preparedBy: e.target.value })}
+                        >
+                          <option value="">All</option>
+                          {savedPreparedByOptions.map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
                         <span>Follow-up</span>
                         <select
                           value={savedFilters.followUp}
@@ -1509,6 +1525,7 @@ export function QuotationGeneratorV1() {
                           <th className="num">Quote Value</th>
                           <th>Status</th>
                           <th>Follow-up</th>
+                          <th>Prepared By</th>
                           <th className="actions">Actions</th>
                         </tr>
                       </thead>
@@ -1537,6 +1554,7 @@ export function QuotationGeneratorV1() {
                                 </span>
                               </td>
                               <td className="nowrap">{row.followUpDate}</td>
+                              <td className="nowrap">{row.preparedBy}</td>
                               <td className="actions">
                                 <div className="qgv1-saved-actions">
                                   <button

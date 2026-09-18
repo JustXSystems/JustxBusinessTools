@@ -19,6 +19,7 @@ export type SavedQuoteListRow = {
   followUpDate: string;
   followUpDateRaw: string;
   validTill: string;
+  preparedBy: string;
 };
 
 export type FollowUpFilter = "all" | "overdue" | "upcoming" | "none" | "set";
@@ -27,6 +28,7 @@ export type SavedQuoteFilters = {
   query: string;
   statuses: QuoteStatus[];
   city: string;
+  preparedBy: string;
   submittedFrom: string;
   submittedTo: string;
   followUp: FollowUpFilter;
@@ -40,6 +42,7 @@ export const EMPTY_SAVED_FILTERS: SavedQuoteFilters = {
   query: "",
   statuses: [],
   city: "",
+  preparedBy: "",
   submittedFrom: "",
   submittedTo: "",
   followUp: "all",
@@ -69,6 +72,10 @@ export function customerCompanyDisplay(q: QuotationV1): string {
   const company = String(q.customer?.company ?? "").trim();
   if (company) return company;
   return String(q.customer?.name ?? "").trim() || "—";
+}
+
+export function preparedByDisplay(q: QuotationV1): string {
+  return String(q.preparedBy ?? "").trim() || "—";
 }
 
 /** Compact line-item description for list rows. */
@@ -126,6 +133,7 @@ export function buildSavedQuoteListRow(
     followUpDate: followRaw ? fmtDate(followRaw) : "—",
     followUpDateRaw: followRaw,
     validTill: q.validTill ? fmtDate(q.validTill) : "—",
+    preparedBy: preparedByDisplay(q),
   };
 }
 
@@ -138,11 +146,21 @@ export function uniqueSavedCities(list: QuotationV1[]): string[] {
   return [...set].sort((a, b) => a.localeCompare(b));
 }
 
+export function uniqueSavedPreparedBy(list: QuotationV1[]): string[] {
+  const set = new Set<string>();
+  for (const q of list) {
+    const name = preparedByDisplay(q);
+    if (name && name !== "—") set.add(name);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
 export function countActiveSavedFilters(f: SavedQuoteFilters): number {
   let n = 0;
   if (f.query.trim()) n += 1;
   if (f.statuses.length) n += 1;
   if (f.city) n += 1;
+  if (f.preparedBy) n += 1;
   if (f.submittedFrom || f.submittedTo) n += 1;
   if (f.followUp !== "all") n += 1;
   if (f.followUpFrom || f.followUpTo) n += 1;
@@ -175,6 +193,7 @@ export function filterSavedQuotations(
     if (statusSet && !statusSet.has(row.status)) return false;
 
     if (filters.city && row.companyCity !== filters.city) return false;
+    if (filters.preparedBy && row.preparedBy !== filters.preparedBy) return false;
 
     if (qText) {
       const hay = [
@@ -183,6 +202,7 @@ export function filterSavedQuotations(
         row.companyCity,
         row.description,
         row.status,
+        row.preparedBy,
         q.customer?.name,
         q.customer?.phone,
         q.preparedBy,
@@ -235,6 +255,7 @@ export const SAVED_QUOTE_EXPORT_HEADERS = [
   "Quotation Status",
   "Follow-up Date",
   "Valid Till",
+  "Prepared By",
 ] as const;
 
 export function savedQuoteExportRows(
@@ -255,6 +276,7 @@ export function savedQuoteExportRows(
       "Quotation Status": row.status,
       "Follow-up Date": row.followUpDateRaw || "",
       "Valid Till": q.validTill || "",
+      "Prepared By": row.preparedBy === "—" ? "" : row.preparedBy,
     };
   });
 }
@@ -309,6 +331,7 @@ export async function exportSavedQuotationsPdf(
       row.totalValueLabel,
       row.status,
       row.followUpDate,
+      row.preparedBy,
     ];
   });
 
@@ -326,12 +349,15 @@ export async function exportSavedQuotationsPdf(
         "Value",
         "Status",
         "Follow-up",
+        "Prepared By",
       ],
     ],
-    body: body.length ? body : [["—", "—", "—", "—", "No quotations", "—", "—", "—", "—", "—"]],
+    body: body.length
+      ? body
+      : [["—", "—", "—", "—", "No quotations", "—", "—", "—", "—", "—", "—"]],
     styles: {
-      fontSize: 7.5,
-      cellPadding: 2.2,
+      fontSize: 7,
+      cellPadding: 2,
       overflow: "linebreak",
       valign: "middle",
       textColor: [30, 41, 59],
@@ -342,20 +368,21 @@ export async function exportSavedQuotationsPdf(
       fillColor: [15, 23, 42],
       textColor: [255, 255, 255],
       fontStyle: "bold",
-      fontSize: 7.5,
+      fontSize: 7,
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0: { cellWidth: 28, fontStyle: "bold" },
-      1: { cellWidth: 22 },
-      2: { cellWidth: 32 },
-      3: { cellWidth: 22 },
-      4: { cellWidth: 48 },
-      5: { cellWidth: 22, halign: "right" },
-      6: { cellWidth: 22, halign: "right" },
-      7: { cellWidth: 22, halign: "right" },
-      8: { cellWidth: 20 },
-      9: { cellWidth: 22 },
+      0: { cellWidth: 24, fontStyle: "bold" },
+      1: { cellWidth: 20 },
+      2: { cellWidth: 28 },
+      3: { cellWidth: 18 },
+      4: { cellWidth: 40 },
+      5: { cellWidth: 18, halign: "right" },
+      6: { cellWidth: 18, halign: "right" },
+      7: { cellWidth: 18, halign: "right" },
+      8: { cellWidth: 18 },
+      9: { cellWidth: 20 },
+      10: { cellWidth: 24 },
     },
     margin: { left: 14, right: 14 },
   });
