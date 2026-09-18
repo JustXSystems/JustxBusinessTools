@@ -933,7 +933,7 @@ html[data-scheme="light"] .qgv1-root select option {
   line-height: 1.5;
 }
 
-/* —— Saved quotations register —— */
+/* —— Saved quotations register (theme-token driven) —— */
 .qgv1-export-group {
   display: flex;
   flex-wrap: wrap;
@@ -941,11 +941,149 @@ html[data-scheme="light"] .qgv1-root select option {
   align-items: center;
 }
 
+.qgv1-saved-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--glass-1);
+  border: 1px solid var(--border-hair);
+  box-shadow: var(--shadow-soft);
+}
+
+.qgv1-saved-filters-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.qgv1-saved-search {
+  flex: 1 1 220px;
+  min-width: 180px;
+  margin: 0;
+}
+
+.qgv1-saved-search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm, 10px);
+  border: 1px solid var(--border-hair);
+  background: var(--bg-2);
+  color: var(--text-hi);
+  font-size: 13px;
+}
+
+.qgv1-saved-search input::placeholder {
+  color: var(--text-low);
+}
+
+.qgv1-saved-search input:focus {
+  outline: none;
+  border-color: rgba(var(--accent-rgb), 0.55);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.14);
+}
+
+.qgv1-saved-status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.qgv1-filter-chip {
+  appearance: none;
+  border: 1px solid var(--border-hair);
+  background: var(--bg-2);
+  color: var(--text-mid);
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.qgv1-filter-chip:hover {
+  color: var(--text-hi);
+  border-color: var(--border-hair-strong, var(--border-hair));
+  background: var(--glass-hover, rgba(var(--accent-rgb), 0.06));
+}
+
+.qgv1-filter-chip.is-on {
+  color: var(--text-hi);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.14);
+}
+
+.qgv1-filters-toggle.is-on {
+  color: var(--accent);
+}
+
+.qgv1-saved-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-hair);
+}
+
+@media (max-width: 960px) {
+  .qgv1-saved-filters-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .qgv1-saved-filters-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.qgv1-saved-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-mid);
+}
+
+.qgv1-saved-meta b {
+  color: var(--text-hi);
+  font-variant-numeric: tabular-nums;
+}
+
+.qgv1-saved-meta-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.12);
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+}
+
+.qgv1-saved-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 28px 8px;
+}
+
 .qgv1-saved-wrap {
   overflow-x: auto;
-  border: 1px solid color-mix(in srgb, var(--border, #e2e8f0) 88%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--panel, #fff) 92%, transparent);
+  border: 1px solid var(--border-hair);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-soft);
 }
 
 .qgv1-saved-table {
@@ -954,6 +1092,7 @@ html[data-scheme="light"] .qgv1-root select option {
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12.5px;
+  color: var(--text-hi);
 }
 
 .qgv1-saved-table thead th {
@@ -965,10 +1104,10 @@ html[data-scheme="light"] .qgv1-root select option {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: color-mix(in srgb, var(--muted, #64748b) 95%, #0f172a);
+  color: var(--text-low);
   padding: 12px 14px;
-  background: color-mix(in srgb, var(--panel-2, #f8fafc) 88%, #0f172a 4%);
-  border-bottom: 1px solid color-mix(in srgb, var(--border, #e2e8f0) 90%, transparent);
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border-hair);
   white-space: nowrap;
 }
 
@@ -984,28 +1123,28 @@ html[data-scheme="light"] .qgv1-root select option {
   position: sticky;
   right: 0;
   z-index: 3;
-  background: color-mix(in srgb, var(--panel-2, #f8fafc) 94%, #0f172a 3%);
-  box-shadow: -8px 0 12px -10px rgba(15, 23, 42, 0.18);
+  background: var(--bg-1);
+  box-shadow: -10px 0 14px -12px color-mix(in srgb, var(--text-hi) 28%, transparent);
 }
 
 .qgv1-saved-table tbody td.actions {
   z-index: 1;
-  background: color-mix(in srgb, var(--panel, #fff) 96%, transparent);
+  background: var(--bg-2);
 }
 
 .qgv1-saved-table tbody tr:hover td {
-  background: color-mix(in srgb, var(--accent, #0f766e) 6%, var(--panel, #fff));
+  background: rgba(var(--accent-rgb), 0.07);
 }
 
 .qgv1-saved-table tbody tr:hover td.actions {
-  background: color-mix(in srgb, var(--accent, #0f766e) 8%, var(--panel, #fff));
+  background: color-mix(in srgb, rgba(var(--accent-rgb), 0.1) 70%, var(--bg-2));
 }
 
 .qgv1-saved-table td {
   padding: 13px 14px;
   vertical-align: middle;
-  border-bottom: 1px solid color-mix(in srgb, var(--border, #e2e8f0) 85%, transparent);
-  color: color-mix(in srgb, var(--text, #0f172a) 92%, transparent);
+  border-bottom: 1px solid var(--border-hair);
+  color: var(--text-hi);
 }
 
 .qgv1-saved-table tbody tr:last-child td {
@@ -1019,6 +1158,7 @@ html[data-scheme="light"] .qgv1-root select option {
 .qgv1-saved-qno {
   font-weight: 700;
   letter-spacing: 0.01em;
+  color: var(--text-hi);
 }
 
 .qgv1-saved-company {
@@ -1027,6 +1167,7 @@ html[data-scheme="light"] .qgv1-root select option {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-hi);
 }
 
 .qgv1-saved-desc {
@@ -1036,12 +1177,12 @@ html[data-scheme="light"] .qgv1-root select option {
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.35;
-  color: color-mix(in srgb, var(--muted, #64748b) 70%, var(--text, #0f172a));
+  color: var(--text-mid);
 }
 
 .qgv1-saved-grand {
   font-weight: 700;
-  color: color-mix(in srgb, var(--text, #0f172a) 96%, transparent);
+  color: var(--text-hi);
 }
 
 .qgv1-saved-actions {
@@ -1049,27 +1190,6 @@ html[data-scheme="light"] .qgv1-root select option {
   flex-wrap: nowrap;
   gap: 6px;
   justify-content: flex-end;
-}
-
-html[data-scheme="light"] .qgv1-saved-wrap {
-  background: #fff;
-  border-color: #e2e8f0;
-}
-
-html[data-scheme="light"] .qgv1-saved-table thead th {
-  background: #f8fafc;
-  color: #64748b;
-  border-bottom-color: #e2e8f0;
-}
-
-html[data-scheme="light"] .qgv1-saved-table thead th.actions,
-html[data-scheme="light"] .qgv1-saved-table tbody td.actions {
-  background: #f8fafc;
-}
-
-html[data-scheme="light"] .qgv1-saved-table tbody tr:hover td,
-html[data-scheme="light"] .qgv1-saved-table tbody tr:hover td.actions {
-  background: #f1f5f9;
 }
 
 /* Offscreen host so Saved-tab PDF download can capture QuoteSheet. */

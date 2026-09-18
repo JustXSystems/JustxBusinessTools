@@ -35,12 +35,20 @@ import {
   buildSavedQuoteListRow,
   exportSavedQuotationsExcel,
   exportSavedQuotationsPdf,
+  filterSavedQuotations,
+  countActiveSavedFilters,
+  uniqueSavedCities,
+  EMPTY_SAVED_FILTERS,
+  SAVED_STATUS_OPTIONS,
+  type SavedQuoteFilters,
+  type FollowUpFilter,
   type CategoryKey,
   type CompanyProfileV1,
   type EngagementKey,
   type QuotationV1,
   type QuoteHistoryRow,
   type QuoteNotification,
+  type QuoteStatus,
 } from "@/lib/quotation-v1";
 import type { BusinessProfileSendSettings } from "@/lib/types/business-profile";
 import {
@@ -152,12 +160,20 @@ export function QuotationGeneratorV1() {
   const [emailFromEmail, setEmailFromEmail] = useState("");
   const [approvalLink, setApprovalLink] = useState<string | null>(null);
   const [pdfHostQuote, setPdfHostQuote] = useState<QuotationV1 | null>(null);
+  const [savedFilters, setSavedFilters] = useState<SavedQuoteFilters>(EMPTY_SAVED_FILTERS);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
 
   const totals = useMemo(() => computeTotals(current, company), [current, company]);
   const pendingApprovals = list.filter((q) => q.status === "sent").length;
   const isSaved = Boolean(current.quoteNo && snapshotOf(current) === lastSaved);
+  const filteredList = useMemo(
+    () => filterSavedQuotations(list, company, savedFilters),
+    [list, company, savedFilters],
+  );
+  const savedCityOptions = useMemo(() => uniqueSavedCities(list), [list]);
+  const activeFilterCount = useMemo(() => countActiveSavedFilters(savedFilters), [savedFilters]);
 
   const flash = useCallback((msg: string, kind = "ok") => {
     if (kind === "err") flashAppError(msg);
@@ -608,29 +624,51 @@ export function QuotationGeneratorV1() {
   }
 
   async function exportSavedExcel() {
-    if (!list.length) {
+    if (!filteredList.length) {
       flash("No quotations to export.", "err");
       return;
     }
     try {
-      await exportSavedQuotationsExcel(list, company);
-      flash("Saved quotations Excel downloaded.");
+      await exportSavedQuotationsExcel(filteredList, company);
+      flash(
+        activeFilterCount
+          ? `Excel downloaded (${filteredList.length} filtered).`
+          : "Saved quotations Excel downloaded.",
+      );
     } catch (e) {
       flash(e instanceof Error ? e.message : "Excel export failed", "err");
     }
   }
 
   async function exportSavedPdf() {
-    if (!list.length) {
+    if (!filteredList.length) {
       flash("No quotations to export.", "err");
       return;
     }
     try {
-      await exportSavedQuotationsPdf(list, company);
-      flash("Saved quotations PDF downloaded.");
+      await exportSavedQuotationsPdf(filteredList, company);
+      flash(
+        activeFilterCount
+          ? `PDF downloaded (${filteredList.length} filtered).`
+          : "Saved quotations PDF downloaded.",
+      );
     } catch (e) {
       flash(e instanceof Error ? e.message : "PDF export failed", "err");
     }
+  }
+
+  function patchSavedFilters(patch: Partial<SavedQuoteFilters>) {
+    setSavedFilters((prev) => ({ ...prev, ...patch }));
+  }
+
+  function toggleSavedStatus(status: QuoteStatus) {
+    setSavedFilters((prev) => {
+      const has = prev.statuses.includes(status);
+      return {
+        ...prev,
+        statuses: has ? prev.statuses.filter((s) => s !== status) : [...prev.statuses, status],
+      };
+    });
   }
 
   function statusPillClass(status: QuotationV1["status"]) {
@@ -1268,14 +1306,14 @@ export function QuotationGeneratorV1() {
             <div className="qgv1-page-head">
               <div>
                 <h1>Saved quotations</h1>
-                <p>Pipeline view — open to edit, download PDF, or export the register.</p>
+                <p>Pipeline view — filter, open to edit, download PDF, or export the register.</p>
               </div>
               {list.length > 0 ? (
                 <div className="qgv1-export-group" role="group" aria-label="Export saved quotations">
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    disabled={busy}
+                    disabled={busy || !filteredList.length}
                     onClick={() => void exportSavedExcel()}
                   >
                     Export Excel
@@ -1283,7 +1321,7 @@ export function QuotationGeneratorV1() {
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    disabled={busy}
+                    disabled={busy || !filteredList.length}
                     onClick={() => void exportSavedPdf()}
                   >
                     Export PDF
@@ -1296,89 +1334,254 @@ export function QuotationGeneratorV1() {
                 <div className="es-title">No quotations yet</div>
               </div>
             ) : (
-              <div className="qgv1-saved-wrap">
-                <table className="qgv1-saved-table">
-                  <thead>
-                    <tr>
-                      <th>Quotation No.</th>
-                      <th>Submitted</th>
-                      <th>Company</th>
-                      <th>City</th>
-                      <th>Description</th>
-                      <th className="num">Basic Total</th>
-                      <th className="num">Grand Total</th>
-                      <th className="num">Quote Value</th>
-                      <th>Status</th>
-                      <th>Follow-up</th>
-                      <th className="actions">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {list.map((q) => {
-                      const row = buildSavedQuoteListRow(q, company);
-                      return (
-                        <tr key={q.id}>
-                          <td className="mono qgv1-saved-qno">{row.quoteNo}</td>
-                          <td className="nowrap">{row.submittedDate}</td>
-                          <td>
-                            <div className="qgv1-saved-company">{row.companyName}</div>
-                          </td>
-                          <td className="nowrap">{row.companyCity}</td>
-                          <td>
-                            <div className="qgv1-saved-desc" title={row.description}>
-                              {row.description}
-                            </div>
-                          </td>
-                          <td className="num nowrap">₹{row.basicTotalLabel}</td>
-                          <td className="num nowrap qgv1-saved-grand">₹{row.grandTotalLabel}</td>
-                          <td className="num nowrap">₹{row.totalValueLabel}</td>
-                          <td>
-                            <span className={`pill pill-${statusPillClass(row.status)}`}>{row.status}</span>
-                          </td>
-                          <td className="nowrap">{row.followUpDate}</td>
-                          <td className="actions">
-                            <div className="qgv1-saved-actions">
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => {
-                                  const full = normalizeQuotation(q);
-                                  setCurrent(full);
-                                  setLastSaved(snapshotOf(full));
-                                  setRoute("new");
-                                }}
-                              >
-                                Open
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-sm"
-                                disabled={busy}
-                                title="Download PDF"
-                                onClick={() => void downloadPdf(q)}
-                              >
-                                PDF
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-destructive btn-sm"
-                                onClick={async () => {
-                                  if (!confirm(`Delete ${q.quoteNo}?`)) return;
-                                  await api(`/quotation-v1/${q.id}`, { method: "DELETE" });
-                                  flash("Deleted.");
-                                  await reloadMeta();
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </td>
+              <>
+                <div className="qgv1-saved-filters">
+                  <div className="qgv1-saved-filters-main">
+                    <label className="qgv1-saved-search">
+                      <span className="sr-only">Search quotations</span>
+                      <input
+                        type="search"
+                        value={savedFilters.query}
+                        onChange={(e) => patchSavedFilters({ query: e.target.value })}
+                        placeholder="Search quote no., company, city, description…"
+                      />
+                    </label>
+                    <div className="qgv1-saved-status-chips" role="group" aria-label="Status filter">
+                      {SAVED_STATUS_OPTIONS.map((status) => {
+                        const on = savedFilters.statuses.includes(status);
+                        return (
+                          <button
+                            key={status}
+                            type="button"
+                            className={`qgv1-filter-chip${on ? " is-on" : ""}`}
+                            aria-pressed={on}
+                            onClick={() => toggleSavedStatus(status)}
+                          >
+                            {status}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      className={`btn btn-ghost btn-sm qgv1-filters-toggle${filtersExpanded ? " is-on" : ""}`}
+                      aria-expanded={filtersExpanded}
+                      onClick={() => setFiltersExpanded((v) => !v)}
+                    >
+                      More filters{activeFilterCount ? ` · ${activeFilterCount}` : ""}
+                    </button>
+                    {activeFilterCount > 0 ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                          setSavedFilters(EMPTY_SAVED_FILTERS);
+                          setFiltersExpanded(false);
+                        }}
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {filtersExpanded ? (
+                    <div className="qgv1-saved-filters-grid">
+                      <label className="field">
+                        <span>City</span>
+                        <select
+                          value={savedFilters.city}
+                          onChange={(e) => patchSavedFilters({ city: e.target.value })}
+                        >
+                          <option value="">All cities</option>
+                          {savedCityOptions.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Follow-up</span>
+                        <select
+                          value={savedFilters.followUp}
+                          onChange={(e) =>
+                            patchSavedFilters({ followUp: e.target.value as FollowUpFilter })
+                          }
+                        >
+                          <option value="all">All</option>
+                          <option value="overdue">Overdue</option>
+                          <option value="upcoming">Upcoming</option>
+                          <option value="set">Has follow-up</option>
+                          <option value="none">No follow-up</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Submitted from</span>
+                        <input
+                          type="date"
+                          value={savedFilters.submittedFrom}
+                          onChange={(e) => patchSavedFilters({ submittedFrom: e.target.value })}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Submitted to</span>
+                        <input
+                          type="date"
+                          value={savedFilters.submittedTo}
+                          onChange={(e) => patchSavedFilters({ submittedTo: e.target.value })}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Follow-up from</span>
+                        <input
+                          type="date"
+                          value={savedFilters.followUpFrom}
+                          onChange={(e) => patchSavedFilters({ followUpFrom: e.target.value })}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Follow-up to</span>
+                        <input
+                          type="date"
+                          value={savedFilters.followUpTo}
+                          onChange={(e) => patchSavedFilters({ followUpTo: e.target.value })}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Min quote value (₹)</span>
+                        <input
+                          inputMode="decimal"
+                          value={savedFilters.valueMin}
+                          onChange={(e) =>
+                            patchSavedFilters({ valueMin: sanitizeNumStr(e.target.value) })
+                          }
+                          placeholder="0"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Max quote value (₹)</span>
+                        <input
+                          inputMode="decimal"
+                          value={savedFilters.valueMax}
+                          onChange={(e) =>
+                            patchSavedFilters({ valueMax: sanitizeNumStr(e.target.value) })
+                          }
+                          placeholder="Any"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+
+                  <div className="qgv1-saved-meta">
+                    Showing <b>{filteredList.length}</b> of {list.length}
+                    {activeFilterCount ? (
+                      <span className="qgv1-saved-meta-tag">
+                        {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                {filteredList.length === 0 ? (
+                  <div className="empty-state qgv1-saved-empty">
+                    <div className="es-title">No matches</div>
+                    <p className="muted">Try clearing filters or broadening the search.</p>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setSavedFilters(EMPTY_SAVED_FILTERS)}
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="qgv1-saved-wrap">
+                    <table className="qgv1-saved-table">
+                      <thead>
+                        <tr>
+                          <th>Quotation No.</th>
+                          <th>Submitted</th>
+                          <th>Company</th>
+                          <th>City</th>
+                          <th>Description</th>
+                          <th className="num">Basic Total</th>
+                          <th className="num">Grand Total</th>
+                          <th className="num">Quote Value</th>
+                          <th>Status</th>
+                          <th>Follow-up</th>
+                          <th className="actions">Actions</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody>
+                        {filteredList.map((q) => {
+                          const row = buildSavedQuoteListRow(q, company);
+                          return (
+                            <tr key={q.id}>
+                              <td className="mono qgv1-saved-qno">{row.quoteNo}</td>
+                              <td className="nowrap">{row.submittedDate}</td>
+                              <td>
+                                <div className="qgv1-saved-company">{row.companyName}</div>
+                              </td>
+                              <td className="nowrap">{row.companyCity}</td>
+                              <td>
+                                <div className="qgv1-saved-desc" title={row.description}>
+                                  {row.description}
+                                </div>
+                              </td>
+                              <td className="num nowrap">₹{row.basicTotalLabel}</td>
+                              <td className="num nowrap qgv1-saved-grand">₹{row.grandTotalLabel}</td>
+                              <td className="num nowrap">₹{row.totalValueLabel}</td>
+                              <td>
+                                <span className={`pill pill-${statusPillClass(row.status)}`}>
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td className="nowrap">{row.followUpDate}</td>
+                              <td className="actions">
+                                <div className="qgv1-saved-actions">
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => {
+                                      const full = normalizeQuotation(q);
+                                      setCurrent(full);
+                                      setLastSaved(snapshotOf(full));
+                                      setRoute("new");
+                                    }}
+                                  >
+                                    Open
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-sm"
+                                    disabled={busy}
+                                    title="Download PDF"
+                                    onClick={() => void downloadPdf(q)}
+                                  >
+                                    PDF
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-destructive btn-sm"
+                                    onClick={async () => {
+                                      if (!confirm(`Delete ${q.quoteNo}?`)) return;
+                                      await api(`/quotation-v1/${q.id}`, { method: "DELETE" });
+                                      flash("Deleted.");
+                                      await reloadMeta();
+                                    }}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
             )}
           </section>
         ) : null}

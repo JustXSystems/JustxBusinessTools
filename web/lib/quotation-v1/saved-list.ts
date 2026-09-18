@@ -1,5 +1,5 @@
-import { computeTotals, fmtDate, money } from "./compute";
-import type { CompanyProfileV1, QuotationV1 } from "./types";
+import { computeTotals, fmtDate, money, todayISO } from "./compute";
+import type { CompanyProfileV1, QuotationV1, QuoteStatus } from "./types";
 
 export type SavedQuoteListRow = {
   id: string;
@@ -20,6 +20,42 @@ export type SavedQuoteListRow = {
   followUpDateRaw: string;
   validTill: string;
 };
+
+export type FollowUpFilter = "all" | "overdue" | "upcoming" | "none" | "set";
+
+export type SavedQuoteFilters = {
+  query: string;
+  statuses: QuoteStatus[];
+  city: string;
+  submittedFrom: string;
+  submittedTo: string;
+  followUp: FollowUpFilter;
+  followUpFrom: string;
+  followUpTo: string;
+  valueMin: string;
+  valueMax: string;
+};
+
+export const EMPTY_SAVED_FILTERS: SavedQuoteFilters = {
+  query: "",
+  statuses: [],
+  city: "",
+  submittedFrom: "",
+  submittedTo: "",
+  followUp: "all",
+  followUpFrom: "",
+  followUpTo: "",
+  valueMin: "",
+  valueMax: "",
+};
+
+export const SAVED_STATUS_OPTIONS: QuoteStatus[] = [
+  "draft",
+  "submitted",
+  "sent",
+  "approved",
+  "rejected",
+];
 
 /** City for list/export; falls back to state when city is blank. */
 export function customerCityDisplay(q: QuotationV1): string {
@@ -93,6 +129,100 @@ export function buildSavedQuoteListRow(
   };
 }
 
+export function uniqueSavedCities(list: QuotationV1[]): string[] {
+  const set = new Set<string>();
+  for (const q of list) {
+    const city = customerCityDisplay(q);
+    if (city && city !== "—") set.add(city);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+export function countActiveSavedFilters(f: SavedQuoteFilters): number {
+  let n = 0;
+  if (f.query.trim()) n += 1;
+  if (f.statuses.length) n += 1;
+  if (f.city) n += 1;
+  if (f.submittedFrom || f.submittedTo) n += 1;
+  if (f.followUp !== "all") n += 1;
+  if (f.followUpFrom || f.followUpTo) n += 1;
+  if (f.valueMin.trim() || f.valueMax.trim()) n += 1;
+  return n;
+}
+
+function inDateRange(iso: string, from: string, to: string): boolean {
+  if (!from && !to) return true;
+  if (!iso) return false;
+  if (from && iso < from) return false;
+  if (to && iso > to) return false;
+  return true;
+}
+
+export function filterSavedQuotations(
+  list: QuotationV1[],
+  company: CompanyProfileV1,
+  filters: SavedQuoteFilters,
+  today = todayISO(),
+): QuotationV1[] {
+  const qText = filters.query.trim().toLowerCase();
+  const min = filters.valueMin.trim() === "" ? null : Number(filters.valueMin);
+  const max = filters.valueMax.trim() === "" ? null : Number(filters.valueMax);
+  const statusSet = filters.statuses.length ? new Set(filters.statuses) : null;
+
+  return list.filter((q) => {
+    const row = buildSavedQuoteListRow(q, company);
+
+    if (statusSet && !statusSet.has(row.status)) return false;
+
+    if (filters.city && row.companyCity !== filters.city) return false;
+
+    if (qText) {
+      const hay = [
+        row.quoteNo,
+        row.companyName,
+        row.companyCity,
+        row.description,
+        row.status,
+        q.customer?.name,
+        q.customer?.phone,
+        q.preparedBy,
+      ]
+        .map((x) => String(x ?? "").toLowerCase())
+        .join(" ");
+      if (!hay.includes(qText)) return false;
+    }
+
+    if (!inDateRange(row.submittedDateRaw, filters.submittedFrom, filters.submittedTo)) {
+      return false;
+    }
+
+    const follow = row.followUpDateRaw;
+    switch (filters.followUp) {
+      case "none":
+        if (follow) return false;
+        break;
+      case "set":
+        if (!follow) return false;
+        break;
+      case "overdue":
+        if (!follow || follow >= today) return false;
+        break;
+      case "upcoming":
+        if (!follow || follow < today) return false;
+        break;
+      default:
+        break;
+    }
+
+    if (!inDateRange(follow, filters.followUpFrom, filters.followUpTo)) return false;
+
+    if (min != null && Number.isFinite(min) && row.grandTotal < min) return false;
+    if (max != null && Number.isFinite(max) && row.grandTotal > max) return false;
+
+    return true;
+  });
+}
+
 export const SAVED_QUOTE_EXPORT_HEADERS = [
   "Quotation Number",
   "Quotation Submitted Date",
@@ -153,7 +283,9 @@ export async function exportSavedQuotationsPdf(
   const autoTable = (await import("jspdf-autotable")).default;
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const title = "Saved quotations";
-  const subtitle = company.name ? `${company.name} · ${list.length} record${list.length === 1 ? "" : "s"}` : `${list.length} records`;
+  const subtitle = company.name
+    ? `${company.name} · ${list.length} record${list.length === 1 ? "" : "s"}`
+    : `${list.length} records`;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);

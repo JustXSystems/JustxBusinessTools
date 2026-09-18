@@ -3,10 +3,12 @@ import {
   buildSavedQuoteListRow,
   customerCityDisplay,
   customerCompanyDisplay,
+  filterSavedQuotations,
   lineItemsSummary,
   newQuotationDraft,
   quotationSubmittedDateIso,
   DEFAULT_COMPANY,
+  EMPTY_SAVED_FILTERS,
 } from "@/lib/quotation-v1";
 
 describe("quotation-v1 saved list helpers", () => {
@@ -64,5 +66,41 @@ describe("quotation-v1 saved list helpers", () => {
     expect(row.basicTotal).toBe(2000);
     expect(row.grandTotal).toBe(row.totalQuotationValue);
     expect(row.followUpDateRaw).toBe("2026-04-01");
+  });
+
+  it("filters by status, city, query, follow-up, and value", () => {
+    const company = { ...DEFAULT_COMPANY, state: "Karnataka" };
+    const a = newQuotationDraft("solar", "epc");
+    a.id = "a";
+    a.quoteNo = "QT-A";
+    a.status = "submitted";
+    a.customer.company = "Zigma";
+    a.customer.city = "Mysuru";
+    a.followUpDate = "2020-01-01";
+    a.items = [{ id: "1", desc: "Panels", qty: 1, rate: 10000, gst: 0, discount: 0 }];
+    a.extraCharge = { label: "x", amount: 0, gst: 0 };
+    a.gstOverride = { mode: "auto", cgst: null, sgst: null, igst: null };
+
+    const b = newQuotationDraft("ups", "sale");
+    b.id = "b";
+    b.quoteNo = "QT-B";
+    b.status = "draft";
+    b.customer.company = "Acme";
+    b.customer.city = "Bengaluru";
+    b.followUpDate = "";
+    b.items = [{ id: "1", desc: "Battery", qty: 1, rate: 500, gst: 0, discount: 0 }];
+    b.extraCharge = { label: "x", amount: 0, gst: 0 };
+    b.gstOverride = { mode: "auto", cgst: null, sgst: null, igst: null };
+
+    const list = [a, b];
+    expect(filterSavedQuotations(list, company, { ...EMPTY_SAVED_FILTERS, statuses: ["submitted"] })).toEqual([
+      a,
+    ]);
+    expect(filterSavedQuotations(list, company, { ...EMPTY_SAVED_FILTERS, city: "Bengaluru" })).toEqual([b]);
+    expect(filterSavedQuotations(list, company, { ...EMPTY_SAVED_FILTERS, query: "panels" })).toEqual([a]);
+    expect(
+      filterSavedQuotations(list, company, { ...EMPTY_SAVED_FILTERS, followUp: "overdue" }, "2026-01-01"),
+    ).toEqual([a]);
+    expect(filterSavedQuotations(list, company, { ...EMPTY_SAVED_FILTERS, valueMin: "1000" })).toEqual([a]);
   });
 });
