@@ -932,3 +932,153 @@ html[data-scheme="light"] .qgv1-root select option {
   color: #7a5a20;
   line-height: 1.5;
 }
+
+/* —— Saved quotations register —— */
+.qgv1-export-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.qgv1-saved-wrap {
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--border, #e2e8f0) 88%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel, #fff) 92%, transparent);
+}
+
+.qgv1-saved-table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+}
+
+.qgv1-saved-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: color-mix(in srgb, var(--muted, #64748b) 95%, #0f172a);
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--panel-2, #f8fafc) 88%, #0f172a 4%);
+  border-bottom: 1px solid color-mix(in srgb, var(--border, #e2e8f0) 90%, transparent);
+  white-space: nowrap;
+}
+
+.qgv1-saved-table thead th.num,
+.qgv1-saved-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.qgv1-saved-table thead th.actions,
+.qgv1-saved-table td.actions {
+  text-align: right;
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: color-mix(in srgb, var(--panel-2, #f8fafc) 94%, #0f172a 3%);
+  box-shadow: -8px 0 12px -10px rgba(15, 23, 42, 0.18);
+}
+
+.qgv1-saved-table tbody td.actions {
+  z-index: 1;
+  background: color-mix(in srgb, var(--panel, #fff) 96%, transparent);
+}
+
+.qgv1-saved-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent, #0f766e) 6%, var(--panel, #fff));
+}
+
+.qgv1-saved-table tbody tr:hover td.actions {
+  background: color-mix(in srgb, var(--accent, #0f766e) 8%, var(--panel, #fff));
+}
+
+.qgv1-saved-table td {
+  padding: 13px 14px;
+  vertical-align: middle;
+  border-bottom: 1px solid color-mix(in srgb, var(--border, #e2e8f0) 85%, transparent);
+  color: color-mix(in srgb, var(--text, #0f172a) 92%, transparent);
+}
+
+.qgv1-saved-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.qgv1-saved-table .nowrap {
+  white-space: nowrap;
+}
+
+.qgv1-saved-qno {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.qgv1-saved-company {
+  font-weight: 600;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qgv1-saved-desc {
+  max-width: 220px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--muted, #64748b) 70%, var(--text, #0f172a));
+}
+
+.qgv1-saved-grand {
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text, #0f172a) 96%, transparent);
+}
+
+.qgv1-saved-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+html[data-scheme="light"] .qgv1-saved-wrap {
+  background: #fff;
+  border-color: #e2e8f0;
+}
+
+html[data-scheme="light"] .qgv1-saved-table thead th {
+  background: #f8fafc;
+  color: #64748b;
+  border-bottom-color: #e2e8f0;
+}
+
+html[data-scheme="light"] .qgv1-saved-table thead th.actions,
+html[data-scheme="light"] .qgv1-saved-table tbody td.actions {
+  background: #f8fafc;
+}
+
+html[data-scheme="light"] .qgv1-saved-table tbody tr:hover td,
+html[data-scheme="light"] .qgv1-saved-table tbody tr:hover td.actions {
+  background: #f1f5f9;
+}
+
+/* Offscreen host so Saved-tab PDF download can capture QuoteSheet. */
+.qgv1-pdf-host {
+  position: fixed;
+  left: -12000px;
+  top: 0;
+  width: 794px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: -1;
+}

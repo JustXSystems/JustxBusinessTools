@@ -98,6 +98,7 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
           </div>
           <div>Date: {fmtDate(q.date)}</div>
           <div>Valid Till: {fmtDate(q.validTill)}</div>
+          {q.followUpDate ? <div>Follow-up: {fmtDate(q.followUpDate)}</div> : null}
           <div>
             Q No: <b className="mono">{q.quoteNo || "(unsaved)"}</b>
           </div>
@@ -118,7 +119,8 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
             ) : null}
             {q.customer.address}
             <br />
-            State: {q.customer.state}
+            {[q.customer.city, q.customer.state].filter((x) => String(x ?? "").trim()).join(", ") ||
+              (q.customer.state ? `State: ${q.customer.state}` : null)}
             {q.customer.gstin ? (
               <>
                 <br />

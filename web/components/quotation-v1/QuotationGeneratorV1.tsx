@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { api, fetchProfile } from "@/lib/api";
 import { flashAppError, flashAppOk } from "@/lib/app-flash";
 import { publicAssetUrl, withBasePath, absolutePublicAssetUrl } from "@/lib/base-path";
@@ -22,6 +23,7 @@ import {
   mergeCompanyFromBusinessProfile,
   money,
   newQuotationDraft,
+  normalizeQuotation,
   normalizeSendSettings,
   numToWordsIndian,
   quotationPdfToBase64,
@@ -30,6 +32,9 @@ import {
   snapshotOf,
   templateItems,
   typeLabel,
+  buildSavedQuoteListRow,
+  exportSavedQuotationsExcel,
+  exportSavedQuotationsPdf,
   type CategoryKey,
   type CompanyProfileV1,
   type EngagementKey,
@@ -146,6 +151,7 @@ export function QuotationGeneratorV1() {
   const [emailFromName, setEmailFromName] = useState("");
   const [emailFromEmail, setEmailFromEmail] = useState("");
   const [approvalLink, setApprovalLink] = useState<string | null>(null);
+  const [pdfHostQuote, setPdfHostQuote] = useState<QuotationV1 | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
 
@@ -172,7 +178,7 @@ export function QuotationGeneratorV1() {
     setSendSettings(normalizeSendSettings(profile?.sendSettings ?? null));
     setHistory(h.history ?? []);
     setNotifications(n.notifications ?? []);
-    setList((q.quotations ?? []) as QuotationV1[]);
+    setList((q.quotations ?? []).map((row) => normalizeQuotation(row)));
   }, []);
 
   useLiveRefresh(async () => {
@@ -304,16 +310,34 @@ export function QuotationGeneratorV1() {
   }
 
   /** Local PDF download only — does not push to Company document delivery. */
-  async function downloadPdf(q: QuotationV1) {
+  async function downloadPdf(q: QuotationV1, opts?: { requireClean?: boolean }) {
     setBusy(true);
+    const normalized = normalizeQuotation(q);
+    const sheetLive =
+      route === "new" && current.id === normalized.id
+        ? document.getElementById("quote-sheet")
+        : null;
     try {
-      const payload = await buildPdfPayload(q);
+      if (!sheetLive) {
+        flushSync(() => {
+          setPdfHostQuote(normalized);
+        });
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            window.setTimeout(() => resolve(), 60);
+          });
+        });
+      }
+      const payload = await buildPdfPayload(normalized, {
+        requireClean: opts?.requireClean ?? false,
+      });
       if (!payload) return;
       forceDownloadPdf(payload.filename, payload.pdfBase64);
       flash(`Downloaded ${payload.filename}.`);
     } catch (e) {
       flash(e instanceof Error ? e.message : "PDF download failed", "err");
     } finally {
+      setPdfHostQuote(null);
       setBusy(false);
     }
   }
@@ -583,6 +607,39 @@ export function QuotationGeneratorV1() {
     flash("History Excel downloaded.");
   }
 
+  async function exportSavedExcel() {
+    if (!list.length) {
+      flash("No quotations to export.", "err");
+      return;
+    }
+    try {
+      await exportSavedQuotationsExcel(list, company);
+      flash("Saved quotations Excel downloaded.");
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Excel export failed", "err");
+    }
+  }
+
+  async function exportSavedPdf() {
+    if (!list.length) {
+      flash("No quotations to export.", "err");
+      return;
+    }
+    try {
+      await exportSavedQuotationsPdf(list, company);
+      flash("Saved quotations PDF downloaded.");
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "PDF export failed", "err");
+    }
+  }
+
+  function statusPillClass(status: QuotationV1["status"]) {
+    if (status === "approved" || status === "submitted") return "success";
+    if (status === "rejected") return "danger";
+    if (status === "sent") return "warning";
+    return "neutral";
+  }
+
   const unread = notifications.filter((n) => !n.read).length;
 
   const NAV: Array<{ id: Route; label: string; hint: string }> = [
@@ -740,6 +797,14 @@ export function QuotationGeneratorV1() {
                     onChange={(e) => patch((q) => ({ ...q, validTill: e.target.value }))}
                   />
                 </label>
+                <label className="field">
+                  <span>Follow-up Date</span>
+                  <input
+                    type="date"
+                    value={current.followUpDate || ""}
+                    onChange={(e) => patch((q) => ({ ...q, followUpDate: e.target.value }))}
+                  />
+                </label>
                 <label className="field" style={{ gridColumn: "1 / -1" }}>
                   <span>Prepared By *</span>
                   <input
@@ -780,6 +845,16 @@ export function QuotationGeneratorV1() {
                     onChange={(e) =>
                       patch((q) => ({ ...q, customer: { ...q.customer, address: e.target.value } }))
                     }
+                  />
+                </label>
+                <label className="field">
+                  <span>City</span>
+                  <input
+                    value={current.customer.city || ""}
+                    onChange={(e) =>
+                      patch((q) => ({ ...q, customer: { ...q.customer, city: e.target.value } }))
+                    }
+                    placeholder="Falls back to State in Saved list if blank"
                   />
                 </label>
                 <label className="field">
@@ -1193,53 +1268,116 @@ export function QuotationGeneratorV1() {
             <div className="qgv1-page-head">
               <div>
                 <h1>Saved quotations</h1>
-                <p>Open a quote to edit, or remove it from the shared list.</p>
+                <p>Pipeline view — open to edit, download PDF, or export the register.</p>
               </div>
+              {list.length > 0 ? (
+                <div className="qgv1-export-group" role="group" aria-label="Export saved quotations">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={busy}
+                    onClick={() => void exportSavedExcel()}
+                  >
+                    Export Excel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={busy}
+                    onClick={() => void exportSavedPdf()}
+                  >
+                    Export PDF
+                  </button>
+                </div>
+              ) : null}
             </div>
             {list.length === 0 ? (
               <div className="empty-state">
                 <div className="es-title">No quotations yet</div>
               </div>
             ) : (
-              <div className="tracker-list">
-                {list.map((q) => (
-                  <div key={q.id} className="tracker-row">
-                    <div className="tracker-row-main">
-                      <span className="tracker-row-title mono">{q.quoteNo}</span>
-                      <span className="tracker-row-sub">
-                        {q.customer?.name} · {typeLabel(q)} · ₹{money(Number((q as { _grandTotal?: number })._grandTotal ?? computeTotals(q, company).grand))}
-                      </span>
-                    </div>
-                    <span className={`pill pill-${q.status === "approved" ? "success" : q.status === "rejected" ? "danger" : q.status === "sent" ? "warning" : q.status === "submitted" ? "success" : "neutral"}`}>
-                      {q.status}
-                    </span>
-                    <div className="tracker-actions">
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => {
-                          setCurrent(q);
-                          setLastSaved(snapshotOf(q));
-                          setRoute("new");
-                        }}
-                      >
-                        Open
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-destructive btn-sm"
-                        onClick={async () => {
-                          if (!confirm(`Delete ${q.quoteNo}?`)) return;
-                          await api(`/quotation-v1/${q.id}`, { method: "DELETE" });
-                          flash("Deleted.");
-                          await reloadMeta();
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div className="qgv1-saved-wrap">
+                <table className="qgv1-saved-table">
+                  <thead>
+                    <tr>
+                      <th>Quotation No.</th>
+                      <th>Submitted</th>
+                      <th>Company</th>
+                      <th>City</th>
+                      <th>Description</th>
+                      <th className="num">Basic Total</th>
+                      <th className="num">Grand Total</th>
+                      <th className="num">Quote Value</th>
+                      <th>Status</th>
+                      <th>Follow-up</th>
+                      <th className="actions">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.map((q) => {
+                      const row = buildSavedQuoteListRow(q, company);
+                      return (
+                        <tr key={q.id}>
+                          <td className="mono qgv1-saved-qno">{row.quoteNo}</td>
+                          <td className="nowrap">{row.submittedDate}</td>
+                          <td>
+                            <div className="qgv1-saved-company">{row.companyName}</div>
+                          </td>
+                          <td className="nowrap">{row.companyCity}</td>
+                          <td>
+                            <div className="qgv1-saved-desc" title={row.description}>
+                              {row.description}
+                            </div>
+                          </td>
+                          <td className="num nowrap">₹{row.basicTotalLabel}</td>
+                          <td className="num nowrap qgv1-saved-grand">₹{row.grandTotalLabel}</td>
+                          <td className="num nowrap">₹{row.totalValueLabel}</td>
+                          <td>
+                            <span className={`pill pill-${statusPillClass(row.status)}`}>{row.status}</span>
+                          </td>
+                          <td className="nowrap">{row.followUpDate}</td>
+                          <td className="actions">
+                            <div className="qgv1-saved-actions">
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => {
+                                  const full = normalizeQuotation(q);
+                                  setCurrent(full);
+                                  setLastSaved(snapshotOf(full));
+                                  setRoute("new");
+                                }}
+                              >
+                                Open
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                disabled={busy}
+                                title="Download PDF"
+                                onClick={() => void downloadPdf(q)}
+                              >
+                                PDF
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-destructive btn-sm"
+                                onClick={async () => {
+                                  if (!confirm(`Delete ${q.quoteNo}?`)) return;
+                                  await api(`/quotation-v1/${q.id}`, { method: "DELETE" });
+                                  flash("Deleted.");
+                                  await reloadMeta();
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </section>
@@ -1780,6 +1918,14 @@ export function QuotationGeneratorV1() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pdfHostQuote ? (
+        <div className="qgv1-pdf-host" aria-hidden="true">
+          <div className="qgv1-preview-fit">
+            <QuoteSheet quote={pdfHostQuote} company={company} />
           </div>
         </div>
       ) : null}

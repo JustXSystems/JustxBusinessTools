@@ -28,10 +28,24 @@ export function blankCustomer(): QuoteCustomer {
     name: "",
     company: "",
     address: "",
+    city: "",
     state: "Karnataka",
     gstin: "",
     phone: "",
     email: "",
+  };
+}
+
+/** Backfill fields added after v1 (city, followUpDate) on older saved docs. */
+export function normalizeQuotation(q: QuotationV1): QuotationV1 {
+  return {
+    ...q,
+    followUpDate: q.followUpDate ?? "",
+    customer: {
+      ...blankCustomer(),
+      ...(q.customer ?? {}),
+      city: q.customer?.city ?? "",
+    },
   };
 }
 
@@ -65,6 +79,7 @@ export function newQuotationDraft(
     quoteNo: null,
     date: todayISO(),
     validTill: new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10),
+    followUpDate: "",
     preparedBy,
     customer: blankCustomer(),
     items: templateItems(category, eng),

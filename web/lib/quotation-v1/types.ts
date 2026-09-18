@@ -29,6 +29,8 @@ export type QuoteCustomer = {
   name: string;
   company: string;
   address: string;
+  /** City / locality; list UI falls back to state when blank. */
+  city: string;
   state: string;
   gstin: string;
   phone: string;
@@ -59,6 +61,8 @@ export type QuotationV1 = {
   quoteNo: string | null;
   date: string;
   validTill: string;
+  /** Optional CRM follow-up date (separate from Valid Till). */
+  followUpDate: string;
   preparedBy: string;
   customer: QuoteCustomer;
   items: QuoteItem[];
