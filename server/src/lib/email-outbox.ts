@@ -100,15 +100,63 @@ function newOutboxId() {
   return `eml_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`;
 }
 
-/** Prefer Admin → Integrations (DB); fall back to EMAIL_WEBHOOK_URL env. */
-export async function getEmailWebhookUrl(): Promise<string | null> {
+import { randomBytes } from "node:crypto";
+import { pool } from "../db.js";
+import {
+  createArtifact,
+  ensureArtifactDeliverySchema,
+  readArtifactBytesById,
+} from "./artifact-delivery.js";
+import { getActiveOrgId, getActiveProfileId, getActiveUserId } from "./request-context.js";
+
+let emailWebhookColReady: Promise<void> | null = null;
+
+/** Per Business Profile quotation-email webhook (Path A). */
+export async function ensureEmailWebhookUrlColumn(): Promise<void> {
+  if (!emailWebhookColReady) {
+    emailWebhookColReady = (async () => {
+      try {
+        await pool.query(
+          `ALTER TABLE business_profiles ADD COLUMN email_webhook_url VARCHAR(1024) NULL`,
+        );
+      } catch (err) {
+        const e = err as { code?: string; errno?: number };
+        if (e.code !== "ER_DUP_FIELDNAME" && e.errno !== 1060) throw err;
+      }
+    })();
+  }
+  await emailWebhookColReady;
+}
+
+/**
+ * Resolve Path A email webhook for the active Business Profile:
+ * 1) Profile `email_webhook_url` (per company / GSTIN) — preferred
+ * 2) Admin → Integrations email_webhook
+ * 3) `EMAIL_WEBHOOK_URL` / `NOTIFY_EMAIL_WEBHOOK_URL` env
+ */
+export async function getEmailWebhookUrl(
+  profileId: number = getActiveProfileId(),
+): Promise<string | null> {
+  await ensureEmailWebhookUrlColumn();
+  const [rows] = await pool.query(
+    `SELECT email_webhook_url FROM business_profiles WHERE id = :id LIMIT 1`,
+    { id: profileId },
+  );
+  const row = Array.isArray(rows)
+    ? (rows[0] as { email_webhook_url?: string | null } | undefined)
+    : undefined;
+  const fromProfile = String(row?.email_webhook_url ?? "").trim();
+  if (fromProfile) return fromProfile;
+
   const { resolveEmailWebhook } = await import("./integrations/resolvers.js");
   const resolved = await resolveEmailWebhook();
   return resolved?.url ?? null;
 }
 
-export async function emailWebhookConfigured(): Promise<boolean> {
-  return Boolean(await getEmailWebhookUrl());
+export async function emailWebhookConfigured(
+  profileId?: number,
+): Promise<boolean> {
+  return Boolean(await getEmailWebhookUrl(profileId ?? getActiveProfileId()));
 }
 
 export function mapOutboxPublic(row: EmailOutboxRow) {

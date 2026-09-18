@@ -500,8 +500,14 @@ export default function AdminIntegrationsPage() {
           <section className="panel admin-card integ-panel">
             <header className="integ-panel-head">
               <div>
-                <h3>Email webhook (Path A)</h3>
-                <p>HTTPS inbound hook for automatic HTML + PDF email. Not SMTP / SendGrid keys.</p>
+                <h3>Email webhook (Path A) — platform fallback</h3>
+                <p>
+                  Optional platform-wide HTTPS inbound hook when a Business Profile has{" "}
+                  <strong>no</strong> per-company email webhook. Prefer{" "}
+                  <strong>Business Profile → Send Via → Email → Email webhook URL</strong> for each
+                  GSTIN / company mailbox (Power Automate). Not SMTP / SendGrid keys. Not the Profile
+                  artifact webhook (PDF files).
+                </p>
               </div>
               <span className={statusPill(byId.email_webhook?.status ?? "not_configured")}>
                 {statusLabel(byId.email_webhook?.status ?? "not_configured")}
@@ -516,7 +522,7 @@ export default function AdminIntegrationsPage() {
             <div className="integ-form">
               <Field
                 label="Webhook URL"
-                hint="n8n / Make / Zapier / Power Automate production HTTPS URL. Not the Profile artifact webhook."
+                hint="Fallback only. Per-company URL lives on Business Profile. n8n / Make / Power Automate production HTTPS URL."
               >
                 <input
                   value={emailForm.url}

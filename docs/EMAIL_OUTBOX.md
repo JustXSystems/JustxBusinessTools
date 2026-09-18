@@ -3,7 +3,7 @@
 **Route:** `/email-outbox` (sidebar → **Email Outbox**)  
 **Who:** **Business Owners** and **Staff** (and Admin with full access). **Viewer** cannot open Email Outbox — see [`ROLES.md`](ROLES.md).  
 **Creates rows:** Quotation → **Send Via → Email** (and retries from this page)  
-**Related:** [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) · [`SYNC_CENTER.md`](SYNC_CENTER.md) · [`SETUP.md`](SETUP.md)#email-delivery-configuration · [`ROLES.md`](ROLES.md)
+**Related:** [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) · [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md) · [`SYNC_CENTER.md`](SYNC_CENTER.md) · [`SETUP.md`](SETUP.md)#email-delivery-configuration · [`ROLES.md`](ROLES.md)
 
 Email Outbox is a **durable queue of quotation emails** for the current Business Profile. It is **not** the Notifications inbox and **not** Sync Center’s pending PDF files.
 
@@ -20,7 +20,8 @@ Email Outbox is a **durable queue of quotation emails** for the current Business
 | Goal | Use | Sync Center setup zip? |
 |------|-----|------------------------|
 | File quotation/survey PDFs to **company Drive / webhook / UNC / local folder** | **Company document delivery** (+ Sync Center only for UNC/status) | Only for **UNC/local folder** (or Outlook Path C) |
-| **Send** the quotation by email | **Email Outbox** (this guide) | Only for **Path C — Open in Outlook** |
+| **Send** HTML + PDF from **any device** (phone/laptop) | **Path A** — Email webhook; recommended: Power Automate + Microsoft 365 Outlook — [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md) | **No** |
+| **Send** the quotation by email (legacy local Outlook) | **Path C** — Open in Outlook | Yes (Owner/Admin installs agent) |
 | Drive/webhook filing **and** email webhook | Both features, separately | Usually **no** agent |
 | UNC/local filing **and** Outlook compose | Both use the **same** desktop agent | **Yes** — install once |
 
@@ -36,32 +37,35 @@ Full “who / what / how” for files: [`SYNC_CENTER.md`](SYNC_CENTER.md)#who-ne
 
 | Setting | Where | Who | Notes |
 |---------|-------|-----|-------|
-| `EMAIL_WEBHOOK_URL` | **Admin → Integrations** (preferred) or `server/.env` | Platform admin | HTTPS inbound webhook **you** create |
-| `NOTIFY_EMAIL_WEBHOOK_URL` | Same `.env` fallback | Engineer | Alias only if Admin / primary empty |
+| **Email webhook URL** (Path A) | **Business Profile → Send Via → Email** | Owner / Admin | **Per company / GSTIN** — Power Automate HTTP URL for that mailbox. Blind-follow: [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md) |
+| Platform Email webhook fallback | **Admin → Integrations** or `EMAIL_WEBHOOK_URL` | Platform admin | Used only if profile URL is empty |
+| `NOTIFY_EMAIL_WEBHOOK_URL` | `.env` fallback | Engineer | Alias only if Admin / primary empty |
 | Email template / accent / Reply-To | **Business Profile** → Send Via → Email | Owner | Also Admin → GST branches → Branding |
 | Default To / CC / subject text | Same Send Via panel | Owner | Prefills Quotation send modal |
-| Desktop agent token | **Sync Center** → Download setup | **Owner or Admin** (Staff cannot open Sync Center) | Same agent as UNC sync; install once on the Outlook PC |
+| Desktop agent token | **Sync Center** → Download setup | **Owner or Admin** (Staff cannot open Sync Center) | Path C only — same agent as UNC sync |
 | Mail client / `mailto` handler | Windows default apps | Staff PC | Path B |
 | Classic Outlook (COM) | Windows desktop | Staff PC | Path C — **not** New Outlook alone |
 | Download Folder / UNC | Business Profile | Owner | **Not required for email** |
+| Artifact webhook (PDF files) | Business Profile → Company document delivery | Owner | **Different** from email webhook |
 
 ---
 
 ## Choose a delivery path
 
-| Path | PDF auto-attached? | Corporate HTML? | Config burden |
-|------|-------------------|-----------------|---------------|
-| **A. Email webhook** | Yes | Yes (`html` field) | Platform admin + automation |
-| **B. Mailto + outbox** | No (download + attach) | **No** — plain text only in mail app | None on server; working default mail client |
-| **C. Outlook via agent** | Yes (COM) | **Yes** — Corporate `html` via Outlook `HTMLBody` (**agent ≥ 1.1.3** + classic Outlook) | Sync Center agent + **classic** Outlook COM |
+| Path | PDF auto-attached? | Corporate HTML? | Any device? | Config burden |
+|------|-------------------|-----------------|-------------|---------------|
+| **A. Email webhook** (+ M365 / Graph via Power Automate) | Yes | Yes (`html` field) | **Yes** | **Owner:** Profile email webhook URL per company — **[`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md)** |
+| **B. Mailto + outbox** | No (download + attach) | **No** — plain text only in mail app | Partial | None on server; working default mail client |
+| **C. Outlook via agent** | Yes (COM) | **Yes** — Corporate `html` via Outlook `HTMLBody` (**agent ≥ 1.1.3** + classic Outlook) | **No** | Sync Center agent + **classic** Outlook COM |
+| **D. Native Graph in JustX** | Yes (planned) | Yes | **Yes** | **Not shipped** — Entra checklist in [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md)#part-2--entra-id-app-registration-for-native-path-d-or-custom-graph-caller |
 
-Recommended: **A** in production for HTML delivered to the customer inbox without a staff PC; **C** when you want HTML compose + PDF on Windows without a webhook; **B** only for plain-text mailto. Combine: A primary, B/C when webhook fails.
+**Recommended for production:** each company Owner sets **Business Profile → Email webhook URL** (Path A + Power Automate) so Staff send HTML + PDF from **any device**. Use **C** only as optional Windows convenience. **B** is plain-text fallback only.
 
 **Important expectations**
 
 | Expectation | Reality |
 |-------------|---------|
-| “I set Corporate HTML in the app” | HTML is **stored** on the outbox row. To **see** it: Path **A** (webhook) or Path **C** (**Open in Outlook** / **Open HTML in Outlook**). Path B mailto is always plain. |
+| “I set Corporate HTML in the app” | HTML is **stored** on the outbox row. To **deliver** it from any device: **Path A** ([`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md)). Path **C** works only on a Windows PC with agent. Path B mailto is always plain. |
 | Body shows `Dear+Customer,%0A%0A…` | Broken mailto encoding (spaces as `+`). Fixed by `buildMailtoHref` (`%20`) — redeploy web; see [Mailto encoding](#mailto-encoding-spaces-as--and-0a). |
 | Open mail app / Open in Outlook do nothing | Often Outlook stuck on **Add Account**, **New Outlook** without COM, or hung `OUTLOOK.exe` — see [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c). |
 | UNC works but email fails | Expected to be independent; email does not use Download Folder. |
@@ -85,16 +89,25 @@ Optional Owner polish (not required to send): **Business Profile → Send Via de
 
 ---
 
-## Path A — Automatic send (`EMAIL_WEBHOOK_URL`)
+## Path A — Automatic send (email webhook)
+
+**Any-device send (recommended):** create the webhook with **Power Automate + Office 365 Outlook**, then paste the URL on **this company’s Business Profile** — full clicks: **[`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md)#part-1--blind-follow-path-a-via-power-automate--microsoft-365-outlook**.
 
 ### What to configure
 
 JustX does **not** generate this URL. You create an inbound webhook in an external tool; JustX POSTs JSON to it.
 
+| Location | Role |
+|----------|------|
+| **Business Profile → Send Via → Email → Email webhook URL** | **Preferred.** Per company / GSTIN / mailbox |
+| Admin → Integrations → Email webhook | Fallback if profile URL empty |
+| `EMAIL_WEBHOOK_URL` / `NOTIFY_EMAIL_WEBHOOK_URL` | Env fallback |
+
 | Env var | Prefer? | Meaning |
 |---------|---------|---------|
-| `EMAIL_WEBHOOK_URL` | Yes (or Admin Integrations) | Primary |
-| `NOTIFY_EMAIL_WEBHOOK_URL` | Only as fallback | Same purpose if primary empty |
+| Profile `emailWebhookUrl` | **Yes** | Per Business Profile |
+| Admin Integrations / `EMAIL_WEBHOOK_URL` | Fallback | Platform-wide |
+| `NOTIFY_EMAIL_WEBHOOK_URL` | Last resort | Same purpose if primary empty |
 
 ### Step-by-step
 
@@ -114,9 +127,11 @@ Pick one:
 
 #### 2) Put URL on JustX
 
-**Preferred:** platform admin → **Admin → Integrations → Email webhook** → paste → Enable → Save → **Send test POST**.
+**Preferred (per company):** Owner/Admin → correct branch → **Business Profile → Send Via → Email → Email webhook URL** → paste → profile **Save**.
 
-**Fallback `.env`:**
+**Optional platform fallback** (only if profile field empty): **Admin → Integrations → Email webhook** → paste → Enable → Save → **Send test POST**.
+
+**Last-resort `.env`:**
 
 ```bash
 nano /var/www/jbt/server/.env
@@ -132,6 +147,7 @@ pm2 reload ecosystem.config.cjs --update-env
 pm2 save
 ```
 
+Resolve order: **Profile → Admin Integrations → env**.
 #### 3) Map JSON in your automation
 
 | Field | Use as |
@@ -152,7 +168,7 @@ Quotation → Send Via → Email. Email Outbox: **sent** = success. **failed** =
 ### Path A checklist
 
 - [ ] Webhook created and **active**  
-- [ ] URL in Admin Integrations or `EMAIL_WEBHOOK_URL`  
+- [ ] URL on **Business Profile → Email webhook URL** (or Admin / env fallback)  
 - [ ] API reloaded if using `.env`  
 - [ ] Automation maps **`html`** and PDF  
 - [ ] Profile Corporate template + accent (optional)  
@@ -463,7 +479,7 @@ Filters: **Pending** = `pending` + `failed` + `opened` (UI note: “Pending / fa
 |------|-------------------|
 | **JustX engineer** | Admin Integrations / `EMAIL_WEBHOOK_URL`, PM2, automation hosting; agent path changes auto-pack on Deploy (or force **`pack_win_agent=true`**) |
 | **Admin** | Admin Console; may also use Operator Email Outbox / Sync Center with full access; login lands on `/admin` — [`ROLES.md`](ROLES.md) |
-| **Company Owner** | Profile email templates, accent; **Sync Center** setup if Path C / UNC; Email Outbox R/W |
+| **Company Owner** | Profile email templates, accent; **Email webhook URL** (Path A per GSTIN); Sync Center setup if Path C / UNC; Email Outbox R/W |
 | **Staff** | Send quotations; Email Outbox actions; Outlook ready on their PC for B/C (agent installed by Owner); **no** Sync Center menu |
 | **Viewer** | No Email Outbox — Home + My Tools only |
 
@@ -511,6 +527,7 @@ Start-Process "mailto:you@example.com?subject=JBT%20test&body=Mailto%20works"
 
 ## Related docs
 
+- [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md) — any-device send via Power Automate + M365 / Entra Graph checklist  
 - [`ROLES.md`](ROLES.md) — who can open Email Outbox vs Sync Center  
 - [`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md) — JSON contract  
 - [`SYNC_CENTER.md`](SYNC_CENTER.md) — agent + UNC/local folder delivery · Connected ≠ sync · [agent version / pack](SYNC_CENTER.md#confirm-desktop-agent-version-in-build--on-pc)  

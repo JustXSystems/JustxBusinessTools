@@ -142,7 +142,9 @@ export default function EmailOutboxPage() {
           <strong className="sync-stat-value" style={{ fontSize: 15 }}>
             {webhookConfigured ? "Configured" : "Not set"}
           </strong>
-          <span className="section-note">EMAIL_WEBHOOK_URL on API</span>
+          <span className="section-note">
+            Profile email webhook · Admin fallback
+          </span>
         </div>
         <div className="panel sync-stat">
           <span className="sync-stat-label">Desktop agent</span>
@@ -164,7 +166,9 @@ export default function EmailOutboxPage() {
         <h3 className="panel-title">How to send</h3>
         <ol className="sync-setup-steps">
           <li>
-            <strong>Webhook (best for HTML inbox)</strong> — Admin → Integrations Email webhook; use{" "}
+            <strong>Webhook (best for HTML inbox)</strong> — set this company&apos;s URL on{" "}
+            <Link href="/profile">Business Profile → Send Via → Email</Link>; optional platform
+            fallback under Admin → Integrations. Use{" "}
             <em>Send via webhook</em> for HTML + PDF.
           </li>
           <li>
@@ -216,8 +220,8 @@ export default function EmailOutboxPage() {
                         disabled={Boolean(busyId) || !webhookConfigured}
                         title={
                           webhookConfigured
-                            ? "Send HTML + PDF via EMAIL_WEBHOOK_URL"
-                            : "Configure EMAIL_WEBHOOK_URL on the API server"
+                            ? "Send HTML + PDF via company email webhook"
+                            : "Set email webhook on Business Profile (or Admin fallback)"
                         }
                         onClick={() =>
                           void run(item.id, "Sent via webhook.", async () => {

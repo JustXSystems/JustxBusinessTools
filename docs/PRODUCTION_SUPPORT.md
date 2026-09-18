@@ -13,6 +13,7 @@ Related docs (do not duplicate full setup here):
 | [`DEPLOY.md`](DEPLOY.md) | First-time VPS, GitHub Actions, nginx, PM2; set `pack_win_agent` when shipping a new agent zip |
 | [`SYNC_CENTER.md`](SYNC_CENTER.md) | UNC/local folder + desktop agent (**Owner/Admin**); Connected vs sync; `…/jbt/api`; agent version / pack |
 | [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) | Quotation email paths A/B/C (**Owner/Staff**); Outlook prep; mailto encoding; Open in Outlook; confirm ≥ 1.1.3 |
+| [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md) | **Any-device** HTML+PDF via Power Automate + M365; Entra Graph `Mail.Send` checklist |
 | [`OBSERVABILITY.md`](OBSERVABILITY.md) | Grafana/Loki/Prometheus, Admin Operations, Sentry/GlitchTip |
 | [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) | Artifact delivery channels & filename policies |
 | [`.env.example`](../.env.example) | Env template → `server/.env` on the VPS |

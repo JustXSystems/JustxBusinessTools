@@ -719,18 +719,39 @@ export default function ProfilePage() {
               />
             </label>
             <p className="section-note">
-              Summary card, line items, accent colors, logo, GSTIN, and CTA stay fixed. Intro/closing
-              support the same {"{{placeholders}}"} as subject.
-            </p>
+          Summary card, line items, accent colors, logo, GSTIN, and CTA stay fixed. Intro/closing
+          support the same {"{{placeholders}}"} as subject.
+        </p>
           </>
         )}
 
+        <h4 className="panel-subtitle" style={{ marginTop: 16 }}>
+          Company email webhook (Path A — any device)
+        </h4>
         <p className="section-note">
-          Without <code>EMAIL_WEBHOOK_URL</code> on the API server, Send Via → Email saves to{" "}
-          <Link href="/email-outbox">Email Outbox</Link>, opens the user’s mail app (plain text), and
-          downloads the PDF to attach — or use <strong>Open in Outlook</strong> with the desktop agent.
-          With a webhook, the server posts To/CC/subject/body/<strong>html</strong>/replyTo/from/PDF —
-          map <code>html</code> in your provider (see <code>docs/EMAIL_OUTBOX.md</code>).
+          Paste this company&apos;s Power Automate / n8n <strong>HTTP POST URL</strong> so Staff can
+          send Corporate HTML + PDF from any device.{" "}
+          <strong>Not</strong> the same as Company document delivery → artifact webhook (PDF files).
+          Blind-follow: <code>docs/MICROSOFT_GRAPH_EMAIL.md</code>. Owner/Admin only.
+        </p>
+        <label className="field">
+          <span className="label">Email webhook URL</span>
+          <input
+            type="url"
+            value={profile.emailWebhookUrl ?? ""}
+            disabled={!canEdit}
+            placeholder="https://prod-….logic.azure.com:443/workflows/…/invoke?…"
+            autoComplete="off"
+            onChange={(e) =>
+              setProfile({ ...profile, emailWebhookUrl: e.target.value.trim() || null })
+            }
+          />
+        </label>
+        <p className="section-note">
+          Leave blank to fall back to platform <strong>Admin → Integrations → Email webhook</strong>{" "}
+          or <code>EMAIL_WEBHOOK_URL</code>. Clear the field and Save to remove this profile&apos;s
+          URL. Without any webhook, Send Via → Email uses{" "}
+          <Link href="/email-outbox">Email Outbox</Link> (mailto / Open in Outlook).
         </p>
       </div>
 

@@ -60,6 +60,7 @@ Legend: **R/W** = read + write / actions · **Read** = view (and safe inbox acti
 - Operator View only — **no** Admin Console, **no** Sync Center.
 - **Home** (read), **Business Profile** (read), **Email Outbox** (read/write/action), **Notifications** (read), **My Tools** (read/write/action).
 - Generate quotations / surveys; send email via Outbox; do **not** configure Drive/UNC or download Sync Center setup.
+- **Any-device Corporate HTML + PDF:** use **Path A** (Email webhook / Power Automate + M365) — [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md). Path C (Open in Outlook) is Windows-only.
 - For Outlook Path C or UNC file sync on a PC: **Owner** (or Admin) must open Sync Center on that PC and install the agent once.
 - Scoped to Business Profiles they belong to.
 
@@ -78,6 +79,7 @@ Legend: **R/W** = read + write / actions · **Read** = view (and safe inbox acti
 |-------|-----|
 | Sync Center (Owner/Admin) | [`SYNC_CENTER.md`](SYNC_CENTER.md) |
 | Email Outbox (Owner/Staff) | [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) |
+| **Any-device email (M365 / Graph)** | [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md) |
 | Company delivery fields | [`DOWNLOAD_FOLDER.md`](DOWNLOAD_FOLDER.md) |
 | Product setup | [`SETUP.md`](SETUP.md) |
 | Support / on-call matrix | [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md) |

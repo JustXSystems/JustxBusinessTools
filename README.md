@@ -19,6 +19,7 @@ Multi-tenant business tools for quotations, site surveys, and more — by **Just
 | **Production support** (on-call, runbooks, triage) | [`docs/PRODUCTION_SUPPORT.md`](docs/PRODUCTION_SUPPORT.md) |
 | **Sync Center** (Owner/Admin) | [`docs/SYNC_CENTER.md`](docs/SYNC_CENTER.md) |
 | **Email Outbox** (Owner/Staff) | [`docs/EMAIL_OUTBOX.md`](docs/EMAIL_OUTBOX.md) |
+| **Any-device email (M365 / Graph)** | [`docs/MICROSOFT_GRAPH_EMAIL.md`](docs/MICROSOFT_GRAPH_EMAIL.md) |
 | **Env template** | [`.env.example`](.env.example) → `server/.env` |
 | **Mobile (Capacitor)** | [`docs/MOBILE.md`](docs/MOBILE.md) |
 | Desktop UNC sync | [`desktop-sync-agent/README.md`](desktop-sync-agent/README.md) |

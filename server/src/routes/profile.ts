@@ -18,6 +18,7 @@ import {
   validateWebhookUrl,
   type ArtifactDestination,
 } from "../lib/artifact-dispatch.js";
+import { ensureEmailWebhookUrlColumn } from "../lib/email-outbox.js";
 import {
   ensureSendSettingsColumn,
   mergeSendSettingsPreservingDriveSecrets,
@@ -91,6 +92,7 @@ type ProfileRow = {
   artifact_destination?: string | null;
   artifact_webhook_url?: string | null;
   artifact_webhook_secret?: string | null;
+  email_webhook_url?: string | null;
 };
 
 async function loadOrgActiveThemeTokens(orgId: number): Promise<Record<string, string> | null> {
@@ -189,6 +191,7 @@ function toApi(
     artifactDestination: (row.artifact_destination as ArtifactDestination) || "auto",
     artifactWebhookUrl: row.artifact_webhook_url ?? null,
     artifactWebhookSecretConfigured: Boolean(row.artifact_webhook_secret),
+    emailWebhookUrl: row.email_webhook_url ?? null,
     delivery: deliveryExtra ?? null,
   };
 }
@@ -202,6 +205,7 @@ async function ensureProfileExtras() {
   await ensureFlashDisplayColumns();
   await ensureArtifactDeliverySchema();
   await ensureDeliveryConfigColumns();
+  await ensureEmailWebhookUrlColumn();
 }
 
 /** One-time: copy legacy quotation letterhead send config into profile if empty. */
@@ -360,6 +364,18 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
     artifactWebhookSecret = s ? s.slice(0, 255) : null;
   }
 
+  let emailWebhookUrl: string | null | undefined;
+  if (body.emailWebhookUrl !== undefined) {
+    try {
+      emailWebhookUrl = validateWebhookUrl(body.emailWebhookUrl);
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : "Invalid email webhook URL",
+      });
+      return;
+    }
+  }
+
   const documentAccentColor =
     body.documentAccentColor !== undefined
       ? normalizeDocumentAccentColor(body.documentAccentColor)
@@ -439,6 +455,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       ${artifactDestination !== undefined ? ", artifact_destination = :artifactDestination" : ""}
       ${artifactWebhookUrl !== undefined ? ", artifact_webhook_url = :artifactWebhookUrl" : ""}
       ${artifactWebhookSecret !== undefined ? ", artifact_webhook_secret = :artifactWebhookSecret" : ""}
+      ${emailWebhookUrl !== undefined ? ", email_webhook_url = :emailWebhookUrl" : ""}
      WHERE id = :id`,
     {
       id: profileId,
@@ -476,6 +493,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       ...(artifactDestination !== undefined ? { artifactDestination } : {}),
       ...(artifactWebhookUrl !== undefined ? { artifactWebhookUrl } : {}),
       ...(artifactWebhookSecret !== undefined ? { artifactWebhookSecret } : {}),
+      ...(emailWebhookUrl !== undefined ? { emailWebhookUrl } : {}),
     },
   );
 

@@ -166,9 +166,15 @@ export type BusinessProfile = {
    * `auto` picks Google Drive → webhook → UNC agent based on what is configured.
    */
   artifactDestination: "auto" | "google_drive" | "webhook" | "unc_agent" | "none";
-  /** Corporate webhook (Power Automate / n8n / SharePoint flow). */
+  /** Corporate webhook (Power Automate / n8n / SharePoint flow) for **PDF file** delivery. */
   artifactWebhookUrl: string | null;
   artifactWebhookSecretConfigured?: boolean;
+  /**
+   * Quotation **email** webhook (Path A) for this Business Profile / company.
+   * Per-GSTIN Power Automate / n8n URL — not the same as artifactWebhookUrl.
+   * Falls back to Admin → Integrations / EMAIL_WEBHOOK_URL when empty.
+   */
+  emailWebhookUrl: string | null;
   delivery?: {
     artifactDestination: string;
     effectiveDestination: string;
@@ -226,6 +232,7 @@ export const EMPTY_PROFILE: BusinessProfile = {
   artifactDestination: "auto",
   artifactWebhookUrl: null,
   artifactWebhookSecretConfigured: false,
+  emailWebhookUrl: null,
   delivery: null,
 };
 
