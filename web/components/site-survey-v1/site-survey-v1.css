@@ -893,6 +893,15 @@
   background: color-mix(in srgb, var(--bg-0) 85%, transparent);
   border: 1px solid var(--ssv1-border2);
   color: var(--ssv1-text);
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  z-index: 1;
+}
 
 /* ---------- Footer / buttons ---------- */
 .ssv1-popup-footer {
