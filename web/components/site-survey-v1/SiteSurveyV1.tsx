@@ -28,12 +28,24 @@ import {
   uid,
   val,
   withFreshEstimate,
+  buildSavedSurveyListRow,
+  filterSavedSurveys,
+  countActiveSurveyFilters,
+  uniqueSurveyCities,
+  exportSavedSurveysExcel,
+  exportSavedSurveysPdf,
+  EMPTY_SAVED_SURVEY_FILTERS,
+  SAVED_SURVEY_STATUS_OPTIONS,
   type Appliance,
   type SiteSurveyV1 as Survey,
   type SurveyCompanySnapshot,
   type SurveyFieldDef,
   type SurveyHistoryRow,
   type SurveyPhoto,
+  type SavedSurveyFilters,
+  type SurveyFollowUpFilter,
+  type SurveyStatus,
+  type InstallationType,
 } from "@/lib/site-survey-v1";
 import {
   fillSendTemplate,
@@ -578,6 +590,8 @@ export function SiteSurveyV1() {
   const [emailCc, setEmailCc] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
+  const [savedFilters, setSavedFilters] = useState<SavedSurveyFilters>(EMPTY_SAVED_SURVEY_FILTERS);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   const preparedSurveyorSeeded = useRef(false);
 
@@ -585,6 +599,9 @@ export function SiteSurveyV1() {
   const steps = useMemo(() => stepsForFlow(flow), [flow]);
   /** Clamp defensively — flow can change (fewer/more steps) while stepIndex is stale. */
   const safeStepIndex = Math.min(stepIndex, steps.length - 1);
+  const filteredList = useMemo(() => filterSavedSurveys(list, savedFilters), [list, savedFilters]);
+  const savedCityOptions = useMemo(() => uniqueSurveyCities(list), [list]);
+  const activeFilterCount = useMemo(() => countActiveSurveyFilters(savedFilters), [savedFilters]);
 
   const flash = useCallback((msg: string, kind = "ok") => {
     setToast({ msg, kind });
@@ -899,6 +916,108 @@ export function SiteSurveyV1() {
     flash("History Excel downloaded.");
   }
 
+  async function exportSavedExcel() {
+    if (!filteredList.length) {
+      flash("No surveys to export.", "err");
+      return;
+    }
+    try {
+      await exportSavedSurveysExcel(filteredList);
+      flash(
+        activeFilterCount
+          ? `Excel downloaded (${filteredList.length} filtered).`
+          : "Saved surveys Excel downloaded.",
+      );
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Excel export failed", "err");
+    }
+  }
+
+  async function exportSavedPdfList() {
+    if (!filteredList.length) {
+      flash("No surveys to export.", "err");
+      return;
+    }
+    try {
+      await exportSavedSurveysPdf(filteredList, company.name);
+      flash(
+        activeFilterCount
+          ? `PDF downloaded (${filteredList.length} filtered).`
+          : "Saved surveys PDF downloaded.",
+      );
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "PDF export failed", "err");
+    }
+  }
+
+  function patchSavedFilters(patch: Partial<SavedSurveyFilters>) {
+    setSavedFilters((prev) => ({ ...prev, ...patch }));
+  }
+
+  function toggleSavedStatus(status: SurveyStatus) {
+    setSavedFilters((prev) => {
+      const has = prev.statuses.includes(status);
+      return {
+        ...prev,
+        statuses: has ? prev.statuses.filter((s) => s !== status) : [...prev.statuses, status],
+      };
+    });
+  }
+
+  function toggleInstallationType(type: InstallationType) {
+    setSavedFilters((prev) => {
+      const has = prev.installationTypes.includes(type);
+      return {
+        ...prev,
+        installationTypes: has
+          ? prev.installationTypes.filter((t) => t !== type)
+          : [...prev.installationTypes, type],
+      };
+    });
+  }
+
+  function forceDownloadPdf(filename: string, pdfBase64: string) {
+    const binary = atob(pdfBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const safeName = filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`;
+    const blob = new Blob([bytes], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = safeName;
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  async function downloadSurveyPdf(survey: Survey) {
+    setBusy(true);
+    try {
+      const full = withFreshEstimate(survey);
+      const pdf = await buildPdf(full);
+      forceDownloadPdf(pdf.filename, pdf.pdfBase64);
+      flash(`Downloaded ${pdf.filename}.`);
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "PDF download failed", "err");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function statusPillClass(status: SurveyStatus) {
+    if (status === "submitted") return "success";
+    if (status === "saved") return "warning";
+    return "neutral";
+  }
+
+  function sanitizeCostFilter(raw: string) {
+    return String(raw).replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+  }
+
   const step = steps[safeStepIndex];
   const stepFields = step ? fieldsForStep(flow, step.id, current.installationType).filter((f) => isFieldVisible(f, current.values)) : [];
   const normalFields = stepFields.filter((f) => f.kind !== "file");
@@ -1181,11 +1300,33 @@ export function SiteSurveyV1() {
           <div className="ssv1-page-head">
             <div>
               <h1>Saved surveys</h1>
-              <p className="ssv1-sub">Open a draft or submitted survey to continue editing, regenerate the PDF, or send it.</p>
+              <p className="ssv1-sub">Filter the register, open to edit, download PDF, or export.</p>
             </div>
-            <button type="button" className="ssv1-btn ssv1-btn-next ssv1-btn-compact" onClick={() => { startNewSurvey(); setRoute("new"); }}>
-              New survey
-            </button>
+            <div className="ssv1-saved-head-actions">
+              {list.length > 0 ? (
+                <div className="ssv1-export-group" role="group" aria-label="Export saved surveys">
+                  <button
+                    type="button"
+                    className="ssv1-btn ssv1-btn-back ssv1-btn-compact"
+                    disabled={busy || !filteredList.length}
+                    onClick={() => void exportSavedExcel()}
+                  >
+                    Export Excel
+                  </button>
+                  <button
+                    type="button"
+                    className="ssv1-btn ssv1-btn-back ssv1-btn-compact"
+                    disabled={busy || !filteredList.length}
+                    onClick={() => void exportSavedPdfList()}
+                  >
+                    Export PDF
+                  </button>
+                </div>
+              ) : null}
+              <button type="button" className="ssv1-btn ssv1-btn-next ssv1-btn-compact" onClick={() => { startNewSurvey(); setRoute("new"); }}>
+                New survey
+              </button>
+            </div>
           </div>
           {list.length === 0 ? (
             <div className="ssv1-empty">
@@ -1196,55 +1337,277 @@ export function SiteSurveyV1() {
               </button>
             </div>
           ) : (
-            <div className="tracker-list">
-              {list.map((s) => (
-                <div key={s.id} className="tracker-row">
-                  <div className="tracker-row-main">
-                    <span className="tracker-row-title ssv1-mono">{s.reportNo || "(draft)"}</span>
-                    <span className="tracker-row-sub">
-                      {val(s.values, "f_name") || "Unnamed"} · {s.installationType} · {fmtRs(s.estimate?.totalCost)}
-                    </span>
+            <>
+              <div className="ssv1-saved-filters">
+                <div className="ssv1-saved-filters-main">
+                  <label className="ssv1-saved-search">
+                    <span className="sr-only">Search surveys</span>
+                    <input
+                      type="search"
+                      value={savedFilters.query}
+                      onChange={(e) => patchSavedFilters({ query: e.target.value })}
+                      placeholder="Search report no., customer, city, type…"
+                    />
+                  </label>
+                  <div className="ssv1-saved-status-chips" role="group" aria-label="Status filter">
+                    {SAVED_SURVEY_STATUS_OPTIONS.map((status) => {
+                      const on = savedFilters.statuses.includes(status);
+                      return (
+                        <button
+                          key={status}
+                          type="button"
+                          className={`ssv1-filter-chip${on ? " is-on" : ""}`}
+                          aria-pressed={on}
+                          onClick={() => toggleSavedStatus(status)}
+                        >
+                          {status}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <span className={`pill pill-${s.status === "submitted" ? "success" : s.status === "saved" ? "warning" : "neutral"}`}>
-                    {s.status}
-                  </span>
-                  <div className="tracker-actions">
+                  <button
+                    type="button"
+                    className={`ssv1-btn ssv1-btn-back ssv1-btn-compact ssv1-filters-toggle${filtersExpanded ? " is-on" : ""}`}
+                    aria-expanded={filtersExpanded}
+                    onClick={() => setFiltersExpanded((v) => !v)}
+                  >
+                    More filters{activeFilterCount ? ` · ${activeFilterCount}` : ""}
+                  </button>
+                  {activeFilterCount > 0 ? (
                     <button
                       type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={async () => {
-                        try {
-                          const data = await api<{ survey: Survey }>(`/site-survey-v1/${s.id}`);
-                          const full = withFreshEstimate(data.survey);
-                          setCurrent(full);
-                          setLastSaved(snapshotOf(full));
-                          setStepIndex(0);
-                          setShowSuccess(false);
-                          setRoute("new");
-                        } catch (e) {
-                          flash(e instanceof Error ? e.message : "Failed to open survey", "err");
-                        }
+                      className="ssv1-btn ssv1-btn-back ssv1-btn-compact"
+                      onClick={() => {
+                        setSavedFilters(EMPTY_SAVED_SURVEY_FILTERS);
+                        setFiltersExpanded(false);
                       }}
                     >
-                      Open
+                      Clear
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-destructive btn-sm"
-                      onClick={async () => {
-                        if (!confirm(`Delete ${s.reportNo || "this draft"}?`)) return;
-                        await api(`/site-survey-v1/${s.id}`, { method: "DELETE" });
-                        flash("Deleted.");
-                        invalidateAdminData("site-survey-v1");
-                        await reloadMeta();
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                  ) : null}
                 </div>
-              ))}
-            </div>
+
+                {filtersExpanded ? (
+                  <div className="ssv1-saved-filters-grid">
+                    <label className="ssv1-field">
+                      <span>City</span>
+                      <select
+                        value={savedFilters.city}
+                        onChange={(e) => patchSavedFilters({ city: e.target.value })}
+                      >
+                        <option value="">All cities</option>
+                        {savedCityOptions.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="ssv1-field">
+                      <span>Follow-up</span>
+                      <select
+                        value={savedFilters.followUp}
+                        onChange={(e) =>
+                          patchSavedFilters({ followUp: e.target.value as SurveyFollowUpFilter })
+                        }
+                      >
+                        <option value="all">All</option>
+                        <option value="overdue">Overdue</option>
+                        <option value="upcoming">Upcoming</option>
+                        <option value="set">Has follow-up</option>
+                        <option value="none">No follow-up</option>
+                      </select>
+                    </label>
+                    <label className="ssv1-field">
+                      <span>Survey from</span>
+                      <input
+                        type="date"
+                        value={savedFilters.surveyFrom}
+                        onChange={(e) => patchSavedFilters({ surveyFrom: e.target.value })}
+                      />
+                    </label>
+                    <label className="ssv1-field">
+                      <span>Survey to</span>
+                      <input
+                        type="date"
+                        value={savedFilters.surveyTo}
+                        onChange={(e) => patchSavedFilters({ surveyTo: e.target.value })}
+                      />
+                    </label>
+                    <label className="ssv1-field">
+                      <span>Follow-up from</span>
+                      <input
+                        type="date"
+                        value={savedFilters.followUpFrom}
+                        onChange={(e) => patchSavedFilters({ followUpFrom: e.target.value })}
+                      />
+                    </label>
+                    <label className="ssv1-field">
+                      <span>Follow-up to</span>
+                      <input
+                        type="date"
+                        value={savedFilters.followUpTo}
+                        onChange={(e) => patchSavedFilters({ followUpTo: e.target.value })}
+                      />
+                    </label>
+                    <label className="ssv1-field">
+                      <span>Min est. cost (₹)</span>
+                      <input
+                        inputMode="decimal"
+                        value={savedFilters.costMin}
+                        onChange={(e) => patchSavedFilters({ costMin: sanitizeCostFilter(e.target.value) })}
+                        placeholder="0"
+                      />
+                    </label>
+                    <label className="ssv1-field">
+                      <span>Max est. cost (₹)</span>
+                      <input
+                        inputMode="decimal"
+                        value={savedFilters.costMax}
+                        onChange={(e) => patchSavedFilters({ costMax: sanitizeCostFilter(e.target.value) })}
+                        placeholder="Any"
+                      />
+                    </label>
+                    <div className="ssv1-saved-type-chips" role="group" aria-label="Installation type filter">
+                      <span className="ssv1-saved-type-label">Installation type</span>
+                      <div className="ssv1-saved-status-chips">
+                        {INSTALLATION_TYPES.map((type) => {
+                          const on = savedFilters.installationTypes.includes(type);
+                          return (
+                            <button
+                              key={type}
+                              type="button"
+                              className={`ssv1-filter-chip${on ? " is-on" : ""}`}
+                              aria-pressed={on}
+                              onClick={() => toggleInstallationType(type)}
+                            >
+                              {type.replace(" Rooftop", "").replace(" Mount", "")}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="ssv1-saved-meta">
+                  Showing <b>{filteredList.length}</b> of {list.length}
+                  {activeFilterCount ? (
+                    <span className="ssv1-saved-meta-tag">
+                      {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              {filteredList.length === 0 ? (
+                <div className="ssv1-empty ssv1-saved-empty">
+                  <div className="ssv1-empty-title">No matches</div>
+                  <p>Try clearing filters or broadening the search.</p>
+                  <button
+                    type="button"
+                    className="ssv1-btn ssv1-btn-back ssv1-btn-compact"
+                    onClick={() => setSavedFilters(EMPTY_SAVED_SURVEY_FILTERS)}
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              ) : (
+                <div className="ssv1-saved-wrap">
+                  <table className="ssv1-saved-table">
+                    <thead>
+                      <tr>
+                        <th>Report No.</th>
+                        <th>Survey Date</th>
+                        <th>Submitted</th>
+                        <th>Customer</th>
+                        <th>City</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Capacity</th>
+                        <th className="num">Est. Cost</th>
+                        <th>Status</th>
+                        <th>Follow-up</th>
+                        <th className="actions">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredList.map((s) => {
+                        const row = buildSavedSurveyListRow(s);
+                        return (
+                          <tr key={s.id}>
+                            <td className="ssv1-mono ssv1-saved-qno">{row.reportNo}</td>
+                            <td className="nowrap">{row.surveyDate}</td>
+                            <td className="nowrap">{row.submittedDate}</td>
+                            <td>
+                              <div className="ssv1-saved-company">{row.companyName}</div>
+                            </td>
+                            <td className="nowrap">{row.city}</td>
+                            <td className="nowrap">{row.installationType}</td>
+                            <td>
+                              <div className="ssv1-saved-desc" title={row.description}>
+                                {row.description}
+                              </div>
+                            </td>
+                            <td className="nowrap">{row.capacityLabel}</td>
+                            <td className="num nowrap ssv1-saved-grand">{row.estimatedCostLabel}</td>
+                            <td>
+                              <span className={`pill pill-${statusPillClass(row.status)}`}>{row.status}</span>
+                            </td>
+                            <td className="nowrap">{row.followUpDate}</td>
+                            <td className="actions">
+                              <div className="ssv1-saved-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={async () => {
+                                    try {
+                                      const data = await api<{ survey: Survey }>(`/site-survey-v1/${s.id}`);
+                                      const full = withFreshEstimate(data.survey);
+                                      setCurrent(full);
+                                      setLastSaved(snapshotOf(full));
+                                      setStepIndex(0);
+                                      setShowSuccess(false);
+                                      setRoute("new");
+                                    } catch (e) {
+                                      flash(e instanceof Error ? e.message : "Failed to open survey", "err");
+                                    }
+                                  }}
+                                >
+                                  Open
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  disabled={busy}
+                                  title="Download PDF"
+                                  onClick={() => void downloadSurveyPdf(s)}
+                                >
+                                  PDF
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-destructive btn-sm"
+                                  onClick={async () => {
+                                    if (!confirm(`Delete ${s.reportNo || "this draft"}?`)) return;
+                                    await api(`/site-survey-v1/${s.id}`, { method: "DELETE" });
+                                    flash("Deleted.");
+                                    invalidateAdminData("site-survey-v1");
+                                    await reloadMeta();
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           )}
         </section>
       ) : null}

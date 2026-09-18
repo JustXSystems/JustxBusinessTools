@@ -121,6 +121,19 @@
       "card": "blue"
     },
     {
+      "key": "f_followup",
+      "kind": "date",
+      "label": "Follow-up Date",
+      "section": "Project Contact",
+      "required": false,
+      "flow": "common",
+      "itype": null,
+      "options": [],
+      "placeholder": null,
+      "stepId": "contact",
+      "card": "blue"
+    },
+    {
       "key": "f_email",
       "kind": "email",
       "label": "Email",
