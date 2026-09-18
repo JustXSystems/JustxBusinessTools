@@ -108,7 +108,7 @@ export default function PublicQuoteApprovePage() {
         {quote ? (
           <>
             {quote.status === "approved" ? (
-              <div className="qgv1-banner" style={{ background: "#e7f3ec", borderColor: "#9fd4b5", color: "#2e7d5b" }}>
+              <div className="qgv1-banner qgv1-banner-success">
                 Approved by {quote.approvedBy || "customer"}
                 {quote.approvedAt ? ` on ${formatDateTime(quote.approvedAt)}` : ""}.
               </div>

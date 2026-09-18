@@ -302,7 +302,7 @@ export default function SyncCenterPage() {
       </div>
 
       {folderMissing && deliveryInfo?.effectiveDestination === "unc_agent" ? (
-        <div className="panel" style={{ borderColor: "rgba(245,166,35,0.45)" }}>
+        <div className="panel panel-warn-border">
           <p className="section-note" style={{ margin: 0 }}>
             No Download Folder path is set yet.
             {canEditFolder ? (

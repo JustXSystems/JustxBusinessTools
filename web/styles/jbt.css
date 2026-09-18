@@ -39,7 +39,7 @@ select {
   border-radius: var(--radius-sm);
   padding: 10px 14px;
   outline: none;
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 
 select option {
@@ -957,7 +957,7 @@ a {
   height: 20px;
   border-radius: 50%;
   background: var(--grad);
-  color: #0b0d13;
+  color: var(--on-accent, var(--bg-0));
   font-size: 10.5px;
   font-weight: 800;
   display: flex;
@@ -1103,6 +1103,11 @@ a {
   margin-top: 14px;
 }
 
+.panel-warn-border {
+  border-color: color-mix(in srgb, var(--warning) 48%, var(--border-hair));
+  background: color-mix(in srgb, var(--warning) 8%, var(--glass-1));
+}
+
 .panel-title {
   font-size: 12.5px;
   font-weight: 700;
@@ -1195,7 +1200,7 @@ a {
 /* btn-primary: the one standout call-to-action per view (Save, Send, Approve, New X). */
 .btn-primary {
   background: var(--grad);
-  color: #0b0d13;
+  color: var(--on-accent, var(--bg-0));
   font-weight: 700;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
@@ -1307,6 +1312,64 @@ a {
 [data-pack="bos"] .btn-destructive:hover:not(:disabled) {
   background: var(--bos-coral-100);
   box-shadow: var(--bos-shadow-sm);
+}
+
+/* BOS pack ? soft shadows + radius for tool chrome (Site Survey / Quotation) */
+[data-pack="bos"] {
+  --shadow-soft: var(--bos-shadow-sm);
+  --shadow-lift: var(--bos-shadow-md);
+}
+
+[data-pack="bos"] .ssv1-shell {
+  --ssv1-shadow: var(--bos-shadow-sm);
+  --ssv1-shadow-lift: var(--bos-shadow-md);
+}
+
+[data-pack="bos"] .ssv1-btn,
+[data-pack="bos"] .ssv1-btn-next,
+[data-pack="bos"] .ssv1-btn-back,
+[data-pack="bos"] .ssv1-btn-save,
+[data-pack="bos"] .ssv1-btn-submit,
+[data-pack="bos"] .ssv1-btn-new,
+[data-pack="bos"] .ssv1-filter-chip {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  box-shadow: var(--bos-shadow-xs);
+}
+
+[data-pack="bos"] .ssv1-btn-next,
+[data-pack="bos"] .ssv1-btn-submit,
+[data-pack="bos"] .ssv1-btn-new-primary {
+  box-shadow: var(--bos-shadow-sm);
+}
+
+[data-pack="bos"] .ssv1-panel,
+[data-pack="bos"] .ssv1-card,
+[data-pack="bos"] .ssv1-popup,
+[data-pack="bos"] .ssv1-saved-wrap,
+[data-pack="bos"] .ssv1-saved-filters,
+[data-pack="bos"] .qgv1-card,
+[data-pack="bos"] .qgv1-saved-wrap,
+[data-pack="bos"] .qgv1-saved-filters {
+  box-shadow: var(--bos-shadow-sm);
+}
+
+[data-pack="bos"] .ssv1-field input,
+[data-pack="bos"] .ssv1-field select,
+[data-pack="bos"] .ssv1-field textarea,
+[data-pack="bos"] .qgv1-root .field input,
+[data-pack="bos"] .qgv1-root .field select,
+[data-pack="bos"] .qgv1-root .field textarea,
+[data-pack="bos"] .qgv1-input,
+[data-pack="bos"] .qgv1-cat {
+  border-radius: var(--radius-sm);
+  box-shadow: var(--bos-shadow-xs);
+}
+
+[data-pack="bos"] .ssv1-seg,
+[data-pack="bos"] .qgv1-seg {
+  box-shadow: var(--bos-shadow-xs);
+  border-radius: var(--radius);
 }
 
 .btn-sm {
@@ -1527,28 +1590,28 @@ a {
   padding: 12px 14px;
   border-radius: var(--radius-sm, 10px);
   border: 1px solid var(--border-hair-strong, rgba(255, 255, 255, 0.16));
-  background: var(--bg-2, #141820);
+  background: var(--bg-2);
   color: var(--text-hi, #f3f5f8);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
   animation: app-flash-in 0.22s ease-out;
 }
 
 .app-flash-error {
-  border-color: rgba(239, 68, 68, 0.55);
-  background: linear-gradient(180deg, rgba(80, 18, 18, 0.96), rgba(40, 12, 12, 0.96));
-  color: #fecaca;
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  background: color-mix(in srgb, var(--danger) 18%, var(--bg-2));
+  color: var(--danger);
 }
 
 .app-flash-warn {
-  border-color: rgba(245, 158, 11, 0.55);
-  background: linear-gradient(180deg, rgba(70, 45, 8, 0.96), rgba(36, 24, 6, 0.96));
-  color: #fde68a;
+  border-color: color-mix(in srgb, var(--warning) 55%, transparent);
+  background: color-mix(in srgb, var(--warning) 16%, var(--bg-2));
+  color: var(--warning);
 }
 
 .app-flash-ok {
-  border-color: rgba(34, 197, 94, 0.45);
-  background: linear-gradient(180deg, rgba(14, 55, 32, 0.96), rgba(10, 32, 20, 0.96));
-  color: #bbf7d0;
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  background: color-mix(in srgb, var(--success) 14%, var(--bg-2));
+  color: var(--success);
 }
 
 .app-flash-body {
@@ -4412,7 +4475,7 @@ a {
   width: var(--sidebar-rail, 252px);
   background:
     radial-gradient(520px 280px at 0% -10%, rgba(var(--accent-rgb), 0.12) 0%, transparent 65%),
-    linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 92%, #0a1524) 0%, var(--bg-1) 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 92%, var(--bg-0)) 0%, var(--bg-1) 100%);
   border-right: 1px solid var(--border-hair);
   padding: 20px 14px 0;
   display: flex;
@@ -5095,7 +5158,7 @@ a {
   align-self: start;
   background:
     radial-gradient(520px 280px at 0% -10%, rgba(var(--accent-rgb), 0.12) 0%, transparent 65%),
-    linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 92%, #0a1524) 0%, var(--bg-1) 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 92%, var(--bg-0)) 0%, var(--bg-1) 100%);
   border-right: 1px solid var(--border-hair);
   padding: 20px 14px 0;
   display: flex;
@@ -7536,7 +7599,7 @@ html[data-scheme="light"] .field textarea {
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--border-hair-strong, rgba(255, 255, 255, 0.14));
-  background: color-mix(in srgb, var(--glass-2, #152428) 92%, #000);
+  background: color-mix(in srgb, var(--glass-2, var(--bg-2)) 92%, var(--bg-0));
   color: inherit;
   box-shadow: var(--shadow-lift, 0 10px 28px rgba(0, 0, 0, 0.28));
   cursor: pointer;
@@ -8487,7 +8550,7 @@ html[data-scheme="light"] .field textarea {
   padding: 11px 14px;
   font-weight: 700;
   background: var(--grad);
-  color: #0b0d13;
+  color: var(--on-accent, var(--bg-0));
   cursor: default;
 }
 
@@ -8745,9 +8808,9 @@ html[data-scheme="light"] .field textarea {
   border-color: var(--border-hair-strong);
 }
 .notif-filter.active {
-  background: rgba(0, 196, 224, 0.12);
-  border-color: rgba(0, 196, 224, 0.35);
-  color: var(--teal);
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: rgba(var(--accent-rgb), 0.35);
+  color: var(--accent);
 }
 .notif-list .notif-row {
   text-decoration: none;
@@ -8768,8 +8831,8 @@ html[data-scheme="light"] .field textarea {
   flex-shrink: 0;
 }
 .notif-row.is-unread {
-  border-color: rgba(0, 196, 224, 0.28);
-  background: rgba(0, 196, 224, 0.04);
+  border-color: rgba(var(--accent-rgb), 0.28);
+  background: rgba(var(--accent-rgb), 0.04);
 }
 .notif-row.is-unread .tracker-row-title::before {
   content: "";
@@ -8915,7 +8978,7 @@ html[data-scheme="light"] .field textarea {
   padding: 14px 14px 16px;
   border-radius: 12px;
   border: 1px solid var(--border, rgba(255,255,255,0.08));
-  background: color-mix(in srgb, var(--panel, #12202c) 92%, transparent);
+  background: color-mix(in srgb, var(--panel, var(--bg-1)) 92%, transparent);
   color: inherit;
   cursor: pointer;
   position: relative;
@@ -8953,7 +9016,7 @@ html[data-scheme="light"] .field textarea {
 }
 .audit-anomaly.severity-critical {
   border-color: rgba(239, 68, 68, 0.35);
-  background: color-mix(in srgb, rgba(239, 68, 68, 0.12) 40%, var(--panel, #12202c));
+  background: color-mix(in srgb, rgba(239, 68, 68, 0.12) 40%, var(--panel, var(--bg-1)));
 }
 .audit-anomaly.severity-critical .audit-anomaly-sev,
 .audit-sev-chip.sev-critical {
@@ -9068,7 +9131,7 @@ html[data-scheme="light"] .field textarea {
   height: 8px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--panel, #12202c) 80%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--panel, var(--bg-1)) 80%, transparent);
 }
 .audit-event.severity-critical::before { background: #ef4444; }
 .audit-event.severity-high::before { background: #f2c675; }
@@ -9078,7 +9141,7 @@ html[data-scheme="light"] .field textarea {
   gap: 12px;
   width: 100%;
   text-align: left;
-  background: color-mix(in srgb, var(--panel-elevated, #182636) 70%, transparent);
+  background: color-mix(in srgb, var(--panel-elevated, var(--bg-2)) 70%, transparent);
   border: 1px solid var(--border, rgba(255,255,255,0.06));
   border-radius: 12px;
   padding: 12px 14px;

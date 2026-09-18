@@ -194,6 +194,9 @@ export function themeTokensToCssVars(tokens: ThemeTokens): Record<string, string
     "--font-sans": tokens.font || JUSTX_ELECTRIC.font,
     "--grad": `linear-gradient(135deg, ${deep} 0%, ${accent} 55%, ${highlight} 100%)`,
     "--grad-soft": `linear-gradient(135deg, rgba(${rgb}, 0.22) 0%, rgba(${rgb}, 0.1) 100%)`,
+    "--panel": tokens.bg1 || (scheme === "light" ? JUSTX_LIGHT.bg1 : JUSTX_ELECTRIC.bg1),
+    "--panel-elevated": tokens.bg2 || (scheme === "light" ? JUSTX_LIGHT.bg2 : JUSTX_ELECTRIC.bg2),
+    "--on-accent": tokens.bg0 || (scheme === "light" ? JUSTX_LIGHT.bg0 : JUSTX_ELECTRIC.bg0),
     ...schemeSurfaceVars(scheme),
   };
 }
@@ -246,45 +249,31 @@ export function applyThemeTokens(tokens: Partial<ThemeTokens> | null | undefined
   if (typeof document === "undefined" || !tokens) return;
   const root = document.documentElement;
   const scheme = schemeOf(tokens);
+  const merged: ThemeTokens = {
+    ...(scheme === "light" ? JUSTX_LIGHT : JUSTX_ELECTRIC),
+    ...tokens,
+    scheme,
+    pack: tokens.pack?.trim() || tokens.pack || (scheme === "light" ? JUSTX_LIGHT.pack : JUSTX_ELECTRIC.pack),
+  };
+
   root.dataset.scheme = scheme;
   root.style.colorScheme = scheme;
-  root.dataset.pack = tokens.pack?.trim() || "default";
+  root.dataset.pack = merged.pack?.trim() || "default";
 
-  const accent = tokens.accent?.trim();
-  const teal = tokens.teal?.trim() || accent;
-  const accentStrong = tokens.accentStrong?.trim() || (accent ? darkenHex(accent, 0.18) : undefined);
-
-  if (accent) {
-    root.style.setProperty("--accent", accent);
-    root.style.setProperty("--blue-400", accent);
-    const rgb = hexToRgbChannels(accent);
-    if (rgb) root.style.setProperty("--accent-rgb", rgb);
-    const highlight = lightenHex(accent, 0.4);
-    const deep = accentStrong || darkenHex(accent, 0.25);
-    root.style.setProperty(
-      "--grad",
-      `linear-gradient(135deg, ${deep} 0%, ${accent} 55%, ${highlight} 100%)`,
-    );
-    root.style.setProperty(
-      "--grad-soft",
-      `linear-gradient(135deg, rgba(${rgb ?? "0, 223, 255"}, 0.22) 0%, rgba(${rgb ?? "0, 223, 255"}, 0.1) 100%)`,
-    );
-  }
-  if (accentStrong) {
-    root.style.setProperty("--accent-strong", accentStrong);
-    root.style.setProperty("--blue-500", accentStrong);
-  }
-  if (teal) root.style.setProperty("--teal", teal);
-  if (tokens.bg0) {
-    root.style.setProperty("--bg-0", tokens.bg0);
-    root.style.setProperty("--navy-950", tokens.bg0);
-  }
-  if (tokens.bg1) root.style.setProperty("--bg-1", tokens.bg1);
-  if (tokens.bg2) root.style.setProperty("--bg-2", tokens.bg2);
-  if (tokens.radius) root.style.setProperty("--radius", tokens.radius);
-  if (tokens.font) root.style.setProperty("--font-sans", tokens.font);
-
-  for (const [k, v] of Object.entries(schemeSurfaceVars(scheme))) {
+  const vars = themeTokensToCssVars(merged);
+  for (const [k, v] of Object.entries(vars)) {
+    // Keep --radius-sm / --radius-xl as calc() from variables.css so they track --radius.
+    if (k === "--radius-sm" || k === "--radius-xl") continue;
     root.style.setProperty(k, v);
+  }
+
+  // Explicit aliases always mirror surfaces (even if themeTokens omitted them historically).
+  root.style.setProperty("--panel", vars["--bg-1"] ?? merged.bg1);
+  root.style.setProperty("--panel-elevated", vars["--bg-2"] ?? merged.bg2);
+  root.style.setProperty("--on-accent", vars["--bg-0"] ?? merged.bg0);
+
+  if (merged.font) {
+    root.style.setProperty("--font-sans", merged.font);
+    document.body?.style.setProperty("font-family", `var(--font-sans), system-ui, sans-serif`);
   }
 }
