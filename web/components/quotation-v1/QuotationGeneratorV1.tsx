@@ -316,7 +316,7 @@ export function QuotationGeneratorV1() {
       // Refresh markers after forced export width so geometry matches the PDF.
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
       renderPageBreakMarkers(node, q);
-      return await quotationPdfToBase64(q);
+      return await quotationPdfToBase64(q, company);
     } finally {
       fit?.classList.remove("is-exporting");
       // Restore preview markers at live layout width.
