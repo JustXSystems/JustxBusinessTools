@@ -67,6 +67,10 @@ export type QuotationEmailVars = {
   companyAddress?: string;
   companyGstin?: string;
   quoteLink?: string;
+  /** Logged-in sender — used in Warm regards block. */
+  LoggedinUserName?: string;
+  /** Logged-in sender phone — used in Warm regards block. */
+  LogginUserPhonenumber?: string;
   /** Absolute https logo URL only — data URLs are skipped (blocked by many clients). */
   logoUrl?: string;
   accentColor?: string;
@@ -198,6 +202,21 @@ function defaultClosing(vars: QuotationEmailVars) {
   );
 }
 
+/** Shared Warm regards lines for plain + corporate (extras kept after the first three). */
+export function quotationEmailRegardsLines(vars: QuotationEmailVars): string[] {
+  const userName = String(vars.LoggedinUserName ?? "").trim();
+  const companyName = String(vars.companyName ?? "").trim();
+  const userPhone = String(vars.LogginUserPhonenumber ?? "").trim();
+  const lines = ["Warm regards,"];
+  if (userName) lines.push(userName);
+  if (companyName) lines.push(companyName);
+  if (userPhone) lines.push(userPhone);
+  if (vars.companyEmail) lines.push(`Email: ${vars.companyEmail}`);
+  if (vars.companyGstin) lines.push(`GSTIN: ${vars.companyGstin}`);
+  if (vars.companyAddress) lines.push(vars.companyAddress);
+  return lines;
+}
+
 /** Plain-text body matching the corporate summary (mailto / multipart text part). */
 export function renderPlainQuotationEmail(vars: QuotationEmailVars): string {
   const lines = [
@@ -226,11 +245,7 @@ export function renderPlainQuotationEmail(vars: QuotationEmailVars): string {
   if (vars.quoteLink) {
     lines.push(`View full quotation: ${vars.quoteLink}`, "");
   }
-  lines.push(defaultClosing(vars), "", "Warm regards,", vars.companyName || "");
-  if (vars.companyPhone) lines.push(`Phone: ${vars.companyPhone}`);
-  if (vars.companyEmail) lines.push(`Email: ${vars.companyEmail}`);
-  if (vars.companyGstin) lines.push(`GSTIN: ${vars.companyGstin}`);
-  if (vars.companyAddress) lines.push(vars.companyAddress);
+  lines.push(defaultClosing(vars), "", ...quotationEmailRegardsLines(vars));
   return lines.filter((l, i, arr) => !(l === "" && arr[i - 1] === "")).join("\n");
 }
 
@@ -248,7 +263,8 @@ export function renderCorporateQuotationEmailHtml(vars: QuotationEmailVars): str
   const validTill = escapeHtml(vars.validTill || "—");
   const grandTotal = escapeHtml(vars.grandTotal || "0.00");
   const grandTotalWords = escapeHtml(vars.grandTotalWords || "");
-  const phone = escapeHtml(vars.companyPhone || "");
+  const userName = escapeHtml(String(vars.LoggedinUserName ?? "").trim());
+  const userPhone = escapeHtml(String(vars.LogginUserPhonenumber ?? "").trim());
   const email = escapeHtml(vars.companyEmail || "");
   const address = escapeHtml(vars.companyAddress || "");
   const gstin = escapeHtml(vars.companyGstin || "");
@@ -326,7 +342,7 @@ export function renderCorporateQuotationEmailHtml(vars: QuotationEmailVars): str
             </tr>`;
 
   const contactLines: string[] = [];
-  if (phone) contactLines.push(`Tel: ${phone}`);
+  if (userPhone) contactLines.push(userPhone);
   if (email) contactLines.push(`Email: ${email}`);
 
   const footerBits: string[] = [];
@@ -439,6 +455,11 @@ export function renderCorporateQuotationEmailHtml(vars: QuotationEmailVars): str
           <tr>
             <td style="padding:24px 40px 32px 40px; border-top:1px solid #eef0f3;">
               <p style="font-size:14px; color:#374151; margin:0 0 6px 0; font-family:Arial, Helvetica, sans-serif;">Warm regards,</p>
+              ${
+                userName
+                  ? `<p style="font-size:14px; color:#111827; font-weight:600; margin:0 0 4px 0; font-family:Arial, Helvetica, sans-serif;">${userName}</p>`
+                  : ""
+              }
               <p style="font-size:14px; color:${p.accent}; font-weight:700; margin:0 0 8px 0; font-family:Arial, Helvetica, sans-serif;">${companyName}</p>
               ${
                 contactLines.length

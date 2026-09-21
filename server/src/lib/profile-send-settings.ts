@@ -49,20 +49,64 @@ export type ProfileSendSettings = {
   googleDrive: ProfileGoogleDriveSettings;
 };
 
-/** Legacy closing block — upgraded on normalize so saved profiles pick up the new signature. */
-const LEGACY_SEND_SIGNATURE = `Regards,
-{{companyName}}
-{{companyPhone}}`;
+/** Legacy closing lines right after Regards — upgraded while keeping any following extras. */
+const LEGACY_SIG_NAME = /^\{\{\s*companyName\s*\}\}$/;
+const LEGACY_SIG_PHONE = /^\{\{\s*companyPhone\s*\}\}$/;
+const NEW_SIG_USER = /^\{\{\s*LoggedinUserName\s*\}\}$/;
+const NEW_SIG_COMPANY = /^\{\{\s*companyName\s*\}\}$/;
+const NEW_SIG_USER_PHONE = /^\{\{\s*LogginUserPhonenumber\s*\}\}$/;
+/** Accidental one-line merge from an earlier upgrade. */
+const CORRUPT_USER_PHONE = /^\{\{\s*LogginUserPhonenumber\s*\}\}\s*,\s*\{\{\s*companyPhone\s*\}\}$/;
 
 export const DEFAULT_SEND_SIGNATURE = `Regards,
 {{LoggedinUserName}}
 {{companyName}}
-{{LogginUserPhonenumber}}, {{companyPhone}}`;
+{{LogginUserPhonenumber}}`;
 
+const DEFAULT_SIGNATURE_LINES = [
+  "{{LoggedinUserName}}",
+  "{{companyName}}",
+  "{{LogginUserPhonenumber}}",
+];
+
+/**
+ * Upgrade only the first three signature lines after Regards / Warm regards.
+ * Any extra lines below the phone line are left unchanged.
+ */
 export function upgradeSendTemplateSignature(template: string): string {
-  return template.includes(LEGACY_SEND_SIGNATURE)
-    ? template.split(LEGACY_SEND_SIGNATURE).join(DEFAULT_SEND_SIGNATURE)
-    : template;
+  const eol = template.includes("\r\n") ? "\r\n" : "\n";
+  const lines = template.split(/\r?\n/);
+  let changed = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^(Warm\s+)?Regards,\s*$/i.test(lines[i].trim())) continue;
+
+    const a = (lines[i + 1] ?? "").trim();
+    const b = (lines[i + 2] ?? "").trim();
+    const c = (lines[i + 3] ?? "").trim();
+
+    // Already on the new 3-line shape.
+    if (NEW_SIG_USER.test(a) && NEW_SIG_COMPANY.test(b) && NEW_SIG_USER_PHONE.test(c)) {
+      continue;
+    }
+
+    // Fix corrupt "{{LogginUserPhonenumber}}, {{companyPhone}}" on one line.
+    if (NEW_SIG_USER.test(a) && NEW_SIG_COMPANY.test(b) && CORRUPT_USER_PHONE.test(c)) {
+      lines[i + 3] = "{{LogginUserPhonenumber}}";
+      changed = true;
+      continue;
+    }
+
+    // Legacy: Regards + companyName + companyPhone (+ optional extras after).
+    if (LEGACY_SIG_NAME.test(a) && LEGACY_SIG_PHONE.test(b)) {
+      lines.splice(i + 1, 2, ...DEFAULT_SIGNATURE_LINES);
+      changed = true;
+      i += 3;
+      continue;
+    }
+  }
+
+  return changed ? lines.join(eol) : template;
 }
 
 export const DEFAULT_WHATSAPP_MESSAGE = `Hi {{customerName}},
@@ -111,6 +155,7 @@ ${DEFAULT_SEND_SIGNATURE}`,
 };
 
 let ready: Promise<void> | null = null;
+let signatureMigration: Promise<void> | null = null;
 
 export async function ensureSendSettingsColumn(): Promise<void> {
   if (!ready) {
@@ -127,6 +172,55 @@ export async function ensureSendSettingsColumn(): Promise<void> {
     });
   }
   await ready;
+}
+
+function rawTemplateMessages(raw: unknown): { whatsappMessage: string; emailMessage: string } {
+  let value: unknown = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      value = null;
+    }
+  }
+  const src = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const email =
+    src.email && typeof src.email === "object" ? (src.email as Record<string, unknown>) : {};
+  return {
+    whatsappMessage: String(src.whatsappMessage ?? ""),
+    emailMessage: String(email.message ?? ""),
+  };
+}
+
+/**
+ * Persist signature upgrades (WhatsApp + email message) for every business profile.
+ * Only rewrites rows whose Regards block still uses the legacy companyName/companyPhone pair.
+ */
+export async function migrateAllProfileSendSignatures(): Promise<void> {
+  if (!signatureMigration) {
+    signatureMigration = (async () => {
+      await ensureSendSettingsColumn();
+      const [rows] = await pool.query(`SELECT id, send_settings FROM business_profiles`);
+      const list = Array.isArray(rows) ? (rows as Array<{ id: number; send_settings: unknown }>) : [];
+      for (const row of list) {
+        if (row.send_settings == null || String(row.send_settings).trim() === "") continue;
+        const before = rawTemplateMessages(row.send_settings);
+        if (!before.whatsappMessage && !before.emailMessage) continue;
+        const afterWa = upgradeSendTemplateSignature(before.whatsappMessage);
+        const afterEmail = upgradeSendTemplateSignature(before.emailMessage);
+        if (afterWa === before.whatsappMessage && afterEmail === before.emailMessage) continue;
+        const normalized = serializeProfileSendSettings(row.send_settings);
+        await pool.query(`UPDATE business_profiles SET send_settings = :send WHERE id = :id`, {
+          id: row.id,
+          send: JSON.stringify(normalized),
+        });
+      }
+    })().catch((err) => {
+      signatureMigration = null;
+      throw err;
+    });
+  }
+  await signatureMigration;
 }
 
 export function normalizeProfileSendSettings(raw: unknown): ProfileSendSettings {

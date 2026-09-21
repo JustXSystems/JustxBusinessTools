@@ -12,6 +12,7 @@ import {
 import { ensureDocumentAccentColorColumn, normalizeDocumentAccentColor } from "../../lib/document-accent.js";
 import {
   ensureSendSettingsColumn,
+  migrateAllProfileSendSignatures,
   normalizeProfileSendSettings,
   normalizeQuotationEmailTemplateId,
   serializeProfileSendSettings,
@@ -115,6 +116,7 @@ router.get("/", async (_req, res) => {
   await ensureHomeToolIdsColumn();
   await ensureDocumentAccentColorColumn();
   await ensureSendSettingsColumn();
+  await migrateAllProfileSendSignatures();
   const [rows] = await pool.query(
     `SELECT p.id, p.organization_id, o.name AS organization_name, p.business_name, p.gstin, p.pan, p.address_line1, p.address_line2,
             p.state, p.state_code, p.phone, p.email, p.is_default, p.home_tool_ids,

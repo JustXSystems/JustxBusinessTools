@@ -456,6 +456,8 @@ export function QuotationGeneratorV1() {
       companyAddress: placeholders.companyAddress,
       companyGstin: placeholders.companyGstin,
       quoteLink: placeholders.quoteLink,
+      LoggedinUserName: placeholders.LoggedinUserName,
+      LogginUserPhonenumber: placeholders.LogginUserPhonenumber,
       logoUrl: company.logo
         ? absolutePublicAssetUrl(
             company.logo,

@@ -49,20 +49,64 @@ export type BusinessProfileSendSettings = {
   };
 };
 
-/** Legacy closing block — upgraded on normalize so saved profiles pick up the new signature. */
-const LEGACY_SEND_SIGNATURE = `Regards,
-{{companyName}}
-{{companyPhone}}`;
+/** Legacy closing lines right after Regards — upgraded while keeping any following extras. */
+const LEGACY_SIG_NAME = /^\{\{\s*companyName\s*\}\}$/;
+const LEGACY_SIG_PHONE = /^\{\{\s*companyPhone\s*\}\}$/;
+const NEW_SIG_USER = /^\{\{\s*LoggedinUserName\s*\}\}$/;
+const NEW_SIG_COMPANY = /^\{\{\s*companyName\s*\}\}$/;
+const NEW_SIG_USER_PHONE = /^\{\{\s*LogginUserPhonenumber\s*\}\}$/;
+/** Accidental one-line merge from an earlier upgrade. */
+const CORRUPT_USER_PHONE = /^\{\{\s*LogginUserPhonenumber\s*\}\}\s*,\s*\{\{\s*companyPhone\s*\}\}$/;
 
 export const DEFAULT_SEND_SIGNATURE = `Regards,
 {{LoggedinUserName}}
 {{companyName}}
-{{LogginUserPhonenumber}}, {{companyPhone}}`;
+{{LogginUserPhonenumber}}`;
 
+const DEFAULT_SIGNATURE_LINES = [
+  "{{LoggedinUserName}}",
+  "{{companyName}}",
+  "{{LogginUserPhonenumber}}",
+];
+
+/**
+ * Upgrade only the first three signature lines after Regards / Warm regards.
+ * Any extra lines below the phone line are left unchanged.
+ */
 export function upgradeSendTemplateSignature(template: string): string {
-  return template.includes(LEGACY_SEND_SIGNATURE)
-    ? template.split(LEGACY_SEND_SIGNATURE).join(DEFAULT_SEND_SIGNATURE)
-    : template;
+  const eol = template.includes("\r\n") ? "\r\n" : "\n";
+  const lines = template.split(/\r?\n/);
+  let changed = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^(Warm\s+)?Regards,\s*$/i.test(lines[i].trim())) continue;
+
+    const a = (lines[i + 1] ?? "").trim();
+    const b = (lines[i + 2] ?? "").trim();
+    const c = (lines[i + 3] ?? "").trim();
+
+    // Already on the new 3-line shape.
+    if (NEW_SIG_USER.test(a) && NEW_SIG_COMPANY.test(b) && NEW_SIG_USER_PHONE.test(c)) {
+      continue;
+    }
+
+    // Fix corrupt "{{LogginUserPhonenumber}}, {{companyPhone}}" on one line.
+    if (NEW_SIG_USER.test(a) && NEW_SIG_COMPANY.test(b) && CORRUPT_USER_PHONE.test(c)) {
+      lines[i + 3] = "{{LogginUserPhonenumber}}";
+      changed = true;
+      continue;
+    }
+
+    // Legacy: Regards + companyName + companyPhone (+ optional extras after).
+    if (LEGACY_SIG_NAME.test(a) && LEGACY_SIG_PHONE.test(b)) {
+      lines.splice(i + 1, 2, ...DEFAULT_SIGNATURE_LINES);
+      changed = true;
+      i += 3;
+      continue;
+    }
+  }
+
+  return changed ? lines.join(eol) : template;
 }
 
 export const DEFAULT_WHATSAPP_MESSAGE = `Hi {{customerName}},

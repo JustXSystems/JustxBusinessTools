@@ -720,7 +720,9 @@ export default function ProfilePage() {
             </label>
             <p className="section-note">
           Summary card, line items, accent colors, logo, GSTIN, and CTA stay fixed. Intro/closing
-          support the same {"{{placeholders}}"} as subject.
+          support the same {"{{placeholders}}"} as subject. Warm regards always uses{" "}
+          {"{{LoggedinUserName}}"}, {"{{companyName}}"}, {"{{LogginUserPhonenumber}}"} (same for Plain
+          text and Corporate HTML).
         </p>
           </>
         )}

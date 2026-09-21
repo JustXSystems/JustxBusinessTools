@@ -22,6 +22,7 @@ import { ensureEmailWebhookUrlColumn } from "../lib/email-outbox.js";
 import {
   ensureSendSettingsColumn,
   mergeSendSettingsPreservingDriveSecrets,
+  migrateAllProfileSendSignatures,
   normalizeProfileSendSettings,
   publicSendSettings,
   serializeProfileSendSettings,
@@ -199,6 +200,7 @@ function toApi(
 async function ensureProfileExtras() {
   await ensureHomeToolIdsColumn();
   await ensureSendSettingsColumn();
+  await migrateAllProfileSendSignatures();
   await ensureDocumentAccentColorColumn();
   await ensureThemePresetColumn();
   await ensureClockDisplayColumns();

@@ -63,6 +63,8 @@ export function QuotationEmailTemplatePicker({
       companyAddress: address,
       companyGstin: gstin,
       quoteLink: "https://example.com/q/preview",
+      LoggedinUserName: "Alex Sender",
+      LogginUserPhonenumber: "+91 98765 00000",
     };
     const sampleItems = summarizeQuoteLineItems([
       { desc: "Solar PV modules 540W", qty: 20, rate: 8500 },
@@ -86,6 +88,8 @@ export function QuotationEmailTemplatePicker({
       companyAddress: address,
       companyGstin: gstin,
       quoteLink: placeholders.quoteLink,
+      LoggedinUserName: placeholders.LoggedinUserName,
+      LogginUserPhonenumber: placeholders.LogginUserPhonenumber,
       logoUrl: logoUrl
         ? absolutePublicAssetUrl(
             logoUrl,

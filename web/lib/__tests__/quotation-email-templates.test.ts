@@ -55,6 +55,8 @@ describe("quotation email templates", () => {
       grandTotalWords: "One Thousand Only",
       companyName: "JustX & Co",
       companyPhone: "999",
+      LoggedinUserName: "Sam Sender",
+      LogginUserPhonenumber: "+91 90000 11111",
       companyEmail: "a@b.com",
       companyGstin: "29ABCDE1234F1Z5",
       companyAddress: "1 Main St",
@@ -74,6 +76,37 @@ describe("quotation email templates", () => {
     expect(html).toContain("…and 3 more");
     expect(html).toContain("Custom intro");
     expect(html).toContain("Custom closing.");
+    expect(html).toContain("Sam Sender");
+    expect(html).toContain("+91 90000 11111");
+    expect(html).not.toContain("Tel: 999");
+  });
+
+  it("matches plain and corporate regards: user, company, user phone", () => {
+    const vars = {
+      customerName: "Acme",
+      quoteNo: "Q-2",
+      typeLabel: "EPC",
+      date: "1 Jan 2026",
+      validTill: "15 Jan 2026",
+      grandTotal: "10.00",
+      grandTotalWords: "Ten Only",
+      companyName: "Co",
+      companyPhone: "company-phone",
+      LoggedinUserName: "Pat",
+      LogginUserPhonenumber: "user-phone",
+      companyEmail: "sales@co.test",
+      accentColor: "#224466",
+    };
+    const corporate = buildQuotationEmailBodies({ templateId: "corporate", vars });
+    expect(corporate.text).toContain("Warm regards,\nPat\nCo\nuser-phone\nEmail: sales@co.test");
+    expect(corporate.html).toContain("Pat");
+    expect(corporate.html).toContain("user-phone");
+    expect(corporate.html).not.toContain("company-phone");
+    const plain = buildQuotationEmailBodies({
+      templateId: "plain",
+      vars,
+    });
+    expect(plain.text).toContain("Warm regards,\nPat\nCo\nuser-phone\nEmail: sales@co.test");
   });
 
   it("returns html only for corporate template", () => {
