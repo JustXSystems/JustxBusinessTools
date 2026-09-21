@@ -31,6 +31,22 @@ export const SIDEBAR_WIDTH_MAX = 320;
 
 export const FLOAT_DOCK_DEFAULT = { x: 18, y: 96 } as const;
 
+/**
+ * Phone / short-height landscape: edge sidebar steals width and truncates menus.
+ * Prefer a horizontal floating dock in this band.
+ */
+export const COMPACT_LANDSCAPE_MQ =
+  "(max-height: 560px) and (orientation: landscape)";
+
+export function matchesCompactLandscape() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.matchMedia(COMPACT_LANDSCAPE_MQ).matches;
+  } catch {
+    return false;
+  }
+}
+
 export const SIDEBAR_LAYOUT_META: Record<
   SidebarLayoutMode,
   { label: string; hint: string }
@@ -92,8 +108,12 @@ export function defaultSidebarState(): SidebarLayoutState {
 
 function clampFloatPos(x: number, y: number) {
   if (typeof window === "undefined") return { x, y };
-  const maxX = Math.max(8, window.innerWidth - 72);
-  const maxY = Math.max(8, window.innerHeight - 72);
+  const horizontal = matchesCompactLandscape();
+  // Vertical pebble is ~56–64px; horizontal open dock can span most of the width.
+  const reserveW = horizontal ? Math.min(window.innerWidth * 0.94, 780) : 72;
+  const reserveH = horizontal ? 72 : 72;
+  const maxX = Math.max(8, window.innerWidth - reserveW);
+  const maxY = Math.max(8, window.innerHeight - reserveH);
   return {
     x: Math.min(maxX, Math.max(8, Math.round(x))),
     y: Math.min(maxY, Math.max(8, Math.round(y))),

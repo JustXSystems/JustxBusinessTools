@@ -22,11 +22,17 @@ type Props = {
   footer?: ReactNode;
 };
 
-type TipState = { label: string; top: number; left: number; placeLeft: boolean } | null;
+type TipState = {
+  label: string;
+  top: number;
+  left: number;
+  placeLeft: boolean;
+  placeBelow: boolean;
+} | null;
 
 /**
  * True floating navigation: collapsed pebble (logo + dots), expands to icon rail,
- * labels appear beside the hovered control (not a fixed HUD).
+ * labels appear beside (or below, in landscape) the hovered control.
  */
 export function FloatingNavDock({ homeHref, items, footer }: Props) {
   const {
@@ -34,6 +40,7 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
     floatY,
     floatOpen,
     floatPinned,
+    floatHorizontal,
     setFloatOpen,
     setFloatPinned,
     setAttachment,
@@ -81,12 +88,29 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
 
   const scheduleClose = () => {
     clearCloseTimer();
-    if (floatPinned) return;
+    if (floatPinned || floatHorizontal) return;
     closeTimer.current = window.setTimeout(() => setFloatOpen(false), 220);
   };
 
   const showTipFor = (el: HTMLElement, label: string) => {
     const rect = el.getBoundingClientRect();
+    if (floatHorizontal) {
+      const tipWidth = Math.min(220, Math.max(72, label.length * 7.5 + 24));
+      const left = Math.min(
+        window.innerWidth - tipWidth / 2 - 8,
+        Math.max(tipWidth / 2 + 8, rect.left + rect.width / 2),
+      );
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const placeBelow = spaceBelow >= 44;
+      setTip({
+        label,
+        top: placeBelow ? rect.bottom + 10 : rect.top - 10,
+        left,
+        placeLeft: false,
+        placeBelow,
+      });
+      return;
+    }
     const tipWidth = Math.min(220, Math.max(72, label.length * 7.5 + 24));
     const spaceRight = window.innerWidth - rect.right;
     const placeLeft = spaceRight < tipWidth + 16;
@@ -95,6 +119,7 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
       top: rect.top + rect.height / 2,
       left: placeLeft ? rect.left - 10 : rect.right + 10,
       placeLeft,
+      placeBelow: false,
     });
   };
 
@@ -103,13 +128,13 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
   return (
     <>
       <div
-        className={`float-dock${floatOpen ? " is-open" : " is-collapsed"}${floatPinned ? " is-pinned" : ""}`}
+        className={`float-dock${floatOpen ? " is-open" : " is-collapsed"}${floatPinned ? " is-pinned" : ""}${floatHorizontal ? " is-horizontal" : ""}`}
         style={{ left: floatX, top: floatY }}
         onMouseEnter={() => {
           clearCloseTimer();
           setFloatOpen(true);
         }}
-          onMouseLeave={() => {
+        onMouseLeave={() => {
           hideTip();
           scheduleClose();
         }}
@@ -140,6 +165,7 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
         onBlurCapture={hideTip}
         role="navigation"
         aria-label="Floating navigation"
+        data-orientation={floatHorizontal ? "horizontal" : "vertical"}
       >
         <button
           type="button"
@@ -176,7 +202,10 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
             setFloatOpen(!floatOpen);
           }}
         >
-          <span className="float-dock-dots float-dock-dots-v" aria-hidden="true">
+          <span
+            className={`float-dock-dots${floatHorizontal ? "" : " float-dock-dots-v"}`}
+            aria-hidden="true"
+          >
             <i />
             <i />
             <i />
@@ -212,22 +241,26 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
           >
             Pin
           </button>
-          <button
-            type="button"
-            className="float-dock-action"
-            title="Switch to full sidebar menu"
-            aria-label="Switch to sidebar"
-            onClick={() => setAttachment("edge")}
-          >
-            Sidebar
-          </button>
+          {!floatHorizontal ? (
+            <button
+              type="button"
+              className="float-dock-action"
+              title="Switch to full sidebar menu"
+              aria-label="Switch to sidebar"
+              onClick={() => setAttachment("edge")}
+            >
+              Sidebar
+            </button>
+          ) : null}
         </div>
       </div>
 
       {mounted && tip && floatOpen
         ? createPortal(
             <div
-              className={`float-dock-tip${tip.placeLeft ? " is-left" : ""}`}
+              className={`float-dock-tip${tip.placeLeft ? " is-left" : ""}${
+                floatHorizontal ? (tip.placeBelow ? " is-below" : " is-above") : ""
+              }`}
               style={{ top: tip.top, left: tip.left }}
               role="tooltip"
             >

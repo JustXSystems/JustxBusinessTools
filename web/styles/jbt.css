@@ -6237,8 +6237,169 @@ body.is-float-dock-dragging {
   right: 6px;
 }
 
+/* Horizontal dock for short-height landscape (phones) ? reclaim width, scroll icons. */
+.float-dock.is-horizontal,
+.float-dock[data-orientation="horizontal"] {
+  flex-direction: row;
+  align-items: center;
+  width: auto;
+  max-width: min(96vw, 920px);
+  height: 56px;
+  padding: 6px 10px;
+  border-radius: 18px;
+  gap: 6px;
+}
+
+.float-dock.is-horizontal.is-collapsed {
+  width: auto;
+  height: 52px;
+  padding: 6px 10px;
+}
+
+.float-dock.is-horizontal.is-open {
+  width: auto;
+  height: 60px;
+  padding: 6px 12px;
+  border-radius: 20px;
+}
+
+.float-dock.is-horizontal .float-dock-drag {
+  width: auto;
+  padding: 4px 6px;
+  flex-shrink: 0;
+}
+
+.float-dock.is-horizontal .float-dock-dots {
+  flex-direction: column;
+  gap: 3px;
+}
+
+.float-dock.is-horizontal .float-dock-toggle {
+  width: auto;
+  padding: 4px 6px;
+  flex-shrink: 0;
+}
+
+.float-dock.is-horizontal .float-dock-brand {
+  flex-shrink: 0;
+}
+
+.float-dock.is-horizontal .float-dock-rail {
+  flex-direction: row;
+  align-items: center;
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: none;
+  max-width: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 6px;
+  border-top: none;
+  border-bottom: none;
+  border-left: 1px solid var(--border-hair);
+  border-right: 1px solid var(--border-hair);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.float-dock.is-horizontal .float-dock-item {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+}
+
+.float-dock.is-horizontal .float-dock-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.float-dock.is-horizontal .float-dock-actions {
+  flex-direction: row;
+  width: auto;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.float-dock.is-horizontal .float-dock-action {
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+.float-dock-tip.is-below {
+  transform: translate(-50%, 0);
+  animation-name: float-tip-in-below;
+}
+
+.float-dock-tip.is-above {
+  transform: translate(-50%, -100%);
+  animation-name: float-tip-in-above;
+}
+
+@keyframes float-tip-in-below {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes float-tip-in-above {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% + 4px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+}
+
 @media (max-width: 768px) {
+  .float-dock:not(.is-horizontal) {
+    display: none;
+  }
+}
+
+/* Compact landscape: keep float dock visible even under the mobile width band. */
+@media (max-height: 560px) and (orientation: landscape) {
   .float-dock {
+    display: flex;
+  }
+
+  .desktop-sidebar,
+  .admin-sidebar {
+    display: none !important;
+  }
+
+  .app-topbar,
+  .app-topbar-mobile {
+    display: none;
+  }
+
+  .operator-layout,
+  .admin-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .operator-layout[data-sidebar-mode="floating"] .operator-main,
+  .operator-layout[data-sidebar-mode="fixed"] .operator-main,
+  .operator-layout[data-sidebar-mode="mini"] .operator-main,
+  .operator-layout[data-sidebar-mode="docked"] .operator-main,
+  .operator-layout[data-sidebar-mode="normal"] .operator-main,
+  .admin-shell[data-sidebar-mode="floating"] .admin-main,
+  .admin-shell[data-sidebar-mode="fixed"] .admin-main,
+  .admin-shell[data-sidebar-mode="mini"] .admin-main,
+  .admin-shell[data-sidebar-mode="docked"] .admin-main,
+  .admin-shell[data-sidebar-mode="normal"] .admin-main {
+    margin-left: 0;
+  }
+
+  /* Hide bottom tab bar once the horizontal float dock is mounted. */
+  body:has(.float-dock.is-horizontal) .bottom-nav {
     display: none;
   }
 }

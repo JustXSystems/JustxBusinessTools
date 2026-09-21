@@ -13,6 +13,8 @@ import {
   clampFloatPosition,
   clampSidebarWidth,
   densityFromWidth,
+  matchesCompactLandscape,
+  COMPACT_LANDSCAPE_MQ,
   readSidebarLayoutState,
   resolveLayoutMode,
   snapSidebarWidth,
@@ -35,6 +37,8 @@ type SidebarLayoutContextValue = {
   floatY: number;
   floatPinned: boolean;
   floatOpen: boolean;
+  /** Short-height landscape: dock lays out horizontally; edge sidebar is suppressed. */
+  floatHorizontal: boolean;
   setAttachment: (attachment: SidebarAttachment) => void;
   setFloatPinned: (pinned: boolean) => void;
   setFloatOpen: (open: boolean) => void;
@@ -76,6 +80,7 @@ export function SidebarLayoutProvider({
   const [dragging, setDragging] = useState(false);
   const [floatDragging, setFloatDragging] = useState(false);
   const [floatHoverOpen, setFloatHoverOpen] = useState(false);
+  const [floatHorizontal, setFloatHorizontal] = useState(false);
   const [dragOriginX, setDragOriginX] = useState(0);
   const [dragOriginWidth, setDragOriginWidth] = useState<number>(SIDEBAR_SNAPS.normal);
   const [floatOrigin, setFloatOrigin] = useState({ x: 0, y: 0, px: 0, py: 0 });
@@ -88,8 +93,49 @@ export function SidebarLayoutProvider({
     setReady(true);
   }, [storageKey]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(COMPACT_LANDSCAPE_MQ);
+    let wasCompact = mq.matches;
+    setFloatHorizontal(wasCompact);
+
+    const apply = () => {
+      const compact = mq.matches;
+      setFloatHorizontal(compact);
+      if (compact && !wasCompact) {
+        // Entering compact landscape: open dock and park it near the top edge.
+        setFloatHoverOpen(true);
+        setState((prev) => {
+          const pos = clampFloatPosition(prev.floatX, Math.min(prev.floatY, 12));
+          if (pos.x === prev.floatX && pos.y === prev.floatY) return prev;
+          return { ...prev, floatX: pos.x, floatY: pos.y };
+        });
+      }
+      wasCompact = compact;
+    };
+
+    // Initial mount in landscape should also open the horizontal dock.
+    if (wasCompact) {
+      setFloatHoverOpen(true);
+      setState((prev) => {
+        const pos = clampFloatPosition(prev.floatX, Math.min(prev.floatY, 12));
+        if (pos.x === prev.floatX && pos.y === prev.floatY) return prev;
+        return { ...prev, floatX: pos.x, floatY: pos.y };
+      });
+    }
+
+    mq.addEventListener("change", apply);
+    window.addEventListener("resize", apply);
+    return () => {
+      mq.removeEventListener("change", apply);
+      window.removeEventListener("resize", apply);
+    };
+  }, []);
+
   const setAttachment = useCallback(
     (attachment: SidebarAttachment) => {
+      // Compact landscape keeps a horizontal float dock; ignore edge switch.
+      if (attachment === "edge" && matchesCompactLandscape()) return;
       setState((prev) => {
         const next = {
           ...prev,
@@ -246,14 +292,18 @@ export function SidebarLayoutProvider({
   );
 
   const density = densityFromWidth(state.width);
-  const mode = resolveLayoutMode(state.width, state.attachment);
-  const previewLabel = dragging ? labelFor(state.width, state.attachment) : null;
+  // Landscape phone: force floating so the horizontal dock can reclaim width.
+  const effectiveAttachment: SidebarAttachment = floatHorizontal
+    ? "floating"
+    : state.attachment;
+  const mode = resolveLayoutMode(state.width, effectiveAttachment);
+  const previewLabel = dragging ? labelFor(state.width, effectiveAttachment) : null;
   const floatOpen = state.floatPinned || floatHoverOpen;
 
   const value = useMemo(
     () => ({
       width: state.width,
-      attachment: state.attachment,
+      attachment: effectiveAttachment,
       density,
       mode,
       dragging: dragging || floatDragging,
@@ -262,6 +312,7 @@ export function SidebarLayoutProvider({
       floatY: state.floatY,
       floatPinned: state.floatPinned,
       floatOpen,
+      floatHorizontal,
       setAttachment,
       setFloatPinned,
       setFloatOpen,
@@ -276,7 +327,7 @@ export function SidebarLayoutProvider({
     }),
     [
       state.width,
-      state.attachment,
+      effectiveAttachment,
       state.floatX,
       state.floatY,
       state.floatPinned,
@@ -286,6 +337,7 @@ export function SidebarLayoutProvider({
       floatDragging,
       previewLabel,
       floatOpen,
+      floatHorizontal,
       setAttachment,
       setFloatPinned,
       setFloatOpen,
