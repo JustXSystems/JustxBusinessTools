@@ -1974,6 +1974,18 @@ export function QuotationGeneratorV1() {
                     <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} placeholder="comma-separated" />
                   </label>
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span>Reply-To</span>
+                    <input
+                      type="email"
+                      value={emailReplyTo}
+                      onChange={(e) => setEmailReplyTo(e.target.value)}
+                      placeholder="replies@yourcompany.com"
+                    />
+                    <small className="muted">
+                      Replies go here instead of the sending mailbox. Prefilled from Business Profile.
+                    </small>
+                  </label>
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span>Subject</span>
                     <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />
                   </label>
