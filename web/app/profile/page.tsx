@@ -539,7 +539,7 @@ export default function ProfilePage() {
         <p className="section-note">
           Templates support {"{{customerName}}"}, {"{{quoteNo}}"}, {"{{typeLabel}}"}, {"{{date}}"},{" "}
           {"{{validTill}}"}, {"{{grandTotal}}"}, {"{{grandTotalWords}}"}, {"{{companyName}}"},{" "}
-          {"{{companyPhone}}"}.
+          {"{{companyPhone}}"}, {"{{LoggedinUserName}}"}, {"{{LogginUserPhonenumber}}"}.
         </p>
 
         <h4 className="panel-subtitle">WhatsApp numbers</h4>

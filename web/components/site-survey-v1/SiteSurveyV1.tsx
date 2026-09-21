@@ -71,8 +71,9 @@ Thank you for the opportunity to survey your site for solar installation.
 Please find the detailed survey report attached as a PDF.
 
 Regards,
+{{LoggedinUserName}}
 {{companyName}}
-{{companyPhone}}`;
+{{LogginUserPhonenumber}}, {{companyPhone}}`;
 
 const DEFAULT_EMAIL_SUBJECT = "{{companyName}} — Site Survey Report {{reportNo}}";
 const DEFAULT_EMAIL_MESSAGE = `Dear {{customerName}},
@@ -87,8 +88,9 @@ Please find attached the site survey report for your solar installation.
 Feel free to reach out if you have any questions.
 
 Regards,
+{{LoggedinUserName}}
 {{companyName}}
-{{companyPhone}}`;
+{{LogginUserPhonenumber}}, {{companyPhone}}`;
 
 const APPLIANCE_ICONS: Record<string, string> = {
   bulb: "\u{1F4A1}",
@@ -170,7 +172,11 @@ async function compressImageFile(file: File): Promise<{ name: string; mime: stri
   return { name: file.name, mime: "image/jpeg", dataUrl };
 }
 
-function messageVars(survey: Survey, company: SurveyCompanySnapshot) {
+function messageVars(
+  survey: Survey,
+  company: SurveyCompanySnapshot,
+  user?: { name?: string | null; email?: string; phone?: string | null } | null,
+) {
   const est = survey.estimate;
   return {
     customerName: val(survey.values, "f_name") || "Customer",
@@ -180,6 +186,8 @@ function messageVars(survey: Survey, company: SurveyCompanySnapshot) {
     totalCost: est ? Math.round(est.totalCost).toLocaleString("en-IN") : "—",
     companyName: company.name,
     companyPhone: company.phone,
+    LoggedinUserName: userDisplayName(user),
+    LogginUserPhonenumber: (user?.phone ?? "").trim(),
   };
 }
 
@@ -791,7 +799,7 @@ export function SiteSurveyV1() {
   function openSendModal(channel: SendChannel) {
     if (!validateSaved()) return;
     const send = normalizeSendSettings(sendSettings);
-    const vars = messageVars(current, company);
+    const vars = messageVars(current, company, user);
     const customerPhone = val(current.values, "f_phone").replace(/\D/g, "");
     const numbers = [customerPhone, ...send.whatsappNumbers.filter((n) => n.phone).map((n) => n.phone)].filter(Boolean);
     setWaPhones([...new Set(numbers)].join(", "));

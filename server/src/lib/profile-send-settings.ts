@@ -49,6 +49,22 @@ export type ProfileSendSettings = {
   googleDrive: ProfileGoogleDriveSettings;
 };
 
+/** Legacy closing block — upgraded on normalize so saved profiles pick up the new signature. */
+const LEGACY_SEND_SIGNATURE = `Regards,
+{{companyName}}
+{{companyPhone}}`;
+
+export const DEFAULT_SEND_SIGNATURE = `Regards,
+{{LoggedinUserName}}
+{{companyName}}
+{{LogginUserPhonenumber}}, {{companyPhone}}`;
+
+export function upgradeSendTemplateSignature(template: string): string {
+  return template.includes(LEGACY_SEND_SIGNATURE)
+    ? template.split(LEGACY_SEND_SIGNATURE).join(DEFAULT_SEND_SIGNATURE)
+    : template;
+}
+
 export const DEFAULT_WHATSAPP_MESSAGE = `Hi {{customerName}},
 
 Please find our quotation details:
@@ -61,9 +77,7 @@ Please find our quotation details:
 
 I am attaching the PDF quotation. Please review and confirm.
 
-Regards,
-{{companyName}}
-{{companyPhone}}`;
+${DEFAULT_SEND_SIGNATURE}`;
 
 export const DEFAULT_PROFILE_SEND_SETTINGS: ProfileSendSettings = {
   whatsappNumbers: [],
@@ -88,9 +102,7 @@ Please find our quotation details below:
 
 We look forward to your confirmation.
 
-Regards,
-{{companyName}}
-{{companyPhone}}`,
+${DEFAULT_SEND_SIGNATURE}`,
   },
   googleDrive: {
     folderId: "",
@@ -144,14 +156,17 @@ export function normalizeProfileSendSettings(raw: unknown): ProfileSendSettings 
         phone: String(row.phone ?? "").trim(),
       };
     }),
-    whatsappMessage:
+    whatsappMessage: upgradeSendTemplateSignature(
       String(src.whatsappMessage ?? DEFAULT_PROFILE_SEND_SETTINGS.whatsappMessage).trim() ||
-      DEFAULT_WHATSAPP_MESSAGE,
+        DEFAULT_WHATSAPP_MESSAGE,
+    ),
     email: {
       to: String(email.to ?? DEFAULT_PROFILE_SEND_SETTINGS.email.to).trim(),
       cc: String(email.cc ?? DEFAULT_PROFILE_SEND_SETTINGS.email.cc).trim(),
       subject: String(email.subject ?? DEFAULT_PROFILE_SEND_SETTINGS.email.subject),
-      message: String(email.message ?? DEFAULT_PROFILE_SEND_SETTINGS.email.message),
+      message: upgradeSendTemplateSignature(
+        String(email.message ?? DEFAULT_PROFILE_SEND_SETTINGS.email.message),
+      ),
       templateId: normalizeQuotationEmailTemplateId(
         email.templateId ?? DEFAULT_PROFILE_SEND_SETTINGS.email.templateId,
       ),

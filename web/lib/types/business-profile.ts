@@ -49,6 +49,22 @@ export type BusinessProfileSendSettings = {
   };
 };
 
+/** Legacy closing block — upgraded on normalize so saved profiles pick up the new signature. */
+const LEGACY_SEND_SIGNATURE = `Regards,
+{{companyName}}
+{{companyPhone}}`;
+
+export const DEFAULT_SEND_SIGNATURE = `Regards,
+{{LoggedinUserName}}
+{{companyName}}
+{{LogginUserPhonenumber}}, {{companyPhone}}`;
+
+export function upgradeSendTemplateSignature(template: string): string {
+  return template.includes(LEGACY_SEND_SIGNATURE)
+    ? template.split(LEGACY_SEND_SIGNATURE).join(DEFAULT_SEND_SIGNATURE)
+    : template;
+}
+
 export const DEFAULT_WHATSAPP_MESSAGE = `Hi {{customerName}},
 
 Please find our quotation details:
@@ -61,9 +77,7 @@ Please find our quotation details:
 
 I am attaching the PDF quotation. Please review and confirm.
 
-Regards,
-{{companyName}}
-{{companyPhone}}`;
+${DEFAULT_SEND_SIGNATURE}`;
 
 export const DEFAULT_SEND_SETTINGS: BusinessProfileSendSettings = {
   whatsappNumbers: [],
@@ -88,9 +102,7 @@ Please find our quotation details below:
 
 We look forward to your confirmation.
 
-Regards,
-{{companyName}}
-{{companyPhone}}`,
+${DEFAULT_SEND_SIGNATURE}`,
   },
   googleDrive: {
     folderId: "",
@@ -256,14 +268,19 @@ export function normalizeSendSettings(
       phone: String((n as { phone?: string }).phone ?? "").trim(),
     })),
     whatsappMessage:
-      String(
-        (src as { whatsappMessage?: string }).whatsappMessage ?? DEFAULT_SEND_SETTINGS.whatsappMessage,
-      ).trim() || DEFAULT_WHATSAPP_MESSAGE,
+      upgradeSendTemplateSignature(
+        String(
+          (src as { whatsappMessage?: string }).whatsappMessage ??
+            DEFAULT_SEND_SETTINGS.whatsappMessage,
+        ).trim() || DEFAULT_WHATSAPP_MESSAGE,
+      ),
     email: {
       to: String(emailRaw.to ?? DEFAULT_SEND_SETTINGS.email.to).trim(),
       cc: String(emailRaw.cc ?? DEFAULT_SEND_SETTINGS.email.cc).trim(),
       subject: String(emailRaw.subject ?? DEFAULT_SEND_SETTINGS.email.subject),
-      message: String(emailRaw.message ?? DEFAULT_SEND_SETTINGS.email.message),
+      message: upgradeSendTemplateSignature(
+        String(emailRaw.message ?? DEFAULT_SEND_SETTINGS.email.message),
+      ),
       templateId: normalizeQuotationEmailTemplateId(
         emailRaw.templateId ?? DEFAULT_SEND_SETTINGS.email.templateId,
       ),

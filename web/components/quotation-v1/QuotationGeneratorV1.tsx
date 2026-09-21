@@ -439,6 +439,8 @@ export function QuotationGeneratorV1() {
       companyAddress: address,
       companyGstin: company.gstin || "",
       quoteLink,
+      LoggedinUserName: userDisplayName(user),
+      LogginUserPhonenumber: (user?.phone ?? "").trim(),
     };
     return {
       customerName: placeholders.customerName,
@@ -489,6 +491,8 @@ export function QuotationGeneratorV1() {
       companyAddress: vars.companyAddress || "",
       companyGstin: vars.companyGstin || "",
       quoteLink: vars.quoteLink || "",
+      LoggedinUserName: userDisplayName(user),
+      LogginUserPhonenumber: (user?.phone ?? "").trim(),
     };
   }
 
