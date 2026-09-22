@@ -4,7 +4,6 @@ import {
   emailAccentPalette,
   escapeHtml,
   normalizeQuotationEmailTemplateId,
-  renderCorporateQuotationEmailHtml,
   safeEmailLogoUrl,
   summarizeQuoteLineItems,
 } from "../quotation-email-templates";
@@ -45,7 +44,7 @@ describe("quotation email templates", () => {
 
   it("escapes html and renders intro/closing/gstin/line items", () => {
     expect(escapeHtml(`A <b> & "x"`)).toBe("A &lt;b&gt; &amp; &quot;x&quot;");
-    const html = renderCorporateQuotationEmailHtml({
+    const vars = {
       customerName: `<script>alert(1)</script>`,
       quoteNo: "Q-1",
       typeLabel: "Solar",
@@ -62,23 +61,41 @@ describe("quotation email templates", () => {
       companyAddress: "1 Main St",
       accentColor: "#0f3d3e",
       quoteLink: "https://example.com/q/abc",
-      intro: "Custom intro for {{companyName}}".replace("{{companyName}}", "JustX & Co"),
-      closing: "Custom closing.",
       lineItems: [{ desc: "Panel <x>", qty: "2", amount: "100.00" }],
       moreItemsCount: 3,
+    };
+    const { html } = buildQuotationEmailBodies({
+      templateId: "corporate",
+      vars,
+      customCorporateMessage: `Dear {{customerName}},
+
+Custom intro for JustX & Co
+
+{{quoteSummaryBlock}}
+
+{{lineItemsBlock}}
+
+{{quoteLinkBlock}}
+
+Custom closing.
+
+Warm regards,
+{{LoggedinUserName}}
+{{LogginUserPhonenumber}}`,
     });
-    expect(html).toContain("#0f3d3e");
-    expect(html).toContain("JustX &amp; Co");
-    expect(html).not.toContain("<script>");
-    expect(html).toContain("View Full Quotation");
-    expect(html).toContain("GSTIN: 29ABCDE1234F1Z5");
-    expect(html).toContain("Panel &lt;x&gt;");
-    expect(html).toContain("…and 3 more");
-    expect(html).toContain("Custom intro");
-    expect(html).toContain("Custom closing.");
-    expect(html).toContain("Sam Sender");
-    expect(html).toContain("+91 90000 11111");
-    expect(html).not.toContain("Tel: 999");
+    expect(html).toBeTruthy();
+    expect(html!).toContain("#0f3d3e");
+    expect(html!).toContain("JustX &amp; Co");
+    expect(html!).not.toContain("<script>");
+    expect(html!).toContain("View Full Quotation");
+    expect(html!).toContain("GSTIN: 29ABCDE1234F1Z5");
+    expect(html!).toContain("Panel &lt;x&gt;");
+    expect(html!).toContain("…and 3 more");
+    expect(html!).toContain("Custom intro");
+    expect(html!).toContain("Custom closing.");
+    expect(html!).toContain("Sam Sender");
+    expect(html!).toContain("+91 90000 11111");
+    expect(html!).not.toContain("Tel: 999");
   });
 
   it("matches plain and corporate regards: user, company, user phone", () => {
@@ -98,7 +115,7 @@ describe("quotation email templates", () => {
       accentColor: "#224466",
     };
     const corporate = buildQuotationEmailBodies({ templateId: "corporate", vars });
-    expect(corporate.text).toContain("Warm regards,\nPat\nCo\nuser-phone\nEmail: sales@co.test");
+    expect(corporate.text).toContain("Warm regards,\nPat\nCo\nuser-phone");
     expect(corporate.html).toContain("Pat");
     expect(corporate.html).toContain("user-phone");
     expect(corporate.html).not.toContain("company-phone");
@@ -106,7 +123,7 @@ describe("quotation email templates", () => {
       templateId: "plain",
       vars,
     });
-    expect(plain.text).toContain("Warm regards,\nPat\nCo\nuser-phone\nEmail: sales@co.test");
+    expect(plain.text).toContain("Warm regards,\nPat\nCo\nuser-phone");
   });
 
   it("returns html only for corporate template", () => {
@@ -128,9 +145,9 @@ describe("quotation email templates", () => {
     const plain = buildQuotationEmailBodies({
       templateId: "plain",
       vars,
-      customPlainMessage: "Custom body",
+      customPlainMessage: "Custom body for {{customerName}}",
     });
     expect(plain.html).toBeUndefined();
-    expect(plain.text).toBe("Custom body");
+    expect(plain.text).toBe("Custom body for Acme");
   });
 });

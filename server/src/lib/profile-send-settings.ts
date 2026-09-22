@@ -15,6 +15,7 @@ export type ProfileEmailDefaults = {
   message: string;
   /** Quotation HTML vs plain layout — see web/lib/quotation-email-templates.ts */
   templateId: QuotationEmailTemplateId;
+  corporateMessage: string;
   intro: string;
   closing: string;
   replyTo: string;
@@ -131,6 +132,7 @@ export const DEFAULT_PROFILE_SEND_SETTINGS: ProfileSendSettings = {
     cc: "",
     subject: "{{companyName}} — Quotation {{quoteNo}}",
     templateId: DEFAULT_QUOTATION_EMAIL_TEMPLATE,
+    corporateMessage: "",
     intro: DEFAULT_CORPORATE_EMAIL_INTRO,
     closing: DEFAULT_CORPORATE_EMAIL_CLOSING,
     replyTo: "",
@@ -264,6 +266,7 @@ export function normalizeProfileSendSettings(raw: unknown): ProfileSendSettings 
       templateId: normalizeQuotationEmailTemplateId(
         email.templateId ?? DEFAULT_PROFILE_SEND_SETTINGS.email.templateId,
       ),
+      corporateMessage: String(email.corporateMessage ?? "").trim(),
       intro:
         String(email.intro ?? DEFAULT_PROFILE_SEND_SETTINGS.email.intro).trim() ||
         DEFAULT_CORPORATE_EMAIL_INTRO,

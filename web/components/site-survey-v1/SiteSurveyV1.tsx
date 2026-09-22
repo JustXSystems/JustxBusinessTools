@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fetchProfile } from "@/lib/api";
-import { publicAssetUrl } from "@/lib/base-path";
+import { absolutePublicAssetUrl, publicAssetUrl } from "@/lib/base-path";
 import { buildMailtoHref } from "@/lib/mailto";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useLiveRefresh, invalidateAdminData } from "@/hooks/useLiveRefresh";
@@ -49,8 +49,16 @@ import {
   type InstallationType,
 } from "@/lib/site-survey-v1";
 import {
+  buildOutboundEmailBodies,
+  normalizeOutboundEmailFormatId,
+  outboundVarsFromTemplateRecord,
+  type OutboundEmailFormatId,
+} from "@/lib/outbound-email";
+import {
+  DEFAULT_SEND_SETTINGS,
   fillSendTemplate,
   normalizeSendSettings,
+  resolveCorporateEmailMessage,
   type BusinessProfileSendSettings,
 } from "@/lib/types/business-profile";
 import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
@@ -184,11 +192,33 @@ function messageVars(
     typeLabel: survey.installationType,
     genLabel: est?.genLabel || "—",
     totalCost: est ? Math.round(est.totalCost).toLocaleString("en-IN") : "—",
+    date: survey.updatedAt?.slice(0, 10) || survey.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
     companyName: company.name,
     companyPhone: company.phone,
+    companyEmail: company.email || "",
     LoggedinUserName: userDisplayName(user),
     LogginUserPhonenumber: (user?.phone ?? "").trim(),
   };
+}
+
+function surveyOutboundVars(
+  survey: Survey,
+  company: SurveyCompanySnapshot,
+  user?: { name?: string | null; email?: string; phone?: string | null } | null,
+) {
+  const record = messageVars(survey, company, user);
+  return outboundVarsFromTemplateRecord(record, {
+    emailHeaderLabel: "Site Survey",
+    referenceNoLabel: "Report No.",
+    amountLabel: "Estimated Cost",
+    accentColor: company.documentAccentColor,
+    logoUrl: company.logo
+      ? absolutePublicAssetUrl(
+          company.logo,
+          typeof window !== "undefined" ? window.location.origin : "",
+        )
+      : undefined,
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -599,6 +629,12 @@ export function SiteSurveyV1() {
   const [emailCc, setEmailCc] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
+  const [emailMessageTemplate, setEmailMessageTemplate] = useState("");
+  const [emailHtml, setEmailHtml] = useState<string | null>(null);
+  const [emailTemplateId, setEmailTemplateId] = useState<OutboundEmailFormatId>(() =>
+    normalizeOutboundEmailFormatId(DEFAULT_SEND_SETTINGS.email.templateId),
+  );
+  const [emailReplyTo, setEmailReplyTo] = useState("");
   const [savedFilters, setSavedFilters] = useState<SavedSurveyFilters>(EMPTY_SAVED_SURVEY_FILTERS);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
@@ -796,6 +832,27 @@ export function SiteSurveyV1() {
     return true;
   }
 
+  function buildEmailBodiesFromTemplate(
+    survey: Survey,
+    templateId: OutboundEmailFormatId,
+    messageTemplate: string,
+  ) {
+    const send = normalizeSendSettings(sendSettings);
+    const vars = surveyOutboundVars(survey, company, user);
+    return buildOutboundEmailBodies({
+      templateId,
+      vars,
+      customPlainMessage:
+        templateId === "plain"
+          ? messageTemplate
+          : send.email.message || DEFAULT_SEND_SETTINGS.email.message,
+      customCorporateMessage:
+        templateId === "corporate"
+          ? messageTemplate
+          : resolveCorporateEmailMessage(send.email),
+    });
+  }
+
   function openSendModal(channel: SendChannel) {
     if (!validateSaved()) return;
     const send = normalizeSendSettings(sendSettings);
@@ -807,7 +864,19 @@ export function SiteSurveyV1() {
     setEmailTo(send.email.to.trim() || val(current.values, "f_email") || "");
     setEmailCc(send.email.cc.trim());
     setEmailSubject(fillSendTemplate(send.email.subject?.trim() || DEFAULT_EMAIL_SUBJECT, vars));
-    setEmailMessage(fillSendTemplate(send.email.message?.trim() || DEFAULT_EMAIL_MESSAGE, vars));
+    const templateId = normalizeOutboundEmailFormatId(send.email.templateId);
+    setEmailTemplateId(templateId);
+    const messageTemplate =
+      templateId === "corporate"
+        ? resolveCorporateEmailMessage(send.email)
+        : send.email.message?.trim() || DEFAULT_EMAIL_MESSAGE;
+    setEmailMessageTemplate(messageTemplate);
+    const bodies = buildEmailBodiesFromTemplate(current, templateId, messageTemplate);
+    setEmailMessage(bodies.text);
+    setEmailHtml(bodies.html ?? null);
+    setEmailReplyTo(
+      send.email.replyTo.trim() || company.email?.trim() || "",
+    );
     setSendChannel(channel);
     setSendOpen(true);
     if (channel === "whatsapp") {
@@ -882,6 +951,9 @@ export function SiteSurveyV1() {
           cc: emailCc.trim(),
           subject: emailSubject.trim(),
           message: emailMessage,
+          html: emailHtml || undefined,
+          templateId: emailTemplateId,
+          replyTo: emailReplyTo.trim() || undefined,
           surveyId: current.id,
           reportNo: current.reportNo,
           filename: pdf?.filename,
@@ -1741,9 +1813,36 @@ export function SiteSurveyV1() {
                     <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />
                   </label>
                   <label className="field">
-                    <span>Message</span>
-                    <textarea rows={7} value={emailMessage} onChange={(e) => setEmailMessage(e.target.value)} />
+                    <span>
+                      Message template —{" "}
+                      {emailTemplateId === "corporate" ? "Corporate HTML" : "Plain text"}
+                    </span>
+                    <textarea
+                      rows={emailTemplateId === "corporate" ? 8 : 6}
+                      value={emailMessageTemplate}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setEmailMessageTemplate(next);
+                        const bodies = buildEmailBodiesFromTemplate(current, emailTemplateId, next);
+                        setEmailMessage(bodies.text);
+                        setEmailHtml(bodies.html ?? null);
+                      }}
+                    />
                   </label>
+                  <div className="field">
+                    <span>Preview (sent body)</span>
+                    {emailHtml ? (
+                      <iframe
+                        title="Email preview"
+                        className="q-email-tpl-preview"
+                        style={{ height: 220 }}
+                        sandbox=""
+                        srcDoc={emailHtml}
+                      />
+                    ) : (
+                      <pre className="q-email-tpl-preview-text">{emailMessage}</pre>
+                    )}
+                  </div>
                 </div>
                 <div className="modal-btns">
                   <button type="button" className="btn btn-ghost" onClick={() => setSendOpen(false)}>

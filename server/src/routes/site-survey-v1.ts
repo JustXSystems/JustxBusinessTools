@@ -211,6 +211,11 @@ router.post("/send/email", async (req, res) => {
   const cc = String(req.body?.cc ?? "").trim();
   const subject = String(req.body?.subject ?? "").trim();
   const body = String(req.body?.message ?? req.body?.body ?? "").trim();
+  const htmlRaw = req.body?.html;
+  const html =
+    typeof htmlRaw === "string" && htmlRaw.trim().length > 0 ? htmlRaw.trim() : undefined;
+  const templateId = String(req.body?.templateId ?? "").trim() || undefined;
+  const replyTo = String(req.body?.replyTo ?? "").trim() || undefined;
   if (!to) {
     res.status(400).json({ error: "Email To is required" });
     return;
@@ -233,6 +238,9 @@ router.post("/send/email", async (req, res) => {
           cc: cc || undefined,
           subject,
           body,
+          html: html || undefined,
+          templateId,
+          replyTo,
           kind: "sitesurveyv1.send",
           surveyId: req.body?.surveyId ?? null,
           reportNo: req.body?.reportNo ?? null,

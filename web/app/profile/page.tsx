@@ -7,7 +7,6 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { canEditBusinessProfile } from "@/lib/auth-access";
 import {
-  DEFAULT_SEND_SETTINGS,
   EMPTY_PROFILE,
   INDIAN_STATES,
   normalizeSendSettings,
@@ -29,13 +28,23 @@ import { publicAssetUrl } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
 import { MfaSettingsPanel } from "@/components/profile/MfaSettingsPanel";
-import { QuotationEmailTemplatePicker } from "@/components/profile/QuotationEmailTemplatePicker";
+import { SendViaDefaultsPanel } from "@/components/profile/SendViaDefaultsPanel";
 import { TeamRequestsPanel } from "@/components/profile/TeamRequestsPanel";
 import { ClockDisplaySettingsPanel } from "@/components/profile/ClockDisplaySettingsPanel";
 import { FlashDisplaySettingsPanel } from "@/components/profile/FlashDisplaySettingsPanel";
-import { normalizeQuotationEmailTemplateId } from "@/lib/quotation-email-templates";
 import { normalizeClockDisplaySettings } from "@/lib/clock-display";
 import { normalizeFlashDisplaySettings } from "@/lib/flash-display";
+
+type ProfileTab = "company" | "brand" | "send" | "delivery" | "tools" | "legal";
+
+const PROFILE_TABS: Array<{ id: ProfileTab; label: string; hint: string }> = [
+  { id: "company", label: "Company", hint: "Identity, address, accent" },
+  { id: "brand", label: "Brand & UI", hint: "Theme, clock, alerts" },
+  { id: "send", label: "Send Via", hint: "WhatsApp & email defaults" },
+  { id: "delivery", label: "Delivery", hint: "Downloads & file webhooks" },
+  { id: "tools", label: "Tools", hint: "Home screen" },
+  { id: "legal", label: "Bank & terms", hint: "Banking & T&C" },
+];
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -52,6 +61,7 @@ export default function ProfilePage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [webhookSecretDraft, setWebhookSecretDraft] = useState("");
+  const [activeTab, setActiveTab] = useState<ProfileTab>("company");
 
   const send = normalizeSendSettings(profile.sendSettings);
   const themePresets = profile.themePresets?.length
@@ -196,7 +206,7 @@ export default function ProfilePage() {
         <div className="tool-header-text">
           <div className="tool-header-title">Business Profile</div>
           <div className="tool-header-sub">
-            Fill this once — it auto-fills every quotation, order, invoice, and PO you create.
+            One profile per branch — letterhead, Send Via defaults, and delivery for all tools.
           </div>
         </div>
         {canEdit ? (
@@ -223,6 +233,28 @@ export default function ProfilePage() {
       {error ? <div className="error-banner">{error}</div> : null}
       {message ? <div className="panel profile-success">{message}</div> : null}
 
+      <div className="profile-shell">
+        <nav className="profile-tabs-bar" aria-label="Business Profile sections">
+          <div className="profile-tabs" role="tablist">
+            {PROFILE_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                className={activeTab === tab.id ? "active" : undefined}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <span className="profile-tab-label">{tab.label}</span>
+                <span className="profile-tab-hint">{tab.hint}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+
+        <div className="profile-tab-panel" role="tabpanel">
+          {activeTab === "company" ? (
+            <>
       <div className="panel profile-hero">
         <div className="flex-row-wrap">
           <div className="logo-preview-lg">
@@ -317,15 +349,102 @@ export default function ProfilePage() {
                 />
               </div>
               <p className="section-note">
-                Used for quotation sheets, invoices/orders/POs, site-survey PDF letterhead
-                (headings, borders, table headers), and the corporate quotation email template.
-                Owner and Admin can change this.
+                Used on generated PDFs (quotations, site surveys, orders, etc.) and Corporate HTML
+                email. Owner and Admin can change this.
               </p>
             </div>
           </div>
         </div>
       </div>
 
+      <div className="panel">
+        <h3 className="panel-title">Registered address & contact</h3>
+        <div className="field-row2">
+          <label className="field">
+            <span className="label">Address line 1</span>
+            <input
+              value={profile.addressLine1 ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, addressLine1: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            <span className="label">Address line 2</span>
+            <input
+              value={profile.addressLine2 ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, addressLine2: e.target.value })}
+            />
+          </label>
+        </div>
+        <div className="field-row2">
+          <label className="field">
+            <span className="label">GSTIN</span>
+            <input
+              value={profile.gstin ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, gstin: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            <span className="label">PAN</span>
+            <input
+              value={profile.pan ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, pan: e.target.value })}
+            />
+          </label>
+        </div>
+        <div className="field-row2">
+          <label className="field">
+            <span className="label">State</span>
+            <select
+              value={profile.state ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => {
+                const state = e.target.value;
+                const code = INDIAN_STATES.find(([n]) => n === state)?.[1] ?? "";
+                setProfile({ ...profile, state, stateCode: code });
+              }}
+            >
+              <option value="">Select state</option>
+              {INDIAN_STATES.map(([name, code]) => (
+                <option key={code} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span className="label">State code</span>
+            <input value={profile.stateCode ?? ""} readOnly />
+          </label>
+        </div>
+        <div className="field-row2">
+          <label className="field">
+            <span className="label">Phone</span>
+            <input
+              value={profile.phone ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            <span className="label">Email</span>
+            <input
+              type="email"
+              value={profile.email ?? ""}
+              disabled={!canEdit}
+              onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+            />
+          </label>
+        </div>
+      </div>
+            </>
+          ) : null}
+
+          {activeTab === "brand" ? (
+            <>
       <div className="panel">
         <h3 className="panel-title">Theme preset</h3>
         <p className="section-note">
@@ -428,7 +547,10 @@ export default function ProfilePage() {
           }}
         />
       </div>
+            </>
+          ) : null}
 
+          {activeTab === "tools" ? (
       <div className="panel">
         <h3 className="panel-title">Tools on home</h3>
         <p className="section-note">
@@ -445,318 +567,22 @@ export default function ProfilePage() {
           disabled={!canEdit}
         />
       </div>
+          ) : null}
 
-      <div className="panel">
-        <h3 className="panel-title">Business details</h3>
-        <div className="field-row2">
-          <label className="field">
-            <span className="label">Address line 1</span>
-            <input
-              value={profile.addressLine1 ?? ""}
-              disabled={!canEdit}
-              onChange={(e) => setProfile({ ...profile, addressLine1: e.target.value })}
-            />
-          </label>
-          <label className="field">
-            <span className="label">Address line 2</span>
-            <input
-              value={profile.addressLine2 ?? ""}
-              disabled={!canEdit}
-              onChange={(e) => setProfile({ ...profile, addressLine2: e.target.value })}
-            />
-          </label>
-        </div>
-        <div className="field-row2">
-          <label className="field">
-            <span className="label">GSTIN</span>
-            <input
-              value={profile.gstin ?? ""}
-              disabled={!canEdit}
-              onChange={(e) => setProfile({ ...profile, gstin: e.target.value })}
-            />
-          </label>
-          <label className="field">
-            <span className="label">PAN</span>
-            <input
-              value={profile.pan ?? ""}
-              disabled={!canEdit}
-              onChange={(e) => setProfile({ ...profile, pan: e.target.value })}
-            />
-          </label>
-        </div>
-        <div className="field-row2">
-          <label className="field">
-            <span className="label">State</span>
-            <select
-              value={profile.state ?? ""}
-              disabled={!canEdit}
-              onChange={(e) => {
-                const state = e.target.value;
-                const code = INDIAN_STATES.find(([n]) => n === state)?.[1] ?? "";
-                setProfile({ ...profile, state, stateCode: code });
-              }}
-            >
-              <option value="">Select state</option>
-              {INDIAN_STATES.map(([name, code]) => (
-                <option key={code} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="label">State code</span>
-            <input value={profile.stateCode ?? ""} readOnly />
-          </label>
-        </div>
-        <div className="field-row2">
-          <label className="field">
-            <span className="label">Phone</span>
-            <input
-              value={profile.phone ?? ""}
-              disabled={!canEdit}
-              onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-            />
-          </label>
-          <label className="field">
-            <span className="label">Email</span>
-            <input
-              type="email"
-              value={profile.email ?? ""}
-              disabled={!canEdit}
-              onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-            />
-          </label>
-        </div>
-      </div>
-
+          {activeTab === "send" ? (
       <div className="panel">
         <h3 className="panel-title">Send Via defaults</h3>
-        <p className="section-note">
-          WhatsApp numbers / message and email To/CC/message templates — used by Quotation → Send Via.
-          Share / download needs no profile setup.
-        </p>
-        <p className="section-note">
-          Templates support {"{{customerName}}"}, {"{{quoteNo}}"}, {"{{typeLabel}}"}, {"{{date}}"},{" "}
-          {"{{validTill}}"}, {"{{grandTotal}}"}, {"{{grandTotalWords}}"}, {"{{companyName}}"},{" "}
-          {"{{companyPhone}}"}, {"{{LoggedinUserName}}"}, {"{{LogginUserPhonenumber}}"}.
-        </p>
-
-        <h4 className="panel-subtitle">WhatsApp numbers</h4>
-        <div className="profile-wa-list">
-          {send.whatsappNumbers.map((n, idx) => (
-            <div key={n.id} className="profile-wa-row">
-              <input
-                placeholder="Label"
-                value={n.label}
-                disabled={!canEdit}
-                onChange={(e) => {
-                  const next = [...send.whatsappNumbers];
-                  next[idx] = { ...n, label: e.target.value };
-                  patchSend({ ...send, whatsappNumbers: next });
-                }}
-              />
-              <input
-                placeholder="Phone"
-                value={n.phone}
-                disabled={!canEdit}
-                onChange={(e) => {
-                  const next = [...send.whatsappNumbers];
-                  next[idx] = { ...n, phone: e.target.value };
-                  patchSend({ ...send, whatsappNumbers: next });
-                }}
-              />
-              {canEdit ? (
-                <button
-                  type="button"
-                  className="btn btn-destructive btn-sm"
-                  onClick={() =>
-                    patchSend({
-                      ...send,
-                      whatsappNumbers: send.whatsappNumbers.filter((_, i) => i !== idx),
-                    })
-                  }
-                >
-                  Remove
-                </button>
-              ) : null}
-            </div>
-          ))}
-        </div>
-        {canEdit ? (
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            style={{ marginTop: 8 }}
-            onClick={() =>
-              patchSend({
-                ...send,
-                whatsappNumbers: [
-                  ...send.whatsappNumbers,
-                  { id: Math.random().toString(36).slice(2, 9), label: "", phone: "" },
-                ],
-              })
-            }
-          >
-            Add WhatsApp number
-          </button>
-        ) : null}
-
-        <label className="field" style={{ marginTop: 14 }}>
-          <span className="label">WhatsApp message template</span>
-          <textarea
-            rows={9}
-            value={send.whatsappMessage || DEFAULT_SEND_SETTINGS.whatsappMessage}
-            disabled={!canEdit}
-            onChange={(e) => patchSend({ ...send, whatsappMessage: e.target.value })}
-          />
-        </label>
-        <p className="section-note">
-          Prefilled when you use Send Via → WhatsApp (editable before opening). Automatic PDF attachment
-          requires <code>WHATSAPP_ACCESS_TOKEN</code> + <code>WHATSAPP_PHONE_NUMBER_ID</code> (Meta Cloud
-          API) or <code>WHATSAPP_WEBHOOK_URL</code> on the API server — browser WhatsApp links cannot attach
-          files.
-        </p>
-
-        <h4 className="panel-subtitle">Email</h4>
-        <QuotationEmailTemplatePicker
-          templateId={normalizeQuotationEmailTemplateId(send.email.templateId)}
-          accentColor={profile.documentAccentColor}
-          companyName={profile.businessName}
-          companyPhone={profile.phone}
-          companyEmail={profile.email}
-          companyGstin={profile.gstin}
-          companyAddress={[profile.addressLine1, profile.addressLine2, profile.state]
-            .filter(Boolean)
-            .join(", ")}
-          logoUrl={profile.logo}
-          intro={send.email.intro}
-          closing={send.email.closing}
-          disabled={!canEdit}
-          onChange={(templateId) =>
-            patchSend({ ...send, email: { ...send.email, templateId } })
-          }
+        <SendViaDefaultsPanel
+          profile={profile}
+          canEdit={canEdit}
+          send={send}
+          onPatchSend={patchSend}
+          onEmailWebhookUrl={(url) => setProfile((p) => ({ ...p, emailWebhookUrl: url }))}
         />
-        <div className="field-row2">
-          <label className="field">
-            <span className="label">Default To (blank = customer email)</span>
-            <input
-              value={send.email.to}
-              disabled={!canEdit}
-              onChange={(e) =>
-                patchSend({ ...send, email: { ...send.email, to: e.target.value } })
-              }
-            />
-          </label>
-          <label className="field">
-            <span className="label">Default CC</span>
-            <input
-              value={send.email.cc}
-              disabled={!canEdit}
-              onChange={(e) =>
-                patchSend({ ...send, email: { ...send.email, cc: e.target.value } })
-              }
-              placeholder="comma-separated"
-            />
-          </label>
-        </div>
-        <label className="field">
-          <span className="label">Subject template</span>
-          <input
-            value={send.email.subject}
-            disabled={!canEdit}
-            onChange={(e) =>
-              patchSend({ ...send, email: { ...send.email, subject: e.target.value } })
-            }
-          />
-        </label>
-        <label className="field">
-          <span className="label">Reply-To (blank = company / sales email)</span>
-          <input
-            type="email"
-            value={send.email.replyTo}
-            disabled={!canEdit}
-            onChange={(e) =>
-              patchSend({ ...send, email: { ...send.email, replyTo: e.target.value } })
-            }
-            placeholder="sales@yourcompany.com"
-          />
-        </label>
-        {normalizeQuotationEmailTemplateId(send.email.templateId) === "plain" ? (
-          <label className="field">
-            <span className="label">Message template</span>
-            <textarea
-              rows={8}
-              value={send.email.message || DEFAULT_SEND_SETTINGS.email.message}
-              disabled={!canEdit}
-              onChange={(e) =>
-                patchSend({ ...send, email: { ...send.email, message: e.target.value } })
-              }
-            />
-          </label>
-        ) : (
-          <>
-            <label className="field">
-              <span className="label">Corporate intro</span>
-              <textarea
-                rows={3}
-                value={send.email.intro || DEFAULT_SEND_SETTINGS.email.intro}
-                disabled={!canEdit}
-                onChange={(e) =>
-                  patchSend({ ...send, email: { ...send.email, intro: e.target.value } })
-                }
-              />
-            </label>
-            <label className="field">
-              <span className="label">Corporate closing</span>
-              <textarea
-                rows={3}
-                value={send.email.closing || DEFAULT_SEND_SETTINGS.email.closing}
-                disabled={!canEdit}
-                onChange={(e) =>
-                  patchSend({ ...send, email: { ...send.email, closing: e.target.value } })
-                }
-              />
-            </label>
-            <p className="section-note">
-          Summary card, line items, accent colors, logo, GSTIN, and CTA stay fixed. Intro/closing
-          support the same {"{{placeholders}}"} as subject. Warm regards always uses{" "}
-          {"{{LoggedinUserName}}"}, {"{{companyName}}"}, {"{{LogginUserPhonenumber}}"} (same for Plain
-          text and Corporate HTML).
-        </p>
-          </>
-        )}
-
-        <h4 className="panel-subtitle" style={{ marginTop: 16 }}>
-          Company email webhook (Path A — any device)
-        </h4>
-        <p className="section-note">
-          Paste this company&apos;s Power Automate / n8n <strong>HTTP POST URL</strong> so Staff can
-          send Corporate HTML + PDF from any device.{" "}
-          <strong>Not</strong> the same as Company document delivery → artifact webhook (PDF files).
-          Blind-follow: <code>docs/MICROSOFT_GRAPH_EMAIL.md</code>. Owner/Admin only.
-        </p>
-        <label className="field">
-          <span className="label">Email webhook URL</span>
-          <input
-            type="url"
-            value={profile.emailWebhookUrl ?? ""}
-            disabled={!canEdit}
-            placeholder="https://prod-….logic.azure.com:443/workflows/…/invoke?…"
-            autoComplete="off"
-            onChange={(e) =>
-              setProfile({ ...profile, emailWebhookUrl: e.target.value.trim() || null })
-            }
-          />
-        </label>
-        <p className="section-note">
-          Leave blank to fall back to platform <strong>Admin → Integrations → Email webhook</strong>{" "}
-          or <code>EMAIL_WEBHOOK_URL</code>. Clear the field and Save to remove this profile&apos;s
-          URL. Without any webhook, Send Via → Email uses{" "}
-          <Link href="/email-outbox">Email Outbox</Link> (mailto / Open in Outlook).
-        </p>
       </div>
+          ) : null}
 
+          {activeTab === "delivery" ? (
       <Suspense fallback={<div className="panel"><p className="section-note">Loading delivery settings…</p></div>}>
         <DownloadFolderPanel
           canEdit={canEdit}
@@ -776,7 +602,10 @@ export default function ProfilePage() {
           onWebhookSecretChange={(secret) => setWebhookSecretDraft(secret)}
         />
       </Suspense>
+          ) : null}
 
+          {activeTab === "legal" ? (
+            <>
       <div className="panel">
         <h3 className="panel-title">Bank details</h3>
         <div className="field-row2">
@@ -837,12 +666,18 @@ export default function ProfilePage() {
           />
         </label>
       </div>
+            </>
+          ) : null}
+        </div>
 
-      {canEdit ? (
-        <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save Business Profile"}
-        </button>
-      ) : null}
+        {canEdit ? (
+          <div className="profile-save-bar">
+            <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : "Save Business Profile"}
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 /**
- * Quotation outbound email layouts — Business Profile chooses a template;
- * corporate layout follows the profile Document accent color.
+ * Outbound email layouts (Plain + Corporate HTML) for Business Profile Send Via defaults.
+ * Used by Quotation, Site Survey, and other tools; corporate shell follows Document accent color.
  */
 
 import {
@@ -20,12 +20,12 @@ export const QUOTATION_EMAIL_TEMPLATES: QuotationEmailTemplateMeta[] = [
   {
     id: "plain",
     label: "Plain text",
-    description: "Classic text-only message (best for mailto / mail apps).",
+    description: "Text-only body — mailto, mail apps, and webhook text part.",
   },
   {
     id: "corporate",
     label: "Corporate HTML",
-    description: "Branded card layout using your Document accent color (webhook delivery).",
+    description: "Branded HTML + matching text — email webhook or Email Outbox.",
   },
 ];
 
@@ -36,6 +36,36 @@ export const DEFAULT_CORPORATE_EMAIL_INTRO =
 
 export const DEFAULT_CORPORATE_EMAIL_CLOSING =
   "Should you have any questions or require modifications, please feel free to reach out — we would be happy to assist. We look forward to your confirmation and to the opportunity of working together.";
+
+/** Dynamic sections inserted when the message template contains block tokens. */
+export const QUOTATION_EMAIL_BLOCK_TOKENS = [
+  "quoteSummaryBlock",
+  "lineItemsBlock",
+  "quoteLinkBlock",
+] as const;
+
+export type QuotationEmailBlockToken = (typeof QUOTATION_EMAIL_BLOCK_TOKENS)[number];
+
+const BLOCK_SPLIT_RE =
+  /\{\{\s*(quoteSummaryBlock|lineItemsBlock|quoteLinkBlock)\s*\}\}/;
+
+/** Full Corporate HTML message template (text + block tokens; rendered into the branded shell). */
+export const DEFAULT_CORPORATE_EMAIL_MESSAGE = `Dear {{customerName}},
+
+${DEFAULT_CORPORATE_EMAIL_INTRO}
+
+{{quoteSummaryBlock}}
+
+{{lineItemsBlock}}
+
+{{quoteLinkBlock}}
+
+${DEFAULT_CORPORATE_EMAIL_CLOSING}
+
+Warm regards,
+{{LoggedinUserName}}
+{{companyName}}
+{{LogginUserPhonenumber}}`;
 
 /** Max line items shown in the corporate email mini-table. */
 export const QUOTATION_EMAIL_LINE_ITEM_LIMIT = 5;
@@ -74,13 +104,15 @@ export type QuotationEmailVars = {
   /** Absolute https logo URL only — data URLs are skipped (blocked by many clients). */
   logoUrl?: string;
   accentColor?: string;
-  /** Filled intro (placeholders already applied). */
-  intro?: string;
-  /** Filled closing (placeholders already applied). */
-  closing?: string;
   lineItems?: QuotationEmailLineItem[];
   /** Count of items not shown in the mini-table. */
   moreItemsCount?: number;
+  /** Header badge in corporate shell (default Document). */
+  emailHeaderLabel?: string;
+  /** First row label in summary block (default Quotation No.). */
+  referenceNoLabel?: string;
+  /** Grand total row label (default Grand Total). */
+  amountLabel?: string;
 };
 
 function clampByte(n: number) {
@@ -188,18 +220,289 @@ export function summarizeQuoteLineItems(
   };
 }
 
-function defaultIntro(vars: QuotationEmailVars) {
-  return (
-    vars.intro?.trim() ||
-    `Greetings from ${vars.companyName || "us"}. Thank you for your interest in our products and services. We appreciate the opportunity and are pleased to share your quotation summary below.`
-  );
+function fillTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => vars[key] ?? "");
 }
 
-function defaultClosing(vars: QuotationEmailVars) {
-  return (
-    vars.closing?.trim() ||
-    "Should you have any questions or require modifications, please feel free to reach out — we would be happy to assist. We look forward to your confirmation and to the opportunity of working together."
-  );
+export function quotationEmailVarsToRecord(vars: QuotationEmailVars): Record<string, string> {
+  return {
+    customerName: vars.customerName,
+    quoteNo: vars.quoteNo,
+    typeLabel: vars.typeLabel,
+    date: vars.date,
+    validTill: vars.validTill,
+    grandTotal: vars.grandTotal,
+    grandTotalWords: vars.grandTotalWords,
+    companyName: vars.companyName,
+    companyPhone: vars.companyPhone,
+    companyEmail: vars.companyEmail ?? "",
+    companyAddress: vars.companyAddress ?? "",
+    companyGstin: vars.companyGstin ?? "",
+    quoteLink: vars.quoteLink ?? "",
+    LoggedinUserName: vars.LoggedinUserName ?? "",
+    LogginUserPhonenumber: vars.LogginUserPhonenumber ?? "",
+  };
+}
+
+function collapseExtraBlankLines(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .filter((l, i, arr) => !(l === "" && arr[i - 1] === ""))
+    .join("\n")
+    .trim();
+}
+
+function renderQuoteSummaryTextBlock(vars: QuotationEmailVars): string {
+  const refLabel = vars.referenceNoLabel?.trim() || "Reference No.";
+  const amountLabel = vars.amountLabel?.trim() || "Grand Total";
+  const lines = [
+    `${refLabel}: ${vars.quoteNo}`,
+    `Type: ${vars.typeLabel}`,
+    `Date: ${vars.date}`,
+  ];
+  if (vars.validTill?.trim()) {
+    lines.push(`Valid Till: ${vars.validTill}`);
+  }
+  const amountLine = vars.grandTotalWords?.trim()
+    ? `${amountLabel}: ₹${vars.grandTotal} (${vars.grandTotalWords})`
+    : `${amountLabel}: ₹${vars.grandTotal}`;
+  lines.push(amountLine);
+  return lines.join("\n");
+}
+
+function renderLineItemsTextBlock(vars: QuotationEmailVars): string {
+  const items = vars.lineItems ?? [];
+  if (!items.length) return "";
+  const lines = ["Items:"];
+  for (const it of items) {
+    lines.push(`• ${it.desc} — qty ${it.qty} — ₹${it.amount}`);
+  }
+  if (vars.moreItemsCount && vars.moreItemsCount > 0) {
+    lines.push(`• …and ${vars.moreItemsCount} more`);
+  }
+  return lines.join("\n");
+}
+
+function renderQuoteLinkTextBlock(vars: QuotationEmailVars): string {
+  if (vars.quoteLink) {
+    return `View full quotation: ${vars.quoteLink}`;
+  }
+  return "The full quotation PDF is attached to this email for your review.";
+}
+
+function renderQuoteSummaryHtmlBlock(
+  vars: QuotationEmailVars,
+  p: ReturnType<typeof emailAccentPalette>,
+): string {
+  const quoteNo = escapeHtml(vars.quoteNo || "—");
+  const typeLabel = escapeHtml(vars.typeLabel || "—");
+  const date = escapeHtml(vars.date || "—");
+  const validTill = escapeHtml(vars.validTill || "—");
+  const grandTotal = escapeHtml(vars.grandTotal || "0.00");
+  const grandTotalWords = escapeHtml(vars.grandTotalWords || "");
+  const refLabel = escapeHtml(vars.referenceNoLabel?.trim() || "Reference No.");
+  const amountLabel = escapeHtml(vars.amountLabel?.trim() || "Grand Total");
+  const validTillRow = vars.validTill?.trim()
+    ? `<tr>
+                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:12px; color:#6b7280; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px;">Valid Till</td>
+                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:14px; color:${p.validTill}; font-weight:700; text-align:right; font-family:Arial, Helvetica, sans-serif;">${validTill}</td>
+                </tr>`
+    : "";
+  return `<tr>
+            <td style="padding:20px 40px 8px 40px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${p.border};">
+                <tr>
+                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:12px; color:#6b7280; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px;">${refLabel}</td>
+                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:14px; color:#111827; font-weight:700; text-align:right; font-family:Arial, Helvetica, sans-serif;">${quoteNo}</td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:12px; color:#6b7280; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px;">Type</td>
+                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:14px; color:#111827; text-align:right; font-family:Arial, Helvetica, sans-serif;">${typeLabel}</td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:12px; color:#6b7280; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px;">Date</td>
+                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:14px; color:#111827; text-align:right; font-family:Arial, Helvetica, sans-serif;">${date}</td>
+                </tr>
+                ${validTillRow}
+                <tr>
+                  <td style="padding:16px 20px; background-color:${p.soft}; font-size:12px; color:${p.accent}; font-weight:700; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px;">${amountLabel}</td>
+                  <td style="padding:16px 20px; background-color:${p.soft}; font-size:17px; color:${p.accent}; font-weight:700; text-align:right; font-family:Arial, Helvetica, sans-serif;">
+                    &#8377;${grandTotal}
+                    ${grandTotalWords ? `<div style="font-size:11px; color:#6b7280; font-weight:400; margin-top:4px;">(${grandTotalWords})</div>` : ""}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>`;
+}
+
+function renderLineItemsHtmlBlock(
+  vars: QuotationEmailVars,
+  p: ReturnType<typeof emailAccentPalette>,
+): string {
+  const lineItems = vars.lineItems ?? [];
+  const more = Math.max(0, Number(vars.moreItemsCount) || 0);
+  if (!lineItems.length) return "";
+  const rows = lineItems
+    .map(
+      (it) => `<tr>
+                  <td style="padding:10px 12px; border-bottom:1px solid #eef0f3; font-size:13px; color:#111827; font-family:Arial, Helvetica, sans-serif;">${escapeHtml(it.desc)}</td>
+                  <td style="padding:10px 12px; border-bottom:1px solid #eef0f3; font-size:13px; color:#6b7280; text-align:center; font-family:Arial, Helvetica, sans-serif; white-space:nowrap;">${escapeHtml(it.qty)}</td>
+                  <td style="padding:10px 12px; border-bottom:1px solid #eef0f3; font-size:13px; color:#111827; text-align:right; font-family:Arial, Helvetica, sans-serif; white-space:nowrap;">&#8377;${escapeHtml(it.amount)}</td>
+                </tr>`,
+    )
+    .join("");
+  const moreRow =
+    more > 0
+      ? `<tr>
+                  <td colspan="3" style="padding:10px 12px; font-size:12px; color:#6b7280; font-family:Arial, Helvetica, sans-serif; font-style:italic;">
+                    …and ${more} more item${more === 1 ? "" : "s"} on the full quotation
+                  </td>
+                </tr>`
+      : "";
+  return `<tr>
+            <td style="padding:8px 40px 4px 40px;">
+              <p style="font-size:12px; color:#6b7280; margin:0 0 8px 0; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px; font-weight:700;">Line items</p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${p.border};">
+                <tr>
+                  <td style="padding:8px 12px; background-color:${p.soft}; font-size:11px; color:${p.accent}; font-weight:700; font-family:Arial, Helvetica, sans-serif;">Description</td>
+                  <td style="padding:8px 12px; background-color:${p.soft}; font-size:11px; color:${p.accent}; font-weight:700; text-align:center; font-family:Arial, Helvetica, sans-serif;">Qty</td>
+                  <td style="padding:8px 12px; background-color:${p.soft}; font-size:11px; color:${p.accent}; font-weight:700; text-align:right; font-family:Arial, Helvetica, sans-serif;">Amount</td>
+                </tr>
+                ${rows}
+                ${moreRow}
+              </table>
+            </td>
+          </tr>`;
+}
+
+function renderQuoteLinkHtmlBlock(
+  vars: QuotationEmailVars,
+  p: ReturnType<typeof emailAccentPalette>,
+): string {
+  const quoteLink = String(vars.quoteLink ?? "").trim();
+  if (quoteLink) {
+    return `<tr>
+              <td style="padding:12px 40px 28px 40px;" align="center">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td align="center" bgcolor="${p.accent}" style="border-radius:4px;">
+                      <a href="${escapeHtml(quoteLink)}" target="_blank" style="display:inline-block; background-color:${p.accent}; color:${p.onAccent}; text-decoration:none; font-size:14px; font-weight:700; font-family:Arial, Helvetica, sans-serif; padding:14px 36px; border-radius:4px; mso-padding-alt:0;">
+                        <!--[if mso]><i style="letter-spacing:36px; mso-font-width:-100%; mso-text-raise:21pt;">&nbsp;</i><![endif]-->
+                        <span style="mso-text-raise:10pt;">View Full Quotation</span>
+                        <!--[if mso]><i style="letter-spacing:36px; mso-font-width:-100%;">&nbsp;</i><![endif]-->
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="font-size:12px; color:#8a8f98; margin:12px 0 0 0; font-family:Arial, Helvetica, sans-serif;">
+                  Or open: <a href="${escapeHtml(quoteLink)}" style="color:${p.accent}; word-break:break-all;">${escapeHtml(quoteLink)}</a>
+                </p>
+              </td>
+            </tr>`;
+  }
+  return `<tr>
+              <td style="padding:0 40px 28px 40px;">
+                <p style="font-size:13px; color:#6b7280; margin:0; font-family:Arial, Helvetica, sans-serif; line-height:1.5;">
+                  The full quotation PDF is attached to this email for your review.
+                </p>
+              </td>
+            </tr>`;
+}
+
+function renderEmailBlock(
+  token: QuotationEmailBlockToken,
+  vars: QuotationEmailVars,
+  mode: "html" | "text",
+  palette: ReturnType<typeof emailAccentPalette>,
+): string {
+  if (token === "quoteSummaryBlock") {
+    return mode === "html"
+      ? renderQuoteSummaryHtmlBlock(vars, palette)
+      : renderQuoteSummaryTextBlock(vars);
+  }
+  if (token === "lineItemsBlock") {
+    const block =
+      mode === "html"
+        ? renderLineItemsHtmlBlock(vars, palette)
+        : renderLineItemsTextBlock(vars);
+    return block;
+  }
+  return mode === "html"
+    ? renderQuoteLinkHtmlBlock(vars, palette)
+    : renderQuoteLinkTextBlock(vars);
+}
+
+function textSegmentToHtmlRows(text: string): string {
+  const chunks = text.split(/\n\s*\n/);
+  return chunks
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map(
+      (chunk) => `<tr>
+            <td style="padding:8px 40px 8px 40px;">
+              <p style="font-size:15px; color:#374151; line-height:1.65; margin:0; font-family:Arial, Helvetica, sans-serif;">
+                ${formatEmailParagraphs(chunk)}
+              </p>
+            </td>
+          </tr>`,
+    )
+    .join("");
+}
+
+/**
+ * Expand a profile message template: {{placeholders}} plus optional dynamic blocks.
+ * Used for Plain text and Corporate HTML (text + HTML body rows).
+ */
+export function expandQuotationMessageTemplate(
+  template: string,
+  vars: QuotationEmailVars,
+  mode: "html" | "text",
+): string {
+  const parts = String(template ?? "").split(BLOCK_SPLIT_RE);
+  const placeholders = quotationEmailVarsToRecord(vars);
+  const palette = emailAccentPalette(vars.accentColor);
+  let out = "";
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 1) {
+      const token = parts[i] as QuotationEmailBlockToken;
+      const block = renderEmailBlock(token, vars, mode, palette);
+      if (block) {
+        out += mode === "text" ? (out ? `\n\n${block}` : block) : block;
+      }
+      continue;
+    }
+    const filled = fillTemplate(parts[i], placeholders).trim();
+    if (!filled) continue;
+    if (mode === "text") {
+      out += out ? `\n\n${filled}` : filled;
+    } else {
+      out += textSegmentToHtmlRows(filled);
+    }
+  }
+  return mode === "text" ? collapseExtraBlankLines(out) : out;
+}
+
+/** Build stored corporate message from legacy intro/closing fields. */
+export function corporateMessageFromLegacyParts(intro: string, closing: string): string {
+  const introPart = intro.trim() || DEFAULT_CORPORATE_EMAIL_INTRO;
+  const closingPart = closing.trim() || DEFAULT_CORPORATE_EMAIL_CLOSING;
+  return `Dear {{customerName}},
+
+${introPart}
+
+{{quoteSummaryBlock}}
+
+{{lineItemsBlock}}
+
+{{quoteLinkBlock}}
+
+${closingPart}
+
+Warm regards,
+{{LoggedinUserName}}
+{{companyName}}
+{{LogginUserPhonenumber}}`;
 }
 
 /** Shared Warm regards lines for plain + corporate (extras kept after the first three). */
@@ -217,133 +520,30 @@ export function quotationEmailRegardsLines(vars: QuotationEmailVars): string[] {
   return lines;
 }
 
-/** Plain-text body matching the corporate summary (mailto / multipart text part). */
+/** Plain-text body when no custom message template is configured (legacy fallback). */
 export function renderPlainQuotationEmail(vars: QuotationEmailVars): string {
-  const lines = [
-    `Dear ${vars.customerName || "Customer"},`,
-    "",
-    defaultIntro(vars),
-    "",
-    `Quotation No.: ${vars.quoteNo}`,
-    `Type: ${vars.typeLabel}`,
-    `Date: ${vars.date}`,
-    `Valid Till: ${vars.validTill}`,
-    `Grand Total: ₹${vars.grandTotal} (${vars.grandTotalWords})`,
-    "",
-  ];
-  const items = vars.lineItems ?? [];
-  if (items.length) {
-    lines.push("Items:");
-    for (const it of items) {
-      lines.push(`• ${it.desc} — qty ${it.qty} — ₹${it.amount}`);
-    }
-    if (vars.moreItemsCount && vars.moreItemsCount > 0) {
-      lines.push(`• …and ${vars.moreItemsCount} more`);
-    }
-    lines.push("");
-  }
-  if (vars.quoteLink) {
-    lines.push(`View full quotation: ${vars.quoteLink}`, "");
-  }
-  lines.push(defaultClosing(vars), "", ...quotationEmailRegardsLines(vars));
-  return lines.filter((l, i, arr) => !(l === "" && arr[i - 1] === "")).join("\n");
+  return expandQuotationMessageTemplate(DEFAULT_CORPORATE_EMAIL_MESSAGE, vars, "text");
 }
 
 /**
  * Corporate HTML email — table-based, inline CSS, themed from Document accent.
  * Suitable for SendGrid / n8n / Power Automate webhooks that accept `html`.
  */
-export function renderCorporateQuotationEmailHtml(vars: QuotationEmailVars): string {
+export function renderCorporateQuotationEmailHtml(
+  vars: QuotationEmailVars,
+  bodyHtml: string,
+): string {
   const p = emailAccentPalette(vars.accentColor);
   const companyName = escapeHtml(vars.companyName || "Company");
-  const customerName = escapeHtml(vars.customerName || "Customer");
   const quoteNo = escapeHtml(vars.quoteNo || "—");
-  const typeLabel = escapeHtml(vars.typeLabel || "—");
-  const date = escapeHtml(vars.date || "—");
-  const validTill = escapeHtml(vars.validTill || "—");
-  const grandTotal = escapeHtml(vars.grandTotal || "0.00");
-  const grandTotalWords = escapeHtml(vars.grandTotalWords || "");
-  const userName = escapeHtml(String(vars.LoggedinUserName ?? "").trim());
-  const userPhone = escapeHtml(String(vars.LogginUserPhonenumber ?? "").trim());
-  const email = escapeHtml(vars.companyEmail || "");
+  const headerLabel = escapeHtml(vars.emailHeaderLabel?.trim() || "Document");
   const address = escapeHtml(vars.companyAddress || "");
   const gstin = escapeHtml(vars.companyGstin || "");
-  const quoteLink = String(vars.quoteLink ?? "").trim();
   const logoUrl = safeEmailLogoUrl(vars.logoUrl);
-  const introHtml = formatEmailParagraphs(defaultIntro(vars));
-  const closingHtml = formatEmailParagraphs(defaultClosing(vars));
 
   const logoBlock = logoUrl
     ? `<img src="${escapeHtml(logoUrl)}" alt="${companyName}" width="140" style="display:block; max-width:140px; max-height:48px; height:auto; border:0;" />`
     : `<span style="color:${p.onAccent}; font-size:20px; font-weight:700; letter-spacing:0.3px; font-family:Arial, Helvetica, sans-serif;">${companyName}</span>`;
-
-  const lineItems = vars.lineItems ?? [];
-  const more = Math.max(0, Number(vars.moreItemsCount) || 0);
-  let lineItemsBlock = "";
-  if (lineItems.length) {
-    const rows = lineItems
-      .map(
-        (it, idx) => `<tr>
-                  <td style="padding:10px 12px; border-bottom:1px solid #eef0f3; font-size:13px; color:#111827; font-family:Arial, Helvetica, sans-serif;">${escapeHtml(it.desc)}</td>
-                  <td style="padding:10px 12px; border-bottom:1px solid #eef0f3; font-size:13px; color:#6b7280; text-align:center; font-family:Arial, Helvetica, sans-serif; white-space:nowrap;">${escapeHtml(it.qty)}</td>
-                  <td style="padding:10px 12px; border-bottom:1px solid #eef0f3; font-size:13px; color:#111827; text-align:right; font-family:Arial, Helvetica, sans-serif; white-space:nowrap;">&#8377;${escapeHtml(it.amount)}</td>
-                </tr>${idx === lineItems.length - 1 && more > 0 ? "" : ""}`,
-      )
-      .join("");
-    const moreRow =
-      more > 0
-        ? `<tr>
-                  <td colspan="3" style="padding:10px 12px; font-size:12px; color:#6b7280; font-family:Arial, Helvetica, sans-serif; font-style:italic;">
-                    …and ${more} more item${more === 1 ? "" : "s"} on the full quotation
-                  </td>
-                </tr>`
-        : "";
-    lineItemsBlock = `<tr>
-            <td style="padding:8px 40px 4px 40px;">
-              <p style="font-size:12px; color:#6b7280; margin:0 0 8px 0; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px; font-weight:700;">Line items</p>
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${p.border};">
-                <tr>
-                  <td style="padding:8px 12px; background-color:${p.soft}; font-size:11px; color:${p.accent}; font-weight:700; font-family:Arial, Helvetica, sans-serif;">Description</td>
-                  <td style="padding:8px 12px; background-color:${p.soft}; font-size:11px; color:${p.accent}; font-weight:700; text-align:center; font-family:Arial, Helvetica, sans-serif;">Qty</td>
-                  <td style="padding:8px 12px; background-color:${p.soft}; font-size:11px; color:${p.accent}; font-weight:700; text-align:right; font-family:Arial, Helvetica, sans-serif;">Amount</td>
-                </tr>
-                ${rows}
-                ${moreRow}
-              </table>
-            </td>
-          </tr>`;
-  }
-
-  const ctaBlock = quoteLink
-    ? `<tr>
-              <td style="padding:12px 40px 28px 40px;" align="center">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                  <tr>
-                    <td align="center" bgcolor="${p.accent}" style="border-radius:4px;">
-                      <a href="${escapeHtml(quoteLink)}" target="_blank" style="display:inline-block; background-color:${p.accent}; color:${p.onAccent}; text-decoration:none; font-size:14px; font-weight:700; font-family:Arial, Helvetica, sans-serif; padding:14px 36px; border-radius:4px; mso-padding-alt:0;">
-                        <!--[if mso]><i style="letter-spacing:36px; mso-font-width:-100%; mso-text-raise:21pt;">&nbsp;</i><![endif]-->
-                        <span style="mso-text-raise:10pt;">View Full Quotation</span>
-                        <!--[if mso]><i style="letter-spacing:36px; mso-font-width:-100%;">&nbsp;</i><![endif]-->
-                      </a>
-                    </td>
-                  </tr>
-                </table>
-                <p style="font-size:12px; color:#8a8f98; margin:12px 0 0 0; font-family:Arial, Helvetica, sans-serif;">
-                  Or open: <a href="${escapeHtml(quoteLink)}" style="color:${p.accent}; word-break:break-all;">${escapeHtml(quoteLink)}</a>
-                </p>
-              </td>
-            </tr>`
-    : `<tr>
-              <td style="padding:0 40px 28px 40px;">
-                <p style="font-size:13px; color:#6b7280; margin:0; font-family:Arial, Helvetica, sans-serif; line-height:1.5;">
-                  The full quotation PDF is attached to this email for your review.
-                </p>
-              </td>
-            </tr>`;
-
-  const contactLines: string[] = [];
-  if (userPhone) contactLines.push(userPhone);
-  if (email) contactLines.push(`Email: ${email}`);
 
   const footerBits: string[] = [];
   if (gstin) footerBits.push(`GSTIN: ${gstin}`);
@@ -391,7 +591,7 @@ export function renderCorporateQuotationEmailHtml(vars: QuotationEmailVars): str
                   </td>
                   <td valign="middle" align="right" style="padding:0 0 0 16px;">
                     <span style="display:inline-block; color:${p.muted}; font-size:11px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; font-family:Arial, Helvetica, sans-serif;">
-                      Quotation
+                      ${headerLabel}
                     </span>
                   </td>
                 </tr>
@@ -399,75 +599,7 @@ export function renderCorporateQuotationEmailHtml(vars: QuotationEmailVars): str
             </td>
           </tr>
 
-          <tr>
-            <td style="padding:32px 40px 8px 40px;">
-              <p style="font-size:15px; color:#1f2937; margin:0 0 16px 0; font-family:Arial, Helvetica, sans-serif; line-height:1.5;">
-                Dear <strong style="color:#111827;">${customerName}</strong>,
-              </p>
-              <p style="font-size:15px; color:#374151; line-height:1.65; margin:0; font-family:Arial, Helvetica, sans-serif;">
-                ${introHtml}
-              </p>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:20px 40px 8px 40px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${p.border};">
-                <tr>
-                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:12px; color:#6b7280; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px;">Quotation No.</td>
-                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:14px; color:#111827; font-weight:700; text-align:right; font-family:Arial, Helvetica, sans-serif;">${quoteNo}</td>
-                </tr>
-                <tr>
-                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:12px; color:#6b7280; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px;">Type</td>
-                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:14px; color:#111827; text-align:right; font-family:Arial, Helvetica, sans-serif;">${typeLabel}</td>
-                </tr>
-                <tr>
-                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:12px; color:#6b7280; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px;">Date</td>
-                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:14px; color:#111827; text-align:right; font-family:Arial, Helvetica, sans-serif;">${date}</td>
-                </tr>
-                <tr>
-                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:12px; color:#6b7280; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px;">Valid Till</td>
-                  <td style="padding:14px 20px; border-bottom:1px solid #eef0f3; font-size:14px; color:${p.validTill}; font-weight:700; text-align:right; font-family:Arial, Helvetica, sans-serif;">${validTill}</td>
-                </tr>
-                <tr>
-                  <td style="padding:16px 20px; background-color:${p.soft}; font-size:12px; color:${p.accent}; font-weight:700; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.4px;">Grand Total</td>
-                  <td style="padding:16px 20px; background-color:${p.soft}; font-size:17px; color:${p.accent}; font-weight:700; text-align:right; font-family:Arial, Helvetica, sans-serif;">
-                    &#8377;${grandTotal}
-                    ${grandTotalWords ? `<div style="font-size:11px; color:#6b7280; font-weight:400; margin-top:4px;">(${grandTotalWords})</div>` : ""}
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          ${lineItemsBlock}
-
-          ${ctaBlock}
-
-          <tr>
-            <td style="padding:0 40px 28px 40px;">
-              <p style="font-size:14px; color:#4b5563; line-height:1.65; margin:0; font-family:Arial, Helvetica, sans-serif;">
-                ${closingHtml}
-              </p>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:24px 40px 32px 40px; border-top:1px solid #eef0f3;">
-              <p style="font-size:14px; color:#374151; margin:0 0 6px 0; font-family:Arial, Helvetica, sans-serif;">Warm regards,</p>
-              ${
-                userName
-                  ? `<p style="font-size:14px; color:#111827; font-weight:600; margin:0 0 4px 0; font-family:Arial, Helvetica, sans-serif;">${userName}</p>`
-                  : ""
-              }
-              <p style="font-size:14px; color:${p.accent}; font-weight:700; margin:0 0 8px 0; font-family:Arial, Helvetica, sans-serif;">${companyName}</p>
-              ${
-                contactLines.length
-                  ? `<p style="font-size:13px; color:#6b7280; margin:0; line-height:1.55; font-family:Arial, Helvetica, sans-serif;">${contactLines.join("<br />")}</p>`
-                  : ""
-              }
-            </td>
-          </tr>
+          ${bodyHtml}
 
           <tr>
             <td style="background-color:${p.soft}; padding:18px 40px; text-align:center; border-top:1px solid ${p.border};">
@@ -493,19 +625,30 @@ export function renderCorporateQuotationEmailHtml(vars: QuotationEmailVars): str
 
 export function buildQuotationEmailBodies(opts: {
   templateId: QuotationEmailTemplateId;
-  /** Custom plain message from profile (used when template is plain, or as webhook text fallback). */
+  /** Plain-text message template from profile (with {{placeholders}} and optional blocks). */
   customPlainMessage?: string;
+  /** Corporate message template from profile (with {{placeholders}} and optional blocks). */
+  customCorporateMessage?: string;
   vars: QuotationEmailVars;
 }): { text: string; html?: string } {
   const templateId = normalizeQuotationEmailTemplateId(opts.templateId);
   if (templateId === "corporate") {
+    const corpTpl =
+      String(opts.customCorporateMessage ?? "").trim() || DEFAULT_CORPORATE_EMAIL_MESSAGE;
+    const text = expandQuotationMessageTemplate(corpTpl, opts.vars, "text");
+    const bodyHtml = expandQuotationMessageTemplate(corpTpl, opts.vars, "html");
     return {
-      text: renderPlainQuotationEmail(opts.vars),
-      html: renderCorporateQuotationEmailHtml(opts.vars),
+      text,
+      html: renderCorporateQuotationEmailHtml(opts.vars, bodyHtml),
     };
   }
-  const custom = String(opts.customPlainMessage ?? "").trim();
+  const plainTpl = String(opts.customPlainMessage ?? "").trim();
+  if (plainTpl) {
+    return {
+      text: expandQuotationMessageTemplate(plainTpl, opts.vars, "text"),
+    };
+  }
   return {
-    text: custom || renderPlainQuotationEmail(opts.vars),
+    text: renderPlainQuotationEmail(opts.vars),
   };
 }

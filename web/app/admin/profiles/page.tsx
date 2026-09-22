@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
 import { QuotationEmailTemplatePicker } from "@/components/profile/QuotationEmailTemplatePicker";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
-import { INDIAN_STATES } from "@/lib/types/business-profile";
+import { DEFAULT_SEND_SETTINGS, INDIAN_STATES } from "@/lib/types/business-profile";
 import { normalizeDocumentAccentColor } from "@/lib/document-accent";
 import {
   DEFAULT_QUOTATION_EMAIL_TEMPLATE,
@@ -500,15 +500,22 @@ function AdminProfilesInner() {
                     </div>
                     <QuotationEmailTemplatePicker
                       templateId={normalizeQuotationEmailTemplateId(form.emailTemplateId)}
+                      plainMessage={DEFAULT_SEND_SETTINGS.email.message}
+                      corporateMessage={DEFAULT_SEND_SETTINGS.email.corporateMessage}
                       accentColor={form.documentAccentColor}
                       companyName={form.businessName}
                       companyPhone={form.phone}
                       companyEmail={form.email}
-                      onChange={(emailTemplateId) => setForm({ ...form, emailTemplateId })}
+                      messageDisabled
+                      onChangeTemplateId={(emailTemplateId) =>
+                        setForm({ ...form, emailTemplateId })
+                      }
+                      onChangePlainMessage={() => {}}
+                      onChangeCorporateMessage={() => {}}
                     />
                     <p className="section-note">
-                      Intro, closing, and Reply-To text are edited on the Business Profile → Send Via
-                      panel for this branch. See <code>docs/EMAIL_WEBHOOK.md</code> for HTML delivery.
+                      Plain / Corporate message templates and Reply-To are edited on Business Profile →
+                      Send Via for this branch. See <code>docs/EMAIL_WEBHOOK.md</code> for HTML delivery.
                     </p>
                   </div>
                 ) : null}

@@ -51,13 +51,15 @@ import {
   type QuoteNotification,
   type QuoteStatus,
 } from "@/lib/quotation-v1";
-import type { BusinessProfileSendSettings } from "@/lib/types/business-profile";
+import {
+  resolveCorporateEmailMessage,
+  type BusinessProfileSendSettings,
+} from "@/lib/types/business-profile";
 import {
   buildQuotationEmailBodies,
-  DEFAULT_CORPORATE_EMAIL_CLOSING,
-  DEFAULT_CORPORATE_EMAIL_INTRO,
   normalizeQuotationEmailTemplateId,
   summarizeQuoteLineItems,
+  type QuotationEmailTemplateId,
   type QuotationEmailVars,
 } from "@/lib/quotation-email-templates";
 import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
@@ -152,6 +154,7 @@ export function QuotationGeneratorV1() {
   const [emailCc, setEmailCc] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
+  const [emailMessageTemplate, setEmailMessageTemplate] = useState("");
   const [emailHtml, setEmailHtml] = useState<string | null>(null);
   const [emailTemplateId, setEmailTemplateId] = useState(() =>
     normalizeQuotationEmailTemplateId(DEFAULT_SEND_SETTINGS.email.templateId),
@@ -424,7 +427,6 @@ export function QuotationGeneratorV1() {
         : "";
     const address = [company.address, company.state].filter(Boolean).join(", ");
     const { lineItems, moreItemsCount } = summarizeQuoteLineItems(q.items);
-    const send = normalizeSendSettings(sendSettings);
     const placeholders: Record<string, string> = {
       customerName: q.customer.name || "Customer",
       quoteNo: q.quoteNo || "",
@@ -467,15 +469,28 @@ export function QuotationGeneratorV1() {
       accentColor: company.documentAccentColor || "",
       lineItems,
       moreItemsCount,
-      intro: fillSendTemplate(
-        send.email.intro?.trim() || DEFAULT_CORPORATE_EMAIL_INTRO,
-        placeholders,
-      ),
-      closing: fillSendTemplate(
-        send.email.closing?.trim() || DEFAULT_CORPORATE_EMAIL_CLOSING,
-        placeholders,
-      ),
     };
+  }
+
+  function buildEmailBodiesFromTemplate(
+    q: QuotationV1,
+    templateId: QuotationEmailTemplateId,
+    messageTemplate: string,
+  ) {
+    const send = normalizeSendSettings(sendSettings);
+    const vars = messageVars(q);
+    return buildQuotationEmailBodies({
+      templateId,
+      vars,
+      customPlainMessage:
+        templateId === "plain"
+          ? messageTemplate
+          : send.email.message || DEFAULT_SEND_SETTINGS.email.message,
+      customCorporateMessage:
+        templateId === "corporate"
+          ? messageTemplate
+          : resolveCorporateEmailMessage(send.email),
+    });
   }
 
   function emailPlaceholders(vars: QuotationEmailVars): Record<string, string> {
@@ -545,14 +560,12 @@ export function QuotationGeneratorV1() {
     );
     const templateId = normalizeQuotationEmailTemplateId(send.email.templateId);
     setEmailTemplateId(templateId);
-    const bodies = buildQuotationEmailBodies({
-      templateId,
-      vars,
-      customPlainMessage: fillSendTemplate(
-        send.email.message || DEFAULT_SEND_SETTINGS.email.message,
-        ph,
-      ),
-    });
+    const messageTemplate =
+      templateId === "corporate"
+        ? resolveCorporateEmailMessage(send.email)
+        : send.email.message || DEFAULT_SEND_SETTINGS.email.message;
+    setEmailMessageTemplate(messageTemplate);
+    const bodies = buildEmailBodiesFromTemplate(saved, templateId, messageTemplate);
     setEmailMessage(bodies.text);
     setEmailHtml(bodies.html ?? null);
     const replyTo =
@@ -1989,9 +2002,30 @@ export function QuotationGeneratorV1() {
                     <span>Subject</span>
                     <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />
                   </label>
-                  {emailHtml ? (
-                    <div className="field" style={{ gridColumn: "1 / -1" }}>
-                      <span>Email preview</span>
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span>
+                      Message template —{" "}
+                      {emailTemplateId === "corporate" ? "Corporate HTML" : "Plain text"}
+                    </span>
+                    <textarea
+                      rows={emailTemplateId === "corporate" ? 10 : 7}
+                      value={emailMessageTemplate}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setEmailMessageTemplate(next);
+                        const bodies = buildEmailBodiesFromTemplate(
+                          current,
+                          emailTemplateId,
+                          next,
+                        );
+                        setEmailMessage(bodies.text);
+                        setEmailHtml(bodies.html ?? null);
+                      }}
+                    />
+                  </label>
+                  <div className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span>Preview (sent body)</span>
+                    {emailHtml ? (
                       <iframe
                         title="Quotation email preview"
                         className="q-email-tpl-preview"
@@ -1999,13 +2033,10 @@ export function QuotationGeneratorV1() {
                         sandbox=""
                         srcDoc={emailHtml}
                       />
-                    </div>
-                  ) : (
-                    <label className="field" style={{ gridColumn: "1 / -1" }}>
-                      <span>Message</span>
-                      <textarea rows={7} value={emailMessage} onChange={(e) => setEmailMessage(e.target.value)} />
-                    </label>
-                  )}
+                    ) : (
+                      <pre className="q-email-tpl-preview-text">{emailMessage}</pre>
+                    )}
+                  </div>
                 </div>
                 <div className="modal-btns">
                   <button

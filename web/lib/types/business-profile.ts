@@ -1,7 +1,9 @@
 import type { QuotationEmailTemplateId } from "@/lib/quotation-email-templates";
 import {
+  corporateMessageFromLegacyParts,
   DEFAULT_CORPORATE_EMAIL_CLOSING,
   DEFAULT_CORPORATE_EMAIL_INTRO,
+  DEFAULT_CORPORATE_EMAIL_MESSAGE,
   DEFAULT_QUOTATION_EMAIL_TEMPLATE,
   normalizeQuotationEmailTemplateId,
 } from "@/lib/quotation-email-templates";
@@ -28,14 +30,18 @@ export type BusinessProfileSendSettings = {
     subject: string;
     message: string;
     /**
-     * Quotation email layout.
-     * `corporate` = HTML branded with Document accent (webhook);
-     * `plain` = text-only (mailto-friendly).
+     * Outbound email format for all tools (Send Via → Email).
+     * `corporate` = HTML + text; `plain` = text-only.
      */
     templateId: QuotationEmailTemplateId;
-    /** Corporate intro paragraph ({{placeholders}}). Empty = default. */
+    /**
+     * Corporate HTML message template ({{placeholders}} + optional
+     * {{quoteSummaryBlock}}, {{lineItemsBlock}}, {{quoteLinkBlock}}).
+     */
+    corporateMessage: string;
+    /** @deprecated Migrated into corporateMessage — kept for stored JSON compat. */
     intro: string;
-    /** Corporate closing paragraph ({{placeholders}}). Empty = default. */
+    /** @deprecated Migrated into corporateMessage — kept for stored JSON compat. */
     closing: string;
     /**
      * Reply-To for webhook delivery. Blank = company sales/email.
@@ -131,6 +137,7 @@ export const DEFAULT_SEND_SETTINGS: BusinessProfileSendSettings = {
     cc: "",
     subject: "{{companyName}} — Quotation {{quoteNo}}",
     templateId: DEFAULT_QUOTATION_EMAIL_TEMPLATE,
+    corporateMessage: DEFAULT_CORPORATE_EMAIL_MESSAGE,
     intro: DEFAULT_CORPORATE_EMAIL_INTRO,
     closing: DEFAULT_CORPORATE_EMAIL_CLOSING,
     replyTo: "",
@@ -328,6 +335,11 @@ export function normalizeSendSettings(
       templateId: normalizeQuotationEmailTemplateId(
         emailRaw.templateId ?? DEFAULT_SEND_SETTINGS.email.templateId,
       ),
+      corporateMessage: resolveCorporateEmailMessage({
+        corporateMessage: String(emailRaw.corporateMessage ?? "").trim(),
+        intro: String(emailRaw.intro ?? DEFAULT_SEND_SETTINGS.email.intro),
+        closing: String(emailRaw.closing ?? DEFAULT_SEND_SETTINGS.email.closing),
+      }),
       intro:
         String(emailRaw.intro ?? DEFAULT_SEND_SETTINGS.email.intro).trim() ||
         DEFAULT_CORPORATE_EMAIL_INTRO,
@@ -345,6 +357,20 @@ export function normalizeSendSettings(
 
 export function fillSendTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => vars[key] ?? "");
+}
+
+/** Effective corporate message template (new field or legacy intro/closing). */
+export function resolveCorporateEmailMessage(parts: {
+  corporateMessage?: string;
+  intro?: string;
+  closing?: string;
+}): string {
+  const direct = String(parts.corporateMessage ?? "").trim();
+  if (direct) return direct;
+  return corporateMessageFromLegacyParts(
+    String(parts.intro ?? DEFAULT_CORPORATE_EMAIL_INTRO),
+    String(parts.closing ?? DEFAULT_CORPORATE_EMAIL_CLOSING),
+  );
 }
 
 export function extractDriveFolderId(raw: string) {
