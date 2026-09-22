@@ -825,7 +825,7 @@ export function QuotationGeneratorV1() {
   ];
 
   return (
-    <div className="qgv1-root tool-workspace">
+    <div className={`qgv1-root tool-workspace${route === "new" ? " qgv1-root-compose" : ""}`}>
       <ToolPageHero
         eyebrow="Sales · Documents"
         title="Quotation Generator V1"
@@ -889,13 +889,23 @@ export function QuotationGeneratorV1() {
 
       <main className="qgv1-main">
         {route === "new" ? (
-          <div className="qgv1-workspace preview-workspace">
-            <div className="qgv1-editor preview-editor">
-            <div className="qgv1-page-head">
+          <div className="qgv1-workspace qgv1-compose-shell preview-workspace">
+            <div className="qgv1-editor qgv1-compose preview-editor">
+            <div className="qgv1-page-head qgv1-compose-head">
               <div>
-                <h1>Compose quotation</h1>
-                <p>Edit left · live preview right. Save draft, Submit to company delivery, Download PDF, or send WhatsApp / Email.</p>
+                <h1>Compose</h1>
+                <p className="qgv1-compose-lede">
+                  Save draft · Submit · PDF · WhatsApp / Email — preview updates live.
+                </p>
               </div>
+            </div>
+
+            <div className="qgv1-compose-bar" aria-label="Quote summary">
+              <span className="qgv1-compose-bar-no mono" title="Quotation number">
+                {previewQuoteNo(current, company, {})}
+              </span>
+              <span className="qgv1-compose-bar-total">₹{money(totals.grand)}</span>
+              <span className={`qgv1-compose-bar-status is-${current.status}`}>{current.status}</span>
             </div>
 
             {!bannerDismissed ? (
@@ -908,60 +918,55 @@ export function QuotationGeneratorV1() {
               </div>
             ) : null}
 
-            <section className="qgv1-card">
-              <div className="qgv1-label">Category *</div>
-              <select
-                className="qgv1-cat"
-                value={current.category}
-                onChange={(e) => switchType(e.target.value as CategoryKey, current.engagement)}
-              >
-                {(Object.keys(CATEGORIES) as CategoryKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {CATEGORIES[k].label}
-                  </option>
-                ))}
-              </select>
-              {current.category === "other" ? (
-                <input
-                  className="qgv1-input"
-                  style={{ marginTop: 8, maxWidth: 340 }}
-                  placeholder="e.g. Water Heater, CCTV…"
-                  value={current.categoryCustomLabel}
-                  onChange={(e) => patch((q) => ({ ...q, categoryCustomLabel: e.target.value }))}
-                />
-              ) : null}
-              <div className="qgv1-label" style={{ marginTop: 14 }}>
-                For *
-              </div>
-              <div className="qgv1-btn-row">
-                {CATEGORY_ENGAGEMENTS[current.category].map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    className={`btn btn-sm ${current.engagement === k ? "btn-primary" : "btn-secondary"}`}
-                    onClick={() => switchType(current.category, k)}
+            <section className="qgv1-card qgv1-card-compact">
+              <h3>Type</h3>
+              <div className="qgv1-compose-type">
+                <label className="field qgv1-compose-type-cat">
+                  <span>Category *</span>
+                  <select
+                    className="qgv1-cat"
+                    value={current.category}
+                    onChange={(e) => switchType(e.target.value as CategoryKey, current.engagement)}
                   >
-                    {engMeta(current.category, k).label}
-                  </button>
-                ))}
+                    {(Object.keys(CATEGORIES) as CategoryKey[]).map((k) => (
+                      <option key={k} value={k}>
+                        {CATEGORIES[k].label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {current.category === "other" ? (
+                  <label className="field qgv1-compose-type-custom">
+                    <span>Custom label</span>
+                    <input
+                      className="qgv1-input"
+                      placeholder="e.g. Water Heater, CCTV…"
+                      value={current.categoryCustomLabel}
+                      onChange={(e) => patch((q) => ({ ...q, categoryCustomLabel: e.target.value }))}
+                    />
+                  </label>
+                ) : null}
+                <div className="qgv1-compose-engagements">
+                  <span className="qgv1-compose-engagements-label">For *</span>
+                  <div className="qgv1-compose-engagements-row" role="group" aria-label="Engagement type">
+                    {CATEGORY_ENGAGEMENTS[current.category].map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        className={`qgv1-eng-chip ${current.engagement === k ? "is-on" : ""}`}
+                        onClick={() => switchType(current.category, k)}
+                      >
+                        {engMeta(current.category, k).label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </section>
 
-            <section className="qgv1-card">
-              <h3>Quotation details</h3>
-              <div className="qgv1-grid2">
-                <label className="field">
-                  <span>Quotation No.</span>
-                  <input
-                    className="mono"
-                    disabled
-                    value={previewQuoteNo(current, company, {})}
-                  />
-                </label>
-                <label className="field">
-                  <span>Status</span>
-                  <input disabled value={current.status} />
-                </label>
+            <section className="qgv1-card qgv1-card-compact">
+              <h3>Details</h3>
+              <div className="qgv1-compose-meta-grid">
                 <label className="field">
                   <span>Date</span>
                   <input
@@ -971,7 +976,7 @@ export function QuotationGeneratorV1() {
                   />
                 </label>
                 <label className="field">
-                  <span>Valid Till</span>
+                  <span>Valid till</span>
                   <input
                     type="date"
                     value={current.validTill}
@@ -979,25 +984,25 @@ export function QuotationGeneratorV1() {
                   />
                 </label>
                 <label className="field">
-                  <span>Follow-up Date</span>
+                  <span>Follow-up</span>
                   <input
                     type="date"
                     value={current.followUpDate || ""}
                     onChange={(e) => patch((q) => ({ ...q, followUpDate: e.target.value }))}
                   />
                 </label>
-                <label className="field" style={{ gridColumn: "1 / -1" }}>
-                  <span>Prepared By *</span>
+                <label className="field">
+                  <span>Prepared by *</span>
                   <input
                     value={current.preparedBy}
                     onChange={(e) => patch((q) => ({ ...q, preparedBy: e.target.value }))}
-                    placeholder="Auto-filled from your login name"
+                    placeholder="Your name"
                   />
                 </label>
               </div>
             </section>
 
-            <section className="qgv1-card">
+            <section className="qgv1-card qgv1-card-compact">
               <h3>Customer</h3>
               <div className="qgv1-grid2">
                 <label className="field">
@@ -1081,9 +1086,9 @@ export function QuotationGeneratorV1() {
               </div>
             </section>
 
-            <section className="qgv1-card">
-              <div className="qgv1-page-head" style={{ marginBottom: 10 }}>
-                <h3 style={{ margin: 0 }}>Line items</h3>
+            <section className="qgv1-card qgv1-card-compact">
+              <div className="qgv1-card-head-row">
+                <h3>Line items</h3>
                 <div className="qgv1-btn-row">
                   <button
                     type="button"
@@ -1347,19 +1352,19 @@ export function QuotationGeneratorV1() {
               </button>
             </section>
 
-            <section className="qgv1-card qgv1-notes-card">
-              <div className="qgv1-notes-head">
-                <h3>Terms &amp; notes</h3>
-                <p className="muted">Printed on the quotation PDF under Terms &amp; Conditions.</p>
-              </div>
+            <details className="qgv1-card qgv1-card-compact qgv1-disclosure qgv1-notes-card" open>
+              <summary className="qgv1-disclosure-summary">
+                <span>Terms &amp; notes</span>
+                <span className="qgv1-disclosure-hint muted">On PDF · Terms &amp; Conditions</span>
+              </summary>
               <textarea
                 className="qgv1-notes-area"
-                rows={14}
+                rows={6}
                 value={current.notes}
                 onChange={(e) => patch((q) => ({ ...q, notes: e.target.value }))}
                 placeholder="Payment terms, warranty, delivery timeline, exclusions…"
               />
-            </section>
+            </details>
 
             <div className="qgv1-btn-row qgv1-editor-actions">
               <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void saveQuote()}>
