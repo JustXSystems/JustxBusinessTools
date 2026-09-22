@@ -29,6 +29,7 @@ import {
   quotationPdfToBase64,
   renderPageBreakMarkers,
   sanitizeNumStr,
+  sanitizeSignedNumStr,
   snapshotOf,
   templateItems,
   typeLabel,
@@ -1205,7 +1206,7 @@ export function QuotationGeneratorV1() {
                             <input
                               value={String(it.rate)}
                               onChange={(e) => {
-                                const v = sanitizeNumStr(e.target.value);
+                                const v = sanitizeSignedNumStr(e.target.value);
                                 patch((q) => ({
                                   ...q,
                                   items: q.items.map((x) => (x.id === it.id ? { ...x, rate: v } : x)),

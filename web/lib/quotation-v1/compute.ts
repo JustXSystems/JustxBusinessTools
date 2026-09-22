@@ -176,6 +176,20 @@ export function sanitizeNumStr(raw: string): string {
   return v;
 }
 
+/** Like sanitizeNumStr but allows a leading minus (line-item rate credits / adjustments). */
+export function sanitizeSignedNumStr(raw: string): string {
+  const s = String(raw);
+  const neg = s.includes("-");
+  let v = s.replace(/-/g, "").replace(/[^0-9.]/g, "");
+  const firstDot = v.indexOf(".");
+  if (firstDot !== -1) v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, "");
+  if (neg) {
+    if (v === "" || v === ".") return "-";
+    return `-${v}`;
+  }
+  return v;
+}
+
 function randomHex(byteLength: number): string {
   const bytes = new Uint8Array(byteLength);
   if (typeof globalThis.crypto?.getRandomValues === "function") {

@@ -4,6 +4,7 @@ import {
   DEFAULT_COMPANY,
   mergeCompanyFromBusinessProfile,
   newQuotationDraft,
+  sanitizeSignedNumStr,
 } from "@/lib/quotation-v1";
 
 describe("quotation-v1 computeTotals", () => {
@@ -26,6 +27,20 @@ describe("quotation-v1 computeTotals", () => {
     expect(t.grand).toBe(Math.round(2500 + 450 + 118));
   });
 
+  it("includes negative line rates in totals", () => {
+    const q = newQuotationDraft("solar", "epc");
+    q.customer.state = "Karnataka";
+    q.items = [
+      { id: "1", desc: "Credit", qty: 1, rate: -500, gst: 18, discount: 0 },
+      { id: "2", desc: "Item", qty: 1, rate: 1500, gst: 18, discount: 0 },
+    ];
+    q.extraCharge = { label: "x", amount: 0, gst: 0 };
+    q.gstOverride = { mode: "auto", cgst: null, sgst: null, igst: null };
+    const t = computeTotals(q, { ...DEFAULT_COMPANY, state: "Karnataka" });
+    expect(t.taxable).toBe(1000);
+    expect(t.subtotal).toBe(1000);
+  });
+
   it("uses IGST for inter-state", () => {
     const q = newQuotationDraft("ups", "sale");
     q.customer.state = "Maharashtra";
@@ -36,6 +51,14 @@ describe("quotation-v1 computeTotals", () => {
     expect(t.interState).toBe(true);
     expect(t.igst).toBeCloseTo(180, 5);
     expect(t.cgst).toBe(0);
+  });
+});
+
+describe("sanitizeSignedNumStr", () => {
+  it("keeps a leading minus while typing and in final values", () => {
+    expect(sanitizeSignedNumStr("-")).toBe("-");
+    expect(sanitizeSignedNumStr("-12.5")).toBe("-12.5");
+    expect(sanitizeSignedNumStr("12-3")).toBe("-123");
   });
 });
 
