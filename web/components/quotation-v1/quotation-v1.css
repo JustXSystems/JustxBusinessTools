@@ -854,23 +854,40 @@
   z-index: 1300;
   align-items: flex-end;
   padding: 0;
+  padding-bottom: var(--qgv1-rev-kb, 0px);
   background: rgba(8, 14, 22, 0.48);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
 .qgv1-rev-modal {
+  display: flex;
+  flex-direction: column;
   margin: 0;
   width: 100%;
   max-width: min(440px, 100%);
+  max-height: min(88vh, 640px);
   border-radius: 18px 18px 0 0;
   border: 1px solid rgba(var(--accent-rgb), 0.28);
   background:
     linear-gradient(165deg, rgba(var(--accent-rgb), 0.1) 0%, transparent 36%),
     var(--bg-2);
-  padding: 16px 16px max(18px, env(safe-area-inset-bottom, 0px));
+  padding: 8px 16px max(12px, env(safe-area-inset-bottom, 0px));
   box-shadow: var(--shadow-lift);
   animation: qgv1-cs-sheet 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.qgv1-rev-grab {
+  display: none;
+  width: 42px;
+  height: 4px;
+  margin: 6px auto 4px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--text-low) 55%, transparent);
+}
+
+.qgv1-rev-overlay.is-mobile .qgv1-rev-grab {
+  display: block;
 }
 
 .qgv1-rev-head {
@@ -879,6 +896,7 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 6px;
+  flex-shrink: 0;
 }
 
 .qgv1-rev-kicker {
@@ -904,6 +922,15 @@
   color: var(--text-mid);
   cursor: pointer;
   touch-action: manipulation;
+}
+
+.qgv1-rev-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: 4px;
 }
 
 .qgv1-rev-lede {
@@ -1007,7 +1034,7 @@
 }
 
 .qgv1-rev-preview {
-  margin-bottom: 14px;
+  margin-bottom: 8px;
   padding: 12px;
   border-radius: 14px;
   border: 1px solid rgba(var(--accent-rgb), 0.22);
@@ -1063,7 +1090,9 @@
 }
 
 .qgv1-rev-actions {
-  margin-top: 0;
+  margin-top: 8px;
+  flex-shrink: 0;
+  gap: 8px;
 }
 
 .qgv1-rev-actions .btn {
@@ -1075,11 +1104,13 @@
   .qgv1-rev-overlay {
     align-items: center;
     padding: 20px;
+    padding-bottom: max(20px, var(--qgv1-rev-kb, 0px));
   }
 
   .qgv1-rev-modal {
     border-radius: var(--radius);
     padding: 20px;
+    max-height: min(86vh, 620px);
     animation: qgv1-cs-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
@@ -1096,6 +1127,12 @@
 
   .qgv1-amt-btn {
     min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qgv1-rev-modal {
+    animation: none !important;
   }
 }
 
