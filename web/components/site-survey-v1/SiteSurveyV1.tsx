@@ -24,6 +24,7 @@ import {
   setValue,
   snapshotOf,
   stepsForFlow,
+  wizardStateWhenOpeningSurvey,
   surveyPdfToBase64,
   uid,
   val,
@@ -1678,10 +1679,11 @@ export function SiteSurveyV1() {
                                     try {
                                       const data = await api<{ survey: Survey }>(`/site-survey-v1/${s.id}`);
                                       const full = withFreshEstimate(data.survey);
+                                      const openState = wizardStateWhenOpeningSurvey(full);
                                       setCurrent(full);
                                       setLastSaved(snapshotOf(full));
-                                      setStepIndex(0);
-                                      setShowSuccess(false);
+                                      setStepIndex(openState.stepIndex);
+                                      setShowSuccess(openState.showSuccess);
                                       setRoute("new");
                                     } catch (e) {
                                       flash(e instanceof Error ? e.message : "Failed to open survey", "err");

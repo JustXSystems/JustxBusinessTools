@@ -1,6 +1,7 @@
 import fieldsSchema from "./fields-schema.json";
 import type {
   InstallationType,
+  SiteSurveyV1,
   SurveyCompanySnapshot,
   SurveyFieldDef,
   SurveyFlow,
@@ -45,6 +46,22 @@ export function flowForType(type: InstallationType): SurveyFlow {
 
 export function stepsForFlow(flow: SurveyFlow): SurveyStepMeta[] {
   return flow === "residential" ? SCHEMA_STEPS.residential : SCHEMA_STEPS.epc;
+}
+
+/** Where to land in the wizard when opening a record from Saved (submitted → report + send actions). */
+export function wizardStateWhenOpeningSurvey(survey: Pick<SiteSurveyV1, "status" | "installationType">): {
+  stepIndex: number;
+  showSuccess: boolean;
+} {
+  if (survey.status === "submitted") {
+    const steps = stepsForFlow(flowForType(survey.installationType));
+    const reportIdx = steps.findIndex((s) => s.id === "report");
+    return {
+      stepIndex: reportIdx >= 0 ? reportIdx : Math.max(0, steps.length - 1),
+      showSuccess: true,
+    };
+  }
+  return { stepIndex: 0, showSuccess: false };
 }
 
 /** Common fields appear on contact (res) / project (epc). */
