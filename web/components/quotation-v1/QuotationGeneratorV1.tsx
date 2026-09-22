@@ -64,6 +64,7 @@ import {
 } from "@/lib/quotation-email-templates";
 import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
 import { buildMailtoHref } from "@/lib/mailto";
+import { SendViaEmailComposeModal } from "@/components/send-via/SendViaEmailComposeModal";
 import { QuoteSheet } from "./QuoteSheet";
 import "./quotation-v1.css";
 
@@ -168,6 +169,15 @@ export function QuotationGeneratorV1() {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
+
+  useEffect(() => {
+    if (!sendOpen || sendChannel !== "whatsapp") return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [sendOpen, sendChannel]);
 
   const totals = useMemo(() => computeTotals(current, company), [current, company]);
   const pendingApprovals = list.filter((q) => q.status === "sent").length;
@@ -582,6 +592,110 @@ export function QuotationGeneratorV1() {
       void api<{ canAutoAttach?: boolean }>("/quotation-v1/send/whatsapp/status")
         .then((s) => setWaCanAutoAttach(Boolean(s.canAutoAttach)))
         .catch(() => setWaCanAutoAttach(false));
+    }
+  }
+
+  async function submitQuotationEmail() {
+    if (!emailTo.trim()) {
+      flash("Enter an email To address.", "err");
+      return;
+    }
+    setBusy(true);
+    try {
+      let pdf: { filename: string; pdfBase64: string } | null = null;
+      try {
+        pdf = await buildPdfPayload(current);
+      } catch {
+        pdf = null;
+      }
+      const result = await api<{
+        ok: boolean;
+        delivered: boolean;
+        via: string;
+        outboxId?: string;
+        hint?: string;
+      }>("/quotation-v1/send/email", {
+        method: "POST",
+        body: JSON.stringify({
+          to: emailTo.trim(),
+          cc: emailCc.trim(),
+          subject: emailSubject.trim(),
+          message: emailMessage,
+          html: emailHtml || undefined,
+          templateId: emailTemplateId,
+          replyTo: emailReplyTo.trim() || undefined,
+          fromName: emailFromName.trim() || undefined,
+          fromEmail: emailFromEmail.trim() || undefined,
+          quotationId: current.id,
+          quoteNo: current.quoteNo,
+          filename: pdf?.filename,
+          pdfBase64: pdf?.pdfBase64,
+        }),
+      });
+      invalidateLiveData("email-outbox");
+      if (!result.delivered) {
+        let openedViaOutlook = false;
+        if (result.outboxId && (emailHtml || pdf?.pdfBase64)) {
+          try {
+            const { openOutboxInOutlook } = await import("@/lib/email-outbox");
+            const r = await openOutboxInOutlook(result.outboxId);
+            openedViaOutlook = Boolean(r.ok);
+            if (!r.ok && emailHtml) {
+              flash(
+                r.error ||
+                  "Could not open Outlook with HTML. Start the Sync Center agent and use classic Outlook, or Email Outbox → Open in Outlook.",
+                "err",
+              );
+            }
+          } catch {
+            openedViaOutlook = false;
+          }
+        }
+        if (!openedViaOutlook && pdf?.pdfBase64) {
+          try {
+            const { pdfBase64ToBytes } = await import("@/lib/artifact-delivery");
+            const bytes = pdfBase64ToBytes(pdf.pdfBase64);
+            const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = pdf.filename || "quotation.pdf";
+            a.click();
+            window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+          } catch {
+            /* continue */
+          }
+        }
+        if (!openedViaOutlook && !emailHtml) {
+          window.location.href = buildMailtoHref({
+            to: emailTo.trim(),
+            cc: emailCc.trim(),
+            subject: emailSubject.trim(),
+            body: emailMessage,
+          });
+        }
+      }
+      await saveQuote("sent");
+      await pushNotif(
+        current.id,
+        result.delivered
+          ? `Quotation ${current.quoteNo} emailed to ${emailTo.trim()}.`
+          : `Quotation ${current.quoteNo} queued in Email Outbox for ${emailTo.trim()}.`,
+      );
+      setSendOpen(false);
+      flash(
+        result.delivered
+          ? "Email handed off to your email webhook."
+          : emailHtml
+            ? result.hint ||
+              "Saved to Email Outbox. Corporate HTML opens in Outlook via the desktop agent (mailto is plain text only)."
+            : result.hint ||
+              "Saved to Email Outbox. Open mail app or Open in Outlook from Email Outbox; attach the PDF if needed.",
+      );
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Email send failed", "err");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -1792,7 +1906,39 @@ export function QuotationGeneratorV1() {
         ) : null}
       </main>
 
-      {sendOpen ? (
+      {sendOpen && sendChannel === "email" ? (
+        <SendViaEmailComposeModal
+          formatId={emailTemplateId}
+          deliveryHint={
+            emailTemplateId === "corporate"
+              ? "Corporate HTML + PDF via webhook when configured; otherwise Email Outbox / Outlook agent. Mailto is plain text only."
+              : "PDF attaches on webhook send; otherwise use Email Outbox or mailto + download."
+          }
+          attachmentNote={current.quoteNo ? `Quotation ${current.quoteNo}.pdf` : "Quotation PDF"}
+          to={emailTo}
+          onToChange={setEmailTo}
+          cc={emailCc}
+          onCcChange={setEmailCc}
+          subject={emailSubject}
+          onSubjectChange={setEmailSubject}
+          replyTo={emailReplyTo}
+          onReplyToChange={setEmailReplyTo}
+          messageTemplate={emailMessageTemplate}
+          onMessageTemplateChange={(next) => {
+            setEmailMessageTemplate(next);
+            const bodies = buildEmailBodiesFromTemplate(current, emailTemplateId, next);
+            setEmailMessage(bodies.text);
+            setEmailHtml(bodies.html ?? null);
+          }}
+          previewText={emailMessage}
+          previewHtml={emailHtml}
+          busy={busy}
+          onClose={() => setSendOpen(false)}
+          onSend={() => void submitQuotationEmail()}
+        />
+      ) : null}
+
+      {sendOpen && sendChannel === "whatsapp" ? (
         <div
           className="modal-overlay"
           onClick={() => {
@@ -1804,9 +1950,7 @@ export function QuotationGeneratorV1() {
             style={{ ["--modal-max-width" as string]: "560px" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="modal-title">{sendChannel === "whatsapp" ? "WhatsApp" : "Email"}</h3>
-
-            {sendChannel === "whatsapp" ? (
+            <h3 className="modal-title">WhatsApp</h3>
               <>
                 <p className="modal-msg">
                   {waCanAutoAttach
@@ -1968,200 +2112,6 @@ export function QuotationGeneratorV1() {
                   </button>
                 </div>
               </>
-            ) : null}
-
-            {sendChannel === "email" ? (
-              <>
-                <p className="modal-msg">
-                  {emailTemplateId === "corporate"
-                    ? "Corporate HTML uses your Document accent. With an email webhook, HTML + PDF go to the inbox. Otherwise the draft is saved to Email Outbox and Open in Outlook (desktop agent + classic Outlook) shows HTML + PDF. Mailto is plain text only."
-                    : "With an email webhook, the PDF attaches automatically. Otherwise Email Outbox saves the draft; Open in Outlook attaches the PDF, or use mailto + download."}
-                </p>
-                <div className="qgv1-grid2" style={{ marginTop: 8 }}>
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span>To</span>
-                    <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)} />
-                  </label>
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span>CC</span>
-                    <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} placeholder="comma-separated" />
-                  </label>
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span>Reply-To</span>
-                    <input
-                      type="email"
-                      value={emailReplyTo}
-                      onChange={(e) => setEmailReplyTo(e.target.value)}
-                      placeholder="replies@yourcompany.com"
-                    />
-                    <small className="muted">
-                      Replies go here instead of the sending mailbox. Prefilled from Business Profile.
-                    </small>
-                  </label>
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span>Subject</span>
-                    <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />
-                  </label>
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span>
-                      Message template —{" "}
-                      {emailTemplateId === "corporate" ? "Corporate HTML" : "Plain text"}
-                    </span>
-                    <textarea
-                      rows={emailTemplateId === "corporate" ? 10 : 7}
-                      value={emailMessageTemplate}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setEmailMessageTemplate(next);
-                        const bodies = buildEmailBodiesFromTemplate(
-                          current,
-                          emailTemplateId,
-                          next,
-                        );
-                        setEmailMessage(bodies.text);
-                        setEmailHtml(bodies.html ?? null);
-                      }}
-                    />
-                  </label>
-                  <div className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span>Preview (sent body)</span>
-                    {emailHtml ? (
-                      <iframe
-                        title="Quotation email preview"
-                        className="q-email-tpl-preview"
-                        style={{ height: 280 }}
-                        sandbox=""
-                        srcDoc={emailHtml}
-                      />
-                    ) : (
-                      <pre className="q-email-tpl-preview-text">{emailMessage}</pre>
-                    )}
-                  </div>
-                </div>
-                <div className="modal-btns">
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => setSendOpen(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={busy}
-                    onClick={async () => {
-                      if (!emailTo.trim()) {
-                        flash("Enter an email To address.", "err");
-                        return;
-                      }
-                      setBusy(true);
-                      try {
-                        let pdf: { filename: string; pdfBase64: string } | null = null;
-                        try {
-                          pdf = await buildPdfPayload(current);
-                        } catch {
-                          pdf = null;
-                        }
-                        const result = await api<{
-                          ok: boolean;
-                          delivered: boolean;
-                          via: string;
-                          outboxId?: string;
-                          hint?: string;
-                        }>("/quotation-v1/send/email", {
-                          method: "POST",
-                          body: JSON.stringify({
-                            to: emailTo.trim(),
-                            cc: emailCc.trim(),
-                            subject: emailSubject.trim(),
-                            message: emailMessage,
-                            html: emailHtml || undefined,
-                            templateId: emailTemplateId,
-                            replyTo: emailReplyTo.trim() || undefined,
-                            fromName: emailFromName.trim() || undefined,
-                            fromEmail: emailFromEmail.trim() || undefined,
-                            quotationId: current.id,
-                            quoteNo: current.quoteNo,
-                            filename: pdf?.filename,
-                            pdfBase64: pdf?.pdfBase64,
-                          }),
-                        });
-                        invalidateLiveData("email-outbox");
-                        if (!result.delivered) {
-                          let openedViaOutlook = false;
-                          // Corporate HTML cannot go through mailto — prefer desktop Outlook agent.
-                          if (result.outboxId && (emailHtml || pdf?.pdfBase64)) {
-                            try {
-                              const { openOutboxInOutlook } = await import("@/lib/email-outbox");
-                              const r = await openOutboxInOutlook(result.outboxId);
-                              openedViaOutlook = Boolean(r.ok);
-                              if (!r.ok && emailHtml) {
-                                flash(
-                                  r.error ||
-                                    "Could not open Outlook with HTML. Start the Sync Center agent and use classic Outlook, or Email Outbox → Open in Outlook.",
-                                  "err",
-                                );
-                              }
-                            } catch {
-                              openedViaOutlook = false;
-                            }
-                          }
-                          if (!openedViaOutlook && pdf?.pdfBase64) {
-                            try {
-                              const { pdfBase64ToBytes } = await import("@/lib/artifact-delivery");
-                              const bytes = pdfBase64ToBytes(pdf.pdfBase64);
-                              const blob = new Blob([bytes as BlobPart], {
-                                type: "application/pdf",
-                              });
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement("a");
-                              a.href = url;
-                              a.download = pdf.filename || "quotation.pdf";
-                              a.click();
-                              window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-                            } catch {
-                              /* continue */
-                            }
-                          }
-                          if (!openedViaOutlook && !emailHtml) {
-                            window.location.href = buildMailtoHref({
-                              to: emailTo.trim(),
-                              cc: emailCc.trim(),
-                              subject: emailSubject.trim(),
-                              body: emailMessage,
-                            });
-                          }
-                        }
-                        await saveQuote("sent");
-                        await pushNotif(
-                          current.id,
-                          result.delivered
-                            ? `Quotation ${current.quoteNo} emailed to ${emailTo.trim()}.`
-                            : `Quotation ${current.quoteNo} queued in Email Outbox for ${emailTo.trim()}.`,
-                        );
-                        setSendOpen(false);
-                        flash(
-                          result.delivered
-                            ? "Email handed off to your email webhook."
-                            : emailHtml
-                              ? result.hint ||
-                                "Saved to Email Outbox. Corporate HTML opens in Outlook via the desktop agent (mailto is plain text only)."
-                              : result.hint ||
-                                "Saved to Email Outbox. Open mail app or Open in Outlook from Email Outbox; attach the PDF if needed.",
-                        );
-                      } catch (e) {
-                        flash(e instanceof Error ? e.message : "Email send failed", "err");
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  >
-                    Send
-                  </button>
-                </div>
-              </>
-            ) : null}
           </div>
         </div>
       ) : null}

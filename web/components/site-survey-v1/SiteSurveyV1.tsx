@@ -62,6 +62,7 @@ import {
   type BusinessProfileSendSettings,
 } from "@/lib/types/business-profile";
 import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
+import { SendViaEmailComposeModal } from "@/components/send-via/SendViaEmailComposeModal";
 import "./site-survey-v1.css";
 
 type Route = "new" | "list" | "history";
@@ -639,6 +640,15 @@ export function SiteSurveyV1() {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   const preparedSurveyorSeeded = useRef(false);
+
+  useEffect(() => {
+    if (!sendOpen || sendChannel !== "whatsapp") return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [sendOpen, sendChannel]);
 
   const flow = flowForType(current.installationType);
   const steps = useMemo(() => stepsForFlow(flow), [flow]);
@@ -1757,7 +1767,37 @@ export function SiteSurveyV1() {
         </section>
       ) : null}
 
-      {sendOpen ? (
+      {sendOpen && sendChannel === "email" ? (
+        <SendViaEmailComposeModal
+          formatId={emailTemplateId}
+          deliveryHint="Survey PDF attaches when your email webhook is configured; otherwise mailto opens with plain text."
+          attachmentNote={
+            current.reportNo ? `Site survey ${current.reportNo}.pdf` : "Site survey PDF"
+          }
+          to={emailTo}
+          onToChange={setEmailTo}
+          cc={emailCc}
+          onCcChange={setEmailCc}
+          subject={emailSubject}
+          onSubjectChange={setEmailSubject}
+          replyTo={emailReplyTo}
+          onReplyToChange={setEmailReplyTo}
+          messageTemplate={emailMessageTemplate}
+          onMessageTemplateChange={(next) => {
+            setEmailMessageTemplate(next);
+            const bodies = buildEmailBodiesFromTemplate(current, emailTemplateId, next);
+            setEmailMessage(bodies.text);
+            setEmailHtml(bodies.html ?? null);
+          }}
+          previewText={emailMessage}
+          previewHtml={emailHtml}
+          busy={busy}
+          onClose={() => setSendOpen(false)}
+          onSend={() => void sendEmail()}
+        />
+      ) : null}
+
+      {sendOpen && sendChannel === "whatsapp" ? (
         <div
           className="modal-overlay"
           onClick={() => {
@@ -1765,9 +1805,7 @@ export function SiteSurveyV1() {
           }}
         >
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <h3 className="modal-title">{sendChannel === "whatsapp" ? "WhatsApp" : "Email"}</h3>
-
-            {sendChannel === "whatsapp" ? (
+            <h3 className="modal-title">WhatsApp</h3>
               <>
                 <p className="modal-msg">
                   {waCanAutoAttach
@@ -1791,69 +1829,6 @@ export function SiteSurveyV1() {
                   </button>
                 </div>
               </>
-            ) : null}
-
-            {sendChannel === "email" ? (
-              <>
-                <p className="modal-msg">
-                  Preview the message, then Send. With an email webhook, the PDF attaches automatically;
-                  otherwise your mail app opens. Use Download PDF only if you need to attach the file.
-                </p>
-                <div>
-                  <label className="field">
-                    <span>To</span>
-                    <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>CC</span>
-                    <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} placeholder="comma-separated" />
-                  </label>
-                  <label className="field">
-                    <span>Subject</span>
-                    <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>
-                      Message template —{" "}
-                      {emailTemplateId === "corporate" ? "Corporate HTML" : "Plain text"}
-                    </span>
-                    <textarea
-                      rows={emailTemplateId === "corporate" ? 8 : 6}
-                      value={emailMessageTemplate}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setEmailMessageTemplate(next);
-                        const bodies = buildEmailBodiesFromTemplate(current, emailTemplateId, next);
-                        setEmailMessage(bodies.text);
-                        setEmailHtml(bodies.html ?? null);
-                      }}
-                    />
-                  </label>
-                  <div className="field">
-                    <span>Preview (sent body)</span>
-                    {emailHtml ? (
-                      <iframe
-                        title="Email preview"
-                        className="q-email-tpl-preview"
-                        style={{ height: 220 }}
-                        sandbox=""
-                        srcDoc={emailHtml}
-                      />
-                    ) : (
-                      <pre className="q-email-tpl-preview-text">{emailMessage}</pre>
-                    )}
-                  </div>
-                </div>
-                <div className="modal-btns">
-                  <button type="button" className="btn btn-ghost" onClick={() => setSendOpen(false)}>
-                    Cancel
-                  </button>
-                  <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void sendEmail()}>
-                    Send
-                  </button>
-                </div>
-              </>
-            ) : null}
           </div>
         </div>
       ) : null}
