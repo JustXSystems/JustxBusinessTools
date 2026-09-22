@@ -1974,3 +1974,227 @@ html[data-scheme="light"] .qgv1-root select option {
     display: none !important;
   }
 }
+
+/* ---------- Activity (save audit) ---------- */
+.qgv1-activity-search {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.qgv1-activity-search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-size: 12.5px;
+}
+
+.qgv1-activity-cards {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qgv1-activity-card {
+  border: 1px solid var(--border-hair);
+  border-radius: var(--radius-sm);
+  padding: 10px 11px;
+  background: var(--glass-2);
+  border-left: 2px solid rgba(var(--accent-rgb), 0.35);
+}
+
+.qgv1-activity-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.qgv1-activity-when {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.qgv1-activity-action {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--border-hair);
+  background: var(--glass-1);
+  color: var(--text-mid);
+}
+
+.qgv1-activity-action.is-create {
+  border-color: rgba(var(--accent-rgb), 0.4);
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.1);
+}
+
+.qgv1-activity-action.is-status {
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--border-hair));
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+.qgv1-activity-action.is-amount {
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border-hair));
+  color: var(--success);
+}
+
+.qgv1-activity-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.qgv1-activity-quote {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.qgv1-activity-quote:disabled {
+  color: var(--text-low);
+  cursor: default;
+  text-decoration: none;
+}
+
+.qgv1-activity-customer {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-hi);
+}
+
+.qgv1-activity-meta {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.qgv1-activity-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.qgv1-activity-amounts {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.qgv1-activity-delta {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.qgv1-activity-delta.is-up {
+  color: var(--success);
+}
+
+.qgv1-activity-delta.is-down {
+  color: var(--danger);
+}
+
+.qgv1-activity-delta-inline {
+  font-size: 11px;
+}
+
+.qgv1-activity-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.qgv1-activity-card-actions .btn {
+  flex: 1 1 calc(50% - 4px);
+  min-height: 40px;
+  justify-content: center;
+}
+
+.qgv1-activity-archived {
+  font-size: 11.5px;
+  flex: 1 1 100%;
+}
+
+.qgv1-activity-latest {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-low);
+  margin-left: auto;
+}
+
+.qgv1-activity-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-hair);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+}
+
+.qgv1-activity-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.qgv1-activity-table th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-low);
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--border-hair);
+  background: var(--bg-1);
+}
+
+.qgv1-activity-table th.num,
+.qgv1-activity-table td.num {
+  text-align: right;
+}
+
+.qgv1-activity-table th.actions,
+.qgv1-activity-table td.actions {
+  text-align: right;
+}
+
+.qgv1-activity-table td {
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--border-hair);
+  vertical-align: middle;
+}
+
+.qgv1-activity-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 768px) {
+  .qgv1-activity-table-wrap.qgv1-saved-table-desktop {
+    display: none;
+  }
+
+  .qgv1-activity-cards {
+    display: flex;
+  }
+}

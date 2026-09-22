@@ -637,7 +637,7 @@ router.post("/", async (req, res) => {
         return mapRow((Array.isArray(rows) ? rows[0] : {}) as Record<string, unknown>);
       });
 
-      await appendHistory(payload, grandTotal);
+      await appendHistory(payload, grandTotal, String(req.body?.historyAction ?? "create"));
       await logAudit("quotationv1.create", "document", id, { quoteNo }, req.ip);
       if (status === "submitted") {
         publishNotificationAsync({
@@ -691,7 +691,7 @@ router.post("/", async (req, res) => {
       res.status(404).json({ error: "Quotation not found" });
       return;
     }
-    await appendHistory(payload, grandTotal);
+    await appendHistory(payload, grandTotal, String(req.body?.historyAction ?? "update"));
     await logAudit("quotationv1.update", "document", id, { quoteNo }, req.ip);
     if (status === "submitted") {
       publishNotificationAsync({
@@ -734,17 +734,21 @@ router.post("/", async (req, res) => {
   }
 });
 
-async function appendHistory(q: QuoteBody, grand: number) {
+async function appendHistory(q: QuoteBody, grand: number, historyAction: string) {
   const history = (((await getConfig(HISTORY_KEY)) as unknown[]) ?? []).slice();
+  const category = String(q.category ?? "other");
+  const engagement = String(q.engagement ?? "misc");
   history.unshift({
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     quotationId: q.id,
     quoteNo: q.quoteNo,
     customerName: (q.customer as { name?: string })?.name ?? "",
-    typeLabel: `${q.category} — ${q.engagement}`,
+    typeLabel: `${category} · ${engagement}`,
     status: q.status,
     grand,
     savedAt: new Date().toISOString(),
+    action: historyAction,
+    preparedBy: String(q.preparedBy ?? "").trim(),
     userId: getActiveUserId(),
   });
   await setConfig(HISTORY_KEY, history.slice(0, 500));

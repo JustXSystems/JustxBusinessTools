@@ -39,6 +39,9 @@ import {
   countActiveSavedFilters,
   uniqueSavedCities,
   uniqueSavedPreparedBy,
+  buildQuoteActivityTimeline,
+  filterQuoteActivity,
+  quoteActivityStats,
   EMPTY_SAVED_FILTERS,
   SAVED_STATUS_OPTIONS,
   type SavedQuoteFilters,
@@ -168,6 +171,7 @@ export function QuotationGeneratorV1() {
   const [pdfHostQuote, setPdfHostQuote] = useState<QuotationV1 | null>(null);
   const [savedFilters, setSavedFilters] = useState<SavedQuoteFilters>(EMPTY_SAVED_FILTERS);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [activityQuery, setActivityQuery] = useState("");
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
 
@@ -190,6 +194,15 @@ export function QuotationGeneratorV1() {
   const savedCityOptions = useMemo(() => uniqueSavedCities(list), [list]);
   const savedPreparedByOptions = useMemo(() => uniqueSavedPreparedBy(list), [list]);
   const activeFilterCount = useMemo(() => countActiveSavedFilters(savedFilters), [savedFilters]);
+  const activityRows = useMemo(
+    () => buildQuoteActivityTimeline(history, list),
+    [history, list],
+  );
+  const filteredActivity = useMemo(
+    () => filterQuoteActivity(activityRows, activityQuery),
+    [activityRows, activityQuery],
+  );
+  const activityStats = useMemo(() => quoteActivityStats(activityRows), [activityRows]);
 
   const flash = useCallback((msg: string, kind = "ok") => {
     if (kind === "err") flashAppError(msg);
@@ -273,6 +286,12 @@ export function QuotationGeneratorV1() {
           ? [...current.history, { ts: new Date().toISOString(), event: `Status set to ${markStatus}` }]
           : current.history,
       };
+      const isCreate = !current.quoteNo;
+      const historyAction = isCreate
+        ? "create"
+        : markStatus
+          ? `status:${markStatus}`
+          : "update";
       const data = await api<{ quotation: QuotationV1 }>("/quotation-v1", {
         method: "POST",
         body: JSON.stringify({
@@ -282,6 +301,7 @@ export function QuotationGeneratorV1() {
             _engCode: engMeta(payload.category, payload.engagement).code,
           },
           grandTotal: computeTotals(payload, company).grand,
+          historyAction,
         }),
       });
       const saved = data.quotation;
@@ -744,13 +764,17 @@ export function QuotationGeneratorV1() {
 
   async function exportHistoryExcel() {
     const XLSX = await import("xlsx");
-    const rows = history.map((h) => ({
+    const rows = activityRows.map((h) => ({
+      When: h.savedAtLabel,
+      Action: h.actionLabel,
       "Q No.": h.quoteNo || "(unsaved)",
       Customer: h.customerName,
       Type: h.typeLabel,
       Status: h.status,
       Amount: h.grand,
-      Saved: h.savedAt,
+      "Amount change": h.amountDelta != null ? h.amountDelta : "",
+      "Prepared by": h.preparedBy ?? "",
+      "Quote on file": h.quoteExists ? "Yes" : "Deleted / log only",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -816,13 +840,29 @@ export function QuotationGeneratorV1() {
 
   const unread = notifications.filter((n) => !n.read).length;
 
-  const NAV: Array<{ id: Route; label: string; hint: string }> = [
+  const NAV: Array<{ id: Route; label: string; hint: string; hidden?: boolean }> = [
     { id: "new", label: "Compose", hint: "Build a quote" },
     { id: "list", label: "Saved", hint: "Open & manage" },
     { id: "notifications", label: "Alerts", hint: "Approvals & sends" },
-    { id: "history", label: "History", hint: "Save log" },
+    { id: "history", label: "Activity", hint: "Save audit", hidden: history.length === 0 },
     { id: "company", label: "Letterhead", hint: "Company details" },
   ];
+
+  useEffect(() => {
+    if (route === "history" && history.length === 0) setRoute("list");
+  }, [route, history.length]);
+
+  function openQuotationById(quotationId: string) {
+    const q = list.find((x) => x.id === quotationId);
+    if (!q) {
+      flash("This quotation was deleted — only the audit log remains.", "err");
+      return;
+    }
+    const full = normalizeQuotation(q);
+    setCurrent(full);
+    setLastSaved(snapshotOf(full));
+    setRoute("new");
+  }
 
   return (
     <div className="qgv1-root tool-workspace qgv1-root-shell">
@@ -863,7 +903,7 @@ export function QuotationGeneratorV1() {
       />
 
       <nav className="qgv1-seg tool-seg-nav" aria-label="Quotation sections">
-        {NAV.map((item) => {
+        {NAV.filter((item) => !item.hidden).map((item) => {
           const badge =
             item.id === "list" && pendingApprovals
               ? pendingApprovals
@@ -1860,34 +1900,176 @@ export function QuotationGeneratorV1() {
           </div>
         ) : null}
 
-        {route === "history" ? (
+        {route === "history" && history.length > 0 ? (
           <div className="qgv1-tab-panel">
           <section className="qgv1-card qgv1-card-compact">
             <div className="qgv1-page-head qgv1-panel-head">
               <div>
-                <h1>History</h1>
-                <p className="qgv1-tab-lede">Every save — including quotes later deleted.</p>
+                <h1>Activity</h1>
+                <p className="qgv1-tab-lede">
+                  Audit trail of saves and status changes — open live quotes from here; deleted quotes stay in the log only.
+                </p>
               </div>
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => void exportHistoryExcel()}>
                 Export Excel
               </button>
             </div>
-            {history.length === 0 ? (
-              <p className="muted qgv1-tab-empty">History fills as you save quotations.</p>
+
+            <div className="qgv1-compose-bar qgv1-tab-bar" aria-label="Activity summary">
+              <span className="qgv1-tab-bar-label">Audit</span>
+              <span className="qgv1-compose-bar-total">{activityStats.events} events</span>
+              <span className="qgv1-compose-bar-status">{activityStats.uniqueQuotes} quotes</span>
+            </div>
+
+            <label className="qgv1-saved-search qgv1-activity-search">
+              <span className="sr-only">Search activity</span>
+              <input
+                type="search"
+                value={activityQuery}
+                onChange={(e) => setActivityQuery(e.target.value)}
+                placeholder="Search quote, customer, action…"
+              />
+            </label>
+
+            {filteredActivity.length === 0 ? (
+              <p className="muted qgv1-tab-empty">No activity matches your search.</p>
             ) : (
-              <div className="tracker-list qgv1-history-list">
-                {history.map((h) => (
-                  <div key={h.id} className="tracker-row qgv1-history-row">
-                    <div className="tracker-row-main">
-                      <span className="tracker-row-title mono">{h.quoteNo}</span>
-                      <span className="tracker-row-sub">
-                        {h.customerName} · {h.typeLabel} · {h.status}
-                      </span>
-                    </div>
-                    <span className="m-val qgv1-history-val">₹{money(h.grand)}</span>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="qgv1-activity-cards">
+                  {filteredActivity.map((h) => (
+                    <article key={h.id} className="qgv1-activity-card">
+                      <div className="qgv1-activity-card-top">
+                        <span className={`qgv1-activity-action is-${h.actionKind}`}>{h.actionLabel}</span>
+                        <time className="qgv1-activity-when muted">{h.savedAtLabel}</time>
+                      </div>
+                      <div className="qgv1-activity-card-body">
+                        <button
+                          type="button"
+                          className="qgv1-activity-quote mono"
+                          disabled={!h.quoteExists}
+                          title={h.quoteExists ? "Open in Compose" : "Quotation no longer on file"}
+                          onClick={() => openQuotationById(h.quotationId)}
+                        >
+                          {h.quoteNo || "(unsaved)"}
+                        </button>
+                        <span className="qgv1-activity-customer">{h.customerName || "—"}</span>
+                        <span className="muted qgv1-activity-meta">
+                          {h.typeLabel}
+                          {h.preparedBy ? ` · ${h.preparedBy}` : ""}
+                        </span>
+                      </div>
+                      <div className="qgv1-activity-card-foot">
+                        <div className="qgv1-activity-amounts">
+                          <span className="qgv1-history-val">₹{money(h.grand)}</span>
+                          {h.amountDelta != null ? (
+                            <span
+                              className={`qgv1-activity-delta ${h.amountDelta >= 0 ? "is-up" : "is-down"}`}
+                            >
+                              {h.amountDelta >= 0 ? "+" : "−"}₹{money(Math.abs(h.amountDelta))}
+                            </span>
+                          ) : null}
+                        </div>
+                        <span className={`pill pill-${statusPillClass(h.status as QuoteStatus)}`}>{h.status}</span>
+                      </div>
+                      <div className="qgv1-activity-card-actions">
+                        {h.quoteExists ? (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => openQuotationById(h.quotationId)}
+                            >
+                              Open
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              disabled={busy}
+                              onClick={() => {
+                                const q = list.find((x) => x.id === h.quotationId);
+                                if (q) void downloadPdf(q);
+                              }}
+                            >
+                              PDF
+                            </button>
+                          </>
+                        ) : (
+                          <span className="qgv1-activity-archived muted">Deleted — log only</span>
+                        )}
+                        {h.isLatestForQuote && h.quoteExists ? (
+                          <span className="qgv1-activity-latest">Latest</span>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="qgv1-activity-table-wrap qgv1-saved-table-desktop">
+                  <table className="qgv1-activity-table">
+                    <thead>
+                      <tr>
+                        <th>When</th>
+                        <th>Action</th>
+                        <th>Quote</th>
+                        <th>Customer</th>
+                        <th className="num">Amount</th>
+                        <th>Status</th>
+                        <th className="actions">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredActivity.map((h) => (
+                        <tr key={h.id}>
+                          <td className="nowrap">{h.savedAtLabel}</td>
+                          <td>
+                            <span className={`qgv1-activity-action is-${h.actionKind}`}>{h.actionLabel}</span>
+                            {h.amountDelta != null ? (
+                              <span className="qgv1-activity-delta-inline muted">
+                                {" "}
+                                ({h.amountDelta >= 0 ? "+" : "−"}₹{money(Math.abs(h.amountDelta))})
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="mono">{h.quoteNo || "—"}</td>
+                          <td>{h.customerName || "—"}</td>
+                          <td className="num nowrap">₹{money(h.grand)}</td>
+                          <td>
+                            <span className={`pill pill-${statusPillClass(h.status as QuoteStatus)}`}>
+                              {h.status}
+                            </span>
+                          </td>
+                          <td className="actions">
+                            {h.quoteExists ? (
+                              <div className="qgv1-saved-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => openQuotationById(h.quotationId)}
+                                >
+                                  Open
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    const q = list.find((x) => x.id === h.quotationId);
+                                    if (q) void downloadPdf(q);
+                                  }}
+                                >
+                                  PDF
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="muted">Log only</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </section>
           </div>

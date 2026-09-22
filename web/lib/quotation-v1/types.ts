@@ -146,4 +146,7 @@ export type QuoteHistoryRow = {
   status: string;
   grand: number;
   savedAt: string;
+  /** create | update | status:(status) — set on new saves */
+  action?: string;
+  preparedBy?: string;
 };
