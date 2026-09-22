@@ -124,6 +124,9 @@ export type SurveyHistoryRow = {
   status: string;
   estimatedCost: number;
   savedAt: string;
+  /** create | update | status:(status) — set on new saves */
+  action?: string;
+  preparedBy?: string;
 };
 
 export type SurveyNotification = {

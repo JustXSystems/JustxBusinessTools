@@ -509,14 +509,18 @@ router.post("/", async (req, res) => {
         return mapRow((Array.isArray(rows) ? rows[0] : {}) as Record<string, unknown>);
       });
 
-      await appendHistory({
-        id,
-        reportNo,
-        customerName,
-        installationType,
-        status,
-        estimatedCost,
-      });
+      await appendHistory(
+        {
+          id,
+          reportNo,
+          customerName,
+          installationType,
+          status,
+          estimatedCost,
+          preparedBy: fieldVal(values, "sv_name") || fieldVal(values, "sv2_name"),
+        },
+        String(req.body?.historyAction ?? "create"),
+      );
       await logAudit("sitesurveyv1.create", "document", id, { reportNo }, req.ip);
       if (status === "submitted" || status === "saved") {
         publishNotificationAsync({
@@ -556,14 +560,18 @@ router.post("/", async (req, res) => {
       res.status(404).json({ error: "Survey not found" });
       return;
     }
-    await appendHistory({
-      id,
-      reportNo,
-      customerName,
-      installationType,
-      status,
-      estimatedCost,
-    });
+    await appendHistory(
+      {
+        id,
+        reportNo,
+        customerName,
+        installationType,
+        status,
+        estimatedCost,
+        preparedBy: fieldVal(values, "sv_name") || fieldVal(values, "sv2_name"),
+      },
+      String(req.body?.historyAction ?? "update"),
+    );
     await logAudit("sitesurveyv1.update", "document", id, { reportNo }, req.ip);
     if (status === "submitted") {
       publishNotificationAsync({
@@ -604,14 +612,18 @@ router.post("/", async (req, res) => {
   }
 });
 
-async function appendHistory(entry: {
-  id: string;
-  reportNo: string;
-  customerName: string;
-  installationType: string;
-  status: string;
-  estimatedCost: number;
-}) {
+async function appendHistory(
+  entry: {
+    id: string;
+    reportNo: string;
+    customerName: string;
+    installationType: string;
+    status: string;
+    estimatedCost: number;
+    preparedBy?: string;
+  },
+  historyAction: string,
+) {
   const history = (((await getConfig(HISTORY_KEY)) as unknown[]) ?? []).slice();
   history.unshift({
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -622,6 +634,8 @@ async function appendHistory(entry: {
     status: entry.status,
     estimatedCost: entry.estimatedCost,
     savedAt: new Date().toISOString(),
+    action: historyAction,
+    preparedBy: entry.preparedBy ?? "",
     userId: getActiveUserId(),
   });
   await setConfig(HISTORY_KEY, history.slice(0, 500));

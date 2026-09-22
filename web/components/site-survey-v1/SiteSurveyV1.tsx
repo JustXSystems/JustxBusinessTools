@@ -36,6 +36,9 @@ import {
   uniqueSurveyPreparedBy,
   exportSavedSurveysExcel,
   exportSavedSurveysPdf,
+  buildSurveyActivityTimeline,
+  filterSurveyActivity,
+  surveyActivityStats,
   EMPTY_SAVED_SURVEY_FILTERS,
   SAVED_SURVEY_STATUS_OPTIONS,
   type Appliance,
@@ -640,6 +643,7 @@ export function SiteSurveyV1() {
   const [emailReplyTo, setEmailReplyTo] = useState("");
   const [savedFilters, setSavedFilters] = useState<SavedSurveyFilters>(EMPTY_SAVED_SURVEY_FILTERS);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [activityQuery, setActivityQuery] = useState("");
 
   const preparedSurveyorSeeded = useRef(false);
 
@@ -660,6 +664,12 @@ export function SiteSurveyV1() {
   const savedCityOptions = useMemo(() => uniqueSurveyCities(list), [list]);
   const savedPreparedByOptions = useMemo(() => uniqueSurveyPreparedBy(list), [list]);
   const activeFilterCount = useMemo(() => countActiveSurveyFilters(savedFilters), [savedFilters]);
+  const activityRows = useMemo(() => buildSurveyActivityTimeline(history, list), [history, list]);
+  const filteredActivity = useMemo(
+    () => filterSurveyActivity(activityRows, activityQuery),
+    [activityRows, activityQuery],
+  );
+  const activityStats = useMemo(() => surveyActivityStats(activityRows), [activityRows]);
 
   const flash = useCallback((msg: string, kind = "ok") => {
     setToast({ msg, kind });
@@ -697,6 +707,10 @@ export function SiteSurveyV1() {
       return setValue(setValue(s, "sv_name", name), "sv2_name", name);
     });
   }, [user]);
+
+  useEffect(() => {
+    if (route === "history" && history.length === 0) setRoute("list");
+  }, [route, history.length]);
 
   function updateValue(key: string, value: string | string[]) {
     setCurrent((prev) => setValue(prev, key, value));
@@ -743,9 +757,19 @@ export function SiteSurveyV1() {
             ? [...current.history, { ts: new Date().toISOString(), event: "Saved" }]
             : current.history,
       };
+      const isCreate = !current.reportNo;
+      const historyAction = isCreate
+        ? "create"
+        : markStatus
+          ? `status:${markStatus}`
+          : "update";
       const data = await api<{ survey: Survey }>("/site-survey-v1", {
         method: "POST",
-        body: JSON.stringify({ survey: payload, estimatedCost: payload.estimate?.totalCost ?? 0 }),
+        body: JSON.stringify({
+          survey: payload,
+          estimatedCost: payload.estimate?.totalCost ?? 0,
+          historyAction,
+        }),
       });
       const saved = data.survey;
       setCurrent(saved);
@@ -995,19 +1019,45 @@ export function SiteSurveyV1() {
 
   async function exportHistoryExcel() {
     const XLSX = await import("xlsx");
-    const rows = history.map((h) => ({
+    const rows = activityRows.map((h) => ({
+      When: h.savedAtLabel,
+      Action: h.actionLabel,
       "Report No.": h.reportNo || "(unsaved)",
       Customer: h.customerName,
       Type: h.installationType,
       Status: h.status,
       "Estimated Cost": h.estimatedCost,
-      Saved: h.savedAt,
+      "Cost change": h.amountDelta != null ? h.amountDelta : "",
+      "Prepared by": h.preparedBy ?? "",
+      "Survey on file": h.surveyExists ? "Yes" : "Deleted / log only",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "History");
-    XLSX.writeFile(wb, "site-survey-history.xlsx");
-    flash("History Excel downloaded.");
+    XLSX.utils.book_append_sheet(wb, ws, "Activity");
+    XLSX.writeFile(wb, "site-survey-activity.xlsx");
+    flash("Activity Excel downloaded.");
+  }
+
+  async function openSavedSurveyById(surveyId: string) {
+    try {
+      const data = await api<{ survey: Survey }>(`/site-survey-v1/${surveyId}`);
+      const full = withFreshEstimate(data.survey);
+      const openState = wizardStateWhenOpeningSurvey(full);
+      setCurrent(full);
+      setLastSaved(snapshotOf(full));
+      setStepIndex(openState.stepIndex);
+      setShowSuccess(openState.showSuccess);
+      setRoute("new");
+    } catch (e) {
+      flash(
+        e instanceof Error && /not found/i.test(e.message)
+          ? "This survey was deleted — only the audit log remains."
+          : e instanceof Error
+            ? e.message
+            : "Failed to open survey",
+        "err",
+      );
+    }
   }
 
   async function exportSavedExcel() {
@@ -1160,15 +1210,17 @@ export function SiteSurveyV1() {
           <span className="ssv1-seg-hint">{list.length ? `${list.length} on file` : "Open drafts"}</span>
           {list.length ? <span className="ssv1-seg-badge">{list.length}</span> : null}
         </button>
-        <button
-          type="button"
-          className={`ssv1-seg-item ${route === "history" ? "active" : ""}`}
-          onClick={() => setRoute("history")}
-        >
-          <span className="ssv1-seg-label">History</span>
-          <span className="ssv1-seg-hint">Audit &amp; export</span>
-          {history.length ? <span className="ssv1-seg-badge">{history.length}</span> : null}
-        </button>
+        {history.length > 0 ? (
+          <button
+            type="button"
+            className={`ssv1-seg-item ${route === "history" ? "active" : ""}`}
+            onClick={() => setRoute("history")}
+          >
+            <span className="ssv1-seg-label">Activity</span>
+            <span className="ssv1-seg-hint">Save audit</span>
+            <span className="ssv1-seg-badge">{history.length}</span>
+          </button>
+        ) : null}
       </nav>
 
       {route === "new" ? (
@@ -1675,20 +1727,7 @@ export function SiteSurveyV1() {
                                 <button
                                   type="button"
                                   className="btn btn-secondary btn-sm"
-                                  onClick={async () => {
-                                    try {
-                                      const data = await api<{ survey: Survey }>(`/site-survey-v1/${s.id}`);
-                                      const full = withFreshEstimate(data.survey);
-                                      const openState = wizardStateWhenOpeningSurvey(full);
-                                      setCurrent(full);
-                                      setLastSaved(snapshotOf(full));
-                                      setStepIndex(openState.stepIndex);
-                                      setShowSuccess(openState.showSuccess);
-                                      setRoute("new");
-                                    } catch (e) {
-                                      flash(e instanceof Error ? e.message : "Failed to open survey", "err");
-                                    }
-                                  }}
+                                  onClick={() => void openSavedSurveyById(s.id)}
                                 >
                                   Open
                                 </button>
@@ -1728,48 +1767,105 @@ export function SiteSurveyV1() {
         </section>
       ) : null}
 
-      {route === "history" ? (
+      {route === "history" && history.length > 0 ? (
         <section className="ssv1-panel">
           <div className="ssv1-page-head">
             <div>
-              <h1>Save history</h1>
-              <p className="ssv1-sub">Every save is logged here for audit — even if the survey is later deleted.</p>
+              <h1>Activity</h1>
+              <p className="ssv1-sub">
+                Audit trail of saves and submissions — open live surveys from here; deleted surveys stay in the log only.
+              </p>
             </div>
             <button type="button" className="ssv1-btn ssv1-btn-back ssv1-btn-compact" onClick={() => void exportHistoryExcel()}>
               Export Excel
             </button>
           </div>
-          {history.length === 0 ? (
-            <div className="ssv1-empty">
-              <div className="ssv1-empty-title">No history yet</div>
-              <p>History fills automatically each time you save a survey.</p>
-            </div>
+
+          <div className="ssv1-activity-bar" aria-label="Activity summary">
+            <span className="ssv1-activity-bar-label">Audit</span>
+            <span>{activityStats.events} events</span>
+            <span>{activityStats.uniqueSurveys} surveys</span>
+          </div>
+
+          <label className="ssv1-saved-search ssv1-activity-search">
+            <span className="sr-only">Search activity</span>
+            <input
+              type="search"
+              value={activityQuery}
+              onChange={(e) => setActivityQuery(e.target.value)}
+              placeholder="Search report, customer, action…"
+            />
+          </label>
+
+          {filteredActivity.length === 0 ? (
+            <p className="ssv1-sub ssv1-activity-empty">No activity matches your search.</p>
           ) : (
-            <div className="ssv1-table-wrap">
-              <table className="ssv1-htable">
-                <thead>
-                  <tr>
-                    <th>Report No.</th>
-                    <th>Customer</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Estimated Cost</th>
-                    <th>Saved</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((h) => (
-                    <tr key={h.id}>
-                      <td className="ssv1-mono">{h.reportNo || "(unsaved)"}</td>
-                      <td>{h.customerName}</td>
-                      <td>{h.installationType}</td>
-                      <td>{h.status}</td>
-                      <td>{fmtRs(h.estimatedCost)}</td>
-                      <td>{h.savedAt?.slice(0, 19).replace("T", " ")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="ssv1-activity-cards">
+              {filteredActivity.map((h) => (
+                <article key={h.id} className="ssv1-activity-card">
+                  <div className="ssv1-activity-card-top">
+                    <span className={`ssv1-activity-action is-${h.actionKind}`}>{h.actionLabel}</span>
+                    <time className="ssv1-activity-when">{h.savedAtLabel}</time>
+                  </div>
+                  <div className="ssv1-activity-card-body">
+                    <button
+                      type="button"
+                      className="ssv1-activity-report ssv1-mono"
+                      disabled={!h.surveyExists}
+                      title={h.surveyExists ? "Open survey" : "Survey no longer on file"}
+                      onClick={() => void openSavedSurveyById(h.surveyId)}
+                    >
+                      {h.reportNo || "(unsaved)"}
+                    </button>
+                    <span className="ssv1-activity-customer">{h.customerName || "—"}</span>
+                    <span className="ssv1-activity-meta">
+                      {h.installationType}
+                      {h.preparedBy ? ` · ${h.preparedBy}` : ""}
+                    </span>
+                  </div>
+                  <div className="ssv1-activity-card-foot">
+                    <div className="ssv1-activity-amounts">
+                      <span className="ssv1-activity-cost">{fmtRs(h.estimatedCost)}</span>
+                      {h.amountDelta != null ? (
+                        <span className={`ssv1-activity-delta ${h.amountDelta >= 0 ? "is-up" : "is-down"}`}>
+                          {h.amountDelta >= 0 ? "+" : "−"}
+                          {fmtRs(Math.abs(h.amountDelta))}
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className={`pill pill-${statusPillClass(h.status as SurveyStatus)}`}>{h.status}</span>
+                  </div>
+                  <div className="ssv1-activity-card-actions">
+                    {h.surveyExists ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => void openSavedSurveyById(h.surveyId)}
+                        >
+                          Open
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          disabled={busy}
+                          onClick={() => {
+                            const s = list.find((x) => x.id === h.surveyId);
+                            if (s) void downloadSurveyPdf(s);
+                          }}
+                        >
+                          PDF
+                        </button>
+                      </>
+                    ) : (
+                      <span className="ssv1-activity-archived">Deleted — log only</span>
+                    )}
+                    {h.isLatestForSurvey && h.surveyExists ? (
+                      <span className="ssv1-activity-latest">Latest</span>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
             </div>
           )}
         </section>
