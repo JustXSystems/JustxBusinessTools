@@ -38,9 +38,18 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
   return (
     <article className={`tool-card${paidOffer && !licensed ? " tool-card-paywall" : ""}`}>
       <Link href={tool.route} className="tool-card-main">
-        <div className="tool-icon">{tool.icon}</div>
-        <div className="tool-name">{tool.name}</div>
-        {sku?.tagline ? <div className="tool-card-tagline">{sku.tagline}</div> : null}
+        <div className="tool-icon" aria-hidden>
+          {tool.icon}
+        </div>
+        <div className="tool-card-copy">
+          <div className="tool-name">{tool.name}</div>
+          {sku?.tagline ? (
+            <div className="tool-card-tagline">{sku.tagline}</div>
+          ) : tool.desc ? (
+            <div className="tool-card-tagline">{tool.desc}</div>
+          ) : null}
+          <span className="tool-card-category">{tool.category}</span>
+        </div>
       </Link>
       {paidOffer ? (
         licensed ? (

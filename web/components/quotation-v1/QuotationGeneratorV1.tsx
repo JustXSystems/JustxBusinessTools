@@ -65,6 +65,7 @@ import {
 import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
 import { buildMailtoHref } from "@/lib/mailto";
 import { SendViaEmailComposeModal } from "@/components/send-via/SendViaEmailComposeModal";
+import { ToolPageHero } from "@/components/shell/ToolPageHero";
 import { QuoteSheet } from "./QuoteSheet";
 import "./quotation-v1.css";
 
@@ -824,37 +825,44 @@ export function QuotationGeneratorV1() {
   ];
 
   return (
-    <div className="qgv1-root">
-      <header className="tool-header qgv1-tool-head">
-        <Link href="/" className="back-btn" aria-label="Back">
-          ←
-        </Link>
-        <div className="tool-header-text">
-          <div className="tool-header-title">Quotation Generator V1</div>
-          <div className="tool-header-sub">
-            Draft · submit to company delivery · PDF · WhatsApp / Email
-            {user?.role
-              ? ` · ${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}`
-              : ""}
-            {user?.email ? ` · ${user.email}` : ""}
-          </div>
-        </div>
-        {route === "new" ? (
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => {
-              preparedBySeeded.current = true;
-              setCurrent(newQuotationDraft("solar", undefined, userDisplayName(user)));
-              setLastSaved(null);
-            }}
-          >
-            New draft
-          </button>
-        ) : null}
-      </header>
+    <div className="qgv1-root tool-workspace">
+      <ToolPageHero
+        eyebrow="Sales · Documents"
+        title="Quotation Generator V1"
+        subtitle="Draft · submit to company delivery · PDF · WhatsApp / Email"
+        meta={
+          <>
+            {user?.role ? (
+              <span className="tool-shell-chip">
+                {user.role.charAt(0).toUpperCase()}
+                {user.role.slice(1)}
+              </span>
+            ) : null}
+            {user?.email ? (
+              <span className="tool-shell-chip tool-shell-chip-muted" title={user.email}>
+                {user.email}
+              </span>
+            ) : null}
+          </>
+        }
+        actions={
+          route === "new" ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                preparedBySeeded.current = true;
+                setCurrent(newQuotationDraft("solar", undefined, userDisplayName(user)));
+                setLastSaved(null);
+              }}
+            >
+              New draft
+            </button>
+          ) : null
+        }
+      />
 
-      <nav className="qgv1-seg" aria-label="Quotation sections">
+      <nav className="qgv1-seg tool-seg-nav" aria-label="Quotation sections">
         {NAV.map((item) => {
           const badge =
             item.id === "list" && pendingApprovals

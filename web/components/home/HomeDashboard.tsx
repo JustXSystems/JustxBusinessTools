@@ -63,8 +63,11 @@ export function HomeDashboard() {
   );
   const isSearching = debouncedSearch.trim().length > 0;
 
+  const toolCount = allTools.length;
+  const categoryCount = categorized.length;
+
   return (
-    <div>
+    <div className="home-dashboard">
       {apiError ? (
         <div className="error-banner">
           API unavailable ({apiError}). Start MySQL with <code>npm run db:up</code> and run{" "}
@@ -72,23 +75,41 @@ export function HomeDashboard() {
         </div>
       ) : null}
 
-      <div className="home-hero">
-        <div className="home-hero-greeting">
-          {greeting()}{businessName ? `, ${businessName}` : ""}
-        </div>
-        <div className="home-hero-title">What do you want to do today?</div>
-        <div className="home-hero-sub">
-          Quotations, orders, invoices, stock, projects, and calculators — all in one place.
-        </div>
-        <div className="search-box">
-          <span>🔍</span>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tools — e.g. invoice, GST, stock..."
-            aria-label="Search tools"
-          />
-        </div>
+      <div className="home-hero home-hero-corp">
+        <div className="home-hero-mesh" aria-hidden />
+        <div className="home-hero-inner">
+          <div className="home-hero-greeting">
+            {greeting()}
+            {businessName ? ` · ${businessName}` : ""}
+          </div>
+          <div className="home-hero-title">What do you want to do today?</div>
+          <div className="home-hero-sub">
+            Corporate-ready quotations, site surveys, invoices, and calculators — pick a tool and
+            work from any device.
+          </div>
+          <div className="search-box">
+            <span aria-hidden>🔍</span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tools — quotation, survey, GST…"
+              aria-label="Search tools"
+            />
+          </div>
+          {toolCount > 0 ? (
+            <div className="home-hero-stats">
+              <div className="home-stat">
+                <span className="home-stat-value">{toolCount}</span>
+                <span>{toolCount === 1 ? "Tool on home" : "Tools on home"}</span>
+              </div>
+              {groupTools && categoryCount > 0 ? (
+                <div className="home-stat">
+                  <span className="home-stat-value">{categoryCount}</span>
+                  <span>{categoryCount === 1 ? "Category" : "Categories"}</span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         {!businessName ? (
           <div className="quick-row">
             <Link href="/profile" className="quick-chip">
@@ -109,6 +130,7 @@ export function HomeDashboard() {
             </Link>
           </div>
         ) : null}
+        </div>
       </div>
 
       {isSearching ? (

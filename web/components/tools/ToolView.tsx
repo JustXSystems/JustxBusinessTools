@@ -11,6 +11,7 @@ import { QuotationGeneratorV1 } from "@/components/quotation-v1/QuotationGenerat
 import { SiteSurveyV1 } from "@/components/site-survey-v1/SiteSurveyV1";
 import { TrackerTool } from "@/components/tools/TrackerTool";
 import { resolveToolDefinition } from "@/lib/dynamic-tools";
+import { ToolPageHero } from "@/components/shell/ToolPageHero";
 
 export function ToolView({ toolId }: { toolId: string }) {
   const { config, loading } = usePlatformConfig();
@@ -72,14 +73,13 @@ export function ToolView({ toolId }: { toolId: string }) {
   }
 
   return (
-    <div>
-      <div className="tool-header">
-        <Link href="/" className="back-btn" aria-label="Back">←</Link>
-        <div className="tool-header-text">
-          <div className="tool-header-title">{tool.icon} {tool.name}</div>
-          <div className="tool-header-sub">{tool.desc}</div>
-        </div>
-      </div>
+    <div className="tool-workspace">
+      <ToolPageHero
+        eyebrow={tool.category}
+        title={tool.name}
+        subtitle={tool.desc}
+        meta={<span className="tool-shell-chip">{tool.icon}</span>}
+      />
       <div className="panel">
         <p className="section-note mt-0">This tool is not available yet.</p>
       </div>

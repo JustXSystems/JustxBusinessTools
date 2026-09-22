@@ -63,6 +63,7 @@ import {
 } from "@/lib/types/business-profile";
 import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
 import { SendViaEmailComposeModal } from "@/components/send-via/SendViaEmailComposeModal";
+import { ToolPageHero } from "@/components/shell/ToolPageHero";
 import "./site-survey-v1.css";
 
 type Route = "new" | "list" | "history";
@@ -1118,24 +1119,29 @@ export function SiteSurveyV1() {
   const progressPct = steps.length ? ((safeStepIndex + 1) / steps.length) * 100 : 0;
 
   return (
-    <div className="ssv1-shell">
-      <header className="tool-header">
-        <Link href="/" className="back-btn" aria-label="Back">
-          ←
-        </Link>
-        <div className="tool-header-text">
-          <div className="tool-header-title">Site Survey Generator V1</div>
-          <div className="tool-header-sub">
-            Structured solar site survey · load estimate · branded PDF report
-            {user?.role
-              ? ` · ${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}`
-              : ""}
-            {user?.email ? ` · ${user.email}` : ""}
-          </div>
-        </div>
-      </header>
+    <div className="ssv1-shell tool-workspace">
+      <ToolPageHero
+        eyebrow="Field · Solar"
+        title="Site Survey Generator V1"
+        subtitle="Structured site survey · load estimate · branded PDF · WhatsApp / Email"
+        meta={
+          <>
+            {user?.role ? (
+              <span className="tool-shell-chip">
+                {user.role.charAt(0).toUpperCase()}
+                {user.role.slice(1)}
+              </span>
+            ) : null}
+            {user?.email ? (
+              <span className="tool-shell-chip tool-shell-chip-muted" title={user.email}>
+                {user.email}
+              </span>
+            ) : null}
+          </>
+        }
+      />
 
-      <nav className="ssv1-seg" aria-label="Site survey views">
+      <nav className="ssv1-seg tool-seg-nav" aria-label="Site survey views">
         <button
           type="button"
           className={`ssv1-seg-item ${route === "new" ? "active" : ""}`}
