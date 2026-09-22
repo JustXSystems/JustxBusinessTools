@@ -45,6 +45,9 @@ import {
   quoteActivityStats,
   EMPTY_SAVED_FILTERS,
   SAVED_STATUS_OPTIONS,
+  suggestCustomersFromQuotations,
+  customerFromSuggestion,
+  type SuggestedCustomer,
   type SavedQuoteFilters,
   type FollowUpFilter,
   type CategoryKey,
@@ -70,6 +73,7 @@ import { deliverToolArtifact, pdfBase64ToBytes } from "@/lib/artifact-delivery";
 import { buildMailtoHref } from "@/lib/mailto";
 import { SendViaEmailComposeModal } from "@/components/send-via/SendViaEmailComposeModal";
 import { ToolPageHero } from "@/components/shell/ToolPageHero";
+import { CustomerNameSuggest } from "./CustomerNameSuggest";
 import { QuoteSheet } from "./QuoteSheet";
 import "./quotation-v1.css";
 
@@ -173,6 +177,9 @@ export function QuotationGeneratorV1() {
   const [savedFilters, setSavedFilters] = useState<SavedQuoteFilters>(EMPTY_SAVED_FILTERS);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [activityQuery, setActivityQuery] = useState("");
+  const [customerSuggestOpen, setCustomerSuggestOpen] = useState(false);
+  const [customerSuggestIndex, setCustomerSuggestIndex] = useState(0);
+  const [customerLinked, setCustomerLinked] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
 
@@ -204,6 +211,17 @@ export function QuotationGeneratorV1() {
     [activityRows, activityQuery],
   );
   const activityStats = useMemo(() => quoteActivityStats(activityRows), [activityRows]);
+  const customerSuggestions = useMemo(
+    () => suggestCustomersFromQuotations(list, current.customer.name),
+    [list, current.customer.name],
+  );
+
+  const applySuggestedCustomer = useCallback((s: SuggestedCustomer) => {
+    setCustomerSuggestOpen(false);
+    setCustomerSuggestIndex(0);
+    setCustomerLinked(true);
+    setCurrent((q) => ({ ...q, customer: customerFromSuggestion(s) }));
+  }, []);
 
   const flash = useCallback((msg: string, kind = "ok") => {
     if (kind === "err") flashAppError(msg);
@@ -862,6 +880,8 @@ export function QuotationGeneratorV1() {
     const full = normalizeQuotation(q);
     setCurrent(full);
     setLastSaved(snapshotOf(full));
+    setCustomerLinked(false);
+    setCustomerSuggestOpen(false);
     setRoute("new");
   }
 
@@ -895,6 +915,8 @@ export function QuotationGeneratorV1() {
                 preparedBySeeded.current = true;
                 setCurrent(newQuotationDraft("solar", undefined, userDisplayName(user)));
                 setLastSaved(null);
+                setCustomerLinked(false);
+                setCustomerSuggestOpen(false);
               }}
             >
               New draft
@@ -1046,15 +1068,27 @@ export function QuotationGeneratorV1() {
             <section className="qgv1-card qgv1-card-compact">
               <h3>Customer</h3>
               <div className="qgv1-grid2">
-                <label className="field">
-                  <span>Customer / Site Owner Name *</span>
-                  <input
-                    value={current.customer.name}
-                    onChange={(e) =>
-                      patch((q) => ({ ...q, customer: { ...q.customer, name: e.target.value } }))
-                    }
-                  />
-                </label>
+                <CustomerNameSuggest
+                  value={current.customer.name}
+                  suggestions={customerSuggestions}
+                  open={customerSuggestOpen}
+                  activeIndex={customerSuggestIndex}
+                  linked={customerLinked}
+                  onOpenChange={(next) => {
+                    setCustomerSuggestOpen(next);
+                    if (next) setCustomerSuggestIndex(0);
+                  }}
+                  onActiveIndexChange={setCustomerSuggestIndex}
+                  onValueChange={(name) => {
+                    setCustomerSuggestIndex(0);
+                    setCustomerSuggestOpen(
+                      suggestCustomersFromQuotations(list, name).length > 0,
+                    );
+                    patch((q) => ({ ...q, customer: { ...q.customer, name } }));
+                  }}
+                  onSelect={applySuggestedCustomer}
+                  onClearLinked={() => setCustomerLinked(false)}
+                />
                 <label className="field">
                   <span>Company (if any)</span>
                   <input
