@@ -39,6 +39,7 @@ import {
   buildSurveyActivityTimeline,
   filterSurveyActivity,
   surveyActivityStats,
+  type SurveyActivityRow,
   EMPTY_SAVED_SURVEY_FILTERS,
   SAVED_SURVEY_STATUS_OPTIONS,
   type Appliance,
@@ -1158,6 +1159,58 @@ export function SiteSurveyV1() {
     return "neutral";
   }
 
+  function activityCostDelta(h: SurveyActivityRow) {
+    if (h.amountDelta == null) return "—";
+    return (
+      <span className={`ssv1-activity-delta ${h.amountDelta >= 0 ? "is-up" : "is-down"}`}>
+        {h.amountDelta >= 0 ? "+" : "−"}
+        {fmtRs(Math.abs(h.amountDelta))}
+      </span>
+    );
+  }
+
+  function activityReportControl(h: SurveyActivityRow, className?: string) {
+    const label = h.reportNo || "—";
+    if (!h.surveyExists) {
+      return <span className={className}>{label}</span>;
+    }
+    return (
+      <button
+        type="button"
+        className={className ?? "ssv1-activity-report-link"}
+        title="Open survey"
+        onClick={() => void openSavedSurveyById(h.surveyId)}
+      >
+        {label}
+      </button>
+    );
+  }
+
+  function activityEventActions(h: SurveyActivityRow, layout: "table" | "mobile") {
+    if (!h.surveyExists) {
+      return <span className="ssv1-activity-archived">Log only</span>;
+    }
+    return (
+      <div className={`ssv1-saved-actions ${layout === "mobile" ? "ssv1-activity-mobile-actions" : ""}`}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openSavedSurveyById(h.surveyId)}>
+          Open
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          disabled={busy}
+          onClick={() => {
+            const s = list.find((x) => x.id === h.surveyId);
+            if (s) void downloadSurveyPdf(s);
+          }}
+        >
+          PDF
+        </button>
+        {h.isLatestForSurvey ? <span className="ssv1-activity-latest-tag">Latest</span> : null}
+      </div>
+    );
+  }
+
   function sanitizeCostFilter(raw: string) {
     return String(raw).replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
   }
@@ -1800,73 +1853,94 @@ export function SiteSurveyV1() {
           {filteredActivity.length === 0 ? (
             <p className="ssv1-sub ssv1-activity-empty">No activity matches your search.</p>
           ) : (
-            <div className="ssv1-activity-cards">
-              {filteredActivity.map((h) => (
-                <article key={h.id} className="ssv1-activity-card">
-                  <div className="ssv1-activity-card-top">
-                    <span className={`ssv1-activity-action is-${h.actionKind}`}>{h.actionLabel}</span>
-                    <time className="ssv1-activity-when">{h.savedAtLabel}</time>
-                  </div>
-                  <div className="ssv1-activity-card-body">
-                    <button
-                      type="button"
-                      className="ssv1-activity-report ssv1-mono"
-                      disabled={!h.surveyExists}
-                      title={h.surveyExists ? "Open survey" : "Survey no longer on file"}
-                      onClick={() => void openSavedSurveyById(h.surveyId)}
-                    >
-                      {h.reportNo || "(unsaved)"}
-                    </button>
-                    <span className="ssv1-activity-customer">{h.customerName || "—"}</span>
-                    <span className="ssv1-activity-meta">
-                      {h.installationType}
-                      {h.preparedBy ? ` · ${h.preparedBy}` : ""}
-                    </span>
-                  </div>
-                  <div className="ssv1-activity-card-foot">
-                    <div className="ssv1-activity-amounts">
-                      <span className="ssv1-activity-cost">{fmtRs(h.estimatedCost)}</span>
-                      {h.amountDelta != null ? (
-                        <span className={`ssv1-activity-delta ${h.amountDelta >= 0 ? "is-up" : "is-down"}`}>
-                          {h.amountDelta >= 0 ? "+" : "−"}
-                          {fmtRs(Math.abs(h.amountDelta))}
-                        </span>
-                      ) : null}
+            <>
+              <div className="ssv1-activity-cards" aria-label="Activity list">
+                {filteredActivity.map((h) => (
+                  <article
+                    key={h.id}
+                    className={
+                      h.isLatestForSurvey && h.surveyExists ? "ssv1-activity-mobile-card is-latest" : "ssv1-activity-mobile-card"
+                    }
+                  >
+                    <div className="ssv1-activity-mobile-top">
+                      <span className={`ssv1-activity-action is-${h.actionKind}`}>{h.actionLabel}</span>
+                      <time className="ssv1-activity-mobile-when">{h.savedAtLabel}</time>
                     </div>
-                    <span className={`pill pill-${statusPillClass(h.status as SurveyStatus)}`}>{h.status}</span>
-                  </div>
-                  <div className="ssv1-activity-card-actions">
-                    {h.surveyExists ? (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          onClick={() => void openSavedSurveyById(h.surveyId)}
-                        >
-                          Open
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          disabled={busy}
-                          onClick={() => {
-                            const s = list.find((x) => x.id === h.surveyId);
-                            if (s) void downloadSurveyPdf(s);
-                          }}
-                        >
-                          PDF
-                        </button>
-                      </>
-                    ) : (
-                      <span className="ssv1-activity-archived">Deleted — log only</span>
-                    )}
-                    {h.isLatestForSurvey && h.surveyExists ? (
-                      <span className="ssv1-activity-latest">Latest</span>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
+                    <div className="ssv1-activity-mobile-headline">
+                      {activityReportControl(h, "ssv1-activity-report-link ssv1-mono")}
+                      <span className="ssv1-activity-mobile-customer">{h.customerName || "—"}</span>
+                    </div>
+                    <dl className="ssv1-activity-mobile-grid">
+                      <div>
+                        <dt>Type</dt>
+                        <dd>{h.installationType || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt>Prepared by</dt>
+                        <dd>{h.preparedBy || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt>Est. cost</dt>
+                        <dd>{fmtRs(h.estimatedCost)}</dd>
+                      </div>
+                      <div>
+                        <dt>Change</dt>
+                        <dd>{activityCostDelta(h)}</dd>
+                      </div>
+                    </dl>
+                    <div className="ssv1-activity-mobile-foot">
+                      <span className={`pill pill-${statusPillClass(h.status as SurveyStatus)} pill-compact`}>
+                        {h.status}
+                      </span>
+                      {activityEventActions(h, "mobile")}
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <div className="ssv1-saved-wrap ssv1-activity-table-wrap ssv1-activity-table-desktop">
+              <table className="ssv1-activity-table">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Action</th>
+                    <th>Report No.</th>
+                    <th>Customer</th>
+                    <th>Type</th>
+                    <th>Prepared by</th>
+                    <th className="num">Est. cost</th>
+                    <th className="num">Change</th>
+                    <th>Status</th>
+                    <th className="actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredActivity.map((h) => (
+                    <tr key={h.id} className={h.isLatestForSurvey && h.surveyExists ? "ssv1-activity-row-latest" : undefined}>
+                      <td className="nowrap ssv1-activity-when-cell">{h.savedAtLabel}</td>
+                      <td>
+                        <span className={`ssv1-activity-action is-${h.actionKind}`}>{h.actionLabel}</span>
+                      </td>
+                      <td className="ssv1-mono">{activityReportControl(h)}</td>
+                      <td className="ssv1-activity-customer-cell">{h.customerName || "—"}</td>
+                      <td className="nowrap ssv1-activity-type-cell" title={h.installationType}>
+                        {h.installationType || "—"}
+                      </td>
+                      <td className="ssv1-activity-prepared-cell">{h.preparedBy || "—"}</td>
+                      <td className="num nowrap">{fmtRs(h.estimatedCost)}</td>
+                      <td className="num nowrap">{activityCostDelta(h)}</td>
+                      <td>
+                        <span className={`pill pill-${statusPillClass(h.status as SurveyStatus)} pill-compact`}>
+                          {h.status}
+                        </span>
+                      </td>
+                      <td className="actions">{activityEventActions(h, "table")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+            </>
           )}
         </section>
       ) : null}
