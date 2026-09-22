@@ -538,6 +538,19 @@ router.get("/notifications", async (_req, res) => {
   res.json({ notifications: Array.isArray(list) ? list : [] });
 });
 
+router.post("/notifications/read-all", async (_req, res) => {
+  const list = (((await getConfig(NOTIF_KEY)) as Array<Record<string, unknown>>) ?? []).slice();
+  let count = 0;
+  for (const n of list) {
+    if (!n.read) {
+      n.read = true;
+      count += 1;
+    }
+  }
+  await setConfig(NOTIF_KEY, list);
+  res.json({ ok: true, count });
+});
+
 router.post("/notifications/:id/read", async (req, res) => {
   const list = (((await getConfig(NOTIF_KEY)) as Array<Record<string, unknown>>) ?? []).slice();
   const id = req.params.id;

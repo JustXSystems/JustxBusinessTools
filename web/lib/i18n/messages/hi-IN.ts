@@ -6,12 +6,15 @@ export const hiIN: Record<string, Record<string, string>> = {
     exportXlsx: "Excel निर्यात",
   },
   notifications: {
-    title: "सूचनाएँ",
+    title: "अलर्ट",
     subtitle: "कार्यप्रवाह, स्वीकृतियाँ और व्यावसायिक गतिविधि।",
-    allCaughtUp: "सब अपडेट है",
+    allCaughtUp: "कमांड कतार खाली",
     markAllRead: "सभी पढ़ा चिह्नित करें",
     filterAll: "सभी",
     filterUnread: "अपठित",
     filterUrgent: "अत्यावश्यक",
+    kpiAction: "कार्रवाई",
+    searchPlaceholder: "शीर्षक, विवरण, श्रेणी खोजें…",
+    open: "खोलें →",
   },
 };

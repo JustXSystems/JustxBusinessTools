@@ -47,6 +47,8 @@ import {
   SAVED_STATUS_OPTIONS,
   suggestCustomersFromQuotations,
   customerFromSuggestion,
+  classifyQuoteAlert,
+  quoteAlertMatchesFilter,
   type SuggestedCustomer,
   type SavedQuoteFilters,
   type FollowUpFilter,
@@ -57,7 +59,9 @@ import {
   type QuoteHistoryRow,
   type QuoteNotification,
   type QuoteStatus,
+  type QuoteAlertFilter,
 } from "@/lib/quotation-v1";
+import { fmtRelativeTime } from "@/lib/format";
 import {
   resolveCorporateEmailMessage,
   type BusinessProfileSendSettings,
@@ -178,6 +182,9 @@ export function QuotationGeneratorV1() {
   const [savedFilters, setSavedFilters] = useState<SavedQuoteFilters>(EMPTY_SAVED_FILTERS);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [activityQuery, setActivityQuery] = useState("");
+  const [alertFilter, setAlertFilter] = useState<QuoteAlertFilter>("all");
+  const [alertQuery, setAlertQuery] = useState("");
+  const [alertBusy, setAlertBusy] = useState(false);
   const [customerSuggestOpen, setCustomerSuggestOpen] = useState(false);
   const [customerSuggestIndex, setCustomerSuggestIndex] = useState(0);
   const [reverseItemId, setReverseItemId] = useState<string | null>(null);
@@ -862,6 +869,67 @@ export function QuotationGeneratorV1() {
   }
 
   const unread = notifications.filter((n) => !n.read).length;
+
+  const alertRows = useMemo(() => {
+    const q = alertQuery.trim().toLowerCase();
+    return notifications
+      .map((n) => {
+        const meta = classifyQuoteAlert(n.message);
+        const quote = list.find((x) => x.id === n.quotationId);
+        return { n, meta, quote };
+      })
+      .filter(({ n, meta }) => {
+        if (
+          !quoteAlertMatchesFilter(alertFilter, {
+            read: n.read,
+            kind: meta.kind,
+            actionable: meta.actionable,
+          })
+        ) {
+          return false;
+        }
+        if (!q) return true;
+        const hay = `${n.message} ${n.quotationId} ${list.find((x) => x.id === n.quotationId)?.quoteNo ?? ""}`.toLowerCase();
+        return hay.includes(q);
+      });
+  }, [notifications, alertFilter, alertQuery, list]);
+
+  const alertStats = useMemo(() => {
+    let action = 0;
+    let approvals = 0;
+    let sends = 0;
+    for (const n of notifications) {
+      const meta = classifyQuoteAlert(n.message);
+      if (!n.read && meta.actionable) action += 1;
+      if (meta.kind === "approval" || meta.kind === "link" || meta.kind === "rejected") approvals += 1;
+      if (meta.kind === "sent" || meta.kind === "submit") sends += 1;
+    }
+    return { total: notifications.length, unread, action, approvals, sends };
+  }, [notifications, unread]);
+
+  async function markAlertRead(id: string) {
+    setAlertBusy(true);
+    try {
+      await api(`/quotation-v1/notifications/${id}/read`, { method: "POST" });
+      await reloadMeta();
+    } finally {
+      setAlertBusy(false);
+    }
+  }
+
+  async function markAllAlertsRead() {
+    if (!unread) return;
+    setAlertBusy(true);
+    try {
+      await api("/quotation-v1/notifications/read-all", { method: "POST" });
+      await reloadMeta();
+      flash("All alerts marked read.");
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Could not mark alerts read", "err");
+    } finally {
+      setAlertBusy(false);
+    }
+  }
 
   const NAV: Array<{ id: Route; label: string; hint: string; hidden?: boolean }> = [
     { id: "new", label: "Compose", hint: "Build a quote" },
@@ -1910,37 +1978,168 @@ export function QuotationGeneratorV1() {
 
         {route === "notifications" ? (
           <div className="qgv1-tab-panel">
-          <section className="qgv1-card qgv1-card-compact">
-            <div className="qgv1-page-head qgv1-panel-head">
+          <section className="qgv1-card qgv1-card-compact qgv1-alerts-panel">
+            <div className="qgv1-page-head qgv1-panel-head qgv1-alerts-head">
               <div>
+                <p className="qgv1-alerts-eyebrow">Operations · Quotation</p>
                 <h1>Alerts</h1>
-                <p className="qgv1-tab-lede">Sends, approvals, and workspace activity.</p>
+                <p className="qgv1-tab-lede">
+                  Actionable sends, approvals, and delivery events — open the quote and clear the queue.
+                </p>
               </div>
+              {unread > 0 ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={alertBusy}
+                  onClick={() => void markAllAlertsRead()}
+                >
+                  Mark all read
+                </button>
+              ) : null}
             </div>
+
+            <div className="qgv1-alerts-kpis" aria-label="Alert summary">
+              <button
+                type="button"
+                className={`qgv1-alerts-kpi${alertFilter === "all" ? " is-active" : ""}`}
+                onClick={() => setAlertFilter("all")}
+              >
+                <span className="qgv1-alerts-kpi-val">{alertStats.total}</span>
+                <span className="qgv1-alerts-kpi-lbl">Total</span>
+              </button>
+              <button
+                type="button"
+                className={`qgv1-alerts-kpi qgv1-alerts-kpi-unread${alertFilter === "unread" ? " is-active" : ""}`}
+                onClick={() => setAlertFilter("unread")}
+              >
+                <span className="qgv1-alerts-kpi-val">{alertStats.unread}</span>
+                <span className="qgv1-alerts-kpi-lbl">Unread</span>
+              </button>
+              <button
+                type="button"
+                className={`qgv1-alerts-kpi qgv1-alerts-kpi-action${alertFilter === "action" ? " is-active" : ""}`}
+                onClick={() => setAlertFilter("action")}
+              >
+                <span className="qgv1-alerts-kpi-val">{alertStats.action}</span>
+                <span className="qgv1-alerts-kpi-lbl">Needs action</span>
+              </button>
+              <button
+                type="button"
+                className={`qgv1-alerts-kpi${alertFilter === "approval" || alertFilter === "link" || alertFilter === "rejected" ? " is-active" : ""}`}
+                onClick={() => setAlertFilter(alertFilter === "approval" ? "all" : "approval")}
+              >
+                <span className="qgv1-alerts-kpi-val">{alertStats.approvals}</span>
+                <span className="qgv1-alerts-kpi-lbl">Approvals</span>
+              </button>
+              <button
+                type="button"
+                className={`qgv1-alerts-kpi${alertFilter === "sent" ? " is-active" : ""}`}
+                onClick={() => setAlertFilter(alertFilter === "sent" ? "all" : "sent")}
+              >
+                <span className="qgv1-alerts-kpi-val">{alertStats.sends}</span>
+                <span className="qgv1-alerts-kpi-lbl">Sends</span>
+              </button>
+            </div>
+
+            <div className="qgv1-alerts-toolbar">
+              <div className="qgv1-alerts-filters" role="tablist" aria-label="Alert filters">
+                {(
+                  [
+                    ["all", "All"],
+                    ["unread", "Unread"],
+                    ["action", "Action"],
+                    ["sent", "Sends"],
+                    ["approval", "Approved"],
+                    ["link", "Links"],
+                    ["rejected", "Rejected"],
+                  ] as Array<[QuoteAlertFilter, string]>
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={alertFilter === key}
+                    className={`qgv1-alerts-chip${alertFilter === key ? " is-active" : ""}`}
+                    onClick={() => setAlertFilter(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="qgv1-saved-search qgv1-alerts-search">
+                <span className="sr-only">Search alerts</span>
+                <input
+                  type="search"
+                  value={alertQuery}
+                  onChange={(e) => setAlertQuery(e.target.value)}
+                  placeholder="Search message, quote…"
+                />
+              </label>
+            </div>
+
             {notifications.length === 0 ? (
-              <p className="muted qgv1-tab-empty">No notifications yet.</p>
+              <div className="qgv1-alerts-empty">
+                <div className="qgv1-alerts-empty-orb" aria-hidden />
+                <strong>Command queue clear</strong>
+                <p className="muted">
+                  Sends, approval links, and customer decisions will land here with one-tap open.
+                </p>
+              </div>
+            ) : alertRows.length === 0 ? (
+              <p className="muted qgv1-tab-empty">No alerts match this filter.</p>
             ) : (
-              <div className="qgv1-notif-list">
-              {notifications.map((n) => (
-                <div key={n.id} className="qgv1-notif" data-read={n.read ? "1" : "0"}>
-                  <div className="qgv1-notif-body">
-                    <strong>{n.message}</strong>
-                    <div className="muted qgv1-notif-time">{n.createdAt?.slice(0, 19).replace("T", " ")}</div>
-                  </div>
-                  {!n.read ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm qgv1-notif-action"
-                      onClick={async () => {
-                        await api(`/quotation-v1/notifications/${n.id}/read`, { method: "POST" });
-                        await reloadMeta();
-                      }}
-                    >
-                      Mark read
-                    </button>
-                  ) : null}
-                </div>
-              ))}
+              <div className="qgv1-alerts-list">
+                {alertRows.map(({ n, meta, quote }) => (
+                  <article
+                    key={n.id}
+                    className={`qgv1-alert-card tone-${meta.tone}${n.read ? " is-read" : " is-unread"}`}
+                  >
+                    <div className="qgv1-alert-icon" aria-hidden data-tone={meta.tone}>
+                      {meta.icon}
+                    </div>
+                    <div className="qgv1-alert-body">
+                      <div className="qgv1-alert-top">
+                        <span className={`qgv1-alert-kind tone-${meta.tone}`}>{meta.label}</span>
+                        <time className="qgv1-alert-time" dateTime={n.createdAt} title={n.createdAt}>
+                          {fmtRelativeTime(n.createdAt)}
+                        </time>
+                      </div>
+                      <strong className="qgv1-alert-title">{n.message}</strong>
+                      <div className="qgv1-alert-meta">
+                        {quote?.quoteNo ? <span className="qgv1-alert-quote">{quote.quoteNo}</span> : null}
+                        {quote?.customer?.name ? <span>{quote.customer.name}</span> : null}
+                        {!n.read ? <span className="qgv1-alert-live">Live</span> : <span>Read</span>}
+                      </div>
+                    </div>
+                    <div className="qgv1-alert-actions">
+                      {quote ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => {
+                            if (!n.read) void markAlertRead(n.id);
+                            openQuotationById(quote.id);
+                          }}
+                        >
+                          Open quote
+                        </button>
+                      ) : n.quotationId ? (
+                        <span className="muted qgv1-alert-gone">Quote removed</span>
+                      ) : null}
+                      {!n.read ? (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          disabled={alertBusy}
+                          onClick={() => void markAlertRead(n.id)}
+                        >
+                          Mark read
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
               </div>
             )}
           </section>
