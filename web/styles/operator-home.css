@@ -339,35 +339,35 @@
   background: color-mix(in srgb, var(--bg-1) 70%, var(--glass-1));
 }
 
-.qgv1-root-compose .tool-shell-hero {
+.qgv1-root-shell .tool-shell-hero {
   margin-bottom: 10px;
   padding: 12px 14px;
 }
 
-.qgv1-root-compose .tool-shell-subtitle {
+.qgv1-root-shell .tool-shell-subtitle {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.qgv1-root-compose .qgv1-seg.tool-seg-nav {
+.qgv1-root-shell .qgv1-seg.tool-seg-nav {
   margin-bottom: 12px;
   padding: 4px;
   gap: 6px;
 }
 
-.qgv1-root-compose .qgv1-seg-item {
+.qgv1-root-shell .qgv1-seg-item {
   padding: 8px 10px;
 }
 
 @media (max-width: 768px) {
-  .qgv1-root-compose .tool-shell-hero {
+  .qgv1-root-shell .tool-shell-hero {
     padding: 12px 10px;
     margin-bottom: 8px;
   }
 
-  .qgv1-root-compose .qgv1-main {
+  .qgv1-root-shell .qgv1-main {
     padding-bottom: calc(24px + var(--safe-bottom, 0px));
   }
 }

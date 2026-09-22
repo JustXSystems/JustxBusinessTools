@@ -825,7 +825,7 @@ export function QuotationGeneratorV1() {
   ];
 
   return (
-    <div className={`qgv1-root tool-workspace${route === "new" ? " qgv1-root-compose" : ""}`}>
+    <div className="qgv1-root tool-workspace qgv1-root-shell">
       <ToolPageHero
         eyebrow="Sales · Documents"
         title="Quotation Generator V1"
@@ -1450,11 +1450,12 @@ export function QuotationGeneratorV1() {
         ) : null}
 
         {route === "list" ? (
-          <section className="qgv1-card">
-            <div className="qgv1-page-head">
+          <div className="qgv1-tab-panel">
+          <section className="qgv1-card qgv1-card-compact">
+            <div className="qgv1-page-head qgv1-panel-head">
               <div>
-                <h1>Saved quotations</h1>
-                <p>Pipeline view — filter, open to edit, download PDF, or export the register.</p>
+                <h1>Saved</h1>
+                <p className="qgv1-tab-lede">Filter · open · PDF · export register.</p>
               </div>
               {list.length > 0 ? (
                 <div className="qgv1-export-group" role="group" aria-label="Export saved quotations">
@@ -1483,6 +1484,15 @@ export function QuotationGeneratorV1() {
               </div>
             ) : (
               <>
+                <div className="qgv1-compose-bar qgv1-tab-bar" aria-label="Saved register summary">
+                  <span className="qgv1-tab-bar-label">Pipeline</span>
+                  <span className="qgv1-compose-bar-total">
+                    {filteredList.length} shown
+                  </span>
+                  {pendingApprovals ? (
+                    <span className="qgv1-compose-bar-status is-sent">{pendingApprovals} pending</span>
+                  ) : null}
+                </div>
                 <div className="qgv1-saved-filters">
                   <div className="qgv1-saved-filters-main">
                     <label className="qgv1-saved-search">
@@ -1657,7 +1667,66 @@ export function QuotationGeneratorV1() {
                     </button>
                   </div>
                 ) : (
-                  <div className="qgv1-saved-wrap">
+                  <>
+                  <div className="qgv1-saved-cards" aria-label="Saved quotations">
+                    {filteredList.map((q) => {
+                      const row = buildSavedQuoteListRow(q, company);
+                      return (
+                        <article key={q.id} className="qgv1-saved-card">
+                          <div className="qgv1-saved-card-top">
+                            <span className="qgv1-saved-qno mono">{row.quoteNo}</span>
+                            <span className={`pill pill-${statusPillClass(row.status)}`}>{row.status}</span>
+                          </div>
+                          <div className="qgv1-saved-card-main">
+                            <strong>{row.companyName}</strong>
+                            <span className="muted">
+                              {row.companyCity} · {row.submittedDate}
+                            </span>
+                            <p className="qgv1-saved-desc">{row.description}</p>
+                          </div>
+                          <div className="qgv1-saved-card-meta">
+                            <span className="qgv1-saved-grand">₹{row.grandTotalLabel}</span>
+                            <span className="muted">{row.preparedBy}</span>
+                          </div>
+                          <div className="qgv1-saved-card-actions">
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => {
+                                const full = normalizeQuotation(q);
+                                setCurrent(full);
+                                setLastSaved(snapshotOf(full));
+                                setRoute("new");
+                              }}
+                            >
+                              Open
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              disabled={busy}
+                              onClick={() => void downloadPdf(q)}
+                            >
+                              PDF
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-destructive btn-sm"
+                              onClick={async () => {
+                                if (!confirm(`Delete ${q.quoteNo}?`)) return;
+                                await api(`/quotation-v1/${q.id}`, { method: "DELETE" });
+                                flash("Deleted.");
+                                await reloadMeta();
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                  <div className="qgv1-saved-wrap qgv1-saved-table-desktop">
                     <table className="qgv1-saved-table">
                       <thead>
                         <tr>
@@ -1744,33 +1813,37 @@ export function QuotationGeneratorV1() {
                       </tbody>
                     </table>
                   </div>
+                  </>
                 )}
               </>
             )}
           </section>
+          </div>
         ) : null}
 
         {route === "notifications" ? (
-          <section className="qgv1-card">
-            <div className="qgv1-page-head">
+          <div className="qgv1-tab-panel">
+          <section className="qgv1-card qgv1-card-compact">
+            <div className="qgv1-page-head qgv1-panel-head">
               <div>
                 <h1>Alerts</h1>
-                <p>Send and approval activity for this workspace.</p>
+                <p className="qgv1-tab-lede">Sends, approvals, and workspace activity.</p>
               </div>
             </div>
             {notifications.length === 0 ? (
-              <p className="muted">No notifications yet.</p>
+              <p className="muted qgv1-tab-empty">No notifications yet.</p>
             ) : (
-              notifications.map((n) => (
+              <div className="qgv1-notif-list">
+              {notifications.map((n) => (
                 <div key={n.id} className="qgv1-notif" data-read={n.read ? "1" : "0"}>
-                  <div>
+                  <div className="qgv1-notif-body">
                     <strong>{n.message}</strong>
-                    <div className="muted">{n.createdAt?.slice(0, 19).replace("T", " ")}</div>
+                    <div className="muted qgv1-notif-time">{n.createdAt?.slice(0, 19).replace("T", " ")}</div>
                   </div>
                   {!n.read ? (
                     <button
                       type="button"
-                      className="btn btn-ghost btn-sm"
+                      className="btn btn-secondary btn-sm qgv1-notif-action"
                       onClick={async () => {
                         await api(`/quotation-v1/notifications/${n.id}/read`, { method: "POST" });
                         await reloadMeta();
@@ -1780,55 +1853,58 @@ export function QuotationGeneratorV1() {
                     </button>
                   ) : null}
                 </div>
-              ))
+              ))}
+              </div>
             )}
           </section>
+          </div>
         ) : null}
 
         {route === "history" ? (
-          <section className="qgv1-card">
-            <div className="qgv1-page-head">
+          <div className="qgv1-tab-panel">
+          <section className="qgv1-card qgv1-card-compact">
+            <div className="qgv1-page-head qgv1-panel-head">
               <div>
-                <h1>Save history</h1>
-                <p>Every save is logged here, even if the quote is later deleted.</p>
+                <h1>History</h1>
+                <p className="qgv1-tab-lede">Every save — including quotes later deleted.</p>
               </div>
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => void exportHistoryExcel()}>
                 Export Excel
               </button>
             </div>
             {history.length === 0 ? (
-              <p className="muted">History fills as you save quotations.</p>
+              <p className="muted qgv1-tab-empty">History fills as you save quotations.</p>
             ) : (
-              <div className="tracker-list">
+              <div className="tracker-list qgv1-history-list">
                 {history.map((h) => (
-                  <div key={h.id} className="tracker-row">
+                  <div key={h.id} className="tracker-row qgv1-history-row">
                     <div className="tracker-row-main">
                       <span className="tracker-row-title mono">{h.quoteNo}</span>
                       <span className="tracker-row-sub">
                         {h.customerName} · {h.typeLabel} · {h.status}
                       </span>
                     </div>
-                    <span className="m-val">₹{money(h.grand)}</span>
+                    <span className="m-val qgv1-history-val">₹{money(h.grand)}</span>
                   </div>
                 ))}
               </div>
             )}
           </section>
+          </div>
         ) : null}
 
         {route === "company" ? (
-          <section className="qgv1-card">
-            <div className="qgv1-page-head">
+          <div className="qgv1-tab-panel">
+          <section className="qgv1-card qgv1-card-compact qgv1-letterhead-panel">
+            <div className="qgv1-page-head qgv1-panel-head">
               <div>
                 <h1>Letterhead</h1>
-                <p>
-                  Brand name and logo come from{" "}
-                  <Link href="/profile">Business Profile</Link>. Other letterhead fields below print on
-                  every quotation PDF.
+                <p className="qgv1-tab-lede">
+                  Logo &amp; name from <Link href="/profile">Business Profile</Link> — fields below print on PDF.
                 </p>
               </div>
             </div>
-            <div className="qgv1-brand-sync">
+            <div className="qgv1-brand-sync qgv1-brand-sync-compact">
               {company.logo ? (
                 <img className="qgv1-brand-sync-logo" src={publicAssetUrl(company.logo)} alt="" />
               ) : (
@@ -1841,7 +1917,7 @@ export function QuotationGeneratorV1() {
                 </p>
               </div>
             </div>
-            <div className="qgv1-grid2">
+            <div className="qgv1-grid2 qgv1-letterhead-grid">
               {(
                 [
                   ["tagline", "Tagline"],
@@ -1886,19 +1962,22 @@ export function QuotationGeneratorV1() {
               </label>
             </div>
 
-            <div className="qgv1-send-admin">
-              <h3 className="qgv1-send-admin-title">Send Via</h3>
-              <p className="muted" style={{ marginTop: 0 }}>
+            <details className="qgv1-disclosure qgv1-send-admin-disclosure">
+              <summary className="qgv1-disclosure-summary qgv1-send-admin-summary">
+                <span>Send Via</span>
+                <span className="qgv1-disclosure-hint muted">WhatsApp &amp; email on Business Profile</span>
+              </summary>
+              <p className="muted qgv1-send-admin-note">
                 WhatsApp numbers and email templates are configured on the{" "}
                 <Link href="/profile">Business Profile</Link> (Business Owner only). Those defaults apply to
                 every tool under this profile.
               </p>
-            </div>
+            </details>
 
+            <div className="qgv1-tab-sticky-actions">
             <button
               type="button"
               className="btn btn-primary"
-              style={{ marginTop: 12 }}
               onClick={async () => {
                 const profile = await fetchProfile().catch(() => null);
                 const next = mergeCompanyFromBusinessProfile(company, profile);
@@ -1913,9 +1992,11 @@ export function QuotationGeneratorV1() {
                 flash("Company profile saved.");
               }}
             >
-              Save Company Details
+              Save company details
             </button>
+            </div>
           </section>
+          </div>
         ) : null}
       </main>
 
