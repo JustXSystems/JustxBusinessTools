@@ -42,8 +42,6 @@ export default function NotificationsPage() {
   const [categories, setCategories] = useState<
     Array<{ id: NotificationCategory; label: string; count: number }>
   >([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [urgentCount, setUrgentCount] = useState(0);
   const [role, setRole] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,8 +60,6 @@ export default function NotificationsPage() {
       const data = await fetchNotifications();
       setItems(data.items);
       setCategories(data.categories ?? []);
-      setUnreadCount(data.unreadCount ?? 0);
-      setUrgentCount(data.urgentCount ?? 0);
       setRole(data.role ?? "");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("notifications.loadError"));
@@ -74,28 +70,51 @@ export default function NotificationsPage() {
 
   useLiveRefresh(load, { intervalMs: 30_000, enabled: allowed });
 
+  /** Single source of truth from loaded items (avoids API/local drift after mark-read). */
+  const liveCounts = useMemo(() => {
+    let unread = 0;
+    let urgent = 0;
+    let action = 0;
+    const byCat = new Map<NotificationCategory, number>();
+    for (const item of items) {
+      if (!item.read) unread += 1;
+      if (item.urgent && !item.read) urgent += 1;
+      if (!item.read && (item.urgent || Boolean(item.href))) action += 1;
+      byCat.set(item.category, (byCat.get(item.category) ?? 0) + 1);
+    }
+    return {
+      total: items.length,
+      unread,
+      urgent,
+      action,
+      byCat,
+    };
+  }, [items]);
+
+  const matchesFilter = useCallback((item: NotificationItem, key: FilterKey) => {
+    if (key === "all") return true;
+    if (key === "unread") return !item.read;
+    if (key === "urgent") return item.urgent && !item.read;
+    return item.category === key;
+  }, []);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((item) => {
-      if (filter === "all") {
-        /* keep */
-      } else if (filter === "unread") {
-        if (item.read) return false;
-      } else if (filter === "urgent") {
-        if (!item.urgent) return false;
-      } else if (item.category !== filter) {
-        return false;
-      }
+      if (!matchesFilter(item, filter)) return false;
       if (!q) return true;
       const hay = `${item.title} ${item.text} ${item.category} ${item.eventType}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [items, filter, query]);
+  }, [items, filter, query, matchesFilter]);
 
-  const actionCount = useMemo(
-    () => items.filter((i) => !i.read && (i.urgent || Boolean(i.href))).length,
-    [items],
-  );
+  const filterChipCounts = useMemo(() => {
+    return {
+      all: liveCounts.total,
+      unread: liveCounts.unread,
+      urgent: liveCounts.urgent,
+    } as Record<string, number>;
+  }, [liveCounts]);
 
   if (!allowed) {
     return (
@@ -119,8 +138,6 @@ export default function NotificationsPage() {
       setItems((prev) =>
         prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)),
       );
-      setUnreadCount((c) => Math.max(0, c - 1));
-      if (item.urgent) setUrgentCount((c) => Math.max(0, c - 1));
       invalidateLiveData("notifications");
     } catch {
       /* ignore */
@@ -142,6 +159,12 @@ export default function NotificationsPage() {
     }
   }
 
+  function severityLabel(item: NotificationItem) {
+    if (item.urgent) return t("notifications.urgent");
+    if (item.severity === "attention") return t("notifications.attention");
+    return t("notifications.upcoming");
+  }
+
   const roleHint =
     role === "admin"
       ? t("notifications.roleAdmin")
@@ -153,60 +176,54 @@ export default function NotificationsPage() {
 
   return (
     <div className="notif-page">
-      <header className="notif-hero">
-        <div className="notif-hero-copy">
-          <p className="notif-hero-eyebrow">Operations · Command</p>
-          <div className="tool-header notif-hero-row">
-            <Link href="/" className="back-btn" aria-label="Back">
-              ←
-            </Link>
-            <div className="tool-header-text">
-              <div className="tool-header-title">{t("notifications.title")}</div>
-              <div className="tool-header-sub">{roleHint}</div>
-            </div>
-            {unreadCount > 0 ? (
-              <button
-                type="button"
-                className="btn btn-secondary notif-mark-all"
-                disabled={busy}
-                onClick={() => void onMarkAll()}
-              >
-                {t("notifications.markAllRead")}
-              </button>
-            ) : null}
-          </div>
+      <div className="tool-header notif-hero-row">
+        <Link href="/" className="back-btn" aria-label="Back">
+          ←
+        </Link>
+        <div className="tool-header-text">
+          <div className="tool-header-title">{t("notifications.title")}</div>
+          <div className="tool-header-sub">{roleHint}</div>
         </div>
-        <div className="notif-hero-pulse" aria-hidden />
-      </header>
+        {liveCounts.unread > 0 ? (
+          <button
+            type="button"
+            className="btn btn-secondary notif-mark-all"
+            disabled={busy}
+            onClick={() => void onMarkAll()}
+          >
+            {t("notifications.markAllRead")}
+          </button>
+        ) : null}
+      </div>
 
-      <div className="notif-kpis" aria-label="Alert summary">
+      <div className="notif-stats" aria-label="Alert summary">
         <button
           type="button"
-          className={`notif-kpi${filter === "all" ? " is-active" : ""}`}
+          className={`notif-stat${filter === "all" ? " is-active" : ""}`}
           onClick={() => setFilter("all")}
         >
-          <span className="notif-kpi-val">{items.length}</span>
-          <span className="notif-kpi-lbl">{t("notifications.kpiTotal")}</span>
+          <span className="notif-stat-val">{liveCounts.total}</span>
+          <span className="notif-stat-lbl">{t("notifications.kpiTotal")}</span>
         </button>
         <button
           type="button"
-          className={`notif-kpi notif-kpi-unread${filter === "unread" ? " is-active" : ""}`}
+          className={`notif-stat is-unread${filter === "unread" ? " is-active" : ""}`}
           onClick={() => setFilter("unread")}
         >
-          <span className="notif-kpi-val">{unreadCount}</span>
-          <span className="notif-kpi-lbl">{t("notifications.kpiUnread")}</span>
+          <span className="notif-stat-val">{liveCounts.unread}</span>
+          <span className="notif-stat-lbl">{t("notifications.kpiUnread")}</span>
         </button>
         <button
           type="button"
-          className={`notif-kpi notif-kpi-urgent${filter === "urgent" ? " is-active" : ""}`}
+          className={`notif-stat is-urgent${filter === "urgent" ? " is-active" : ""}`}
           onClick={() => setFilter("urgent")}
         >
-          <span className="notif-kpi-val">{urgentCount}</span>
-          <span className="notif-kpi-lbl">{t("notifications.kpiUrgent")}</span>
+          <span className="notif-stat-val">{liveCounts.urgent}</span>
+          <span className="notif-stat-lbl">{t("notifications.kpiUrgent")}</span>
         </button>
-        <div className="notif-kpi notif-kpi-action" aria-label="Needs action">
-          <span className="notif-kpi-val">{actionCount}</span>
-          <span className="notif-kpi-lbl">{t("notifications.kpiAction")}</span>
+        <div className="notif-stat is-action">
+          <span className="notif-stat-val">{liveCounts.action}</span>
+          <span className="notif-stat-lbl">{t("notifications.kpiAction")}</span>
         </div>
       </div>
 
@@ -219,18 +236,25 @@ export default function NotificationsPage() {
               ["urgent", t("notifications.filterUrgent")],
               ...categories.map((c) => [c.id, c.label] as const),
             ] as Array<[FilterKey, string]>
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={filter === key}
-              className={`notif-filter${filter === key ? " active" : ""}`}
-              onClick={() => setFilter(key)}
-            >
-              {label}
-            </button>
-          ))}
+          ).map(([key, label]) => {
+            const count =
+              key === "all" || key === "unread" || key === "urgent"
+                ? filterChipCounts[key]
+                : (liveCounts.byCat.get(key as NotificationCategory) ?? 0);
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={filter === key}
+                className={`notif-filter${filter === key ? " active" : ""}`}
+                onClick={() => setFilter(key)}
+              >
+                {label}
+                <span className="notif-filter-count">{count}</span>
+              </button>
+            );
+          })}
         </div>
         <label className="notif-search">
           <span className="sr-only">{t("notifications.search")}</span>
@@ -243,6 +267,15 @@ export default function NotificationsPage() {
         </label>
       </div>
 
+      {items.length > 0 ? (
+        <div className="notif-meta">
+          Showing <b>{filtered.length}</b> of {items.length}
+          {filter !== "all" || query.trim() ? (
+            <span className="notif-meta-tag">{t("notifications.filtered")}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="empty-state">
           <div className="es-icon">⏳</div>
@@ -252,97 +285,166 @@ export default function NotificationsPage() {
         <div className="error-banner">{error}</div>
       ) : filtered.length === 0 ? (
         <div className="empty-state notif-empty">
-          <div className="notif-empty-orb" aria-hidden />
           <div className="es-title">{t("notifications.allCaughtUp")}</div>
           <div className="es-sub">{t("notifications.allCaughtUpSub")}</div>
         </div>
       ) : (
-        <div className="tracker-list notif-list">
-          {filtered.map((item) => {
-            const tone = SEVERITY_TONE[item.severity] ?? "info";
-            const severityLabel = item.urgent
-              ? t("notifications.urgent")
-              : item.severity === "attention"
-                ? t("notifications.attention")
-                : t("notifications.upcoming");
-
-            const body = (
-              <>
-                <div className={`notif-row-rail tone-${tone}`} aria-hidden />
-                <div className={`notif-row-icon tone-${tone}`} aria-hidden>
-                  {item.icon}
-                </div>
-                <div className="tracker-row-main notif-row-main">
-                  <div className="notif-row-top">
+        <>
+          <div className="notif-cards" aria-label="Alerts">
+            {filtered.map((item) => {
+              const tone = SEVERITY_TONE[item.severity] ?? "info";
+              return (
+                <article
+                  key={item.id}
+                  className={`notif-mcard tone-${tone}${item.read ? " is-read" : " is-unread"}`}
+                >
+                  <div className="notif-mcard-top">
                     <span className="notif-cat">{item.category}</span>
                     <time
-                      className="notif-row-time"
                       dateTime={item.createdAt || item.date || undefined}
                       title={item.createdAt || item.date || undefined}
                     >
                       {fmtRelativeTime(item.createdAt || item.date)}
                     </time>
                   </div>
-                  <div className="tracker-row-title">{item.title}</div>
-                  <div className="tracker-row-sub">{item.text}</div>
-                  <div className="notif-row-meta-line">
-                    {item.date ? <span>{fmtDate(item.date)}</span> : null}
-                    {item.source === "derived" ? (
-                      <span>· {t("notifications.liveReminder")}</span>
-                    ) : null}
-                    {!item.read ? <span className="notif-live-tag">Live</span> : null}
-                  </div>
-                </div>
-                <div className="tracker-row-meta notif-row-aside">
-                  <span className={`pill ${SEVERITY_PILL[item.severity] ?? "pill-neutral"}`}>
-                    {severityLabel}
-                  </span>
-                  <div className="notif-row-actions">
+                  <strong className="notif-mcard-title">{item.title}</strong>
+                  <p className="notif-mcard-text">{item.text}</p>
+                  <dl className="notif-mcard-grid">
+                    <div>
+                      <dt>{t("notifications.colSeverity")}</dt>
+                      <dd>
+                        <span className={`pill ${SEVERITY_PILL[item.severity] ?? "pill-neutral"}`}>
+                          {severityLabel(item)}
+                        </span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{t("notifications.colStatus")}</dt>
+                      <dd>{item.read ? t("notifications.read") : t("notifications.unread")}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("notifications.colDate")}</dt>
+                      <dd>{item.date ? fmtDate(item.date) : "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("notifications.colSource")}</dt>
+                      <dd>
+                        {item.source === "derived"
+                          ? t("notifications.liveReminder")
+                          : t("notifications.event")}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="notif-mcard-actions">
                     {item.href ? (
-                      <span className="notif-open-hint">{t("notifications.open")}</span>
+                      <Link
+                        href={item.href}
+                        className="btn btn-primary btn-sm"
+                        onClick={() => void onMarkRead(item)}
+                      >
+                        {t("notifications.open")}
+                      </Link>
                     ) : null}
                     {!item.read && item.source === "event" ? (
                       <button
                         type="button"
-                        className="btn btn-secondary notif-read-btn"
+                        className="btn btn-secondary btn-sm"
                         disabled={busy}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          void onMarkRead(item);
-                        }}
+                        onClick={() => void onMarkRead(item)}
                       >
                         {t("notifications.markRead")}
                       </button>
                     ) : null}
                   </div>
-                </div>
-              </>
-            );
-
-            if (item.href) {
-              return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className={`tracker-row notif-row tone-${tone}${item.read ? " is-read" : " is-unread"}`}
-                  onClick={() => void onMarkRead(item)}
-                >
-                  {body}
-                </Link>
+                </article>
               );
-            }
+            })}
+          </div>
 
-            return (
-              <div
-                key={item.id}
-                className={`tracker-row notif-row tone-${tone}${item.read ? " is-read" : " is-unread"}`}
-              >
-                {body}
-              </div>
-            );
-          })}
-        </div>
+          <div className="notif-table-wrap">
+            <table className="notif-table">
+              <thead>
+                <tr>
+                  <th>{t("notifications.colWhen")}</th>
+                  <th>{t("notifications.colCategory")}</th>
+                  <th>{t("notifications.colSeverity")}</th>
+                  <th>{t("notifications.colStatus")}</th>
+                  <th>{t("notifications.colTitle")}</th>
+                  <th>{t("notifications.colDetail")}</th>
+                  <th className="actions">{t("notifications.colActions")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item) => {
+                  const tone = SEVERITY_TONE[item.severity] ?? "info";
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`tone-${tone}${item.read ? " is-read" : " is-unread"}`}
+                    >
+                      <td className="nowrap">
+                        <time
+                          dateTime={item.createdAt || item.date || undefined}
+                          title={item.createdAt || item.date || undefined}
+                        >
+                          {fmtRelativeTime(item.createdAt || item.date)}
+                        </time>
+                      </td>
+                      <td className="notif-td-cat">{item.category}</td>
+                      <td>
+                        <span className={`pill ${SEVERITY_PILL[item.severity] ?? "pill-neutral"}`}>
+                          {severityLabel(item)}
+                        </span>
+                      </td>
+                      <td>
+                        {item.read ? (
+                          <span className="muted">{t("notifications.read")}</span>
+                        ) : (
+                          <span className="notif-live-tag">{t("notifications.unread")}</span>
+                        )}
+                      </td>
+                      <td className="notif-td-title" title={item.title}>
+                        {item.href ? (
+                          <Link href={item.href} onClick={() => void onMarkRead(item)}>
+                            {item.title}
+                          </Link>
+                        ) : (
+                          item.title
+                        )}
+                      </td>
+                      <td className="notif-td-detail" title={item.text}>
+                        {item.text}
+                      </td>
+                      <td className="actions">
+                        <div className="notif-row-actions">
+                          {item.href ? (
+                            <Link
+                              href={item.href}
+                              className="btn btn-primary btn-sm"
+                              onClick={() => void onMarkRead(item)}
+                            >
+                              {t("notifications.open")}
+                            </Link>
+                          ) : null}
+                          {!item.read && item.source === "event" ? (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              disabled={busy}
+                              onClick={() => void onMarkRead(item)}
+                            >
+                              {t("notifications.markRead")}
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

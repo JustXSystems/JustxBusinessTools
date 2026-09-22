@@ -32,6 +32,8 @@ import {
   buildSavedSurveyListRow,
   filterSavedSurveys,
   countActiveSurveyFilters,
+  countSurveysByStatus,
+  countSurveysByInstallationType,
   uniqueSurveyCities,
   uniqueSurveyPreparedBy,
   exportSavedSurveysExcel,
@@ -662,6 +664,8 @@ export function SiteSurveyV1() {
   /** Clamp defensively — flow can change (fewer/more steps) while stepIndex is stale. */
   const safeStepIndex = Math.min(stepIndex, steps.length - 1);
   const filteredList = useMemo(() => filterSavedSurveys(list, savedFilters), [list, savedFilters]);
+  const statusCounts = useMemo(() => countSurveysByStatus(list), [list]);
+  const typeCounts = useMemo(() => countSurveysByInstallationType(list), [list]);
   const savedCityOptions = useMemo(() => uniqueSurveyCities(list), [list]);
   const savedPreparedByOptions = useMemo(() => uniqueSurveyPreparedBy(list), [list]);
   const activeFilterCount = useMemo(() => countActiveSurveyFilters(savedFilters), [savedFilters]);
@@ -670,7 +674,8 @@ export function SiteSurveyV1() {
     () => filterSurveyActivity(activityRows, activityQuery),
     [activityRows, activityQuery],
   );
-  const activityStats = useMemo(() => surveyActivityStats(activityRows), [activityRows]);
+  const activityStats = useMemo(() => surveyActivityStats(filteredActivity), [filteredActivity]);
+  const activityStatsAll = useMemo(() => surveyActivityStats(activityRows), [activityRows]);
 
   const flash = useCallback((msg: string, kind = "ok") => {
     setToast({ msg, kind });
@@ -1556,6 +1561,7 @@ export function SiteSurveyV1() {
                   <div className="ssv1-saved-status-chips" role="group" aria-label="Status filter">
                     {SAVED_SURVEY_STATUS_OPTIONS.map((status) => {
                       const on = savedFilters.statuses.includes(status);
+                      const count = statusCounts[status] ?? 0;
                       return (
                         <button
                           key={status}
@@ -1565,6 +1571,7 @@ export function SiteSurveyV1() {
                           onClick={() => toggleSavedStatus(status)}
                         >
                           {status}
+                          <span className="ssv1-filter-chip-count">{count}</span>
                         </button>
                       );
                     })}
@@ -1691,6 +1698,7 @@ export function SiteSurveyV1() {
                       <div className="ssv1-saved-status-chips">
                         {INSTALLATION_TYPES.map((type) => {
                           const on = savedFilters.installationTypes.includes(type);
+                          const count = typeCounts[type] ?? 0;
                           return (
                             <button
                               key={type}
@@ -1700,6 +1708,7 @@ export function SiteSurveyV1() {
                               onClick={() => toggleInstallationType(type)}
                             >
                               {type.replace(" Rooftop", "").replace(" Mount", "")}
+                              <span className="ssv1-filter-chip-count">{count}</span>
                             </button>
                           );
                         })}
@@ -1836,8 +1845,16 @@ export function SiteSurveyV1() {
 
           <div className="ssv1-activity-bar" aria-label="Activity summary">
             <span className="ssv1-activity-bar-label">Audit</span>
-            <span>{activityStats.events} events</span>
-            <span>{activityStats.uniqueSurveys} surveys</span>
+            <span>
+              {activityQuery.trim()
+                ? `${activityStats.events} of ${activityStatsAll.events} events`
+                : `${activityStats.events} events`}
+            </span>
+            <span>
+              {activityQuery.trim()
+                ? `${activityStats.uniqueSurveys} of ${activityStatsAll.uniqueSurveys} surveys`
+                : `${activityStats.uniqueSurveys} surveys`}
+            </span>
           </div>
 
           <label className="ssv1-saved-search ssv1-activity-search">

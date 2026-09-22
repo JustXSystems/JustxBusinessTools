@@ -168,6 +168,22 @@ export function countActiveSavedFilters(f: SavedQuoteFilters): number {
   return n;
 }
 
+/** Per-status totals for filter chip labels (full register). */
+export function countQuotationsByStatus(list: QuotationV1[]): Record<QuoteStatus, number> {
+  const out: Record<QuoteStatus, number> = {
+    draft: 0,
+    submitted: 0,
+    sent: 0,
+    approved: 0,
+    rejected: 0,
+  };
+  for (const q of list) {
+    const st = q.status;
+    if (st in out) out[st] += 1;
+  }
+  return out;
+}
+
 function inDateRange(iso: string, from: string, to: string): boolean {
   if (!from && !to) return true;
   if (!iso) return false;

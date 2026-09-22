@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { classifyQuoteAlert, quoteAlertMatchesFilter } from "../alerts";
+import {
+  classifyQuoteAlert,
+  countQuoteAlerts,
+  quoteAlertFilterStats,
+  quoteAlertMatchesFilter,
+} from "../alerts";
 
 describe("classifyQuoteAlert", () => {
   it("detects send, approval, reject, and link kinds", () => {
@@ -22,5 +27,27 @@ describe("quoteAlertMatchesFilter", () => {
     expect(
       quoteAlertMatchesFilter("sent", { read: true, kind: "sent", actionable: true }),
     ).toBe(true);
+  });
+});
+
+describe("quoteAlertFilterStats", () => {
+  it("counts each filter bucket exactly", () => {
+    const list = [
+      { message: "Quotation QT emailed to a@b.com.", read: false },
+      { message: "Quotation QT submitted — ok", read: false },
+      { message: "Quotation QT approved.", read: true },
+      { message: "Approval link generated for QT.", read: false },
+      { message: "Quotation QT rejected.", read: false },
+    ];
+    const stats = quoteAlertFilterStats(list);
+    expect(stats.all).toBe(5);
+    expect(stats.unread).toBe(4);
+    expect(stats.sent).toBe(1);
+    expect(stats.submit).toBe(1);
+    expect(stats.approval).toBe(1);
+    expect(stats.link).toBe(1);
+    expect(stats.rejected).toBe(1);
+    expect(countQuoteAlerts(list, "sent")).toBe(stats.sent);
+    expect(countQuoteAlerts(list, "approval")).toBe(stats.approval);
   });
 });

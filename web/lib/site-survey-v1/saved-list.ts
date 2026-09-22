@@ -168,6 +168,32 @@ export function countActiveSurveyFilters(f: SavedSurveyFilters): number {
   return n;
 }
 
+/** Per-status totals for filter chip labels (full register). */
+export function countSurveysByStatus(list: SiteSurveyV1[]): Record<SurveyStatus, number> {
+  const out: Record<SurveyStatus, number> = {
+    draft: 0,
+    saved: 0,
+    submitted: 0,
+  };
+  for (const s of list) {
+    const st = s.status;
+    if (st in out) out[st] += 1;
+  }
+  return out;
+}
+
+/** Per installation-type totals for filter chip labels. */
+export function countSurveysByInstallationType(
+  list: SiteSurveyV1[],
+): Partial<Record<InstallationType, number>> {
+  const out: Partial<Record<InstallationType, number>> = {};
+  for (const s of list) {
+    const t = s.installationType;
+    out[t] = (out[t] ?? 0) + 1;
+  }
+  return out;
+}
+
 function inDateRange(iso: string, from: string, to: string): boolean {
   if (!from && !to) return true;
   if (!iso) return false;

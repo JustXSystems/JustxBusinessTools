@@ -15,6 +15,8 @@ export const hiIN: Record<string, Record<string, string>> = {
     filterUrgent: "अत्यावश्यक",
     kpiAction: "कार्रवाई",
     searchPlaceholder: "शीर्षक, विवरण, श्रेणी खोजें…",
-    open: "खोलें →",
+    open: "खोलें",
+    read: "पढ़ा",
+    unread: "अपठित",
   },
 };

@@ -49,3 +49,38 @@ export function quoteAlertMatchesFilter(
   if (filter === "action") return !opts.read && opts.actionable;
   return opts.kind === filter;
 }
+
+/** Counts that match each filter key exactly (for accurate KPI / chip labels). */
+export function countQuoteAlerts(
+  notifications: Array<{ message: string; read: boolean }>,
+  filter: QuoteAlertFilter,
+): number {
+  let n = 0;
+  for (const item of notifications) {
+    const meta = classifyQuoteAlert(item.message);
+    if (
+      quoteAlertMatchesFilter(filter, {
+        read: item.read,
+        kind: meta.kind,
+        actionable: meta.actionable,
+      })
+    ) {
+      n += 1;
+    }
+  }
+  return n;
+}
+
+export function quoteAlertFilterStats(notifications: Array<{ message: string; read: boolean }>) {
+  return {
+    all: notifications.length,
+    unread: countQuoteAlerts(notifications, "unread"),
+    action: countQuoteAlerts(notifications, "action"),
+    approval: countQuoteAlerts(notifications, "approval"),
+    rejected: countQuoteAlerts(notifications, "rejected"),
+    sent: countQuoteAlerts(notifications, "sent"),
+    link: countQuoteAlerts(notifications, "link"),
+    submit: countQuoteAlerts(notifications, "submit"),
+    activity: countQuoteAlerts(notifications, "activity"),
+  };
+}
