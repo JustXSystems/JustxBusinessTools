@@ -66,12 +66,10 @@ type Props = {
   suggestions: SuggestedCustomer[];
   open: boolean;
   activeIndex: number;
-  linked: boolean;
   onOpenChange: (open: boolean) => void;
   onActiveIndexChange: (index: number) => void;
   onValueChange: (value: string) => void;
   onSelect: (customer: SuggestedCustomer) => void;
-  onClearLinked: () => void;
 };
 
 export function CustomerNameSuggest({
@@ -79,12 +77,10 @@ export function CustomerNameSuggest({
   suggestions,
   open,
   activeIndex,
-  linked,
   onOpenChange,
   onActiveIndexChange,
   onValueChange,
   onSelect,
-  onClearLinked,
 }: Props) {
   const listId = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -172,13 +168,18 @@ export function CustomerNameSuggest({
 
   useEffect(() => {
     if (!showPanel || !mobile) return;
+    // Let the sheet paint before focusing (iOS keyboard).
     const id = window.setTimeout(() => {
       const el = mobileSearchRef.current;
       if (!el) return;
       el.focus({ preventScroll: true });
       const len = el.value.length;
-      el.setSelectionRange(len, len);
-    }, 40);
+      try {
+        el.setSelectionRange(len, len);
+      } catch {
+        /* some mobile browsers */
+      }
+    }, 220);
     return () => window.clearTimeout(id);
   }, [showPanel, mobile]);
 
@@ -285,7 +286,6 @@ export function CustomerNameSuggest({
                   placeholder="Keep typing to refine…"
                   aria-label="Refine customer search"
                   onChange={(e) => {
-                    onClearLinked();
                     onValueChange(e.target.value);
                   }}
                   onKeyDown={onKeyDown}
@@ -306,10 +306,11 @@ export function CustomerNameSuggest({
                       aria-selected={active}
                       className={active ? "qgv1-cs-item is-active" : "qgv1-cs-item"}
                       onMouseEnter={() => onActiveIndexChange(idx)}
-                      onMouseDown={(ev) => {
-                        ev.preventDefault();
-                        onSelect(s);
+                      onPointerDown={(ev) => {
+                        // Prevent input blur before select (mouse + touch).
+                        if (ev.pointerType === "mouse") ev.preventDefault();
                       }}
+                      onClick={() => onSelect(s)}
                     >
                       <span className="qgv1-cs-avatar" aria-hidden>
                         {customerInitials(s.name)}
@@ -343,17 +344,10 @@ export function CustomerNameSuggest({
 
   return (
     <div
-      className={`field qgv1-customer-name-field${linked ? " is-linked" : ""}${showPanel ? " is-open" : ""}`}
+      className={`field qgv1-customer-name-field${showPanel ? " is-open" : ""}`}
       ref={wrapRef}
     >
-      <div className="qgv1-cs-label-row">
-        <span>Customer / Site Owner Name *</span>
-        {linked ? (
-          <span className="qgv1-cs-linked-pill" title="Filled from an existing quotation record">
-            Linked record
-          </span>
-        ) : null}
-      </div>
+      <span>Customer / Site Owner Name *</span>
       <div className="qgv1-cs-input-shell">
         <input
           ref={inputRef}
@@ -369,18 +363,12 @@ export function CustomerNameSuggest({
           aria-activedescendant={
             showPanel ? `${listId}-opt-${activeIndex}` : undefined
           }
-          onChange={(e) => {
-            onClearLinked();
-            onValueChange(e.target.value);
-          }}
+          onChange={(e) => onValueChange(e.target.value)}
           onFocus={() => {
             if (suggestions.length > 0) onOpenChange(true);
           }}
           onKeyDown={onKeyDown}
         />
-        {value.trim().length >= 3 && suggestions.length > 0 ? (
-          <span className="qgv1-cs-pulse" aria-hidden />
-        ) : null}
       </div>
       {panel}
     </div>

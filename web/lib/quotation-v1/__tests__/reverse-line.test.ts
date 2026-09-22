@@ -53,6 +53,19 @@ describe("quotation-v1 reverse line calc", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("accepts negative inclusive total for credit lines", () => {
+    const r = reverseLineFromInclusiveTotal({
+      inclusiveTotal: -11800,
+      gstPercent: 18,
+      qty: 1,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.rate).toBe(-10000);
+    expect(r.taxable).toBe(-10000);
+    expect(r.gstAmount).toBe(-1800);
+  });
+
   it("seeds inclusive total from line fields", () => {
     expect(
       lineInclusiveTotal({ qty: 2, rate: 1000, gst: 18, discount: 0 }),

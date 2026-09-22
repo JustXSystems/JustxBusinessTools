@@ -7,6 +7,7 @@ import {
   money,
   reverseLineFromInclusiveTotal,
   sanitizeNumStr,
+  sanitizeSignedNumStr,
   type QuoteItem,
 } from "@/lib/quotation-v1";
 
@@ -146,8 +147,8 @@ export function LineAmountReverseModal({ open, item, onClose, onApply }: Props) 
 
         <div className="qgv1-rev-scroll">
           <p className="qgv1-rev-lede">
-            Enter the <strong>GST-inclusive</strong> total you want for this line. We’ll derive the
-            unit rate from qty{qty ? ` (${qty})` : ""} and GST %.
+            Enter the <strong>GST-inclusive</strong> total for this line (positive or negative for
+            credits). We’ll derive the unit rate from qty{qty ? ` (${qty})` : ""} and GST %.
           </p>
 
           {item.desc ? (
@@ -161,6 +162,22 @@ export function LineAmountReverseModal({ open, item, onClose, onApply }: Props) 
             <label className="field">
               <span>Total amount (incl. GST) *</span>
               <div className="qgv1-rev-rupee">
+                <button
+                  type="button"
+                  className="qgv1-rev-sign"
+                  title="Toggle positive / negative"
+                  aria-label="Toggle positive or negative total"
+                  onClick={() => {
+                    setTotalStr((prev) => {
+                      const v = sanitizeSignedNumStr(prev);
+                      if (!v || v === "-" || v === "." || v === "-.") return v;
+                      if (v.startsWith("-")) return v.slice(1);
+                      return `-${v}`;
+                    });
+                  }}
+                >
+                  ±
+                </button>
                 <span aria-hidden>₹</span>
                 <input
                   ref={totalRef}
@@ -169,7 +186,7 @@ export function LineAmountReverseModal({ open, item, onClose, onApply }: Props) 
                   autoComplete="off"
                   value={totalStr}
                   placeholder="e.g. 11800"
-                  onChange={(e) => setTotalStr(sanitizeNumStr(e.target.value))}
+                  onChange={(e) => setTotalStr(sanitizeSignedNumStr(e.target.value))}
                 />
               </div>
             </label>

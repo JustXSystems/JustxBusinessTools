@@ -144,7 +144,7 @@ export function reverseLineFromInclusiveTotal(input: ReverseLineCalcInput): Reve
   if (!Number.isFinite(qty) || qty === 0) {
     return { ok: false, error: "Quantity must not be zero" };
   }
-  if (!Number.isFinite(total) || total < 0) {
+  if (!Number.isFinite(total)) {
     return { ok: false, error: "Enter a valid total amount" };
   }
   if (!Number.isFinite(gst) || gst < 0) {

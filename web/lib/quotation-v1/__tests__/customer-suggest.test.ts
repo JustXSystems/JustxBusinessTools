@@ -40,6 +40,50 @@ describe("quotation-v1 customer suggest", () => {
     expect(unique[0].sourceQuoteId).toBe("b");
   });
 
+  it("dedupes 91-prefixed phone with 10-digit phone", () => {
+    const a = quoteWithCustomer(
+      "1",
+      { name: "Asha", phone: "919876543210" },
+      "2024-01-01T00:00:00.000Z",
+    );
+    const b = quoteWithCustomer(
+      "2",
+      { name: "Asha R", phone: "9876543210" },
+      "2025-01-01T00:00:00.000Z",
+    );
+    expect(uniqueCustomersFromQuotations([a, b])).toHaveLength(1);
+  });
+
+  it("dedupes same customer name even when phones differ", () => {
+    const a = quoteWithCustomer(
+      "1",
+      { name: "  ACME Power  ", phone: "9000000001" },
+      "2024-01-01T00:00:00.000Z",
+    );
+    const b = quoteWithCustomer(
+      "2",
+      { name: "acme power", phone: "9000000099" },
+      "2025-06-01T00:00:00.000Z",
+    );
+    const unique = uniqueCustomersFromQuotations([a, b]);
+    expect(unique).toHaveLength(1);
+    expect(unique[0].phone).toBe("9000000099");
+  });
+
+  it("dedupes by gstin across name variants", () => {
+    const a = quoteWithCustomer(
+      "1",
+      { name: "Site A", phone: "", gstin: "29AAAAA0000A1Z5" },
+      "2024-01-01T00:00:00.000Z",
+    );
+    const b = quoteWithCustomer(
+      "2",
+      { name: "Site B", phone: "", gstin: "29AAAAA0000A1Z5" },
+      "2025-01-01T00:00:00.000Z",
+    );
+    expect(uniqueCustomersFromQuotations([a, b])).toHaveLength(1);
+  });
+
   it("requires min chars before matching", () => {
     const list = [
       quoteWithCustomer("1", { name: "Acme Solar", phone: "9000000001" }, "2025-01-01T00:00:00.000Z"),

@@ -233,45 +233,13 @@
   min-width: 0;
 }
 
-.qgv1-cs-label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.qgv1-customer-name-field .qgv1-cs-label-row > span:first-child {
-  display: block;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-low);
-}
-
-.qgv1-cs-linked-pill {
-  flex-shrink: 0;
-  font-size: 9px;
-  font-weight: 750;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
-  color: var(--accent);
-  border: 1px solid rgba(var(--accent-rgb), 0.38);
-  background:
-    linear-gradient(135deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.05));
-  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.06) inset;
-}
-
 .qgv1-cs-input-shell {
   position: relative;
 }
 
 .qgv1-customer-name-field .qgv1-cs-input-shell input {
   width: 100%;
-  padding: 8px 34px 8px 11px;
+  padding: 8px 11px;
   font-size: 13px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-hair);
@@ -291,39 +259,6 @@
     0 0 0 4px rgba(var(--accent-rgb), 0.12),
     0 10px 28px rgba(0, 0, 0, 0.08);
   background: color-mix(in srgb, var(--bg-1) 70%, var(--glass-1));
-}
-
-.qgv1-customer-name-field.is-linked .qgv1-cs-input-shell input {
-  border-color: rgba(var(--accent-rgb), 0.42);
-  background:
-    linear-gradient(120deg, rgba(var(--accent-rgb), 0.07), transparent 42%),
-    var(--glass-2);
-}
-
-.qgv1-cs-pulse {
-  position: absolute;
-  right: 11px;
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  margin-top: -4px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.45);
-  animation: qgv1-cs-pulse 1.6s ease-out infinite;
-  pointer-events: none;
-}
-
-@keyframes qgv1-cs-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.45);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(var(--accent-rgb), 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0);
-  }
 }
 
 .qgv1-cs-layer {
@@ -394,7 +329,8 @@
 .qgv1-cs-layer.is-mobile .qgv1-cs-panel {
   position: relative;
   width: 100%;
-  max-height: min(62vh, 520px);
+  max-height: min(68vh, calc(100vh - var(--qgv1-cs-kb, 0px) - 12px));
+  max-height: min(68dvh, calc(100dvh - var(--qgv1-cs-kb, 0px) - 12px));
   border-radius: 18px 18px 0 0;
   border-bottom: 0;
   padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
@@ -692,10 +628,37 @@
     padding-top: 10px;
     padding-bottom: 10px;
   }
+
+  .qgv1-amt-btn {
+    min-width: 92px;
+    min-height: 48px;
+    padding: 8px 10px;
+  }
+
+  .qgv1-compose .qgv1-table-wrap {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .qgv1-compose .qgv1-items th:nth-child(5),
+  .qgv1-compose .qgv1-items td.amt {
+    position: sticky;
+    right: 36px;
+    z-index: 1;
+    background: color-mix(in srgb, var(--bg-1) 92%, var(--glass-1));
+    box-shadow: -6px 0 10px rgba(0, 0, 0, 0.04);
+  }
+
+  .qgv1-compose .qgv1-items th:last-child,
+  .qgv1-compose .qgv1-items td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background: color-mix(in srgb, var(--bg-1) 94%, var(--glass-1));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .qgv1-cs-pulse,
   .qgv1-cs-layer.is-desktop .qgv1-cs-panel,
   .qgv1-cs-layer.is-mobile .qgv1-cs-panel,
   .qgv1-cs-backdrop {
@@ -866,7 +829,8 @@
   margin: 0;
   width: 100%;
   max-width: min(440px, 100%);
-  max-height: min(88vh, 640px);
+  max-height: min(88vh, calc(100vh - var(--qgv1-rev-kb, 0px) - 8px));
+  max-height: min(88dvh, calc(100dvh - var(--qgv1-rev-kb, 0px) - 8px));
   border-radius: 18px 18px 0 0;
   border: 1px solid rgba(var(--accent-rgb), 0.28);
   background:
@@ -980,10 +944,26 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-left: 10px;
+  padding-left: 6px;
   border: 1px solid var(--border-hair);
   border-radius: var(--radius-sm);
   background: var(--glass-2);
+}
+
+.qgv1-rev-sign {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin: 3px 0;
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border-radius: 10px;
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .qgv1-rev-rupee > span {

@@ -180,7 +180,6 @@ export function QuotationGeneratorV1() {
   const [activityQuery, setActivityQuery] = useState("");
   const [customerSuggestOpen, setCustomerSuggestOpen] = useState(false);
   const [customerSuggestIndex, setCustomerSuggestIndex] = useState(0);
-  const [customerLinked, setCustomerLinked] = useState(false);
   const [reverseItemId, setReverseItemId] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
@@ -225,7 +224,6 @@ export function QuotationGeneratorV1() {
   const applySuggestedCustomer = useCallback((s: SuggestedCustomer) => {
     setCustomerSuggestOpen(false);
     setCustomerSuggestIndex(0);
-    setCustomerLinked(true);
     setCurrent((q) => ({ ...q, customer: customerFromSuggestion(s) }));
   }, []);
 
@@ -886,7 +884,6 @@ export function QuotationGeneratorV1() {
     const full = normalizeQuotation(q);
     setCurrent(full);
     setLastSaved(snapshotOf(full));
-    setCustomerLinked(false);
     setCustomerSuggestOpen(false);
     setRoute("new");
   }
@@ -921,7 +918,6 @@ export function QuotationGeneratorV1() {
                 preparedBySeeded.current = true;
                 setCurrent(newQuotationDraft("solar", undefined, userDisplayName(user)));
                 setLastSaved(null);
-                setCustomerLinked(false);
                 setCustomerSuggestOpen(false);
               }}
             >
@@ -1079,7 +1075,6 @@ export function QuotationGeneratorV1() {
                   suggestions={customerSuggestions}
                   open={customerSuggestOpen}
                   activeIndex={customerSuggestIndex}
-                  linked={customerLinked}
                   onOpenChange={(next) => {
                     setCustomerSuggestOpen(next);
                     if (next) setCustomerSuggestIndex(0);
@@ -1093,7 +1088,6 @@ export function QuotationGeneratorV1() {
                     patch((q) => ({ ...q, customer: { ...q.customer, name } }));
                   }}
                   onSelect={applySuggestedCustomer}
-                  onClearLinked={() => setCustomerLinked(false)}
                 />
                 <label className="field">
                   <span>Company (if any)</span>

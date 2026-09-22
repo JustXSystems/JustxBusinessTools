@@ -15,13 +15,34 @@ function digitsOnly(raw: string): string {
   return String(raw ?? "").replace(/\D/g, "");
 }
 
-function customerDedupeKey(c: QuoteCustomer): string | null {
-  const phone = digitsOnly(c.phone);
-  if (phone.length >= 8) return `p:${phone}`;
-  const name = String(c.name ?? "").trim().toLowerCase();
-  if (!name) return null;
+/** Collapse Indian / intl formatting so 91XXXXXXXXXX and 0XXXXXXXXXX match. */
+function normalizePhone(raw: string): string {
+  let d = digitsOnly(raw);
+  if (!d) return "";
+  if (d.length === 12 && d.startsWith("91")) d = d.slice(2);
+  if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
+  if (d.length > 10) d = d.slice(-10);
+  return d.length >= 8 ? d : "";
+}
+
+function normalizeName(raw: string): string {
+  return String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function customerIdentityKeys(c: QuoteCustomer): string[] {
+  const keys: string[] = [];
+  const phone = normalizePhone(c.phone);
+  if (phone) keys.push(`p:${phone}`);
+  const name = normalizeName(c.name);
+  if (name) keys.push(`n:${name}`);
   const gstin = String(c.gstin ?? "").trim().toUpperCase();
-  return `n:${name}|g:${gstin}`;
+  if (gstin.length >= 10) keys.push(`g:${gstin}`);
+  const email = String(c.email ?? "").trim().toLowerCase();
+  if (email.includes("@")) keys.push(`e:${email}`);
+  return keys;
 }
 
 function quoteRecency(q: QuotationV1): number {
@@ -30,23 +51,38 @@ function quoteRecency(q: QuotationV1): number {
   return Number.isFinite(t) ? t : 0;
 }
 
-/** Unique customers from saved quotations (most recent fields win). */
+/**
+ * Unique customers from saved quotations (most recent fields win).
+ * Merges rows that share phone, normalized name, GSTIN, or email so the
+ * suggest list never shows the same party twice.
+ */
 export function uniqueCustomersFromQuotations(list: QuotationV1[]): SuggestedCustomer[] {
   type Row = SuggestedCustomer & { ts: number };
   const byKey = new Map<string, Row>();
+  /** Maps any identity key → canonical row key currently stored in byKey. */
+  const aliasToCanonical = new Map<string, string>();
+
+  function resolveCanonical(keys: string[]): string | null {
+    for (const k of keys) {
+      const c = aliasToCanonical.get(k);
+      if (c) return c;
+    }
+    return null;
+  }
 
   for (const q of list) {
     const c = q.customer;
     if (!c) continue;
     const name = String(c.name ?? "").trim();
     if (!name) continue;
-    const key = customerDedupeKey(c);
-    if (!key) continue;
+    const keys = customerIdentityKeys(c);
+    if (!keys.length) continue;
+
     const ts = quoteRecency(q);
-    const prev = byKey.get(key);
-    if (prev && prev.ts >= ts) continue;
-    byKey.set(key, {
-      key,
+    const existingCanonical = resolveCanonical(keys);
+
+    const row: Row = {
+      key: existingCanonical ?? keys[0],
       sourceQuoteId: q.id,
       name,
       company: String(c.company ?? "").trim(),
@@ -57,7 +93,25 @@ export function uniqueCustomersFromQuotations(list: QuotationV1[]): SuggestedCus
       phone: String(c.phone ?? "").trim(),
       email: String(c.email ?? "").trim(),
       ts,
-    });
+    };
+
+    if (existingCanonical) {
+      const prev = byKey.get(existingCanonical);
+      if (prev && prev.ts >= ts) {
+        // Older row — still register any new identity aliases onto the winner.
+        for (const k of keys) aliasToCanonical.set(k, existingCanonical);
+        continue;
+      }
+      byKey.delete(existingCanonical);
+      row.key = existingCanonical;
+      byKey.set(existingCanonical, row);
+      for (const k of keys) aliasToCanonical.set(k, existingCanonical);
+    } else {
+      const canonical = keys[0];
+      row.key = canonical;
+      byKey.set(canonical, row);
+      for (const k of keys) aliasToCanonical.set(k, canonical);
+    }
   }
 
   return [...byKey.values()]
