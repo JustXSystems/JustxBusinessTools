@@ -798,8 +798,305 @@
 }
 
 .qgv1-compose .qgv1-items .amt {
-  padding-top: 10px;
+  padding-top: 4px;
+  padding-bottom: 4px;
   font-size: 12px;
+}
+
+.qgv1-amt-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(var(--accent-rgb), 0.08), transparent 70%);
+  color: var(--text-hi);
+  cursor: pointer;
+  text-align: right;
+  touch-action: manipulation;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.qgv1-amt-btn:hover,
+.qgv1-amt-btn:focus-visible {
+  outline: none;
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background:
+    linear-gradient(145deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.04));
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
+}
+
+.qgv1-amt-btn-value {
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.qgv1-amt-btn-hint {
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+/* ---------- Reverse amount modal ---------- */
+.qgv1-rev-overlay {
+  z-index: 1300;
+  align-items: flex-end;
+  padding: 0;
+  background: rgba(8, 14, 22, 0.48);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.qgv1-rev-modal {
+  margin: 0;
+  width: 100%;
+  max-width: min(440px, 100%);
+  border-radius: 18px 18px 0 0;
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  background:
+    linear-gradient(165deg, rgba(var(--accent-rgb), 0.1) 0%, transparent 36%),
+    var(--bg-2);
+  padding: 16px 16px max(18px, env(safe-area-inset-bottom, 0px));
+  box-shadow: var(--shadow-lift);
+  animation: qgv1-cs-sheet 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.qgv1-rev-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.qgv1-rev-kicker {
+  margin: 0 0 2px;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.qgv1-rev-modal .modal-title {
+  margin: 0;
+  font-size: 17px;
+}
+
+.qgv1-rev-x {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border-hair);
+  border-radius: 12px;
+  background: var(--glass-2);
+  color: var(--text-mid);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.qgv1-rev-lede {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-mid);
+}
+
+.qgv1-rev-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-hair);
+  background: var(--glass-2);
+  min-width: 0;
+}
+
+.qgv1-rev-item-label {
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-low);
+}
+
+.qgv1-rev-item-name {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qgv1-rev-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.qgv1-rev-rupee {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  border: 1px solid var(--border-hair);
+  border-radius: var(--radius-sm);
+  background: var(--glass-2);
+}
+
+.qgv1-rev-rupee > span {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.qgv1-rev-rupee input {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding-left: 0 !important;
+  min-height: 42px;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.qgv1-rev-grid .field input {
+  min-height: 42px;
+  font-size: 16px;
+}
+
+.qgv1-rev-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.qgv1-rev-preset {
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-hair);
+  background: var(--glass-2);
+  color: var(--text-mid);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.qgv1-rev-preset.is-on,
+.qgv1-rev-preset:hover {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.12);
+}
+
+.qgv1-rev-preview {
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
+  background:
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.12), rgba(var(--accent-rgb), 0.03));
+}
+
+.qgv1-rev-preview-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.16);
+}
+
+.qgv1-rev-preview-main span {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.qgv1-rev-preview-main strong {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-hi);
+}
+
+.qgv1-rev-preview-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text-mid);
+  padding: 3px 0;
+}
+
+.qgv1-rev-preview-row.is-total {
+  margin-top: 4px;
+  font-weight: 750;
+  color: var(--text-hi);
+}
+
+.qgv1-rev-preview-empty {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-mid);
+  line-height: 1.4;
+}
+
+.qgv1-rev-actions {
+  margin-top: 0;
+}
+
+.qgv1-rev-actions .btn {
+  min-height: 44px;
+  flex: 1;
+}
+
+@media (min-width: 721px) {
+  .qgv1-rev-overlay {
+    align-items: center;
+    padding: 20px;
+  }
+
+  .qgv1-rev-modal {
+    border-radius: var(--radius);
+    padding: 20px;
+    animation: qgv1-cs-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .qgv1-rev-rupee input,
+  .qgv1-rev-grid .field input {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 520px) {
+  .qgv1-rev-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .qgv1-amt-btn {
+    min-height: 44px;
+  }
 }
 
 .qgv1-compose .qgv1-totals {

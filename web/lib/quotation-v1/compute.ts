@@ -108,6 +108,82 @@ export function money(n: number): string {
   });
 }
 
+function roundMoney2(n: number): number {
+  return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
+}
+
+export type ReverseLineCalcInput = {
+  /** GST-inclusive line total (matches Quote sheet “Total Amount”). */
+  inclusiveTotal: number;
+  gstPercent: number;
+  qty: number;
+  discountPercent?: number;
+};
+
+export type ReverseLineCalcResult =
+  | {
+      ok: true;
+      rate: number;
+      gross: number;
+      taxable: number;
+      gstAmount: number;
+      inclusiveTotal: number;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Back-calculate unit rate from a GST-inclusive line total.
+ * Accounts for line discount % the same way {@link computeTotals} does.
+ */
+export function reverseLineFromInclusiveTotal(input: ReverseLineCalcInput): ReverseLineCalcResult {
+  const qty = Number(input.qty);
+  const gst = Number(input.gstPercent);
+  const total = Number(input.inclusiveTotal);
+  const disc = Number(input.discountPercent) || 0;
+
+  if (!Number.isFinite(qty) || qty === 0) {
+    return { ok: false, error: "Quantity must not be zero" };
+  }
+  if (!Number.isFinite(total) || total < 0) {
+    return { ok: false, error: "Enter a valid total amount" };
+  }
+  if (!Number.isFinite(gst) || gst < 0) {
+    return { ok: false, error: "Enter a valid GST %" };
+  }
+  if (!Number.isFinite(disc) || disc < 0 || disc >= 100) {
+    return { ok: false, error: "Discount must be between 0 and 100%" };
+  }
+
+  const taxable = total / (1 + gst / 100);
+  const gross = taxable / (1 - disc / 100);
+  const rate = gross / qty;
+  const gstAmount = total - taxable;
+
+  return {
+    ok: true,
+    rate: roundMoney2(rate),
+    gross: roundMoney2(gross),
+    taxable: roundMoney2(taxable),
+    gstAmount: roundMoney2(gstAmount),
+    inclusiveTotal: roundMoney2(total),
+  };
+}
+
+/** Current GST-inclusive line total for seeding the reverse-calc modal. */
+export function lineInclusiveTotal(item: {
+  qty: number | string;
+  rate: number | string;
+  gst: number | string;
+  discount?: number | string;
+}): number {
+  const gross = (Number(item.qty) || 0) * (Number(item.rate) || 0);
+  const disc = gross * ((Number(item.discount) || 0) / 100);
+  const taxable = gross - disc;
+  const gstAmt = (taxable * (Number(item.gst) || 0)) / 100;
+  return roundMoney2(taxable + gstAmt);
+}
+
+
 export function fmtDate(iso: string): string {
   if (!iso) return "";
   const d = new Date(`${iso}T00:00:00`);

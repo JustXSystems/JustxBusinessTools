@@ -74,6 +74,7 @@ import { buildMailtoHref } from "@/lib/mailto";
 import { SendViaEmailComposeModal } from "@/components/send-via/SendViaEmailComposeModal";
 import { ToolPageHero } from "@/components/shell/ToolPageHero";
 import { CustomerNameSuggest } from "./CustomerNameSuggest";
+import { LineAmountReverseModal } from "./LineAmountReverseModal";
 import { QuoteSheet } from "./QuoteSheet";
 import "./quotation-v1.css";
 
@@ -180,6 +181,7 @@ export function QuotationGeneratorV1() {
   const [customerSuggestOpen, setCustomerSuggestOpen] = useState(false);
   const [customerSuggestIndex, setCustomerSuggestIndex] = useState(0);
   const [customerLinked, setCustomerLinked] = useState(false);
+  const [reverseItemId, setReverseItemId] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
 
@@ -214,6 +216,10 @@ export function QuotationGeneratorV1() {
   const customerSuggestions = useMemo(
     () => suggestCustomersFromQuotations(list, current.customer.name),
     [list, current.customer.name],
+  );
+  const reverseItem = useMemo(
+    () => (reverseItemId ? current.items.find((x) => x.id === reverseItemId) ?? null : null),
+    [current.items, reverseItemId],
   );
 
   const applySuggestedCustomer = useCallback((s: SuggestedCustomer) => {
@@ -1202,7 +1208,9 @@ export function QuotationGeneratorV1() {
                       <th>Qty</th>
                       <th>Rate</th>
                       <th>GST%</th>
-                      <th>Amount</th>
+                      <th title="Click amount to reverse-calculate rate from inclusive total">
+                        Amount
+                      </th>
                       <th />
                     </tr>
                   </thead>
@@ -1260,7 +1268,17 @@ export function QuotationGeneratorV1() {
                               }}
                             />
                           </td>
-                          <td className="amt">₹{money(amt)}</td>
+                          <td className="amt">
+                            <button
+                              type="button"
+                              className="qgv1-amt-btn"
+                              title="Reverse calculate rate from total + GST %"
+                              onClick={() => setReverseItemId(it.id)}
+                            >
+                              <span className="qgv1-amt-btn-value">₹{money(amt)}</span>
+                              <span className="qgv1-amt-btn-hint">Reverse</span>
+                            </button>
+                          </td>
                           <td>
                             <button
                               type="button"
@@ -2460,6 +2478,21 @@ export function QuotationGeneratorV1() {
           </div>
         </div>
       ) : null}
+
+      <LineAmountReverseModal
+        open={Boolean(reverseItem)}
+        item={reverseItem}
+        onClose={() => setReverseItemId(null)}
+        onApply={({ rate, gst }) => {
+          if (!reverseItemId) return;
+          patch((q) => ({
+            ...q,
+            items: q.items.map((x) =>
+              x.id === reverseItemId ? { ...x, rate, gst } : x,
+            ),
+          }));
+        }}
+      />
     </div>
   );
 }
