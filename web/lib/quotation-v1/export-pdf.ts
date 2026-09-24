@@ -35,12 +35,12 @@ export function pdfPageGeometry(node: HTMLElement) {
 }
 
 /** Prefer page breaks after these blocks (never mid-row / mid-section). */
-const SAFE_BREAK_SELECTOR = [
-  ".qgv1-qs-table tr",
+const ATOMIC_BLOCK_SELECTOR = [
+  ".qgv1-qs-table thead tr",
+  ".qgv1-qs-table tbody tr",
   ".qgv1-qs-totals tr",
   ".qgv1-qs-head",
   ".qgv1-qs-parties",
-  ".qgv1-qs-party",
   ".qgv1-qs-totals-wrap",
   ".qgv1-qs-words",
   ".qgv1-qs-notes",
@@ -48,9 +48,9 @@ const SAFE_BREAK_SELECTOR = [
   ".qgv1-qs-bank",
   ".qgv1-sun-rule",
   ".qgv1-qs-foot",
-  ".qgv1-qs-gst-note li",
-  ".qgv1-qs-notes br",
 ].join(", ");
+
+type AtomicBlock = { top: number; bottom: number };
 
 /**
  * JPEG keeps print-sharp look at far smaller size than PNG page rasters.
@@ -65,20 +65,102 @@ export function sanitizePdfFilename(str: string) {
     .trim();
 }
 
+function measureScaleY(node: HTMLElement, canvasHeight: number): number {
+  const h = Math.max(
+    node.scrollHeight,
+    node.offsetHeight,
+    Math.ceil(node.getBoundingClientRect().height),
+  );
+  return canvasHeight / Math.max(1, h);
+}
+
+/** Unbreakable vertical ranges (table rows, sections) in the same Y space as the canvas. */
+function collectAtomicBlocks(node: HTMLElement, scaleY: number): AtomicBlock[] {
+  const sheetTop = node.getBoundingClientRect().top;
+  const blocks: AtomicBlock[] = [];
+  node.querySelectorAll(ATOMIC_BLOCK_SELECTOR).forEach((elm) => {
+    const r = elm.getBoundingClientRect();
+    if (r.height < 0.5) return;
+    blocks.push({
+      top: Math.round((r.top - sheetTop) * scaleY),
+      bottom: Math.round((r.bottom - sheetTop) * scaleY),
+    });
+  });
+  return blocks.sort((a, b) => a.top - b.top || a.bottom - b.bottom);
+}
+
+/**
+ * Pick a slice end that never scissors through a table row / section.
+ * If the last line item would be clipped, the whole row moves to the next page.
+ */
+function pickSliceEnd(
+  blocks: AtomicBlock[],
+  afterY: number,
+  capacity: number,
+  canvasHeight: number,
+): number {
+  const rawTarget = Math.min(canvasHeight, afterY + capacity);
+  if (rawTarget >= canvasHeight - 1) return canvasHeight;
+
+  // Allow snapping back most of the page so a nearly-full page can drop one row.
+  const minKeep = Math.max(8, Math.round(capacity * 0.12));
+
+  let sliceEnd = rawTarget;
+
+  // If capacity cuts through an atomic block, push that whole block to the next page.
+  for (const block of blocks) {
+    if (block.bottom <= afterY + 1) continue;
+    if (block.top >= sliceEnd) continue;
+    const cutsThrough = block.top < sliceEnd && block.bottom > sliceEnd;
+    if (!cutsThrough) continue;
+
+    if (block.top > afterY + minKeep) {
+      // Row/section not yet started on this page — keep it intact on the next page.
+      sliceEnd = block.top;
+    }
+    // else: block already began on this page and is taller than remaining space
+    // (rare oversized row) — leave sliceEnd; unavoidable mid-block split.
+  }
+
+  // End exactly after the last fully included block (includes bottom border).
+  let bestBottom: number | null = null;
+  for (const block of blocks) {
+    if (block.bottom > afterY + 1 && block.bottom <= sliceEnd + 1) {
+      bestBottom = block.bottom;
+    }
+  }
+  if (bestBottom != null && bestBottom > afterY + minKeep) {
+    return Math.min(canvasHeight, bestBottom + 2);
+  }
+
+  if (sliceEnd > afterY + minKeep && sliceEnd < rawTarget) {
+    return sliceEnd;
+  }
+
+  // Last resort: latest complete block bottom at or before rawTarget.
+  let latest: number | null = null;
+  for (const block of blocks) {
+    if (block.bottom > afterY + 1 && block.bottom <= rawTarget) latest = block.bottom;
+  }
+  if (latest != null && latest > afterY + minKeep) {
+    return Math.min(canvasHeight, latest + 2);
+  }
+
+  return rawTarget;
+}
+
 /** Preview-only guides (excluded from html2canvas via ignoreElements). */
 export function renderPageBreakMarkers(node: HTMLElement, q: QuotationV1) {
   node.querySelectorAll(".page-break-marker").forEach((m) => m.remove());
   const geo = pdfPageGeometry(node);
   const totalPx = node.scrollHeight;
-  const textRuns = collectTextRuns(node);
-  // CSS-px safe breaks (scale=1) so preview guides match PDF slice logic.
-  const safeBreaksCss = collectSafeBreakCanvasYs(node, 1, totalPx, textRuns);
+  const blocks = collectAtomicBlocks(node, 1);
 
   const positions: number[] = [];
   let used = 0;
   let pageCap = geo.pageHeightPx;
   while (used + pageCap < totalPx) {
-    const sliceEnd = pickSliceEnd(safeBreaksCss, used, pageCap, totalPx, textRuns, 1);
+    const sliceEnd = pickSliceEnd(blocks, used, pageCap, totalPx);
     if (sliceEnd <= used + 1) break;
     positions.push(sliceEnd);
     used = sliceEnd;
@@ -209,93 +291,6 @@ function collectTextRuns(node: HTMLElement): TextRun[] {
   return runs;
 }
 
-/**
- * Collect Y positions (canvas px) where a page break is safe — after a row/section,
- * never through the middle of a line of text.
- */
-function collectSafeBreakCanvasYs(
-  node: HTMLElement,
-  canvasScale: number,
-  canvasHeight: number,
-  textRuns: TextRun[],
-): number[] {
-  const nodeTop = node.getBoundingClientRect().top;
-  const breaks = new Set<number>([0, canvasHeight]);
-
-  node.querySelectorAll(SAFE_BREAK_SELECTOR).forEach((elm) => {
-    const r = elm.getBoundingClientRect();
-    if (r.height < 1) return;
-    // Break after the block (preferred).
-    breaks.add(Math.round((r.bottom - nodeTop) * canvasScale));
-    // Also allow break just before the next block starts.
-    breaks.add(Math.round((r.top - nodeTop) * canvasScale));
-  });
-
-  // After every painted text line — never slice through a glyph row.
-  for (const run of textRuns) {
-    breaks.add(Math.round(run.bottomCss * canvasScale));
-    breaks.add(Math.max(0, Math.round(run.topCss * canvasScale) - 1));
-  }
-
-  return Array.from(breaks)
-    .filter((y) => y >= 0 && y <= canvasHeight)
-    .sort((a, b) => a - b);
-}
-
-/**
- * Pick a slice end that fits the page capacity without a horizontal "scissors"
- * cut through a text line or table row.
- */
-function pickSliceEnd(
-  safeBreaks: number[],
-  afterY: number,
-  capacity: number,
-  canvasHeight: number,
-  textRuns: TextRun[],
-  canvasScale: number,
-): number {
-  const rawTarget = Math.min(canvasHeight, afterY + capacity);
-  if (rawTarget >= canvasHeight - 1) return canvasHeight;
-
-  const minAdvance = Math.max(24, Math.round(capacity * 0.35));
-  const earliest = afterY + minAdvance;
-  const maxNudge = Math.round(capacity * 0.45);
-
-  // 1) Prefer the latest safe break at or before rawTarget within the nudge window.
-  let best: number | null = null;
-  for (const b of safeBreaks) {
-    if (b <= afterY + 1) continue;
-    if (b > rawTarget) break;
-    if (b < rawTarget - maxNudge && b < earliest) continue;
-    if (b >= earliest && b <= rawTarget) best = b;
-  }
-  if (best != null) return best;
-
-  // 2) If rawTarget would cut through a text run, snap to just before that run.
-  let sliceEnd = rawTarget;
-  for (const run of textRuns) {
-    const top = run.topCss * canvasScale;
-    const bottom = run.bottomCss * canvasScale;
-    if (top >= sliceEnd || bottom <= afterY + 1) continue;
-    if (top < sliceEnd && bottom > sliceEnd) {
-      // Mid-line cut — move break to before this line (if we still advance enough).
-      const candidate = Math.floor(top) - 1;
-      if (candidate > afterY + minAdvance * 0.5) {
-        sliceEnd = candidate;
-      }
-    }
-  }
-
-  // 3) Fall back to nearest safe break at or before sliceEnd.
-  let nearest: number | null = null;
-  for (const b of safeBreaks) {
-    if (b > afterY + 1 && b <= sliceEnd) nearest = b;
-  }
-  if (nearest != null && nearest >= afterY + minAdvance * 0.5) return nearest;
-
-  return Math.max(afterY + 1, Math.min(canvasHeight, sliceEnd));
-}
-
 function beginInvisibleText(pdf: JsPdf, GStateCtor?: new (opts: { opacity: number }) => unknown) {
   const anyPdf = pdf as JsPdf & {
     setTextRenderingMode?: (mode: number) => void;
@@ -393,7 +388,7 @@ function drawSelectableTextLayer(
 /**
  * Capture #quote-sheet for a pixel-perfect visual match to the preview, then
  * overlay an invisible text layer so content stays selectable / searchable.
- * Page slices snap to row/section and text-line boundaries (no mid-line cuts).
+ * Page slices never cut through a table row — incomplete rows move to the next page.
  */
 export async function buildQuotationPdf(
   q: QuotationV1,
@@ -440,15 +435,16 @@ export async function buildQuotationPdf(
   const pxPerPage = Math.floor(usablePageHeight * ptToCanvasPx);
   const pxPerPageCont = Math.floor(usablePageHeightCont * ptToCanvasPx);
 
-  const canvasScale = canvas.width / node.offsetWidth;
-  const safeBreaks = collectSafeBreakCanvasYs(node, canvasScale, canvas.height, textRuns);
+  // Match break Y coords to the actual captured canvas (not offsetWidth alone).
+  const scaleY = measureScaleY(node, canvas.height);
+  const blocks = collectAtomicBlocks(node, scaleY);
 
   const slices: Array<{ dataUrl: string; heightPx: number; sy: number }> = [];
   let sy = 0;
   let pageIdx = 0;
   while (sy < canvas.height - 1) {
     const capacity = pageIdx === 0 ? pxPerPage : pxPerPageCont;
-    const sliceEnd = pickSliceEnd(safeBreaks, sy, capacity, canvas.height, textRuns, canvasScale);
+    const sliceEnd = pickSliceEnd(blocks, sy, capacity, canvas.height);
     const sliceH = Math.max(1, Math.round(sliceEnd - sy));
     const pageCanvas = document.createElement("canvas");
     pageCanvas.width = canvas.width;
@@ -500,8 +496,8 @@ export async function buildQuotationPdf(
     pdf.addImage(slice.dataUrl, "JPEG", marginX, contentTopY, imgW, sliceHPt, undefined, "MEDIUM");
 
     // Invisible selectable text on top — look stays the screenshot (exact preview).
-    const sliceTopCss = slice.sy / canvasScale;
-    const sliceBottomCss = (slice.sy + slice.heightPx) / canvasScale;
+    const sliceTopCss = slice.sy / scaleY;
+    const sliceBottomCss = (slice.sy + slice.heightPx) / scaleY;
     drawSelectableTextLayer(pdf, textRuns, {
       sliceTopCss,
       sliceBottomCss,
