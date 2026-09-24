@@ -180,7 +180,6 @@ export function QuotationGeneratorV1() {
   const [emailFromName, setEmailFromName] = useState("");
   const [emailFromEmail, setEmailFromEmail] = useState("");
   const [approvalLink, setApprovalLink] = useState<string | null>(null);
-  const [pdfHostQuote, setPdfHostQuote] = useState<QuotationV1 | null>(null);
   const [savedFilters, setSavedFilters] = useState<SavedQuoteFilters>(EMPTY_SAVED_FILTERS);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [activityQuery, setActivityQuery] = useState("");
@@ -190,6 +189,8 @@ export function QuotationGeneratorV1() {
   const [customerSuggestOpen, setCustomerSuggestOpen] = useState(false);
   const [customerSuggestIndex, setCustomerSuggestIndex] = useState(0);
   const [reverseItemId, setReverseItemId] = useState<string | null>(null);
+  /** Off-screen QuoteSheet host when exporting a saved quote that is not on the new/edit route. */
+  const [pdfHostQuote, setPdfHostQuote] = useState<QuotationV1 | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
 
