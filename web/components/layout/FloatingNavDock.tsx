@@ -49,6 +49,7 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
     endFloatDrag,
   } = useSidebarLayout();
 
+  const dockRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef(false);
   const movedRef = useRef(false);
   const closeTimer = useRef<number | null>(null);
@@ -78,6 +79,18 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
       window.removeEventListener("pointercancel", onUp);
     };
   }, [updateFloatDrag, endFloatDrag]);
+
+  // Touch has no mouseleave, so an open dock would never collapse on its own.
+  useEffect(() => {
+    if (!floatOpen || floatPinned || floatHorizontal) return;
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType === "mouse") return;
+      if (dockRef.current?.contains(e.target as Node)) return;
+      setFloatOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [floatOpen, floatPinned, floatHorizontal, setFloatOpen]);
 
   const clearCloseTimer = () => {
     if (closeTimer.current) {
@@ -125,9 +138,17 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
 
   const hideTip = () => setTip(null);
 
+  // Touch devices emulate mouseover on tap, which would leave tooltips stuck.
+  const canHover = () => window.matchMedia("(hover: hover)").matches;
+
+  const closeAfterTouchNav = () => {
+    if (!floatPinned && !floatHorizontal && !canHover()) setFloatOpen(false);
+  };
+
   return (
     <>
       <div
+        ref={dockRef}
         className={`float-dock${floatOpen ? " is-open" : " is-collapsed"}${floatPinned ? " is-pinned" : ""}${floatHorizontal ? " is-horizontal" : ""}`}
         style={{ left: floatX, top: floatY }}
         onMouseEnter={() => {
@@ -142,7 +163,7 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
           const target = (e.target as HTMLElement).closest(
             ".float-dock-item, .float-dock-action",
           ) as HTMLElement | null;
-          if (!target || !floatOpen) return;
+          if (!target || !floatOpen || !canHover()) return;
           const label =
             target.getAttribute("aria-label") ||
             target.getAttribute("title") ||
@@ -155,6 +176,7 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
           if (!target.classList.contains("float-dock-item") && !target.classList.contains("float-dock-action")) {
             return;
           }
+          if (!canHover()) return;
           const label =
             target.getAttribute("aria-label") ||
             target.getAttribute("title") ||
@@ -220,6 +242,7 @@ export function FloatingNavDock({ homeHref, items, footer }: Props) {
               className={`float-dock-item${item.active ? " active" : ""}`}
               aria-label={item.label}
               aria-current={item.active ? "page" : undefined}
+              onClick={closeAfterTouchNav}
             >
               <span className={`float-dock-icon${item.active ? " is-glow" : ""}`}>
                 <NavIcon id={item.icon} />

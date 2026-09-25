@@ -687,6 +687,12 @@ a {
   animation: mobile-menu-in 0.16s ease-out;
 }
 
+.mobile-menu-layout {
+  padding: 4px 2px 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-hair);
+}
+
 .mobile-menu-list {
   display: grid;
   gap: 4px;
@@ -736,6 +742,10 @@ a {
     opacity: 1;
     transform: none;
   }
+}
+
+body:has(.mobile-menu) .float-dock {
+  visibility: hidden;
 }
 
 @media (min-width: 769px) {
@@ -6605,6 +6615,17 @@ body.is-float-dock-dragging {
   width: 100%;
   padding: 4px 0 2px;
   cursor: grab;
+  touch-action: none;
+}
+
+@media (pointer: coarse) {
+  .float-dock-drag {
+    min-height: 28px;
+  }
+
+  .float-dock-toggle {
+    min-height: 32px;
+  }
 }
 
 .float-dock-drag:active {
@@ -6914,12 +6935,6 @@ body.is-float-dock-dragging {
   to {
     opacity: 1;
     transform: translate(-50%, -100%);
-  }
-}
-
-@media (max-width: 768px) {
-  .float-dock:not(.is-horizontal) {
-    display: none;
   }
 }
 
@@ -11153,7 +11168,7 @@ html[data-scheme="light"] .field textarea {
     padding: 10px 12px;
   }
 
-  .admin-shell .admin-sidebar .ds-brand-account,
+  .admin-shell .admin-sidebar .ds-identity-chip,
   .admin-shell .admin-brand-eyebrow,
   .admin-shell .admin-brand-org {
     display: none;

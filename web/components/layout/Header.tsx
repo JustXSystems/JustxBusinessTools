@@ -7,6 +7,7 @@ import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { NavIcon } from "@/components/layout/NavIcon";
+import { SidebarAttachmentToggle } from "@/components/layout/SidebarAttachmentToggle";
 import { mobileNavForUser, operatorNavForUser, type NavItem } from "@/config/navigation.config";
 
 /** Mobile-only chrome. Desktop navigation lives in the left sidebar. */
@@ -71,6 +72,14 @@ export function BottomNavigation() {
             onClick={() => setMenuOpen(false)}
           />
           <div className="mobile-menu-sheet" role="dialog" aria-label="Menu">
+            <div
+              className="mobile-menu-layout"
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest("button")) setMenuOpen(false);
+              }}
+            >
+              <SidebarAttachmentToggle />
+            </div>
             <nav className="mobile-menu-list" aria-label="All pages">
               {menuItems.map((item) => {
                 const active = isActivePath(pathname, item.href);

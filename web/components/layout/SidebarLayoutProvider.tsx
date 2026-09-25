@@ -15,6 +15,7 @@ import {
   densityFromWidth,
   matchesCompactLandscape,
   COMPACT_LANDSCAPE_MQ,
+  defaultSidebarState,
   readSidebarLayoutState,
   resolveLayoutMode,
   snapSidebarWidth,
@@ -71,14 +72,7 @@ export function SidebarLayoutProvider({
   storageKey: string;
   children: ReactNode;
 }) {
-  const [state, setState] = useState<SidebarLayoutState>(() => ({
-    width: SIDEBAR_SNAPS.normal,
-    attachment: "edge",
-    restoreWidth: SIDEBAR_SNAPS.normal,
-    floatX: 18,
-    floatY: 96,
-    floatPinned: false,
-  }));
+  const [state, setState] = useState<SidebarLayoutState>(defaultSidebarState);
   const [dragging, setDragging] = useState(false);
   const [floatDragging, setFloatDragging] = useState(false);
   const [floatHoverOpen, setFloatHoverOpen] = useState(false);
@@ -308,13 +302,9 @@ export function SidebarLayoutProvider({
   const effectiveWidth = phoneNarrow ? SIDEBAR_SNAPS.normal : state.width;
   const density = densityFromWidth(effectiveWidth);
   // Landscape phone: force floating so the horizontal dock can reclaim width.
-  // Portrait phone: the vertical float dock is hidden by CSS, so keep edge chrome
-  // or admin screens lose their only navigation.
   const effectiveAttachment: SidebarAttachment = floatHorizontal
     ? "floating"
-    : phoneNarrow
-      ? "edge"
-      : state.attachment;
+    : state.attachment;
   const mode = resolveLayoutMode(effectiveWidth, effectiveAttachment);
   const previewLabel = dragging ? labelFor(state.width, effectiveAttachment) : null;
   const floatOpen = state.floatPinned || floatHoverOpen;

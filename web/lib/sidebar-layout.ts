@@ -57,8 +57,9 @@ export const SIDEBAR_LAYOUT_META: Record<
   floating: { label: "Float", hint: "Movable mini dock over content" },
 };
 
-export const OPERATOR_SIDEBAR_KEY = "jbt.sidebar-layout-v3";
-export const ADMIN_SIDEBAR_KEY = "jbt.admin-sidebar-layout-v3";
+/** v4: Float became the default; older saved layouts migrate into Float once. */
+export const OPERATOR_SIDEBAR_KEY = "jbt.sidebar-layout-v4";
+export const ADMIN_SIDEBAR_KEY = "jbt.admin-sidebar-layout-v4";
 
 export function clampSidebarWidth(width: number) {
   return Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, Math.round(width)));
@@ -98,7 +99,7 @@ export function resolveLayoutMode(
 export function defaultSidebarState(): SidebarLayoutState {
   return {
     width: SIDEBAR_SNAPS.normal,
-    attachment: "edge",
+    attachment: "floating",
     restoreWidth: SIDEBAR_SNAPS.normal,
     floatX: FLOAT_DOCK_DEFAULT.x,
     floatY: FLOAT_DOCK_DEFAULT.y,
@@ -126,9 +127,10 @@ export function readSidebarLayoutState(storageKey: string): SidebarLayoutState {
   try {
     const raw = localStorage.getItem(storageKey);
     if (!raw) {
+      // Legacy layouts keep width / dock position but start in Float (the default).
       const legacyKeys = [
-        storageKey,
-        storageKey.replace("-v3", "-v2"),
+        storageKey.replace("-v4", "-v3"),
+        storageKey.replace("-v4", "-v2"),
         storageKey.includes("admin") ? "jbt.admin-sidebar-layout" : "jbt.sidebar-layout",
       ];
       for (const key of legacyKeys) {
@@ -140,17 +142,13 @@ export function readSidebarLayoutState(storageKey: string): SidebarLayoutState {
         if (legacy === "docked") {
           return { ...base, width: SIDEBAR_SNAPS.docked, restoreWidth: SIDEBAR_SNAPS.docked };
         }
-        if (legacy === "floating") {
-          return { ...base, attachment: "floating" };
-        }
-        if (legacy === "fixed") {
-          // Fixed merged into Edge — same docked rail behavior.
-          return { ...base, attachment: "edge" };
+        if (legacy === "floating" || legacy === "fixed") {
+          return base;
         }
         try {
           const parsed = JSON.parse(legacy) as Partial<SidebarLayoutState>;
           if (parsed && typeof parsed === "object") {
-            return normalizeState(parsed, base);
+            return { ...normalizeState(parsed, base), attachment: "floating" };
           }
         } catch {
           /* continue */
@@ -170,7 +168,9 @@ function normalizeState(
 ): SidebarLayoutState {
   const width = clampSidebarWidth(Number(parsed.width) || base.width);
   const attachment: SidebarAttachment =
-    parsed.attachment === "floating" ? "floating" : "edge";
+    parsed.attachment === "edge" || parsed.attachment === "floating"
+      ? parsed.attachment
+      : base.attachment;
   const restoreWidth = clampSidebarWidth(
     Number(parsed.restoreWidth) || Math.max(width, SIDEBAR_SNAPS.docked),
   );
