@@ -8,6 +8,7 @@ import { RoleMatrixPanel } from "@/components/admin/RoleMatrixPanel";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { groupItemsByKey } from "@/lib/group-items";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
+import { useRevealWhenStacked } from "@/hooks/useRevealWhenStacked";
 
 type Member = {
   id: number;
@@ -119,6 +120,7 @@ function AdminTeamInner() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>(initialFilter);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { ref: detailRef, reveal: revealDetail } = useRevealWhenStacked<HTMLElement>();
   const [tab, setTab] = useState<Tab>("profile");
   const [branchIds, setBranchIds] = useState<number[]>([]);
   const [branchMode, setBranchMode] = useState<AccessMode>("all");
@@ -306,7 +308,10 @@ function AdminTeamInner() {
               type="button"
               key={m.id}
               className={`tracker-row admin-member-row ${selectedId === m.id ? "is-selected" : ""}`}
-              onClick={() => void openMember(m.id)}
+              onClick={() => {
+                void openMember(m.id);
+                revealDetail();
+              }}
             >
               <div className="tracker-row-main">
                 <span className="tracker-row-title">{m.name || m.email}</span>
@@ -336,7 +341,7 @@ function AdminTeamInner() {
 
       <div className="admin-pane-stack">
       {selected ? (
-        <section className="panel admin-card admin-detail-panel">
+        <section ref={detailRef} className="panel admin-card admin-detail-panel">
           <h2>{selected.name || selected.email}</h2>
           <p className="muted">{ROLE_HELP[selected.role] ?? selected.role}</p>
           <div className="admin-tabs-bar">

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { ConfigProvider } from "@/components/config/ConfigProvider";
@@ -57,6 +57,19 @@ function AdminShellInner({ children }: { children: ReactNode }) {
   const mini = density === "mini";
   const compact = density === "docked";
   const floating = mode === "floating";
+  const navRef = useRef<HTMLElement>(null);
+
+  // Phones render the admin nav as a horizontal strip; keep the active item visible
+  // without scrolling the page itself.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || nav.scrollWidth <= nav.clientWidth + 1) return;
+    const active = nav.querySelector<HTMLElement>(".ds-nav-link.active");
+    if (!active) return;
+    const navRect = nav.getBoundingClientRect();
+    const linkRect = active.getBoundingClientRect();
+    nav.scrollLeft += linkRect.left + linkRect.width / 2 - (navRect.left + navRect.width / 2);
+  }, [pathname, floating]);
 
   const roleLabel = user?.isPlatformAdmin
     ? "Platform super admin"
@@ -160,7 +173,7 @@ function AdminShellInner({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <nav className="admin-nav" aria-label="Admin">
+          <nav ref={navRef} className="admin-nav" aria-label="Admin">
             {adminNavigation.map((section) => (
               <div key={section.id} className="ds-nav-section">
                 {!mini && !compact ? (

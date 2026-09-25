@@ -1191,7 +1191,7 @@
 }
 
 .qgv1-compose .qgv1-editor-actions {
-  bottom: calc(58px + var(--safe-bottom, 0px));
+  bottom: calc(var(--chrome-bottom) + 6px);
   margin: 6px 0 calc(4px + var(--safe-bottom, 0px));
   padding: 8px 10px;
   gap: 6px;
@@ -1266,7 +1266,7 @@
 
   .qgv1-compose .qgv1-editor-actions {
     position: sticky;
-    bottom: calc(56px + var(--safe-bottom, 0px));
+    bottom: calc(var(--chrome-bottom) + 6px);
     max-height: none;
     overflow: visible;
   }
@@ -1322,7 +1322,7 @@
 
 .qgv1-editor-actions {
   position: sticky;
-  bottom: 36px;
+  bottom: calc(var(--chrome-bottom) + 6px);
   z-index: 5;
   margin: 8px 0 0;
   padding: 10px 12px;
@@ -1977,7 +1977,7 @@
 
 .qgv1-toast {
   position: fixed;
-  bottom: calc(88px + var(--safe-bottom));
+  bottom: calc(var(--chrome-bottom) + 28px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 70;
@@ -3081,7 +3081,7 @@ html[data-scheme="light"] .qgv1-root select option {
 
 .qgv1-tab-sticky-actions {
   position: sticky;
-  bottom: calc(58px + var(--safe-bottom, 0px));
+  bottom: calc(var(--chrome-bottom) + 6px);
   z-index: 4;
   margin-top: 12px;
   padding: 8px 10px;
@@ -3428,5 +3428,37 @@ html[data-scheme="light"] .qgv1-root select option {
 
   .qgv1-activity-cards {
     display: flex;
+  }
+}
+
+/* ---------- Touch performance ----------
+   Sticky bars and sheets with backdrop-filter re-blur the page on every scroll
+   frame on phones; use opaque surfaces instead. */
+@media (hover: none) and (pointer: coarse), (max-width: 768px) {
+  .qgv1-editor-actions,
+  .qgv1-tab-sticky-actions {
+    background: var(--bg-1);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .qgv1-cs-backdrop {
+    background: rgba(8, 14, 22, 0.6);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .qgv1-cs-panel {
+    background:
+      linear-gradient(165deg, rgba(var(--accent-rgb), 0.1) 0%, transparent 38%),
+      var(--bg-1);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .qgv1-rev-overlay {
+    background: rgba(8, 14, 22, 0.64);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }

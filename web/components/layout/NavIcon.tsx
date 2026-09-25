@@ -195,6 +195,12 @@ export function NavIcon({ id, className }: { id: NavIconId; className?: string }
           <path d="M9 12h11" />
         </Svg>
       );
+    case "menu":
+      return (
+        <Svg {...props}>
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </Svg>
+      );
     default:
       return null;
   }

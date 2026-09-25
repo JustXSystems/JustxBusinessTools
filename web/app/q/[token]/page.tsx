@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { QuoteSheet } from "@/components/quotation-v1/QuoteSheet";
 import "@/components/quotation-v1/quotation-v1.css";
@@ -21,6 +21,18 @@ function formatDateTime(iso: string): string {
   });
 }
 
+/** Owns the 1s tick so the quotation sheet does not re-render every second. */
+function LiveStamp() {
+  const [nowTick, setNowTick] = useState(() => new Date().toISOString());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTick(new Date().toISOString()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return <strong>{formatDateTime(nowTick)}</strong>;
+}
+
 export default function PublicQuoteApprovePage() {
   const params = useParams();
   const token = String(params?.token ?? "");
@@ -30,7 +42,6 @@ export default function PublicQuoteApprovePage() {
   const [busy, setBusy] = useState(false);
   const [approverName, setApproverName] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [nowTick, setNowTick] = useState(() => new Date().toISOString());
 
   useEffect(() => {
     if (!token) return;
@@ -47,14 +58,8 @@ export default function PublicQuoteApprovePage() {
       .catch((e: Error) => setError(e.message));
   }, [token]);
 
-  useEffect(() => {
-    const id = window.setInterval(() => setNowTick(new Date().toISOString()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
   const canDecide = quote?.status === "sent" || quote?.status === "submitted";
   const nameReady = approverName.trim().length >= 2;
-  const liveStamp = useMemo(() => formatDateTime(nowTick), [nowTick]);
 
   async function decide(decision: "approved" | "rejected") {
     const name = approverName.trim();
@@ -144,7 +149,7 @@ export default function PublicQuoteApprovePage() {
                   />
                 </label>
                 <p className="muted" style={{ marginTop: 10, marginBottom: 0 }}>
-                  Approval date &amp; time will be recorded as: <strong>{liveStamp}</strong>
+                  Approval date &amp; time will be recorded as: <LiveStamp />
                 </p>
                 <p className="muted" style={{ marginTop: 8 }}>
                   By approving, you confirm you have verified all details and want us to proceed on these terms.
@@ -192,7 +197,7 @@ export default function PublicQuoteApprovePage() {
               quotation, and you are confirming this quotation approval to proceed to process further.
             </p>
             <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
-              Recorded at: <strong>{liveStamp}</strong>
+              Recorded at: <LiveStamp />
             </p>
             <div className="modal-btns">
               <button

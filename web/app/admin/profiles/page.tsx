@@ -15,6 +15,7 @@ import {
 import { api } from "@/lib/api";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
+import { useRevealWhenStacked } from "@/hooks/useRevealWhenStacked";
 
 type Profile = {
   id: number;
@@ -148,6 +149,7 @@ function AdminProfilesInner() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>(initialFilter);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { ref: detailRef, reveal: revealDetail } = useRevealWhenStacked<HTMLElement>();
   const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<Tab>("identity");
   const [form, setForm] = useState(emptyForm);
@@ -320,7 +322,10 @@ function AdminProfilesInner() {
                 type="button"
                 key={p.id}
                 className={`tracker-row admin-member-row ${selectedId === p.id && !creating ? "is-selected" : ""}`}
-                onClick={() => void openProfile(p.id)}
+                onClick={() => {
+                  void openProfile(p.id);
+                  revealDetail();
+                }}
               >
                 <div className="tracker-row-main">
                   <span className="tracker-row-title">{p.businessName}</span>
@@ -343,7 +348,7 @@ function AdminProfilesInner() {
           </div>
         </section>
 
-        <section className="panel admin-card admin-detail-panel">
+        <section ref={detailRef} className="panel admin-card admin-detail-panel">
           {creating || selected ? (
             <>
               <h2>{creating ? "New branch" : selected?.businessName}</h2>

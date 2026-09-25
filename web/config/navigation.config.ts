@@ -22,6 +22,7 @@ export type NavIconId =
   | "integrations"
   | "logout"
   | "arrowLeft"
+  | "menu"
   | "sync";
 
 export type NavItem = {

@@ -1580,9 +1580,10 @@
   }
 }
 
-/* ============ MOBILE: near-full-height immersive sheet ============
-   Kept inside normal page flow (not position:fixed) so the app's own
-   header / bottom navigation remain reachable. */
+/* ============ MOBILE: wizard flows with the page ============
+   The page is the only vertical scroller on phones: a fixed-height card with
+   an inner scrolling body traps the finger and a dvh height relayouts while
+   the URL bar collapses. The footer sticks above the bottom navigation. */
 @media (max-width: 640px) {
   .ssv1-wizard-wrap {
     padding: 0;
@@ -1591,9 +1592,25 @@
   .ssv1-popup {
     max-width: 100%;
     width: 100%;
-    height: min(84dvh, 760px);
-    min-height: 420px;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    overflow: clip;
     border-radius: var(--ssv1-radius-sm);
+    scroll-margin-top: calc(64px + var(--safe-top, 0px));
+  }
+
+  .ssv1-popup-body {
+    flex: none;
+    overflow: visible;
+  }
+
+  .ssv1-popup-footer {
+    position: sticky;
+    bottom: var(--chrome-bottom);
+    z-index: 5;
+    border-radius: 0 0 var(--ssv1-radius-sm) var(--ssv1-radius-sm);
+    box-shadow: 0 -8px 18px -12px rgba(0, 0, 0, 0.45);
   }
 
   .ssv1-row {

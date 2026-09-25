@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
+import { useRevealWhenStacked } from "@/hooks/useRevealWhenStacked";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 
 type Gateway = {
@@ -116,6 +117,7 @@ function AdminGatewaysInner() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [events, setEvents] = useState<GwEvent[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { ref: detailRef, reveal: revealDetail } = useRevealWhenStacked<HTMLElement>();
   const [filter, setFilter] = useState<Filter>(filterFromUrl);
   const [query, setQuery] = useState("");
   const [pane, setPane] = useState<Pane>("health");
@@ -437,7 +439,10 @@ function AdminGatewaysInner() {
                 type="button"
                 key={g.id}
                 className={`tracker-row admin-member-row ${selectedId === g.id ? "is-selected" : ""}`}
-                onClick={() => void selectGateway(g.id)}
+                onClick={() => {
+                  void selectGateway(g.id);
+                  revealDetail();
+                }}
               >
                 <div>
                   <strong>{g.displayName}</strong>
@@ -557,7 +562,7 @@ function AdminGatewaysInner() {
               </form>
             </section>
           ) : selected ? (
-            <section className="panel admin-card admin-detail-panel">
+            <section ref={detailRef} className="panel admin-card admin-detail-panel">
               <div className="analytics-toolbar">
                 <div>
                   <h2>{selected.displayName}</h2>

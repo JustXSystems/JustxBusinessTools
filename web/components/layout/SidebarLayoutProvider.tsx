@@ -54,6 +54,8 @@ type SidebarLayoutContextValue = {
 
 const SidebarLayoutContext = createContext<SidebarLayoutContextValue | null>(null);
 
+const PHONE_PORTRAIT_MQ = "(max-width: 768px) and (orientation: portrait)";
+
 function labelFor(width: number, attachment: SidebarAttachment) {
   const mode = resolveLayoutMode(width, attachment);
   if (mode === "mini") return "Mini";
@@ -81,6 +83,7 @@ export function SidebarLayoutProvider({
   const [floatDragging, setFloatDragging] = useState(false);
   const [floatHoverOpen, setFloatHoverOpen] = useState(false);
   const [floatHorizontal, setFloatHorizontal] = useState(false);
+  const [phoneNarrow, setPhoneNarrow] = useState(false);
   const [dragOriginX, setDragOriginX] = useState(0);
   const [dragOriginWidth, setDragOriginWidth] = useState<number>(SIDEBAR_SNAPS.normal);
   const [floatOrigin, setFloatOrigin] = useState({ x: 0, y: 0, px: 0, py: 0 });
@@ -124,12 +127,21 @@ export function SidebarLayoutProvider({
       });
     }
 
+    // No window "resize" listener: mobile browsers fire it continuously while the
+    // URL bar collapses during scroll, and the media query already reports changes.
     mq.addEventListener("change", apply);
-    window.addEventListener("resize", apply);
     return () => {
       mq.removeEventListener("change", apply);
-      window.removeEventListener("resize", apply);
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(PHONE_PORTRAIT_MQ);
+    const apply = () => setPhoneNarrow(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
   }, []);
 
   const setAttachment = useCallback(
@@ -291,18 +303,25 @@ export function SidebarLayoutProvider({
     [storageKey],
   );
 
-  const density = densityFromWidth(state.width);
+  // Portrait phone: the saved desktop rail width (e.g. Mini) would hide nav labels
+  // in the stacked phone header, so always lay out at the normal width there.
+  const effectiveWidth = phoneNarrow ? SIDEBAR_SNAPS.normal : state.width;
+  const density = densityFromWidth(effectiveWidth);
   // Landscape phone: force floating so the horizontal dock can reclaim width.
+  // Portrait phone: the vertical float dock is hidden by CSS, so keep edge chrome
+  // or admin screens lose their only navigation.
   const effectiveAttachment: SidebarAttachment = floatHorizontal
     ? "floating"
-    : state.attachment;
-  const mode = resolveLayoutMode(state.width, effectiveAttachment);
+    : phoneNarrow
+      ? "edge"
+      : state.attachment;
+  const mode = resolveLayoutMode(effectiveWidth, effectiveAttachment);
   const previewLabel = dragging ? labelFor(state.width, effectiveAttachment) : null;
   const floatOpen = state.floatPinned || floatHoverOpen;
 
   const value = useMemo(
     () => ({
-      width: state.width,
+      width: effectiveWidth,
       attachment: effectiveAttachment,
       density,
       mode,
@@ -326,7 +345,7 @@ export function SidebarLayoutProvider({
       stepSnap,
     }),
     [
-      state.width,
+      effectiveWidth,
       effectiveAttachment,
       state.floatX,
       state.floatY,

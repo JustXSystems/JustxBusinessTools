@@ -12,6 +12,7 @@ import { withBasePath } from "@/lib/base-path";
 import { groupItemsByKey } from "@/lib/group-items";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
+import { useRevealWhenStacked } from "@/hooks/useRevealWhenStacked";
 
 type CatalogRow = {
   id: string;
@@ -68,6 +69,7 @@ export default function AdminToolsPage() {
   const [bundles, setBundles] = useState<BundleState[]>([]);
   const [defs, setDefs] = useState<ToolDef[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const { ref: detailRef, reveal: revealDetail } = useRevealWhenStacked<HTMLDivElement>();
   const [tab, setTab] = useState<Tab>("placement");
   const [dirFilter, setDirFilter] = useState<DirFilter>("all");
   const [query, setQuery] = useState("");
@@ -422,7 +424,10 @@ export default function AdminToolsPage() {
                       type="button"
                       key={t.id}
                       className={`tm-dir-item${selected?.id === t.id ? " is-selected" : ""}`}
-                      onClick={() => select(t.id)}
+                      onClick={() => {
+                        select(t.id);
+                        revealDetail();
+                      }}
                     >
                       <span className="tm-dir-name">
                         <strong>{t.name}</strong>
@@ -493,7 +498,7 @@ export default function AdminToolsPage() {
           )}
         </aside>
 
-        <div className="tm-detail">
+        <div ref={detailRef} className="tm-detail">
           {selected ? (
             <>
               <section className="panel admin-card tm-detail-head">

@@ -649,6 +649,8 @@ export function SiteSurveyV1() {
   const [activityQuery, setActivityQuery] = useState("");
 
   const preparedSurveyorSeeded = useRef(false);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const popupBodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!sendOpen || sendChannel !== "whatsapp") return;
@@ -717,6 +719,16 @@ export function SiteSurveyV1() {
   useEffect(() => {
     if (route === "history" && history.length === 0) setRoute("list");
   }, [route, history.length]);
+
+  // Each step opens at its top. Phones scroll the page (the body is not a nested
+  // scroller there); larger screens scroll the wizard body.
+  useEffect(() => {
+    popupBodyRef.current?.scrollTo({ top: 0 });
+    const popup = popupRef.current;
+    if (popup && popup.getBoundingClientRect().top < 0) {
+      popup.scrollIntoView({ block: "start" });
+    }
+  }, [safeStepIndex, showSuccess]);
 
   function updateValue(key: string, value: string | string[]) {
     setCurrent((prev) => setValue(prev, key, value));
@@ -1283,7 +1295,7 @@ export function SiteSurveyV1() {
 
       {route === "new" ? (
         <div className="ssv1-wizard-wrap">
-          <div className="ssv1-popup">
+          <div ref={popupRef} className="ssv1-popup">
             <aside className="ssv1-popup-header">
               <div className="ssv1-brand-row">
                 {company.logo ? (
@@ -1348,7 +1360,7 @@ export function SiteSurveyV1() {
               <div className="ssv1-progress-fill" style={{ width: `${progressPct}%` }} />
             </div>
 
-            <div className="ssv1-popup-body">
+            <div ref={popupBodyRef} className="ssv1-popup-body">
               {showSuccess ? (
                 <div className="ssv1-success">
                   <div className="ssv1-success-icon">✓</div>

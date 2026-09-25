@@ -455,8 +455,11 @@ a {
   right: 0;
   z-index: 40;
   display: flex;
+  align-items: center;
   justify-content: space-around;
-  padding: 10px calc(12px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(12px + var(--safe-left));
+  box-sizing: border-box;
+  height: calc(var(--bottom-nav-h) + var(--safe-bottom));
+  padding: 0 calc(12px + var(--safe-right)) var(--safe-bottom) calc(12px + var(--safe-left));
   background: color-mix(in srgb, var(--bg-0) 88%, transparent);
   backdrop-filter: blur(20px);
   border-top: 1px solid var(--border-hair);
@@ -468,7 +471,7 @@ a {
 
 .install-prompt {
   position: fixed;
-  bottom: calc(72px + var(--safe-bottom));
+  bottom: calc(var(--chrome-bottom) + 12px);
   left: 16px;
   right: 16px;
   z-index: 45;
@@ -619,21 +622,127 @@ a {
   font-size: 12px;
 }
 
-.bottom-nav a {
+.bottom-nav a,
+.bottom-nav-menu-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 4px;
+  min-width: 56px;
+  min-height: 48px;
   font-size: 10px;
+  line-height: 1.2;
   font-weight: 600;
   color: var(--text-low);
-  padding: 6px 12px;
+  padding: 5px 12px;
   border-radius: var(--radius-sm);
+  -webkit-tap-highlight-color: transparent;
 }
 
-.bottom-nav a.active {
+.bottom-nav-menu-btn {
+  font-family: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.bottom-nav a.active,
+.bottom-nav-menu-btn.active {
   color: var(--teal);
   background: rgba(var(--accent-rgb), 0.08);
+}
+
+/* Full page list for phones, where the bottom bar only fits a few tabs. */
+.mobile-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+}
+
+.mobile-menu-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.5);
+  touch-action: none;
+  cursor: default;
+}
+
+.mobile-menu-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--chrome-bottom);
+  max-height: calc(100svh - var(--chrome-bottom) - 72px - var(--safe-top));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px calc(12px + var(--safe-right)) 12px calc(12px + var(--safe-left));
+  background: var(--bg-1);
+  border-top: 1px solid var(--border-hair-strong);
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: var(--shadow-lift);
+  animation: mobile-menu-in 0.16s ease-out;
+}
+
+.mobile-menu-list {
+  display: grid;
+  gap: 4px;
+}
+
+.mobile-menu-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-hi);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-menu-link:active {
+  background: rgba(var(--accent-rgb), 0.06);
+}
+
+.mobile-menu-link.active {
+  color: var(--teal);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.mobile-menu-logout {
+  margin-top: 6px;
+  border-top: 1px solid var(--border-hair);
+  border-radius: 0;
+  color: var(--text-mid);
+}
+
+@keyframes mobile-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .bottom-nav-menu-btn,
+  .mobile-menu {
+    display: none;
+  }
 }
 
 .home-hero {
@@ -2227,7 +2336,7 @@ a {
     display: none;
   }
   .profile-save-bar {
-    bottom: calc(58px + var(--safe-bottom));
+    bottom: var(--chrome-bottom);
     z-index: 15;
     margin-top: 12px;
     padding-bottom: max(8px, var(--safe-bottom));
@@ -9417,7 +9526,7 @@ html[data-scheme="light"] .field textarea {
 
 @media (max-width: 1023px) {
   .profile-save-bar {
-    bottom: calc(58px + var(--safe-bottom));
+    bottom: var(--chrome-bottom);
     z-index: 15;
   }
 }
@@ -10838,4 +10947,356 @@ html[data-scheme="light"] .field textarea {
 
 .integ-field select {
   width: 100%;
+}
+
+/* ==========================================================================
+   Mobile & touch scroll system (operator + admin)
+   Must stay at the end of this file: it overrides the desktop viewport-locked
+   admin scroll system above, which otherwise wins the cascade over the earlier
+   mobile media queries.
+   ========================================================================== */
+
+/* Touch devices: backdrop-filter on sticky/fixed chrome is re-rasterised on
+   every scroll frame (the main cause of jank on mid-range phones). */
+@media (hover: none) and (pointer: coarse), (max-width: 768px) {
+  .app-topbar,
+  .admin-topbar,
+  .powered-by-footer--bar {
+    background: color-mix(in srgb, var(--bg-0) 96%, transparent);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .bottom-nav {
+    background: color-mix(in srgb, var(--bg-0) 97%, transparent);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .profile-tabs-bar {
+    background: var(--bg-1);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .float-dock,
+  .store-cart-fab,
+  .store-cart-panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .modal-overlay {
+    background: rgba(0, 0, 0, 0.64);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* Infinite box-shadow animation repaints the fixed status bar every frame. */
+  .status-clock-pulse {
+    animation: none;
+  }
+
+  /* Full-viewport fixed paint layer under scrolling content. */
+  .home-dashboard::before {
+    position: absolute;
+  }
+
+  /* In-page nested scrollers hand the gesture back to the page at their edges
+     instead of trapping it (modals/sheets keep their own containment). */
+  .admin-page-scroll,
+  .admin-dir-list,
+  .team-workspace > .panel.admin-dir-panel .tracker-list,
+  .admin-split > .panel .tracker-list.admin-dir-list,
+  .tm-pane-body,
+  .tm-packs-list.admin-scroll-list,
+  .tm-pack-tool-grid,
+  .schema-field-list,
+  .admin-nav,
+  .desktop-sidebar-nav {
+    overscroll-behavior: auto;
+  }
+}
+
+/* Modals taller than the viewport must scroll (tablets / desktop). */
+.modal-box:not(.qgv1-rev-modal) {
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Tablets, small laptops and landscape phones: the document is the single
+   vertical scroller for admin too (same model as the operator app). The
+   viewport-locked shell clipped single-column pages in this range. */
+@media (max-width: 1100px), (max-height: 560px) and (orientation: landscape) {
+  .admin-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .admin-sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    height: 100svh;
+  }
+
+  .admin-main {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .admin-content,
+  .admin-content:has(.admin-page),
+  .admin-content:has(.preview-workspace),
+  .admin-page,
+  .admin-page:has(> .tm-workspace),
+  .admin-page:has(> .admin-page-body),
+  .admin-page:has(> .admin-page-scroll),
+  .admin-page .audit-page,
+  .admin-page .analytics-page,
+  .admin-page .preview-editor {
+    overflow: visible;
+  }
+
+  .admin-page-scroll {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .tm-workspace {
+    flex: 0 0 auto;
+  }
+
+  .tm-directory {
+    position: sticky;
+    top: 12px;
+    align-self: start;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100svh - 24px);
+  }
+
+  .tm-detail,
+  .tm-schema-pane {
+    overflow: visible;
+  }
+
+  .tm-detail > .admin-page-scroll,
+  .tm-detail > [hidden] + *,
+  .tm-detail > .panel.tm-pane,
+  .tm-pane:not(.tm-schema-pane),
+  .tm-pane-body {
+    flex: 0 0 auto;
+    min-height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .xp-phone {
+    min-height: min(640px, calc(100svh - 220px));
+  }
+
+  /* Stops sideways wobble from any over-wide child without creating a
+     scroll container (sticky descendants keep working). */
+  .operator-main,
+  .admin-main {
+    overflow-x: clip;
+  }
+}
+
+@media (max-width: 960px) {
+  .admin-dir-panel {
+    position: static;
+    max-height: min(72vh, 640px);
+  }
+
+  .tm-directory {
+    position: static;
+    max-height: none;
+  }
+
+  .tm-directory-body {
+    max-height: min(48vh, 420px);
+  }
+}
+
+/* Phones (portrait): compact admin header instead of the full desktop sidebar
+   stacked above every page. The sidebar box is flattened (display: contents) so
+   its pieces become rows of the admin grid; that lets the nav strip stick to the
+   top for the whole page while brand + session rows scroll away. */
+@media (max-width: 768px) {
+  .admin-shell {
+    align-content: start;
+  }
+
+  .admin-shell .admin-sidebar {
+    display: contents;
+  }
+
+  .admin-shell .sidebar-resize-handle {
+    display: none;
+  }
+
+  .admin-shell .admin-brand {
+    order: 0;
+    padding: calc(12px + var(--safe-top)) 12px 0;
+    border-bottom: 0;
+    background: var(--bg-1);
+  }
+
+  .admin-shell .admin-brand-panel {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .admin-shell .admin-sidebar .ds-brand-account,
+  .admin-shell .admin-brand-eyebrow,
+  .admin-shell .admin-brand-org {
+    display: none;
+  }
+
+  .admin-shell .admin-nav {
+    order: 2;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    min-width: 0;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin: 0;
+    padding: 8px 12px;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border-hair);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .admin-shell > .admin-main {
+    order: 3;
+    min-width: 0;
+  }
+
+  .admin-shell .admin-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-shell .admin-nav .ds-nav-section {
+    display: contents;
+  }
+
+  .admin-shell .admin-nav .ds-nav-section-label {
+    display: none;
+  }
+
+  .admin-shell .admin-nav .ds-nav-link {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    gap: 8px;
+    min-height: 44px;
+    padding: 6px 12px 6px 8px;
+    border: 1px solid var(--border-hair);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .admin-shell .admin-nav .ds-nav-link::before {
+    display: none;
+  }
+
+  .admin-shell .admin-nav .ds-nav-label {
+    display: inline;
+    flex: none;
+  }
+
+  .admin-shell .admin-nav .ds-nav-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .admin-shell .admin-sidebar .sidebar-session-footer {
+    order: 1;
+    margin-top: 0;
+    flex-direction: row;
+    padding: 8px 12px 10px;
+    border-top: 0;
+    background: var(--bg-1);
+  }
+
+  .admin-shell .admin-sidebar .sidebar-session-btn {
+    flex: 1 1 0;
+    min-height: 40px;
+    justify-content: center;
+  }
+
+  .admin-content {
+    padding: 14px 12px calc(24px + var(--safe-bottom));
+  }
+}
+
+/* Height of fixed chrome at the viewport bottom (see --chrome-bottom in
+   variables.css): operator bottom nav below 1024px, slim status bar above 768px,
+   nothing on admin phones (no bottom nav there). */
+@media (min-width: 1024px) {
+  :root {
+    --chrome-bottom: 30px;
+  }
+}
+
+.admin-shell {
+  --chrome-bottom: 30px;
+}
+
+@media (max-width: 768px) {
+  .admin-shell {
+    --chrome-bottom: var(--safe-bottom);
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  body:has(.float-dock.is-horizontal) {
+    --chrome-bottom: var(--safe-bottom);
+  }
+}
+
+@media (min-width: 769px) and (max-height: 560px) and (orientation: landscape) {
+  body:has(.float-dock.is-horizontal) {
+    --chrome-bottom: 30px;
+  }
+}
+
+.admin-detail-panel,
+.tm-detail {
+  scroll-margin-top: 12px;
+}
+
+/* iOS Safari zooms the page when a field under 16px is focused and leaves it
+   zoomed (sideways panning, "stuck" layout). Scoped to iOS so other devices
+   keep the compact field sizes. */
+@supports (-webkit-touch-callout: none) {
+  @media (hover: none) and (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+}
+
+/* Touch: :hover sticks after a tap, leaving cards lifted and repainting. */
+@media (hover: none) {
+  .tool-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .tool-card:active {
+    transform: scale(0.99);
+  }
 }
