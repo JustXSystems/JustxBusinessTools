@@ -208,9 +208,6 @@ export function ClockDisplaySettingsPanel({
   return (
     <div className="clock-display-panel">
       <div className="clock-display-panel-head">
-        <h3 className="panel-title" style={{ marginBottom: 4 }}>
-          Status bar date &amp; time
-        </h3>
         <p className="section-note" style={{ margin: 0 }}>
           Quiet IST clock on the desktop footer, left of Powered by. Same format for every user on
           this Business Profile.

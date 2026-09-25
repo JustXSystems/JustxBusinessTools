@@ -22,7 +22,6 @@ export function FlashDisplaySettingsPanel({ value, disabled, onChange }: Props) 
 
   return (
     <div>
-      <h3 className="panel-title">On-screen messages</h3>
       <p className="section-note">
         How long error and success banners stay visible in the top-right corner. Staff can always
         dismiss earlier with the Close (✕) control.

@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
+import { CollapsibleSection } from "@/components/common/CollapsibleSection";
 
 type PendingMember = {
   id: number;
@@ -78,8 +79,13 @@ export function TeamRequestsPanel() {
   }
 
   return (
-    <div className="panel">
-      <h3 className="panel-title">Team requests</h3>
+    <CollapsibleSection
+      className="profile-page-section"
+      title="Team requests"
+      hint="Approve people who registered against your GSTIN"
+      badge={loading ? undefined : members.length ? `${members.length} pending` : "None pending"}
+      badgeTone={members.length ? "warn" : "default"}
+    >
       <p className="section-note">
         People who registered against your GSTIN wait here until you approve them as Staff or Viewer.
         JustX admins can also approve these optionally.
@@ -132,6 +138,6 @@ export function TeamRequestsPanel() {
           </div>
         ))}
       </div>
-    </div>
+    </CollapsibleSection>
   );
 }

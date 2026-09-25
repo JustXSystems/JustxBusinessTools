@@ -100,15 +100,6 @@ function newOutboxId() {
   return `eml_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`;
 }
 
-import { randomBytes } from "node:crypto";
-import { pool } from "../db.js";
-import {
-  createArtifact,
-  ensureArtifactDeliverySchema,
-  readArtifactBytesById,
-} from "./artifact-delivery.js";
-import { getActiveOrgId, getActiveProfileId, getActiveUserId } from "./request-context.js";
-
 let emailWebhookColReady: Promise<void> | null = null;
 
 /** Per Business Profile quotation-email webhook (Path A). */

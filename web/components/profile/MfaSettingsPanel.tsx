@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { CollapsibleSection } from "@/components/common/CollapsibleSection";
 
 /** TOTP MFA setup for signed-in users (Owner/Admin recommended). */
 export function MfaSettingsPanel() {
@@ -87,8 +88,13 @@ export function MfaSettingsPanel() {
   }
 
   return (
-    <section className="panel" style={{ marginBottom: "1.25rem" }}>
-      <h3 className="panel-title">Security · Authenticator (MFA)</h3>
+    <CollapsibleSection
+      className="profile-page-section"
+      title="Security · Authenticator (MFA)"
+      hint="Two-factor sign-in for your account"
+      badge={enabled ? "On" : "Off"}
+      badgeTone={enabled ? "accent" : "default"}
+    >
       <p className="section-note">
         {enabled
           ? "Two-factor authentication is on for this account."
@@ -129,6 +135,6 @@ export function MfaSettingsPanel() {
           </button>
         </div>
       ) : null}
-    </section>
+    </CollapsibleSection>
   );
 }

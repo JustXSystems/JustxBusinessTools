@@ -53,7 +53,60 @@ export type BusinessProfileSendSettings = {
     folderId: string;
     folderLabel: string;
   };
+  /**
+   * Daily email to the quotation's Prepared By user when Follow-up date = today.
+   * Sent by the server scheduler via the profile Email webhook (Path A).
+   */
+  followUpReminder: {
+    enabled: boolean;
+    /** CC every active Owner-role user. */
+    ccOwners: boolean;
+    /** Extra CC addresses (comma-separated). */
+    cc: string;
+    subject: string;
+    message: string;
+  };
 };
+
+export const FOLLOW_UP_REMINDER_PLACEHOLDERS: Array<{ key: string; description: string }> = [
+  { key: "preparedBy", description: "Prepared By on the quotation" },
+  { key: "quoteNo", description: "Quotation number" },
+  { key: "followUpDate", description: "Follow-up date (today)" },
+  { key: "customerName", description: "Customer name" },
+  { key: "customerCompany", description: "Customer company" },
+  { key: "customerPhone", description: "Customer phone" },
+  { key: "customerEmail", description: "Customer email" },
+  { key: "typeLabel", description: "Category · engagement" },
+  { key: "date", description: "Quotation date" },
+  { key: "validTill", description: "Valid till" },
+  { key: "grandTotal", description: "Grand total" },
+  { key: "status", description: "Quotation status" },
+  { key: "companyName", description: "Business name" },
+  { key: "companyPhone", description: "Company phone" },
+  { key: "companyEmail", description: "Company email" },
+  { key: "quotationLink", description: "Link to the Quotation tool" },
+];
+
+export const DEFAULT_FOLLOW_UP_REMINDER_SUBJECT =
+  "Follow-up due today: Quotation {{quoteNo}} — {{customerName}}";
+
+export const DEFAULT_FOLLOW_UP_REMINDER_MESSAGE = `Hi {{preparedBy}},
+
+This is a reminder that the quotation below is due for follow-up today ({{followUpDate}}).
+
+* Quotation No.: {{quoteNo}}
+* Customer: {{customerName}}
+* Customer Phone: {{customerPhone}}
+* Customer Email: {{customerEmail}}
+* Type: {{typeLabel}}
+* Quotation Date: {{date}}
+* Valid Till: {{validTill}}
+* Grand Total: ₹{{grandTotal}}
+* Status: {{status}}
+
+Open Quotation tool: {{quotationLink}}
+
+This is an automated reminder from {{companyName}}.`;
 
 /** Legacy closing lines right after Regards — upgraded while keeping any following extras. */
 const LEGACY_SIG_NAME = /^\{\{\s*companyName\s*\}\}$/;
@@ -158,6 +211,13 @@ ${DEFAULT_SEND_SIGNATURE}`,
   googleDrive: {
     folderId: "",
     folderLabel: "",
+  },
+  followUpReminder: {
+    enabled: false,
+    ccOwners: true,
+    cc: "",
+    subject: DEFAULT_FOLLOW_UP_REMINDER_SUBJECT,
+    message: DEFAULT_FOLLOW_UP_REMINDER_MESSAGE,
   },
 };
 
@@ -289,6 +349,7 @@ export const EMPTY_PROFILE: BusinessProfile = {
     whatsappMessage: DEFAULT_SEND_SETTINGS.whatsappMessage,
     email: { ...DEFAULT_SEND_SETTINGS.email },
     googleDrive: { ...DEFAULT_SEND_SETTINGS.googleDrive },
+    followUpReminder: { ...DEFAULT_SEND_SETTINGS.followUpReminder },
   },
   downloadFolder: null,
   downloadFolderConflictPolicy: "overwrite",
@@ -312,6 +373,10 @@ export function normalizeSendSettings(
       ? (src.googleDrive as Partial<BusinessProfileSendSettings["googleDrive"]>)
       : {};
   const numbers = Array.isArray(src.whatsappNumbers) ? src.whatsappNumbers : [];
+  const reminderRaw =
+    src.followUpReminder && typeof src.followUpReminder === "object"
+      ? (src.followUpReminder as Partial<BusinessProfileSendSettings["followUpReminder"]>)
+      : {};
   return {
     whatsappNumbers: numbers.map((n) => ({
       id: String((n as { id?: string }).id ?? Math.random().toString(36).slice(2, 9)),
@@ -351,6 +416,13 @@ export function normalizeSendSettings(
     googleDrive: {
       folderId: String(driveRaw.folderId ?? "").trim(),
       folderLabel: String(driveRaw.folderLabel ?? "").trim(),
+    },
+    followUpReminder: {
+      enabled: reminderRaw.enabled === true,
+      ccOwners: reminderRaw.ccOwners !== false,
+      cc: String(reminderRaw.cc ?? ""),
+      subject: String(reminderRaw.subject ?? DEFAULT_FOLLOW_UP_REMINDER_SUBJECT),
+      message: String(reminderRaw.message ?? DEFAULT_FOLLOW_UP_REMINDER_MESSAGE),
     },
   };
 }

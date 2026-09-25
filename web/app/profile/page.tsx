@@ -29,6 +29,8 @@ import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
 import { MfaSettingsPanel } from "@/components/profile/MfaSettingsPanel";
 import { SendViaDefaultsPanel } from "@/components/profile/SendViaDefaultsPanel";
+import { FollowUpReminderPanel } from "@/components/profile/FollowUpReminderPanel";
+import { CollapsibleSection } from "@/components/common/CollapsibleSection";
 import { TeamRequestsPanel } from "@/components/profile/TeamRequestsPanel";
 import { ClockDisplaySettingsPanel } from "@/components/profile/ClockDisplaySettingsPanel";
 import { FlashDisplaySettingsPanel } from "@/components/profile/FlashDisplaySettingsPanel";
@@ -40,11 +42,21 @@ type ProfileTab = "company" | "brand" | "send" | "delivery" | "tools" | "legal";
 const PROFILE_TABS: Array<{ id: ProfileTab; label: string; hint: string }> = [
   { id: "company", label: "Company", hint: "Identity, address, accent" },
   { id: "brand", label: "Brand & UI", hint: "Theme, clock, alerts" },
-  { id: "send", label: "Send Via", hint: "WhatsApp & email defaults" },
+  { id: "send", label: "Send Via", hint: "WhatsApp, email & follow-ups" },
   { id: "delivery", label: "Delivery", hint: "Downloads & file webhooks" },
   { id: "tools", label: "Tools", hint: "Home screen" },
   { id: "legal", label: "Bank & terms", hint: "Banking & T&C" },
 ];
+
+/** Tabs with more than one section render them collapsed by default. */
+const TAB_SECTIONS: Record<ProfileTab, string[]> = {
+  company: ["identity", "address"],
+  brand: ["theme", "clock", "flash"],
+  send: ["sendDefaults", "followUp"],
+  delivery: ["delivery"],
+  tools: ["homeTools"],
+  legal: ["bank", "terms"],
+};
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -62,6 +74,23 @@ export default function ProfilePage() {
   const [error, setError] = useState("");
   const [webhookSecretDraft, setWebhookSecretDraft] = useState("");
   const [activeTab, setActiveTab] = useState<ProfileTab>("company");
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const activeSections = TAB_SECTIONS[activeTab];
+  const allActiveOpen = activeSections.every((id) => openSections[id]);
+
+  function sectionProps(id: string) {
+    return {
+      open: Boolean(openSections[id]),
+      onOpenChange: (open: boolean) => setOpenSections((s) => ({ ...s, [id]: open })),
+    };
+  }
+
+  function setAllActiveSections(open: boolean) {
+    setOpenSections((s) => ({
+      ...s,
+      ...Object.fromEntries(activeSections.map((id) => [id, open])),
+    }));
+  }
 
   const send = normalizeSendSettings(profile.sendSettings);
   const themePresets = profile.themePresets?.length
@@ -253,9 +282,26 @@ export default function ProfilePage() {
         </nav>
 
         <div className="profile-tab-panel" role="tabpanel">
+          {activeSections.length > 1 ? (
+            <div className="profile-section-tools">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setAllActiveSections(!allActiveOpen)}
+              >
+                {allActiveOpen ? "Collapse all" : "Expand all"}
+              </button>
+            </div>
+          ) : null}
+
           {activeTab === "company" ? (
             <>
-      <div className="panel profile-hero">
+      <CollapsibleSection
+        {...sectionProps("identity")}
+        className="profile-hero"
+        title="Business identity"
+        hint={profile.businessName.trim() || "Business name, logo & document accent color"}
+      >
         <div className="flex-row-wrap">
           <div className="logo-preview-lg">
             {profile.logo ? <img src={publicAssetUrl(profile.logo)} alt="Logo" /> : <span>🏢</span>}
@@ -355,10 +401,13 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div className="panel">
-        <h3 className="panel-title">Registered address & contact</h3>
+      <CollapsibleSection
+        {...sectionProps("address")}
+        title="Registered address & contact"
+        hint="Address, GSTIN, PAN, state, phone & email"
+      >
         <div className="field-row2">
           <label className="field">
             <span className="label">Address line 1</span>
@@ -439,14 +488,19 @@ export default function ProfilePage() {
             />
           </label>
         </div>
-      </div>
+      </CollapsibleSection>
             </>
           ) : null}
 
           {activeTab === "brand" ? (
             <>
-      <div className="panel">
-        <h3 className="panel-title">Theme preset</h3>
+      <CollapsibleSection
+        {...sectionProps("theme")}
+        title="Theme preset"
+        hint="UI colors for everyone on this Business Profile"
+        badge={selectedThemeKey ? "Override" : "Org default"}
+        badgeTone={selectedThemeKey ? "accent" : "default"}
+      >
         <p className="section-note">
           Default follows the organization theme set in Admin. A selection here overrides that theme
           for this Business Profile only (takes precedence for every user on this branch).
@@ -523,9 +577,14 @@ export default function ProfilePage() {
             : "Using Admin organization theme (no profile override)."}{" "}
           Save to apply for all staff on this Business Profile.
         </p>
-      </div>
+      </CollapsibleSection>
 
-      <div className="panel">
+      <CollapsibleSection
+        {...sectionProps("clock")}
+        title="Status bar date & time"
+        hint="Footer clock next to Powered by"
+        badge={normalizeClockDisplaySettings(profile.clockDisplay).visible ? "Visible" : "Hidden"}
+      >
         <ClockDisplaySettingsPanel
           value={normalizeClockDisplaySettings(profile.clockDisplay)}
           disabled={!canEdit}
@@ -535,9 +594,13 @@ export default function ProfilePage() {
             setProfile((p) => ({ ...p, clockDisplay }));
           }}
         />
-      </div>
+      </CollapsibleSection>
 
-      <div className="panel">
+      <CollapsibleSection
+        {...sectionProps("flash")}
+        title="On-screen messages"
+        hint="How long error and success banners stay visible"
+      >
         <FlashDisplaySettingsPanel
           value={normalizeFlashDisplaySettings(profile.flashDisplay)}
           disabled={!canEdit}
@@ -546,7 +609,7 @@ export default function ProfilePage() {
             setProfile((p) => ({ ...p, flashDisplay }));
           }}
         />
-      </div>
+      </CollapsibleSection>
             </>
           ) : null}
 
@@ -570,8 +633,12 @@ export default function ProfilePage() {
           ) : null}
 
           {activeTab === "send" ? (
-      <div className="panel">
-        <h3 className="panel-title">Send Via defaults</h3>
+            <>
+      <CollapsibleSection
+        {...sectionProps("sendDefaults")}
+        title="Send Via defaults"
+        hint="WhatsApp numbers, email templates & email webhook"
+      >
         <SendViaDefaultsPanel
           profile={profile}
           canEdit={canEdit}
@@ -579,7 +646,22 @@ export default function ProfilePage() {
           onPatchSend={patchSend}
           onEmailWebhookUrl={(url) => setProfile((p) => ({ ...p, emailWebhookUrl: url }))}
         />
-      </div>
+      </CollapsibleSection>
+      <CollapsibleSection
+        {...sectionProps("followUp")}
+        title="Quotation follow-up reminder email"
+        hint="Daily email to Prepared By when the follow-up date is today"
+        badge={send.followUpReminder.enabled ? "On" : "Off"}
+        badgeTone={send.followUpReminder.enabled ? "accent" : "default"}
+      >
+        <FollowUpReminderPanel
+          canEdit={canEdit}
+          value={send.followUpReminder}
+          emailWebhookUrl={profile.emailWebhookUrl}
+          onChange={(followUpReminder) => patchSend({ ...send, followUpReminder })}
+        />
+      </CollapsibleSection>
+            </>
           ) : null}
 
           {activeTab === "delivery" ? (
@@ -606,8 +688,11 @@ export default function ProfilePage() {
 
           {activeTab === "legal" ? (
             <>
-      <div className="panel">
-        <h3 className="panel-title">Bank details</h3>
+      <CollapsibleSection
+        {...sectionProps("bank")}
+        title="Bank details"
+        hint="Bank, branch, account, IFSC & UPI shown on documents"
+      >
         <div className="field-row2">
           <label className="field">
             <span className="label">Bank name</span>
@@ -652,10 +737,13 @@ export default function ProfilePage() {
             onChange={(e) => setProfile({ ...profile, bankUpi: e.target.value })}
           />
         </label>
-      </div>
+      </CollapsibleSection>
 
-      <div className="panel">
-        <h3 className="panel-title">Default terms & conditions</h3>
+      <CollapsibleSection
+        {...sectionProps("terms")}
+        title="Default terms & conditions"
+        hint="Terms printed on documents"
+      >
         <label className="field">
           <span className="label">Terms (shown on documents)</span>
           <textarea
@@ -665,7 +753,7 @@ export default function ProfilePage() {
             onChange={(e) => setProfile({ ...profile, terms: e.target.value })}
           />
         </label>
-      </div>
+      </CollapsibleSection>
             </>
           ) : null}
         </div>

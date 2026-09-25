@@ -31,6 +31,7 @@ import { requestIdMiddleware } from "./middleware/request-id.js";
 import { requireBranchAccess } from "./middleware/require-write.js";
 import { startAnalyticsRollupScheduler } from "./jobs/analytics-rollup.js";
 import { startRenewalNoticeScheduler } from "./jobs/renewal-notices.js";
+import { startFollowUpReminderScheduler } from "./jobs/quotation-followup-reminders.js";
 import { initSmsProvider } from "./lib/auth/init-sms.js";
 import { ensureArtifactDeliverySchema } from "./lib/artifact-delivery.js";
 import { ensureEmailOutboxSchema } from "./lib/email-outbox.js";
@@ -196,6 +197,7 @@ app.listen(port, () => {
     startArtifactDispatchScheduler();
     startAnalyticsRollupScheduler();
     startRenewalNoticeScheduler();
+    startFollowUpReminderScheduler();
   } else {
     log.info("jobs_deferred_to_worker");
   }

@@ -162,6 +162,7 @@ const LABEL_BY_ACTION: Record<string, string> = {
   "quotationv1.create": "Created quotation",
   "quotationv1.update": "Updated quotation",
   "quotationv1.delete": "Deleted quotation",
+  "quotationv1.followup_reminders.run": "Sent quotation follow-up reminders",
   "sitesurveyv1.create": "Created site survey",
   "sitesurveyv1.update": "Updated site survey",
   "sitesurveyv1.delete": "Deleted site survey",

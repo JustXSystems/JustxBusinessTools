@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { startAnalyticsRollupScheduler } from "./jobs/analytics-rollup.js";
 import { startRenewalNoticeScheduler } from "./jobs/renewal-notices.js";
+import { startFollowUpReminderScheduler } from "./jobs/quotation-followup-reminders.js";
 import { ensureArtifactDeliverySchema } from "./lib/artifact-delivery.js";
 import { startArtifactDispatchScheduler } from "./lib/artifact-dispatch.js";
 import { ensureNotificationSchema } from "./lib/notification-schema.js";
@@ -46,6 +47,7 @@ log.info("worker_start", { role });
 startArtifactDispatchScheduler();
 startAnalyticsRollupScheduler();
 startRenewalNoticeScheduler();
+startFollowUpReminderScheduler();
 
 // Keep process alive; schedulers use setInterval.
 setInterval(() => {}, 60_000).unref?.();

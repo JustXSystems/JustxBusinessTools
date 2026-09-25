@@ -42,12 +42,24 @@ export type ProfileGoogleDriveSettings = {
   folderLabel: string;
 };
 
+/** Daily quotation follow-up reminder to the Prepared By user (see jobs/quotation-followup-reminders.ts). */
+export type ProfileFollowUpReminderSettings = {
+  enabled: boolean;
+  /** CC every active Owner-role user of this organization. */
+  ccOwners: boolean;
+  /** Extra CC addresses (comma / semicolon separated). */
+  cc: string;
+  subject: string;
+  message: string;
+};
+
 export type ProfileSendSettings = {
   whatsappNumbers: ProfileWhatsAppNumber[];
   /** WhatsApp chat text template ({{placeholders}}). */
   whatsappMessage: string;
   email: ProfileEmailDefaults;
   googleDrive: ProfileGoogleDriveSettings;
+  followUpReminder: ProfileFollowUpReminderSettings;
 };
 
 /** Legacy closing lines right after Regards — upgraded while keeping any following extras. */
@@ -124,6 +136,35 @@ I am attaching the PDF quotation. Please review and confirm.
 
 ${DEFAULT_SEND_SIGNATURE}`;
 
+export const DEFAULT_FOLLOW_UP_REMINDER_SUBJECT =
+  "Follow-up due today: Quotation {{quoteNo}} — {{customerName}}";
+
+export const DEFAULT_FOLLOW_UP_REMINDER_MESSAGE = `Hi {{preparedBy}},
+
+This is a reminder that the quotation below is due for follow-up today ({{followUpDate}}).
+
+* Quotation No.: {{quoteNo}}
+* Customer: {{customerName}}
+* Customer Phone: {{customerPhone}}
+* Customer Email: {{customerEmail}}
+* Type: {{typeLabel}}
+* Quotation Date: {{date}}
+* Valid Till: {{validTill}}
+* Grand Total: ₹{{grandTotal}}
+* Status: {{status}}
+
+Open Quotation tool: {{quotationLink}}
+
+This is an automated reminder from {{companyName}}.`;
+
+export const DEFAULT_FOLLOW_UP_REMINDER: ProfileFollowUpReminderSettings = {
+  enabled: false,
+  ccOwners: true,
+  cc: "",
+  subject: DEFAULT_FOLLOW_UP_REMINDER_SUBJECT,
+  message: DEFAULT_FOLLOW_UP_REMINDER_MESSAGE,
+};
+
 export const DEFAULT_PROFILE_SEND_SETTINGS: ProfileSendSettings = {
   whatsappNumbers: [],
   whatsappMessage: DEFAULT_WHATSAPP_MESSAGE,
@@ -154,6 +195,7 @@ ${DEFAULT_SEND_SIGNATURE}`,
     folderId: "",
     folderLabel: "",
   },
+  followUpReminder: { ...DEFAULT_FOLLOW_UP_REMINDER },
 };
 
 let ready: Promise<void> | null = null;
@@ -242,6 +284,10 @@ export function normalizeProfileSendSettings(raw: unknown): ProfileSendSettings 
       ? (src.googleDrive as Record<string, unknown>)
       : {};
   const numbers = Array.isArray(src.whatsappNumbers) ? src.whatsappNumbers : [];
+  const reminder =
+    src.followUpReminder && typeof src.followUpReminder === "object"
+      ? (src.followUpReminder as Record<string, unknown>)
+      : {};
 
   return {
     whatsappNumbers: numbers.map((n) => {
@@ -278,6 +324,15 @@ export function normalizeProfileSendSettings(raw: unknown): ProfileSendSettings 
     googleDrive: {
       folderId: String(drive.folderId ?? "").trim(),
       folderLabel: String(drive.folderLabel ?? "").trim(),
+    },
+    followUpReminder: {
+      enabled: reminder.enabled === true,
+      ccOwners: reminder.ccOwners !== false,
+      cc: String(reminder.cc ?? "").trim(),
+      subject:
+        String(reminder.subject ?? "").trim() || DEFAULT_FOLLOW_UP_REMINDER_SUBJECT,
+      message:
+        String(reminder.message ?? "").trim() || DEFAULT_FOLLOW_UP_REMINDER_MESSAGE,
     },
   };
 }

@@ -25,6 +25,12 @@ import {
   mapOutboxPublic,
   postEmailWebhookPayload,
 } from "../lib/email-outbox.js";
+import {
+  FOLLOW_UP_REMINDER_TIMEZONE_DEFAULT,
+  localDateParts,
+  runFollowUpRemindersForProfile,
+} from "../lib/quotation-followup-reminders.js";
+import { requireBusinessProfileOwner } from "../middleware/require-business-profile-owner.js";
 
 const TOOL_ID = "quotationv1";
 const COMPANY_KEY = "quotation_v1_company";
@@ -412,6 +418,29 @@ router.get("/send/email/status", async (_req, res) => {
   res.json({ webhookConfigured: await emailWebhookConfigured() });
 });
 
+/** Owner/Admin: send today's follow-up reminders for this profile now (same once-per-day guard as the scheduler). */
+router.post("/follow-up-reminders/run-now", requireBusinessProfileOwner, async (req, res) => {
+  const { date } = localDateParts(
+    new Date(),
+    process.env.FOLLOWUP_REMINDER_TZ?.trim() || FOLLOW_UP_REMINDER_TIMEZONE_DEFAULT,
+  );
+  try {
+    const result = await runFollowUpRemindersForProfile(getActiveProfileId(), date);
+    await logAudit(
+      "quotationv1.followup_reminders.run",
+      "business_profile",
+      String(getActiveProfileId()),
+      { date, ...result },
+      req.ip,
+    );
+    res.json({ ok: true, date, ...result });
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : "Follow-up reminders failed",
+    });
+  }
+});
+
 router.get("/send/whatsapp/status", async (_req, res) => {
   res.json(await getWhatsAppDeliveryConfig());
 });
@@ -624,7 +653,14 @@ router.post("/", async (req, res) => {
   const status = String(body.status ?? "draft");
   const docDate = String(body.date ?? new Date().toISOString().slice(0, 10));
   const extraDate = body.validTill ? String(body.validTill) : null;
-  const payload = { ...body, id, quoteNo, status, updatedAt: new Date().toISOString() };
+  const payload = {
+    ...body,
+    id,
+    quoteNo,
+    status,
+    updatedAt: new Date().toISOString(),
+    ...(isNew && getActiveUserId() ? { createdByUserId: getActiveUserId() } : {}),
+  };
 
   try {
     if (isNew) {
