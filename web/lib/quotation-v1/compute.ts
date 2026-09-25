@@ -8,7 +8,7 @@ export function computeTotals(q: QuotationV1, company: CompanyProfileV1): QuoteT
   let oldBuybackLess = 0;
   let subtotalGst = 0;
   let discountTotal = 0;
-  let taxable = 0;
+  let itemsTaxable = 0;
   const gstBuckets: Record<number, number> = {};
 
   for (const it of q.items) {
@@ -21,7 +21,7 @@ export function computeTotals(q: QuotationV1, company: CompanyProfileV1): QuoteT
     const net = gross - disc;
     subtotal += gross;
     discountTotal += disc;
-    taxable += net;
+    itemsTaxable += net;
     const rate = Number(it.gst) || 0;
     gstBuckets[rate] = (gstBuckets[rate] || 0) + net;
     const lineGst = (gross * rate) / 100;
@@ -32,7 +32,9 @@ export function computeTotals(q: QuotationV1, company: CompanyProfileV1): QuoteT
   const exGstRate = Number(q.extraCharge?.gst) || 0;
   const exGstAmt = (exBase * exGstRate) / 100;
   const exTotal = exBase + exGstAmt;
+  if (exBase > 0) subtotal += exBase;
   if (exGstAmt > 0) subtotalGst += exGstAmt;
+  const taxable = subtotal;
 
   let autoCgst = 0;
   let autoSgst = 0;
@@ -46,9 +48,9 @@ export function computeTotals(q: QuotationV1, company: CompanyProfileV1): QuoteT
     }
   }
 
-  const autoCgstRate = taxable > 0 ? (autoCgst / taxable) * 100 : 0;
-  const autoSgstRate = taxable > 0 ? (autoSgst / taxable) * 100 : 0;
-  const autoIgstRate = taxable > 0 ? (autoIgst / taxable) * 100 : 0;
+  const autoCgstRate = itemsTaxable > 0 ? (autoCgst / itemsTaxable) * 100 : 0;
+  const autoSgstRate = itemsTaxable > 0 ? (autoSgst / itemsTaxable) * 100 : 0;
+  const autoIgstRate = itemsTaxable > 0 ? (autoIgst / itemsTaxable) * 100 : 0;
 
   const manual = q.gstOverride?.mode === "manual";
   let cgstRate: number;
@@ -85,7 +87,7 @@ export function computeTotals(q: QuotationV1, company: CompanyProfileV1): QuoteT
 
   const totalTax = cgst + sgst + igst;
   const totalGst = subtotalGst + totalTax;
-  const grandRaw = taxable + totalTax + exTotal + oldBuybackLess;
+  const grandRaw = subtotal + totalGst - Math.abs(oldBuybackLess);
   const grand = Math.round(grandRaw);
   const roundOff = grand - grandRaw;
 

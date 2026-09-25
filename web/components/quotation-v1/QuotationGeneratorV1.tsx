@@ -1413,10 +1413,6 @@ export function QuotationGeneratorV1() {
                     <td className="amt">₹{money(totals.taxable)}</td>
                   </tr>
                   <tr>
-                    <td>Extra + GST</td>
-                    <td className="amt">₹{money(totals.exTotal)}</td>
-                  </tr>
-                  <tr>
                     <td>Subtotal GST</td>
                     <td className="amt">₹{money(totals.subtotalGst)}</td>
                   </tr>

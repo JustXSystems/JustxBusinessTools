@@ -8,7 +8,7 @@ import {
 } from "@/lib/quotation-v1";
 
 describe("quotation-v1 computeTotals", () => {
-  it("splits CGST/SGST for intra-state and keeps extra charge separate", () => {
+  it("splits CGST/SGST for intra-state and folds extra charge into subtotal", () => {
     const q = newQuotationDraft("solar", "epc");
     q.customer.state = "Karnataka";
     q.items = [
@@ -19,15 +19,32 @@ describe("quotation-v1 computeTotals", () => {
     q.gstOverride = { mode: "auto", cgst: null, sgst: null, igst: null };
     const company = { ...DEFAULT_COMPANY, state: "Karnataka" };
     const t = computeTotals(q, company);
-    expect(t.taxable).toBe(2500);
+    expect(t.taxable).toBe(2600);
     expect(t.interState).toBe(false);
     expect(t.cgst + t.sgst).toBeCloseTo(450, 5);
     expect(t.exBase).toBe(100);
     expect(t.exGstAmt).toBeCloseTo(18, 5);
-    expect(t.grand).toBe(Math.round(2500 + 450 + 118));
+    expect(t.subtotal).toBe(2600);
+    expect(t.subtotalGst).toBeCloseTo(468, 5);
+    expect(t.totalGst).toBeCloseTo(468 + 450, 5);
+    expect(t.grand).toBe(Math.round(2600 + 918));
   });
 
-  it("excludes negative line rates from taxable and deducts them from grand", () => {
+  it("uses manual CGST/SGST of zero so grand is subtotal + line GST", () => {
+    const q = newQuotationDraft("solar", "epc");
+    q.customer.state = "Karnataka";
+    q.items = [{ id: "1", desc: "A", qty: 1, rate: 1000.4, gst: 18, discount: 0 }];
+    q.extraCharge = { label: "Transport", amount: 100, gst: 0 };
+    q.gstOverride = { mode: "manual", cgst: 0, sgst: 0, igst: null };
+    const t = computeTotals(q, { ...DEFAULT_COMPANY, state: "Karnataka" });
+    expect(t.subtotal).toBeCloseTo(1100.4, 5);
+    expect(t.taxable).toBeCloseTo(t.subtotal, 5);
+    expect(t.totalGst).toBeCloseTo(180.072, 5);
+    expect(t.grand).toBe(1280);
+    expect(t.subtotal + t.totalGst + t.roundOff).toBeCloseTo(t.grand, 5);
+  });
+
+  it("excludes negative line rates from subtotal and taxable, deducts them from grand", () => {
     const q = newQuotationDraft("solar", "epc");
     q.customer.state = "Karnataka";
     q.items = [
@@ -41,7 +58,8 @@ describe("quotation-v1 computeTotals", () => {
     expect(t.subtotal).toBe(1500);
     expect(t.cgst + t.sgst).toBeCloseTo(270, 5);
     expect(t.oldBuybackLess).toBe(-500);
-    expect(t.grand).toBe(Math.round(1500 + 270 - 500));
+    expect(t.grand).toBe(Math.round(1500 + 270 + 270 - 500));
+    expect(t.subtotal + t.totalGst + t.roundOff - Math.abs(t.oldBuybackLess)).toBeCloseTo(t.grand, 5);
   });
 
   it("computes Subtotal GST, Total GST and old buyback rows", () => {
@@ -54,13 +72,13 @@ describe("quotation-v1 computeTotals", () => {
     q.extraCharge = { label: "Transport", amount: 100, gst: 18 };
     q.gstOverride = { mode: "auto", cgst: null, sgst: null, igst: null };
     const t = computeTotals(q, { ...DEFAULT_COMPANY, state: "Karnataka" });
-    expect(t.subtotal).toBe(2000);
-    expect(t.taxable).toBe(2000);
+    expect(t.subtotal).toBe(2100);
+    expect(t.taxable).toBe(2100);
     expect(t.subtotalGst).toBeCloseTo(360 + 18, 5);
     expect(t.cgst + t.sgst).toBeCloseTo(360, 5);
     expect(t.totalGst).toBeCloseTo(378 + 360, 5);
     expect(t.oldBuybackLess).toBe(-500);
-    expect(t.grand).toBe(Math.round(2000 + 360 + 118 - 500));
+    expect(t.grand).toBe(Math.round(2100 + 738 - 500));
   });
 
   it("uses IGST for inter-state", () => {

@@ -111,15 +111,16 @@ export type CompanyProfileV1 = {
 };
 
 export type QuoteTotals = {
-  /** Sum of positive line amounts (qty × rate); negative lines go to {@link oldBuybackLess}. */
+  /** Sum of positive line amounts (qty × rate) plus extra charge base; negative lines go to {@link oldBuybackLess}. */
   subtotal: number;
   /** Sum of positive per-line GST amounts on the quote sheet (items + extra charge). */
   subtotalGst: number;
   /** subtotalGst + CGST + SGST (+ IGST when inter-state). */
   totalGst: number;
-  /** Sum of negative line amounts (qty × rate); zero or negative. Excluded from taxable/GST, deducted from grand. */
+  /** Sum of negative line amounts (qty × rate); zero or negative. Excluded from subtotal, taxable and GST; deducted from grand. */
   oldBuybackLess: number;
   discountTotal: number;
+  /** Same as {@link subtotal}; manual CGST/SGST/IGST rates apply to this. */
   taxable: number;
   cgst: number;
   sgst: number;
@@ -128,6 +129,7 @@ export type QuoteTotals = {
   sgstRate: number;
   igstRate: number;
   totalTax: number;
+  /** round(subtotal + totalGst - |oldBuybackLess|); equals subtotal + totalGst + roundOff - |oldBuybackLess|. */
   grand: number;
   roundOff: number;
   interState: boolean;

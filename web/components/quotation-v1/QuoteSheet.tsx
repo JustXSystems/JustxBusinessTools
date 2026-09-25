@@ -176,10 +176,10 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
             <tr>
               <td>{q.items.length + 1}</td>
               <td>{q.extraCharge.label}</td>
-              <td>—</td>
-              <td>₹{money(Number(q.extraCharge.amount) || 0)}</td>
+              <td>1</td>
+              <td>₹{money(t.exBase)}</td>
               <td>{q.extraCharge.gst}%</td>
-              <td>—</td>
+              <td>₹{money(t.exBase)}</td>
               <td>₹{money(t.exGstAmt)}</td>
               <td>₹{money(t.exTotal)}</td>
             </tr>
@@ -206,10 +206,6 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
             <tr>
               <td>Taxable Value</td>
               <td className="amt">₹{money(t.taxable)}</td>
-            </tr>
-            <tr>
-              <td>Additional Charges</td>
-              <td className="amt">₹{money(t.exTotal)}</td>
             </tr>
             <tr>
               <td>Subtotal GST</td>
