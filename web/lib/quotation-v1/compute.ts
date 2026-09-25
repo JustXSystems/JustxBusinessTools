@@ -5,12 +5,18 @@ export function computeTotals(q: QuotationV1, company: CompanyProfileV1): QuoteT
     q.customer.state && company.state && q.customer.state !== company.state,
   );
   let subtotal = 0;
+  let oldBuybackLess = 0;
+  let subtotalGst = 0;
   let discountTotal = 0;
   let taxable = 0;
   const gstBuckets: Record<number, number> = {};
 
   for (const it of q.items) {
     const gross = (Number(it.qty) || 0) * (Number(it.rate) || 0);
+    if (gross < 0) {
+      oldBuybackLess += gross;
+      continue;
+    }
     const disc = gross * ((Number(it.discount) || 0) / 100);
     const net = gross - disc;
     subtotal += gross;
@@ -18,12 +24,15 @@ export function computeTotals(q: QuotationV1, company: CompanyProfileV1): QuoteT
     taxable += net;
     const rate = Number(it.gst) || 0;
     gstBuckets[rate] = (gstBuckets[rate] || 0) + net;
+    const lineGst = (gross * rate) / 100;
+    if (lineGst > 0) subtotalGst += lineGst;
   }
 
   const exBase = Number(q.extraCharge?.amount) || 0;
   const exGstRate = Number(q.extraCharge?.gst) || 0;
   const exGstAmt = (exBase * exGstRate) / 100;
   const exTotal = exBase + exGstAmt;
+  if (exGstAmt > 0) subtotalGst += exGstAmt;
 
   let autoCgst = 0;
   let autoSgst = 0;
@@ -75,12 +84,16 @@ export function computeTotals(q: QuotationV1, company: CompanyProfileV1): QuoteT
   }
 
   const totalTax = cgst + sgst + igst;
-  const grandRaw = taxable + totalTax + exTotal;
+  const totalGst = subtotalGst + totalTax;
+  const grandRaw = taxable + totalTax + exTotal + oldBuybackLess;
   const grand = Math.round(grandRaw);
   const roundOff = grand - grandRaw;
 
   return {
     subtotal,
+    subtotalGst,
+    totalGst,
+    oldBuybackLess,
     discountTotal,
     taxable,
     cgst,

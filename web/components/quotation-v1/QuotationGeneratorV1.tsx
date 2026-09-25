@@ -13,6 +13,7 @@ import {
   CATEGORIES,
   CATEGORY_ENGAGEMENTS,
   computeTotals,
+  DEFAULT_BUYBACK_LABEL,
   DEFAULT_COMPANY,
   DEFAULT_SEND_SETTINGS,
   DEFAULT_WHATSAPP_MESSAGE,
@@ -1415,6 +1416,10 @@ export function QuotationGeneratorV1() {
                     <td>Extra + GST</td>
                     <td className="amt">₹{money(totals.exTotal)}</td>
                   </tr>
+                  <tr>
+                    <td>Subtotal GST</td>
+                    <td className="amt">₹{money(totals.subtotalGst)}</td>
+                  </tr>
                   {totals.interState ? (
                     <tr>
                       <td>
@@ -1483,6 +1488,26 @@ export function QuotationGeneratorV1() {
                       </tr>
                     </>
                   )}
+                  <tr>
+                    <td>Total GST</td>
+                    <td className="amt">₹{money(totals.totalGst)}</td>
+                  </tr>
+                  {totals.oldBuybackLess ? (
+                    <tr>
+                      <td>
+                        <input
+                          className="qgv1-totals-label"
+                          aria-label="Buyback row label"
+                          placeholder={DEFAULT_BUYBACK_LABEL}
+                          value={current.buybackLabel ?? DEFAULT_BUYBACK_LABEL}
+                          onChange={(e) =>
+                            patch((q) => ({ ...q, buybackLabel: e.target.value }))
+                          }
+                        />
+                      </td>
+                      <td className="amt">₹{money(totals.oldBuybackLess)}</td>
+                    </tr>
+                  ) : null}
                   <tr>
                     <td>Round off</td>
                     <td className="amt">₹{money(totals.roundOff)}</td>

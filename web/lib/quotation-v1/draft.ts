@@ -36,6 +36,12 @@ export function blankCustomer(): QuoteCustomer {
   };
 }
 
+export const DEFAULT_BUYBACK_LABEL = "Less Of old buyback";
+
+export function buybackLabelOf(q: Pick<QuotationV1, "buybackLabel">): string {
+  return q.buybackLabel?.trim() || DEFAULT_BUYBACK_LABEL;
+}
+
 /** Backfill fields added after v1 (city, followUpDate) on older saved docs. */
 export function normalizeQuotation(q: QuotationV1): QuotationV1 {
   return {
@@ -84,6 +90,7 @@ export function newQuotationDraft(
     customer: blankCustomer(),
     items: templateItems(category, eng),
     extraCharge: { label: "Transport / Miscellaneous", amount: 0, gst: 0 },
+    buybackLabel: DEFAULT_BUYBACK_LABEL,
     notes: buildTerms(category, eng),
     gstOverride: { mode: "manual", cgst: 0, sgst: 0, igst: null },
     createdAt: new Date().toISOString(),

@@ -67,6 +67,8 @@ export type QuotationV1 = {
   customer: QuoteCustomer;
   items: QuoteItem[];
   extraCharge: ExtraCharge;
+  /** Totals row label for negative line amounts; blank falls back to the default. */
+  buybackLabel?: string;
   notes: string;
   gstOverride: GstOverride;
   createdAt: string;
@@ -109,7 +111,14 @@ export type CompanyProfileV1 = {
 };
 
 export type QuoteTotals = {
+  /** Sum of positive line amounts (qty × rate); negative lines go to {@link oldBuybackLess}. */
   subtotal: number;
+  /** Sum of positive per-line GST amounts on the quote sheet (items + extra charge). */
+  subtotalGst: number;
+  /** subtotalGst + CGST + SGST (+ IGST when inter-state). */
+  totalGst: number;
+  /** Sum of negative line amounts (qty × rate); zero or negative. Excluded from taxable/GST, deducted from grand. */
+  oldBuybackLess: number;
   discountTotal: number;
   taxable: number;
   cgst: number;

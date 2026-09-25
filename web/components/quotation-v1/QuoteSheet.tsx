@@ -2,6 +2,7 @@
 
 import type { CompanyProfileV1, QuotationV1 } from "@/lib/quotation-v1";
 import {
+  buybackLabelOf,
   computeTotals,
   fmtDate,
   fmtDateSlash,
@@ -210,6 +211,10 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
               <td>Additional Charges</td>
               <td className="amt">₹{money(t.exTotal)}</td>
             </tr>
+            <tr>
+              <td>Subtotal GST</td>
+              <td className="amt">₹{money(t.subtotalGst)}</td>
+            </tr>
             {t.interState ? (
               <tr>
                 <td>IGST ({t.igstRate.toFixed(2)}%)</td>
@@ -227,6 +232,16 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
                 </tr>
               </>
             )}
+            <tr>
+              <td>Total GST</td>
+              <td className="amt">₹{money(t.totalGst)}</td>
+            </tr>
+            {t.oldBuybackLess ? (
+              <tr>
+                <td>{buybackLabelOf(q)}</td>
+                <td className="amt">₹{money(t.oldBuybackLess)}</td>
+              </tr>
+            ) : null}
             <tr>
               <td>Round Off</td>
               <td className="amt">₹{money(t.roundOff)}</td>

@@ -1671,6 +1671,16 @@
   color: var(--text-hi);
 }
 
+.qgv1-totals-label {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--border-hair);
+  border-radius: var(--radius-sm);
+  background: var(--glass-3);
+  color: var(--text-hi);
+  font: inherit;
+}
+
 .qgv1-sheet-scroll {
   overflow: auto;
   border-radius: var(--radius-sm);
