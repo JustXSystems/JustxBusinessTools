@@ -261,6 +261,13 @@
   color: var(--text-hi);
 }
 
+.tool-shell-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .tool-shell-subtitle {
   margin: 6px 0 0;
   font-size: 13px;

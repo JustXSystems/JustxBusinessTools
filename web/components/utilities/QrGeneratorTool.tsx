@@ -1,10 +1,11 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { useToast } from "@/components/common/ToastProvider";
 import { ToolPageHero } from "@/components/shell/ToolPageHero";
 import { ColorField, FieldInput, Segmented } from "@/components/utilities/qr-generator/controls";
+import { QrAboutDialog, QrAboutHeart } from "@/components/utilities/qr-generator/QrAboutDialog";
 import { QrBatchPanel } from "@/components/utilities/qr-generator/QrBatchPanel";
 import { trackEvent } from "@/lib/analytics";
 import { fetchProfile } from "@/lib/api";
@@ -208,6 +209,8 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
   const previewRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [previewInView, setPreviewInView] = useState(true);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const closeAbout = useCallback(() => setAboutOpen(false), []);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const type = cfg.enabledTypes.includes(rawType) ? rawType : cfg.defaultType;
@@ -649,8 +652,8 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
         ) : null}
 
         <p className="section-note qrg-tip">
-          Tip: test-scan with two different phones before printing. SVG and PDF stay sharp at any size — best for banners
-          and packaging.
+          Tip: test-scan with two different phones before printing.
+          {has("svg") ? " SVG is vector and stays sharp at any size — best for banners and packaging." : ""}
         </p>
       </section>
     </aside>
@@ -661,6 +664,7 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
       <ToolPageHero
         eyebrow="Utilities"
         title={cfg.title}
+        titleAddon={<QrAboutHeart onClick={() => setAboutOpen(true)} />}
         subtitle={cfg.subtitle}
         meta={
           <>
@@ -987,6 +991,8 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
           </section>
         </div>
       )}
+
+      {aboutOpen ? <QrAboutDialog cfg={cfg} onClose={closeAbout} /> : null}
 
       {mode === "single" ? (
         <div className={`qrg-dock${showDock ? " is-shown" : ""}`} aria-hidden={!showDock} inert={!showDock}>

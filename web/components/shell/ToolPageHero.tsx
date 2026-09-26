@@ -10,6 +10,8 @@ export type ToolPageHeroProps = {
   meta?: ReactNode;
   backHref?: string;
   actions?: ReactNode;
+  /** Small inline control rendered beside the title (e.g. an info button). */
+  titleAddon?: ReactNode;
 };
 
 /** Corporate tool page header — shared by Quotation V1, Site Survey V1, and future tools. */
@@ -20,6 +22,7 @@ export function ToolPageHero({
   meta,
   backHref = "/",
   actions,
+  titleAddon,
 }: ToolPageHeroProps) {
   return (
     <header className="tool-shell-hero">
@@ -30,7 +33,14 @@ export function ToolPageHero({
         </Link>
         <div className="tool-shell-hero-copy">
           {eyebrow ? <p className="tool-shell-eyebrow">{eyebrow}</p> : null}
-          <h1 className="tool-shell-title">{title}</h1>
+          {titleAddon ? (
+            <div className="tool-shell-title-row">
+              <h1 className="tool-shell-title">{title}</h1>
+              {titleAddon}
+            </div>
+          ) : (
+            <h1 className="tool-shell-title">{title}</h1>
+          )}
           {subtitle ? <p className="tool-shell-subtitle">{subtitle}</p> : null}
           {meta ? <div className="tool-shell-meta">{meta}</div> : null}
         </div>
