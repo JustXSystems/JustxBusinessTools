@@ -25,7 +25,10 @@ export const QR_EXPORT_FORMATS: Array<{ id: QrExportFormat; label: string }> = [
 
 export const QR_SIZE_OPTIONS = [256, 512, 1024, 2048, 4096];
 
-export type QrBrandLogoSource = "none" | "profile" | "custom";
+export type QrBrandLogoSource = "none" | "jbt" | "profile" | "custom";
+
+/** Trimmed, transparent JBT mark sized for the centre of a QR code. */
+export const JBT_QR_LOGO_URL = "/icons/justx-qr-mark.png";
 
 export type QrBrandDesign = Omit<QrDesign, "logoDataUrl" | "caption">;
 
@@ -118,7 +121,7 @@ export const DEFAULT_QR_CONFIG: QrGeneratorConfig = {
       eyeStyle: DEFAULT_QR_DESIGN.eyeStyle,
       logoScale: DEFAULT_QR_DESIGN.logoScale,
     },
-    logoSource: "none",
+    logoSource: "jbt",
     logoDataUrl: null,
     lockDesign: false,
     allowLogoUpload: true,
@@ -205,7 +208,7 @@ function perType<T>(v: unknown, map: (raw: unknown) => T): Partial<Record<QrType
 
 const MODULE_STYLES: readonly QrModuleStyle[] = ["square", "rounded", "dots"];
 const EYE_STYLES: readonly QrEyeStyle[] = ["square", "rounded", "circle"];
-const LOGO_SOURCES: readonly QrBrandLogoSource[] = ["none", "profile", "custom"];
+const LOGO_SOURCES: readonly QrBrandLogoSource[] = ["none", "jbt", "profile", "custom"];
 
 /** Sanitises an admin-published definition; anything missing or invalid falls back to defaults. */
 export function resolveQrGeneratorConfig(definition: unknown): QrGeneratorConfig {

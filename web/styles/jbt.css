@@ -42,9 +42,15 @@ select {
   color-scheme: inherit;
 }
 
-select option {
+select option,
+select optgroup {
   background: var(--bg-2);
   color: var(--text-hi);
+}
+
+select optgroup {
+  font-weight: 700;
+  font-style: normal;
 }
 
 select:focus {
@@ -61,7 +67,8 @@ html[data-scheme="light"] select {
   color-scheme: light;
 }
 
-html[data-scheme="light"] select option {
+html[data-scheme="light"] select option,
+html[data-scheme="light"] select optgroup {
   background: var(--bg-2);
   color: var(--text-hi);
 }

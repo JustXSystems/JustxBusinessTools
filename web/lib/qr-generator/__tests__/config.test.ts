@@ -28,6 +28,13 @@ describe("resolveQrGeneratorConfig", () => {
     expect(qrConfigToDefinition(cfg).type).toBe("utility");
   });
 
+  it("uses the JBT logo by default but respects an explicit admin choice", () => {
+    expect(DEFAULT_QR_CONFIG.brand.logoSource).toBe("jbt");
+    expect(resolveQrGeneratorConfig({}).brand.logoSource).toBe("jbt");
+    expect(resolveQrGeneratorConfig({ brand: { logoSource: "none" } }).brand.logoSource).toBe("none");
+    expect(resolveQrGeneratorConfig({ brand: { logoSource: "profile" } }).brand.logoSource).toBe("profile");
+  });
+
   it("keeps type order, drops unknown types and repairs a disabled default", () => {
     const cfg = resolveQrGeneratorConfig({ enabledTypes: ["wifi", "bogus", "url", "wifi"], defaultType: "upi" });
     expect(cfg.enabledTypes).toEqual(["wifi", "url"]);

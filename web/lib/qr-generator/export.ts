@@ -1,6 +1,26 @@
+import { publicAssetUrl } from "@/lib/base-path";
+import { JBT_QR_LOGO_URL } from "@/lib/qr-generator/config";
 import { renderQrSvg, renderQrToCanvas, type QrDesign, type QrMatrix } from "@/lib/qr-generator/render";
 
 export const LOGO_MAX_PX = 512;
+const JBT_LOGO_PX = 256;
+
+let jbtLogo: Promise<string> | null = null;
+
+/** The JBT mark as a PNG data URL (cached; SVG exports and drafts need an inline image). */
+export function loadJbtQrLogo(): Promise<string> {
+  jbtLogo ??= fetch(publicAssetUrl(JBT_QR_LOGO_URL))
+    .then((res) => {
+      if (!res.ok) throw new Error("JBT logo unavailable");
+      return res.blob();
+    })
+    .then((blob) => blobToPngDataUrl(blob, JBT_LOGO_PX))
+    .catch((err: unknown) => {
+      jbtLogo = null;
+      throw err;
+    });
+  return jbtLogo;
+}
 
 export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {

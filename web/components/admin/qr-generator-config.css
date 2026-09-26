@@ -151,6 +151,62 @@
   flex: 1 1 auto;
   min-width: 0;
   max-width: 260px;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid var(--border-hair);
+  border-radius: var(--radius-sm);
+  background: var(--glass-2);
+  color: var(--text-hi);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.qrgc-presets input[type="text"]:focus {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+}
+
+@media (max-width: 1099px) {
+  .qrgc-preview {
+    order: -1;
+  }
+
+  .qrgc-preview .qrg-stage {
+    max-width: 240px;
+  }
+}
+
+@media (max-width: 640px) {
+  .qrgc-toolbar .admin-tabs {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-inline: -2px;
+    padding: 2px;
+  }
+
+  .qrgc-toolbar .admin-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .qrgc-toolbar .admin-tabs button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .qrgc-toolbar > .btn {
+    margin-left: auto;
+  }
+
+  .qrgc-presets input[type="text"] {
+    max-width: none;
+  }
+
+  .qrgc-type-row {
+    padding: 10px 12px;
+  }
 }
 
 .qrgc-types {
@@ -241,5 +297,11 @@
 
   .qrgc-chip {
     padding: 9px 14px;
+  }
+
+  .qrgc-type-name input,
+  .qrgc-default input {
+    width: 18px;
+    height: 18px;
   }
 }

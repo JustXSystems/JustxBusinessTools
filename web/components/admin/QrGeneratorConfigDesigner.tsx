@@ -15,7 +15,7 @@ import {
   type QrExportFormat,
   type QrGeneratorConfig,
 } from "@/lib/qr-generator/config";
-import { blobToPngDataUrl, loadImage, verifyCanvasDecodes } from "@/lib/qr-generator/export";
+import { blobToPngDataUrl, loadImage, loadJbtQrLogo, verifyCanvasDecodes } from "@/lib/qr-generator/export";
 import { buildQrPayload, getQrTypeDef, QR_TYPES, type QrType } from "@/lib/qr-generator/payloads";
 import {
   CAPTION_MAX,
@@ -61,6 +61,7 @@ const EYE_OPTIONS: Array<{ value: QrEyeStyle; label: string }> = [
 
 const LOGO_OPTIONS: Array<{ value: QrBrandLogoSource; label: string }> = [
   { value: "none", label: "No logo" },
+  { value: "jbt", label: "JBT logo" },
   { value: "profile", label: "Business profile logo" },
   { value: "custom", label: "Upload" },
 ];
@@ -122,6 +123,7 @@ export function QrGeneratorConfigDesigner({
   const [previewType, setPreviewType] = useState<QrType>(cfg.defaultType);
   const [profileLogo, setProfileLogo] = useState<string | null>(null);
   const [profileLogoMissing, setProfileLogoMissing] = useState(false);
+  const [jbtLogo, setJbtLogo] = useState<string | null>(null);
   const [loadedLogo, setLoadedLogo] = useState<{ src: string; img: HTMLImageElement } | null>(null);
   const [verify, setVerify] = useState<{ key: string; ok: boolean } | null>(null);
   const [uploadError, setUploadError] = useState("");
@@ -170,8 +172,28 @@ export function QrGeneratorConfigDesigner({
     };
   }, [needsProfileLogo]);
 
+  const needsJbtLogo = cfg.brand.logoSource === "jbt";
+  useEffect(() => {
+    if (!needsJbtLogo) return;
+    let cancelled = false;
+    loadJbtQrLogo()
+      .then((dataUrl) => {
+        if (!cancelled) setJbtLogo(dataUrl);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [needsJbtLogo]);
+
   const brandLogo =
-    cfg.brand.logoSource === "custom" ? cfg.brand.logoDataUrl : cfg.brand.logoSource === "profile" ? profileLogo : null;
+    cfg.brand.logoSource === "custom"
+      ? cfg.brand.logoDataUrl
+      : cfg.brand.logoSource === "profile"
+        ? profileLogo
+        : cfg.brand.logoSource === "jbt"
+          ? jbtLogo
+          : null;
 
   useEffect(() => {
     if (!brandLogo) return;
@@ -323,7 +345,7 @@ export function QrGeneratorConfigDesigner({
           ? "Showing sample content — add field defaults for this type to preview real data."
           : "Using this type's field defaults."}{" "}
         Error correction {design.ecl}
-        {brandLogo ? " (forced to H because of the logo)" : ""}.
+        {brandLogo ? " — always H with a logo" : ""}.
       </p>
       {warnings.map((w) => (
         <p key={w} className="qrg-alert">

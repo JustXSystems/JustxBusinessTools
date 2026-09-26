@@ -21,6 +21,7 @@ import {
   blobToPngDataUrl,
   buildPosterPdf,
   downloadBlob,
+  loadJbtQrLogo,
   renderPngBlob,
   renderPngDataUrl,
   svgBlob,
@@ -62,8 +63,9 @@ import {
 import type { BusinessProfile } from "@/lib/types/business-profile";
 import "./qr-generator.css";
 
-const STORAGE_KEY = "jbt.qrgen.v1";
+const STORAGE_KEY = "jbt.qrgen.v2";
 const PREVIEW_PX = 720;
+const DOCK_THUMB_PX = 96;
 const LOGO_MAX_BYTES = 3 * 1024 * 1024;
 
 type FieldsByType = Partial<Record<QrType, QrFields>>;
@@ -196,11 +198,16 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
   const [history, setHistory] = useState<QrHistoryEntry[]>(() => (F.history ? readHistory() : []));
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [businessLogo, setBusinessLogo] = useState<string | null>(null);
+  const [jbtLogo, setJbtLogo] = useState<string | null>(null);
   const [loadedLogo, setLoadedLogo] = useState<{ src: string; img: HTMLImageElement } | null>(null);
   const [verify, setVerify] = useState<{ key: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dockCanvasRef = useRef<HTMLCanvasElement>(null);
+  const previewRef = useRef<HTMLElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [previewInView, setPreviewInView] = useState(true);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const type = cfg.enabledTypes.includes(rawType) ? rawType : cfg.defaultType;
@@ -208,8 +215,30 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
   const typeDef = getQrTypeDef(type);
   const enabledTypeDefs = QR_TYPES.filter((t) => cfg.enabledTypes.includes(t.id));
   const groups = [...new Set(enabledTypeDefs.map((t) => t.group))];
+  const logoSource = cfg.brand.logoSource;
   const brandLogo =
-    cfg.brand.logoSource === "custom" ? cfg.brand.logoDataUrl : cfg.brand.logoSource === "profile" ? businessLogo : null;
+    logoSource === "custom"
+      ? cfg.brand.logoDataUrl
+      : logoSource === "profile"
+        ? businessLogo
+        : logoSource === "jbt"
+          ? jbtLogo
+          : null;
+
+  useEffect(() => {
+    if (logoSource !== "jbt") return;
+    let cancelled = false;
+    loadJbtQrLogo()
+      .then((dataUrl) => {
+        if (cancelled) return;
+        setJbtLogo(dataUrl);
+        if (!stored.design) setDesign((d) => (d.logoDataUrl ? d : { ...d, logoDataUrl: dataUrl }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [logoSource, stored.design]);
 
   useEffect(() => {
     let cancelled = false;
@@ -327,6 +356,14 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
     if (!canvas || !matrix) return;
     if (activeDesign.logoDataUrl && !logoImg) return;
     renderQrToCanvas(canvas, matrix, activeDesign, PREVIEW_PX, logoImg);
+    const dock = dockCanvasRef.current;
+    const dockCtx = dock?.getContext("2d");
+    if (dock && dockCtx) {
+      dock.width = DOCK_THUMB_PX;
+      dock.height = Math.round((DOCK_THUMB_PX * canvas.height) / canvas.width);
+      dockCtx.imageSmoothingQuality = "high";
+      dockCtx.drawImage(canvas, 0, 0, dock.width, dock.height);
+    }
     if (!F.verifyScan || !deferredPayload) return;
     let cancelled = false;
     const t = setTimeout(() => {
@@ -346,6 +383,20 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
 
   const verifyStatus: "ok" | "fail" | "pending" | null =
     !F.verifyScan || !matrix ? null : verify?.key === verifyKey ? (verify.ok ? "ok" : "fail") : "pending";
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => setPreviewInView(entry.isIntersecting), { threshold: 0.35 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [mode]);
+  const showDock = mode === "single" && !!matrix && !previewInView;
+
+  function scrollToPreview() {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    previewRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }
 
   const warnings = useMemo(() => {
     const list = designWarnings(activeDesign);
@@ -497,7 +548,7 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
   const eclOptions = ECL_OPTIONS.filter((o) => eclAtLeast(o.value, cfg.minEcl));
 
   const previewPanel = (
-    <aside className="qrg-area-preview">
+    <aside className="qrg-area-preview" ref={previewRef}>
       <section className="panel qrg-preview-panel" aria-live="polite">
         <div className="qrg-panel-head">
           <h2 className="panel-title">Preview &amp; download</h2>
@@ -511,7 +562,7 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
           ) : null}
         </div>
 
-        <div className={`qrg-stage${matrix ? " is-live" : ""}`} style={{ background: matrix ? activeDesign.bg : undefined }}>
+        <div ref={stageRef} className={`qrg-stage${matrix ? " is-live" : ""}`} style={{ background: matrix ? activeDesign.bg : undefined }}>
           {matrix ? (
             <canvas ref={canvasRef} className="qrg-canvas" role="img" aria-label={`${typeDef.label} QR code`} />
           ) : (
@@ -829,7 +880,7 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
                       ) : null}
                       {brandLogo && design.logoDataUrl !== brandLogo ? (
                         <button type="button" className="btn btn-secondary btn-sm" onClick={() => patchDesign({ logoDataUrl: brandLogo })}>
-                          Use brand logo
+                          {logoSource === "jbt" ? "Use JBT logo" : "Use brand logo"}
                         </button>
                       ) : null}
                       {businessLogo && businessLogo !== brandLogo && design.logoDataUrl !== businessLogo ? (
@@ -936,6 +987,28 @@ function QrWorkspace({ cfg }: { cfg: QrGeneratorConfig }) {
           </section>
         </div>
       )}
+
+      {mode === "single" ? (
+        <div className={`qrg-dock${showDock ? " is-shown" : ""}`} aria-hidden={!showDock} inert={!showDock}>
+          <button type="button" className="qrg-dock-thumb" onClick={scrollToPreview} aria-label="Show QR preview">
+            <canvas ref={dockCanvasRef} />
+          </button>
+          <div className="qrg-dock-text">
+            <strong>{typeDef.label}</strong>
+            <span className={verifyStatus ? `qrg-dock-status is-${verifyStatus}` : "qrg-dock-status"}>
+              {verifyStatus === "ok" ? "✓ Scan verified" : verifyStatus === "fail" ? "⚠ Check the design" : verifyStatus === "pending" ? "Checking…" : "QR ready"}
+            </span>
+          </div>
+          {has("png") ? (
+            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={downloadPng}>
+              ⬇ PNG
+            </button>
+          ) : null}
+          <button type="button" className="btn btn-secondary btn-sm" onClick={scrollToPreview}>
+            View
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
