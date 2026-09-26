@@ -31,6 +31,11 @@ async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
      VALUES (:orgId, 'sitesurveyv1', 'Solar Solutions', 14, 1)`,
     { orgId },
   );
+  await pool.query(
+    `INSERT IGNORE INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available)
+     VALUES (:orgId, 'qrgenerator', 'Utilities', 38, 1)`,
+    { orgId },
+  );
 }
 
 export async function getEffectiveConfig(): Promise<{
@@ -89,7 +94,10 @@ export async function getEffectiveConfig(): Promise<{
 
   // Opt Live V1 tools into branch home allowlists that were frozen before these tools existed.
   for (const row of catalog) {
-    if (row.available && (row.id === "sitesurveyv1" || row.id === "quotationv1")) {
+    if (
+      row.available &&
+      (row.id === "sitesurveyv1" || row.id === "quotationv1" || row.id === "qrgenerator")
+    ) {
       await appendToolToOrgHomeSelections(orgId, row.id);
     }
   }

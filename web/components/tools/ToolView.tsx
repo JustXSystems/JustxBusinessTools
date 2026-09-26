@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Suspense } from "react";
 import { DOCUMENT_CONFIGS } from "@/config/tools.config";
@@ -12,6 +13,19 @@ import { SiteSurveyV1 } from "@/components/site-survey-v1/SiteSurveyV1";
 import { TrackerTool } from "@/components/tools/TrackerTool";
 import { resolveToolDefinition } from "@/lib/dynamic-tools";
 import { ToolPageHero } from "@/components/shell/ToolPageHero";
+
+const QrGeneratorTool = dynamic(
+  () => import("@/components/utilities/QrGeneratorTool").then((m) => m.QrGeneratorTool),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="empty-state">
+        <div className="es-icon">⏳</div>
+        <div className="es-title">Loading…</div>
+      </div>
+    ),
+  },
+);
 
 export function ToolView({ toolId }: { toolId: string }) {
   const { config, loading } = usePlatformConfig();
@@ -62,6 +76,10 @@ export function ToolView({ toolId }: { toolId: string }) {
 
   if (tool.id === "qrscanner") {
     return <QrTool />;
+  }
+
+  if (tool.id === "qrgenerator") {
+    return <QrGeneratorTool />;
   }
 
   if (tool.id === "quotationv1") {

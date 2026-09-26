@@ -59,6 +59,7 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
   { id: "visitors", name: "Visitor & Appointment Manager", category: "Utilities", icon: "🗓️", desc: "Log visits & upcoming meetings" },
   { id: "notifications", name: "Notifications", category: "Utilities", icon: "🔔", desc: "Reminders across every tool" },
   { id: "qrscanner", name: "QR Code Scanner", category: "Utilities", icon: "🔳", desc: "Scan or generate QR codes" },
+  { id: "qrgenerator", name: "QR Code Generator", category: "Utilities", icon: "🎨", desc: "Branded QR for UPI, Wi-Fi, vCard, maps & more" },
 ];
 
 const TOOL_TYPES: Record<string, ToolType> = {
@@ -90,6 +91,7 @@ const TOOL_TYPES: Record<string, ToolType> = {
   solarroi: "calculator",
   dealercommission: "calculator",
   qrscanner: "utility",
+  qrgenerator: "utility",
   notifications: "screen",
 };
 

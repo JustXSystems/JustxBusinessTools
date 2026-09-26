@@ -35,6 +35,7 @@ const DEFAULT_TOOLS = [
   ["dealerorders", "Dealers / Distributors"],
   ["visitors", "Utilities"],
   ["qrscanner", "Utilities"],
+  ["qrgenerator", "Utilities"],
 ] as const;
 
 const router = Router();
@@ -72,13 +73,18 @@ async function ensureCatalog(orgId: number): Promise<void> {
        VALUES (:orgId, 'sitesurveyv1', 'Solar Solutions', 14, 1)`,
       { orgId },
     );
+    await pool.query(
+      `INSERT IGNORE INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available)
+       VALUES (:orgId, 'qrgenerator', 'Utilities', 38, 1)`,
+      { orgId },
+    );
   }
 
   // New tools added after branch home allowlists were saved stay invisible unless we opt them in.
   const [liveRows] = await pool.query(
     `SELECT tool_id FROM tool_catalog
      WHERE organization_id = :orgId AND available = 1
-       AND tool_id IN ('sitesurveyv1', 'quotationv1')`,
+       AND tool_id IN ('sitesurveyv1', 'quotationv1', 'qrgenerator')`,
     { orgId },
   );
   for (const row of Array.isArray(liveRows) ? liveRows : []) {

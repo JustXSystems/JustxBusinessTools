@@ -2,9 +2,11 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
+import { QrGeneratorConfigDesigner } from "@/components/admin/QrGeneratorConfigDesigner";
 import { TrackerSchemaDesigner } from "@/components/admin/SchemaDesigner";
 import { TRACKER_CONFIGS } from "@/config/tools.config";
 import { api } from "@/lib/api";
+import { QR_TOOL_ID } from "@/lib/qr-generator/config";
 import { validateComputedFormulas, type TrackerFieldMeta } from "@jbt/shared";
 
 function hydrateJson(
@@ -40,8 +42,10 @@ export const ToolSchemaPane = forwardRef<
     onPublished: (msg: string) => void;
   }
 >(function ToolSchemaPane({ toolId, toolType, definition, onPublished }, ref) {
-  const isTracker = toolType === "tracker" || TRACKER_CONFIGS[toolId] != null;
-  const [mode, setMode] = useState<"visual" | "json">(isTracker ? "visual" : "json");
+  const isQr = toolId === QR_TOOL_ID;
+  const isTracker = !isQr && (toolType === "tracker" || TRACKER_CONFIGS[toolId] != null);
+  const hasVisual = isTracker || isQr;
+  const [mode, setMode] = useState<"visual" | "json">(hasVisual ? "visual" : "json");
   const [jsonText, setJsonText] = useState(() => hydrateJson(toolId, toolType, definition));
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -51,7 +55,7 @@ export const ToolSchemaPane = forwardRef<
     setDirty(false);
     setLocalError("");
     setJsonText(hydrateJson(toolId, toolType, definition));
-    setMode(TRACKER_CONFIGS[toolId] != null || toolType === "tracker" ? "visual" : "json");
+    setMode(toolId === QR_TOOL_ID || TRACKER_CONFIGS[toolId] != null || toolType === "tracker" ? "visual" : "json");
   }, [toolId]);
 
   useEffect(() => {
@@ -69,6 +73,7 @@ export const ToolSchemaPane = forwardRef<
     setLocalError("");
     try {
       const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+      if (isQr) parsed.type = "utility";
       if ((parsed.type === "tracker" || isTracker) && Array.isArray(parsed.fields) === false) {
         throw new Error("Tracker schema must include a fields array");
       }
@@ -101,23 +106,25 @@ export const ToolSchemaPane = forwardRef<
       label: () => "Publish revision",
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [busy, dirty, jsonText, toolId, isTracker],
+    [busy, dirty, jsonText, toolId, isTracker, isQr],
   );
 
   return (
     <section className="panel admin-card tm-pane tm-schema-pane">
       <div className="analytics-toolbar tm-pane-toolbar">
         <div>
-          <h2>Schema</h2>
+          <h2>{isQr ? "QR generator settings" : "Schema"}</h2>
           <p className="muted">
-            {isTracker
-              ? "Field-level layout for this tracker. Publish a revision when the operator form should change."
-              : "Calculator and document tools use JSON config (rates, copy). Runtime math stays in product code."}
+            {isQr
+              ? "Brand kit, allowed QR types, company defaults, export formats and features for every operator in this organisation. Publish a revision to roll it out."
+              : isTracker
+                ? "Field-level layout for this tracker. Publish a revision when the operator form should change."
+                : "Calculator and document tools use JSON config (rates, copy). Runtime math stays in product code."}
           </p>
         </div>
         <div className="admin-form-row">
           {dirty ? <span className="pill pill-warning">Unsaved</span> : null}
-          {isTracker ? (
+          {hasVisual ? (
             <div className="admin-tabs">
               <button type="button" className={mode === "visual" ? "active" : ""} onClick={() => setMode("visual")}>
                 Visual
@@ -134,7 +141,8 @@ export const ToolSchemaPane = forwardRef<
         {isTracker && mode === "visual" ? (
           <TrackerSchemaDesigner toolId={toolId} jsonText={jsonText} onChange={updateJson} />
         ) : null}
-        {mode === "json" || !isTracker ? (
+        {isQr && mode === "visual" ? <QrGeneratorConfigDesigner jsonText={jsonText} onChange={updateJson} /> : null}
+        {mode === "json" || !hasVisual ? (
           <label className="field">
             <span>Definition JSON</span>
             <textarea rows={16} value={jsonText} onChange={(e) => updateJson(e.target.value)} />

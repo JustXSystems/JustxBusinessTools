@@ -253,6 +253,10 @@ export function QrTool() {
               onChange={(e) => setText(e.target.value)}
             />
           </label>
+          <p className="section-note">
+            Need a UPI, Wi-Fi, contact card or branded QR code?{" "}
+            <Link href="/tools/qrgenerator">Open the QR Code Generator →</Link>
+          </p>
           <div className="qr-gen-box">
             <canvas ref={canvasRef} />
           </div>

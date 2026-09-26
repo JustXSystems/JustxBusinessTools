@@ -68,6 +68,7 @@ export const DEFAULT_TOOL_SKUS: Array<
   { toolId: "visitors", name: "Visitor & Appointment Manager", category: "Utilities", priceInr: 49, includedFree: false },
   { toolId: "notifications", name: "Notifications", category: "Utilities", priceInr: 0, includedFree: true },
   { toolId: "qrscanner", name: "QR Code Scanner", category: "Utilities", priceInr: 0, includedFree: true },
+  { toolId: "qrgenerator", name: "QR Code Generator", category: "Utilities", priceInr: 0, includedFree: true },
 ];
 
 let schemaReady: Promise<void> | null = null;

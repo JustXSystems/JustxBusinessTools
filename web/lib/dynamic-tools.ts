@@ -27,6 +27,7 @@ const BUILTIN_IDS = new Set(
       "solarroi",
       "dealercommission",
       "qrscanner",
+      "qrgenerator",
       "notifications",
     ],
   ),
