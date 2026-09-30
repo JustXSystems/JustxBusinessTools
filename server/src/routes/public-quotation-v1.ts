@@ -5,6 +5,7 @@ import { withFileAccessToken } from "../lib/storage.js";
 import {
   ensureDocumentAccentColorColumn,
   normalizeDocumentAccentColor,
+  normalizeDocumentTextTone,
 } from "../lib/document-accent.js";
 
 const TOOL_ID = "quotationv1";
@@ -49,7 +50,7 @@ async function companyForRecord(
   await ensureDocumentAccentColorColumn();
   const [rows] = await pool.query(
     `SELECT business_name, logo_data_url, address_line1, address_line2, state, gstin, phone, email,
-            document_accent_color
+            document_accent_color, document_text_tone
      FROM business_profiles WHERE id = :id LIMIT 1`,
     { id: businessProfileId },
   );
@@ -65,6 +66,7 @@ async function companyForRecord(
             phone: string | null;
             email: string | null;
             document_accent_color?: string | null;
+            document_text_tone?: string | null;
           }
         | undefined)
     : undefined;
@@ -87,6 +89,7 @@ async function companyForRecord(
     quotePrefix: "QT",
     place: "",
     documentAccentColor: normalizeDocumentAccentColor(row.document_accent_color),
+    documentTextTone: normalizeDocumentTextTone(row.document_text_tone),
   };
 }
 

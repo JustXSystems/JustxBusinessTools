@@ -1709,6 +1709,15 @@
   font-size: 12px;
 }
 
+/* Business Profile documentTextTone = "dark": secondary text near-black for on-screen readability. */
+.qgv1-sheet[data-text-tone="dark"] {
+  --q-soft: #1b1b1b;
+}
+
+.qgv1-sheet[data-text-tone="dark"] .qgv1-qs-foot {
+  color: #3a3a3a;
+}
+
 .qgv1-stamp {
   position: absolute;
   top: 150px;

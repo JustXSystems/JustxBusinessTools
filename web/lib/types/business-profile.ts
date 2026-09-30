@@ -246,6 +246,11 @@ export type BusinessProfile = {
    */
   documentAccentColor: string;
   /**
+   * Secondary text on the on-screen quotation preview: `standard` keeps the soft gray,
+   * `dark` renders it near-black for readability.
+   */
+  documentTextTone: "standard" | "dark";
+  /**
    * UI theme override for this Business Profile.
    * `null` = inherit Admin (organization) active theme.
    * Otherwise a built-in preset name, or `saved:{orgThemeId}` for a saved org theme.
@@ -331,6 +336,7 @@ export const EMPTY_PROFILE: BusinessProfile = {
   bankUpi: null,
   terms: null,
   documentAccentColor: "#0f3d3e",
+  documentTextTone: "standard",
   themePreset: null,
   themePresets: [],
   orgThemes: [],

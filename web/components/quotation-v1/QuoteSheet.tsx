@@ -28,6 +28,7 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
       id="quote-sheet"
       className="qgv1-sheet"
       data-show-breaks={showBreakMarkers ? "1" : "0"}
+      data-text-tone={c.documentTextTone === "dark" ? "dark" : "standard"}
       style={accentStyle}
     >
       {q.status === "approved" ? (

@@ -30,6 +30,7 @@ import {
 import {
   ensureDocumentAccentColorColumn,
   normalizeDocumentAccentColor,
+  normalizeDocumentTextTone,
 } from "../lib/document-accent.js";
 import {
   ensureThemePresetColumn,
@@ -81,6 +82,7 @@ type ProfileRow = {
   bank_upi: string | null;
   terms: string | null;
   document_accent_color?: string | null;
+  document_text_tone?: string | null;
   theme_preset?: string | null;
   clock_display_visible?: number | boolean | null;
   clock_display_format?: string | null;
@@ -168,6 +170,7 @@ function toApi(
     bankUpi: row.bank_upi,
     terms: row.terms,
     documentAccentColor: normalizeDocumentAccentColor(row.document_accent_color),
+    documentTextTone: normalizeDocumentTextTone(row.document_text_tone),
     themePreset: normalizeThemePreset(row.theme_preset),
     themePresets: THEME_PRESETS.map((p) => ({
       name: p.name,
@@ -382,6 +385,8 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
     body.documentAccentColor !== undefined
       ? normalizeDocumentAccentColor(body.documentAccentColor)
       : undefined;
+  const documentTextTone =
+    body.documentTextTone !== undefined ? normalizeDocumentTextTone(body.documentTextTone) : undefined;
 
   let themePreset: string | null | undefined;
   if (body.themePreset !== undefined) {
@@ -439,6 +444,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       terms = :terms,
       send_settings = :sendSettings
       ${documentAccentColor !== undefined ? ", document_accent_color = :documentAccentColor" : ""}
+      ${documentTextTone !== undefined ? ", document_text_tone = :documentTextTone" : ""}
       ${themePreset !== undefined ? ", theme_preset = :themePreset" : ""}
       ${
         themePreset !== undefined || clockDisplay !== undefined || flashDisplay !== undefined
@@ -479,6 +485,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       terms: body.terms || null,
       sendSettings: JSON.stringify(sendSettings),
       ...(documentAccentColor !== undefined ? { documentAccentColor } : {}),
+      ...(documentTextTone !== undefined ? { documentTextTone } : {}),
       ...(themePreset !== undefined ? { themePreset } : {}),
       ...(clockDisplay !== undefined
         ? { clockVisible: clockDisplay.visible ? 1 : 0, clockFormat: clockDisplay.format }

@@ -13,7 +13,7 @@ import {
   type BusinessProfile,
   type BusinessProfileSendSettings,
 } from "@/lib/types/business-profile";
-import { normalizeDocumentAccentColor } from "@/lib/document-accent";
+import { normalizeDocumentAccentColor, normalizeDocumentTextTone } from "@/lib/document-accent";
 import {
   findThemePresetTokens,
   normalizeThemePreset,
@@ -106,6 +106,7 @@ export default function ProfilePage() {
           ...EMPTY_PROFILE,
           ...p,
           documentAccentColor: normalizeDocumentAccentColor(p.documentAccentColor),
+          documentTextTone: normalizeDocumentTextTone(p.documentTextTone),
           themePreset: normalizeThemePreset(p.themePreset),
           themePresets: p.themePresets ?? [],
           orgThemes: p.orgThemes ?? [],
@@ -167,6 +168,7 @@ export default function ProfilePage() {
       const payload: BusinessProfile & { artifactWebhookSecret?: string } = {
         ...profile,
         documentAccentColor: normalizeDocumentAccentColor(profile.documentAccentColor),
+        documentTextTone: normalizeDocumentTextTone(profile.documentTextTone),
         themePreset: normalizeThemePreset(profile.themePreset),
         clockDisplay: normalizeClockDisplaySettings(profile.clockDisplay),
         flashDisplay: normalizeFlashDisplaySettings(profile.flashDisplay),
@@ -183,6 +185,7 @@ export default function ProfilePage() {
         ...EMPTY_PROFILE,
         ...saved,
         documentAccentColor: normalizeDocumentAccentColor(saved.documentAccentColor),
+        documentTextTone: normalizeDocumentTextTone(saved.documentTextTone),
         themePreset: normalizeThemePreset(saved.themePreset),
         themePresets: saved.themePresets ?? [],
         orgThemes: saved.orgThemes ?? [],
@@ -397,6 +400,31 @@ export default function ProfilePage() {
               <p className="section-note">
                 Used on generated PDFs (quotations, site surveys, orders, etc.) and Corporate HTML
                 email. Owner and Admin can change this.
+              </p>
+            </div>
+            <div className="profile-accent-field" style={{ marginTop: 16 }}>
+              <label className="label" htmlFor="documentTextTone">
+                Document text tone
+              </label>
+              <select
+                id="documentTextTone"
+                value={normalizeDocumentTextTone(profile.documentTextTone)}
+                disabled={!canEdit}
+                onChange={(e) =>
+                  setProfile({
+                    ...profile,
+                    documentTextTone: normalizeDocumentTextTone(e.target.value),
+                  })
+                }
+                style={{ maxWidth: 260 }}
+              >
+                <option value="standard">Standard (soft gray)</option>
+                <option value="dark">Dark (high contrast black)</option>
+              </select>
+              <p className="section-note">
+                Choose Dark if gray details (address, customer contact, notes, terms) are hard to
+                read on the quotation preview. Applies to the preview and the PDF downloaded from
+                it.
               </p>
             </div>
           </div>

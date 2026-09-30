@@ -2,6 +2,13 @@
 
 export const DEFAULT_DOCUMENT_ACCENT_COLOR = "#0f3d3e";
 
+/** On-screen document body text: `standard` (soft gray) or `dark` (near-black). */
+export type DocumentTextTone = "standard" | "dark";
+
+export function normalizeDocumentTextTone(raw: unknown): DocumentTextTone {
+  return String(raw ?? "").trim().toLowerCase() === "dark" ? "dark" : "standard";
+}
+
 const HEX_RE = /^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 /** Normalize to `#rrggbb` or fall back to the quotation default teal. */

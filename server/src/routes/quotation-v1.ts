@@ -18,6 +18,8 @@ import { withFileAccessToken } from "../lib/storage.js";
 import {
   ensureDocumentAccentColorColumn,
   normalizeDocumentAccentColor,
+  normalizeDocumentTextTone,
+  type DocumentTextTone,
 } from "../lib/document-accent.js";
 import {
   createEmailOutbox,
@@ -106,11 +108,12 @@ async function loadActiveBusinessBrand(): Promise<{
   phone: string | null;
   email: string | null;
   documentAccentColor: string;
+  documentTextTone: DocumentTextTone;
 } | null> {
   await ensureDocumentAccentColorColumn();
   const [rows] = await pool.query(
     `SELECT business_name, logo_data_url, address_line1, address_line2, state, gstin, phone, email,
-            document_accent_color
+            document_accent_color, document_text_tone
      FROM business_profiles WHERE id = :id LIMIT 1`,
     { id: getActiveProfileId() },
   );
@@ -126,6 +129,7 @@ async function loadActiveBusinessBrand(): Promise<{
             phone: string | null;
             email: string | null;
             document_accent_color?: string | null;
+            document_text_tone?: string | null;
           }
         | undefined)
     : undefined;
@@ -140,6 +144,7 @@ async function loadActiveBusinessBrand(): Promise<{
     phone: row.phone,
     email: row.email,
     documentAccentColor: normalizeDocumentAccentColor(row.document_accent_color),
+    documentTextTone: normalizeDocumentTextTone(row.document_text_tone),
   };
 }
 
@@ -165,12 +170,14 @@ function mergeCompanyWithBusinessBrand(
     quotePrefix: "QT",
     place: "Bengaluru",
     documentAccentColor: normalizeDocumentAccentColor(null),
+    documentTextTone: normalizeDocumentTextTone(null),
     ...storedObj,
   };
   if (!brand) {
     return {
       ...company,
       documentAccentColor: normalizeDocumentAccentColor(company.documentAccentColor),
+      documentTextTone: normalizeDocumentTextTone(company.documentTextTone),
     };
   }
 
@@ -199,6 +206,7 @@ function mergeCompanyWithBusinessBrand(
     quotePrefix:
       storedPrefix && storedPrefix !== "QT" ? storedPrefix : prefixFromName || company.quotePrefix,
     documentAccentColor: brand.documentAccentColor,
+    documentTextTone: brand.documentTextTone,
   };
 }
 

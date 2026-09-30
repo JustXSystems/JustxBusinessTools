@@ -108,6 +108,8 @@ export type CompanyProfileV1 = {
   place: string;
   /** Letterhead / sheet accent from Business Profile (`#rrggbb`). */
   documentAccentColor?: string;
+  /** Business Profile preview text tone; `dark` replaces soft gray text with near-black. */
+  documentTextTone?: "standard" | "dark";
 };
 
 export type QuoteTotals = {

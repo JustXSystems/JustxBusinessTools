@@ -20,19 +20,34 @@ export function normalizeDocumentAccentColor(raw: unknown): string {
   return `#${full.toLowerCase()}`;
 }
 
+/** On-screen document body text: `standard` (soft gray) or `dark` (near-black). */
+export type DocumentTextTone = "standard" | "dark";
+
+export function normalizeDocumentTextTone(raw: unknown): DocumentTextTone {
+  return String(raw ?? "").trim().toLowerCase() === "dark" ? "dark" : "standard";
+}
+
 let ready: Promise<void> | null = null;
 
+async function addColumnIfMissing(sql: string): Promise<void> {
+  try {
+    await pool.query(sql);
+  } catch (err) {
+    const e = err as { code?: string; errno?: number };
+    if (e.code !== "ER_DUP_FIELDNAME" && e.errno !== 1060) throw err;
+  }
+}
+
+/** Ensures both document styling columns (accent color + text tone). */
 export async function ensureDocumentAccentColorColumn(): Promise<void> {
   if (!ready) {
     ready = (async () => {
-      try {
-        await pool.query(
-          `ALTER TABLE business_profiles ADD COLUMN document_accent_color VARCHAR(7) NULL`,
-        );
-      } catch (err) {
-        const e = err as { code?: string; errno?: number };
-        if (e.code !== "ER_DUP_FIELDNAME" && e.errno !== 1060) throw err;
-      }
+      await addColumnIfMissing(
+        `ALTER TABLE business_profiles ADD COLUMN document_accent_color VARCHAR(7) NULL`,
+      );
+      await addColumnIfMissing(
+        `ALTER TABLE business_profiles ADD COLUMN document_text_tone VARCHAR(16) NULL`,
+      );
     })().catch((err) => {
       ready = null;
       throw err;
