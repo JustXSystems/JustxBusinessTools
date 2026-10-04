@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FeatureSwitchesPanel } from "@/components/admin/FeatureSwitchesPanel";
 import { ToolPlacementPane } from "@/components/admin/ToolPlacementPane";
 import { ToolPricingPane, type BundleState, type SkuState } from "@/components/admin/ToolPricingPane";
 import { ToolSchemaPane } from "@/components/admin/ToolSchemaPane";
@@ -575,6 +576,7 @@ export default function AdminToolsPage() {
                     invalidateAdminData("admin-tools");
                   }}
                 />
+                <FeatureSwitchesPanel toolId={selected.id} toolName={selected.name} toolLive={selected.catalog?.available === true} />
               </div>
 
               <div hidden={tab !== "pricing"} className={tab === "pricing" ? undefined : "payments-tab-park"}>

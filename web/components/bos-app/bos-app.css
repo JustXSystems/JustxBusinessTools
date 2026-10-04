@@ -1,0 +1,64 @@
+/* Justx BOS app — the few layouts the design kit doesn't already provide. Scoped under `.bos`. */
+
+/* GST line items: description · qty · rate · GST% · amount · remove */
+.bos .bos-app-line-head,
+.bos .bos-app-line { display: grid; grid-template-columns: minmax(0, 2fr) 58px 96px 66px 96px 26px; gap: 8px; align-items: center; }
+.bos .bos-app-line-head { font-family: var(--bos-font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--bos-text-faint); font-weight: 650; padding: 0 0 6px; }
+.bos .bos-app-line { margin-bottom: 8px; }
+.bos .bos-app-line-amount { font-family: var(--bos-font-mono); font-size: 12px; color: var(--bos-text-muted); text-align: right; padding-right: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bos .bos-app-line-amount small { display: block; font-size: 10px; color: var(--bos-text-faint); }
+
+/* Paper extras for GST invoices */
+.bos .bos-inv-paper-seller { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.5; white-space: pre-line; }
+.bos .bos-inv-paper-sub { font-size: 11px; color: #6b7280; font-weight: 500; margin-top: 2px; white-space: pre-line; }
+.bos .bos-inv-paper-table td small { display: block; font-size: 10px; color: #9aa0ac; }
+.bos .bos-inv-totals-row.is-due { color: #c2410c; font-weight: 700; }
+.bos .bos-inv-stamp { display: inline-block; margin-top: 8px; font-family: var(--bos-font-mono); font-size: 10px; font-weight: 700; letter-spacing: .08em; padding: 3px 8px; border-radius: 999px; border: 1.5px solid currentColor; }
+
+/* Record header row: back link · title · actions */
+.bos .bos-app-recordbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.bos .bos-app-recordbar .bos-back-link { margin-bottom: 0; }
+.bos .bos-app-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Connected tools */
+.bos .bos-app-connector { display: flex; flex-direction: column; gap: 12px; }
+.bos .bos-app-connector-head { display: flex; align-items: center; gap: 12px; }
+.bos .bos-app-connector-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; background: var(--bos-blue-100); flex-shrink: 0; }
+.bos .bos-app-connector-name { font-family: var(--bos-font-display); font-weight: 650; font-size: 15px; }
+.bos .bos-app-connector-desc { font-size: 12.5px; color: var(--bos-text-muted); line-height: 1.55; }
+.bos .bos-app-flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: var(--bos-font-mono); font-size: 11px; color: var(--bos-text-muted); }
+.bos .bos-app-flow-arrow { color: var(--bos-text-faint); }
+
+/* Attendance roster quick-marking */
+.bos .bos-app-mark { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.bos .bos-app-mark .bos-filter-chip { padding: 3px 9px; font-size: 11px; }
+
+/* Standalone app (/bos): full-viewport gate (splash → login) and app frame */
+.bos.bos-app-standalone { min-height: 100dvh; }
+.bos .bos-app-gate { position: relative; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: var(--bos-s-8) var(--bos-s-4); text-align: center; background:
+  radial-gradient(1200px 600px at 50% -10%, var(--bos-blue-100), transparent 60%), var(--bos-bg); }
+.bos .bos-app-gate .bos-login-card { animation: bos-fade-in var(--bos-dur) var(--bos-ease); }
+.bos .bos-app-gate-foot { position: absolute; bottom: 18px; left: 0; right: 0; }
+.bos .bos-app-gate-foot .bos-footer { padding: 0; }
+.bos .bos-app-otp-row { display: flex; gap: 8px; align-items: flex-end; }
+.bos .bos-app-otp-row .bos-field { flex: 1; margin-bottom: 0 !important; }
+.bos .bos-app-error { font-size: 12px; color: var(--bos-coral-600); margin: -6px 0 12px; }
+
+@media (max-width: 560px) {
+  .bos .bos-app-line-head { display: none; }
+  .bos .bos-app-line {
+    grid-template-columns: 58px minmax(0, 1fr) 66px 32px;
+    grid-template-areas: "desc desc desc remove" "qty rate gst gst" "amount amount amount amount";
+    padding: 10px;
+    border: 1px solid var(--bos-border-soft);
+    border-radius: var(--bos-r-md);
+    background: var(--bos-surface-2);
+  }
+  .bos .bos-app-line > :nth-child(1) { grid-area: desc; }
+  .bos .bos-app-line > :nth-child(2) { grid-area: qty; }
+  .bos .bos-app-line > :nth-child(3) { grid-area: rate; }
+  .bos .bos-app-line > :nth-child(4) { grid-area: gst; }
+  .bos .bos-app-line > :nth-child(5) { grid-area: amount; text-align: left; }
+  .bos .bos-app-line > :nth-child(6) { grid-area: remove; justify-self: end; }
+  .bos .bos-app-recordbar { align-items: flex-start; }
+}

@@ -13,12 +13,14 @@ export function ShellRouter({ children }: { children: ReactNode }) {
     return <AdminShell>{children}</AdminShell>;
   }
 
-  // Public pages: no operator chrome / subscription gate (approval links, login, status).
+  // Public pages: no operator chrome / subscription gate (approval links, login, status, standalone BOS).
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
     pathname.startsWith("/status") ||
-    pathname.startsWith("/q")
+    pathname.startsWith("/q") ||
+    pathname === "/bos" ||
+    pathname.startsWith("/bos/")
   ) {
     return (
       <ConfigProvider>

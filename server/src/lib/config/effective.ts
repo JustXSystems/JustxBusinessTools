@@ -19,6 +19,7 @@ import {
   normalizeFlashDisplaySettings,
   type FlashDisplaySettings,
 } from "../flash-display.js";
+import { getOrgFeatureSwitches, type FeatureSwitchState } from "../feature-switches.js";
 
 async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
   await pool.query(
@@ -42,6 +43,11 @@ async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
      VALUES (:orgId, 'bosdesign', 'Utilities', 39, 0)`,
     { orgId },
   );
+  await pool.query(
+    `INSERT IGNORE INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available)
+     VALUES (:orgId, 'bos', 'Utilities', 40, 0)`,
+    { orgId },
+  );
 }
 
 export async function getEffectiveConfig(): Promise<{
@@ -56,6 +62,7 @@ export async function getEffectiveConfig(): Promise<{
   themePreset: string | null;
   clockDisplay: ClockDisplaySettings;
   flashDisplay: FlashDisplaySettings;
+  features: FeatureSwitchState;
 }> {
   const orgId = getActiveOrgId();
   const profileId = getActiveProfileId();
@@ -96,7 +103,7 @@ export async function getEffectiveConfig(): Promise<{
   });
 
   await ensureBuiltinCatalogRows(orgId);
-  const [tools, catalog] = await Promise.all([listToolDefinitions(), listOrgCatalog(orgId)]);
+  const [tools, catalog, features] = await Promise.all([listToolDefinitions(), listOrgCatalog(orgId), getOrgFeatureSwitches(orgId)]);
 
   // Opt Live V1 tools into branch home allowlists that were frozen before these tools existed.
   for (const row of catalog) {
@@ -122,6 +129,7 @@ export async function getEffectiveConfig(): Promise<{
     themePreset: resolved.themePreset,
     clockDisplay,
     flashDisplay,
+    features,
   };
 }
 

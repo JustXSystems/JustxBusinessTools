@@ -30,6 +30,7 @@ const BUILTIN_IDS = new Set(
       "qrscanner",
       "qrgenerator",
       "bosdesign",
+      "bos",
       "notifications",
     ],
   ),

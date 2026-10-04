@@ -66,6 +66,12 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const PUBLIC_PREFIXES = ["/login", "/register", "/status", "/q"];
+/** Apps with their own sign-in screen (the standalone Justx BOS app). */
+const SELF_GATED_ROOTS = ["/bos"];
+
+export function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p)) || SELF_GATED_ROOTS.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -89,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loading) return;
-    const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
+    const isPublic = isPublicPath(pathname);
     if (!user && !isPublic) {
       router.replace("/login?next=" + encodeURIComponent(pathname));
     } else if (user && !canAccessAdmin(user) && pathname.startsWith("/admin")) {
@@ -211,7 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, loading, login, verifyOtp, register, logout, switchBranch, refresh],
   );
 
-  const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
+  const isPublic = isPublicPath(pathname);
   const blocking = loading || (!user && !isPublic);
 
   return (

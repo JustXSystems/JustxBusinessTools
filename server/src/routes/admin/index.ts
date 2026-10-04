@@ -6,6 +6,7 @@ import auditRouter from "./audit.js";
 import branchesRouter from "./branches.js";
 import catalogRouter from "./catalog.js";
 import configRouter from "./config.js";
+import featuresRouter from "./features.js";
 import gatewaysRouter from "./gateways.js";
 import opsRouter from "./ops.js";
 import paymentsRouter from "./payments.js";
@@ -279,6 +280,7 @@ router.use("/subscriptions", subscriptionsRouter);
 router.use("/gateways", gatewaysRouter);
 router.use("/themes", themesRouter);
 router.use("/config", configRouter);
+router.use("/features", featuresRouter);
 router.use("/integrations", integrationsRouter);
 
 export default router;

@@ -23,6 +23,7 @@ Multi-tenant business tools for quotations, site surveys, and more — by **Just
 | **Env template** | [`.env.example`](.env.example) → `server/.env` |
 | **Mobile (Capacitor)** | [`docs/MOBILE.md`](docs/MOBILE.md) |
 | **UI/UX standard** (Justx BOS design system) | [`docs/BOS_DESIGN_SYSTEM.md`](docs/BOS_DESIGN_SYSTEM.md) |
+| **Justx BOS app** (Finance, HR, Projects — `/tools/bos` + `/bos`) | [`docs/BOS_APP.md`](docs/BOS_APP.md) |
 | Desktop UNC sync | [`desktop-sync-agent/README.md`](desktop-sync-agent/README.md) |
 
 ## Local development

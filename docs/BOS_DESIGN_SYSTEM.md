@@ -2,6 +2,8 @@
 
 The company-standard UI/UX system, implemented from `Justxsystems_BOS_Design.html` as a reusable React kit plus a live reference tool (**Justx BOS Design**, `/tools/bosdesign`).
 
+The working application built on this system, **Justx BOS** (`/tools/bos` and `/bos`), is documented in [BOS_APP.md](BOS_APP.md).
+
 | Layer | Location | Purpose |
 |------|----------|---------|
 | Tokens | `web/components/bos/tokens.ts` | Single source of truth for colour, type, radius, spacing and motion (light + dark) |

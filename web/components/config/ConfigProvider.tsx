@@ -66,6 +66,8 @@ export type EffectiveConfig = {
   clockDisplay?: ClockDisplaySettings;
   /** Top-right toast durations (Business Profile). */
   flashDisplay?: FlashDisplaySettings;
+  /** Org feature switches (Admin → Tools → Switches). Missing keys are off. */
+  features?: Record<string, boolean>;
 };
 
 type ConfigContextValue = {
@@ -111,7 +113,13 @@ function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefi
     themePreset: data?.themePreset ?? null,
     clockDisplay: normalizeClockDisplaySettings(data?.clockDisplay),
     flashDisplay: normalizeFlashDisplaySettings(data?.flashDisplay),
+    features: normalizeFeatures(data?.features),
   };
+}
+
+function normalizeFeatures(raw: unknown): Record<string, boolean> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  return Object.fromEntries(Object.entries(raw).filter(([, v]) => v === true).map(([k]) => [k, true]));
 }
 
 export function ConfigProvider({ children }: { children: ReactNode }) {
@@ -191,4 +199,10 @@ export function useClockDisplaySettings(): ClockDisplaySettings {
 export function useFlashDisplaySettings(): FlashDisplaySettings {
   const ctx = useContext(ConfigContext);
   return normalizeFlashDisplaySettings(ctx?.config?.flashDisplay);
+}
+
+/** True only when an admin has turned the switch on for this org. Safe outside the provider. */
+export function useFeatureSwitch(key: string): boolean {
+  const ctx = useContext(ConfigContext);
+  return ctx?.config?.features?.[key] === true;
 }

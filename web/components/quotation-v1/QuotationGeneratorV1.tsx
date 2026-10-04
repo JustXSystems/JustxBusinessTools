@@ -7,6 +7,7 @@ import { api, fetchProfile } from "@/lib/api";
 import { flashAppError, flashAppOk } from "@/lib/app-flash";
 import { publicAssetUrl, withBasePath, absolutePublicAssetUrl } from "@/lib/base-path";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { SendToBos } from "@/components/bos-app/SendToBos";
 import { useLiveRefresh, invalidateAdminData, invalidateLiveData } from "@/hooks/useLiveRefresh";
 import {
   buildTerms,
@@ -1581,6 +1582,14 @@ export function QuotationGeneratorV1() {
               >
                 Email
               </button>
+              <SendToBos
+                tool="quotationv1"
+                recordId={current.quoteNo ? current.id : null}
+                status={current.status}
+                saved={isSaved}
+                className="btn btn-secondary"
+                onFlash={flash}
+              />
               {!isSaved && current.quoteNo ? (
                 <span className="pill pill-warning">Unsaved changes</span>
               ) : null}

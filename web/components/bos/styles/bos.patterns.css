@@ -370,6 +370,8 @@
   box-shadow: var(--bos-shadow-lg);
   width: 360px;
   max-width: 100%;
+  max-height: calc(100dvh - 2 * var(--bos-s-4));
+  overflow-y: auto;
   padding: var(--bos-s-6);
   transform: scale(0.94) translateY(6px);
   transition: transform var(--bos-dur) var(--bos-ease);

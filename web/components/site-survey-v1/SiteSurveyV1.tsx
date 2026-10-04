@@ -6,6 +6,7 @@ import { api, fetchProfile } from "@/lib/api";
 import { absolutePublicAssetUrl, publicAssetUrl } from "@/lib/base-path";
 import { buildMailtoHref } from "@/lib/mailto";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { SendToBos } from "@/components/bos-app/SendToBos";
 import { useLiveRefresh, invalidateAdminData } from "@/hooks/useLiveRefresh";
 import {
   cardTone,
@@ -1418,6 +1419,14 @@ export function SiteSurveyV1() {
                     <button type="button" className="ssv1-btn-new" onClick={() => openSendModal("email")}>
                       Email
                     </button>
+                    <SendToBos
+                      tool="sitesurveyv1"
+                      recordId={current.reportNo ? current.id : null}
+                      status={current.status}
+                      saved={isSaved()}
+                      className="ssv1-btn-new"
+                      onFlash={flash}
+                    />
                     <button type="button" className="ssv1-btn-new ssv1-btn-new-primary" onClick={startNewSurvey}>
                       Start New Survey
                     </button>

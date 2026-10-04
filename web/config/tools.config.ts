@@ -61,13 +61,14 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
   { id: "qrscanner", name: "QR Code Scanner", category: "Utilities", icon: "🔳", desc: "Scan or generate QR codes" },
   { id: "qrgenerator", name: "QR Code Generator", category: "Utilities", icon: "🎨", desc: "Branded QR for UPI, Wi-Fi, vCard, maps & more" },
   { id: "bosdesign", name: "Justx BOS Design", category: "Utilities", icon: "🧩", desc: "Standard UI/UX system with live HR, Finance & Invoice samples" },
+  { id: "bos", name: "Justx BOS", category: "Utilities", icon: "🏢", desc: "Business Operating System — Finance, GST invoicing, HR & projects, synced with your tools" },
 ];
 
 /**
  * Tools hidden from every home screen, picker and default selection until an admin
  * marks them available in the org catalog (Admin → Tools → Placement).
  */
-export const OPT_IN_TOOL_IDS: ReadonlySet<string> = new Set(["bosdesign"]);
+export const OPT_IN_TOOL_IDS: ReadonlySet<string> = new Set(["bosdesign", "bos"]);
 
 const TOOL_TYPES: Record<string, ToolType> = {
   quotation: "document",
@@ -100,6 +101,7 @@ const TOOL_TYPES: Record<string, ToolType> = {
   qrscanner: "utility",
   qrgenerator: "utility",
   bosdesign: "utility",
+  bos: "utility",
   notifications: "screen",
 };
 
