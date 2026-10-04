@@ -36,6 +36,10 @@ export function createBosRouter({ db, host, connectors = [] }: CreateBosRouterOp
         res.status(401).json({ error: "Sign in to use Justx BOS" });
         return;
       }
+      if (host.enabled && !(await host.enabled(actor))) {
+        res.status(403).json({ error: "Justx BOS isn't enabled for this organization yet. An administrator can turn it on in Admin → Tools.", code: "BOS_NOT_ENABLED" });
+        return;
+      }
       res.locals.bosActor = actor;
       next();
     } catch (err) {

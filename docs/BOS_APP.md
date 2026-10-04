@@ -33,6 +33,7 @@ BOS never imports JBT internals. It talks to its host through one interface:
 ```ts
 interface BosHost {
   actor(req): Promise<BosActor | null>;        // who is calling, which tenant, which role
+  enabled?(actor): Promise<boolean>;           // optional: is BOS turned on for this caller (false → 403)
   requireWrite: RequestHandler;                // gate for mutating requests
   audit(actor, action, entityType, entityId, diff?, ip?): Promise<void>;
   notify(actor, notice: BosNotice): void;      // approvals/decisions → host notifications
@@ -94,8 +95,8 @@ Connectors read another tool's records and import them into BOS. The source tool
 | Quotation V1 (`/tools/quotationv1`) | Approved → customer + draft GST invoice (lines, HSN, GST rates carried over). Sent/submitted → customer | Customer, Invoice |
 | Site Survey V1 (`/tools/sitesurveyv1`) | Saved/submitted/sent → customer + project lead (site address, estimate) | Customer, Project |
 
-- **Auto-sync** runs when BOS opens, if Settings → Integrations → Automatic sync is on. It is throttled to once every 30 seconds per tenant. **Sync now** forces it.
-- **Events out.** Approval requests and decisions (leave, expenses, bills, profile changes), plus imports that create an invoice or project, become JBT notifications with deep links back into BOS.
+- **Auto-sync** is **off for new workspaces**, because its first run imports every eligible past quotation and survey. A manager turns it on in Settings → Integrations → Automatic sync. Once on, it runs when BOS opens, throttled to once every 30 seconds per tenant. **Sync now** runs it on demand either way.
+- **Events out.** Approval requests and decisions (leave, expenses, bills, profile changes) become JBT notifications with deep links back into BOS. A manual import that creates an invoice or project sends one notification. A sync sends a single summary ("3 draft invoices and 1 project lead created from your tools.") instead of one per record.
 - **Bridge for tool authors.** Any JBT screen can push a record to BOS with `sendToBos("quotationv1", id, "invoice")` from `web/lib/bos-app/api.ts`.
 - **New connector.** Implement `BosConnector` (`id`, `label`, `targets`, `autoTargets`, `list`, `get`) in `server/src/bos/connectors/` and add it to `server/src/routes/bos.ts`.
 
@@ -123,22 +124,25 @@ Quotation V1 and Site Survey V1 can show a **Send to BOS** button. These tools a
 BOS is **opt-in and hidden by default**. Existing customers see nothing until an admin enables it.
 
 1. Restart the API once after deploying. Migration 010 is applied on start.
-2. Go to Admin → Tools → **Justx BOS** and mark it **Available** for the org. The catalog row is seeded with `available = 0`.
+2. Go to Admin → Tools → **Justx BOS** → Placement, set **Visible on home** to **Live**, then **Save placement**. The catalog row is seeded with `available = 0`.
 3. Users then find it under *Utilities* (`/tools/bos`), and `/bos` opens the full-screen app.
+4. Optional, when the team is ready: turn on automatic sync (BOS Settings → Integrations) and the Send to BOS switches (Admin → Tools → Justx BOS → Switches).
 
 `/bos` checks the same catalog flag. A signed-in user whose org hasn't enabled BOS sees a "not enabled yet" screen; platform admins always have access.
+
+The API enforces the same rule, so typing `/tools/bos` or calling `/api/bos` directly doesn't bypass it. Until the org's catalog row is Live, every BOS endpoint answers `403` with `code: "BOS_NOT_ENABLED"` before it reads or writes any data. As a result, auto-sync, imports and BOS notifications can't start on their own. The check is the optional `BosHost.enabled(actor)` hook; JBT implements it in `server/src/bos/hosts/jbt.ts` and fails closed if the lookup errors.
 
 ## Isolation (zero impact on live JBT)
 
 - New tables only. No changes to existing JBT tables or data.
 - Existing tools change only through the Send to BOS switches above, which are off until an admin turns them on.
-- The API lives under `/api/bos` only, behind JBT session auth and the write-permission gate.
+- The API lives under `/api/bos` only, behind JBT session auth, the org's BOS catalog flag and the write-permission gate.
 - The UI is lazy-loaded (`next/dynamic`, `ssr: false`), so no BOS code ships on other routes. Styles are scoped to `.bos` (see the design system isolation contract).
 - `/bos` is public-path matched exactly (`/bos` and `/bos/*`). It renders its own sign-in, and no other route's auth behaviour changes.
 
 ## API
 
-All endpoints are under `/api/bos`. They require a JBT session; `GET` is read access and everything else needs write permission.
+All endpoints are under `/api/bos`. They require a JBT session and BOS Live for the org (`403 BOS_NOT_ENABLED` otherwise); `GET` is read access and everything else needs write permission.
 
 | Area | Endpoints |
 |------|-----------|
@@ -159,4 +163,4 @@ cd server && npx tsc --noEmit -p . && npx vitest run
 cd web && npx tsc --noEmit -p . && npx eslint components/bos-app lib/bos-app app/bos && npx vitest run components/bos-app lib/bos-app
 ```
 
-`web/components/bos-app/BosApp.test.tsx` renders the whole app against a mocked API. It walks every workspace and module, checks live GST maths in the invoice editor, the deep links (including a project handed off from Site Survey), and the pending-migration notice. `SendToBos.test.tsx` covers the button in every state: switch off, BOS not Live, unsaved, draft, sent, already linked and refused.
+`web/components/bos-app/BosApp.test.tsx` renders the whole app against a mocked API. It walks every workspace and module, checks live GST maths in the invoice editor, the deep links (including a project handed off from Site Survey), and the pending-migration notice. `SendToBos.test.tsx` covers the button in every state: switch off, BOS not Live, unsaved, draft, sent, already linked and refused. On the server, `server/src/bos/router.test.ts` checks the sign-in and enabled gates over HTTP, and `logic.test.ts` covers the pure rules, including the sync summary.

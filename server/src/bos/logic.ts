@@ -247,3 +247,16 @@ export function initialsOf(name: string): string {
 export function phoneKey(phone: unknown): string {
   return String(phone ?? "").replace(/\D/g, "").slice(-10);
 }
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** One notification for a whole sync run (customers alone aren't announced). Null when nothing worth telling. */
+export function syncSummary(items: ReadonlyArray<{ target: string; created: boolean }>): { body: string; path: string } | null {
+  const made = items.filter((i) => i.created);
+  const invoices = made.filter((i) => i.target === "invoice").length;
+  const projects = made.filter((i) => i.target === "project").length;
+  if (!invoices && !projects) return null;
+  const parts = [invoices ? plural(invoices, "draft invoice") : "", projects ? plural(projects, "project lead") : ""].filter(Boolean);
+  const path = invoices && projects ? "?ws=connect" : invoices ? "?ws=finance&m=invoices" : "?ws=projects";
+  return { body: `${parts.join(" and ")} created from your tools.`, path };
+}

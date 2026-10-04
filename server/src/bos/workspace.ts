@@ -72,10 +72,12 @@ export async function getSettings(deps: BosDeps, tenantId: number): Promise<BosS
   const existing = await one<SettingsRow>(deps.db, sql, { tenantId });
   if (existing) return mapSettings(existing);
   const brand = await deps.host.brand(tenantId).catch(() => null);
+  /* Automatic sync starts off: its first run imports every eligible past quotation and survey,
+     so a manager opts in from Settings → Integrations. */
   await exec(
     deps.db,
-    `INSERT IGNORE INTO bos_settings (tenant_id, company_name, gstin, state, state_code, address, email, phone)
-     VALUES (:tenantId, :name, :gstin, :state, :stateCode, :address, :email, :phone)`,
+    `INSERT IGNORE INTO bos_settings (tenant_id, company_name, gstin, state, state_code, address, email, phone, auto_sync)
+     VALUES (:tenantId, :name, :gstin, :state, :stateCode, :address, :email, :phone, 0)`,
     {
       tenantId,
       name: brand?.name || null,

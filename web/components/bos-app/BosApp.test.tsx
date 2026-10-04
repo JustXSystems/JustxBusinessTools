@@ -279,4 +279,12 @@ describe("BosApp", () => {
     render(<BosApp mode="tool" />);
     expect(await screen.findByText("Justx BOS is being set up", undefined, WAIT)).toBeTruthy();
   }, TEST_TIMEOUT);
+
+  it("tells users of an org that hasn't enabled BOS how to turn it on", async () => {
+    overrides["GET /session"] = { status: 403, body: { error: "Justx BOS isn't enabled for this organization yet.", code: "BOS_NOT_ENABLED" } };
+    render(<BosApp mode="tool" />);
+    expect(await screen.findByText("Justx BOS isn't enabled yet", undefined, WAIT)).toBeTruthy();
+    expect(screen.getByText(/Admin → Tools/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  }, TEST_TIMEOUT);
 });

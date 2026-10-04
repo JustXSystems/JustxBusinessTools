@@ -42,6 +42,21 @@ export const jbtHost: BosHost = {
     return { tenantId: ctx.businessProfileId, userId: ctx.userId, role: ctx.role, name: info.name, email: info.email };
   },
 
+  /** Same rule as the web: the org's `bos` catalog row is Live (Admin → Tools), or a platform admin. */
+  async enabled(): Promise<boolean> {
+    const ctx = getRequestContext();
+    if (!ctx) return false;
+    if (ctx.isPlatformAdmin) return true;
+    try {
+      const [rows] = await pool.query(`SELECT available FROM tool_catalog WHERE organization_id = :orgId AND tool_id = 'bos' LIMIT 1`, { orgId: ctx.organizationId });
+      const row = (Array.isArray(rows) ? rows[0] : null) as { available: number } | null;
+      return Number(row?.available) === 1;
+    } catch (err) {
+      console.warn("[bos] enabled check failed", err instanceof Error ? err.message : err);
+      return false;
+    }
+  },
+
   requireWrite: requireWriteAccess,
 
   async audit(_actor, action, entityType, entityId, diff, ip) {

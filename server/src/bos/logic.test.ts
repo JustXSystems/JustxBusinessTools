@@ -16,8 +16,27 @@ import {
   parseWeekendDays,
   phoneKey,
   settleStatus,
+  syncSummary,
   todayISO,
 } from "./logic.js";
+
+describe("syncSummary", () => {
+  const item = (target: string, created = true) => ({ target, created });
+
+  it("stays quiet when a sync only touched customers or existing records", () => {
+    expect(syncSummary([])).toBeNull();
+    expect(syncSummary([item("party"), item("invoice", false)])).toBeNull();
+  });
+
+  it("counts new invoices and projects in one message with the right deep link", () => {
+    expect(syncSummary([item("party"), item("invoice")])).toEqual({ body: "1 draft invoice created from your tools.", path: "?ws=finance&m=invoices" });
+    expect(syncSummary([item("project"), item("project")])).toEqual({ body: "2 project leads created from your tools.", path: "?ws=projects" });
+    expect(syncSummary([item("invoice"), item("invoice"), item("invoice"), item("project")])).toEqual({
+      body: "3 draft invoices and 1 project lead created from your tools.",
+      path: "?ws=connect",
+    });
+  });
+});
 
 describe("computeInvoiceTotals", () => {
   const lines = [

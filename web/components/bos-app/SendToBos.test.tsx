@@ -88,8 +88,11 @@ describe("SendToBos", () => {
     expect(calls).toEqual([]);
   });
 
-  it("stays hidden when BOS can't be reached", async () => {
-    replies["GET /links"] = { status: 503, body: { error: "setting up", code: "BOS_SCHEMA_PENDING" } };
+  it.each([
+    ["isn't set up yet", 503, "BOS_SCHEMA_PENDING"],
+    ["refuses the org", 403, "BOS_NOT_ENABLED"],
+  ])("stays hidden when BOS %s", async (_why, status, code) => {
+    replies["GET /links"] = { status, body: { error: "unavailable", code } };
     renderButton();
     await flush();
     expect(screen.queryByRole("button")).toBeNull();

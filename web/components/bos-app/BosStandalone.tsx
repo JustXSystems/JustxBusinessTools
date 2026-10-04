@@ -270,7 +270,7 @@ export function BosStandalone() {
         <div className="bos-login-card">
           <h2 className="bos-login-title">Justx BOS isn&apos;t enabled yet</h2>
           <p className="bos-login-sub">
-            An administrator can turn it on in Admin → Tools (Justx BOS → Available). It then opens here and inside Justx Business Tools.
+            An administrator can turn it on in Admin → Tools (Justx BOS → Visible on home → Live, then Save placement). It then opens here and inside Justx Business Tools.
           </p>
           <div className="bos-row" style={{ gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
             <a className="bos-btn bos-btn-primary" href={withBasePath("/")}>

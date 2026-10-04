@@ -5,7 +5,7 @@ import type { BosConnector, ConnectorRecord, ConnectorTarget } from "./connector
 import { actorOf, parse, recordEvent, type BosDeps } from "./context.js";
 import { exec, one, rows, tx } from "./db.js";
 import { BosError, notFound, type BosActor } from "./host.js";
-import { addDaysISO, todayISO } from "./logic.js";
+import { addDaysISO, syncSummary, todayISO } from "./logic.js";
 import { createInvoice, createParty, findParty } from "./finance.js";
 import { createProject, getSettings } from "./workspace.js";
 
@@ -163,6 +163,23 @@ async function announce(deps: BosDeps, actor: BosActor, c: BosConnector, items: 
   }
 }
 
+function notifySyncSummary(deps: BosDeps, actor: BosActor, imported: ReadonlyArray<Imported>): void {
+  const summary = syncSummary(imported);
+  if (!summary) return;
+  try {
+    deps.host.notify(actor, {
+      kind: "workflow",
+      title: "Tools synced to BOS",
+      body: summary.body,
+      href: `${deps.host.appHref}${summary.path}`,
+      entityType: "sync",
+      entityId: String(actor.tenantId),
+    });
+  } catch (err) {
+    console.warn("[bos] sync notice failed", err instanceof Error ? err.message : err);
+  }
+}
+
 function connectorOr404(deps: BosDeps, id: string): BosConnector {
   const c = deps.connectors.find((x) => x.id === id);
   if (!c) throw notFound("Connected tool");
@@ -246,7 +263,7 @@ export function registerConnect(router: Router, deps: BosDeps): void {
           if (links.get(r.ref)?.[target]) continue;
           try {
             const items = await importRecord(deps, actor, c, r, target);
-            await announce(deps, actor, c, items, req.ip);
+            await announce(deps, actor, c, items, req.ip, true);
             imported.push(...items.filter((i) => i.created));
             links.set(r.ref, { ...(links.get(r.ref) ?? {}), ...Object.fromEntries(items.map((i) => [i.target, i.id])) });
           } catch (err) {
@@ -255,6 +272,7 @@ export function registerConnect(router: Router, deps: BosDeps): void {
         }
       }
     }
+    notifySyncSummary(deps, actor, imported);
     res.json({ imported, errors, lastSyncAt: lastSync.get(actor.tenantId) });
   });
 

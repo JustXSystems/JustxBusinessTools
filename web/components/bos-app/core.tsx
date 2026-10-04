@@ -162,6 +162,13 @@ export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () =>
       </Alert>
     );
   }
+  if (error instanceof BosApiError && error.notEnabled) {
+    return (
+      <Alert tone="blue" title="Justx BOS isn't enabled yet">
+        An administrator can turn it on in Admin → Tools (Justx BOS → Visible on home → Live, then Save placement).
+      </Alert>
+    );
+  }
   if (error instanceof BosApiError && error.status === 403) {
     return (
       <Alert tone="blue" title="Restricted">

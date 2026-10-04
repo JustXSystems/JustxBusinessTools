@@ -21,6 +21,11 @@ export class BosApiError extends Error {
   get schemaPending(): boolean {
     return this.code === "BOS_SCHEMA_PENDING";
   }
+
+  /** BOS isn't Live for the caller's org yet (Admin → Tools → Justx BOS). */
+  get notEnabled(): boolean {
+    return this.code === "BOS_NOT_ENABLED";
+  }
 }
 
 export async function bosApi<T>(path: string, init?: { method?: string; body?: unknown; signal?: AbortSignal }): Promise<T> {
