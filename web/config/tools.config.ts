@@ -60,7 +60,14 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
   { id: "notifications", name: "Notifications", category: "Utilities", icon: "🔔", desc: "Reminders across every tool" },
   { id: "qrscanner", name: "QR Code Scanner", category: "Utilities", icon: "🔳", desc: "Scan or generate QR codes" },
   { id: "qrgenerator", name: "QR Code Generator", category: "Utilities", icon: "🎨", desc: "Branded QR for UPI, Wi-Fi, vCard, maps & more" },
+  { id: "bosdesign", name: "Justx BOS Design", category: "Utilities", icon: "🧩", desc: "Standard UI/UX system with live HR, Finance & Invoice samples" },
 ];
+
+/**
+ * Tools hidden from every home screen, picker and default selection until an admin
+ * marks them available in the org catalog (Admin → Tools → Placement).
+ */
+export const OPT_IN_TOOL_IDS: ReadonlySet<string> = new Set(["bosdesign"]);
 
 const TOOL_TYPES: Record<string, ToolType> = {
   quotation: "document",
@@ -92,6 +99,7 @@ const TOOL_TYPES: Record<string, ToolType> = {
   dealercommission: "calculator",
   qrscanner: "utility",
   qrgenerator: "utility",
+  bosdesign: "utility",
   notifications: "screen",
 };
 
@@ -117,7 +125,7 @@ export function getToolDefinition(id: string): ToolDefinition | undefined {
     type,
     subscriptionExempt,
     route: id === "notifications" ? "/notifications" : `/tools/${id}`,
-    showOnHome: id !== "notifications",
+    showOnHome: id !== "notifications" && !OPT_IN_TOOL_IDS.has(id),
   };
 }
 

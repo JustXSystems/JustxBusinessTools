@@ -1,0 +1,240 @@
+/* ==========================================================================
+   Justx BOS Design System — tokens & base
+   --------------------------------------------------------------------------
+   Contract:
+   • Every token is `--bos-*`, every class is `bos-*`.
+   • Nothing here styles bare elements outside a `.bos` root, so the file can
+     ship next to any host stylesheet (JBT, marketing sites, other apps)
+     without changing a single pixel of the host.
+   • Opt in by wrapping UI in   <div class="bos" data-bos-theme="light|dark">
+   • Values mirror components/bos/tokens.ts (enforced by tokens.test.ts).
+   ========================================================================== */
+
+.bos {
+  --bos-font-display: var(--font-plex-sans, "IBM Plex Sans"), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bos-font-body: var(--font-plex-sans, "IBM Plex Sans"), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bos-font-mono: var(--font-plex-mono, "IBM Plex Mono"), ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --bos-r-sm: 8px;
+  --bos-r-md: 10px;
+  --bos-r-lg: 14px;
+  --bos-r-xl: 16px;
+  --bos-r-full: 999px;
+
+  --bos-s-1: 4px;
+  --bos-s-2: 8px;
+  --bos-s-3: 12px;
+  --bos-s-4: 16px;
+  --bos-s-5: 20px;
+  --bos-s-6: 24px;
+  --bos-s-8: 32px;
+  --bos-s-10: 40px;
+  --bos-s-12: 48px;
+  --bos-s-16: 64px;
+  --bos-s-20: 80px;
+
+  --bos-ease: cubic-bezier(.4,0,.2,1);
+  --bos-ease-spring: cubic-bezier(.22,1,.36,1);
+  --bos-dur: 200ms;
+
+  /* Decorative pastels — theme-invariant; category, never status or actions */
+  --bos-pastel-sage: #C7D2C6;
+  --bos-pastel-blue: #C8D3DC;
+  --bos-pastel-rose: #E5D2CE;
+  --bos-pastel-mint: #C6E6E0;
+  --bos-pastel-lavender: #D2CEE5;
+  --bos-pastel-sage-ink: #55624F;
+  --bos-pastel-blue-ink: #4C5D6B;
+  --bos-pastel-rose-ink: #7A5148;
+  --bos-pastel-mint-ink: #2E6259;
+  --bos-pastel-lavender-ink: #5A5079;
+
+  --bos-scrim: rgba(16,20,28,0.45);
+  --bos-z-sticky: 50;
+  --bos-z-overlay: 1200;
+  --bos-z-toast: 1300;
+}
+
+/* ---- LIGHT (default) ---- */
+.bos,
+.bos[data-bos-theme="light"] {
+  --bos-bg: #F5F6F8;
+  --bos-surface: #FFFFFF;
+  --bos-surface-2: #FAFBFC;
+  --bos-border: #E5E8EC;
+  --bos-border-soft: #EDEFF2;
+  --bos-hairline: #ECEEF1;
+  --bos-text: #1B1F27;
+  --bos-text-muted: #667085;
+  --bos-text-faint: #98A2B3;
+
+  --bos-blue: #5B8DEF;
+  --bos-blue-100: #EAF0FE;
+  --bos-blue-600: #4271D6;
+  --bos-blue-btn: #4271D6;
+  --bos-emerald: #34B27B;
+  --bos-emerald-100: #E6F7EF;
+  --bos-emerald-600: #268F62;
+  --bos-amber: #E5A155;
+  --bos-amber-100: #FDF1E3;
+  --bos-amber-600: #B97A34;
+  --bos-coral: #EE8B76;
+  --bos-coral-100: #FCEBE7;
+  --bos-coral-600: #D4664F;
+
+  --bos-shadow-xs: 0 1px 2px rgba(16,24,40,0.05);
+  --bos-shadow-sm: 0 1px 3px rgba(16,24,40,0.08), 0 1px 2px rgba(16,24,40,0.05);
+  --bos-shadow-md: 0 3px 10px rgba(16,24,40,0.11), 0 1px 3px rgba(16,24,40,0.06);
+  --bos-shadow-lg: 0 14px 32px rgba(16,24,40,0.13), 0 3px 8px rgba(16,24,40,0.07);
+  --bos-shadow-focus-blue: 0 0 0 3.5px rgba(91,141,239,0.22);
+  --bos-topbar-bg: rgba(245,246,248,0.82);
+  --bos-row-hover: #E6F7EF;
+
+  color-scheme: light;
+}
+
+/* ---- DARK — same calm philosophy, macOS Dark Mode adjacent ---- */
+.bos[data-bos-theme="dark"] {
+  --bos-bg: #1C1C1E;
+  --bos-surface: #2C2C2E;
+  --bos-surface-2: #262628;
+  --bos-border: #3A3A3D;
+  --bos-border-soft: #333335;
+  --bos-hairline: #333335;
+  --bos-text: #F2F2F7;
+  --bos-text-muted: #98989D;
+  --bos-text-faint: #6E6E73;
+
+  --bos-blue: #6E9BFF;
+  --bos-blue-100: #22314F;
+  --bos-blue-600: #8FB1FF;
+  --bos-blue-btn: #618DED;
+  --bos-emerald: #3DCB8F;
+  --bos-emerald-100: #123626;
+  --bos-emerald-600: #5BDBA4;
+  --bos-amber: #F0B36B;
+  --bos-amber-100: #3A2A16;
+  --bos-amber-600: #F5C88A;
+  --bos-coral: #FF9B85;
+  --bos-coral-100: #3D211C;
+  --bos-coral-600: #FFB09E;
+
+  --bos-shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
+  --bos-shadow-sm: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
+  --bos-shadow-md: 0 4px 14px rgba(0,0,0,0.4);
+  --bos-shadow-lg: 0 16px 32px rgba(0,0,0,0.5);
+  --bos-shadow-focus-blue: 0 0 0 3.5px rgba(110,155,255,0.3);
+  --bos-topbar-bg: rgba(28,28,30,0.78);
+  --bos-row-hover: #343434;
+
+  color-scheme: dark;
+}
+
+/* ---------- Base (scoped) ---------- */
+.bos {
+  font-family: var(--bos-font-body);
+  color: var(--bos-text);
+  letter-spacing: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-align: left;
+}
+
+.bos *,
+.bos *::before,
+.bos *::after {
+  box-sizing: border-box;
+}
+
+.bos a { color: inherit; text-decoration: none; }
+.bos :focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; border-radius: var(--bos-r-sm); }
+.bos h1, .bos h2, .bos h3, .bos h4, .bos p { margin: 0; }
+.bos button { font-family: inherit; }
+.bos { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.bos button,
+.bos a,
+.bos select,
+.bos label { touch-action: manipulation; }
+
+/* Full-bleed page canvas (background + theme transition). */
+.bos.bos-canvas,
+.bos .bos-canvas {
+  background: var(--bos-bg);
+  color: var(--bos-text);
+  min-height: 100%;
+  transition: background-color var(--bos-dur) var(--bos-ease), color var(--bos-dur) var(--bos-ease);
+}
+.bos.bos-canvas { overflow-x: clip; }
+
+.bos .bos-wrap { max-width: 1180px; margin: 0 auto; padding: 0 var(--bos-s-8) var(--bos-s-20); }
+
+.bos .bos-code {
+  font-family: var(--bos-font-mono);
+  font-size: 0.9em;
+  background: var(--bos-surface-2);
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--bos-border-soft);
+}
+
+.bos .bos-kbd {
+  font-family: var(--bos-font-mono);
+  background: var(--bos-surface-2);
+  border: 1px solid var(--bos-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 9.5px;
+  color: var(--bos-text-muted);
+}
+
+/* ---------- Typography scale ---------- */
+.bos .bos-text-display { font-family: var(--bos-font-display); font-weight: 650; font-size: 36px; letter-spacing: -0.02em; line-height: 1.15; }
+.bos .bos-text-h1 { font-family: var(--bos-font-display); font-weight: 600; font-size: 27px; letter-spacing: -0.015em; line-height: 1.25; }
+.bos .bos-text-h2 { font-family: var(--bos-font-display); font-weight: 600; font-size: 20px; line-height: 1.3; }
+.bos .bos-text-body { font-family: var(--bos-font-body); font-weight: 400; font-size: 15px; line-height: 1.6; }
+.bos .bos-text-caption { font-family: var(--bos-font-body); font-weight: 550; font-size: 12.5px; color: var(--bos-text-muted); }
+.bos .bos-text-mono { font-family: var(--bos-font-mono); font-weight: 500; font-size: 13px; }
+.bos .bos-text-muted { color: var(--bos-text-muted); }
+.bos .bos-text-faint { color: var(--bos-text-faint); }
+.bos .bos-mono { font-family: var(--bos-font-mono); }
+
+/* Mono uppercase overline (section / group labels). */
+.bos .bos-overline {
+  font-family: var(--bos-font-mono);
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--bos-text-faint);
+  font-weight: 650;
+}
+
+/* ---------- Layout primitives ---------- */
+.bos .bos-row { display: flex; align-items: center; gap: var(--bos-s-3); flex-wrap: wrap; }
+.bos .bos-row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--bos-s-3); flex-wrap: wrap; }
+.bos .bos-stack { display: flex; flex-direction: column; gap: var(--bos-gap, var(--bos-s-3)); }
+.bos .bos-grid {
+  display: grid;
+  grid-template-columns: var(--bos-cols, repeat(3, minmax(0, 1fr)));
+  gap: var(--bos-gap, var(--bos-s-4));
+}
+/* Under 900px every grid reflows to auto-fit; --bos-grid-min sets the narrowest column. */
+@media (max-width: 900px) {
+  .bos .bos-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--bos-grid-min, 200px)), 1fr)); }
+}
+/* Full-bleed on phones: cancels the host page gutter given in --bos-bleed. */
+@media (max-width: 560px) {
+  .bos.bos-bleed { margin-inline: calc(-1 * var(--bos-bleed, 0px)); }
+}
+.bos .bos-spacer { flex: 1; }
+.bos .bos-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------- Motion safety ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .bos *,
+  .bos *::before,
+  .bos *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

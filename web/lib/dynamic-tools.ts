@@ -1,6 +1,7 @@
 import type { PlatformToolDefinition } from "@/components/config/ConfigProvider";
 import {
   getToolDefinition,
+  OPT_IN_TOOL_IDS,
   TOOL_CATEGORIES,
   TRACKER_CONFIGS,
   uniqueTools,
@@ -28,6 +29,7 @@ const BUILTIN_IDS = new Set(
       "dealercommission",
       "qrscanner",
       "qrgenerator",
+      "bosdesign",
       "notifications",
     ],
   ),
@@ -173,6 +175,19 @@ export function filterHomeToolsByCatalog(
     // Not in catalog yet → keep (legacy). Explicitly hidden → drop.
     return row == null || row.available !== false;
   });
+}
+
+/** Opt-in tools an admin has explicitly enabled; missing catalog rows never qualify. */
+export function catalogEnabledOptInTools(
+  catalog: Array<{ id: string; available: boolean }> | null | undefined,
+): ToolDefinition[] {
+  const out: ToolDefinition[] = [];
+  for (const row of catalog ?? []) {
+    if (row.available !== true || !OPT_IN_TOOL_IDS.has(row.id)) continue;
+    const def = getToolDefinition(row.id);
+    if (def && !out.some((t) => t.id === def.id)) out.push({ ...def, showOnHome: true });
+  }
+  return out;
 }
 
 export function homeToolsByCategory(

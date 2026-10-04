@@ -79,6 +79,12 @@ async function ensureCatalog(orgId: number): Promise<void> {
       { orgId },
     );
   }
+  // Opt-in tool: seeded hidden so admins enable it per org.
+  await pool.query(
+    `INSERT IGNORE INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available)
+     VALUES (:orgId, 'bosdesign', 'Utilities', 39, 0)`,
+    { orgId },
+  );
 
   // New tools added after branch home allowlists were saved stay invisible unless we opt them in.
   const [liveRows] = await pool.query(

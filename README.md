@@ -22,6 +22,7 @@ Multi-tenant business tools for quotations, site surveys, and more — by **Just
 | **Any-device email (M365 / Graph)** | [`docs/MICROSOFT_GRAPH_EMAIL.md`](docs/MICROSOFT_GRAPH_EMAIL.md) |
 | **Env template** | [`.env.example`](.env.example) → `server/.env` |
 | **Mobile (Capacitor)** | [`docs/MOBILE.md`](docs/MOBILE.md) |
+| **UI/UX standard** (Justx BOS design system) | [`docs/BOS_DESIGN_SYSTEM.md`](docs/BOS_DESIGN_SYSTEM.md) |
 | Desktop UNC sync | [`desktop-sync-agent/README.md`](desktop-sync-agent/README.md) |
 
 ## Local development

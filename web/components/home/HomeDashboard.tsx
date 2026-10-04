@@ -11,6 +11,7 @@ import {
   homeToolsByCategory,
   filterHomeToolsBySelection,
   filterHomeToolsByCatalog,
+  catalogEnabledOptInTools,
 } from "@/lib/dynamic-tools";
 import type { ToolDefinition } from "@/config/tools.config";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -53,7 +54,7 @@ export function HomeDashboard() {
   const allTools = useMemo(() => {
     const merged = mergedHomeTools(platformTools);
     const byCatalog = filterHomeToolsByCatalog(merged, catalog);
-    return filterHomeToolsBySelection(byCatalog, homeToolIds);
+    return [...filterHomeToolsBySelection(byCatalog, homeToolIds), ...catalogEnabledOptInTools(catalog)];
   }, [platformTools, catalog, homeToolIds]);
   const groupTools = config?.toolGrouping?.enabled !== false;
   const filtered = useMemo(() => filterMergedTools(debouncedSearch, allTools), [debouncedSearch, allTools]);

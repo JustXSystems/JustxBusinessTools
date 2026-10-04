@@ -36,6 +36,12 @@ async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
      VALUES (:orgId, 'qrgenerator', 'Utilities', 38, 1)`,
     { orgId },
   );
+  // Opt-in tool: seeded hidden so admins enable it per org.
+  await pool.query(
+    `INSERT IGNORE INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available)
+     VALUES (:orgId, 'bosdesign', 'Utilities', 39, 0)`,
+    { orgId },
+  );
 }
 
 export async function getEffectiveConfig(): Promise<{
