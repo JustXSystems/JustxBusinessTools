@@ -200,12 +200,12 @@ function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mod
           <ThemeToggle theme={theme} onChange={setTheme} />
           <IconButton icon="bell" aria-label="Activity and notifications" onClick={() => navigate("settings", "audit")} />
           {mode === "tool" ? (
-            <Button size="sm" variant="ghost" onClick={() => window.open(withBasePath("/bos"), "_blank", "noopener")} title="Open BOS as a full-screen app">
-              Full screen ↗
+            <Button size="sm" variant="ghost" onClick={() => window.open(withBasePath("/bos"), "_blank", "noopener")} title="Open BOS as a full-screen app" aria-label="Full screen">
+              <span className="bos-app-topbar-label">Full screen</span> ↗
             </Button>
           ) : onSignOut ? (
-            <Button size="sm" variant="ghost" icon="login" onClick={onSignOut}>
-              Sign out
+            <Button size="sm" variant="ghost" icon="login" onClick={onSignOut} aria-label="Sign out">
+              <span className="bos-app-topbar-label">Sign out</span>
             </Button>
           ) : null}
           <Avatar size="md" tone="var(--bos-blue)">

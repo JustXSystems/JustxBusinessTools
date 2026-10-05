@@ -112,7 +112,7 @@ export function Tasks() {
                 value={scope}
                 onChange={setScope}
               />
-              <Select aria-label="Project" value={projectId} onChange={(e) => setProjectId(e.target.value)} style={{ maxWidth: 220 }}>
+              <Select aria-label="Project" value={projectId} onChange={(e) => setProjectId(e.target.value)} style={{ maxWidth: 320 }}>
                 <option value={ALL}>All projects</option>
                 <option value={NO_PROJECT}>No project</option>
                 {o.projects.map((p) => (
@@ -377,31 +377,33 @@ function TaskView({ id, o, onClose, onEdit }: { id: string; o: TasksOverview; on
         }
         actions={actions.length ? <>{actions}</> : <Button size="sm" onClick={onClose}>Close</Button>}
       >
-        {missing ? (
-          <Alert tone="amber" title="This task doesn't exist any more">It may have been deleted.</Alert>
-        ) : task ? (
-          <Stack gap={14}>
-            <div className="bos-row" style={{ gap: 8, flexWrap: "wrap" }}>
-              <StatusBadge view={taskStatusBadge(task.status)} />
-              <PriorityBadge priority={task.priority} />
-              {task.state === "overdue" ? <Badge tone="coral">OVERDUE</Badge> : null}
-              {task.recurrence !== "none" ? <Badge tag="lavender">{TASK_RECURRENCE_LABEL[task.recurrence].toUpperCase()}</Badge> : null}
-            </div>
-            <DetailsGrid
-              cols={3}
-              items={[
-                { label: "Assignee", value: task.assigneeName ? `${task.assigneeName}${task.assigneeDesignation ? ` · ${task.assigneeDesignation}` : ""}` : "Unassigned" },
-                { label: "Due", value: task.dueOn ? dateLabel(task.dueOn) : "—" },
-                { label: "Start", value: task.startOn ? dateLabel(task.startOn) : "—" },
-                { label: "Priority", value: TASK_PRIORITY_LABEL[task.priority] },
-                { label: "Created by", value: task.createdBy ?? "—" },
-                { label: task.status === "done" ? "Done" : "Updated", value: task.status === "done" && task.doneAt ? `${dateLabel(task.doneAt.slice(0, 10))}${task.doneBy ? ` · ${task.doneBy}` : ""}` : dateLabel(task.updatedAt.slice(0, 10)) },
-              ]}
-            />
-            {task.details ? <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{task.details}</div> : null}
-            {!task.access.status ? <div className="bos-text-faint" style={{ fontSize: 12.5 }}>Only the assignee, the person who created this task, or an owner or admin can change it.</div> : null}
-          </Stack>
-        ) : null}
+        <div style={{ marginBottom: 20 }}>
+          {missing ? (
+            <Alert tone="amber" title="This task doesn't exist any more">It may have been deleted.</Alert>
+          ) : task ? (
+            <Stack gap={14}>
+              <div className="bos-row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <StatusBadge view={taskStatusBadge(task.status)} />
+                <PriorityBadge priority={task.priority} />
+                {task.state === "overdue" ? <Badge tone="coral">OVERDUE</Badge> : null}
+                {task.recurrence !== "none" ? <Badge tag="lavender">{TASK_RECURRENCE_LABEL[task.recurrence].toUpperCase()}</Badge> : null}
+              </div>
+              <DetailsGrid
+                cols={3}
+                items={[
+                  { label: "Assignee", value: task.assigneeName ? `${task.assigneeName}${task.assigneeDesignation ? ` · ${task.assigneeDesignation}` : ""}` : "Unassigned" },
+                  { label: "Due", value: task.dueOn ? dateLabel(task.dueOn) : "—" },
+                  { label: "Start", value: task.startOn ? dateLabel(task.startOn) : "—" },
+                  { label: "Priority", value: TASK_PRIORITY_LABEL[task.priority] },
+                  { label: "Created by", value: task.createdBy ?? "—" },
+                  { label: task.status === "done" ? "Done" : "Updated", value: task.status === "done" && task.doneAt ? `${dateLabel(task.doneAt.slice(0, 10))}${task.doneBy ? ` · ${task.doneBy}` : ""}` : dateLabel(task.updatedAt.slice(0, 10)) },
+                ]}
+              />
+              {task.details ? <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{task.details}</div> : null}
+              {!task.access.status ? <div className="bos-text-faint" style={{ fontSize: 12.5 }}>Only the assignee, the person who created this task, or an owner or admin can change it.</div> : null}
+            </Stack>
+          ) : null}
+        </div>
       </Dialog>
       <ConfirmDialog
         open={confirm !== null}

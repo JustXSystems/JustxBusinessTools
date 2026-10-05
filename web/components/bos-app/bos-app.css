@@ -163,3 +163,9 @@
   .bos .bos-app-recordbar { align-items: flex-start; }
   .bos .bos-payslip-meta { grid-template-columns: 1fr 1fr; }
 }
+
+/* Narrow phones: the topbar can't fit every action, so text buttons go icon-only and the decorative avatar drops. */
+@media (max-width: 400px) {
+  .bos .bos-app-topbar-label,
+  .bos .bos-topbar-actions > .bos-avatar { display: none; }
+}
