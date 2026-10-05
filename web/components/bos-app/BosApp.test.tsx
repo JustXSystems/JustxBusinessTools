@@ -296,6 +296,34 @@ const arjun = {
 const payrollConfig = { basicPct: 50, hraPct: 40, pfEnabled: true, pfCapWage: true, esiEnabled: false, ptSlabs: [{ from: 25000, amount: 200 }], unmarkedPaid: true };
 const statutoryTotals = { pfEmployee: 1500, pfEmployer: 1500, esiEmployee: 0, esiEmployer: 0, pt: 200, tds: 0, due: { pfEsi: "2026-10-15", tds: "2026-10-07" } };
 
+const task = {
+  id: "t1",
+  taskNo: "TSK-0001",
+  title: "Install inverter",
+  details: null,
+  projectId: "pr1",
+  projectName: "Meridian Solar — Rooftop 5kW",
+  milestoneId: "m1",
+  milestoneName: "Panels installed",
+  assigneeId: "e1",
+  assigneeName: "Ravi Kumar",
+  assigneeDesignation: "Installer",
+  status: "todo",
+  priority: "high",
+  startOn: null,
+  dueOn: "2026-10-05",
+  recurrence: "weekly",
+  doneAt: null,
+  doneBy: null,
+  createdBy: "Asha",
+  createdAt: "2026-10-01 10:00:00",
+  updatedAt: "2026-10-01 10:00:00",
+  state: "due_today",
+  mine: false,
+  access: { edit: true, status: true, cancel: true, delete: true },
+};
+const milestone = { id: "m1", projectId: "pr1", projectName: "Meridian Solar — Rooftop 5kW", name: "Panels installed", dueOn: "2026-10-09", status: "open", doneOn: null, total: 1, done: 0, progress: 0, state: "due_soon", canDelete: true };
+
 const ROUTES: Record<string, unknown> = {
   "GET /session": session,
   "POST /connect/sync": { imported: [] },
@@ -553,6 +581,20 @@ const ROUTES: Record<string, unknown> = {
   "GET /projects": {
     projects: [{ id: "pr1", name: "Meridian Solar — Rooftop 5kW", partyId: "p1", partyName: "Meridian Solar", status: "lead", siteAddress: "Mysuru", valueEstimate: 250000, startDate: null, dueDate: null, notes: null, sourceTool: "sitesurveyv1", sourceRef: "s1", createdAt: "2026-10-01", updatedAt: "2026-10-01" }],
   },
+  "GET /tasks/summary": { today: "2026-10-05", totals: { open: 0, todo: 0, inProgress: 0, onHold: 0, overdue: 0, dueToday: 0, recurring: 0, doneRecent: 0 }, upcoming: [], progress: {} },
+  "GET /tasks": {
+    today: "2026-10-05",
+    manager: true,
+    me: null,
+    tasks: [task],
+    milestones: [milestone],
+    people: [{ id: "e1", name: "Ravi Kumar", designation: "Installer", isMe: false }],
+    projects: [{ id: "pr1", name: "Meridian Solar — Rooftop 5kW", status: "lead" }],
+    progress: { pr1: { total: 1, done: 0, overdue: 0, progress: 0 } },
+    truncated: false,
+    totals: { open: 1, todo: 1, inProgress: 0, onHold: 0, overdue: 0, dueToday: 1, recurring: 1, doneRecent: 0 },
+  },
+  "GET /tasks/t1": { task },
   "GET /connect": { autoSync: true, lastSyncAt: null, connectors: [{ id: "quotationv1", label: "Quotation V1", icon: "📑", href: "/tools/quotationv1", description: "Approved quotations become customers and draft invoices.", targets: ["party", "invoice"], total: 1, linked: 1, pending: 0 }] },
   "GET /connect/quotationv1": {
     connector: { id: "quotationv1", label: "Quotation V1", icon: "📑", href: "/tools/quotationv1", description: "Approved quotations become customers and draft invoices.", targets: ["party", "invoice"], total: 1, linked: 1, pending: 0 },
@@ -1079,6 +1121,49 @@ describe("BosApp", () => {
     render(<BosApp mode="tool" />);
     expect(await screen.findByRole("button", { name: "Issue invoice" }, WAIT)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Delete draft" })).toBeNull();
+    expect(unmatched).toEqual([]);
+  }, TEST_TIMEOUT);
+
+  it("finishes a repeating task from its deep link and adds a project milestone", async () => {
+    const next = { ...task, id: "t2", taskNo: "TSK-0002", dueOn: "2026-10-12", state: "upcoming" };
+    overrides["POST /tasks/t1/status"] = { status: 200, body: { task: { ...task, status: "done", state: "done" }, next } };
+    overrides["POST /projects/pr1/milestones"] = { status: 201, body: { milestone: { ...milestone, id: "m2", name: "Grid connection", dueOn: "2026-10-20" } } };
+    window.history.replaceState(null, "", "/tools/bos?ws=projects&m=tasks&open=t1");
+    render(<BosApp mode="tool" />);
+    const dialog = await screen.findByRole("dialog", { name: "Install inverter" }, WAIT);
+    expect(within(dialog).getByText("EVERY WEEK")).toBeTruthy();
+    expect(within(dialog).getByText("Ravi Kumar · Installer")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Mark done" }));
+    await waitFor(() => {
+      const call = vi.mocked(fetch).mock.calls.find(([i, init]) => routeOf(i, init) === "POST /tasks/t1/status");
+      expect(JSON.parse(String(call![1]!.body))).toEqual({ status: "done" });
+    }, WAIT);
+    expect(await screen.findByText("Install inverter — the next one has been added.", undefined, WAIT)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Project"), { target: { value: "pr1" } });
+    expect(await screen.findByText("0 of 1 tasks done", undefined, WAIT)).toBeTruthy();
+    expect(screen.getByText("Panels installed")).toBeTruthy();
+    expect(vi.mocked(fetch).mock.calls.some(([i]) => String(i).includes("/tasks?projectId=pr1"))).toBe(true);
+    fireEvent.change(screen.getByLabelText("New milestone"), { target: { value: "Grid connection" } });
+    fireEvent.change(screen.getByLabelText("Milestone due date"), { target: { value: "2026-10-20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add milestone" }));
+    await waitFor(() => {
+      const call = vi.mocked(fetch).mock.calls.find(([i, init]) => routeOf(i, init) === "POST /projects/pr1/milestones");
+      expect(JSON.parse(String(call![1]!.body))).toEqual({ name: "Grid connection", dueOn: "2026-10-20" });
+    }, WAIT);
+    expect(unmatched).toEqual([]);
+  }, TEST_TIMEOUT);
+
+  it("shows My Tasks on Home only to people who have tasks", async () => {
+    overrides["GET /tasks/summary"] = {
+      status: 200,
+      body: { today: "2026-10-05", totals: { open: 2, todo: 1, inProgress: 1, onHold: 0, overdue: 1, dueToday: 0, recurring: 0, doneRecent: 0 }, upcoming: [{ ...task, state: "overdue", dueOn: "2026-10-03" }], progress: {} },
+    };
+    render(<BosApp mode="tool" />);
+    await ready();
+    expect(await screen.findByText("✅ My Tasks", undefined, WAIT)).toBeTruthy();
+    fireEvent.click(screen.getByText("Install inverter"));
+    expect(await screen.findByRole("dialog", { name: "Install inverter" }, WAIT)).toBeTruthy();
     expect(unmatched).toEqual([]);
   }, TEST_TIMEOUT);
 

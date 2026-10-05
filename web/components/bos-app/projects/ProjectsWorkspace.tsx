@@ -6,6 +6,7 @@ import { bos, type BosProject, type ProjectStatus } from "@/lib/bos-app/api";
 import { dateLabel, dayMonth, inr, inrCompact, PROJECT_STAGES, sourceLabel, todayLocal } from "@/lib/bos-app/format";
 import { LiveWorkspace, Loaded, PersonAvatar, Stack, useBosAction, useBosApp, useBosData, useWorkspaceModule, type LiveModule } from "../core";
 import { ProjectDialog, usePartyList } from "../dialogs";
+import { Tasks } from "./Tasks";
 
 const STAGE_LABEL: Record<ProjectStatus, string> = { ...Object.fromEntries(PROJECT_STAGES.map((s) => [s.key, s.label])), cancelled: "Cancelled" } as Record<ProjectStatus, string>;
 
@@ -111,10 +112,12 @@ function ProjectEditor({ projects, editor, customers }: { projects: ReadonlyArra
 }
 
 function ProjectList() {
+  const { navigate } = useBosApp();
   const editor = useProjectEditor("list");
   const [query, setQuery] = useState("");
   const customers = usePartyList("customer", editor.active);
   const state = useProjects();
+  const progress = useBosData(() => bos.taskSummary().then((s) => s.progress).catch(() => null), []).data;
 
   return (
     <Loaded state={state}>
@@ -128,6 +131,27 @@ function ProjectList() {
           { key: "value", header: "Value", align: "right", mono: true, cell: (p) => (p.valueEstimate ? inr(p.valueEstimate) : "—") },
           { key: "start", header: "Start", mono: true, cell: (p) => dateLabel(p.startDate) },
           { key: "due", header: "Due", mono: true, cell: (p) => dateLabel(p.dueDate) },
+          {
+            key: "tasks",
+            header: "Tasks",
+            cell: (p) => {
+              const t = progress?.[p.id];
+              return (
+                <button
+                  type="button"
+                  className="bos-link"
+                  style={{ font: "inherit", color: t?.overdue ? "var(--bos-coral-600)" : "inherit" }}
+                  aria-label={`Tasks for ${p.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate("projects", "tasks", `project:${p.id}`);
+                  }}
+                >
+                  {t ? `${t.done}/${t.total}${t.overdue ? ` · ${t.overdue} late` : ""}` : "Plan"}
+                </button>
+              );
+            },
+          },
           { key: "source", header: "Source", cell: (p) => (p.sourceTool ? <Badge tag="sage">{sourceLabel(p.sourceTool)}</Badge> : <span className="bos-text-faint">Manual</span>) },
         ];
         return (
@@ -155,7 +179,8 @@ function ProjectList() {
 
 const MODULES: ReadonlyArray<LiveModule> = [
   { key: "board", label: "Pipeline", icon: "🗂️", title: "Project Pipeline", sub: "Drag projects across stages — lead, planned, active, on hold and completed", render: () => <Board /> },
-  { key: "list", label: "All Projects", icon: "📋", title: "All Projects", sub: "Every project with customer, value, schedule and source", render: () => <ProjectList /> },
+  { key: "list", label: "All Projects", icon: "📋", title: "All Projects", sub: "Every project with customer, value, schedule, task progress and source", render: () => <ProjectList /> },
+  { key: "tasks", label: "Tasks", icon: "✅", title: "Tasks & Milestones", sub: "Who's doing what by when — assign, track and repeat tasks, and mark project milestones", render: () => <Tasks /> },
 ];
 
 export function ProjectsWorkspace() {

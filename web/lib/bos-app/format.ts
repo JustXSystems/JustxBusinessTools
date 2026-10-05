@@ -31,6 +31,9 @@ import type {
   OpeningStatus,
   PayrollRunStatus,
   ProjectStatus,
+  TaskPriority,
+  TaskRecurrence,
+  TaskStatus,
   TravelMode,
   TripPhase,
   CertificateKind,
@@ -586,6 +589,24 @@ export const PROJECT_STAGES: ReadonlyArray<{ key: ProjectStatus; label: string; 
   { key: "on_hold", label: "On Hold", dot: "var(--bos-amber)" },
   { key: "completed", label: "Completed", dot: "var(--bos-emerald)" },
 ];
+
+export const TASK_COLUMNS: ReadonlyArray<{ key: TaskStatus; label: string; dot: string }> = [
+  { key: "todo", label: "To do", dot: "var(--bos-text-faint)" },
+  { key: "in_progress", label: "In progress", dot: "var(--bos-blue)" },
+  { key: "on_hold", label: "On hold", dot: "var(--bos-amber)" },
+  { key: "done", label: "Done", dot: "var(--bos-emerald)" },
+];
+export const TASK_STATUS_LABEL: Record<TaskStatus, string> = { todo: "To do", in_progress: "In progress", on_hold: "On hold", done: "Done", cancelled: "Cancelled" };
+export const TASK_PRIORITY_LABEL: Record<TaskPriority, string> = { low: "Low", normal: "Normal", high: "High", urgent: "Urgent" };
+export const TASK_RECURRENCE_LABEL: Record<TaskRecurrence, string> = { none: "Doesn't repeat", daily: "Every working day", weekly: "Every week", monthly: "Every month" };
+const TASK_BADGE: Record<TaskStatus, BadgeView> = {
+  todo: { text: "TO DO", tone: "neutral" },
+  in_progress: { text: "IN PROGRESS", tone: "blue" },
+  on_hold: { text: "ON HOLD", tone: "amber" },
+  done: { text: "DONE", tone: "emerald" },
+  cancelled: { text: "CANCELLED", tone: "neutral" },
+};
+export const taskStatusBadge = (s: TaskStatus): BadgeView => TASK_BADGE[s] ?? TASK_BADGE.todo;
 
 export const LEAVE_LABEL: Record<LeaveType, string> = { casual: "Casual Leave", sick: "Sick Leave", earned: "Earned Leave", lop: "Loss of Pay (LOP)" };
 export const EMPLOYMENT_LABEL: Record<EmploymentType, string> = { full_time: "Full-time", part_time: "Part-time", contract: "Contract", intern: "Intern" };

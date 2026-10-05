@@ -1441,6 +1441,80 @@ export type BosProject = {
 };
 export type ProjectInput = Partial<Omit<BosProject, "id" | "createdAt" | "updatedAt" | "sourceTool" | "sourceRef">>;
 
+export type TaskStatus = "todo" | "in_progress" | "on_hold" | "done" | "cancelled";
+export type TaskPriority = "low" | "normal" | "high" | "urgent";
+export type TaskRecurrence = "none" | "daily" | "weekly" | "monthly";
+export type TaskState = "done" | "cancelled" | "overdue" | "due_today" | "upcoming" | "no_date";
+export type BosTask = {
+  id: string;
+  taskNo: string;
+  title: string;
+  details: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  milestoneId: string | null;
+  milestoneName: string | null;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  assigneeDesignation: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  startOn: string | null;
+  dueOn: string | null;
+  recurrence: TaskRecurrence;
+  doneAt: string | null;
+  doneBy: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  state: TaskState;
+  /** Assigned to the caller, or unassigned and created by them. */
+  mine: boolean;
+  access: { edit: boolean; status: boolean; cancel: boolean; delete: boolean };
+};
+export type TaskInput = {
+  title: string;
+  details?: string | null;
+  projectId?: string | null;
+  milestoneId?: string | null;
+  assigneeId?: string | null;
+  priority?: TaskPriority;
+  startOn?: string | null;
+  dueOn?: string | null;
+  recurrence?: TaskRecurrence;
+  status?: "todo" | "in_progress" | "on_hold";
+};
+export type MilestoneState = "done" | "overdue" | "due_soon" | "upcoming" | "no_date";
+export type BosMilestone = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  name: string;
+  dueOn: string | null;
+  status: "open" | "done";
+  doneOn: string | null;
+  total: number;
+  done: number;
+  progress: number | null;
+  state: MilestoneState;
+  canDelete: boolean;
+};
+export type TaskTotals = { open: number; todo: number; inProgress: number; onHold: number; overdue: number; dueToday: number; recurring: number; doneRecent: number };
+export type ProjectProgress = Record<string, { total: number; done: number; overdue: number; progress: number | null }>;
+export type TasksOverview = {
+  today: string;
+  manager: boolean;
+  me: { id: string; name: string } | null;
+  tasks: BosTask[];
+  milestones: BosMilestone[];
+  people: Array<{ id: string; name: string; designation: string | null; isMe: boolean }>;
+  projects: Array<{ id: string; name: string; status: ProjectStatus }>;
+  progress: ProjectProgress;
+  truncated: boolean;
+  totals: TaskTotals;
+};
+export type TaskSummary = { today: string; totals: TaskTotals; upcoming: BosTask[]; progress: ProjectProgress };
+
 export type BosEvent = { id: number; actorName: string | null; type: string; entityType: string; entityId: string; summary: string; createdAt: string };
 
 export type ConnectorTarget = "party" | "invoice" | "project";
@@ -1717,6 +1791,17 @@ export const bos = {
   projects: () => bosApi<{ projects: BosProject[] }>("/projects"),
   createProject: (input: ProjectInput & { name: string }) => post<{ project: BosProject }>("/projects", input),
   updateProject: (id: string, input: ProjectInput) => patch<{ project: BosProject }>(`/projects/${id}`, input),
+
+  tasks: (opts: { projectId?: string | null; mine?: boolean } = {}) => bosApi<TasksOverview>(`/tasks${qs({ projectId: opts.projectId, mine: opts.mine ? 1 : null })}`),
+  taskSummary: () => bosApi<TaskSummary>("/tasks/summary"),
+  task: (id: string) => bosApi<{ task: BosTask }>(`/tasks/${id}`),
+  createTask: (input: TaskInput) => post<{ task: BosTask }>("/tasks", input),
+  updateTask: (id: string, input: Partial<TaskInput>) => patch<{ task: BosTask }>(`/tasks/${id}`, input),
+  setTaskStatus: (id: string, status: TaskStatus) => post<{ task: BosTask; next: BosTask | null }>(`/tasks/${id}/status`, { status }),
+  deleteTask: (id: string) => del(`/tasks/${id}`),
+  createMilestone: (projectId: string, input: { name: string; dueOn?: string | null }) => post<{ milestone: BosMilestone }>(`/projects/${projectId}/milestones`, input),
+  updateMilestone: (id: string, input: { name?: string; dueOn?: string | null; status?: "open" | "done" }) => patch<{ milestone: BosMilestone }>(`/milestones/${id}`, input),
+  deleteMilestone: (id: string) => del(`/milestones/${id}`),
 
   connectors: () => bosApi<{ autoSync: boolean; lastSyncAt: number | null; connectors: ConnectorSummary[] }>("/connect"),
   connectorItems: (tool: string) => bosApi<{ connector: ConnectorSummary; items: ConnectorItem[] }>(`/connect/${tool}`),

@@ -702,3 +702,76 @@ describe("own deletes switch", () => {
     expect(deleted(db, "bos_bills")).toBe(true);
   });
 });
+
+describe("tasks", () => {
+  const send = (method: string, body: unknown): RequestInit => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+  it.each([
+    ["/tasks", send("POST", { title: " " }), /title/],
+    ["/tasks", send("POST", { title: "Weekly site report", recurrence: "weekly" }), /needs a due date/],
+    ["/tasks", send("POST", { title: "Install panels", startOn: "2026-10-10", dueOn: "2026-10-09" }), /before the start/],
+    ["/tasks", send("POST", { title: "Install panels", milestoneId: "m1" }), /project/],
+    ["/tasks", send("POST", { title: "Install panels", priority: "asap" }), /priority/],
+    ["/tasks/k1/status", send("POST", { status: "finished" }), /status/],
+    ["/projects/p1/milestones", send("POST", { name: "" }), /name/],
+    ["/milestones/m1", send("PATCH", { status: "closed" }), /status/],
+  ] as const)("checks %s input before querying", async (path, init, detail) => {
+    const { status, body, db } = await call(host(), path, init);
+    expect(status).toBe(400);
+    expect(JSON.stringify(body)).toMatch(detail);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it("lets staff open the task list", async () => {
+    const { status, body } = await call(host(), "/tasks?mine=1");
+    expect(status).toBe(503);
+    expect(body.code).toBe("BOS_SCHEMA_PENDING");
+  });
+
+  /** One open task created by user 99 and assigned to user 42; every other query behaves as if the tables were missing. */
+  function taskDb() {
+    const db = missingTablesDb();
+    const missing = db.query.getMockImplementation()!;
+    const task = { id: "k1", task_no: "TSK-0001", title: "Fix inverter", status: "todo", recurrence: "none", due_on: null, created_by: 99, assignee_employee_id: "e9", assignee_user_id: 42 };
+    db.query.mockImplementation(((sql: unknown) => (/FROM bos_project_tasks t[\s\S]*WHERE t\.id = :id/.test(String(sql)) ? Promise.resolve([[task], []]) : missing())) as never);
+    return db;
+  }
+  const wrote = (db: ReturnType<typeof taskDb>, re: RegExp) => db.query.mock.calls.some(([sql]) => re.test(String(sql)));
+  const as = (userId: number, role: BosActor["role"] = "staff") => host({ actor: async () => ({ ...ACTOR, userId, role }) });
+
+  it("stops staff who neither created nor own a task from changing, moving or deleting it", async () => {
+    for (const [path, init] of [
+      ["/tasks/k1", send("PATCH", { title: "Renamed" })],
+      ["/tasks/k1/status", send("POST", { status: "done" })],
+      ["/tasks/k1", { method: "DELETE" }],
+    ] as const) {
+      const db = taskDb();
+      const { status } = await call(host(), path, init, db);
+      expect(status).toBe(403);
+      expect(wrote(db, /UPDATE bos_project_tasks|DELETE FROM bos_project_tasks/)).toBe(false);
+      expect(db.getConnection).not.toHaveBeenCalled();
+      await new Promise<void>((resolve) => server!.close(() => resolve()));
+      server = null;
+    }
+  });
+
+  it("lets the assignee move a task along but not cancel or edit it", async () => {
+    const moved = await call(as(42), "/tasks/k1/status", send("POST", { status: "in_progress" }), taskDb());
+    expect(moved.db.getConnection).toHaveBeenCalled();
+    await new Promise<void>((resolve) => server!.close(() => resolve()));
+    server = null;
+    const cancelled = await call(as(42), "/tasks/k1/status", send("POST", { status: "cancelled" }), taskDb());
+    expect(cancelled.status).toBe(403);
+    expect(cancelled.body.error).toMatch(/cancel/);
+    await new Promise<void>((resolve) => server!.close(() => resolve()));
+    server = null;
+    const edited = await call(as(42), "/tasks/k1", send("PATCH", { dueOn: "2026-10-30" }), taskDb());
+    expect(edited.status).toBe(403);
+  });
+
+  it("lets owners delete anyone's task", async () => {
+    const db = taskDb();
+    await call(as(1, "owner"), "/tasks/k1", { method: "DELETE" }, db);
+    expect(wrote(db, /DELETE FROM bos_project_tasks/)).toBe(true);
+  });
+});

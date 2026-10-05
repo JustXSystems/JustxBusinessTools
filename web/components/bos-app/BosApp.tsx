@@ -153,6 +153,8 @@ function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mod
     { id: "hol", section: "HR", label: "Holiday calendar", icon: "🎉", onSelect: go("hr", "leave", "holidays") },
     { id: "org", section: "HR", label: "Org chart", icon: "🏢", onSelect: go("hr", "orgchart") },
     { id: "proj", section: "Projects", label: "Project pipeline", icon: "🗂️", keywords: "kanban site", onSelect: go("projects", "board") },
+    { id: "tasks", section: "Projects", label: "My tasks", icon: "✅", keywords: "todo to-do assigned milestone", onSelect: go("projects", "tasks", "mine") },
+    { id: "task-new", section: "Projects", label: "New task", icon: "＋", keywords: "todo assign", onSelect: go("projects", "tasks", "new") },
     ...session.connectors.map((c) => ({ id: `con-${c.id}`, section: "Connected tools", label: `${c.label} records`, icon: c.icon, onSelect: go("connect", c.id) })),
     {
       id: "sync",

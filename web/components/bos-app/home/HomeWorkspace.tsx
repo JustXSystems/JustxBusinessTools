@@ -23,7 +23,7 @@ import {
   type BosTickerItem,
 } from "@/components/bos";
 import { bos, type BosEvent } from "@/lib/bos-app/api";
-import { dateLabel, EMPLOYMENT_LABEL, greetingFor, inr, inrCompact, LEAVE_LABEL, monthLabel, timeAgo, todayLocal } from "@/lib/bos-app/format";
+import { dateLabel, dayMonth, EMPLOYMENT_LABEL, greetingFor, inr, inrCompact, LEAVE_LABEL, monthLabel, timeAgo, todayLocal } from "@/lib/bos-app/format";
 import { Loaded, PersonAvatar, useBosApp, useBosData, useWorkspaceModule, type WorkspaceKey } from "../core";
 import { ApplyLeaveDialog, ExpenseDialog } from "../dialogs";
 import { toCelebrations } from "../hr/HrOverview";
@@ -72,6 +72,8 @@ const TICKER_STYLE: Record<string, { icon: BosIconName; tint: string }> = {
   agreement: { icon: "file", tint: "blue" },
   sales: { icon: "receipt", tint: "mint" },
   sales_item: { icon: "box", tint: "mint" },
+  task: { icon: "check", tint: "blue" },
+  milestone: { icon: "layers", tint: "emerald" },
 };
 
 export const tickerOf = (events: ReadonlyArray<BosEvent>): BosTickerItem[] =>
@@ -83,7 +85,7 @@ function MyProfile() {
   const { session, navigate, canManage } = useBosApp();
   const [dialog, setDialog] = useState<"leave" | "expense" | null>(null);
   const state = useBosData(async () => {
-    const [me, projects, events, hr, expenses, payslips, policies] = await Promise.all([
+    const [me, projects, events, hr, expenses, payslips, policies, tasks] = await Promise.all([
       bos.me(),
       bos.projects().catch(() => ({ projects: [] })),
       bos.events({ limit: 8 }).catch(() => ({ events: [] })),
@@ -91,6 +93,7 @@ function MyProfile() {
       bos.expenses().catch(() => ({ expenses: [], categories: [] as string[] })),
       bos.myPayslips().catch(() => ({ employeeId: null, payslips: [] })),
       bos.pendingPolicies().catch(() => ({ policies: [] })),
+      bos.taskSummary().catch(() => null),
     ]);
     return {
       me,
@@ -101,23 +104,26 @@ function MyProfile() {
       categories: expenses.categories,
       payslips: payslips.payslips,
       pendingPolicies: policies.policies,
+      tasks,
     };
   });
 
   return (
     <Loaded state={state} rows={2}>
-      {({ me, projects, events, hr, expenses, categories, payslips, pendingPolicies }) => {
+      {({ me, projects, events, hr, expenses, categories, payslips, pendingPolicies, tasks }) => {
         const emp = me.employee;
         const month = new Date().toLocaleDateString("en-GB", { month: "short" });
         const stage = (s: string) => projects.filter((p) => p.status === s).length;
         const myExpenses = emp ? expenses.filter((x) => x.employeeId === emp.id) : [];
         const myPendingLeave = emp ? me.leaves.filter((l) => l.status === "pending").length : 0;
+        const hasTasks = Boolean(tasks && (tasks.totals.open || tasks.totals.doneRecent));
         const balance = (t: "casual" | "sick") => (emp ? (me.balances.find((b) => b.type === t)?.remaining ?? 0) : 0);
         const quick: Array<{ label: string; onClick: () => void; show?: boolean }> = [
           { label: "Apply Leave", onClick: () => setDialog("leave"), show: Boolean(emp) || canManage },
           { label: "Claim Expense", onClick: () => setDialog("expense") },
           { label: "Holiday Calendar", onClick: () => navigate("hr", "leave", "holidays") },
           { label: "Attendance History", onClick: () => (emp ? navigate("hr", "employees", `open:${emp.id}`) : navigate("hr", "leave", "biometric")), show: Boolean(emp) || canManage },
+          { label: "My Tasks", onClick: () => navigate("projects", "tasks", "mine") },
           { label: "Create Invoice", onClick: () => navigate("finance", "invoices", "new") },
           { label: "Sync from Tools", onClick: () => navigate("connect") },
         ];
@@ -217,13 +223,33 @@ function MyProfile() {
                   </FilterChip>
                 ))}
             </div>
-            {payslips.length ? (
+            {payslips.length || hasTasks ? (
               <Grid cols={2} gap={12} style={{ marginBottom: 20 }}>
-                <WidgetCard title="💰 My Payslips" dot="mint">
-                  {payslips.slice(0, 4).map((p) => (
-                    <WidgetRow key={p.id} label={p.period ? monthLabel(p.period) : "Payslip"} value={inr(p.netPay)} valueTone="emerald" chevron onClick={() => navigate("finance", "payroll", `payslip:${p.id}`)} />
-                  ))}
-                </WidgetCard>
+                {tasks && hasTasks ? (
+                  <WidgetCard title="✅ My Tasks" dot="blue">
+                    <WidgetRow label="Overdue" value={tasks.totals.overdue} valueTone={tasks.totals.overdue ? "coral" : "faint"} onClick={() => navigate("projects", "tasks", "mine")} />
+                    <WidgetRow label="Due today" value={tasks.totals.dueToday} valueTone={tasks.totals.dueToday ? "amber" : "faint"} />
+                    <WidgetRow label="In progress" value={tasks.totals.inProgress} valueTone="blue" />
+                    <WidgetRow label="To do" value={tasks.totals.todo} valueTone="faint" />
+                    {tasks.upcoming.slice(0, 3).map((t) => (
+                      <WidgetRow
+                        key={t.id}
+                        label={t.title}
+                        value={t.dueOn ? (t.state === "due_today" ? "Today" : dayMonth(t.dueOn)) : "—"}
+                        valueTone={t.state === "overdue" ? "coral" : "faint"}
+                        chevron
+                        onClick={() => navigate("projects", "tasks", `open:${t.id}`)}
+                      />
+                    ))}
+                  </WidgetCard>
+                ) : null}
+                {payslips.length ? (
+                  <WidgetCard title="💰 My Payslips" dot="mint">
+                    {payslips.slice(0, 4).map((p) => (
+                      <WidgetRow key={p.id} label={p.period ? monthLabel(p.period) : "Payslip"} value={inr(p.netPay)} valueTone="emerald" chevron onClick={() => navigate("finance", "payroll", `payslip:${p.id}`)} />
+                    ))}
+                  </WidgetCard>
+                ) : null}
               </Grid>
             ) : null}
             {events.length ? <ActionTicker items={tickerOf(events)} /> : null}

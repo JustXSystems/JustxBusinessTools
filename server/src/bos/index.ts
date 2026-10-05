@@ -17,6 +17,7 @@ import { registerReports } from "./reports.js";
 import { registerSales } from "./sales.js";
 import { registerPolicies } from "./policies.js";
 import { registerServices } from "./services.js";
+import { registerTasks } from "./tasks.js";
 import { registerTravel } from "./travel.js";
 import { registerWorkspace } from "./workspace.js";
 
@@ -83,6 +84,7 @@ export function createBosRouter({ db, host, connectors = [] }: CreateBosRouterOp
   registerServices(router, deps);
   registerPolicies(router, deps);
   registerSales(router, deps);
+  registerTasks(router, deps);
 
   router.use((_req, res) => {
     res.status(404).json({ error: "Unknown BOS endpoint" });
