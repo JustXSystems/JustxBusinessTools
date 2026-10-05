@@ -50,6 +50,11 @@ export interface BosHost {
   actor(req: Request): Promise<BosActor | null>;
   /** Whether BOS is turned on for the caller; `false` → 403 `BOS_NOT_ENABLED`. Omit to always allow. */
   enabled?(actor: BosActor): Promise<boolean>;
+  /**
+   * Per-organization switch for features that change what live customers see (e.g. `bos.sales.pos`).
+   * Omit to allow every feature; JBT reads the admin switches and treats unknown keys as off.
+   */
+  feature?(actor: BosActor, key: string): Promise<boolean>;
   /** Gate for mutating requests (role write permission). */
   requireWrite: RequestHandler;
   audit(actor: BosActor, action: string, entityType: string, entityId: string, diff?: Record<string, unknown>, ip?: string): Promise<void>;

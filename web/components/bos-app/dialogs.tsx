@@ -173,7 +173,9 @@ export function PartyField({
   );
 }
 
-function EmployeeSelect({ employees, value, onChange, label = "Employee", allowSelf }: { employees: ReadonlyArray<BosEmployee>; value: string; onChange: (id: string) => void; label?: string; allowSelf?: boolean }) {
+type PickableEmployee = Pick<BosEmployee, "id" | "name" | "empCode" | "status">;
+
+function EmployeeSelect({ employees, value, onChange, label = "Employee", allowSelf }: { employees: ReadonlyArray<PickableEmployee>; value: string; onChange: (id: string) => void; label?: string; allowSelf?: boolean }) {
   return (
     <Field label={label}>
       {({ id }) => (
@@ -243,10 +245,30 @@ export function ApplyLeaveDialog({ open, onClose, employees = [], employeeId }: 
 
 /* ---------- Expense claim ---------- */
 
-export function ExpenseDialog({ open, onClose, categories, employees = [] }: { open: boolean; onClose: () => void; categories: ReadonlyArray<string>; employees?: ReadonlyArray<BosEmployee> }) {
+export type ExpensePrefill = { employeeId?: string; category?: string; description?: string; spentOn?: string };
+
+export function ExpenseDialog({
+  open,
+  onClose,
+  categories,
+  employees = [],
+  prefill,
+}: {
+  open: boolean;
+  onClose: () => void;
+  categories: ReadonlyArray<string>;
+  employees?: ReadonlyArray<PickableEmployee>;
+  prefill?: ExpensePrefill;
+}) {
   const { canManage } = useBosApp();
   const { run, busy } = useBosAction();
-  const f = useFormState(() => ({ employeeId: "", category: categories[0] ?? "Travel", amount: "", spentOn: todayLocal(), description: "" }));
+  const f = useFormState(() => ({
+    employeeId: prefill?.employeeId ?? "",
+    category: prefill?.category ?? categories[0] ?? "Travel",
+    amount: "",
+    spentOn: prefill?.spentOn ?? todayLocal(),
+    description: prefill?.description ?? "",
+  }));
   const { reset } = f;
   useEffect(() => {
     if (open) reset();

@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -128,6 +129,22 @@ export function useBosAction() {
   return { run, busy, isBusy: (key: string) => busy === key };
 }
 
+/** Prints only the `.bos-inv-paper` on screen (invoices, payslips); the body class is cleared after printing. */
+export function usePrint() {
+  useEffect(() => {
+    const clear = () => document.body.classList.remove("bos-printing");
+    window.addEventListener("afterprint", clear);
+    return () => {
+      window.removeEventListener("afterprint", clear);
+      clear();
+    };
+  }, []);
+  return () => {
+    document.body.classList.add("bos-printing");
+    window.print();
+  };
+}
+
 /* ---------- States ---------- */
 
 export function LoadingBlock({ rows = 2 }: { rows?: number }) {
@@ -151,6 +168,15 @@ export function LoadingBlock({ rows = 2 }: { rows?: number }) {
         </Card>
       ))}
     </div>
+  );
+}
+
+/** For screens the API keeps to managers, so other roles get an explanation instead of an error. */
+export function ManagersOnly({ children }: { children: ReactNode }) {
+  return (
+    <Alert tone="blue" title="Owners and admins only">
+      {children}
+    </Alert>
   );
 }
 
@@ -322,7 +348,7 @@ export function LiveWorkspace({
     >
       <ModuleHeader title={current.title} sub={current.sub} brand={current.render ? "Justx BOS" : <Badge tone="blue" auto>COMING NEXT</Badge>} />
       <div key={`${current.key}:${navSeq}`} className={current.compact ? "bos-compact bos-fade-in" : "bos-fade-in"}>
-        {current.render ? current.render() : current.preview ? <PreviewModule spec={current.preview} /> : null}
+        {current.render ? <Suspense fallback={<LoadingBlock />}>{current.render()}</Suspense> : current.preview ? <PreviewModule spec={current.preview} /> : null}
       </div>
     </AppShell>
   );

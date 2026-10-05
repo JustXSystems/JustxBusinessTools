@@ -22,7 +22,7 @@ export function Parties() {
 
   return (
     <Loaded state={state}>
-      {({ parties }) => {
+      {({ parties, truncated }) => {
         const q = query.trim().toLowerCase();
         const rows = parties.filter(
           (p) =>
@@ -113,6 +113,7 @@ export function Parties() {
               />
               <Pagination>
                 Showing {rows.length} of {parties.length}
+                {truncated ? " · the first 5,000 by name" : ""}
               </Pagination>
             </div>
             <PartyDialog open={editing !== null} party={editing === "new" ? null : editing} onClose={() => setEditing(null)} defaultKind={filter === "vendor" ? "vendor" : "customer"} />

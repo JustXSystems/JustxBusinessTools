@@ -1,6 +1,7 @@
 import type { Request } from "express";
 import { pool } from "../../db.js";
 import { logAudit } from "../../lib/audit.js";
+import { getOrgFeatureSwitches, isFeatureSwitchKey } from "../../lib/feature-switches.js";
 import { ensureDocumentAccentColorColumn } from "../../lib/document-accent.js";
 import type { NotificationEventType } from "../../lib/notification-events.js";
 import { publishNotificationAsync } from "../../lib/notification-publish.js";
@@ -55,6 +56,13 @@ export const jbtHost: BosHost = {
       console.warn("[bos] enabled check failed", err instanceof Error ? err.message : err);
       return false;
     }
+  },
+
+  /** Admin → Tools → Justx BOS → Switches. Unregistered keys and read errors count as off. */
+  async feature(_actor, key): Promise<boolean> {
+    const ctx = getRequestContext();
+    if (!ctx || !isFeatureSwitchKey(key)) return false;
+    return (await getOrgFeatureSwitches(ctx.organizationId))[key];
   },
 
   requireWrite: requireWriteAccess,

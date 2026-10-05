@@ -422,7 +422,9 @@ Credentials live only in `server/.env` (`DB_*`).
 
 ### Backup (automated)
 
-Script: [`scripts/backup-jbt.sh`](../scripts/backup-jbt.sh) — MySQL dump + local uploads tarball, retention via `BACKUP_RETENTION_DAYS` (default 14).
+Script: [`scripts/backup-jbt.sh`](../scripts/backup-jbt.sh) — MySQL dump + local uploads tarball, retention via `BACKUP_RETENTION_DAYS` (default 14). Each dump is verified (`gzip -t` + mysqldump's completion trailer) before it replaces anything; a failed dump leaves no partial file and exits non-zero. Options: `BACKUP_SCOPE=db` (skip uploads), `BACKUP_TAG=<label>` (appended to the file name).
+
+**Before every deploy with DB changes:** [`scripts/db-backup-if-pending.sh`](../scripts/db-backup-if-pending.sh) runs automatically from `vps-release.sh` / `vps-deploy.sh`. If the new release has pending migrations, it takes a DB-only backup tagged `pre-migrate-<release>` and stops the deploy if that backup fails. See [DEPLOY.md](DEPLOY.md) → *Automatic pre-migration backup*.
 
 **Install crons (backup + health) once on the VPS:**
 

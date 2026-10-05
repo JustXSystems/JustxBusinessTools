@@ -5,6 +5,8 @@
 # Optional CD controls (same allowlist as vps-release.sh):
 #   DEPLOY_BRANCH      (default: master)
 #   RUN_MIGRATIONS     true|false (default: true)
+#   BACKUP_DB          true|false (default: false) — force a MySQL + uploads backup; a MySQL backup
+#                      always runs automatically when migrations are pending
 #   SEED_TOOLS         true|false (default: false)
 #   PM2_MODE           reload|restart|restart_api|restart_web|restart_worker|none (default: reload)
 #   POST_DEPLOY_TASK   none|seed_tools|seed_admin|analytics_rollup (default: none)
@@ -17,13 +19,14 @@ cd "$ROOT"
 BRANCH="${DEPLOY_BRANCH:-master}"
 BASE_PATH="${NEXT_PUBLIC_BASE_PATH:-/jbt}"
 RUN_MIGRATIONS="${RUN_MIGRATIONS:-true}"
+BACKUP_DB="${BACKUP_DB:-false}"
 SEED_TOOLS="${SEED_TOOLS:-false}"
 PM2_MODE="${PM2_MODE:-reload}"
 POST_DEPLOY_TASK="${POST_DEPLOY_TASK:-none}"
 HEALTH_CHECK="${HEALTH_CHECK:-true}"
 
 echo "==> Deploying JBT from $(pwd) (branch=${BRANCH}, local-build fallback)"
-echo "    migrations=$RUN_MIGRATIONS seed_tools=$SEED_TOOLS pm2=$PM2_MODE task=$POST_DEPLOY_TASK health=$HEALTH_CHECK"
+echo "    migrations=$RUN_MIGRATIONS backup_db=$BACKUP_DB seed_tools=$SEED_TOOLS pm2=$PM2_MODE task=$POST_DEPLOY_TASK health=$HEALTH_CHECK"
 
 case "$PM2_MODE" in
   reload|restart|restart_api|restart_web|restart_worker|none) ;;
@@ -83,6 +86,11 @@ run_task() {
       ;;
   esac
 }
+
+# Always checked, even with RUN_MIGRATIONS=false: the new API applies pending migrations itself when PM2 starts it.
+BACKUP_FORCE="$BACKUP_DB" BACKUP_TAG="pre-migrate-$(git rev-parse --short=12 HEAD 2>/dev/null || date -u +%Y%m%dT%H%M%SZ)" \
+  bash "$ROOT/scripts/db-backup-if-pending.sh" "$ROOT" \
+  || { echo "ERROR: DB backup failed — stopped before migrations and PM2 reload" >&2; exit 1; }
 
 if [[ "$RUN_MIGRATIONS" == "true" ]]; then
   echo "==> Apply pending DB migrations"

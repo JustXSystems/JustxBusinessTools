@@ -33,7 +33,7 @@ export function Receivables() {
   const [paying, setPaying] = useState<BosInvoice | null>(null);
   const [query, setQuery] = useState("");
   const state = useBosData(async () => {
-    const [overview, list] = await Promise.all([bos.financeOverview(), bos.invoices()]);
+    const [overview, list] = await Promise.all([bos.financeOverview(), bos.invoices({ status: "open" })]);
     return { aging: overview.aging, invoices: list.invoices };
   });
 
@@ -159,7 +159,7 @@ export function Payables() {
                 <Button size="sm" variant="success" disabled={busy !== null} onClick={() => run(`pay-${b.id}`, () => bos.payBill(b.id, todayLocal()), { success: "Bill marked paid", description: `${b.partyName} · ${inr(b.total)}` })}>
                   Mark paid
                 </Button>
-              ) : b.status === "pending" || b.status === "rejected" ? (
+              ) : (b.canDelete ?? (b.status === "pending" || b.status === "rejected")) ? (
                 <Button size="sm" variant="ghost" onClick={() => setRemoving(b)}>
                   Delete
                 </Button>
@@ -248,7 +248,7 @@ export function Expenses() {
 
   return (
     <Loaded state={state}>
-      {({ expenses, categories, employees }) => {
+      {({ expenses, categories, employees, ownOnly }) => {
         const month = todayLocal().slice(0, 7);
         const submitted = expenses.filter((e) => e.status === "submitted");
         const approved = expenses.filter((e) => e.status === "approved");
@@ -303,7 +303,7 @@ export function Expenses() {
               <div>
                 <ModuleToolbar>
                   <span className="bos-text-faint" style={{ fontSize: 12.5 }}>
-                    {canManage ? "All claims across the team" : "Your claims"}
+                    {ownOnly ? "Your claims" : "All claims across the team"}
                   </span>
                   <span className="bos-spacer" />
                   <Button size="sm" variant="primary" icon="plus" onClick={() => setClaiming(true)}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   BlockLabel,
   BosIcon,
@@ -33,27 +33,11 @@ import {
   sourceLabel,
   timeAgo,
   todayLocal,
+  type BadgeView,
   type GstTotals,
 } from "@/lib/bos-app/format";
-import { Loaded, Stack, StatusBadge, useBosAction, useBosApp, useBosData } from "../core";
+import { Loaded, Stack, StatusBadge, useBosAction, useBosApp, useBosData, usePrint } from "../core";
 import { ConfirmDialog, PartyDialog, PartyField, PaymentDialog, usePartyList } from "../dialogs";
-
-/* ---------- Printing ---------- */
-
-function usePrint() {
-  useEffect(() => {
-    const clear = () => document.body.classList.remove("bos-printing");
-    window.addEventListener("afterprint", clear);
-    return () => {
-      window.removeEventListener("afterprint", clear);
-      clear();
-    };
-  }, []);
-  return () => {
-    document.body.classList.add("bos-printing");
-    window.print();
-  };
-}
 
 /* ---------- Paper ---------- */
 
@@ -70,6 +54,14 @@ type PaperDoc = {
   notes: string | null;
   amountPaid?: number;
   status?: InvoiceDisplayStatus;
+  /** Sales documents reuse the paper with their own title and labels; invoices leave these unset. */
+  title?: string;
+  numberTitle?: string;
+  dateTitle?: string;
+  /** `null` hides the second date. */
+  dueTitle?: string | null;
+  stamp?: BadgeView | null;
+  extraMeta?: Array<[string, string, string?]>;
 };
 
 const STAMP_INK: Record<string, string> = { emerald: "var(--bos-emerald-600)", coral: "var(--bos-coral-600)", amber: "var(--bos-amber-600)", blue: "var(--bos-blue-btn)" };
@@ -79,19 +71,20 @@ export function InvoicePaper({ settings, doc }: { settings: BosSettings; doc: Pa
   const seller = [settings.address, [settings.gstin && `GSTIN ${settings.gstin}`, settings.state].filter(Boolean).join(" · "), [settings.phone, settings.email].filter(Boolean).join(" · ")]
     .filter(Boolean)
     .join("\n");
-  const stamp = doc.status && doc.status !== "sent" ? invoiceBadge(doc.status) : null;
+  const stamp = doc.stamp !== undefined ? doc.stamp : doc.status && doc.status !== "sent" ? invoiceBadge(doc.status) : null;
   const paid = doc.amountPaid ?? 0;
   const billTo = [doc.partyGstin && `GSTIN ${doc.partyGstin}`, doc.partyAddress].filter(Boolean).join("\n");
   const meta: Array<[string, string, string?]> = [
     ["Bill To", doc.partyName || "Customer name", billTo],
-    ["Invoice Number", doc.invoiceNo],
-    ["Invoice Date", dateLabel(doc.issueDate)],
-    ["Due Date", dateLabel(doc.dueDate)],
+    [doc.numberTitle ?? "Invoice Number", doc.invoiceNo],
+    [doc.dateTitle ?? "Invoice Date", dateLabel(doc.issueDate)],
+    ...(doc.dueTitle === null ? [] : [[doc.dueTitle ?? "Due Date", doc.dueDate ? dateLabel(doc.dueDate) : "—"] as [string, string]]),
     ["Place of Supply", doc.placeOfSupply || settings.state || "—", doc.intraState ? "Intra-state · CGST + SGST" : "Inter-state · IGST"],
+    ...(doc.extraMeta ?? []),
   ];
 
   return (
-    <article className="bos-inv-paper" aria-label="Invoice preview">
+    <article className="bos-inv-paper" aria-label={doc.title ? `${doc.title.charAt(0)}${doc.title.slice(1).toLowerCase()} preview` : "Invoice preview"}>
       <div className="bos-inv-paper-top">
         <div>
           <div className="bos-inv-paper-brand">{settings.companyName || "Your Company"}</div>
@@ -99,7 +92,7 @@ export function InvoicePaper({ settings, doc }: { settings: BosSettings; doc: Pa
           <div className="bos-inv-paper-powered">Powered by Justx BOS</div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div className="bos-inv-paper-title">{settings.gstin ? "TAX INVOICE" : "INVOICE"}</div>
+          <div className="bos-inv-paper-title">{doc.title ?? (settings.gstin ? "TAX INVOICE" : "INVOICE")}</div>
           {stamp ? (
             <span className="bos-inv-stamp" style={{ color: STAMP_INK[stamp.tone] ?? "#6b7280" }}>
               {stamp.text}
@@ -449,9 +442,11 @@ function InvoiceDetail({ id, onBack, onEdit }: { id: string; onBack: () => void;
 
   return (
     <Loaded state={state} rows={2}>
-      {({ invoice: inv, payments, events }) => {
+      {({ invoice: inv, payments, events, canDelete }) => {
         const open = inv.status === "sent" || inv.status === "partial";
         const editable = inv.status !== "void" && inv.status !== "paid" && inv.amountPaid === 0;
+        const deletable = inv.status === "draft" && canDelete !== false;
+        const voidable = canManage && inv.status !== "draft" && inv.status !== "void" && inv.amountPaid === 0;
         return (
           <>
             <div className="bos-app-recordbar">
@@ -543,9 +538,9 @@ function InvoiceDetail({ id, onBack, onEdit }: { id: string; onBack: () => void;
                     <WidgetRow label={<span className="bos-text-faint">No activity recorded</span>} />
                   )}
                 </WidgetCard>
-                {inv.status === "draft" || (canManage && inv.status !== "void" && inv.amountPaid === 0) ? (
+                {deletable || voidable ? (
                   <div className="bos-row" style={{ gap: 8 }}>
-                    {inv.status === "draft" ? (
+                    {deletable ? (
                       <Button size="sm" variant="destructive" onClick={() => setConfirm("delete")}>
                         Delete draft
                       </Button>
@@ -608,17 +603,25 @@ const FILTERS: ReadonlyArray<{ key: ListFilter; label: string; test: (i: BosInvo
 function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: () => void }) {
   const [filter, setFilter] = useState<ListFilter>("all");
   const [query, setQuery] = useState("");
+  const [older, setOlder] = useState<{ q: string; invoices: BosInvoice[] } | null>(null);
+  const { run, busy } = useBosAction();
   const state = useBosData(() => bos.invoices(), []);
 
   return (
     <Loaded state={state}>
-      {({ invoices }) => {
+      {({ invoices, truncated, month: monthTotals }) => {
         const q = query.trim().toLowerCase();
         const test = FILTERS.find((f) => f.key === filter)?.test ?? (() => true);
-        const rows = invoices.filter((i) => test(i) && (!q || `${i.invoiceNo} ${i.partyName} ${i.partyGstin ?? ""}`.toLowerCase().includes(q)));
+        const found = older && older.q === q ? older.invoices.filter((o) => !invoices.some((i) => i.id === o.id)) : [];
+        const rows = [...invoices, ...found].filter((i) => test(i) && (!q || `${i.invoiceNo} ${i.partyName} ${i.partyGstin ?? ""}`.toLowerCase().includes(q)));
         const month = todayLocal().slice(0, 7);
         const issued = invoices.filter((i) => i.status !== "draft" && i.status !== "void");
-        const thisMonth = issued.filter((i) => i.issueDate.startsWith(month));
+        const thisMonthList = issued.filter((i) => i.issueDate.startsWith(month));
+        const thisMonth = monthTotals ?? { count: thisMonthList.length, total: thisMonthList.reduce((s, i) => s + i.grandTotal, 0) };
+        const searchOlder = async () => {
+          const out = await run("older", () => bos.invoices({ q: query.trim() }), { refresh: false });
+          if (out) setOlder({ q, invoices: out.invoices });
+        };
         const outstanding = issued.reduce((s, i) => s + i.balance, 0);
         const overdue = invoices.filter((i) => i.displayStatus === "overdue");
         const columns: BosColumn<BosInvoice>[] = [
@@ -642,7 +645,7 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
         return (
           <Stack>
             <Grid cols={4} min={140}>
-              <KpiCard label="Invoiced this month" value={inrCompact(thisMonth.reduce((s, i) => s + i.grandTotal, 0))} chip={{ color: "mint", glyph: "₹" }} delta={`${thisMonth.length} invoice${thisMonth.length === 1 ? "" : "s"}`} deltaTone="muted" />
+              <KpiCard label="Invoiced this month" value={inrCompact(thisMonth.total)} chip={{ color: "mint", glyph: "₹" }} delta={`${thisMonth.count} invoice${thisMonth.count === 1 ? "" : "s"}`} deltaTone="muted" />
               <KpiCard label="Outstanding" value={inrCompact(outstanding)} chip={{ color: "rose", glyph: "◐" }} delta={`${issued.filter((i) => i.balance > 0).length} unpaid`} deltaTone={outstanding ? "warn" : "muted"} />
               <KpiCard
                 label="Overdue"
@@ -680,7 +683,16 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
                 empty={invoices.length ? "No invoices match this view." : "No invoices yet — create one, or import an accepted quotation from Connected Tools."}
               />
               <Pagination>
-                Showing {rows.length} of {invoices.length}
+                Showing {rows.length} of {invoices.length + found.length}
+                {truncated ? " · every draft and unpaid invoice, plus the latest 1,000 paid or void" : ""}
+                {truncated && q.length >= 2 && older?.q !== q ? (
+                  <>
+                    {" · "}
+                    <button type="button" className="bos-link" disabled={busy === "older"} onClick={searchOlder}>
+                      Search older invoices for “{query.trim()}”
+                    </button>
+                  </>
+                ) : null}
               </Pagination>
             </div>
           </Stack>

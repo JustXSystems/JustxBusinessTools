@@ -31,7 +31,7 @@ on:
         type: boolean
         default: true
       backup_db:
-        description: "Run MySQL backup before migrations"
+        description: "Force a MySQL + uploads backup even with no pending migrations (a MySQL backup always runs automatically when migrations are pending)"
         type: boolean
         default: false
       seed_tools:

@@ -2,7 +2,7 @@ import type { Router } from "express";
 import type { PoolConnection } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { actorOf, isoDate as iso, optText, parse, recordEvent, type BosDeps } from "./context.js";
+import { actorOf, featureOn, isoDate as iso, optText, parse, parsePatch, recordEvent, type BosDeps, type BosEventInput } from "./context.js";
 import { exec, json, money, nextSequence, one, rows, tx } from "./db.js";
 import { BosError, forbidden, isManager, notFound, type BosActor } from "./host.js";
 import {
@@ -27,6 +27,12 @@ import {
 import { getSettings } from "./workspace.js";
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+const OWN_CLAIMS_SWITCH = "bos.expenses.own_claims";
+const OWN_DELETES_SWITCH = "bos.finance.own_deletes";
+const INVOICE_ORDER = "ORDER BY issue_date DESC, invoice_no DESC";
+const ACTIVE_LIMIT = 5000;
+const SETTLED_LIMIT = 1000;
+const PARTY_LIMIT = 5000;
 
 /* =====================================================================
  * Parties (customers & vendors)
@@ -135,7 +141,7 @@ export async function findParty(deps: BosDeps, tenantId: number, probe: { name: 
  * Invoices & payments
  * ===================================================================== */
 
-const LineInput = z.object({
+export const LineInput = z.object({
   description: z.string().trim().max(500).default(""),
   hsn: optText(20),
   unit: optText(20),
@@ -184,6 +190,7 @@ type InvoiceRow = {
   source_tool: string | null;
   source_ref: string | null;
   sent_at: string | null;
+  created_by: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -287,6 +294,36 @@ const PaymentInput = z.object({
   reference: optText(120),
   notes: optText(500),
 });
+export type PaymentInputT = z.infer<typeof PaymentInput>;
+
+/** Records a payment against an issued invoice and settles its status, inside the caller's transaction. */
+export async function addInvoicePayment(deps: BosDeps, conn: PoolConnection, actor: BosActor, invoiceId: string, input: PaymentInputT) {
+  const inv = await loadInvoice(deps, actor.tenantId, invoiceId, conn);
+  if (inv.status === "draft" || inv.status === "void") throw new BosError(409, "Issue the invoice before recording payments");
+  const balance = round2(money(inv.grand_total) - money(inv.amount_paid));
+  if (input.amount > balance + 0.5) throw new BosError(400, `Payment is more than the balance due (${inr(balance)})`);
+  const paid = round2(money(inv.amount_paid) + input.amount);
+  const status = settleStatus(inv.status as InvoiceStatus, money(inv.grand_total), paid);
+  const paymentId = randomUUID();
+  await exec(
+    conn,
+    `INSERT INTO bos_payments (id, tenant_id, invoice_id, amount, paid_on, method, reference, notes, created_by)
+     VALUES (:id, :tenantId, :invoiceId, :amount, :paidOn, :method, :reference, :notes, :userId)`,
+    { id: paymentId, tenantId: actor.tenantId, invoiceId: inv.id, ...input, reference: input.reference ?? null, notes: input.notes ?? null, userId: actor.userId },
+  );
+  await exec(conn, `UPDATE bos_invoices SET amount_paid = :paid, status = :status WHERE id = :id`, { paid, status, id: inv.id });
+  return { invoiceId: inv.id, invoiceNo: inv.invoice_no, partyName: inv.party_name, status, paymentId };
+}
+
+export const invoicePaymentEvent = (r: Awaited<ReturnType<typeof addInvoicePayment>>, input: Pick<PaymentInputT, "amount" | "method">, ip?: string): BosEventInput => ({
+  type: "invoice.payment",
+  entityType: "invoice",
+  entityId: r.invoiceId,
+  summary: `Received ${inr(input.amount)} against ${r.invoiceNo}${r.status === "paid" ? " — fully paid" : ""}`,
+  payload: { amount: input.amount, method: input.method },
+  notice: { kind: "activity", title: "Payment received", body: `${inr(input.amount)} · ${r.invoiceNo} · ${r.partyName}`, path: "?ws=finance&m=receivables" },
+  ip,
+});
 
 /* =====================================================================
  * Bills (payables) & expenses
@@ -319,6 +356,7 @@ type BillRow = {
   notes: string | null;
   decided_at: string | null;
   paid_on: string | null;
+  created_by: number | null;
   created_at: string;
 };
 
@@ -352,7 +390,7 @@ const ExpenseInput = z.object({
   spentOn: iso,
 });
 
-type ExpenseRow = {
+export type ExpenseRow = {
   id: string;
   employee_id: string | null;
   claimant_name: string | null;
@@ -365,7 +403,7 @@ type ExpenseRow = {
   created_at: string;
 };
 
-const mapExpense = (r: ExpenseRow) => ({
+export const mapExpense = (r: ExpenseRow) => ({
   id: r.id,
   employeeId: r.employee_id,
   claimantName: r.claimant_name,
@@ -379,6 +417,34 @@ const mapExpense = (r: ExpenseRow) => ({
 });
 
 const Decision = z.object({ decision: z.enum(["approved", "rejected"]), note: optText(500) });
+
+type Db = BosDeps["db"] | PoolConnection;
+
+/** Marks an approved bill paid. */
+export async function payBill(db: Db, tenantId: number, billId: string, paidOn: string): Promise<BillRow> {
+  const bill = await one<BillRow>(db, `SELECT * FROM bos_bills WHERE id = :id AND tenant_id = :tenantId`, { id: billId, tenantId });
+  if (!bill) throw notFound("Bill");
+  if (bill.status !== "approved") throw new BosError(409, "Approve the bill before paying it");
+  const r = await exec(db, `UPDATE bos_bills SET status = 'paid', paid_on = :paidOn WHERE id = :id AND status = 'approved'`, { paidOn, id: bill.id });
+  if (!r.affectedRows) throw new BosError(409, "Approve the bill before paying it");
+  return bill;
+}
+
+export const billPaidEvent = (bill: Pick<BillRow, "id" | "party_name" | "total">, ip?: string): BosEventInput => ({
+  type: "bill.paid",
+  entityType: "bill",
+  entityId: bill.id,
+  summary: `Paid ${bill.party_name} · ${inr(money(bill.total))}`,
+  ip,
+});
+
+/** Marks an approved expense claim reimbursed. */
+export async function reimburseExpense(db: Db, tenantId: number, expenseId: string): Promise<void> {
+  const r = await exec(db, `UPDATE bos_expenses SET status = 'reimbursed' WHERE id = :id AND tenant_id = :tenantId AND status = 'approved'`, { id: expenseId, tenantId });
+  if (!r.affectedRows) throw new BosError(409, "Only approved claims can be reimbursed");
+}
+
+export const reimburseEvent = (expenseId: string, ip?: string): BosEventInput => ({ type: "expense.reimburse", entityType: "expense", entityId: expenseId, summary: "Reimbursed an expense claim", ip });
 
 /* =====================================================================
  * Reporting helpers
@@ -405,6 +471,10 @@ async function monthlySums(deps: BosDeps, sql: string, tenantId: number, from: s
  * Routes
  * ===================================================================== */
 
+/** With the switch on, staff may delete only the bills and draft invoices they created. */
+const ownDeletesOnly = async (deps: BosDeps, actor: BosActor) => !isManager(actor) && (await featureOn(deps, actor, OWN_DELETES_SWITCH));
+const mayDelete = (limited: boolean, actor: BosActor, createdBy: number | null) => !limited || (actor.userId !== null && createdBy === actor.userId);
+
 export function registerFinance(router: Router, deps: BosDeps): void {
   /* ----- Parties ----- */
 
@@ -421,10 +491,13 @@ export function registerFinance(router: Router, deps: BosDeps): void {
        WHERE p.tenant_id = :tenantId AND p.archived_at IS NULL
          ${kind === "customer" ? "AND p.kind IN ('customer','both')" : kind === "vendor" ? "AND p.kind IN ('vendor','both')" : ""}
          ${q ? "AND (p.name LIKE :like OR p.company LIKE :like OR p.phone LIKE :like OR p.gstin LIKE :like)" : ""}
-       ORDER BY p.name ASC LIMIT 1000`,
+       ORDER BY p.name ASC LIMIT ${PARTY_LIMIT + 1}`,
       { tenantId: actor.tenantId, like: `%${q}%` },
     );
-    res.json({ parties: list.map((r) => ({ ...mapParty(r), invoiced: money(r.invoiced), balance: money(r.balance) })) });
+    res.json({
+      parties: list.slice(0, PARTY_LIMIT).map((r) => ({ ...mapParty(r), invoiced: money(r.invoiced), balance: money(r.balance) })),
+      truncated: list.length > PARTY_LIMIT,
+    });
   });
 
   router.post("/parties", async (req, res) => {
@@ -440,7 +513,7 @@ export function registerFinance(router: Router, deps: BosDeps): void {
     const actor = actorOf(res);
     const existing = await one<PartyRow>(deps.db, `SELECT * FROM bos_parties WHERE id = :id AND tenant_id = :tenantId`, { id: req.params.id, tenantId: actor.tenantId });
     if (!existing) throw notFound("Customer or vendor");
-    const input = parse(PartyInput.partial(), req.body);
+    const input = parsePatch(PartyInput, req.body);
     const merged = { ...mapParty(existing), ...Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) };
     await exec(
       deps.db,
@@ -464,17 +537,35 @@ export function registerFinance(router: Router, deps: BosDeps): void {
 
   /* ----- Invoices ----- */
 
+  /**
+   * Drafts and unpaid invoices always come back in full, so receivables and outstanding totals are never cut short;
+   * paid and void ones are the latest {@link SETTLED_LIMIT}, with `truncated` when there are more (find those with `q`).
+   */
   router.get("/invoices", async (req, res) => {
     const actor = actorOf(res);
     const today = todayISO();
     const partyId = typeof req.query.partyId === "string" ? req.query.partyId : null;
-    const list = await rows<InvoiceRow>(
-      deps.db,
-      `SELECT * FROM bos_invoices WHERE tenant_id = :tenantId ${partyId ? "AND party_id = :partyId" : ""}
-       ORDER BY issue_date DESC, invoice_no DESC LIMIT 1000`,
-      { tenantId: actor.tenantId, partyId },
-    );
-    res.json({ invoices: list.map((r) => mapInvoice(r, today)) });
+    const openOnly = req.query.status === "open";
+    const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 80) : "";
+    const where = `tenant_id = :tenantId ${partyId ? "AND party_id = :partyId" : ""}
+      ${q ? "AND (invoice_no LIKE :like OR party_name LIKE :like OR party_gstin LIKE :like)" : ""}`;
+    const params = { tenantId: actor.tenantId, partyId, like: `%${q}%` };
+    const [active, settled] = await Promise.all([
+      rows<InvoiceRow>(deps.db, `SELECT * FROM bos_invoices WHERE ${where} AND status IN (${openOnly ? "'sent','partial'" : "'draft','sent','partial'"}) ${INVOICE_ORDER} LIMIT ${ACTIVE_LIMIT}`, params),
+      openOnly ? Promise.resolve([]) : rows<InvoiceRow>(deps.db, `SELECT * FROM bos_invoices WHERE ${where} AND status NOT IN ('draft','sent','partial') ${INVOICE_ORDER} LIMIT ${SETTLED_LIMIT + 1}`, params),
+    ]);
+    const truncated = settled.length > SETTLED_LIMIT;
+    const list = [...active, ...settled.slice(0, SETTLED_LIMIT)].sort((a, b) => b.issue_date.localeCompare(a.issue_date) || b.invoice_no.localeCompare(a.invoice_no));
+    let month: { count: number; total: number } | undefined;
+    if (truncated) {
+      const m = await one<{ n: number; total: string | number | null }>(
+        deps.db,
+        `SELECT COUNT(*) AS n, SUM(grand_total) AS total FROM bos_invoices WHERE ${where} AND status NOT IN ('draft','void') AND issue_date >= :monthStart`,
+        { ...params, monthStart: `${today.slice(0, 7)}-01` },
+      );
+      month = { count: Number(m?.n ?? 0), total: money(m?.total ?? 0) };
+    }
+    res.json({ invoices: list.map((r) => mapInvoice(r, today)), truncated, month });
   });
 
   router.get("/invoices/:id", async (req, res) => {
@@ -488,6 +579,7 @@ export function registerFinance(router: Router, deps: BosDeps): void {
     );
     res.json({
       invoice: mapInvoice(row, todayISO()),
+      canDelete: row.status === "draft" && mayDelete(await ownDeletesOnly(deps, actor), actor, row.created_by),
       payments: payments.map((p) => ({
         id: p.id,
         amount: money(p.amount),
@@ -596,6 +688,7 @@ export function registerFinance(router: Router, deps: BosDeps): void {
     const actor = actorOf(res);
     const existing = await loadInvoice(deps, actor.tenantId, req.params.id);
     if (existing.status !== "draft") throw new BosError(409, "Only drafts can be deleted — void issued invoices instead");
+    if (!mayDelete(await ownDeletesOnly(deps, actor), actor, existing.created_by)) throw forbidden("You can only delete drafts you created");
     await exec(deps.db, `DELETE FROM bos_invoices WHERE id = :id AND tenant_id = :tenantId`, { id: existing.id, tenantId: actor.tenantId });
     await exec(deps.db, `DELETE FROM bos_links WHERE tenant_id = :tenantId AND target_type = 'invoice' AND target_id = :id`, { tenantId: actor.tenantId, id: existing.id });
     await recordEvent(deps, actor, { type: "invoice.delete", entityType: "invoice", entityId: existing.id, summary: `Deleted draft ${existing.invoice_no}`, ip: req.ip });
@@ -605,32 +698,9 @@ export function registerFinance(router: Router, deps: BosDeps): void {
   router.post("/invoices/:id/payments", async (req, res) => {
     const actor = actorOf(res);
     const input = parse(PaymentInput, req.body);
-    const result = await tx(deps.db, async (conn) => {
-      const inv = await loadInvoice(deps, actor.tenantId, req.params.id, conn);
-      if (inv.status === "draft" || inv.status === "void") throw new BosError(409, "Issue the invoice before recording payments");
-      const balance = round2(money(inv.grand_total) - money(inv.amount_paid));
-      if (input.amount > balance + 0.5) throw new BosError(400, `Payment is more than the balance due (${inr(balance)})`);
-      const paid = round2(money(inv.amount_paid) + input.amount);
-      const status = settleStatus(inv.status as InvoiceStatus, money(inv.grand_total), paid);
-      await exec(
-        conn,
-        `INSERT INTO bos_payments (id, tenant_id, invoice_id, amount, paid_on, method, reference, notes, created_by)
-         VALUES (:id, :tenantId, :invoiceId, :amount, :paidOn, :method, :reference, :notes, :userId)`,
-        { id: randomUUID(), tenantId: actor.tenantId, invoiceId: inv.id, ...input, reference: input.reference ?? null, notes: input.notes ?? null, userId: actor.userId },
-      );
-      await exec(conn, `UPDATE bos_invoices SET amount_paid = :paid, status = :status WHERE id = :id`, { paid, status, id: inv.id });
-      return { inv, status };
-    });
-    await recordEvent(deps, actor, {
-      type: "invoice.payment",
-      entityType: "invoice",
-      entityId: result.inv.id,
-      summary: `Received ${inr(input.amount)} against ${result.inv.invoice_no}${result.status === "paid" ? " — fully paid" : ""}`,
-      payload: { amount: input.amount, method: input.method },
-      notice: { kind: "activity", title: "Payment received", body: `${inr(input.amount)} · ${result.inv.invoice_no} · ${result.inv.party_name}`, path: "?ws=finance&m=receivables" },
-      ip: req.ip,
-    });
-    res.status(201).json({ invoice: mapInvoice(await loadInvoice(deps, actor.tenantId, result.inv.id), todayISO()) });
+    const result = await tx(deps.db, (conn) => addInvoicePayment(deps, conn, actor, req.params.id, input));
+    await recordEvent(deps, actor, invoicePaymentEvent(result, input, req.ip));
+    res.status(201).json({ invoice: mapInvoice(await loadInvoice(deps, actor.tenantId, result.invoiceId), todayISO()) });
   });
 
   router.delete("/invoices/:id/payments/:paymentId", async (req, res) => {
@@ -659,8 +729,13 @@ export function registerFinance(router: Router, deps: BosDeps): void {
   router.get("/bills", async (_req, res) => {
     const actor = actorOf(res);
     const today = todayISO();
-    const list = await rows<BillRow>(deps.db, `SELECT * FROM bos_bills WHERE tenant_id = :tenantId ORDER BY bill_date DESC LIMIT 1000`, { tenantId: actor.tenantId });
-    res.json({ bills: list.map((r) => mapBill(r, today)) });
+    const [list, limited] = await Promise.all([
+      rows<BillRow>(deps.db, `SELECT * FROM bos_bills WHERE tenant_id = :tenantId ORDER BY bill_date DESC LIMIT 1000`, { tenantId: actor.tenantId }),
+      ownDeletesOnly(deps, actor),
+    ]);
+    res.json({
+      bills: list.map((r) => ({ ...mapBill(r, today), canDelete: (r.status === "pending" || r.status === "rejected") && mayDelete(limited, actor, r.created_by) })),
+    });
   });
 
   router.post("/bills", async (req, res) => {
@@ -704,17 +779,17 @@ export function registerFinance(router: Router, deps: BosDeps): void {
     const actor = actorOf(res);
     if (!isManager(actor)) throw forbidden();
     const { paidOn } = parse(z.object({ paidOn: iso }), req.body);
-    const bill = await one<BillRow>(deps.db, `SELECT * FROM bos_bills WHERE id = :id AND tenant_id = :tenantId`, { id: req.params.id, tenantId: actor.tenantId });
-    if (!bill) throw notFound("Bill");
-    if (bill.status !== "approved") throw new BosError(409, "Approve the bill before paying it");
-    await exec(deps.db, `UPDATE bos_bills SET status = 'paid', paid_on = :paidOn WHERE id = :id`, { paidOn, id: bill.id });
-    await recordEvent(deps, actor, { type: "bill.paid", entityType: "bill", entityId: bill.id, summary: `Paid ${bill.party_name} · ${inr(money(bill.total))}`, ip: req.ip });
+    const bill = await payBill(deps.db, actor.tenantId, req.params.id, paidOn);
+    await recordEvent(deps, actor, billPaidEvent(bill, req.ip));
     const row = await one<BillRow>(deps.db, `SELECT * FROM bos_bills WHERE id = :id`, { id: bill.id });
     res.json({ bill: mapBill(row!, todayISO()) });
   });
 
   router.delete("/bills/:id", async (req, res) => {
     const actor = actorOf(res);
+    const bill = await one<Pick<BillRow, "created_by">>(deps.db, `SELECT created_by FROM bos_bills WHERE id = :id AND tenant_id = :tenantId`, { id: req.params.id, tenantId: actor.tenantId });
+    if (!bill) throw notFound("Bill");
+    if (!mayDelete(await ownDeletesOnly(deps, actor), actor, bill.created_by)) throw forbidden("You can only delete bills you added");
     const r = await exec(deps.db, `DELETE FROM bos_bills WHERE id = :id AND tenant_id = :tenantId AND status IN ('pending','rejected')`, { id: req.params.id, tenantId: actor.tenantId });
     if (!r.affectedRows) throw new BosError(409, "Only pending or rejected bills can be deleted");
     await recordEvent(deps, actor, { type: "bill.delete", entityType: "bill", entityId: req.params.id, summary: "Deleted a bill", ip: req.ip });
@@ -725,18 +800,31 @@ export function registerFinance(router: Router, deps: BosDeps): void {
 
   router.get("/expenses", async (_req, res) => {
     const actor = actorOf(res);
-    const list = await rows<ExpenseRow>(deps.db, `SELECT * FROM bos_expenses WHERE tenant_id = :tenantId ORDER BY spent_on DESC, created_at DESC LIMIT 1000`, { tenantId: actor.tenantId });
-    res.json({ expenses: list.map(mapExpense), categories: EXPENSE_CATEGORIES });
+    const ownOnly = !isManager(actor) && (await featureOn(deps, actor, OWN_CLAIMS_SWITCH));
+    const list = await rows<ExpenseRow>(
+      deps.db,
+      `SELECT * FROM bos_expenses WHERE tenant_id = :tenantId
+       ${ownOnly ? "AND (created_by = :uid OR employee_id IN (SELECT id FROM bos_employees WHERE tenant_id = :tenantId AND user_id = :uid))" : ""}
+       ORDER BY spent_on DESC, created_at DESC LIMIT 1000`,
+      { tenantId: actor.tenantId, uid: actor.userId ?? -1 },
+    );
+    res.json({ expenses: list.map(mapExpense), categories: EXPENSE_CATEGORIES, ownOnly });
   });
 
   router.post("/expenses", async (req, res) => {
     const actor = actorOf(res);
     const input = parse(ExpenseInput, req.body);
+    const manager = isManager(actor);
     let employeeId = input.employeeId ?? null;
-    let claimant = input.claimantName ?? null;
+    let claimant = manager ? (input.claimantName ?? null) : null;
     if (employeeId) {
-      const emp = await one<{ first_name: string; last_name: string | null }>(deps.db, `SELECT first_name, last_name FROM bos_employees WHERE id = :id AND tenant_id = :tenantId`, { id: employeeId, tenantId: actor.tenantId });
+      const emp = await one<{ first_name: string; last_name: string | null; user_id: number | null }>(
+        deps.db,
+        `SELECT first_name, last_name, user_id FROM bos_employees WHERE id = :id AND tenant_id = :tenantId`,
+        { id: employeeId, tenantId: actor.tenantId },
+      );
       if (!emp) throw notFound("Employee");
+      if (!manager && !(actor.userId && emp.user_id === actor.userId)) throw forbidden("You can only claim expenses for yourself");
       claimant = claimant || [emp.first_name, emp.last_name].filter(Boolean).join(" ");
     } else if (actor.userId) {
       const me = await one<{ id: string; first_name: string; last_name: string | null }>(deps.db, `SELECT id, first_name, last_name FROM bos_employees WHERE tenant_id = :tenantId AND user_id = :userId LIMIT 1`, { tenantId: actor.tenantId, userId: actor.userId });
@@ -790,9 +878,8 @@ export function registerFinance(router: Router, deps: BosDeps): void {
   router.post("/expenses/:id/reimburse", async (req, res) => {
     const actor = actorOf(res);
     if (!isManager(actor)) throw forbidden();
-    const r = await exec(deps.db, `UPDATE bos_expenses SET status = 'reimbursed' WHERE id = :id AND tenant_id = :tenantId AND status = 'approved'`, { id: req.params.id, tenantId: actor.tenantId });
-    if (!r.affectedRows) throw new BosError(409, "Only approved claims can be reimbursed");
-    await recordEvent(deps, actor, { type: "expense.reimburse", entityType: "expense", entityId: req.params.id, summary: "Reimbursed an expense claim", ip: req.ip });
+    await reimburseExpense(deps.db, actor.tenantId, req.params.id);
+    await recordEvent(deps, actor, reimburseEvent(req.params.id, req.ip));
     const row = await one<ExpenseRow>(deps.db, `SELECT * FROM bos_expenses WHERE id = :id`, { id: req.params.id });
     res.json({ expense: mapExpense(row!) });
   });
@@ -899,7 +986,7 @@ export function registerFinance(router: Router, deps: BosDeps): void {
     }
     const input = await one<{ tax: string | number; count: number }>(
       deps.db,
-      `SELECT COALESCE(SUM(tax_amount),0) AS tax, COUNT(*) AS count FROM bos_bills WHERE tenant_id = :t AND status <> 'rejected' AND bill_date BETWEEN :start AND :end`,
+      `SELECT COALESCE(SUM(tax_amount),0) AS tax, COUNT(*) AS count FROM bos_bills WHERE tenant_id = :t AND status IN ('approved','paid') AND bill_date BETWEEN :start AND :end`,
       { t: actor.tenantId, start, end },
     );
     const outputTax = round2(cgst + sgst + igst);

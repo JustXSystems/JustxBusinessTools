@@ -2,7 +2,7 @@ import type { Router } from "express";
 import type { PoolConnection } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { actorOf, isoDate, optText, parse, recordEvent, type BosDeps } from "./context.js";
+import { actorOf, isoDate, optText, parse, parsePatch, recordEvent, type BosDeps } from "./context.js";
 import { exec, json, money, one, rows } from "./db.js";
 import { forbidden, isManager, notFound, type BosActor } from "./host.js";
 import { normalizeLeavePolicy, parseWeekendDays, type LeavePolicy } from "./logic.js";
@@ -300,7 +300,7 @@ export function registerWorkspace(router: Router, deps: BosDeps): void {
 
   router.patch("/projects/:id", async (req, res) => {
     const actor = actorOf(res);
-    const input = parse(ProjectInput.partial(), req.body);
+    const input = parsePatch(ProjectInput, req.body);
     const existing = await one<ProjectRow>(deps.db, `SELECT * FROM bos_projects WHERE id = :id AND tenant_id = :tenantId`, { id: req.params.id, tenantId: actor.tenantId });
     if (!existing) throw notFound("Project");
     const merged = { ...mapProject(existing), ...Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) };

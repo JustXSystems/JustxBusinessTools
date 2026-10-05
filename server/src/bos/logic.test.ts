@@ -18,7 +18,57 @@ import {
   settleStatus,
   syncSummary,
   todayISO,
+  attendanceSummary,
+  fiscalYearStart,
+  monthEndISO,
+  monthsBetween,
+  profitAndLoss,
 } from "./logic.js";
+
+describe("report periods", () => {
+  it("finds the fiscal year start and month ends", () => {
+    expect(fiscalYearStart("2026-10-05")).toBe("2026-04-01");
+    expect(fiscalYearStart("2027-02-10")).toBe("2026-04-01");
+    expect(fiscalYearStart("2026-10-05", 1)).toBe("2026-01-01");
+    expect(monthEndISO("2026-02")).toBe("2026-02-28");
+    expect(monthEndISO("2028-02")).toBe("2028-02-29");
+    expect(monthEndISO("2026-12")).toBe("2026-12-31");
+  });
+
+  it("lists months across a year boundary", () => {
+    expect(monthsBetween("2026-11-15", "2027-02-01")).toEqual(["2026-11", "2026-12", "2027-01", "2027-02"]);
+    expect(monthsBetween("2026-10-01", "2026-10-31")).toEqual(["2026-10"]);
+  });
+});
+
+describe("profitAndLoss", () => {
+  it("nets purchases, expenses and payroll off GST-exclusive sales, per month and in total", () => {
+    const r = profitAndLoss(["2026-08", "2026-09"], {
+      sales: new Map([["2026-08", 100000], ["2026-09", 50000.5]]),
+      purchases: new Map([["2026-08", 40000]]),
+      expenses: new Map([["2026-09", 60000]]),
+      payroll: new Map([["2026-09", 20000]]),
+    });
+    expect(r.months).toEqual([
+      { month: "2026-08", sales: 100000, purchases: 40000, expenses: 0, payroll: 0, net: 60000 },
+      { month: "2026-09", sales: 50000.5, purchases: 0, expenses: 60000, payroll: 20000, net: -29999.5 },
+    ]);
+    expect(r.total).toEqual({ sales: 150000.5, purchases: 40000, expenses: 60000, payroll: 20000, net: 30000.5 });
+  });
+});
+
+describe("attendanceSummary", () => {
+  it("counts half days as half attended and flags unmarked working days", () => {
+    expect(attendanceSummary({ present: 15, wfh: 2, half_day: 2, absent: 1, leave: 1 }, 22)).toEqual({
+      present: 15, wfh: 2, halfDay: 2, absent: 1, leave: 1, unmarked: 1, attendancePct: 82,
+    });
+  });
+
+  it("handles a month with no working days and never exceeds 100%", () => {
+    expect(attendanceSummary({}, 0).attendancePct).toBe(0);
+    expect(attendanceSummary({ present: 5 }, 4)).toMatchObject({ unmarked: 0, attendancePct: 100 });
+  });
+});
 
 describe("syncSummary", () => {
   const item = (target: string, created = true) => ({ target, created });

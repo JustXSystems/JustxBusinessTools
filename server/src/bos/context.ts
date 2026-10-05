@@ -22,12 +22,27 @@ export function actorOf(res: Response): BosActor {
   return actor;
 }
 
+/** An admin switch (see `BosHost.feature`); a host without switches allows everything. */
+export function featureOn(deps: BosDeps, actor: BosActor, key: string): Promise<boolean> {
+  return deps.host.feature ? deps.host.feature(actor, key) : Promise.resolve(true);
+}
+
 /** Validate a body with zod and surface field errors as a 400. */
 export function parse<S extends z.ZodType>(schema: S, input: unknown): z.infer<S> {
   const result = schema.safeParse(input ?? {});
   if (result.success) return result.data;
   const details = result.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`);
   throw new BosError(400, "Please check the highlighted fields", details);
+}
+
+/**
+ * Validate a partial update. Zod fills `.default()` values even inside `.partial()`, which would overwrite stored
+ * fields the caller didn't send, so only the keys present in the body are kept.
+ */
+export function parsePatch<S extends z.ZodObject>(schema: S, input: unknown): Partial<z.infer<S>> {
+  const parsed = parse(schema.partial(), input) as Record<string, unknown>;
+  const sent = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  return Object.fromEntries(Object.entries(parsed).filter(([k]) => sent[k] !== undefined)) as Partial<z.infer<S>>;
 }
 
 export type BosEventInput = {

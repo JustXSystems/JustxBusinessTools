@@ -2,7 +2,7 @@
 # Apply a CI-built release tarball on the VPS (no Next.js build).
 #
 # Hardened flow:
-#   preflight → verify checksum → extract stage → optional DB backup →
+#   preflight → verify checksum → extract stage → DB backup (automatic when migrations are pending) →
 #   migrate/seeds on stage (live untouched) → atomic dir swap → PM2 →
 #   health (API+web) → auto-rollback on failure
 #
@@ -307,16 +307,11 @@ run_task() {
   esac
 }
 
-if [[ "$BACKUP_DB" == "true" ]]; then
-  echo "==> DB backup before migrations"
-  if [[ -x "$STAGE/scripts/backup-jbt.sh" ]]; then
-    ENV_FILE="$SHARED_DIR/server.env" bash "$STAGE/scripts/backup-jbt.sh"
-  elif [[ -f "$LIVE/scripts/backup-jbt.sh" ]]; then
-    ENV_FILE="$SHARED_DIR/server.env" bash "$LIVE/scripts/backup-jbt.sh"
-  else
-    die "backup requested but backup-jbt.sh not found"
-  fi
-fi
+# Always checked, even with RUN_MIGRATIONS=false: the new API applies pending migrations itself when PM2 starts it.
+[[ -f "$STAGE/scripts/db-backup-if-pending.sh" ]] || die "release is missing scripts/db-backup-if-pending.sh"
+BACKUP_FORCE="$BACKUP_DB" BACKUP_TAG="pre-migrate-${RELEASE_ID}" ENV_FILE="$SHARED_DIR/server.env" \
+  bash "$STAGE/scripts/db-backup-if-pending.sh" "$STAGE" \
+  || die "DB backup failed — stopped before migrations; the live release is untouched"
 
 # Migrations / seeds against STAGE — live tree still serving previous release
 if [[ "$RUN_MIGRATIONS" == "true" ]]; then

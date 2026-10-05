@@ -8,6 +8,7 @@ import {
   Avatar,
   BosIcon,
   Breadcrumbs,
+  Button,
   Celebrations,
   FilterChip,
   Grid,
@@ -22,7 +23,7 @@ import {
   type BosTickerItem,
 } from "@/components/bos";
 import { bos, type BosEvent } from "@/lib/bos-app/api";
-import { dateLabel, EMPLOYMENT_LABEL, greetingFor, inr, inrCompact, LEAVE_LABEL, timeAgo, todayLocal } from "@/lib/bos-app/format";
+import { dateLabel, EMPLOYMENT_LABEL, greetingFor, inr, inrCompact, LEAVE_LABEL, monthLabel, timeAgo, todayLocal } from "@/lib/bos-app/format";
 import { Loaded, PersonAvatar, useBosApp, useBosData, useWorkspaceModule, type WorkspaceKey } from "../core";
 import { ApplyLeaveDialog, ExpenseDialog } from "../dialogs";
 import { toCelebrations } from "../hr/HrOverview";
@@ -49,6 +50,28 @@ const TICKER_STYLE: Record<string, { icon: BosIconName; tint: string }> = {
   employee: { icon: "user", tint: "lavender" },
   attendance: { icon: "clock", tint: "emerald" },
   project: { icon: "layers", tint: "blue" },
+  payroll_run: { icon: "wallet", tint: "emerald" },
+  bank_account: { icon: "wallet", tint: "blue" },
+  bank_txn: { icon: "refresh", tint: "blue" },
+  budget: { icon: "trend", tint: "emerald" },
+  asset: { icon: "box", tint: "lavender" },
+  journal: { icon: "file", tint: "blue" },
+  account: { icon: "layers", tint: "lavender" },
+  accounting: { icon: "layers", tint: "lavender" },
+  opening: { icon: "users", tint: "blue" },
+  candidate: { icon: "user", tint: "emerald" },
+  training: { icon: "check", tint: "emerald" },
+  certificate: { icon: "check", tint: "blue" },
+  kra: { icon: "layers", tint: "blue" },
+  promotion: { icon: "user", tint: "lavender" },
+  recognition: { icon: "user", tint: "amber" },
+  travel: { icon: "calendar", tint: "blue" },
+  service: { icon: "user", tint: "rose" },
+  policy: { icon: "file", tint: "lavender" },
+  compliance: { icon: "calendar", tint: "amber" },
+  agreement: { icon: "file", tint: "blue" },
+  sales: { icon: "receipt", tint: "mint" },
+  sales_item: { icon: "box", tint: "mint" },
 };
 
 export const tickerOf = (events: ReadonlyArray<BosEvent>): BosTickerItem[] =>
@@ -60,19 +83,30 @@ function MyProfile() {
   const { session, navigate, canManage } = useBosApp();
   const [dialog, setDialog] = useState<"leave" | "expense" | null>(null);
   const state = useBosData(async () => {
-    const [me, projects, events, hr, expenses] = await Promise.all([
+    const [me, projects, events, hr, expenses, payslips, policies] = await Promise.all([
       bos.me(),
       bos.projects().catch(() => ({ projects: [] })),
       bos.events({ limit: 8 }).catch(() => ({ events: [] })),
       bos.hrOverview().catch(() => null),
       bos.expenses().catch(() => ({ expenses: [], categories: [] as string[] })),
+      bos.myPayslips().catch(() => ({ employeeId: null, payslips: [] })),
+      bos.pendingPolicies().catch(() => ({ policies: [] })),
     ]);
-    return { me, projects: projects.projects, events: events.events, hr, expenses: expenses.expenses, categories: expenses.categories };
+    return {
+      me,
+      projects: projects.projects,
+      events: events.events,
+      hr,
+      expenses: expenses.expenses,
+      categories: expenses.categories,
+      payslips: payslips.payslips,
+      pendingPolicies: policies.policies,
+    };
   });
 
   return (
     <Loaded state={state} rows={2}>
-      {({ me, projects, events, hr, expenses, categories }) => {
+      {({ me, projects, events, hr, expenses, categories, payslips, pendingPolicies }) => {
         const emp = me.employee;
         const month = new Date().toLocaleDateString("en-GB", { month: "short" });
         const stage = (s: string) => projects.filter((p) => p.status === s).length;
@@ -136,6 +170,17 @@ function MyProfile() {
                 </Alert>
               </div>
             ) : null}
+            {pendingPolicies.length ? (
+              <div style={{ marginBottom: 16 }}>
+                <Alert tone="amber" title={pendingPolicies.length === 1 ? `Please read and acknowledge the ${pendingPolicies[0].title}` : `${pendingPolicies.length} policies to read and acknowledge`}>
+                  {pendingPolicies.some((p) => p.mandatory) ? "Acknowledging is mandatory. " : ""}
+                  {pendingPolicies.some((p) => p.updated) ? "Some were updated since you last acknowledged them. " : ""}
+                  <Button size="sm" variant="ghost" onClick={() => navigate("hr", "policies", pendingPolicies.length === 1 ? `open:${pendingPolicies[0].id}` : undefined)}>
+                    Review {pendingPolicies.length === 1 ? "policy" : "policies"} →
+                  </Button>
+                </Alert>
+              </div>
+            ) : null}
             <Grid cols={4} gap={12} style={{ marginBottom: 20 }}>
               <WidgetCard title="My Requests" dot="sage">
                 <WidgetRow label="Leave awaiting approval" value={myPendingLeave} valueTone={myPendingLeave ? "amber" : "faint"} onClick={() => navigate("hr", "leave")} />
@@ -172,6 +217,15 @@ function MyProfile() {
                   </FilterChip>
                 ))}
             </div>
+            {payslips.length ? (
+              <Grid cols={2} gap={12} style={{ marginBottom: 20 }}>
+                <WidgetCard title="💰 My Payslips" dot="mint">
+                  {payslips.slice(0, 4).map((p) => (
+                    <WidgetRow key={p.id} label={p.period ? monthLabel(p.period) : "Payslip"} value={inr(p.netPay)} valueTone="emerald" chevron onClick={() => navigate("finance", "payroll", `payslip:${p.id}`)} />
+                  ))}
+                </WidgetCard>
+              </Grid>
+            ) : null}
             {events.length ? <ActionTicker items={tickerOf(events)} /> : null}
             {hr?.celebrations.length ? <Celebrations items={toCelebrations(hr.celebrations)} /> : null}
             <ApplyLeaveDialog open={dialog === "leave"} onClose={() => setDialog(null)} employeeId={emp?.id} />

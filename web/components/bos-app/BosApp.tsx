@@ -2,7 +2,7 @@
 
 import "./bos-app.css";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Avatar,
   BosRoot,
@@ -24,13 +24,14 @@ import {
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import { bos, BosApiError, type BosSession, type BosSettings } from "@/lib/bos-app/api";
 import { initialsOf } from "@/lib/bos-app/format";
-import { ConnectWorkspace } from "./connect/ConnectWorkspace";
-import { BosAppProvider, ErrorBlock, WORKSPACES, type BosAppContextValue, type WorkspaceKey } from "./core";
-import { FinanceWorkspace } from "./finance/FinanceWorkspace";
+import { BosAppProvider, ErrorBlock, LoadingBlock, WORKSPACES, type BosAppContextValue, type WorkspaceKey } from "./core";
 import { HomeWorkspace } from "./home/HomeWorkspace";
-import { HrWorkspace } from "./hr/HrWorkspace";
-import { ProjectsWorkspace } from "./projects/ProjectsWorkspace";
-import { SettingsWorkspace } from "./settings/SettingsWorkspace";
+
+const ConnectWorkspace = lazy(() => import("./connect/ConnectWorkspace").then((m) => ({ default: m.ConnectWorkspace })));
+const FinanceWorkspace = lazy(() => import("./finance/FinanceWorkspace").then((m) => ({ default: m.FinanceWorkspace })));
+const HrWorkspace = lazy(() => import("./hr/HrWorkspace").then((m) => ({ default: m.HrWorkspace })));
+const ProjectsWorkspace = lazy(() => import("./projects/ProjectsWorkspace").then((m) => ({ default: m.ProjectsWorkspace })));
+const SettingsWorkspace = lazy(() => import("./settings/SettingsWorkspace").then((m) => ({ default: m.SettingsWorkspace })));
 
 export const BOS_LOGO = "/icons/justx-bos-mark.png";
 const WS_KEYS = new Set<string>(WORKSPACES.map((w) => w.value));
@@ -217,12 +218,14 @@ function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mod
         </nav>
 
         <div key={nav.ws} className="bos-fade-in">
-          {nav.ws === "home" ? <HomeWorkspace /> : null}
-          {nav.ws === "finance" ? <FinanceWorkspace /> : null}
-          {nav.ws === "hr" ? <HrWorkspace /> : null}
-          {nav.ws === "projects" ? <ProjectsWorkspace /> : null}
-          {nav.ws === "connect" ? <ConnectWorkspace /> : null}
-          {nav.ws === "settings" ? <SettingsWorkspace /> : null}
+          <Suspense fallback={<LoadingBlock />}>
+            {nav.ws === "home" ? <HomeWorkspace /> : null}
+            {nav.ws === "finance" ? <FinanceWorkspace /> : null}
+            {nav.ws === "hr" ? <HrWorkspace /> : null}
+            {nav.ws === "projects" ? <ProjectsWorkspace /> : null}
+            {nav.ws === "connect" ? <ConnectWorkspace /> : null}
+            {nav.ws === "settings" ? <SettingsWorkspace /> : null}
+          </Suspense>
         </div>
 
         <Footnote>

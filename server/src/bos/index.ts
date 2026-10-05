@@ -1,4 +1,8 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
+import { registerAccounting } from "./accounting.js";
+import { registerAssets } from "./assets.js";
+import { registerBanking } from "./banking.js";
+import { registerBudgets } from "./budgets.js";
 import { registerConnect } from "./connect.js";
 import type { BosConnector } from "./connectors/types.js";
 import type { BosDeps } from "./context.js";
@@ -6,6 +10,14 @@ import type { BosDb } from "./db.js";
 import { registerFinance } from "./finance.js";
 import { BosError, type BosHost } from "./host.js";
 import { registerHr } from "./hr.js";
+import { registerPayroll } from "./payroll.js";
+import { registerPerformance } from "./performance.js";
+import { registerRecruitment } from "./recruitment.js";
+import { registerReports } from "./reports.js";
+import { registerSales } from "./sales.js";
+import { registerPolicies } from "./policies.js";
+import { registerServices } from "./services.js";
+import { registerTravel } from "./travel.js";
 import { registerWorkspace } from "./workspace.js";
 
 export type { BosHost, BosActor, BosBrand, BosNotice } from "./host.js";
@@ -59,6 +71,18 @@ export function createBosRouter({ db, host, connectors = [] }: CreateBosRouterOp
   registerFinance(router, deps);
   registerHr(router, deps);
   registerConnect(router, deps);
+  registerReports(router, deps);
+  registerPayroll(router, deps);
+  registerBanking(router, deps);
+  registerBudgets(router, deps);
+  registerAssets(router, deps);
+  registerAccounting(router, deps);
+  registerRecruitment(router, deps);
+  registerPerformance(router, deps);
+  registerTravel(router, deps);
+  registerServices(router, deps);
+  registerPolicies(router, deps);
+  registerSales(router, deps);
 
   router.use((_req, res) => {
     res.status(404).json({ error: "Unknown BOS endpoint" });

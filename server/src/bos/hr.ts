@@ -1,7 +1,8 @@
 import type { Router } from "express";
+import type { PoolConnection } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { actorOf, isoDate as iso, optText, parse, recordEvent, type BosDeps } from "./context.js";
+import { actorOf, isoDate as iso, optText, parse, parsePatch, recordEvent, type BosDeps } from "./context.js";
 import { exec, json, money, nextSequence, one, rows, tx } from "./db.js";
 import { BosError, forbidden, isManager, notFound, type BosActor } from "./host.js";
 import {
@@ -9,6 +10,7 @@ import {
   countLeaveDays,
   daysBetween,
   eachDate,
+  fiscalYearStart as fiscalStart,
   LEAVE_TYPES,
   leaveBalances,
   maskAccount,
@@ -117,6 +119,56 @@ const EMPLOYEE_SELECT = `
   LEFT JOIN bos_departments d ON d.id = e.department_id
   LEFT JOIN bos_employees m ON m.id = e.manager_id`;
 
+export type NewEmployee = z.infer<typeof EmployeeInput>;
+export const NewEmployeeInput = EmployeeInput;
+
+/** Numbers and inserts an employee inside the caller's transaction; returns the employee code. */
+export async function insertEmployee(conn: PoolConnection, tenantId: number, prefix: string, id: string, input: NewEmployee): Promise<string> {
+  const seq = await nextSequence(conn, tenantId, "employee", "all");
+  const code = `${prefix}-${String(seq).padStart(4, "0")}`;
+  await exec(
+    conn,
+    `INSERT INTO bos_employees (id, tenant_id, emp_code, first_name, last_name, work_email, phone, designation, department_id, manager_id,
+       employment_type, status, join_date, exit_date, location, dob, ctc_annual, personal, bank, user_id)
+     VALUES (:id, :tenantId, :code, :firstName, :lastName, :workEmail, :phone, :designation, :departmentId, :managerId,
+       :employmentType, :status, :joinDate, :exitDate, :location, :dob, :ctcAnnual, :personal, :bank, :userId)`,
+    {
+      id,
+      tenantId,
+      code,
+      firstName: input.firstName,
+      lastName: input.lastName ?? null,
+      workEmail: input.workEmail || null,
+      phone: input.phone ?? null,
+      designation: input.designation ?? null,
+      departmentId: input.departmentId || null,
+      managerId: input.managerId || null,
+      employmentType: input.employmentType,
+      status: input.status,
+      joinDate: input.joinDate,
+      exitDate: input.exitDate ?? null,
+      location: input.location ?? null,
+      dob: input.dob ?? null,
+      ctcAnnual: input.ctcAnnual ?? null,
+      personal: JSON.stringify(input.personal ?? {}),
+      bank: JSON.stringify(input.bank ?? {}),
+      userId: input.userId ?? null,
+    },
+  );
+  return code;
+}
+
+export async function recordEmployeeCreated(deps: BosDeps, actor: BosActor, id: string, empCode: string, input: NewEmployee, ip: string | undefined): Promise<void> {
+  await recordEvent(deps, actor, {
+    type: "employee.create",
+    entityType: "employee",
+    entityId: id,
+    summary: `Onboarded ${fullName(input.firstName, input.lastName)} (${empCode})`,
+    notice: { kind: "activity", title: "New employee onboarded", body: `${fullName(input.firstName, input.lastName)} · ${input.designation ?? "Team member"}`, path: "?ws=hr&m=employees" },
+    ip,
+  });
+}
+
 async function loadEmployee(deps: BosDeps, tenantId: number, id: string): Promise<EmployeeRow> {
   const row = await one<EmployeeRow>(deps.db, `${EMPLOYEE_SELECT} WHERE e.id = :id AND e.tenant_id = :tenantId`, { id, tenantId });
   if (!row) throw notFound("Employee");
@@ -138,12 +190,6 @@ export async function employeeForActor(deps: BosDeps, actor: BosActor): Promise<
     return byEmail;
   }
   return null;
-}
-
-function fiscalStart(today: string, startMonth: number): string {
-  const [y, m] = today.split("-").map(Number);
-  const year = m >= startMonth ? y : y - 1;
-  return `${year}-${String(startMonth).padStart(2, "0")}-01`;
 }
 
 async function leaveUsed(deps: BosDeps, tenantId: number, employeeId: string, from: string, statuses: string[]): Promise<Record<string, number>> {
@@ -330,48 +376,8 @@ export function registerHr(router: Router, deps: BosDeps): void {
     const input = parse(EmployeeInput, req.body);
     const settings = await getSettings(deps, actor.tenantId);
     const id = randomUUID();
-    const empCode = await tx(deps.db, async (conn) => {
-      const seq = await nextSequence(conn, actor.tenantId, "employee", "all");
-      const code = `${settings.employeePrefix}-${String(seq).padStart(4, "0")}`;
-      await exec(
-        conn,
-        `INSERT INTO bos_employees (id, tenant_id, emp_code, first_name, last_name, work_email, phone, designation, department_id, manager_id,
-           employment_type, status, join_date, exit_date, location, dob, ctc_annual, personal, bank, user_id)
-         VALUES (:id, :tenantId, :code, :firstName, :lastName, :workEmail, :phone, :designation, :departmentId, :managerId,
-           :employmentType, :status, :joinDate, :exitDate, :location, :dob, :ctcAnnual, :personal, :bank, :userId)`,
-        {
-          id,
-          tenantId: actor.tenantId,
-          code,
-          firstName: input.firstName,
-          lastName: input.lastName ?? null,
-          workEmail: input.workEmail || null,
-          phone: input.phone ?? null,
-          designation: input.designation ?? null,
-          departmentId: input.departmentId || null,
-          managerId: input.managerId || null,
-          employmentType: input.employmentType,
-          status: input.status,
-          joinDate: input.joinDate,
-          exitDate: input.exitDate ?? null,
-          location: input.location ?? null,
-          dob: input.dob ?? null,
-          ctcAnnual: input.ctcAnnual ?? null,
-          personal: JSON.stringify(input.personal ?? {}),
-          bank: JSON.stringify(input.bank ?? {}),
-          userId: input.userId ?? null,
-        },
-      );
-      return code;
-    });
-    await recordEvent(deps, actor, {
-      type: "employee.create",
-      entityType: "employee",
-      entityId: id,
-      summary: `Onboarded ${fullName(input.firstName, input.lastName)} (${empCode})`,
-      notice: { kind: "activity", title: "New employee onboarded", body: `${fullName(input.firstName, input.lastName)} · ${input.designation ?? "Team member"}`, path: "?ws=hr&m=employees" },
-      ip: req.ip,
-    });
+    const empCode = await tx(deps.db, (conn) => insertEmployee(conn, actor.tenantId, settings.employeePrefix, id, input));
+    await recordEmployeeCreated(deps, actor, id, empCode, input, req.ip);
     res.status(201).json({ employee: mapEmployee(await loadEmployee(deps, actor.tenantId, id), { canSeePay: true }) });
   });
 
@@ -379,7 +385,7 @@ export function registerHr(router: Router, deps: BosDeps): void {
     const actor = actorOf(res);
     if (!isManager(actor)) throw forbidden("Only owners and admins can edit employee records");
     const existing = await loadEmployee(deps, actor.tenantId, req.params.id);
-    const input = parse(EmployeeInput.partial(), req.body);
+    const input = parsePatch(EmployeeInput, req.body);
     if (input.managerId && input.managerId === existing.id) throw new BosError(400, "An employee cannot report to themselves");
     const cur = mapEmployee(existing, { canSeePay: true });
     const bankNow = json<Bank>(existing.bank, {});

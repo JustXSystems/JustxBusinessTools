@@ -17,6 +17,24 @@ export const FEATURE_SWITCHES = [
     label: "Send to BOS from Site Survey V1",
     description: "Adds a “Send to BOS” button to saved site surveys that opens a project lead (and the customer) in Justx BOS.",
   },
+  {
+    key: "bos.sales.pos",
+    tool: "bos",
+    label: "POS counter billing in BOS",
+    description: "Adds a POS counter to Finance → Sales Billing. Each counter bill is issued as a paid GST tax invoice in the BOS invoice series.",
+  },
+  {
+    key: "bos.expenses.own_claims",
+    tool: "bos",
+    label: "Private expense claims in BOS",
+    description: "Staff see only their own claims in Finance → Expenses (as in HR → Expenses & assets). Owners and admins still see the whole team.",
+  },
+  {
+    key: "bos.finance.own_deletes",
+    tool: "bos",
+    label: "Staff delete only their own bills and drafts in BOS",
+    description: "Staff can delete only the vendor bills and draft invoices they created. Owners and admins can still delete any of them.",
+  },
 ] as const;
 
 export type FeatureSwitch = (typeof FEATURE_SWITCHES)[number];

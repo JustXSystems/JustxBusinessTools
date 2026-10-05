@@ -114,7 +114,7 @@ function InvoicingSettings() {
   );
 }
 
-function HrSettings() {
+export function HrSettings() {
   return (
     <SettingsSection title="HR policy" note="Leave allowance per employee per year, and your weekly off days.">
       {(d, set, disabled) => (
@@ -154,7 +154,10 @@ function IntegrationSettings() {
   const { session, mode } = useBosApp();
   return (
     <Stack>
-      <SettingsSection title="Sync with JBT tools" note="When on, opening BOS pulls new approved quotations and submitted site surveys automatically (at most every few minutes).">
+      <SettingsSection
+        title="Sync with JBT tools"
+        note="When on, opening BOS imports approved quotations and saved site surveys automatically. The first sync brings in every eligible past record — to review them first, import one by one from Connected Tools."
+      >
         {(d, set, disabled) => (
           <label className="bos-row" style={{ gap: 10, fontSize: 13 }}>
             <Switch checked={d.autoSync} disabled={disabled} onChange={(v) => set("autoSync", v)} aria-label="Automatic sync" />

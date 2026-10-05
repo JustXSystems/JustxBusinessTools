@@ -38,9 +38,10 @@ import {
   type Personal,
   type PersonalField,
 } from "@/lib/bos-app/api";
-import { attendanceBadge, dateLabel, EMPLOYMENT_LABEL, employeeBadge, inr, leaveBadge, LEAVE_LABEL, todayLocal, dateRange } from "@/lib/bos-app/format";
+import { attendanceBadge, dateLabel, EMPLOYMENT_LABEL, employeeBadge, inr, leaveBadge, LEAVE_LABEL, monthLabel, todayLocal, dateRange } from "@/lib/bos-app/format";
 import { Loaded, PersonAvatar, Stack, StatusBadge, useBosAction, useBosApp, useBosData } from "../core";
 import { ApplyLeaveDialog } from "../dialogs";
+import { PayslipList } from "../finance/Payroll";
 
 export const PERSONAL_LABELS: Record<PersonalField, string> = {
   fatherName: "Father's Name",
@@ -511,16 +512,15 @@ function EmployeeDetailView({ id, onBack, onEdit }: { id: string; onBack: () => 
             ) : null}
 
             {tab === "pay" ? (
-              <Stack gap={16}>
-                <Alert tone="blue" title="Payroll is coming next">
-                  Salary runs, payslips and statutory deductions arrive with the Payroll module. The CTC on this record will seed the salary structure.
-                </Alert>
+              canSeeBank ? (
+                <PayrollTab employeeId={e.id} lopUsed={d.balances.find((b) => b.type === "lop")?.used ?? 0} ctcAnnual={e.ctcAnnual} />
+              ) : (
                 <Grid cols={3} min={150}>
                   <KpiCard label="Annual CTC" value={e.ctcAnnual ? inr(e.ctcAnnual) : "—"} chip={{ color: "mint", glyph: "₹" }} delta="On record" deltaTone="muted" interactive={false} />
                   <KpiCard label="Monthly gross (est.)" value={e.ctcAnnual ? inr(Math.round(e.ctcAnnual / 12)) : "—"} chip={{ color: "blue", glyph: "◎" }} delta="CTC ÷ 12" deltaTone="muted" interactive={false} />
                   <KpiCard label="Loss of pay this year" value={`${d.balances.find((b) => b.type === "lop")?.used ?? 0} d`} chip={{ color: "rose", glyph: "−" }} delta="From approved LOP leave" deltaTone="muted" interactive={false} />
                 </Grid>
-              </Stack>
+              )
             ) : null}
 
             {tab === "bank" && canSeeBank ? <BankCard employee={e} /> : null}
@@ -528,6 +528,40 @@ function EmployeeDetailView({ id, onBack, onEdit }: { id: string; onBack: () => 
           </>
         );
       }}
+    </Loaded>
+  );
+}
+
+/** Salary and released payslips — shown to managers and to the employee themself. */
+function PayrollTab({ employeeId, lopUsed, ctcAnnual }: { employeeId: string; lopUsed: number; ctcAnnual: number | null }) {
+  const { canManage, navigate } = useBosApp();
+  const state = useBosData(() => bos.employeePayslips(employeeId), [employeeId]);
+  return (
+    <Loaded state={state} rows={2}>
+      {({ structure, payslips }) => (
+        <Stack gap={16}>
+          <Grid cols={4} min={140}>
+            <KpiCard label="Monthly gross" value={structure ? inr(structure.gross) : "—"} chip={{ color: "mint", glyph: "₹" }} delta={structure ? `Basic ${inr(structure.basic)} · HRA ${inr(structure.hra)}` : "Salary not set up yet"} deltaTone="muted" interactive={false} />
+            <KpiCard label="Annual CTC" value={ctcAnnual ? inr(ctcAnnual) : "—"} chip={{ color: "blue", glyph: "◎" }} delta="On record" deltaTone="muted" interactive={false} />
+            <KpiCard label="Last net pay" value={payslips[0] ? inr(payslips[0].netPay) : "—"} chip={{ color: "lavender", glyph: "✓" }} delta={payslips[0]?.period ? monthLabel(payslips[0].period) : "No payslips yet"} deltaTone="muted" interactive={false} />
+            <KpiCard label="Loss of pay this year" value={`${lopUsed} d`} chip={{ color: "rose", glyph: "−" }} delta="From approved LOP leave" deltaTone="muted" interactive={false} />
+          </Grid>
+          {!structure && canManage ? (
+            <Alert
+              tone="blue"
+              title="No salary structure yet"
+              actions={
+                <Button size="sm" onClick={() => navigate("finance", "payroll")}>
+                  Open payroll
+                </Button>
+              }
+            >
+              Set this employee&apos;s salary in Finance → Payroll → Salary structures to include them in payroll runs.
+            </Alert>
+          ) : null}
+          <PayslipList payslips={payslips} empty="No payslips yet — they appear here once a payroll run is finalised." />
+        </Stack>
+      )}
     </Loaded>
   );
 }

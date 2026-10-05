@@ -36,23 +36,42 @@ function splitSqlStatements(sql: string): string[] {
     .filter(Boolean);
 }
 
-export async function runPendingMigrations(): Promise<{ applied: string[]; skipped: string[] }> {
-  await ensureMigrationsTable();
-  const dir = migrationsDir();
-  let files: string[] = [];
+async function migrationFiles(dir: string): Promise<string[] | null> {
   try {
-    files = (await readdir(dir))
+    return (await readdir(dir))
       .filter((f) => /^\d{3,}_.+\.sql$/i.test(f))
       .sort((a, b) => a.localeCompare(b));
   } catch (err) {
     console.warn("[migrations] directory missing:", dir, err instanceof Error ? err.message : err);
-    return { applied: [], skipped: [] };
+    return null;
   }
+}
 
+async function appliedIds(): Promise<Set<string>> {
   const [rows] = await pool.query(`SELECT id FROM schema_migrations`);
-  const done = new Set(
-    (Array.isArray(rows) ? rows : []).map((r) => String((r as { id: string }).id)),
-  );
+  return new Set((Array.isArray(rows) ? rows : []).map((r) => String((r as { id: string }).id)));
+}
+
+/** Migrations that would run next, without applying anything (used by deploys to decide on a backup). */
+export async function listPendingMigrations(): Promise<string[]> {
+  const files = await migrationFiles(migrationsDir());
+  if (!files) return [];
+  let done = new Set<string>();
+  try {
+    done = await appliedIds();
+  } catch (err) {
+    if ((err as { code?: string }).code !== "ER_NO_SUCH_TABLE") throw err;
+  }
+  return files.map((f) => f.replace(/\.sql$/i, "")).filter((id) => !done.has(id));
+}
+
+export async function runPendingMigrations(): Promise<{ applied: string[]; skipped: string[] }> {
+  await ensureMigrationsTable();
+  const dir = migrationsDir();
+  const files = await migrationFiles(dir);
+  if (!files) return { applied: [], skipped: [] };
+
+  const done = await appliedIds();
 
   const applied: string[] = [];
   const skipped: string[] = [];

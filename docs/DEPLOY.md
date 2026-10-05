@@ -21,7 +21,7 @@ git push master
   → scripts/vps-release.sh
        ├─ extract stage
        ├─ reuse live node_modules if lockfile unchanged, else npm ci --omit=dev
-       ├─ optional DB backup / migrate / seeds on stage
+       ├─ DB backup (automatic when migrations are pending) / migrate / seeds on stage
        ├─ rsync into /var/www/jbt (or mv if /var/www writable)
        ├─ pm2 reload
        ├─ health: API + web
@@ -340,7 +340,7 @@ Push-to-`master` always uses the safe defaults (no exotic tasks).
 | `pack_win_agent` | `false` | **Force** rebuild+ship ~28MB `JustX-Sync-Agent-win-x64.zip`. Usually unnecessary: deploy **auto-packs** when agent-related paths change (see below). Use to force a rebuild with no source diff. |
 | `force_cache_rebuild` | `false` | Delete repo Actions caches, cold-build Next/npm, force VPS `npm ci` (rewrites caches) |
 | `run_migrations` | `true` | Apply `mysql/migrations` on **stage before** live swap |
-| `backup_db` | `false` | Run `backup-jbt.sh` (MySQL dump) before migrations |
+| `backup_db` | `false` | Force a MySQL + uploads backup even when no migrations are pending. A MySQL backup **always** runs automatically when the release has pending migrations (see below) |
 | `seed_tools` | `false` | Re-seed tool catalog (`db:seed:tools`) |
 | `pm2_mode` | `reload` | `reload` · `restart` · `restart_api` · `restart_web` · `restart_worker` · `none` |
 | `post_deploy_task` | `none` | Allowlisted: `none` · `seed_tools` · `seed_admin` · `analytics_rollup` |
@@ -354,14 +354,33 @@ Push-to-`master` always uses the safe defaults (no exotic tasks).
 - Occasional known ops → checkbox / allowlisted `post_deploy_task`.
 - `seed_admin` is intentional and rare — not for routine deploys.
 - Migrations run **before** the live swap; a migrate failure leaves the old app serving.
-- Auto-rollback restores **code** only — DB migrations are forward-only (use `backup_db` + SQL restore if you must reverse schema).
+- Auto-rollback restores **code** only — DB migrations are forward-only. To reverse a schema change, restore the pre-migration dump (below).
 - There is **no** free-text “run any shell” input.
 
-Example: ship code with DB backup first:
+**Automatic pre-migration backup**
+
+Every deploy (push or manual, and `scripts/vps-deploy.sh`) runs `scripts/db-backup-if-pending.sh` before migrations and before the swap:
+
+1. `npm run db:migrate:pending -w server` compares `mysql/migrations` in the new release with `schema_migrations` in the live DB.
+2. **Pending > 0** → `backup-jbt.sh` with `BACKUP_SCOPE=db`, file `~/backups/<db>_<date>_pre-migrate-<release>.sql.gz`. The dump is written to a temp file, checked (`gzip -t` + mysqldump's `-- Dump completed` trailer), then moved into place (`chmod 600`).
+3. **Pending = 0** → no backup (code-only deploys stay fast).
+4. **Check fails** (DB unreachable, etc.) → treated as "unknown" and backed up anyway.
+5. **Backup fails** → deploy stops **before** migrations and the swap; the live release keeps serving.
+
+This runs even with `run_migrations = false`, because the API applies pending migrations itself on start. Same retention (`BACKUP_RETENTION_DAYS`) and off-box copy (`BACKUP_RSYNC_TARGET`) as the nightly backup.
+
+Restore a pre-migration dump (stop the API first so it doesn't re-apply migrations on start):
+
+```bash
+pm2 stop justx-jbt-api
+gunzip -c ~/backups/<db>_<date>_pre-migrate-<release>.sql.gz | mysql -u "$DB_USER" -p "$DB_NAME"
+# deploy the previous release, then pm2 start justx-jbt-api
+```
+
+Example: ship code with a full backup (DB + uploads) even when there are no migrations:
 
 1. Run workflow  
 2. `backup_db` = true  
-3. `run_migrations` = true  
 
 Example: refresh tool definitions:
 

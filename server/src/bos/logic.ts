@@ -173,6 +173,36 @@ export function fiscalYearLabel(iso: string, startMonth = 4): string {
   return startMonth === 1 ? String(start) : `${two(start)}-${two(start + 1)}`;
 }
 
+/** First day of the fiscal year containing `iso`. */
+export function fiscalYearStart(iso: string, startMonth = 4): string {
+  const [y, m] = iso.split("-").map(Number);
+  const year = m >= startMonth ? y : y - 1;
+  return `${year}-${String(startMonth).padStart(2, "0")}-01`;
+}
+
+/** Last day of a `YYYY-MM` month. */
+export function monthEndISO(ym: string): string {
+  return addDaysISO(fromUTC(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 1)), -1);
+}
+
+/** Every `YYYY-MM` from the month of `fromISO` to the month of `toISO`, inclusive (capped at 120). */
+export function monthsBetween(fromISO: string, toISO: string): string[] {
+  const out: string[] = [];
+  let [y, m] = fromISO.split("-").map(Number);
+  const end = toISO.slice(0, 7);
+  while (out.length < 120) {
+    const ym = `${y}-${String(m).padStart(2, "0")}`;
+    if (ym > end) break;
+    out.push(ym);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return out;
+}
+
 export function formatDocNo(prefix: string, period: string, seq: number, pad = 4): string {
   const p = String(prefix || "DOC").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 12) || "DOC";
   return `${p}/${period}/${String(seq).padStart(pad, "0")}`;
@@ -246,6 +276,46 @@ export function initialsOf(name: string): string {
 
 export function phoneKey(phone: unknown): string {
   return String(phone ?? "").replace(/\D/g, "").slice(-10);
+}
+
+/* ---------- Reports ---------- */
+
+export type PnlRow = { month: string; sales: number; purchases: number; expenses: number; payroll: number; net: number };
+
+/**
+ * Accrual profit & loss by month. Sales and purchases are GST-exclusive (GST collected and input
+ * credit are neither income nor cost); expense claims are taken as claimed; payroll is the
+ * employer's cost (gross pay plus employer PF and ESI) of finalised runs, in the payroll month.
+ */
+export function profitAndLoss(
+  months: ReadonlyArray<string>,
+  sums: { sales: ReadonlyMap<string, number>; purchases: ReadonlyMap<string, number>; expenses: ReadonlyMap<string, number>; payroll: ReadonlyMap<string, number> },
+): { months: PnlRow[]; total: Omit<PnlRow, "month"> } {
+  const rows = months.map((month) => {
+    const sales = round2(sums.sales.get(month) ?? 0);
+    const purchases = round2(sums.purchases.get(month) ?? 0);
+    const expenses = round2(sums.expenses.get(month) ?? 0);
+    const payroll = round2(sums.payroll.get(month) ?? 0);
+    return { month, sales, purchases, expenses, payroll, net: round2(sales - purchases - expenses - payroll) };
+  });
+  const add = (k: keyof Omit<PnlRow, "month">) => round2(rows.reduce((s, r) => s + r[k], 0));
+  return { months: rows, total: { sales: add("sales"), purchases: add("purchases"), expenses: add("expenses"), payroll: add("payroll"), net: add("net") } };
+}
+
+export type AttendanceSummary = { present: number; wfh: number; halfDay: number; absent: number; leave: number; unmarked: number; attendancePct: number };
+
+/** Monthly attendance for one employee. Attended = present + WFH + ½ half days, as a share of working days. */
+export function attendanceSummary(counts: Partial<Record<string, number>>, workingDays: number): AttendanceSummary {
+  const n = (k: string) => Math.max(0, num(counts[k]));
+  const present = n("present");
+  const wfh = n("wfh");
+  const halfDay = n("half_day");
+  const absent = n("absent");
+  const leave = n("leave");
+  const unmarked = Math.max(0, workingDays - (present + wfh + halfDay + absent + leave + n("holiday")));
+  const attended = present + wfh + halfDay * 0.5;
+  const attendancePct = workingDays > 0 ? Math.min(100, Math.round((attended / workingDays) * 100)) : 0;
+  return { present, wfh, halfDay, absent, leave, unmarked, attendancePct };
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
