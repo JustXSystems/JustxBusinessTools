@@ -2358,7 +2358,8 @@ body:has(.mobile-menu) .float-dock {
     margin-top: 12px;
     padding-bottom: max(8px, var(--safe-bottom));
   }
-  .profile-save-bar .btn {
+  .profile-save-bar .btn,
+  .profile-terms-action {
     width: 100%;
     min-height: 44px;
   }
@@ -9460,6 +9461,9 @@ html[data-scheme="light"] .field textarea {
   display: flex;
   justify-content: flex-end;
   background: linear-gradient(to top, var(--bg-1) 70%, transparent);
+}
+.profile-terms-action {
+  margin-top: 8px;
 }
 .profile-stack {
   display: flex;
