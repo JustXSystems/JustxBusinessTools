@@ -240,10 +240,10 @@ export type BusinessProfile = {
   bankUpi: string | null;
   terms: string | null;
   /**
-   * Terms & notes Quotation V1 fills in when "For" is Annual Maintenance (AMC).
-   * `null` = use the built-in AMC terms.
+   * Quotation V1 terms & notes per "For" (engagement key such as `amc`, `sale`).
+   * A missing key uses the built-in terms for that "For". Owner / Admin edit.
    */
-  amcTerms: string | null;
+  quoteTerms: Partial<Record<string, string>>;
   /**
    * Accent used on tool document previews and generated PDFs
    * (quote-sheet headings, borders, table headers, site-survey report, etc.).
@@ -340,7 +340,7 @@ export const EMPTY_PROFILE: BusinessProfile = {
   bankIfsc: null,
   bankUpi: null,
   terms: null,
-  amcTerms: null,
+  quoteTerms: {},
   documentAccentColor: "#0f3d3e",
   documentTextTone: "standard",
   themePreset: null,

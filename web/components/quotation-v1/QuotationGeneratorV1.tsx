@@ -59,7 +59,7 @@ import {
   type CategoryKey,
   type CompanyProfileV1,
   type EngagementKey,
-  type ProfileTermsOverrides,
+  type ProfileQuoteTerms,
   type QuotationV1,
   type QuoteHistoryRow,
   type QuoteNotification,
@@ -196,7 +196,7 @@ export function QuotationGeneratorV1() {
   const [pdfHostQuote, setPdfHostQuote] = useState<QuotationV1 | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
-  const termsOverridesRef = useRef<ProfileTermsOverrides>({ amcTerms: null });
+  const profileTermsRef = useRef<ProfileQuoteTerms>({});
 
   useEffect(() => {
     if (!sendOpen || sendChannel !== "whatsapp") return;
@@ -268,19 +268,15 @@ export function QuotationGeneratorV1() {
     setCompany(merged);
     setSendSettings(normalizeSendSettings(profile?.sendSettings ?? null));
     if (profile) {
-      const prevTerms = termsOverridesRef.current;
-      const nextTerms: ProfileTermsOverrides = { amcTerms: profile.amcTerms ?? null };
-      termsOverridesRef.current = nextTerms;
-      if ((prevTerms.amcTerms ?? "").trim() !== (nextTerms.amcTerms ?? "").trim()) {
-        // Swap in the new AMC terms only on an unsaved draft whose notes haven't been edited.
-        setCurrent((q) =>
-          !q.quoteNo &&
-          q.engagement === "amc" &&
-          q.notes === buildTerms(q.category, q.engagement, prevTerms)
-            ? { ...q, notes: buildTerms(q.category, q.engagement, nextTerms) }
-            : q,
-        );
-      }
+      const prevTerms = profileTermsRef.current;
+      const nextTerms: ProfileQuoteTerms = profile.quoteTerms ?? {};
+      profileTermsRef.current = nextTerms;
+      // Swap in changed profile terms only on an unsaved draft whose notes haven't been edited.
+      setCurrent((q) => {
+        if (q.quoteNo || q.notes !== buildTerms(q.category, q.engagement, prevTerms)) return q;
+        const notes = buildTerms(q.category, q.engagement, nextTerms);
+        return notes === q.notes ? q : { ...q, notes };
+      });
     }
     setHistory(h.history ?? []);
     setNotifications(n.notifications ?? []);
@@ -322,7 +318,7 @@ export function QuotationGeneratorV1() {
       engagement: eng,
       categoryCustomLabel: category !== "other" ? "" : q.categoryCustomLabel,
       items: templateItems(category, eng),
-      notes: buildTerms(category, eng, termsOverridesRef.current),
+      notes: buildTerms(category, eng, profileTermsRef.current),
       gstOverride: { mode: "manual", cgst: 0, sgst: 0, igst: null },
     }));
   }
@@ -1005,7 +1001,7 @@ export function QuotationGeneratorV1() {
               onClick={() => {
                 preparedBySeeded.current = true;
                 setCurrent(
-                  newQuotationDraft("solar", undefined, userDisplayName(user), termsOverridesRef.current),
+                  newQuotationDraft("solar", undefined, userDisplayName(user), profileTermsRef.current),
                 );
                 setLastSaved(null);
                 setCustomerSuggestOpen(false);

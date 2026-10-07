@@ -26,7 +26,7 @@ import { fetchProfile, saveProfile } from "@/lib/api";
 import { flashAppError, flashAppOk } from "@/lib/app-flash";
 import { publicAssetUrl } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
-import { BASE_TERMS } from "@/lib/quotation-v1/catalog";
+import { countCustomQuoteTerms, QuoteTermsPanel } from "@/components/profile/QuoteTermsPanel";
 import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
 import { MfaSettingsPanel } from "@/components/profile/MfaSettingsPanel";
 import { SendViaDefaultsPanel } from "@/components/profile/SendViaDefaultsPanel";
@@ -56,7 +56,7 @@ const TAB_SECTIONS: Record<ProfileTab, string[]> = {
   send: ["sendDefaults", "followUp"],
   delivery: ["delivery"],
   tools: ["homeTools"],
-  legal: ["bank", "terms", "amcTerms"],
+  legal: ["bank", "terms", "quoteTerms"],
 };
 
 export default function ProfilePage() {
@@ -77,6 +77,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<ProfileTab>("company");
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const activeSections = TAB_SECTIONS[activeTab];
+  const quoteTermsCustomCount = countCustomQuoteTerms(profile.quoteTerms);
   const allActiveOpen = activeSections.every((id) => openSections[id]);
 
   function sectionProps(id: string) {
@@ -785,31 +786,17 @@ export default function ProfilePage() {
       </CollapsibleSection>
 
       <CollapsibleSection
-        {...sectionProps("amcTerms")}
-        title="AMC quotation terms & notes"
-        hint={'Quotation V1 · For "Annual Maintenance -AMC"'}
+        {...sectionProps("quoteTerms")}
+        title="Quotation terms & notes"
+        hint={'Quotation V1 · per "For" (Installation, AMC, Repair, Sales…)'}
+        badge={quoteTermsCustomCount ? `${quoteTermsCustomCount} customised` : undefined}
+        badgeTone="accent"
       >
-        <label className="field">
-          <span className="label">
-            Terms &amp; notes for AMC quotations (leave blank to use the built-in AMC terms)
-          </span>
-          <textarea
-            rows={8}
-            value={profile.amcTerms ?? ""}
-            placeholder={BASE_TERMS.amc}
-            disabled={!canEdit}
-            onChange={(e) => setProfile({ ...profile, amcTerms: e.target.value })}
-          />
-        </label>
-        {canEdit && !(profile.amcTerms ?? "").trim() ? (
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm profile-terms-action"
-            onClick={() => setProfile({ ...profile, amcTerms: BASE_TERMS.amc })}
-          >
-            Start from built-in AMC terms
-          </button>
-        ) : null}
+        <QuoteTermsPanel
+          value={profile.quoteTerms ?? {}}
+          disabled={!canEdit}
+          onChange={(quoteTerms) => setProfile({ ...profile, quoteTerms })}
+        />
       </CollapsibleSection>
             </>
           ) : null}

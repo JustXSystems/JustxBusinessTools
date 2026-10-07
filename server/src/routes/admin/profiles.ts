@@ -17,7 +17,7 @@ import {
   normalizeQuotationEmailTemplateId,
   serializeProfileSendSettings,
 } from "../../lib/profile-send-settings.js";
-import { ensureAmcTermsColumn } from "../../lib/profile-terms.js";
+import { ensureQuoteTermsColumns, serializeQuoteTerms } from "../../lib/profile-terms.js";
 import { getActiveOrgId, getActiveUserId } from "../../lib/request-context.js";
 import { orgEqualsSql, orgScopeParams } from "../../lib/platform-admin.js";
 import { publishNotification } from "../../lib/notification-publish.js";
@@ -579,7 +579,7 @@ router.post("/:id/unarchive", async (req, res) => {
 });
 
 router.post("/:id/duplicate", async (req, res) => {
-  await ensureAmcTermsColumn();
+  await ensureQuoteTermsColumns();
   const orgId = getActiveOrgId();
   const id = Number(req.params.id);
   const [rows] = await pool.query(
@@ -594,9 +594,9 @@ router.post("/:id/duplicate", async (req, res) => {
   const [result] = await pool.query(
     `INSERT INTO business_profiles
       (organization_id, business_name, gstin, pan, address_line1, address_line2, state, state_code, phone, email,
-       bank_name, bank_branch, bank_account, bank_ifsc, bank_upi, terms, amc_terms, is_default)
+       bank_name, bank_branch, bank_account, bank_ifsc, bank_upi, terms, quote_terms, is_default)
      VALUES (:orgId, :name, :gstin, :pan, :a1, :a2, :state, :stateCode, :phone, :email,
-             :bankName, :bankBranch, :bankAccount, :bankIfsc, :bankUpi, :terms, :amcTerms, 0)`,
+             :bankName, :bankBranch, :bankAccount, :bankIfsc, :bankUpi, :terms, :quoteTerms, 0)`,
     {
       orgId,
       name: `${String(src.business_name ?? "Branch")} (copy)`,
@@ -614,7 +614,7 @@ router.post("/:id/duplicate", async (req, res) => {
       bankIfsc: src.bank_ifsc ?? null,
       bankUpi: src.bank_upi ?? null,
       terms: src.terms ?? null,
-      amcTerms: src.amc_terms ?? null,
+      quoteTerms: serializeQuoteTerms(src.quote_terms),
     },
   );
   const newId = Number((result as { insertId: number }).insertId);

@@ -49,7 +49,11 @@ import {
   normalizeFlashDisplaySettings,
   type FlashDisplaySettings,
 } from "../lib/flash-display.js";
-import { ensureAmcTermsColumn } from "../lib/profile-terms.js";
+import {
+  ensureQuoteTermsColumns,
+  normalizeQuoteTerms,
+  serializeQuoteTerms,
+} from "../lib/profile-terms.js";
 import { getActiveOrgId, getActiveProfileId } from "../lib/request-context.js";
 import { gstinTakenByOther, isValidGstin, normalizeGstin } from "../lib/gstin.js";
 import {
@@ -82,7 +86,7 @@ type ProfileRow = {
   bank_ifsc: string | null;
   bank_upi: string | null;
   terms: string | null;
-  amc_terms?: string | null;
+  quote_terms?: unknown;
   document_accent_color?: string | null;
   document_text_tone?: string | null;
   theme_preset?: string | null;
@@ -171,7 +175,7 @@ function toApi(
     bankIfsc: row.bank_ifsc,
     bankUpi: row.bank_upi,
     terms: row.terms,
-    amcTerms: row.amc_terms ?? null,
+    quoteTerms: normalizeQuoteTerms(row.quote_terms),
     documentAccentColor: normalizeDocumentAccentColor(row.document_accent_color),
     documentTextTone: normalizeDocumentTextTone(row.document_text_tone),
     themePreset: normalizeThemePreset(row.theme_preset),
@@ -214,7 +218,7 @@ async function ensureProfileExtras() {
   await ensureArtifactDeliverySchema();
   await ensureDeliveryConfigColumns();
   await ensureEmailWebhookUrlColumn();
-  await ensureAmcTermsColumn();
+  await ensureQuoteTermsColumns();
 }
 
 /** One-time: copy legacy quotation letterhead send config into profile if empty. */
@@ -385,12 +389,8 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
     }
   }
 
-  const amcTerms: string | null | undefined =
-    body.amcTerms === undefined
-      ? undefined
-      : String(body.amcTerms ?? "").trim()
-        ? String(body.amcTerms)
-        : null;
+  const quoteTerms =
+    body.quoteTerms === undefined ? undefined : serializeQuoteTerms(body.quoteTerms);
 
   const documentAccentColor =
     body.documentAccentColor !== undefined
@@ -454,7 +454,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       bank_upi = :bankUpi,
       terms = :terms,
       send_settings = :sendSettings
-      ${amcTerms !== undefined ? ", amc_terms = :amcTerms" : ""}
+      ${quoteTerms !== undefined ? ", quote_terms = :quoteTerms, amc_terms = NULL" : ""}
       ${documentAccentColor !== undefined ? ", document_accent_color = :documentAccentColor" : ""}
       ${documentTextTone !== undefined ? ", document_text_tone = :documentTextTone" : ""}
       ${themePreset !== undefined ? ", theme_preset = :themePreset" : ""}
@@ -496,7 +496,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       bankUpi: body.bankUpi || null,
       terms: body.terms || null,
       sendSettings: JSON.stringify(sendSettings),
-      ...(amcTerms !== undefined ? { amcTerms } : {}),
+      ...(quoteTerms !== undefined ? { quoteTerms } : {}),
       ...(documentAccentColor !== undefined ? { documentAccentColor } : {}),
       ...(documentTextTone !== undefined ? { documentTextTone } : {}),
       ...(themePreset !== undefined ? { themePreset } : {}),

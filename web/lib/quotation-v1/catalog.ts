@@ -158,19 +158,41 @@ export const BASE_TERMS: Record<EngagementKey, string> = {
 5. This quotation is subject to Bengaluru jurisdiction.`,
 };
 
-/** Business Profile terms that replace the built-in ones for a given "For" (engagement). */
-export type ProfileTermsOverrides = { amcTerms?: string | null };
+/** Business Profile terms & notes per "For" (engagement); a missing or blank entry uses BASE_TERMS. */
+export type ProfileQuoteTerms = Partial<Record<EngagementKey, string>>;
 
 export function buildTerms(
   category: CategoryKey,
   engagement: EngagementKey,
-  overrides?: ProfileTermsOverrides | null,
+  profileTerms?: ProfileQuoteTerms | null,
 ): string {
-  const custom = engagement === "amc" ? overrides?.amcTerms?.trim() : "";
+  const custom = profileTerms?.[engagement]?.trim();
   return (custom || BASE_TERMS[engagement] || BASE_TERMS.misc).replace(
     "{WARRANTY}",
     WARRANTY_TEXT[category] ?? WARRANTY_TEXT.other,
   );
+}
+
+/**
+ * One entry per "For" for configuring terms: the composer label(s) and the categories that offer it.
+ * Labels repeat across engagements (e.g. "Installation" is EPC for Solar, Setup for UPS/Inverter).
+ */
+export function quoteTermsForOptions(): Array<{
+  key: EngagementKey;
+  label: string;
+  categories: string;
+}> {
+  return (Object.keys(ENGAGEMENTS) as EngagementKey[]).map((key) => {
+    const cats = (Object.keys(CATEGORY_ENGAGEMENTS) as CategoryKey[]).filter((c) =>
+      CATEGORY_ENGAGEMENTS[c].includes(key),
+    );
+    const labels = [...new Set(cats.map((c) => engMeta(c, key).label))];
+    return {
+      key,
+      label: labels.length ? labels.join(" / ") : ENGAGEMENTS[key].label,
+      categories: cats.map((c) => CATEGORIES[c].label).join(", "),
+    };
+  });
 }
 
 export const INDIAN_STATES = [

@@ -2359,7 +2359,7 @@ body:has(.mobile-menu) .float-dock {
     padding-bottom: max(8px, var(--safe-bottom));
   }
   .profile-save-bar .btn,
-  .profile-terms-action {
+  .quote-terms-actions .btn {
     width: 100%;
     min-height: 44px;
   }
@@ -9462,8 +9462,15 @@ html[data-scheme="light"] .field textarea {
   justify-content: flex-end;
   background: linear-gradient(to top, var(--bg-1) 70%, transparent);
 }
-.profile-terms-action {
-  margin-top: 8px;
+.quote-terms-panel {
+  display: grid;
+  gap: 12px;
+}
+.quote-terms-panel .field {
+  margin: 0;
+}
+.quote-terms-panel select {
+  text-overflow: ellipsis;
 }
 .profile-stack {
   display: flex;
