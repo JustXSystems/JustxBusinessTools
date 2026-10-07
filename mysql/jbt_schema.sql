@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS business_profiles (
   bank_ifsc VARCHAR(16) NULL,
   bank_upi VARCHAR(80) NULL,
   terms TEXT NULL,
+  amc_terms TEXT NULL,
   document_accent_color VARCHAR(7) NULL,
   document_text_tone VARCHAR(16) NULL,
   theme_preset VARCHAR(120) NULL,

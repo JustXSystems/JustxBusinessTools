@@ -240,6 +240,11 @@ export type BusinessProfile = {
   bankUpi: string | null;
   terms: string | null;
   /**
+   * Terms & notes Quotation V1 fills in when "For" is Annual Maintenance (AMC).
+   * `null` = use the built-in AMC terms.
+   */
+  amcTerms: string | null;
+  /**
    * Accent used on tool document previews and generated PDFs
    * (quote-sheet headings, borders, table headers, site-survey report, etc.).
    * `#rrggbb`; defaults to quotation teal `#0f3d3e`.
@@ -335,6 +340,7 @@ export const EMPTY_PROFILE: BusinessProfile = {
   bankIfsc: null,
   bankUpi: null,
   terms: null,
+  amcTerms: null,
   documentAccentColor: "#0f3d3e",
   documentTextTone: "standard",
   themePreset: null,

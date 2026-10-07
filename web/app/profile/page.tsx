@@ -26,6 +26,7 @@ import { fetchProfile, saveProfile } from "@/lib/api";
 import { flashAppError, flashAppOk } from "@/lib/app-flash";
 import { publicAssetUrl } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
+import { BASE_TERMS } from "@/lib/quotation-v1/catalog";
 import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
 import { MfaSettingsPanel } from "@/components/profile/MfaSettingsPanel";
 import { SendViaDefaultsPanel } from "@/components/profile/SendViaDefaultsPanel";
@@ -55,7 +56,7 @@ const TAB_SECTIONS: Record<ProfileTab, string[]> = {
   send: ["sendDefaults", "followUp"],
   delivery: ["delivery"],
   tools: ["homeTools"],
-  legal: ["bank", "terms"],
+  legal: ["bank", "terms", "amcTerms"],
 };
 
 export default function ProfilePage() {
@@ -781,6 +782,34 @@ export default function ProfilePage() {
             onChange={(e) => setProfile({ ...profile, terms: e.target.value })}
           />
         </label>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        {...sectionProps("amcTerms")}
+        title="AMC quotation terms & notes"
+        hint={'Quotation V1 · For "Annual Maintenance -AMC"'}
+      >
+        <label className="field">
+          <span className="label">
+            Terms &amp; notes for AMC quotations (leave blank to use the built-in AMC terms)
+          </span>
+          <textarea
+            rows={8}
+            value={profile.amcTerms ?? ""}
+            placeholder={BASE_TERMS.amc}
+            disabled={!canEdit}
+            onChange={(e) => setProfile({ ...profile, amcTerms: e.target.value })}
+          />
+        </label>
+        {canEdit && !(profile.amcTerms ?? "").trim() ? (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm profile-terms-action"
+            onClick={() => setProfile({ ...profile, amcTerms: BASE_TERMS.amc })}
+          >
+            Start from built-in AMC terms
+          </button>
+        ) : null}
       </CollapsibleSection>
             </>
           ) : null}

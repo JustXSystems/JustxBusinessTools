@@ -1,5 +1,5 @@
 import itemTemplatesJson from "./item-templates.json";
-import { buildTerms, CATEGORY_ENGAGEMENTS } from "./catalog";
+import { buildTerms, CATEGORY_ENGAGEMENTS, type ProfileTermsOverrides } from "./catalog";
 import { newApprovalToken, todayISO, uid } from "./compute";
 import type {
   CategoryKey,
@@ -73,6 +73,7 @@ export function newQuotationDraft(
   category: CategoryKey = "solar",
   engagement?: EngagementKey,
   preparedBy = "",
+  termsOverrides?: ProfileTermsOverrides | null,
 ): QuotationV1 {
   const allowed = CATEGORY_ENGAGEMENTS[category];
   const eng = engagement && allowed.includes(engagement) ? engagement : allowed[0];
@@ -91,7 +92,7 @@ export function newQuotationDraft(
     items: templateItems(category, eng),
     extraCharge: { label: "Transport / Miscellaneous", amount: 0, gst: 0 },
     buybackLabel: DEFAULT_BUYBACK_LABEL,
-    notes: buildTerms(category, eng),
+    notes: buildTerms(category, eng, termsOverrides),
     gstOverride: { mode: "manual", cgst: 0, sgst: 0, igst: null },
     createdAt: new Date().toISOString(),
     history: [{ ts: new Date().toISOString(), event: "Draft created" }],

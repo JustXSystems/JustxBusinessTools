@@ -158,8 +158,16 @@ export const BASE_TERMS: Record<EngagementKey, string> = {
 5. This quotation is subject to Bengaluru jurisdiction.`,
 };
 
-export function buildTerms(category: CategoryKey, engagement: EngagementKey): string {
-  return (BASE_TERMS[engagement] ?? BASE_TERMS.misc).replace(
+/** Business Profile terms that replace the built-in ones for a given "For" (engagement). */
+export type ProfileTermsOverrides = { amcTerms?: string | null };
+
+export function buildTerms(
+  category: CategoryKey,
+  engagement: EngagementKey,
+  overrides?: ProfileTermsOverrides | null,
+): string {
+  const custom = engagement === "amc" ? overrides?.amcTerms?.trim() : "";
+  return (custom || BASE_TERMS[engagement] || BASE_TERMS.misc).replace(
     "{WARRANTY}",
     WARRANTY_TEXT[category] ?? WARRANTY_TEXT.other,
   );
