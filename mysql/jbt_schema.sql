@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS business_profiles (
   quote_terms JSON NULL,
   document_accent_color VARCHAR(7) NULL,
   document_text_tone VARCHAR(16) NULL,
+  document_footer JSON NULL,
   theme_preset VARCHAR(120) NULL,
   home_tool_ids JSON NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

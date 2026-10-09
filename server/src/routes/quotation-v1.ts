@@ -22,6 +22,11 @@ import {
   type DocumentTextTone,
 } from "../lib/document-accent.js";
 import {
+  ensureDocumentFooterColumn,
+  normalizeDocumentFooter,
+  type DocumentFooterSettings,
+} from "../lib/document-footer.js";
+import {
   createEmailOutbox,
   emailWebhookConfigured,
   mapOutboxPublic,
@@ -109,11 +114,13 @@ async function loadActiveBusinessBrand(): Promise<{
   email: string | null;
   documentAccentColor: string;
   documentTextTone: DocumentTextTone;
+  documentFooter: DocumentFooterSettings;
 } | null> {
   await ensureDocumentAccentColorColumn();
+  await ensureDocumentFooterColumn();
   const [rows] = await pool.query(
     `SELECT business_name, logo_data_url, address_line1, address_line2, state, gstin, phone, email,
-            document_accent_color, document_text_tone
+            document_accent_color, document_text_tone, document_footer
      FROM business_profiles WHERE id = :id LIMIT 1`,
     { id: getActiveProfileId() },
   );
@@ -130,6 +137,7 @@ async function loadActiveBusinessBrand(): Promise<{
             email: string | null;
             document_accent_color?: string | null;
             document_text_tone?: string | null;
+            document_footer?: unknown;
           }
         | undefined)
     : undefined;
@@ -145,6 +153,7 @@ async function loadActiveBusinessBrand(): Promise<{
     email: row.email,
     documentAccentColor: normalizeDocumentAccentColor(row.document_accent_color),
     documentTextTone: normalizeDocumentTextTone(row.document_text_tone),
+    documentFooter: normalizeDocumentFooter(row.document_footer),
   };
 }
 
@@ -178,6 +187,7 @@ function mergeCompanyWithBusinessBrand(
       ...company,
       documentAccentColor: normalizeDocumentAccentColor(company.documentAccentColor),
       documentTextTone: normalizeDocumentTextTone(company.documentTextTone),
+      documentFooter: normalizeDocumentFooter(company.documentFooter),
     };
   }
 
@@ -207,6 +217,7 @@ function mergeCompanyWithBusinessBrand(
       storedPrefix && storedPrefix !== "QT" ? storedPrefix : prefixFromName || company.quotePrefix,
     documentAccentColor: brand.documentAccentColor,
     documentTextTone: brand.documentTextTone,
+    documentFooter: brand.documentFooter,
   };
 }
 

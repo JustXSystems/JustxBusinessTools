@@ -15,6 +15,11 @@ import {
 } from "@/lib/types/business-profile";
 import { normalizeDocumentAccentColor, normalizeDocumentTextTone } from "@/lib/document-accent";
 import {
+  DOCUMENT_FOOTER_TEMPLATE_OPTIONS,
+  normalizeDocumentFooter,
+} from "@/lib/document-footer";
+import { DocumentFooterPanel } from "@/components/profile/DocumentFooterPanel";
+import {
   findThemePresetTokens,
   normalizeThemePreset,
   savedThemePresetKey,
@@ -41,7 +46,7 @@ import { normalizeFlashDisplaySettings } from "@/lib/flash-display";
 type ProfileTab = "company" | "brand" | "send" | "delivery" | "tools" | "legal";
 
 const PROFILE_TABS: Array<{ id: ProfileTab; label: string; hint: string }> = [
-  { id: "company", label: "Company", hint: "Identity, address, accent" },
+  { id: "company", label: "Company", hint: "Identity, address, quote footer" },
   { id: "brand", label: "Brand & UI", hint: "Theme, clock, alerts" },
   { id: "send", label: "Send Via", hint: "WhatsApp, email & follow-ups" },
   { id: "delivery", label: "Delivery", hint: "Downloads & file webhooks" },
@@ -51,7 +56,7 @@ const PROFILE_TABS: Array<{ id: ProfileTab; label: string; hint: string }> = [
 
 /** Tabs with more than one section render them collapsed by default. */
 const TAB_SECTIONS: Record<ProfileTab, string[]> = {
-  company: ["identity", "address"],
+  company: ["identity", "address", "footer"],
   brand: ["theme", "clock", "flash"],
   send: ["sendDefaults", "followUp"],
   delivery: ["delivery"],
@@ -109,6 +114,7 @@ export default function ProfilePage() {
           ...p,
           documentAccentColor: normalizeDocumentAccentColor(p.documentAccentColor),
           documentTextTone: normalizeDocumentTextTone(p.documentTextTone),
+          documentFooter: normalizeDocumentFooter(p.documentFooter),
           themePreset: normalizeThemePreset(p.themePreset),
           themePresets: p.themePresets ?? [],
           orgThemes: p.orgThemes ?? [],
@@ -171,6 +177,7 @@ export default function ProfilePage() {
         ...profile,
         documentAccentColor: normalizeDocumentAccentColor(profile.documentAccentColor),
         documentTextTone: normalizeDocumentTextTone(profile.documentTextTone),
+        documentFooter: normalizeDocumentFooter(profile.documentFooter),
         themePreset: normalizeThemePreset(profile.themePreset),
         clockDisplay: normalizeClockDisplaySettings(profile.clockDisplay),
         flashDisplay: normalizeFlashDisplaySettings(profile.flashDisplay),
@@ -188,6 +195,7 @@ export default function ProfilePage() {
         ...saved,
         documentAccentColor: normalizeDocumentAccentColor(saved.documentAccentColor),
         documentTextTone: normalizeDocumentTextTone(saved.documentTextTone),
+        documentFooter: normalizeDocumentFooter(saved.documentFooter),
         themePreset: normalizeThemePreset(saved.themePreset),
         themePresets: saved.themePresets ?? [],
         orgThemes: saved.orgThemes ?? [],
@@ -518,6 +526,41 @@ export default function ProfilePage() {
             />
           </label>
         </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        {...sectionProps("footer")}
+        title="Quotation footer & sender contact"
+        hint="Sign-off layout and the Prepared by employee's name, mobile & email"
+        badge={
+          DOCUMENT_FOOTER_TEMPLATE_OPTIONS.find(
+            (o) => o.id === normalizeDocumentFooter(profile.documentFooter).template,
+          )?.label
+        }
+        badgeTone={
+          normalizeDocumentFooter(profile.documentFooter).template === "classic" ? "default" : "accent"
+        }
+      >
+        <DocumentFooterPanel
+          value={profile.documentFooter}
+          disabled={!canEdit}
+          onChange={(documentFooter) => {
+            if (!canEdit) return;
+            setProfile((p) => ({ ...p, documentFooter }));
+          }}
+          company={{
+            name: profile.businessName,
+            phone: profile.phone ?? "",
+            email: profile.email ?? "",
+            accentColor: normalizeDocumentAccentColor(profile.documentAccentColor),
+            textTone: normalizeDocumentTextTone(profile.documentTextTone),
+          }}
+          sender={{
+            name: (user?.name ?? "").trim(),
+            phone: (user?.phone ?? "").trim(),
+            email: (user?.email ?? "").trim(),
+          }}
+        />
       </CollapsibleSection>
             </>
           ) : null}

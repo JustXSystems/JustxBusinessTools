@@ -19,6 +19,7 @@ import {
   normalizeFlashDisplaySettings,
   type FlashDisplaySettings,
 } from "@/lib/flash-display";
+import { DEFAULT_DOCUMENT_FOOTER, type DocumentFooterSettings } from "@/lib/document-footer";
 
 export type BusinessProfileSendSettings = {
   whatsappNumbers: Array<{ id: string; label: string; phone: string }>;
@@ -256,6 +257,11 @@ export type BusinessProfile = {
    */
   documentTextTone: "standard" | "dark";
   /**
+   * Quotation sign-off footer: template and which details of the
+   * Prepared by employee (name, mobile, email) are printed.
+   */
+  documentFooter: DocumentFooterSettings;
+  /**
    * UI theme override for this Business Profile.
    * `null` = inherit Admin (organization) active theme.
    * Otherwise a built-in preset name, or `saved:{orgThemeId}` for a saved org theme.
@@ -343,6 +349,7 @@ export const EMPTY_PROFILE: BusinessProfile = {
   quoteTerms: {},
   documentAccentColor: "#0f3d3e",
   documentTextTone: "standard",
+  documentFooter: { ...DEFAULT_DOCUMENT_FOOTER },
   themePreset: null,
   themePresets: [],
   orgThemes: [],

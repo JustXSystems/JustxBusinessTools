@@ -7,6 +7,7 @@ import {
   normalizeDocumentAccentColor,
   normalizeDocumentTextTone,
 } from "../lib/document-accent.js";
+import { ensureDocumentFooterColumn, normalizeDocumentFooter } from "../lib/document-footer.js";
 
 const TOOL_ID = "quotationv1";
 const router = Router();
@@ -48,9 +49,10 @@ async function companyForRecord(
     };
   }
   await ensureDocumentAccentColorColumn();
+  await ensureDocumentFooterColumn();
   const [rows] = await pool.query(
     `SELECT business_name, logo_data_url, address_line1, address_line2, state, gstin, phone, email,
-            document_accent_color, document_text_tone
+            document_accent_color, document_text_tone, document_footer
      FROM business_profiles WHERE id = :id LIMIT 1`,
     { id: businessProfileId },
   );
@@ -67,6 +69,7 @@ async function companyForRecord(
             email: string | null;
             document_accent_color?: string | null;
             document_text_tone?: string | null;
+            document_footer?: unknown;
           }
         | undefined)
     : undefined;
@@ -90,6 +93,7 @@ async function companyForRecord(
     place: "",
     documentAccentColor: normalizeDocumentAccentColor(row.document_accent_color),
     documentTextTone: normalizeDocumentTextTone(row.document_text_tone),
+    documentFooter: normalizeDocumentFooter(row.document_footer),
   };
 }
 

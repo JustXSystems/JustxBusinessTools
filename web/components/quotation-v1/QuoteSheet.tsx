@@ -5,7 +5,6 @@ import {
   buybackLabelOf,
   computeTotals,
   fmtDate,
-  fmtDateSlash,
   money,
   numToWordsIndian,
   typeLabel,
@@ -13,6 +12,7 @@ import {
 import { documentAccentCssVars } from "@/lib/document-accent";
 import { publicAssetUrl } from "@/lib/base-path";
 import type { CSSProperties } from "react";
+import { QuoteSheetFooter } from "./QuoteSheetFooter";
 
 type Props = {
   quote: QuotationV1;
@@ -263,26 +263,11 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
           </span>
         ))}
       </div>
-      <div className="qgv1-qs-callback">
-        <b>Thank you for your business with {c.name}!</b>
-        <br />
-        For any queries, please contact
-        <br />
-        Phone: {c.phone}
-        <br />
-        Email: {c.email}
-      </div>
-      <div className="qgv1-qs-bank">
-        <div>
-          <b>Date :</b> {fmtDateSlash(q.date)}
-          <br />
-          <b>Place :</b> {c.place || "Bengaluru"}
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <b>For {c.name}</b>
-          <div className="qgv1-qs-sign">Authorized Signatory</div>
-        </div>
-      </div>
+      <QuoteSheetFooter
+        company={c}
+        date={q.date}
+        sender={{ name: q.preparedBy, phone: q.preparedByPhone, email: q.preparedByEmail }}
+      />
       <div className="qgv1-qs-foot">
         {c.name} · {c.website} · This is a system-generated quotation.
       </div>

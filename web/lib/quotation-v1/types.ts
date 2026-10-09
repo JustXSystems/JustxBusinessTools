@@ -1,4 +1,5 @@
 import type { BusinessProfileSendSettings } from "@/lib/types/business-profile";
+import type { DocumentFooterSettings } from "@/lib/document-footer";
 
 export type CategoryKey = "solar" | "ups" | "battery" | "inverter" | "other";
 export type EngagementKey =
@@ -64,6 +65,9 @@ export type QuotationV1 = {
   /** Optional CRM follow-up date (separate from Valid Till). */
   followUpDate: string;
   preparedBy: string;
+  /** Sender contact printed by the Business Profile footer template; seeded from the logged-in user. */
+  preparedByPhone?: string;
+  preparedByEmail?: string;
   customer: QuoteCustomer;
   items: QuoteItem[];
   extraCharge: ExtraCharge;
@@ -110,6 +114,8 @@ export type CompanyProfileV1 = {
   documentAccentColor?: string;
   /** Business Profile preview text tone; `dark` replaces soft gray text with near-black. */
   documentTextTone?: "standard" | "dark";
+  /** Business Profile sign-off footer template. */
+  documentFooter?: DocumentFooterSettings;
 };
 
 export type QuoteTotals = {

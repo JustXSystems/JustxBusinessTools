@@ -32,6 +32,7 @@ import {
   normalizeDocumentAccentColor,
   normalizeDocumentTextTone,
 } from "../lib/document-accent.js";
+import { ensureDocumentFooterColumn, normalizeDocumentFooter } from "../lib/document-footer.js";
 import {
   ensureThemePresetColumn,
   findPresetTokens,
@@ -89,6 +90,7 @@ type ProfileRow = {
   quote_terms?: unknown;
   document_accent_color?: string | null;
   document_text_tone?: string | null;
+  document_footer?: unknown;
   theme_preset?: string | null;
   clock_display_visible?: number | boolean | null;
   clock_display_format?: string | null;
@@ -178,6 +180,7 @@ function toApi(
     quoteTerms: normalizeQuoteTerms(row.quote_terms),
     documentAccentColor: normalizeDocumentAccentColor(row.document_accent_color),
     documentTextTone: normalizeDocumentTextTone(row.document_text_tone),
+    documentFooter: normalizeDocumentFooter(row.document_footer),
     themePreset: normalizeThemePreset(row.theme_preset),
     themePresets: THEME_PRESETS.map((p) => ({
       name: p.name,
@@ -212,6 +215,7 @@ async function ensureProfileExtras() {
   await ensureSendSettingsColumn();
   await migrateAllProfileSendSignatures();
   await ensureDocumentAccentColorColumn();
+  await ensureDocumentFooterColumn();
   await ensureThemePresetColumn();
   await ensureClockDisplayColumns();
   await ensureFlashDisplayColumns();
@@ -398,6 +402,10 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       : undefined;
   const documentTextTone =
     body.documentTextTone !== undefined ? normalizeDocumentTextTone(body.documentTextTone) : undefined;
+  const documentFooter =
+    body.documentFooter !== undefined
+      ? JSON.stringify(normalizeDocumentFooter(body.documentFooter))
+      : undefined;
 
   let themePreset: string | null | undefined;
   if (body.themePreset !== undefined) {
@@ -457,6 +465,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       ${quoteTerms !== undefined ? ", quote_terms = :quoteTerms, amc_terms = NULL" : ""}
       ${documentAccentColor !== undefined ? ", document_accent_color = :documentAccentColor" : ""}
       ${documentTextTone !== undefined ? ", document_text_tone = :documentTextTone" : ""}
+      ${documentFooter !== undefined ? ", document_footer = :documentFooter" : ""}
       ${themePreset !== undefined ? ", theme_preset = :themePreset" : ""}
       ${
         themePreset !== undefined || clockDisplay !== undefined || flashDisplay !== undefined
@@ -499,6 +508,7 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       ...(quoteTerms !== undefined ? { quoteTerms } : {}),
       ...(documentAccentColor !== undefined ? { documentAccentColor } : {}),
       ...(documentTextTone !== undefined ? { documentTextTone } : {}),
+      ...(documentFooter !== undefined ? { documentFooter } : {}),
       ...(themePreset !== undefined ? { themePreset } : {}),
       ...(clockDisplay !== undefined
         ? { clockVisible: clockDisplay.visible ? 1 : 0, clockFormat: clockDisplay.format }

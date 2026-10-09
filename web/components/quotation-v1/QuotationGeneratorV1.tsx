@@ -67,6 +67,7 @@ import {
   type QuoteAlertFilter,
 } from "@/lib/quotation-v1";
 import { fmtRelativeTime } from "@/lib/format";
+import { footerShowsSender, normalizeDocumentFooter } from "@/lib/document-footer";
 import {
   resolveCorporateEmailMessage,
   type BusinessProfileSendSettings,
@@ -136,6 +137,13 @@ function userDisplayName(user: { name?: string | null; email?: string } | null |
   const email = (user?.email ?? "").trim();
   if (email.includes("@")) return email.split("@")[0] || "";
   return email;
+}
+
+function userSenderContact(user: { phone?: string | null; email?: string } | null | undefined) {
+  return {
+    preparedByPhone: (user?.phone ?? "").trim(),
+    preparedByEmail: (user?.email ?? "").trim(),
+  };
 }
 
 function previewQuoteNo(q: QuotationV1, company: CompanyProfileV1, counters: Record<string, number>) {
@@ -208,6 +216,7 @@ export function QuotationGeneratorV1() {
   }, [sendOpen, sendChannel]);
 
   const totals = useMemo(() => computeTotals(current, company), [current, company]);
+  const senderFooterOn = footerShowsSender(normalizeDocumentFooter(company.documentFooter));
   const filteredList = useMemo(
     () => filterSavedQuotations(list, company, savedFilters),
     [list, company, savedFilters],
@@ -295,9 +304,17 @@ export function QuotationGeneratorV1() {
     const name = userDisplayName(user);
     if (!name || preparedBySeeded.current) return;
     preparedBySeeded.current = true;
+    const contact = userSenderContact(user);
     setCurrent((q) => {
-      if (q.quoteNo || q.preparedBy.trim()) return q;
-      return { ...q, preparedBy: name };
+      if (q.quoteNo) return q;
+      const preparedBy = q.preparedBy.trim() ? q.preparedBy : name;
+      if (preparedBy.trim() !== name) return q;
+      return {
+        ...q,
+        preparedBy,
+        preparedByPhone: q.preparedByPhone?.trim() ? q.preparedByPhone : contact.preparedByPhone,
+        preparedByEmail: q.preparedByEmail?.trim() ? q.preparedByEmail : contact.preparedByEmail,
+      };
     });
   }, [user]);
 
@@ -1000,9 +1017,10 @@ export function QuotationGeneratorV1() {
               className="btn btn-secondary btn-sm"
               onClick={() => {
                 preparedBySeeded.current = true;
-                setCurrent(
-                  newQuotationDraft("solar", undefined, userDisplayName(user), profileTermsRef.current),
-                );
+                setCurrent({
+                  ...newQuotationDraft("solar", undefined, userDisplayName(user), profileTermsRef.current),
+                  ...userSenderContact(user),
+                });
                 setLastSaved(null);
                 setCustomerSuggestOpen(false);
               }}
@@ -1152,6 +1170,28 @@ export function QuotationGeneratorV1() {
                     placeholder="Your name"
                   />
                 </label>
+                {senderFooterOn ? (
+                  <>
+                    <label className="field" title="Printed in the quotation footer">
+                      <span>Sender mobile</span>
+                      <input
+                        type="tel"
+                        value={current.preparedByPhone ?? ""}
+                        onChange={(e) => patch((q) => ({ ...q, preparedByPhone: e.target.value }))}
+                        placeholder={user?.phone || "Mobile number"}
+                      />
+                    </label>
+                    <label className="field" title="Printed in the quotation footer">
+                      <span>Sender email</span>
+                      <input
+                        type="email"
+                        value={current.preparedByEmail ?? ""}
+                        onChange={(e) => patch((q) => ({ ...q, preparedByEmail: e.target.value }))}
+                        placeholder={user?.email || "name@company.com"}
+                      />
+                    </label>
+                  </>
+                ) : null}
               </div>
             </section>
 

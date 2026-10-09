@@ -1973,6 +1973,82 @@
   margin-top: 10px;
 }
 
+/* Business Profile footer templates: the Prepared by employee's details. */
+.qgv1-qs-bank[data-footer="contact-card"] {
+  align-items: flex-start;
+}
+
+.qgv1-qs-contact {
+  flex: 0 1 270px;
+  line-height: 1.55;
+  background: var(--doc-accent-soft, var(--q-paper));
+  border: 1px solid var(--q-line);
+  border-left: 3px solid var(--q-teal-800);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.qgv1-qs-contact-h,
+.qgv1-qs-contact-strip .lbl {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--q-teal-800);
+}
+
+.qgv1-qs-contact-nm {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1b1b1b;
+  margin: 1px 0 2px;
+}
+
+.qgv1-qs-signer {
+  text-align: right;
+  line-height: 1.5;
+}
+
+.qgv1-qs-sign-space {
+  width: 190px;
+  height: 34px;
+  margin: 4px 0 4px auto;
+  border-bottom: 1px solid var(--q-soft);
+}
+
+.qgv1-qs-signer-nm {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1b1b1b;
+}
+
+.qgv1-qs-signer-meta {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.qgv1-qs-bank[data-footer="contact-strip"] {
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+
+.qgv1-qs-contact-strip {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  background: var(--doc-accent-soft, var(--q-paper));
+  border-left: 3px solid var(--q-teal-800);
+  border-radius: 6px;
+  padding: 7px 12px;
+  color: #1b1b1b;
+}
+
+.qgv1-qs-contact-strip .nm {
+  font-weight: 700;
+}
+
 .qgv1-qs-foot {
   text-align: center;
   font-size: 10.5px;
