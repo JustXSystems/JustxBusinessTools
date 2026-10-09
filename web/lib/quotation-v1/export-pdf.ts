@@ -202,143 +202,149 @@ function pdfSafeText(raw: string): string {
     .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, "");
 }
 
+/** One visual line of one DOM text node, positioned in sheet CSS px. */
 type TextRun = {
   text: string;
-  /** Y of text top relative to sheet, in CSS px. */
   topCss: number;
-  /** Y of text bottom relative to sheet, in CSS px. */
   bottomCss: number;
-  /** X of text left relative to sheet, in CSS px. */
   leftCss: number;
+  widthCss: number;
   fontSizePx: number;
   bold: boolean;
   italic: boolean;
-  align: "left" | "center" | "right";
-  widthCss: number;
 };
+
+/** Decorative overlays (rotated stamp) would cover real text and steal selection. */
+const TEXT_LAYER_SKIP_SELECTOR = ".page-break-marker, .qgv1-stamp";
+
+type MeasuredPiece = {
+  text: string;
+  spaceBefore: boolean;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+/**
+ * Measure every word of a text node where the browser actually laid it out.
+ * Soft-wrapped paragraphs have no "\n", so lines must come from geometry, not the string.
+ */
+function measureTextPieces(textNode: Text, range: Range): MeasuredPiece[] {
+  const full = textNode.data;
+  const pieces: MeasuredPiece[] = [];
+  const wordRe = /\S+/g;
+  let m: RegExpExecArray | null;
+  while ((m = wordRe.exec(full))) {
+    const word = m[0];
+    const start = m.index;
+    const spaceBefore = start > 0 && /\s/.test(full[start - 1]!);
+    range.setStart(textNode, start);
+    range.setEnd(textNode, start + word.length);
+    const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0.1 && r.height > 0.1);
+    if (!rects.length) continue;
+    if (rects.length === 1) {
+      const r = rects[0]!;
+      pieces.push({ text: word, spaceBefore, left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+      continue;
+    }
+    // Word broken across lines (overflow-wrap) — place each character separately.
+    let offset = start;
+    let first = true;
+    for (const ch of word) {
+      range.setStart(textNode, offset);
+      range.setEnd(textNode, offset + ch.length);
+      offset += ch.length;
+      const r = range.getBoundingClientRect();
+      if (r.width <= 0.1 || r.height <= 0.1) continue;
+      pieces.push({
+        text: ch,
+        spaceBefore: first && spaceBefore,
+        left: r.left,
+        right: r.right,
+        top: r.top,
+        bottom: r.bottom,
+      });
+      first = false;
+    }
+  }
+  return pieces;
+}
+
+function applyTextTransform(text: string, transform: string): string {
+  if (transform === "uppercase") return text.toUpperCase();
+  if (transform === "lowercase") return text.toLowerCase();
+  if (transform === "capitalize") return text.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+  return text;
+}
 
 function collectTextRuns(node: HTMLElement): TextRun[] {
   const sheetRect = node.getBoundingClientRect();
   const runs: TextRun[] = [];
+  const range = document.createRange();
   const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
   let current: Node | null;
   while ((current = walker.nextNode())) {
-    const parent = current.parentElement;
+    const textNode = current as Text;
+    const parent = textNode.parentElement;
     if (!parent) continue;
-    if (parent.closest(".page-break-marker")) continue;
+    if (!textNode.data.trim()) continue;
+    if (parent.closest(TEXT_LAYER_SKIP_SELECTOR)) continue;
     const style = window.getComputedStyle(parent);
     if (style.display === "none" || style.visibility === "hidden") continue;
     if (Number.parseFloat(style.opacity || "1") === 0) continue;
-
-    const range = document.createRange();
-    range.selectNodeContents(current);
-    const rects = Array.from(range.getClientRects());
-    if (!rects.length) continue;
 
     const weight = style.fontWeight;
     const bold =
       weight === "bold" || weight === "bolder" || Number.parseInt(weight, 10) >= 600;
     const italic = style.fontStyle === "italic" || style.fontStyle === "oblique";
     const fontSizePx = Number.parseFloat(style.fontSize) || 12;
-    const alignRaw = style.textAlign;
-    const align: TextRun["align"] =
-      alignRaw === "center" || alignRaw === "right" ? alignRaw : "left";
+    const lineTolerance = fontSizePx * 0.5;
 
-    const full = String(current.textContent || "").replace(/\r\n/g, "\n");
-    if (!full.replace(/\s+/g, "")) continue;
+    let line: MeasuredPiece | null = null;
+    const flush = () => {
+      if (!line) return;
+      const text = pdfSafeText(applyTextTransform(line.text, style.textTransform));
+      if (text.trim()) {
+        runs.push({
+          text,
+          topCss: line.top - sheetRect.top,
+          bottomCss: line.bottom - sheetRect.top,
+          leftCss: line.left - sheetRect.left,
+          widthCss: line.right - line.left,
+          fontSizePx,
+          bold,
+          italic,
+        });
+      }
+      line = null;
+    };
 
-    if (rects.length === 1) {
-      const r = rects[0]!;
-      const text = pdfSafeText(full.replace(/\s+/g, " ").trim());
-      if (!text) continue;
-      runs.push({
-        text,
-        topCss: r.top - sheetRect.top,
-        bottomCss: r.bottom - sheetRect.top,
-        leftCss: r.left - sheetRect.left,
-        fontSizePx,
-        bold,
-        italic,
-        align,
-        widthCss: r.width,
-      });
-      continue;
+    for (const piece of measureTextPieces(textNode, range)) {
+      const sameLine: boolean =
+        line !== null &&
+        Math.abs(piece.top - line.top) < lineTolerance &&
+        piece.left >= line.right - lineTolerance;
+      if (line && sameLine) {
+        line.text += (piece.spaceBefore ? " " : "") + piece.text;
+        line.right = Math.max(line.right, piece.right);
+        line.top = Math.min(line.top, piece.top);
+        line.bottom = Math.max(line.bottom, piece.bottom);
+      } else {
+        flush();
+        line = { ...piece };
+      }
     }
-
-    const lines = full.split("\n").flatMap((ln) => {
-      const t = ln.replace(/\s+/g, " ").trim();
-      return t ? [t] : [];
-    });
-    const usableRects = rects.filter((r) => r.width > 0.5 && r.height > 0.5);
-    const count = Math.min(lines.length, usableRects.length) || usableRects.length;
-    for (let i = 0; i < count; i++) {
-      const r = usableRects[i]!;
-      const text = pdfSafeText(lines[i] ?? lines[lines.length - 1] ?? "");
-      if (!text) continue;
-      runs.push({
-        text,
-        topCss: r.top - sheetRect.top,
-        bottomCss: r.bottom - sheetRect.top,
-        leftCss: r.left - sheetRect.left,
-        fontSizePx,
-        bold,
-        italic,
-        align,
-        widthCss: r.width,
-      });
-    }
+    flush();
   }
   return runs;
 }
 
-function beginInvisibleText(pdf: JsPdf, GStateCtor?: new (opts: { opacity: number }) => unknown) {
-  const anyPdf = pdf as JsPdf & {
-    setTextRenderingMode?: (mode: number) => void;
-    setGState?: (state: unknown) => void;
-    internal?: { write: (s: string) => void };
-  };
-  if (GStateCtor && typeof anyPdf.setGState === "function") {
-    try {
-      anyPdf.setGState(new GStateCtor({ opacity: 0 }));
-    } catch {
-      /* ignore */
-    }
-  }
-  if (typeof anyPdf.setTextRenderingMode === "function") {
-    anyPdf.setTextRenderingMode(3);
-  } else {
-    try {
-      anyPdf.internal?.write("3 Tr");
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
-function endInvisibleText(pdf: JsPdf, GStateCtor?: new (opts: { opacity: number }) => unknown) {
-  const anyPdf = pdf as JsPdf & {
-    setTextRenderingMode?: (mode: number) => void;
-    setGState?: (state: unknown) => void;
-    internal?: { write: (s: string) => void };
-  };
-  if (typeof anyPdf.setTextRenderingMode === "function") {
-    anyPdf.setTextRenderingMode(0);
-  } else {
-    try {
-      anyPdf.internal?.write("0 Tr");
-    } catch {
-      /* ignore */
-    }
-  }
-  if (GStateCtor && typeof anyPdf.setGState === "function") {
-    try {
-      anyPdf.setGState(new GStateCtor({ opacity: 1 }));
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
+/**
+ * Invisible (render mode 3) text over the page image. Each line is stretched with
+ * horizontal scaling to the exact on-screen width, so selecting a word highlights that
+ * word in the image instead of drifting into its neighbours.
+ */
 function drawSelectableTextLayer(
   pdf: JsPdf,
   runs: TextRun[],
@@ -348,19 +354,17 @@ function drawSelectableTextLayer(
     contentTopY: number;
     marginX: number;
     cssPxPerPt: number;
-    GStateCtor?: new (opts: { opacity: number }) => unknown;
   },
 ) {
-  const { sliceTopCss, sliceBottomCss, contentTopY, marginX, cssPxPerPt, GStateCtor } = opts;
-  beginInvisibleText(pdf, GStateCtor);
+  const { sliceTopCss, sliceBottomCss, contentTopY, marginX, cssPxPerPt } = opts;
+  // q/Q so Tz and Tr don't leak into the visible header/footer text drawn later.
+  pdf.saveGraphicsState();
   pdf.setTextColor(0, 0, 0);
   for (const run of runs) {
     if (run.bottomCss <= sliceTopCss + 0.5 || run.topCss >= sliceBottomCss - 0.5) continue;
-    // Skip runs that would be clipped mid-glyph on this slice (defensive).
     if (run.topCss < sliceTopCss - 0.5 && run.bottomCss > sliceTopCss + 0.5) continue;
     if (run.topCss < sliceBottomCss - 0.5 && run.bottomCss > sliceBottomCss + 0.5) continue;
 
-    const fontPt = Math.max(5, run.fontSizePx / cssPxPerPt);
     const style =
       run.bold && run.italic
         ? "bolditalic"
@@ -370,19 +374,22 @@ function drawSelectableTextLayer(
             ? "italic"
             : "normal";
     pdf.setFont("helvetica", style);
-    pdf.setFontSize(fontPt);
-    const baselineCss = run.topCss + run.fontSizePx * 0.8;
+    pdf.setFontSize(Math.max(1, run.fontSizePx / cssPxPerPt));
+
+    const targetWidthPt = run.widthCss / cssPxPerPt;
+    const naturalWidthPt = pdf.getTextWidth(run.text);
+    const horizontalScale =
+      naturalWidthPt > 0 && targetWidthPt > 0
+        ? Math.min(10, Math.max(0.1, targetWidthPt / naturalWidthPt))
+        : 1;
+
+    // Range rects span the font's ascent+descent; the alphabetic baseline sits ~0.22em above the bottom.
+    const baselineCss = run.bottomCss - run.fontSizePx * 0.22;
     const yPt = contentTopY + (baselineCss - sliceTopCss) / cssPxPerPt;
-    const xLeft = marginX + run.leftCss / cssPxPerPt;
-    if (run.align === "center") {
-      pdf.text(run.text, xLeft + run.widthCss / cssPxPerPt / 2, yPt, { align: "center" });
-    } else if (run.align === "right") {
-      pdf.text(run.text, xLeft + run.widthCss / cssPxPerPt, yPt, { align: "right" });
-    } else {
-      pdf.text(run.text, xLeft, yPt);
-    }
+    const xPt = marginX + run.leftCss / cssPxPerPt;
+    pdf.text(run.text, xPt, yPt, { renderingMode: "invisible", horizontalScale });
   }
-  endInvisibleText(pdf, GStateCtor);
+  pdf.restoreGraphicsState();
 }
 
 /**
@@ -401,9 +408,7 @@ export async function buildQuotationPdf(
   if (!node) throw new Error("Preview not ready");
 
   const html2canvas = (await import("html2canvas")).default;
-  const jspdfMod = await import("jspdf");
-  const { jsPDF } = jspdfMod;
-  const GStateCtor = (jspdfMod as { GState?: new (opts: { opacity: number }) => unknown }).GState;
+  const { jsPDF } = await import("jspdf");
 
   const textRuns = collectTextRuns(node);
 
@@ -504,7 +509,6 @@ export async function buildQuotationPdf(
       contentTopY,
       marginX,
       cssPxPerPt,
-      GStateCtor,
     });
   });
 
