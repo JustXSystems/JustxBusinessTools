@@ -655,6 +655,36 @@
   gap: 8px 10px;
 }
 
+.qgv1-compose-meta-grid input[readonly] {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.qgv1-sig-lock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-mid);
+  background: var(--glass-1);
+  border: 1px dashed var(--border-hair-strong, var(--border-hair));
+  border-radius: var(--radius-sm);
+}
+
+.qgv1-sig-lock.is-forced {
+  border-style: solid;
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.qgv1-sig-lock .btn {
+  flex-shrink: 0;
+}
+
 .qgv1-compose-type {
   display: flex;
   flex-direction: column;

@@ -3,7 +3,12 @@ import { pool } from "../db.js";
 import { logAudit } from "../lib/audit.js";
 import { jsonVal } from "../lib/admin/approvals.js";
 import { newDocumentId } from "../lib/documents.js";
-import { getActiveOrgId, getActiveProfileId, getActiveUserId } from "../lib/request-context.js";
+import {
+  getActiveOrgId,
+  getActiveProfileId,
+  getActiveRole,
+  getActiveUserId,
+} from "../lib/request-context.js";
 import { LimitReachedError, runCreateWithLimit } from "../lib/usage-limits.js";
 import {
   getWhatsAppDeliveryConfig,
@@ -38,6 +43,7 @@ import {
   runFollowUpRemindersForProfile,
 } from "../lib/quotation-followup-reminders.js";
 import { requireBusinessProfileOwner } from "../middleware/require-business-profile-owner.js";
+import { signatureOf, signatureUpdateDecision } from "../lib/quotation-signature.js";
 
 const TOOL_ID = "quotationv1";
 const COMPANY_KEY = "quotation_v1_company";
@@ -668,18 +674,70 @@ router.post("/", async (req, res) => {
     return;
   }
 
+  let existing: QuoteBody | null = null;
+  let forcedSignature: { before: Record<string, string>; after: Record<string, string> } | null = null;
+  if (!isNew) {
+    const [existingRows] = await pool.query(
+      `SELECT data FROM document_records
+       WHERE id = :id AND business_profile_id = :profileId AND tool_id = :toolId`,
+      { id, profileId: getActiveProfileId(), toolId: TOOL_ID },
+    );
+    const existingRow = Array.isArray(existingRows)
+      ? (existingRows[0] as { data: unknown } | undefined)
+      : undefined;
+    if (!existingRow) {
+      res.status(404).json({ error: "Quotation not found" });
+      return;
+    }
+    existing = parseData(existingRow.data);
+
+    const before = signatureOf(existing);
+    const after = signatureOf(body);
+    const decision = signatureUpdateDecision({
+      before,
+      after,
+      userId: getActiveUserId(),
+      creatorUserId: existing.createdByUserId,
+      role: getActiveRole(),
+      force: req.body?.forceSignature === true,
+    });
+    if (decision === "locked") {
+      res.status(403).json({
+        error: `The signature on ${quoteNo} is locked to ${before.preparedBy || "the user who saved it"}. Only the Business Owner can force an update.`,
+        code: "QUOTE_SIGNATURE_LOCKED",
+      });
+      return;
+    }
+    if (decision === "forced") forcedSignature = { before, after };
+  }
+
   const grandTotal = Number(req.body?.grandTotal ?? body.grandTotal ?? 0);
   const status = String(body.status ?? "draft");
   const docDate = String(body.date ?? new Date().toISOString().slice(0, 10));
   const extraDate = body.validTill ? String(body.validTill) : null;
-  const payload = {
+  const now = new Date().toISOString();
+  const payload: QuoteBody = {
     ...body,
     id,
     quoteNo,
     status,
-    updatedAt: new Date().toISOString(),
-    ...(isNew && getActiveUserId() ? { createdByUserId: getActiveUserId() } : {}),
+    updatedAt: now,
   };
+  if (isNew) {
+    if (getActiveUserId()) payload.createdByUserId = getActiveUserId();
+  } else if (existing?.createdByUserId != null) {
+    payload.createdByUserId = existing.createdByUserId;
+  } else {
+    delete payload.createdByUserId;
+  }
+  if (forcedSignature) {
+    const history = Array.isArray(body.history) ? [...(body.history as unknown[])] : [];
+    history.push({
+      ts: now,
+      event: `Signature force-updated by Business Owner: ${forcedSignature.before.preparedBy || "—"} → ${forcedSignature.after.preparedBy || "—"}`,
+    });
+    payload.history = history;
+  }
 
   try {
     if (isNew) {
@@ -761,6 +819,15 @@ router.post("/", async (req, res) => {
     }
     await appendHistory(payload, grandTotal, String(req.body?.historyAction ?? "update"));
     await logAudit("quotationv1.update", "document", id, { quoteNo }, req.ip);
+    if (forcedSignature) {
+      await logAudit(
+        "quotationv1.signature_force_update",
+        "document",
+        id,
+        { quoteNo, before: forcedSignature.before, after: forcedSignature.after },
+        req.ip,
+      );
+    }
     if (status === "submitted") {
       publishNotificationAsync({
         eventType: "document.quotation_submitted",

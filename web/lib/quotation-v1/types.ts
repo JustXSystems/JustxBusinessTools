@@ -68,6 +68,8 @@ export type QuotationV1 = {
   /** Sender contact printed by the Business Profile footer template; seeded from the logged-in user. */
   preparedByPhone?: string;
   preparedByEmail?: string;
+  /** Set by the server on first save; only this user may change the signature afterwards. */
+  createdByUserId?: number;
   customer: QuoteCustomer;
   items: QuoteItem[];
   extraCharge: ExtraCharge;

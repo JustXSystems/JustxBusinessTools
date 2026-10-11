@@ -205,6 +205,11 @@ export function QuotationGeneratorV1() {
   const sheetRef = useRef<HTMLDivElement>(null);
   const preparedBySeeded = useRef(false);
   const profileTermsRef = useRef<ProfileQuoteTerms>({});
+  /** Business Owner force-unlock of a saved quotation's signature, with the values to restore on cancel. */
+  const [signatureForce, setSignatureForce] = useState<{
+    quoteId: string;
+    saved: Pick<QuotationV1, "preparedBy" | "preparedByPhone" | "preparedByEmail">;
+  } | null>(null);
 
   useEffect(() => {
     if (!sendOpen || sendChannel !== "whatsapp") return;
@@ -217,6 +222,13 @@ export function QuotationGeneratorV1() {
 
   const totals = useMemo(() => computeTotals(current, company), [current, company]);
   const senderFooterOn = footerShowsSender(normalizeDocumentFooter(company.documentFooter));
+  const signatureForceOn = signatureForce?.quoteId === current.id;
+  const signatureLocked =
+    Boolean(current.quoteNo) &&
+    Boolean(user) &&
+    Number(current.createdByUserId) !== user?.id &&
+    !signatureForceOn;
+  const canForceSignature = user?.role === "owner";
   const filteredList = useMemo(
     () => filterSavedQuotations(list, company, savedFilters),
     [list, company, savedFilters],
@@ -376,11 +388,13 @@ export function QuotationGeneratorV1() {
           },
           grandTotal: computeTotals(payload, company).grand,
           historyAction,
+          ...(signatureForceOn ? { forceSignature: true } : {}),
         }),
       });
       const saved = data.quotation;
       setCurrent(saved);
       setLastSaved(snapshotOf(saved));
+      setSignatureForce(null);
       if (!markStatus) {
         flash(`Saved as ${saved.quoteNo}.`);
       } else if (markStatus === "submitted") {
@@ -1166,6 +1180,7 @@ export function QuotationGeneratorV1() {
                   <span>Prepared by *</span>
                   <input
                     value={current.preparedBy}
+                    readOnly={signatureLocked}
                     onChange={(e) => patch((q) => ({ ...q, preparedBy: e.target.value }))}
                     placeholder="Your name"
                   />
@@ -1177,8 +1192,9 @@ export function QuotationGeneratorV1() {
                       <input
                         type="tel"
                         value={current.preparedByPhone ?? ""}
+                        readOnly={signatureLocked}
                         onChange={(e) => patch((q) => ({ ...q, preparedByPhone: e.target.value }))}
-                        placeholder={user?.phone || "Mobile number"}
+                        placeholder={signatureLocked ? "" : user?.phone || "Mobile number"}
                       />
                     </label>
                     <label className="field" title="Printed in the quotation footer">
@@ -1186,13 +1202,66 @@ export function QuotationGeneratorV1() {
                       <input
                         type="email"
                         value={current.preparedByEmail ?? ""}
+                        readOnly={signatureLocked}
                         onChange={(e) => patch((q) => ({ ...q, preparedByEmail: e.target.value }))}
-                        placeholder={user?.email || "name@company.com"}
+                        placeholder={signatureLocked ? "" : user?.email || "name@company.com"}
                       />
                     </label>
                   </>
                 ) : null}
               </div>
+              {signatureLocked ? (
+                <div className="qgv1-sig-lock">
+                  <span>
+                    <b>Signature locked.</b> This quotation is signed by{" "}
+                    {current.preparedBy || "the user who saved it"}; only they can change it.
+                    {canForceSignature ? "" : " Ask the Business Owner if it must change."}
+                  </span>
+                  {canForceSignature ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            `Change the signature on ${current.quoteNo}? The change is recorded in the audit log and the quotation history.`,
+                          )
+                        ) {
+                          return;
+                        }
+                        setSignatureForce({
+                          quoteId: current.id,
+                          saved: {
+                            preparedBy: current.preparedBy,
+                            preparedByPhone: current.preparedByPhone,
+                            preparedByEmail: current.preparedByEmail,
+                          },
+                        });
+                      }}
+                    >
+                      Force update signature
+                    </button>
+                  ) : null}
+                </div>
+              ) : signatureForceOn && signatureForce ? (
+                <div className="qgv1-sig-lock is-forced">
+                  <span>
+                    <b>Force update on.</b> Your next save replaces the signature and is recorded in
+                    the audit log.
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      const saved = signatureForce.saved;
+                      patch((q) => ({ ...q, ...saved }));
+                      setSignatureForce(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
             </section>
 
             <section className="qgv1-card qgv1-card-compact">
