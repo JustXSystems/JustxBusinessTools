@@ -1402,6 +1402,9 @@ export const TALLY_LEDGERS = {
   inputSgst: "Input SGST",
   inputIgst: "Input IGST",
   roundOff: "Round Off",
+  /** Tally's built-in Cash-in-Hand ledger; exists in every company. */
+  cash: "Cash",
+  bank: "Bank Account",
 } as const;
 
 export type TallyLedgerMaster = {
@@ -1485,7 +1488,8 @@ export type TallyVoucherLine = {
 };
 
 export type TallyVoucher = {
-  kind: "Sales" | "Purchase";
+  /** Credit Note = customer return (reverses a sale); Debit Note = return to supplier (reverses a purchase). */
+  kind: "Sales" | "Purchase" | "Credit Note" | "Debit Note";
   number: string;
   date: string;
   partyName: string;
@@ -1508,10 +1512,13 @@ function tallyEntry(tag: "LEDGERENTRIES.LIST" | "ACCOUNTINGALLOCATIONS.LIST", le
   return `<${tag}><LEDGERNAME>${xmlEscape(ledger)}</LEDGERNAME><ISDEEMEDPOSITIVE>${amount < 0 ? "Yes" : "No"}</ISDEEMEDPOSITIVE>${party ? "<ISPARTYLEDGER>Yes</ISPARTYLEDGER>" : ""}<AMOUNT>${tallyAmount(amount)}</AMOUNT></${tag}>`;
 }
 
-/** A GST sales / purchase invoice voucher that balances to zero (party = total, other side = taxable + tax + round-off). */
+/**
+ * A GST sales / purchase invoice (or credit / debit note) voucher that balances to zero
+ * (party = total, other side = taxable + tax + round-off). Notes post the mirror image of the document they reverse.
+ */
 export function tallyVoucherXml(v: TallyVoucher): string {
-  const sales = v.kind === "Sales";
-  const sign = sales ? 1 : -1;
+  const sales = v.kind === "Sales" || v.kind === "Credit Note";
+  const sign = v.kind === "Sales" || v.kind === "Debit Note" ? 1 : -1;
   const goodsLedger = sales ? TALLY_LEDGERS.sales : TALLY_LEDGERS.purchase;
   const stockLines = v.lines.filter((l) => l.stock && l.qty > 0);
   const otherLines = v.lines.filter((l) => !(l.stock && l.qty > 0));
@@ -1569,6 +1576,45 @@ export function tallyVoucherXml(v: TallyVoucher): string {
 export function tallyVoucherBalance(v: TallyVoucher): number {
   const lines = v.lines.length ? v.lines.reduce((s, l) => s + l.amount, 0) : v.taxable;
   return round2(lines + v.cgst + v.sgst + v.igst + v.roundOff - v.total);
+}
+
+export type TallyCashVoucher = {
+  /** Receipt = money in from a customer; Payment = money out to a supplier. */
+  kind: "Receipt" | "Payment";
+  number: string;
+  date: string;
+  partyName: string;
+  amount: number;
+  /** Cash goes to Tally's Cash ledger; UPI, card, cheque and transfers to the bank ledger. */
+  method: string;
+  reference?: string | null;
+  narration?: string | null;
+};
+
+export function tallyCashLedger(method: string): string {
+  return method === "cash" ? TALLY_LEDGERS.cash : TALLY_LEDGERS.bank;
+}
+
+/** A receipt / payment voucher: the party against cash or bank, balancing to zero. */
+export function tallyCashVoucherXml(v: TallyCashVoucher): string {
+  const amount = round2(Math.abs(num(v.amount)));
+  const receipt = v.kind === "Receipt";
+  return [
+    '<TALLYMESSAGE xmlns:UDF="TallyUDF">',
+    `<VOUCHER VCHTYPE="${v.kind}" ACTION="Create" OBJVIEW="Accounting Voucher View">`,
+    `<DATE>${tallyDate(v.date)}</DATE>`,
+    `<EFFECTIVEDATE>${tallyDate(v.date)}</EFFECTIVEDATE>`,
+    `<VOUCHERTYPENAME>${v.kind}</VOUCHERTYPENAME>`,
+    `<VOUCHERNUMBER>${xmlEscape(v.number)}</VOUCHERNUMBER>`,
+    v.reference ? `<REFERENCE>${xmlEscape(v.reference)}</REFERENCE>` : "",
+    `<PARTYLEDGERNAME>${xmlEscape(v.partyName)}</PARTYLEDGERNAME>`,
+    v.narration ? `<NARRATION>${xmlEscape(v.narration)}</NARRATION>` : "",
+    "<PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>",
+    tallyEntry("LEDGERENTRIES.LIST", v.partyName, receipt ? amount : -amount, true),
+    tallyEntry("LEDGERENTRIES.LIST", tallyCashLedger(v.method), receipt ? -amount : amount),
+    "</VOUCHER>",
+    "</TALLYMESSAGE>",
+  ].join("");
 }
 
 export function tallyEnvelope(company: string, report: "All Masters" | "Vouchers", messages: ReadonlyArray<string>): string {
@@ -2032,3 +2078,360 @@ export const nameKey = (value: unknown): string =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+
+/* ---------- Books: a double-entry view of IMS records (trial balance, P&L, balance sheet, day book) ---------- */
+
+export type BookAccountType = "asset" | "liability" | "income" | "expense";
+export type BookAccountMeta = { name: string; group: string; type: BookAccountType };
+
+export const BOOK_ACCOUNTS = {
+  cash: { name: "Cash in hand", group: "Cash-in-hand", type: "asset" },
+  bank: { name: "Bank accounts", group: "Bank accounts", type: "asset" },
+  debtors: { name: "Sundry Debtors", group: "Current assets", type: "asset" },
+  stock: { name: "Opening stock", group: "Current assets", type: "asset" },
+  inputCgst: { name: "Input CGST", group: "Duties & taxes", type: "asset" },
+  inputSgst: { name: "Input SGST", group: "Duties & taxes", type: "asset" },
+  inputIgst: { name: "Input IGST", group: "Duties & taxes", type: "asset" },
+  inputGstExpenses: { name: "Input GST on expenses", group: "Duties & taxes", type: "asset" },
+  creditors: { name: "Sundry Creditors", group: "Current liabilities", type: "liability" },
+  outputCgst: { name: "Output CGST", group: "Duties & taxes", type: "liability" },
+  outputSgst: { name: "Output SGST", group: "Duties & taxes", type: "liability" },
+  outputIgst: { name: "Output IGST", group: "Duties & taxes", type: "liability" },
+  suspense: { name: "Manual ledger entries (suspense)", group: "Suspense", type: "liability" },
+  capital: { name: "Capital & reserves", group: "Capital", type: "liability" },
+  sales: { name: "Sales", group: "Sales accounts", type: "income" },
+  salesReturns: { name: "Sales returns", group: "Sales accounts", type: "income" },
+  purchases: { name: "Purchases", group: "Purchase accounts", type: "expense" },
+  purchaseReturns: { name: "Purchase returns", group: "Purchase accounts", type: "expense" },
+  roundOff: { name: "Round off", group: "Indirect expenses", type: "expense" },
+} as const satisfies Record<string, BookAccountMeta>;
+
+export type BookAccountKey = keyof typeof BOOK_ACCOUNTS | `exp:${string}`;
+
+export function bookAccount(key: BookAccountKey): BookAccountMeta {
+  if (key.startsWith("exp:")) return { name: key.slice(4) || "Other expenses", group: "Indirect expenses", type: "expense" };
+  return BOOK_ACCOUNTS[key as keyof typeof BOOK_ACCOUNTS];
+}
+
+export type BookVoucherType = "Opening" | "Sales" | "Purchase" | "Receipt" | "Payment" | "Credit note" | "Debit note" | "Expense" | "Journal";
+export type BookLine = { account: BookAccountKey; dr: number; cr: number };
+export type BookVoucher = {
+  date: string;
+  type: BookVoucherType;
+  ref: string | null;
+  party: string | null;
+  narration: string;
+  amount: number;
+  lines: BookLine[];
+  /** Where the voucher came from, so the UI can open the record. */
+  source: { type: "invoice" | "bill" | "payment" | "return" | "expense" | "ledger" | "party"; id: string | null };
+};
+
+export type BookSources = {
+  homeState: string | null;
+  parties: ReadonlyArray<{ id: string; name: string; opening: number }>;
+  invoices: ReadonlyArray<{ id: string; no: string; date: string; party: string; taxable: number; cgst: number; sgst: number; igst: number; total: number }>;
+  bills: ReadonlyArray<{ id: string; no: string; supplierBillNo: string | null; date: string; party: string; partyState: string | null; taxable: number; tax: number; total: number }>;
+  payments: ReadonlyArray<{ id: string; direction: string; date: string; party: string; amount: number; method: string; docNo: string | null; reference: string | null }>;
+  notes: ReadonlyArray<{ id: string; no: string; kind: "Credit Note" | "Debit Note"; date: string; party: string; against: string | null; taxable: number; cgst: number; sgst: number; igst: number; total: number }>;
+  expenses: ReadonlyArray<{ id: string; date: string; category: string; description: string | null; vendor: string | null; amount: number; gst: number; method: string }>;
+  entries: ReadonlyArray<{ id: string; date: string; party: string; type: string; category: string; amount: number; refNo: string | null; settledOn: string | null; settleMethod: string | null }>;
+};
+
+/** Party opening balances sit before any real date. */
+export const BOOKS_EPOCH = "1900-01-01";
+
+const cashOrBank = (method: string | null | undefined): BookAccountKey => (method === "cash" ? "cash" : "bank");
+
+function bookVoucher(v: Omit<BookVoucher, "lines" | "amount"> & { lines: BookLine[] }): BookVoucher | null {
+  const lines = v.lines.map((l) => ({ ...l, dr: round2(l.dr), cr: round2(l.cr) })).filter((l) => Math.abs(l.dr) >= 0.005 || Math.abs(l.cr) >= 0.005);
+  if (!lines.length) return null;
+  const amount = round2(lines.reduce((s, l) => s + l.dr, 0));
+  return { ...v, amount, lines };
+}
+
+/** Taxable + taxes + any rounding, posted so every voucher balances exactly. */
+function taxedLines(goods: BookAccountKey, taxes: ReadonlyArray<[BookAccountKey, number]>, taxable: number, total: number, side: "dr" | "cr"): BookLine[] {
+  const taxSum = taxes.reduce((s, [, a]) => s + a, 0);
+  const roundOff = round2(total - taxable - taxSum);
+  const put = (account: BookAccountKey, amount: number): BookLine => (side === "dr" ? { account, dr: amount, cr: 0 } : { account, dr: 0, cr: amount });
+  const lines = [put(goods, taxable), ...taxes.map(([a, amt]) => put(a, amt))];
+  if (Math.abs(roundOff) >= 0.005) lines.push(side === "dr" ? { account: "roundOff", dr: roundOff, cr: 0 } : { account: "roundOff", dr: -roundOff, cr: 0 });
+  return lines;
+}
+
+/**
+ * Every IMS record as a balanced voucher. Payments go to Cash when paid in cash, otherwise to Bank.
+ * Manual ledger entries post against a suspense account (opening entries against capital) because
+ * IMS doesn't know what the money was for.
+ */
+export function buildBookVouchers(src: BookSources): BookVoucher[] {
+  const out: Array<BookVoucher | null> = [];
+  for (const p of src.parties) {
+    const amt = round2(p.opening);
+    if (Math.abs(amt) < 0.005) continue;
+    out.push(
+      bookVoucher({
+        date: BOOKS_EPOCH,
+        type: "Opening",
+        ref: null,
+        party: p.name,
+        narration: "Opening balance",
+        source: { type: "party", id: p.id },
+        lines: amt > 0 ? [{ account: "debtors", dr: amt, cr: 0 }, { account: "capital", dr: 0, cr: amt }] : [{ account: "capital", dr: -amt, cr: 0 }, { account: "creditors", dr: 0, cr: -amt }],
+      }),
+    );
+  }
+  for (const i of src.invoices) {
+    out.push(
+      bookVoucher({
+        date: i.date,
+        type: "Sales",
+        ref: i.no,
+        party: i.party,
+        narration: `Sales invoice ${i.no}`,
+        source: { type: "invoice", id: i.id },
+        lines: [{ account: "debtors", dr: i.total, cr: 0 }, ...taxedLines("sales", [["outputCgst", i.cgst], ["outputSgst", i.sgst], ["outputIgst", i.igst]], i.taxable, i.total, "cr")],
+      }),
+    );
+  }
+  for (const b of src.bills) {
+    const intra = isIntraState(src.homeState, b.partyState);
+    const cgst = intra ? round2(b.tax / 2) : 0;
+    const sgst = intra ? round2(b.tax - cgst) : 0;
+    const igst = intra ? 0 : round2(b.tax);
+    out.push(
+      bookVoucher({
+        date: b.date,
+        type: "Purchase",
+        ref: b.no,
+        party: b.party,
+        narration: `Purchase bill ${b.no}${b.supplierBillNo ? ` (supplier invoice ${b.supplierBillNo})` : ""}`,
+        source: { type: "bill", id: b.id },
+        lines: [...taxedLines("purchases", [["inputCgst", cgst], ["inputSgst", sgst], ["inputIgst", igst]], b.taxable, b.total, "dr"), { account: "creditors", dr: 0, cr: b.total }],
+      }),
+    );
+  }
+  for (const p of src.payments) {
+    const amt = round2(p.amount);
+    const receipt = p.direction === "in";
+    out.push(
+      bookVoucher({
+        date: p.date,
+        type: receipt ? "Receipt" : "Payment",
+        ref: p.reference || p.docNo,
+        party: p.party,
+        narration: `${receipt ? "Received" : "Paid"}${p.docNo ? ` against ${p.docNo}` : " on account"} (${p.method.toUpperCase()})`,
+        source: { type: "payment", id: p.id },
+        lines: receipt ? [{ account: cashOrBank(p.method), dr: amt, cr: 0 }, { account: "debtors", dr: 0, cr: amt }] : [{ account: "creditors", dr: amt, cr: 0 }, { account: cashOrBank(p.method), dr: 0, cr: amt }],
+      }),
+    );
+  }
+  for (const n of src.notes) {
+    const credit = n.kind === "Credit Note";
+    out.push(
+      bookVoucher({
+        date: n.date,
+        type: credit ? "Credit note" : "Debit note",
+        ref: n.no,
+        party: n.party,
+        narration: `${credit ? "Credit note — customer return" : "Debit note — return to supplier"}${n.against ? ` against ${n.against}` : ""}`,
+        source: { type: "return", id: n.id },
+        lines: credit
+          ? [...taxedLines("salesReturns", [["outputCgst", n.cgst], ["outputSgst", n.sgst], ["outputIgst", n.igst]], n.taxable, n.total, "dr"), { account: "debtors", dr: 0, cr: n.total }]
+          : [{ account: "creditors", dr: n.total, cr: 0 }, ...taxedLines("purchaseReturns", [["inputCgst", n.cgst], ["inputSgst", n.sgst], ["inputIgst", n.igst]], n.taxable, n.total, "cr")],
+      }),
+    );
+  }
+  for (const e of src.expenses) {
+    const gst = round2(Math.min(Math.max(0, e.gst), e.amount));
+    out.push(
+      bookVoucher({
+        date: e.date,
+        type: "Expense",
+        ref: null,
+        party: e.vendor,
+        narration: `${e.category}${e.description ? ` — ${e.description}` : ""}`,
+        source: { type: "expense", id: e.id },
+        lines: [
+          { account: `exp:${e.category.trim() || "Other expenses"}`, dr: e.amount - gst, cr: 0 },
+          { account: "inputGstExpenses", dr: gst, cr: 0 },
+          { account: cashOrBank(e.method), dr: 0, cr: e.amount },
+        ],
+      }),
+    );
+  }
+  for (const e of src.entries) {
+    const amt = round2(e.amount);
+    const theyOwe = e.type === "credit";
+    const counter: BookAccountKey = e.category === "opening" ? "capital" : "suspense";
+    out.push(
+      bookVoucher({
+        date: e.date,
+        type: "Journal",
+        ref: e.refNo,
+        party: e.party,
+        narration: `Manual ${theyOwe ? "credit (they owe you)" : "debit (you owe them)"} — ${e.category.replace(/_/g, " ")}`,
+        source: { type: "ledger", id: e.id },
+        lines: theyOwe ? [{ account: "debtors", dr: amt, cr: 0 }, { account: counter, dr: 0, cr: amt }] : [{ account: counter, dr: amt, cr: 0 }, { account: "creditors", dr: 0, cr: amt }],
+      }),
+    );
+    if (e.settledOn) {
+      out.push(
+        bookVoucher({
+          date: e.settledOn,
+          type: theyOwe ? "Receipt" : "Payment",
+          ref: e.refNo,
+          party: e.party,
+          narration: `Settled manual ${theyOwe ? "credit" : "debit"} entry (${(e.settleMethod ?? "cash").toUpperCase()})`,
+          source: { type: "ledger", id: e.id },
+          lines: theyOwe ? [{ account: cashOrBank(e.settleMethod ?? "cash"), dr: amt, cr: 0 }, { account: "debtors", dr: 0, cr: amt }] : [{ account: "creditors", dr: amt, cr: 0 }, { account: cashOrBank(e.settleMethod ?? "cash"), dr: 0, cr: amt }],
+        }),
+      );
+    }
+  }
+  const order: Record<BookVoucherType, number> = { Opening: 0, Sales: 1, Purchase: 1, "Credit note": 2, "Debit note": 2, Journal: 2, Expense: 3, Receipt: 4, Payment: 4 };
+  return out.filter((v): v is BookVoucher => v !== null).sort((a, b) => (a.date === b.date ? order[a.type] - order[b.type] : a.date < b.date ? -1 : 1));
+}
+
+export type TrialBalanceRow = { account: BookAccountKey; name: string; group: string; type: BookAccountType; dr: number; cr: number };
+export type StatementRow = { name: string; amount: number; account?: BookAccountKey };
+
+export type BookStatements = {
+  range: { from: string; to: string };
+  trialBalance: { rows: TrialBalanceRow[]; dr: number; cr: number; difference: number };
+  profitLoss: {
+    sales: number;
+    salesReturns: number;
+    netSales: number;
+    openingStock: number;
+    purchases: number;
+    purchaseReturns: number;
+    netPurchases: number;
+    closingStock: number;
+    cogs: number;
+    grossProfit: number;
+    expenses: StatementRow[];
+    totalExpenses: number;
+    netProfit: number;
+  };
+  balanceSheet: { assets: StatementRow[]; liabilities: StatementRow[]; totalAssets: number; totalLiabilities: number; difference: number };
+};
+
+const TYPE_ORDER: Record<BookAccountType, number> = { asset: 0, liability: 1, income: 2, expense: 3 };
+
+/**
+ * Statements for `from`..`to`. Income and expenses before `from` are carried into capital
+ * (profit brought forward); stock uses the valuation passed in, not the purchase postings.
+ */
+export function bookStatements(vouchers: ReadonlyArray<BookVoucher>, opts: { from: string; to: string; openingStock: number; closingStock: number }): BookStatements {
+  const bal = new Map<BookAccountKey, { dr: number; cr: number }>();
+  const add = (account: BookAccountKey, dr: number, cr: number) => {
+    const b = bal.get(account) ?? { dr: 0, cr: 0 };
+    b.dr += dr;
+    b.cr += cr;
+    bal.set(account, b);
+  };
+  for (const v of vouchers) {
+    if (v.date > opts.to) continue;
+    for (const l of v.lines) {
+      const t = bookAccount(l.account).type;
+      const pl = t === "income" || t === "expense";
+      add(pl && v.date < opts.from ? "capital" : l.account, l.dr, l.cr);
+    }
+  }
+  const openingStock = round2(Math.max(0, opts.openingStock));
+  const closingStock = round2(Math.max(0, opts.closingStock));
+  if (openingStock) {
+    add("stock", openingStock, 0);
+    add("capital", 0, openingStock);
+  }
+  const net = (a: BookAccountKey) => {
+    const b = bal.get(a);
+    return b ? round2(b.dr - b.cr) : 0;
+  };
+
+  const tbRows: TrialBalanceRow[] = [...bal.keys()]
+    .map((account) => {
+      const n = net(account);
+      const meta = bookAccount(account);
+      return { account, name: meta.name, group: meta.group, type: meta.type, dr: n > 0 ? n : 0, cr: n < 0 ? -n : 0 };
+    })
+    .filter((r) => r.dr >= 0.005 || r.cr >= 0.005)
+    .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type] || a.group.localeCompare(b.group) || a.name.localeCompare(b.name));
+  const tbDr = round2(tbRows.reduce((s, r) => s + r.dr, 0));
+  const tbCr = round2(tbRows.reduce((s, r) => s + r.cr, 0));
+
+  const sales = round2(-net("sales"));
+  const salesReturns = round2(net("salesReturns"));
+  const purchases = round2(net("purchases"));
+  const purchaseReturns = round2(-net("purchaseReturns"));
+  const netSales = round2(sales - salesReturns);
+  const netPurchases = round2(purchases - purchaseReturns);
+  const cogs = round2(openingStock + netPurchases - closingStock);
+  const grossProfit = round2(netSales - cogs);
+  const expenses: StatementRow[] = [...bal.keys()]
+    .filter((a) => a.startsWith("exp:") || a === "roundOff")
+    .map((a) => ({ account: a, name: bookAccount(a).name, amount: net(a) }))
+    .filter((r) => Math.abs(r.amount) >= 0.005)
+    .sort((a, b) => b.amount - a.amount);
+  const totalExpenses = round2(expenses.reduce((s, r) => s + r.amount, 0));
+  const netProfit = round2(grossProfit - totalExpenses);
+
+  const inputGst = round2(net("inputCgst") + net("inputSgst") + net("inputIgst") + net("inputGstExpenses"));
+  const outputGst = round2(-(net("outputCgst") + net("outputSgst") + net("outputIgst")));
+  const assets: StatementRow[] = [
+    { account: "cash", name: BOOK_ACCOUNTS.cash.name, amount: net("cash") },
+    { account: "bank", name: BOOK_ACCOUNTS.bank.name, amount: net("bank") },
+    { account: "debtors", name: BOOK_ACCOUNTS.debtors.name, amount: net("debtors") },
+    { name: "Closing stock", amount: closingStock },
+    { name: "GST input credit", amount: inputGst },
+  ];
+  const liabilities: StatementRow[] = [
+    { account: "creditors", name: BOOK_ACCOUNTS.creditors.name, amount: round2(-net("creditors")) },
+    { name: "GST output payable", amount: outputGst },
+    { account: "suspense", name: BOOK_ACCOUNTS.suspense.name, amount: round2(-net("suspense")) },
+    { account: "capital", name: BOOK_ACCOUNTS.capital.name, amount: round2(-net("capital")) },
+    { name: netProfit >= 0 ? "Profit for the period" : "Loss for the period", amount: netProfit },
+  ];
+  const totalAssets = round2(assets.reduce((s, r) => s + r.amount, 0));
+  const totalLiabilities = round2(liabilities.reduce((s, r) => s + r.amount, 0));
+  return {
+    range: { from: opts.from, to: opts.to },
+    trialBalance: { rows: tbRows, dr: tbDr, cr: tbCr, difference: round2(tbDr - tbCr) },
+    profitLoss: { sales, salesReturns, netSales, openingStock, purchases, purchaseReturns, netPurchases, closingStock, cogs, grossProfit, expenses, totalExpenses, netProfit },
+    balanceSheet: {
+      assets: assets.filter((r) => Math.abs(r.amount) >= 0.005 || r.name === "Closing stock"),
+      liabilities: liabilities.filter((r) => Math.abs(r.amount) >= 0.005 || r.account === "capital"),
+      totalAssets,
+      totalLiabilities,
+      difference: round2(totalAssets - totalLiabilities),
+    },
+  };
+}
+
+/**
+ * A GST-inclusive note amount split back into taxable value and tax, using each line's GST rate.
+ * Line amounts are scaled so they add up to the taxable value exactly.
+ */
+export function splitInclusiveNote(
+  input: ReadonlyArray<ImsLineInput>,
+  amount: number,
+  intraState: boolean,
+): { lines: Array<{ itemId: string | null; name: string; unit: string; qty: number; amount: number }>; taxable: number; cgst: number; sgst: number; igst: number; total: number } {
+  const total = round2(Math.max(0, num(amount)));
+  const totals = computeTotals(input, intraState);
+  const gross = round2(totals.taxable + totals.taxTotal);
+  const factor = gross > 0 ? total / gross : 0;
+  const tax = gross > 0 ? round2(totals.taxTotal * factor) : 0;
+  const cgst = intraState ? round2(tax / 2) : 0;
+  const sgst = intraState ? round2(tax - cgst) : 0;
+  const igst = intraState ? 0 : tax;
+  const taxable = round2(total - tax);
+  const lines = totals.lines.map((l) => ({ itemId: l.itemId ?? null, name: l.name, unit: l.unit || "pcs", qty: l.qty, amount: round2(l.taxable * factor) }));
+  if (lines.length) {
+    const drift = round2(taxable - lines.reduce((s, l) => s + l.amount, 0));
+    lines[lines.length - 1].amount = round2(lines[lines.length - 1].amount + drift);
+  }
+  return { lines, taxable, cgst, sgst, igst, total };
+}

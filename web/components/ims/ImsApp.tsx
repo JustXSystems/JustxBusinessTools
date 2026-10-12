@@ -27,8 +27,10 @@ import {
 } from "@/components/bos";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import { ims, ImsApiError, type ImsModuleKey, type ImsNotification, type ImsSearchResult, type ImsSession, type ImsSettings } from "@/lib/ims/api";
+import { isAssistantPage } from "@/lib/ims/assistant";
 import { initialsOf, timeAgo } from "@/lib/ims/format";
 import { rememberModule } from "@/lib/ims/recent";
+import { PageAskAi } from "./AskAi";
 import { ErrorBlock, ImsAppProvider, LoadingBlock, type ImsAppContextValue, type ImsAppMode } from "./core";
 import { MODULE_KEYS, moduleDef, visibleModules } from "./modules";
 
@@ -143,6 +145,31 @@ function SearchDialog({ open, onClose, onPick }: { open: boolean; onClose: () =>
   );
 }
 
+const MOBILE_NAV: ReadonlyArray<{ key: ImsModuleKey; label: string }> = [
+  { key: "dashboard", label: "Home" },
+  { key: "stockin", label: "Stock In" },
+  { key: "stockout", label: "Stock Out" },
+  { key: "stock", label: "Stock" },
+  { key: "more", label: "More" },
+];
+
+function MobileNav({ available, active, onSelect }: { available: ReadonlySet<ImsModuleKey>; active: ImsModuleKey; onSelect: (key: ImsModuleKey) => void }) {
+  const items = MOBILE_NAV.filter((n) => available.has(n.key));
+  if (items.length < 2) return null;
+  return (
+    <nav className="ims-mnav" aria-label="IMS quick navigation">
+      {items.map((n) => (
+        <button key={n.key} type="button" className={`ims-mnav-btn${n.key === active ? " is-active" : ""}`} aria-current={n.key === active ? "page" : undefined} onClick={() => onSelect(n.key)}>
+          <span className="ims-mnav-ic" aria-hidden="true">
+            {moduleDef(n.key)?.icon}
+          </span>
+          <span className="ims-mnav-label">{n.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mode: ImsAppMode; onSignOut?: () => void }) {
   const logoSrc = publicAssetUrl(IMS_LOGO);
   const { theme, setTheme, toggleTheme } = useBosTheme();
@@ -152,6 +179,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
   const [notes, setNotes] = useState<ImsNotification[]>([]);
   const [notesTick, setNotesTick] = useState(0);
 
@@ -159,6 +187,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
 
   const modules = useMemo(() => visibleModules(session), [session]);
   const current = modules.find((x) => x.key === nav.module) ?? modules[0];
+  const moduleKeys = useMemo(() => new Set(modules.map((x) => x.key)), [modules]);
   const perms = useMemo(() => new Set(session.access.perms), [session.access.perms]);
 
   useEffect(() => {
@@ -181,6 +210,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
 
   const navigate = useCallback((module: ImsModuleKey, intent?: string) => {
     setNav((n) => ({ module, intent: intent ? { module, value: intent } : null, seq: intent ? n.seq + 1 : n.seq }));
+    setAskOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
@@ -203,6 +233,16 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
     [session, mode, perms, version, invalidate, navigate, nav, current.key, notes],
   );
 
+  const askPage = isAssistantPage(current.key) ? current.key : null;
+  const navBadges = useMemo(() => {
+    const m = new Map<ImsModuleKey, { count: number; tone: "coral" | "amber"; label: string }>();
+    for (const n of notes) {
+      const prev = m.get(n.module);
+      const count = (prev?.count ?? 0) + 1;
+      m.set(n.module, { count, tone: prev?.tone === "coral" || n.tone === "coral" ? "coral" : "amber", label: `${count} alert${count === 1 ? "" : "s"}` });
+    }
+    return m;
+  }, [notes]);
   const go = (module: ImsModuleKey, intent?: string) => () => navigate(module, intent);
   const can = (p: Parameters<ImsAppContextValue["can"]>[0]) => perms.has(p);
   const commands: BosCommand[] = [
@@ -214,6 +254,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
     ...(can("receivables") ? [{ id: "q-pay", section: "Quick actions", label: "Receive a payment", icon: "💰", keywords: "collection receipt", onSelect: go("receivables", "pay") }] : []),
     ...(modules.some((x) => x.key === "scanner") ? [{ id: "q-scan", section: "Quick actions", label: "Scan stock (QR / barcode)", icon: "⌗", onSelect: go("scanner") }] : []),
     { id: "q-search", section: "Quick actions", label: "Search items, parties & documents", icon: "⌕", keywords: "find lookup", onSelect: () => setSearchOpen(true) },
+    ...(askPage ? [{ id: "q-ask", section: "Quick actions", label: `Ask AI about ${current.label}`, icon: "✦", keywords: "assistant question gemini help", onSelect: () => setAskOpen(true) }] : []),
     ...modules.map((x) => ({ id: `m-${x.key}`, section: x.section, label: x.label, icon: x.icon, keywords: `${x.desc} ${x.keywords ?? ""}`, onSelect: go(x.key) })),
     { id: "theme", section: "Preferences", label: `Switch to ${theme === "dark" ? "light" : "dark"} mode`, icon: "◐", onSelect: toggleTheme },
     ...(mode === "standalone" ? [{ id: "jbt", section: "Preferences", label: "Open Justx Business Tools", icon: "⤺", onSelect: () => window.location.assign(withBasePath("/")) }] : []),
@@ -240,6 +281,11 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
                 if (e.key === "Enter" || e.key === " ") setSearchOpen(true);
               }}
             />
+            {askPage ? (
+              <Button size="sm" variant="secondary" icon="sparkle" className="ims-ask-btn" onClick={() => setAskOpen(true)} aria-label={`Ask AI about ${current.label}`}>
+                <span className="ims-topbar-label">Ask AI</span>
+              </Button>
+            ) : null}
             <ThemeToggle theme={theme} onChange={setTheme} />
             <span className="ims-bell">
               <IconButton icon="bell" aria-label={`Notifications${notes.length ? ` (${notes.length})` : ""}`} onClick={() => setNotesOpen(true)} />
@@ -262,7 +308,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
         <div className="bos-wrap" style={{ paddingTop: 20 }}>
           <AppShell
             brand={<NavBrand name="IMS — Dealer" mark="I" />}
-            items={modules.map((x) => ({ key: x.key, label: x.label, icon: x.icon, section: x.section }))}
+            items={modules.map((x) => ({ key: x.key, label: x.label, icon: x.icon, section: x.section, badge: navBadges.get(x.key) }))}
             active={current.key}
             onSelect={(k) => navigate(k)}
             onSearch={() => setPaletteOpen(true)}
@@ -288,7 +334,9 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
           </div>
         </div>
 
+        {mode === "standalone" ? <MobileNav available={moduleKeys} active={current.key} onSelect={(k) => navigate(k)} /> : null}
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} placeholder="Type a command or module…" />
+        {askPage ? <PageAskAi key={askPage} page={askPage} open={askOpen} onClose={() => setAskOpen(false)} /> : null}
         <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} onPick={(r) => navigate(r.module, `open:${r.open}`)} />
         <NotificationsDialog
           open={notesOpen}

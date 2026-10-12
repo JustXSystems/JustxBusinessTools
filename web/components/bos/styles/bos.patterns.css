@@ -180,6 +180,8 @@
 .bos .bos-nav-ic svg { width: 13px; height: 13px; }
 .bos .bos-nav-item:not(.is-active) .bos-nav-ic svg { color: var(--bos-text-faint); }
 .bos .bos-nav-item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bos .bos-nav-badge { flex-shrink: 0; min-width: 18px; height: 18px; padding: 0 6px; border-radius: 999px; background: var(--bos-coral); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 18px; text-align: center; }
+.bos .bos-nav-badge.is-amber { background: var(--bos-amber); }
 .bos .bos-nav-foot { margin-top: auto; padding-top: 16px; }
 .bos .bos-nav-foot .bos-time-pill { width: 100%; justify-content: center; font-size: 10.5px; padding: 7px 10px; }
 .bos .bos-shell-main { background: var(--bos-bg); padding: var(--bos-s-6); overflow: auto; min-width: 0; }

@@ -60,9 +60,9 @@ every permission. Non-GET requests need a write role.
 | Operations | `field` | Check-in/out with GPS, live pings, tasks, travel distance |
 | Insights | `reports` | Report builder, saved reports with submit/approve, scheduled sends |
 | | `gst` | GSTR summary, HSN summary, item GST sanity check |
-| Auditing | `audit` | Issues, ledgers, GST reconciliation, bank import & matching, documents |
+| Auditing | `audit` | Issues, ledgers, financial statements (trial balance, P&L, balance sheet, day book built as double-entry vouchers from IMS records), GST reconciliation incl. GSTR-2B upload matching, document trail per invoice / bill / PO / payment / expense, bank import & matching, documents, Ask Audit AI |
 | | `excise` | Liquor excise register (shown when the business type needs it) |
-| System | `integrations` | Tally (XML export / sync) and POS connectors with sync log |
+| System | `integrations` | Tally (XML export / sync: masters, sales, purchases, credit / debit notes from returns, receipts / payments against Cash or Bank Account) and POS connectors with sync log |
 | | `connect` | Import from other JBT tools (see below) |
 | | `helpdesk` | Support tickets and FAQ |
 | | `settings` | Business, taxonomy, reminders, roles matrix, team |
@@ -70,6 +70,45 @@ every permission. Non-GET requests need a write role.
 Stock only changes through movements (`ims_movements`), posted inside a
 transaction with the item row locked. Document numbers come from
 `ims_sequences` per fiscal year, e.g. `PO/26-27/0007`.
+
+## Document trail and GSTR-2B
+
+Both features are read-only and add no tables.
+
+- **Document trail.** `GET /api/ims/audit/trace/:type/:id` covers invoices,
+  bills, POs, payments and expenses. It follows the record through each step
+  (source → order → goods receipt → bill / invoice → approval → payment →
+  bank match → returns → GST → documents → Tally). Each step is marked in
+  order, needs a look, problem, or not applicable. The response also includes
+  the record's activity and its audit findings. Open it with **Trace** on
+  Findings, Ask Audit AI or GSTR-2B rows.
+- **GSTR-2B.** Auditing → GST → GSTR-2B reconciliation. The browser reads the
+  portal's JSON, its Excel (B2B sheet) or a CSV, then posts one row per
+  invoice to `POST /api/ims/audit/gstr2b`. Rows are matched to bills by
+  supplier GSTIN and normalised invoice number. When the number doesn't match,
+  matching falls back to GSTIN + amount + date within 5 days. Results:
+  matched, differs, not in 2B (credit at risk) and not in books. Nothing is
+  stored.
+
+The sidebar shows a count on each module that has open alerts.
+
+## Ask AI
+
+Read-only. The topbar **Ask AI** button appears on dashboard, stock, lowstock,
+items, history, purchase, parties, receivables, payables and reports.
+`POST /api/ims/assistant/ask` answers the suggested questions from live tenant
+data and returns a compact data summary. Receivables, payables and PO data are
+included only when the user's role has that permission.
+
+In **Auditing / CA → Ask Audit AI**, `GET /api/ims/audit/ask?q=` maps the
+question (category, amount, age, document number) onto the audit rule
+engine's open findings, with links to each record.
+
+Gemini is optional and per user. The user's own key is stored only in that
+browser's localStorage (`justx.ims.gemini.v1`). The browser calls
+`generativelanguage.googleapis.com` directly with the question and the data
+summary. The server never sees or stores the key. Without a key, only the
+built-in answers are used.
 
 ## Working with other JBT tools
 

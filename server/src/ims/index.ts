@@ -1,4 +1,5 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
+import { registerAssistant } from "./assistant.js";
 import { registerAudit } from "./audit.js";
 import { registerConnect } from "./connect.js";
 import type { ImsDeps } from "./context.js";
@@ -87,6 +88,7 @@ export function createImsRouter({ db, host, sources = [], catalogs = [] }: Creat
   registerIntegrations(router, deps);
   registerExcise(router, deps);
   registerAudit(router, deps);
+  registerAssistant(router, deps);
   registerSupport(router, deps);
   registerConnect(router, deps);
 

@@ -206,6 +206,8 @@ function TallyTab({ data }: { data: IntegrationsOverview }) {
                   ["stockItems", "Stock items", "Items with unit, HSN and GST rate, grouped by category."],
                   ["salesVouchers", "Sales vouchers", "Issued invoices with CGST / SGST / IGST split and inventory lines."],
                   ["purchaseVouchers", "Purchase vouchers", "Approved supplier bills with input tax."],
+                  ["notes", "Credit / debit notes", "Customer returns as Credit Notes and supplier returns as Debit Notes, reversing GST at each item's rate."],
+                  ["receipts", "Receipts & payments", "Customer receipts and supplier payments against Cash (cash) or Bank Account (UPI, card, cheque, transfer)."],
                 ] as const
               ).map(([key, label, hint]) => (
                 <label key={key} className="ims-row" style={{ alignItems: "flex-start", gap: 10 }}>
@@ -336,6 +338,8 @@ function XmlExport({ counts }: { counts: IntegrationsOverview["counts"] }) {
             { value: "masters", label: "Masters (ledgers + items)" },
             { value: "sales", label: "Sales vouchers" },
             { value: "purchases", label: "Purchase vouchers" },
+            { value: "notes", label: "Credit / debit notes" },
+            { value: "receipts", label: "Receipts & payments" },
             { value: "all", label: "Everything" },
           ]}
         />

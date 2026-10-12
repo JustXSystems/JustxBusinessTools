@@ -1,6 +1,7 @@
 import type { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { loadReturnNotes } from "./books.js";
 import { insertImsInvoice } from "./connect.js";
 import { actorName, actorOf, isoDate, parse, qint, qstr, recordEvent, requireAnyPerm, requirePerm, type ImsDeps } from "./context.js";
 import { exec, isoOf, json, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
@@ -18,6 +19,7 @@ import {
   posExclusiveRate,
   round2,
   round3,
+  tallyCashVoucherXml,
   tallyEnvelope,
   tallyLedgerXml,
   tallyPingEnvelope,
@@ -27,6 +29,7 @@ import {
   tallyVoucherXml,
   todayISO,
   type ImsLineInput,
+  type TallyCashVoucher,
   type TallyImportResult,
   type TallyVoucher,
 } from "./logic.js";
@@ -208,6 +211,7 @@ async function buildMasters(db: Queryable, tenantId: number, settings: ImsSettin
       { name: TALLY_LEDGERS.inputSgst, parent: "Duties & Taxes", taxType: "SGST" as const },
       { name: TALLY_LEDGERS.inputIgst, parent: "Duties & Taxes", taxType: "IGST" as const },
       { name: TALLY_LEDGERS.roundOff, parent: "Indirect Expenses" },
+      { name: TALLY_LEDGERS.bank, parent: "Bank Accounts" },
     ];
     for (const l of fixed) messages.push(tallyLedgerXml(l));
     const parties = await rows<{ name: string; kind: string; gstin: string | null; state: string | null; address: string | null; city: string | null; mobile: string | null; email: string | null; opening_balance: string }>(
@@ -374,6 +378,65 @@ async function buildPurchaseVouchers(db: Queryable, tenantId: number, settings: 
       taxable: money(b.subtotal),
     });
   });
+}
+
+/** Returns settled as a credit note: customer → Credit Note, supplier → Debit Note, GST backed out at each item's rate. */
+async function buildNoteVouchers(db: Queryable, tenantId: number, settings: ImsSettings, range: VoucherSource): Promise<TallyVoucher[]> {
+  const notes = await loadReturnNotes(db, tenantId, settings, range);
+  return notes.map((n) => ({
+    kind: n.kind,
+    number: n.no,
+    date: n.date,
+    partyName: n.party,
+    partyGstin: n.partyGstin,
+    placeOfSupply: n.partyState,
+    reference: n.against,
+    narration: n.narration,
+    lines: n.lines.map((l) => ({ name: l.name, unit: l.unit, qty: l.qty, amount: l.amount, stock: l.stock })),
+    taxable: n.taxable,
+    cgst: n.cgst,
+    sgst: n.sgst,
+    igst: n.igst,
+    roundOff: 0,
+    total: n.total,
+  }));
+}
+
+/** Money in becomes a Receipt, money out a Payment; cash goes to Tally's Cash ledger, everything else to the bank ledger. */
+async function buildCashVouchers(db: Queryable, tenantId: number, range: VoucherSource): Promise<TallyCashVoucher[]> {
+  const list = await rows<{
+    id: string;
+    direction: string;
+    party_name: string;
+    doc_no: string | null;
+    amount: string;
+    method: string;
+    reference: string | null;
+    paid_on: string;
+    notes: string | null;
+  }>(
+    db,
+    `SELECT id, direction, party_name, doc_no, amount, method, reference, paid_on, notes
+     FROM ims_payments WHERE tenant_id = :tenantId AND paid_on BETWEEN :from AND :to ${range.since ? "AND created_at >= :since" : ""}
+     ORDER BY paid_on, created_at LIMIT 5000`,
+    { tenantId, from: range.from, to: range.to, since: range.since ?? null },
+  );
+  return list
+    .filter((p) => money(p.amount) > 0)
+    .map<TallyCashVoucher>((p) => {
+      const receipt = p.direction === "in";
+      const narration = [p.doc_no ? `${receipt ? "Received against" : "Paid against"} ${p.doc_no}` : "On account", p.method ? `via ${p.method}` : "", p.notes ?? ""].filter(Boolean).join(" · ");
+      return {
+        kind: receipt ? "Receipt" : "Payment",
+        number: `${receipt ? "R" : "P"}-${p.id.replace(/-/g, "").slice(0, 8).toUpperCase()}`,
+        date: isoOf(p.paid_on),
+        partyName: p.party_name,
+        amount: money(p.amount),
+        method: p.method,
+        reference: p.reference,
+        narration,
+      };
+    });
 }
 
 /* ---------- Talking to Tally ---------- */
@@ -579,7 +642,7 @@ async function runPosSale(deps: ImsDeps, actor: ImsActor, input: Parameters<type
 /* ---------- Routes ---------- */
 
 const TestInput = TallyConfig.pick({ host: true, port: true, company: true }).partial();
-const ExportType = z.enum(["masters", "sales", "purchases", "all"]);
+const ExportType = z.enum(["masters", "sales", "purchases", "notes", "receipts", "all"]);
 
 export function registerIntegrations(router: Router, deps: ImsDeps): void {
   router.get("/integrations", async (_req, res) => {
@@ -715,7 +778,15 @@ export function registerIntegrations(router: Router, deps: ImsDeps): void {
     }
     if (reachable && view.sync.purchaseVouchers) {
       const v = await buildPurchaseVouchers(deps.db, actor.tenantId, settings, { ...fy, since });
-      await push("purchases", "Vouchers", v.map(tallyVoucherXml), v.length);
+      reachable = await push("purchases", "Vouchers", v.map(tallyVoucherXml), v.length);
+    }
+    if (reachable && view.sync.notes) {
+      const v = await buildNoteVouchers(deps.db, actor.tenantId, settings, { ...fy, since });
+      reachable = await push("notes", "Vouchers", v.map(tallyVoucherXml), v.length);
+    }
+    if (reachable && view.sync.receipts) {
+      const v = await buildCashVouchers(deps.db, actor.tenantId, { ...fy, since });
+      await push("receipts", "Vouchers", v.map(tallyCashVoucherXml), v.length);
     }
     const overall: SyncStatus = steps.every((s) => s.status === "success") ? "success" : steps.some((s) => s.status !== "failed") ? "partial" : "failed";
     await touchIntegration(deps.db, actor.tenantId, "tally", overall);
@@ -735,7 +806,7 @@ export function registerIntegrations(router: Router, deps: ImsDeps): void {
     const actor = actorOf(res);
     requireAnyPerm(res, ["integrations", "audit"]);
     const typeParsed = ExportType.safeParse(qstr(req.query.type, 16) || "sales");
-    if (!typeParsed.success) throw badRequest("type must be masters, sales, purchases or all");
+    if (!typeParsed.success) throw badRequest("type must be masters, sales, purchases, notes, receipts or all");
     const type = typeParsed.data;
     const settings = await getSettings(deps, actor.tenantId);
     const today = todayISO();
@@ -760,6 +831,16 @@ export function registerIntegrations(router: Router, deps: ImsDeps): void {
     if (type === "purchases" || type === "all") {
       const v = await buildPurchaseVouchers(deps.db, actor.tenantId, settings, range);
       parts.push(...v.map(tallyVoucherXml));
+      records += v.length;
+    }
+    if (type === "notes" || type === "all") {
+      const v = await buildNoteVouchers(deps.db, actor.tenantId, settings, range);
+      parts.push(...v.map(tallyVoucherXml));
+      records += v.length;
+    }
+    if (type === "receipts" || type === "all") {
+      const v = await buildCashVouchers(deps.db, actor.tenantId, range);
+      parts.push(...v.map(tallyCashVoucherXml));
       records += v.length;
     }
     const xml = tallyEnvelope(company, report, parts);

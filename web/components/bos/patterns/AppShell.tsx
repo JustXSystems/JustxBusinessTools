@@ -12,6 +12,8 @@ export type BosNavItem<K extends string = string> = {
   icon?: ReactNode;
   /** Group label rendered above the first item of each section. */
   section?: string;
+  /** Optional count pill after the label; hidden when 0 or absent. */
+  badge?: { count: number; tone?: "coral" | "amber"; label?: string };
 };
 
 export type BosAppShellProps<K extends string> = {
@@ -79,6 +81,11 @@ export function AppShell<K extends string>({
                 </span>
               ) : null}
               <span className="bos-nav-item-label">{item.label}</span>
+              {item.badge && item.badge.count > 0 ? (
+                <span className={cx("bos-nav-badge", item.badge.tone === "amber" && "is-amber")} aria-label={item.badge.label ?? `${item.badge.count} pending`}>
+                  {item.badge.count > 99 ? "99+" : item.badge.count}
+                </span>
+              ) : null}
             </button>
           </Fragment>
         ))}

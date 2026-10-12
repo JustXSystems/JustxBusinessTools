@@ -14,6 +14,7 @@ import {
   SYNC_TONE,
   fileSize,
   imsSystem,
+  isTraceType,
   readAsDataUrl,
   saveBlob,
   type AgingLedgerRow,
@@ -32,7 +33,12 @@ import {
   type BankImportResult,
   type BankSuggestion,
   type BankTxn,
+  type BookVoucher,
+  type BookVoucherType,
+  type BooksReport,
   type ExpenseLedgerRow,
+  type Gstr2bResult,
+  type Gstr2bStatus,
   type InventoryLedgerRow,
   type LedgerKind,
   type LedgerResponse,
@@ -41,18 +47,25 @@ import {
   type SyncLogEntry,
   type SyncStatus,
   type TallyExportType,
+  type TraceState,
+  type TraceType,
 } from "@/lib/ims/system";
+import { askGemini, auditSystem, dataPrompt, type GeminiTurn } from "@/lib/ims/assistant";
+import { readGstr2bFile } from "@/lib/ims/gstr2b";
+import { AskDialog, geminiFailNote, useGemini, type AskResult } from "../AskAi";
 import { Loaded, PageHeader, PeriodPicker, PersonAvatar, RequirePerm, Stack, SubTabs, useIms, useImsAction, useImsData } from "../core";
 import { ConfirmDialog, KeyValues, ReplyBox, Thread, ToolHead, useDebounced } from "./shared";
 
-type Tab = "overview" | "issues" | "ledgers" | "banking" | "gst" | "documents" | "queries" | "trail" | "integrations" | "access";
+type Tab = "overview" | "issues" | "ledgers" | "statements" | "banking" | "gst" | "documents" | "queries" | "trail" | "integrations" | "access";
 type Opener = (type: string | null, id: string | null) => void;
+type Tracer = (type: string | null, id: string | null) => void;
 type Prefill = Partial<AuditItemInput>;
 
 const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: "overview", label: "Overview" },
   { value: "issues", label: "Findings" },
   { value: "ledgers", label: "Ledgers" },
+  { value: "statements", label: "Financial statements" },
   { value: "banking", label: "Bank reconciliation" },
   { value: "gst", label: "GST" },
   { value: "documents", label: "Documents" },
@@ -61,7 +74,7 @@ const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: "integrations", label: "Integrations" },
   { value: "access", label: "Access" },
 ];
-const PERIOD_TABS: ReadonlyArray<Tab> = ["overview", "issues", "ledgers", "gst"];
+const PERIOD_TABS: ReadonlyArray<Tab> = ["overview", "issues", "ledgers", "statements", "gst"];
 const SEVERITIES: ReadonlyArray<AuditSeverity> = ["critical", "high", "medium", "low"];
 const ITEM_STATUSES: ReadonlyArray<AuditItemStatus> = ["open", "responded", "resolved", "dismissed"];
 const AREAS = Object.keys(AUDIT_AREA_LABEL) as AuditArea[];
@@ -113,6 +126,10 @@ function entityTarget(type: string | null, id: string | null): { module: ImsModu
       return { module: "receivables" };
     case "expense":
       return { module: "closing" };
+    case "return":
+      return { module: "returns", intent: open };
+    case "ledger":
+      return { module: "ledger" };
     case "integration":
       return { module: "integrations" };
     default:
@@ -169,7 +186,12 @@ function AuditWorkspace() {
   const [category, setCategory] = useState<AuditCategory | "">("");
   const [openItem, setOpenItem] = useState<string | null>(intent?.startsWith("open:") ? intent.slice(5) : null);
   const [raising, setRaising] = useState<{ seq: number; prefill: Prefill } | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [tracing, setTracing] = useState<{ type: TraceType; id: string } | null>(null);
   const canWrite = can("audit");
+  const trace: Tracer = (type, id) => {
+    if (isTraceType(type) && id) setTracing({ type, id });
+  };
 
   const openEntity: Opener = (type, id) => {
     if (type === "bank") {
@@ -191,11 +213,16 @@ function AuditWorkspace() {
         title="Auditing / CA"
         sub="One workspace for your accountant or CA: automated checks, registers, bank reconciliation, GST, documents and queries — with a full audit trail."
         actions={
-          canWrite ? (
-            <Button variant="primary" icon="plus" onClick={() => raise({ kind: "query" })}>
-              New flag or query
+          <>
+            <Button icon="sparkle" onClick={() => setAsking(true)}>
+              Ask Audit AI
             </Button>
-          ) : null
+            {canWrite ? (
+              <Button variant="primary" icon="plus" onClick={() => raise({ kind: "query" })}>
+                New flag or query
+              </Button>
+            ) : null}
+          </>
         }
       />
       <SubTabs label="Auditor workspace" value={tab} onChange={setTab} options={TABS} />
@@ -215,15 +242,44 @@ function AuditWorkspace() {
           onTab={setTab}
         />
       ) : null}
-      {tab === "issues" ? <IssuesTab period={period} category={category} onCategory={setCategory} canWrite={canWrite} onRaise={raise} onOpenEntity={openEntity} /> : null}
+      {tab === "issues" ? <IssuesTab period={period} category={category} onCategory={setCategory} canWrite={canWrite} onRaise={raise} onOpenEntity={openEntity} onTrace={trace} /> : null}
       {tab === "ledgers" ? <LedgersTab period={period} onOpenEntity={openEntity} /> : null}
+      {tab === "statements" ? <StatementsTab period={period} onOpenEntity={openEntity} /> : null}
       {tab === "banking" ? <BankingTab onOpenEntity={openEntity} /> : null}
-      {tab === "gst" ? <GstTab period={period} /> : null}
+      {tab === "gst" ? <GstTab period={period} onTrace={trace} /> : null}
       {tab === "documents" ? <DocumentsTab onOpenEntity={openEntity} /> : null}
       {tab === "queries" ? <QueriesTab canWrite={canWrite} onOpen={setOpenItem} onNew={() => raise({ kind: "query" })} /> : null}
       {tab === "trail" ? <TrailTab onOpenEntity={openEntity} /> : null}
       {tab === "integrations" ? <IntegrationsTab period={period} /> : null}
       {tab === "access" ? <AccessTab /> : null}
+      <AuditAskAi
+        open={asking}
+        period={period}
+        onClose={() => setAsking(false)}
+        onOpenEntity={(type, id) => {
+          setAsking(false);
+          openEntity(type, id);
+        }}
+        onTrace={(type, id) => {
+          setAsking(false);
+          trace(type, id);
+        }}
+      />
+      <TraceDialog
+        target={tracing}
+        period={period}
+        canWrite={canWrite}
+        onClose={() => setTracing(null)}
+        onTrace={trace}
+        onOpenEntity={(type, id) => {
+          setTracing(null);
+          openEntity(type, id);
+        }}
+        onRaise={(p) => {
+          setTracing(null);
+          raise(p);
+        }}
+      />
       <ItemDialog id={openItem} canWrite={canWrite} onClose={() => setOpenItem(null)} onOpenEntity={openEntity} />
       <NewItemDialog
         key={raising?.seq ?? 0}
@@ -236,6 +292,379 @@ function AuditWorkspace() {
         }}
       />
     </Stack>
+  );
+}
+
+/* ---------- Document trail ---------- */
+
+const TRACE_MARK: Record<TraceState, { glyph: string; label: string }> = {
+  ok: { glyph: "✓", label: "In order" },
+  warn: { glyph: "!", label: "Needs a look" },
+  bad: { glyph: "✕", label: "Problem" },
+  na: { glyph: "–", label: "Not applicable" },
+};
+
+function TraceDialog({
+  target,
+  period,
+  canWrite,
+  onClose,
+  onTrace,
+  onOpenEntity,
+  onRaise,
+}: {
+  target: { type: TraceType; id: string } | null;
+  period: Period;
+  canWrite: boolean;
+  onClose: () => void;
+  onTrace: Tracer;
+  onOpenEntity: Opener;
+  onRaise: (p: Prefill) => void;
+}) {
+  return (
+    <Dialog open={target !== null} onClose={onClose} wide title="Document trail" description="Follows the record from order to stock, bill or invoice, payment, bank, GST and Tally." icon={{ tone: "blue", name: "layers" }}>
+      {target ? <TraceBody key={`${target.type}:${target.id}`} target={target} period={period} canWrite={canWrite} onTrace={onTrace} onOpenEntity={onOpenEntity} onRaise={onRaise} /> : null}
+    </Dialog>
+  );
+}
+
+function TraceBody({
+  target,
+  period,
+  canWrite,
+  onTrace,
+  onOpenEntity,
+  onRaise,
+}: {
+  target: { type: TraceType; id: string };
+  period: Period;
+  canWrite: boolean;
+  onTrace: Tracer;
+  onOpenEntity: Opener;
+  onRaise: (p: Prefill) => void;
+}) {
+  const state = useImsData(() => imsSystem.trace(target.type, target.id, { period }), [target.type, target.id, period]);
+  return (
+    <Loaded state={state} rows={6}>
+      {({ trace: t, findings }) => {
+        const problems = t.steps.filter((s) => s.state === "bad").length;
+        const checks = t.steps.filter((s) => s.state === "warn").length;
+        return (
+          <Stack gap={16}>
+            <div className="ims-between" style={{ flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <div className="ims-strong" style={{ fontSize: 16 }}>
+                  {t.title}
+                </div>
+                <span className="ims-sys-mini">{t.subtitle}</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {problems ? <Badge tone="coral">{plural(problems, "problem")}</Badge> : null}
+                {checks ? <Badge tone="amber">{plural(checks, "check")}</Badge> : null}
+                {!problems && !checks ? <Badge tone="emerald">All in order</Badge> : null}
+              </div>
+            </div>
+            <ol className="ims-trace" aria-label="Document trail">
+              {t.steps.map((s, i) => (
+                <li key={`${s.label}-${i}`} className={`ims-trace-step is-${s.state}`}>
+                  <span className="ims-trace-dot" aria-label={TRACE_MARK[s.state].label} title={TRACE_MARK[s.state].label}>
+                    {TRACE_MARK[s.state].glyph}
+                  </span>
+                  <div className="ims-trace-body">
+                    <span className="ims-trace-label">{s.label}</span>
+                    <span className="ims-trace-title">{s.title}</span>
+                    <span className="ims-trace-detail">{s.detail}</span>
+                  </div>
+                  {s.link ? (
+                    <Button size="sm" variant="ghost" onClick={() => (isTraceType(s.link?.type ?? null) ? onTrace(s.link?.type ?? null, s.link?.id ?? null) : onOpenEntity(s.link?.type ?? null, s.link?.id ?? null))}>
+                      {isTraceType(s.link.type) ? "Trace" : "Open"}
+                    </Button>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+            {findings.length ? (
+              <Stack gap={8}>
+                <b className="ims-strong">Audit findings on this record</b>
+                <div className="ims-sys-issues">
+                  {findings.map((i) => (
+                    <div key={i.key} className={cx("ims-sys-issue", !i.open && "is-closed")}>
+                      <Badge tone={SEVERITY_TONE[i.severity]}>{SEVERITY_LABEL[i.severity]}</Badge>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="ims-sys-issue-title">{i.title}</div>
+                        <div className="ims-sys-issue-detail">{i.detail}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Stack>
+            ) : null}
+            <Grid cols={2} min={260}>
+              <Card interactive={false}>
+                <Stack gap={8}>
+                  <b className="ims-strong">Details</b>
+                  <KeyValues rows={t.details} />
+                </Stack>
+              </Card>
+              <Card interactive={false}>
+                <Stack gap={8}>
+                  <b className="ims-strong">Activity</b>
+                  {t.events.length ? (
+                    <ul className="ims-trace-events">
+                      {t.events.slice(0, 12).map((e, i) => (
+                        <li key={i}>
+                          <span>{e.summary}</span>
+                          <small>
+                            {e.by ?? "System"} · {e.at ? timeAgo(e.at) : "—"}
+                          </small>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <span className="ims-sys-mini">No recorded activity.</span>
+                  )}
+                </Stack>
+              </Card>
+            </Grid>
+            <div className="ims-between" style={{ flexWrap: "wrap", gap: 8 }}>
+              {canWrite ? (
+                <Button
+                  icon="plus"
+                  onClick={() =>
+                    onRaise({
+                      kind: "query",
+                      title: `Query on ${t.title}`,
+                      entityType: t.type,
+                      entityId: t.id,
+                      entityLabel: t.title.slice(0, 120),
+                      area: t.type === "invoice" ? "sales" : t.type === "expense" ? "expenses" : t.type === "payment" ? "aging" : "purchases",
+                    })
+                  }
+                >
+                  Raise a query
+                </Button>
+              ) : (
+                <span />
+              )}
+              {canOpenEntity(t.type, t.id) ? (
+                <Button variant="primary" onClick={() => onOpenEntity(t.type, t.id)}>
+                  Open record
+                </Button>
+              ) : null}
+            </div>
+          </Stack>
+        );
+      }}
+    </Loaded>
+  );
+}
+
+/* ---------- GSTR-2B reconciliation ---------- */
+
+const GSTR2B_LABEL: Record<Gstr2bStatus, { label: string; tone: "emerald" | "amber" | "coral" | "blue" }> = {
+  matched: { label: "Matched", tone: "emerald" },
+  mismatch: { label: "Differs", tone: "amber" },
+  missing_2b: { label: "Not in 2B", tone: "coral" },
+  missing_books: { label: "Not in books", tone: "blue" },
+};
+
+function Gstr2bCard({ period, onTrace }: { period: Period; onTrace: Tracer }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ file: string; data: Gstr2bResult } | null>(null);
+  const [filter, setFilter] = useState<Gstr2bStatus | "">("");
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const rows = await readGstr2bFile(file);
+      if (!rows.length) throw new Error("No B2B invoices found. Use the GSTR-2B JSON or Excel download from the GST portal.");
+      setResult({ file: file.name, data: await imsSystem.gstr2b(rows, { period }) });
+      setFilter("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't read that file.");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const d = result?.data;
+  const list = d ? (filter ? d.rows.filter((r) => r.status === filter) : d.rows) : [];
+  const exportCols: ReadonlyArray<ExportColumn<Gstr2bResult["rows"][number]>> = [
+    { header: "Status", value: (r) => GSTR2B_LABEL[r.status].label },
+    { header: "Supplier GSTIN", value: (r) => r.gstin },
+    { header: "Supplier", value: (r) => r.supplier },
+    { header: "Invoice no", value: (r) => r.invoiceNo },
+    { header: "Date", value: (r) => r.date ?? "" },
+    { header: "Bill", value: (r) => r.bill?.no ?? "" },
+    { header: "GST in books", value: (r) => r.bill?.tax ?? "" },
+    { header: "GST in 2B", value: (r) => r.portal?.tax ?? "" },
+    { header: "Difference", value: (r) => r.taxDiff },
+    { header: "Note", value: (r) => r.note },
+  ];
+
+  return (
+    <Card interactive={false}>
+      <Stack gap={12}>
+        <div className="ims-between" style={{ flexWrap: "wrap", gap: 10 }}>
+          <ToolHead glyph="⇆" title="GSTR-2B reconciliation" sub="Upload the GSTR-2B JSON or Excel from the GST portal. Each supplier invoice is matched to your bills by GSTIN and invoice number (or amount and date). The file is read in your browser and nothing is saved." />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {d ? (
+              <Button size="sm" variant="ghost" icon="download" onClick={() => downloadCsv(`GSTR2B_reconciliation_${d.range.from}_${d.range.to}.csv`, d.rows, exportCols)}>
+                Export
+              </Button>
+            ) : null}
+            <Button variant="primary" icon="file" disabled={busy} onClick={() => fileRef.current?.click()}>
+              {busy ? "Matching…" : d ? "Upload another file" : "Upload GSTR-2B"}
+            </Button>
+            <input ref={fileRef} type="file" accept=".json,.xlsx,.xls,.csv" hidden onChange={(e) => void onFile(e.target.files?.[0])} />
+          </div>
+        </div>
+        {error ? <Alert tone="coral" title="Couldn't reconcile">{error}</Alert> : null}
+        {d ? (
+          <>
+            <span className="ims-sys-mini">
+              {result?.file} · bills dated {dateRange(d.range.from, d.range.to)} (and earlier bills that 2B lists)
+            </span>
+            <Grid cols={4} min={160}>
+              <KpiCard interactive={false} label="Credit in your books" value={inr(d.summary.itcBooks)} chip={{ color: "blue", glyph: "📒" }} />
+              <KpiCard interactive={false} label="Credit in GSTR-2B" value={inr(d.summary.itcPortal)} chip={{ color: "lavender", glyph: "🏛" }} />
+              <KpiCard interactive={false} label="Credit at risk" value={inr(d.summary.itcAtRisk)} valueTone={d.summary.itcAtRisk > 0 ? "coral" : "emerald"} delta="Missing from 2B or lower in 2B" deltaTone="muted" chip={{ color: "amber", glyph: "!" }} />
+              <KpiCard interactive={false} label="In 2B, not in books" value={inr(d.summary.itcNotBooked)} delta={plural(d.summary.counts.missing_books, "invoice")} deltaTone="muted" chip={{ color: "mint", glyph: "+" }} />
+            </Grid>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <FilterChip active={filter === ""} onClick={() => setFilter("")}>
+                All · {d.rows.length}
+              </FilterChip>
+              {(Object.keys(GSTR2B_LABEL) as Gstr2bStatus[]).map((s) => (
+                <FilterChip key={s} active={filter === s} onClick={() => setFilter(s)}>
+                  {GSTR2B_LABEL[s].label} · {d.summary.counts[s]}
+                </FilterChip>
+              ))}
+            </div>
+            {list.length ? (
+              <div className="ims-sys-issues">
+                {list.slice(0, 200).map((r, i) => (
+                  <div key={`${r.gstin}-${r.invoiceNo}-${r.bill?.id ?? i}`} className="ims-sys-issue">
+                    <Badge tone={GSTR2B_LABEL[r.status].tone}>{GSTR2B_LABEL[r.status].label}</Badge>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="ims-sys-issue-title">
+                        {r.supplier || r.gstin} · {r.invoiceNo}
+                      </div>
+                      <div className="ims-sys-issue-detail">{r.note}</div>
+                      <div className="ims-sys-issue-meta">
+                        <span>{r.gstin}</span>
+                        {r.date ? <span>{dateLabel(r.date)}</span> : null}
+                        {r.bill ? <span>Books GST {inr(r.bill.tax)}</span> : null}
+                        {r.portal ? <span>2B GST {inr(r.portal.tax)}</span> : null}
+                      </div>
+                    </div>
+                    <div className="ims-sys-issue-actions">
+                      {r.bill ? (
+                        <Button size="sm" variant="ghost" onClick={() => onTrace("bill", r.bill?.id ?? null)}>
+                          Trace bill
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+                {list.length > 200 ? <span className="ims-sys-mini">Showing 200 of {list.length}. Export for the full list.</span> : null}
+              </div>
+            ) : (
+              <EmptyState title="Nothing in this group" />
+            )}
+          </>
+        ) : null}
+      </Stack>
+    </Card>
+  );
+}
+
+/* ---------- Ask Audit AI: plain-language questions over the rule engine's findings ---------- */
+
+const AUDIT_SUGGESTIONS = [
+  "Give me a summary of open findings",
+  "Why is GST different on these invoices?",
+  "Show duplicate entries",
+  "Which purchases are missing documents?",
+  "Invoices without payment pending more than 60 days",
+  "Unreconciled bank entries",
+  "What changed after approval?",
+  "Findings above ₹1,00,000",
+];
+
+function AuditAskAi({ open, period, onClose, onOpenEntity, onTrace }: { open: boolean; period: Period; onClose: () => void; onOpenEntity: Opener; onTrace: Tracer }) {
+  const { session } = useIms();
+  const gemini = useGemini();
+  const [cfg, setCfg] = gemini;
+  const business = session.settings.businessName || session.brand?.name || "this business";
+
+  const findings = (rows: ReadonlyArray<AuditIssue>, matched: number) =>
+    rows.length ? (
+      <div className="ims-sys-issues ims-ai-findings">
+        {rows.slice(0, 12).map((i) => (
+          <div key={i.key} className="ims-sys-issue">
+            <Badge tone={SEVERITY_TONE[i.severity]}>{SEVERITY_LABEL[i.severity]}</Badge>
+            <div style={{ minWidth: 0 }}>
+              <div className="ims-sys-issue-title">{i.title}</div>
+              <div className="ims-sys-issue-meta">
+                {i.entityLabel ? <span>{i.entityLabel}</span> : null}
+                {i.amount !== null ? <span>{inr(i.amount)}</span> : null}
+                {i.date ? <span>{dateLabel(i.date)}</span> : null}
+              </div>
+            </div>
+            <div className="ims-sys-issue-actions">
+              {isTraceType(i.entityType) ? (
+                <Button size="sm" variant="ghost" onClick={() => onTrace(i.entityType, i.entityId)}>
+                  Trace
+                </Button>
+              ) : null}
+              {canOpenEntity(i.entityType, i.entityId) ? (
+                <Button size="sm" variant="ghost" onClick={() => onOpenEntity(i.entityType, i.entityId)}>
+                  Open
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ))}
+        {matched > 12 ? <span className="ims-sys-mini">Showing 12 of {matched}. See Findings for the full list.</span> : null}
+      </div>
+    ) : null;
+
+  const onAsk = async (question: string, history: GeminiTurn[]): Promise<AskResult> => {
+    const r = await imsSystem.auditAsk(question, { period });
+    const extra = findings(r.rows, r.matched);
+    if (cfg && r.rows.length) {
+      try {
+        const data = [
+          `PERIOD: ${r.range.from} to ${r.range.to}. Findings matching the question: ${r.matched}.`,
+          `ENGINE SUMMARY: ${r.answer}`,
+          `FINDINGS (record | category | severity | title | detail | amount | date):`,
+          ...r.rows.map((i) => `${i.entityLabel} | ${i.category} | ${i.severity} | ${i.title} | ${i.detail} | ${i.amount ?? "-"} | ${i.date ?? "-"}`),
+        ].join("\n");
+        const g = await askGemini(cfg, setCfg, { system: auditSystem(business, todayLocal()), history, prompt: dataPrompt(data, question) });
+        return { text: g.text, source: "gemini", extra, note: g.truncated ? "The answer was cut short — ask a narrower question." : undefined };
+      } catch (err) {
+        return { text: r.answer, source: "built-in", extra, note: geminiFailNote(err) };
+      }
+    }
+    return { text: r.answer, source: "built-in", extra };
+  };
+
+  return (
+    <AskDialog
+      open={open}
+      onClose={onClose}
+      title="Ask Audit AI"
+      description="Plain-language questions answered from the automated checks for the selected period. Open any record straight from the answer."
+      suggestions={AUDIT_SUGGESTIONS}
+      onAsk={onAsk}
+      gemini={gemini}
+    />
   );
 }
 
@@ -395,6 +824,7 @@ function IssuesTab({
   canWrite,
   onRaise,
   onOpenEntity,
+  onTrace,
 }: {
   period: Period;
   category: AuditCategory | "";
@@ -402,6 +832,7 @@ function IssuesTab({
   canWrite: boolean;
   onRaise: (p: Prefill) => void;
   onOpenEntity: Opener;
+  onTrace: Tracer;
 }) {
   const [show, setShow] = useState<"open" | "closed" | "all">("open");
   const [q, setQ] = useState("");
@@ -484,6 +915,11 @@ function IssuesTab({
                       </div>
                     </div>
                     <div className="ims-sys-issue-actions">
+                      {isTraceType(i.entityType) ? (
+                        <Button size="sm" variant="ghost" onClick={() => onTrace(i.entityType, i.entityId)}>
+                          Trace
+                        </Button>
+                      ) : null}
                       {canOpenEntity(i.entityType, i.entityId) ? (
                         <Button size="sm" variant="ghost" onClick={() => onOpenEntity(i.entityType, i.entityId)}>
                           Open record
@@ -915,6 +1351,270 @@ function LedgerTable<T extends { id: string }>({
   );
 }
 
+/* ---------- Financial statements ---------- */
+
+type StatementView = "tb" | "pl" | "bs" | "daybook";
+const STATEMENT_VIEWS: ReadonlyArray<{ value: StatementView; label: string }> = [
+  { value: "tb", label: "Trial balance" },
+  { value: "pl", label: "Profit & loss" },
+  { value: "bs", label: "Balance sheet" },
+  { value: "daybook", label: "Day book" },
+];
+const VOUCHER_TONE: Record<BookVoucherType, "blue" | "emerald" | "amber" | "coral" | "neutral"> = {
+  Opening: "neutral",
+  Sales: "blue",
+  Purchase: "amber",
+  Receipt: "emerald",
+  Payment: "coral",
+  "Credit note": "amber",
+  "Debit note": "amber",
+  Expense: "coral",
+  Journal: "neutral",
+};
+
+type StatementLine = { label: string; group?: string; dr?: number | null; cr?: number | null; amount?: number | null; strong?: boolean; indent?: boolean };
+const STATEMENT_EXPORT: ReadonlyArray<ExportColumn<StatementLine>> = [
+  { header: "Particulars", value: (r) => r.label },
+  { header: "Group", value: (r) => r.group ?? "" },
+  { header: "Debit", value: (r) => r.dr ?? "" },
+  { header: "Credit", value: (r) => r.cr ?? "" },
+  { header: "Amount", value: (r) => r.amount ?? "" },
+];
+
+function trialBalanceLines(d: BooksReport): StatementLine[] {
+  return [...d.trialBalance.rows.map((r) => ({ label: r.name, group: r.group, dr: r.dr || null, cr: r.cr || null })), { label: "Total", dr: d.trialBalance.dr, cr: d.trialBalance.cr, strong: true }];
+}
+
+function profitLossLines(d: BooksReport): StatementLine[] {
+  const p = d.profitLoss;
+  return [
+    { label: "Sales", amount: p.sales },
+    { label: "Less: sales returns", amount: -p.salesReturns, indent: true },
+    { label: "Net sales", amount: p.netSales, strong: true },
+    { label: "Opening stock", amount: p.openingStock },
+    { label: "Add: purchases", amount: p.purchases, indent: true },
+    { label: "Less: purchase returns", amount: -p.purchaseReturns, indent: true },
+    { label: "Less: closing stock", amount: -p.closingStock, indent: true },
+    { label: "Cost of goods sold", amount: p.cogs, strong: true },
+    { label: "Gross profit", amount: p.grossProfit, strong: true },
+    ...p.expenses.map((e) => ({ label: e.name, amount: e.amount, indent: true })),
+    { label: "Total expenses", amount: p.totalExpenses, strong: true },
+    { label: p.netProfit >= 0 ? "Net profit" : "Net loss", amount: p.netProfit, strong: true },
+  ];
+}
+
+function balanceSheetLines(d: BooksReport): StatementLine[] {
+  const b = d.balanceSheet;
+  return [
+    { label: "Assets", strong: true },
+    ...b.assets.map((r) => ({ label: r.name, amount: r.amount, indent: true })),
+    { label: "Total assets", amount: b.totalAssets, strong: true },
+    { label: "Liabilities & capital", strong: true },
+    ...b.liabilities.map((r) => ({ label: r.name, amount: r.amount, indent: true })),
+    { label: "Total liabilities & capital", amount: b.totalLiabilities, strong: true },
+  ];
+}
+
+const ACCOUNT_LABEL: Record<string, string> = {
+  cash: "Cash",
+  bank: "Bank",
+  debtors: "Debtors",
+  creditors: "Creditors",
+  stock: "Stock",
+  inputCgst: "Input CGST",
+  inputSgst: "Input SGST",
+  inputIgst: "Input IGST",
+  inputGstExpenses: "Input GST",
+  outputCgst: "Output CGST",
+  outputSgst: "Output SGST",
+  outputIgst: "Output IGST",
+  suspense: "Suspense",
+  capital: "Capital",
+  sales: "Sales",
+  salesReturns: "Sales returns",
+  purchases: "Purchases",
+  purchaseReturns: "Purchase returns",
+  roundOff: "Round off",
+};
+const accountLabel = (key: string) => (key.startsWith("exp:") ? key.slice(4) : (ACCOUNT_LABEL[key] ?? key));
+
+type DayBookRow = BookVoucher & { id: string };
+const DAY_BOOK_COLS: ReadonlyArray<BosColumn<DayBookRow>> = [
+  { key: "date", header: "Date", cell: (r) => dateLabel(r.date) },
+  { key: "type", header: "Voucher", cell: (r) => <Badge tone={VOUCHER_TONE[r.type]}>{r.type}</Badge> },
+  { key: "ref", header: "Reference", cell: (r) => cell(r.ref ?? "—", r.party ?? undefined, true) },
+  { key: "narration", header: "Narration", cell: (r) => cell(r.narration, r.lines.map((l) => `${l.dr ? "Dr" : "Cr"} ${accountLabel(l.account)}`).join(" · ")) },
+  { key: "amount", header: "Amount", align: "right", cell: (r) => num(r.amount) },
+];
+const DAY_BOOK_EXPORT: ReadonlyArray<ExportColumn<DayBookRow>> = [
+  { header: "Date", value: (r) => r.date },
+  { header: "Voucher", value: (r) => r.type },
+  { header: "Reference", value: (r) => r.ref },
+  { header: "Party", value: (r) => r.party },
+  { header: "Narration", value: (r) => r.narration },
+  { header: "Entries", value: (r) => r.lines.map((l) => `${l.dr ? `Dr ${accountLabel(l.account)} ${l.dr}` : `Cr ${accountLabel(l.account)} ${l.cr}`}`).join("; ") },
+  { header: "Amount", value: (r) => r.amount },
+];
+
+function StatementsTab({ period, onOpenEntity }: { period: Period; onOpenEntity: Opener }) {
+  const [view, setView] = useState<StatementView>("tb");
+  const state = useImsData(() => imsSystem.books({ period }), [period]);
+  return (
+    <>
+      <Card interactive={false}>
+        <div className="ims-toolbar" style={{ marginBottom: 0, flexWrap: "wrap" }}>
+          <Segmented size="sm" scroll role="radio" aria-label="Statement" options={STATEMENT_VIEWS} value={view} onChange={setView} />
+          <span className="ims-sys-mini">Built from IMS records as double-entry vouchers · stock valued at current purchase price</span>
+        </div>
+      </Card>
+      <Loaded state={state} rows={6}>
+        {(d) => {
+          const p = d.profitLoss;
+          const balanced = Math.abs(d.trialBalance.difference) < 0.01 && Math.abs(d.balanceSheet.difference) < 0.01;
+          const range = dateRange(d.range.from, d.range.to);
+          return (
+            <>
+              <Grid cols={4} min={160}>
+                <KpiCard interactive={false} label="Net sales" value={inr(p.netSales)} delta={p.salesReturns ? `after ${inr(p.salesReturns)} returns` : undefined} deltaTone="muted" chip={{ color: "blue", glyph: "₹" }} />
+                <KpiCard interactive={false} label="Gross profit" value={inr(p.grossProfit)} delta={p.netSales ? `${Math.round((p.grossProfit / p.netSales) * 100)}% margin` : undefined} deltaTone="muted" chip={{ color: "mint", glyph: "◔" }} />
+                <KpiCard interactive={false} label={p.netProfit >= 0 ? "Net profit" : "Net loss"} value={inr(p.netProfit)} valueTone={p.netProfit < 0 ? "coral" : "emerald"} chip={{ color: p.netProfit < 0 ? "rose" : "mint", glyph: "=" }} />
+                <KpiCard
+                  interactive={false}
+                  label="Books"
+                  value={balanced ? "Balanced" : "Out of balance"}
+                  valueTone={balanced ? "emerald" : "coral"}
+                  delta={balanced ? `Dr = Cr = ${inr(d.trialBalance.dr)}` : `Difference ${inr(d.trialBalance.difference || d.balanceSheet.difference)}`}
+                  deltaTone={balanced ? "muted" : "warn"}
+                  chip={{ color: balanced ? "mint" : "rose", glyph: balanced ? "✓" : "!" }}
+                />
+              </Grid>
+              {view === "tb" ? <StatementTable title={`Trial balance · ${range}`} file={`trial-balance-${d.range.from}-to-${d.range.to}`} lines={trialBalanceLines(d)} columns="drcr" /> : null}
+              {view === "pl" ? (
+                <StatementTable
+                  title={`Profit & loss · ${range}`}
+                  file={`profit-and-loss-${d.range.from}-to-${d.range.to}`}
+                  lines={profitLossLines(d)}
+                  columns="amount"
+                  note="Cost of goods sold uses opening and closing stock valued at each item's current purchase price."
+                />
+              ) : null}
+              {view === "bs" ? (
+                <StatementTable
+                  title={`Balance sheet · as on ${dateLabel(d.range.to)}`}
+                  file={`balance-sheet-${d.range.to}`}
+                  lines={balanceSheetLines(d)}
+                  columns="amount"
+                  note={
+                    d.balanceSheet.liabilities.some((r) => r.account === "suspense")
+                      ? "Manual credit / debit ledger entries are held in a suspense account until your accountant classifies them."
+                      : "Capital & reserves includes party opening balances, opening stock and profit brought forward from earlier periods."
+                  }
+                />
+              ) : null}
+              {view === "daybook" ? <DayBook d={d} onOpenEntity={onOpenEntity} /> : null}
+            </>
+          );
+        }}
+      </Loaded>
+    </>
+  );
+}
+
+function StatementTable({ title, file, lines, columns, note }: { title: string; file: string; lines: StatementLine[]; columns: "drcr" | "amount"; note?: string }) {
+  const money = (v: number | null | undefined) => (v === null || v === undefined ? "" : inr(v));
+  return (
+    <Card interactive={false}>
+      <Stack gap={12}>
+        <div className="ims-between" style={{ flexWrap: "wrap", gap: 8 }}>
+          <b className="ims-strong">{title}</b>
+          <span className="ims-row">
+            <Button size="sm" icon="download" onClick={() => downloadCsv(file, lines, STATEMENT_EXPORT)}>
+              CSV
+            </Button>
+            <Button size="sm" icon="file" onClick={() => void downloadXlsx(file, "Statement", lines, STATEMENT_EXPORT)}>
+              Excel
+            </Button>
+          </span>
+        </div>
+        <div className="ims-matrix-wrap">
+          <table className="bos-inv-paper-table">
+            <thead>
+              <tr>
+                <th>Particulars</th>
+                {columns === "drcr" ? (
+                  <>
+                    <th>Group</th>
+                    <th className="ims-num">Debit</th>
+                    <th className="ims-num">Credit</th>
+                  </>
+                ) : (
+                  <th className="ims-num">Amount</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l, i) => (
+                <tr key={`${l.label}:${i}`} className={l.strong ? "ims-strong" : undefined}>
+                  <td style={l.indent ? { paddingLeft: 24 } : undefined}>{l.label}</td>
+                  {columns === "drcr" ? (
+                    <>
+                      <td className="ims-faint">{l.group ?? ""}</td>
+                      <td className="ims-num">{money(l.dr)}</td>
+                      <td className="ims-num">{money(l.cr)}</td>
+                    </>
+                  ) : (
+                    <td className={cx("ims-num", typeof l.amount === "number" && l.amount < 0 && "ims-neg")}>{money(l.amount)}</td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {note ? <span className="ims-sys-mini">{note}</span> : null}
+      </Stack>
+    </Card>
+  );
+}
+
+function DayBook({ d, onOpenEntity }: { d: BooksReport; onOpenEntity: Opener }) {
+  const rows = useMemo<DayBookRow[]>(() => d.dayBook.rows.map((v, i) => ({ ...v, id: String(i) })).reverse(), [d.dayBook.rows]);
+  const totals = Object.entries(d.dayBook.totals) as Array<[BookVoucherType, { count: number; amount: number }]>;
+  const file = `day-book-${d.range.from}-to-${d.range.to}`;
+  return (
+    <Card interactive={false}>
+      <Stack gap={10}>
+        <div className="ims-between" style={{ flexWrap: "wrap", gap: 8 }}>
+          <span className="ims-row" style={{ flexWrap: "wrap", gap: 6 }}>
+            {totals.map(([type, t]) => (
+              <Badge key={type} tone={VOUCHER_TONE[type]}>
+                {type} · {t.count} · {inr(t.amount)}
+              </Badge>
+            ))}
+          </span>
+          <span className="ims-row">
+            <Button size="sm" icon="download" disabled={!rows.length} onClick={() => downloadCsv(file, rows, DAY_BOOK_EXPORT)}>
+              CSV
+            </Button>
+            <Button size="sm" icon="file" disabled={!rows.length} onClick={() => void downloadXlsx(file, "Day book", rows, DAY_BOOK_EXPORT)}>
+              Excel
+            </Button>
+          </span>
+        </div>
+        {d.dayBook.truncated ? <span className="ims-sys-mini">Showing the latest {rows.length} vouchers — pick a shorter period to see them all.</span> : null}
+        <DataTable
+          columns={DAY_BOOK_COLS}
+          rows={rows}
+          rowKey={(r) => r.id}
+          onRowClick={(r) => onOpenEntity(r.source.type, r.source.id)}
+          compact
+          chevron
+          empty={<EmptyState glyph="∅" title="No vouchers">Nothing was recorded in this period.</EmptyState>}
+        />
+      </Stack>
+    </Card>
+  );
+}
+
 /* ---------- Bank reconciliation ---------- */
 
 type BankStatus = "unmatched" | "matched" | "ignored" | "all";
@@ -1194,7 +1894,7 @@ function MatchDialog({ txn, onClose }: { txn: BankTxn | null; onClose: () => voi
 
 /* ---------- GST ---------- */
 
-function GstTab({ period }: { period: Period }) {
+function GstTab({ period, onTrace }: { period: Period; onTrace: Tracer }) {
   const { navigate } = useIms();
   const state = useImsData(() => imsSystem.auditGst({ period }), [period]);
   return (
@@ -1276,6 +1976,7 @@ function GstTab({ period }: { period: Period }) {
               </Stack>
             </Card>
           </Grid>
+          <Gstr2bCard period={period} onTrace={onTrace} />
           <Card interactive={false}>
             <div className="ims-between" style={{ flexWrap: "wrap", gap: 10 }}>
               <ToolHead glyph="🧮" title="GST returns workspace" sub="GSTR-1 and GSTR-3B summaries, HSN summary and JSON / Excel exports live in the GST module." />
@@ -2113,6 +2814,8 @@ const EXPORTS: ReadonlyArray<{ value: TallyExportType; label: string }> = [
   { value: "masters", label: "Masters" },
   { value: "sales", label: "Sales vouchers" },
   { value: "purchases", label: "Purchase vouchers" },
+  { value: "notes", label: "Credit / debit notes" },
+  { value: "receipts", label: "Receipts & payments" },
   { value: "all", label: "Everything" },
 ];
 

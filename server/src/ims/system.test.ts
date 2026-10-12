@@ -21,6 +21,8 @@ import {
   scoreBankMatch,
   stockLedgerGap,
   suggestBankMatches,
+  tallyCashLedger,
+  tallyCashVoucherXml,
   tallyDate,
   tallyEnvelope,
   tallyLedgerXml,
@@ -83,6 +85,36 @@ describe("Tally XML", () => {
     expect(xml).toContain(`<LEDGERNAME>${TALLY_LEDGERS.inputIgst}</LEDGERNAME>`);
     expect(xml).toContain("Accounting Voucher View");
     expect(tallyVoucherBalance({ ...purchase, total: 1190 })).toBe(-10);
+  });
+
+  it("reverses a sale as a Credit Note and a purchase as a Debit Note", () => {
+    const credit = tallyVoucherXml({ ...sale, kind: "Credit Note", number: "RET-0001" });
+    expect(credit).toContain('VCHTYPE="Credit Note"');
+    expect(credit).toContain("<VOUCHERTYPENAME>Credit Note</VOUCHERTYPENAME>");
+    expect(credit).toContain("<LEDGERNAME>Acme &amp; Sons</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>1298.00</AMOUNT>");
+    expect(credit).toContain(`<LEDGERNAME>${TALLY_LEDGERS.sales}</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-100.00</AMOUNT>`);
+    expect(credit).toContain(`<LEDGERNAME>${TALLY_LEDGERS.outputCgst}</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-99.00</AMOUNT>`);
+    expect(credit).toContain("<STOCKITEMNAME>Widget &lt;XL&gt;</STOCKITEMNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>");
+
+    const debit = tallyVoucherXml({ ...sale, kind: "Debit Note", lines: [], taxable: 1000, cgst: 0, sgst: 0, igst: 180, total: 1180 });
+    expect(debit).toContain('VCHTYPE="Debit Note"');
+    expect(debit).toContain("<ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-1180.00</AMOUNT>");
+    expect(debit).toContain(`<LEDGERNAME>${TALLY_LEDGERS.purchase}</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>1000.00</AMOUNT>`);
+    expect(debit).toContain(`<LEDGERNAME>${TALLY_LEDGERS.inputIgst}</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>180.00</AMOUNT>`);
+  });
+
+  it("builds receipts and payments against cash or bank", () => {
+    const receipt = tallyCashVoucherXml({ kind: "Receipt", number: "R-1A2B3C4D", date: "2026-04-05", partyName: "Acme", amount: 500, method: "upi", reference: "UTR123", narration: "Against INV-0001" });
+    expect(receipt).toContain('VCHTYPE="Receipt"');
+    expect(receipt).toContain("<LEDGERNAME>Acme</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>500.00</AMOUNT>");
+    expect(receipt).toContain(`<LEDGERNAME>${TALLY_LEDGERS.bank}</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-500.00</AMOUNT>`);
+    expect(receipt).toContain("<REFERENCE>UTR123</REFERENCE>");
+
+    const payment = tallyCashVoucherXml({ kind: "Payment", number: "P-1", date: "2026-04-05", partyName: "Supplier Co", amount: -250, method: "cash" });
+    expect(payment).toContain("<ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-250.00</AMOUNT>");
+    expect(payment).toContain(`<LEDGERNAME>${TALLY_LEDGERS.cash}</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>250.00</AMOUNT>`);
+    expect(payment).not.toContain("<REFERENCE>");
+    expect(tallyCashLedger("cheque")).toBe(TALLY_LEDGERS.bank);
   });
 
   it("builds masters and the import envelope", () => {

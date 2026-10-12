@@ -1,6 +1,10 @@
 import type { Request, Response, Router } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { auditAsk } from "./assistant.js";
+import { loadBooks } from "./books.js";
+import { Gstr2bRowSchema, loadBookBills, reconcileGstr2b } from "./gstr2b.js";
+import { loadTrace, TRACE_TYPES, type TraceType } from "./trace.js";
 import { accessOf, actorName, actorOf, can, isoDate, optText, parse, qint, qstr, recordEvent, requireAnyPerm, requirePerm, type ImsDeps } from "./context.js";
 import { exec, isoOf, json, likeOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
 import { ImsError, badRequest, conflict, forbidden, notFound, type ImsActor } from "./host.js";
@@ -1262,6 +1266,45 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
       return;
     }
     throw badRequest("Unknown ledger (use sales, purchases, inventory, receivables, payables or expenses)");
+  });
+
+  /** Trial balance, profit & loss, balance sheet and day book, built from IMS records as double-entry vouchers. */
+  router.get("/audit/books", async (req, res) => {
+    const actor = actorOf(res);
+    requireAuditView(res);
+    const { range, settings } = await rangeOf(deps, req, actor.tenantId);
+    res.json(await loadBooks(deps.db, actor.tenantId, settings, range));
+  });
+
+  router.get("/audit/trace/:type/:id", async (req, res) => {
+    const actor = actorOf(res);
+    requireAuditView(res);
+    const type = String(req.params.type);
+    if (!(TRACE_TYPES as ReadonlyArray<string>).includes(type)) throw badRequest("This record type can't be traced");
+    const id = String(req.params.id).slice(0, 64);
+    const { range, settings, today } = await rangeOf(deps, req, actor.tenantId);
+    const [trace, issues] = await Promise.all([loadTrace(deps.db, actor.tenantId, type as TraceType, id, today), issuesWithVerdicts(deps.db, actor.tenantId, range, today, settings)]);
+    if (!trace) throw notFound("Record not found");
+    res.json({ trace, findings: issues.filter((i) => i.entityId === id) });
+  });
+
+  router.post("/audit/gstr2b", async (req, res) => {
+    const actor = actorOf(res);
+    requireAuditView(res);
+    const { rows: portal } = parse(z.object({ rows: z.array(Gstr2bRowSchema).min(1, "The file has no B2B invoices").max(20_000) }), req.body);
+    const { range } = await rangeOf(deps, req, actor.tenantId, "lastmonth");
+    const bills = await loadBookBills(deps.db, actor.tenantId, range);
+    res.json({ range, ...reconcileGstr2b(bills, portal) });
+  });
+
+  router.get("/audit/ask", async (req, res) => {
+    const actor = actorOf(res);
+    requireAuditView(res);
+    const question = qstr(req.query.q, 500);
+    if (!question) throw badRequest("Type a question");
+    const { range, settings, today } = await rangeOf(deps, req, actor.tenantId);
+    const issues = await issuesWithVerdicts(deps.db, actor.tenantId, range, today, settings);
+    res.json({ question, range, ...auditAsk(question, issues, today) });
   });
 
   router.get("/audit/gst", async (req, res) => {

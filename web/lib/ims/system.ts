@@ -43,7 +43,7 @@ export type IntegrationsOverview = {
 
 export type TallyTestResult = { reachable: boolean; latencyMs: number; message: string; companies: string[]; companyFound: boolean | null; httpStatus?: number };
 export type TallySyncResult = { status: SyncStatus; steps: Array<{ entity: string; status: SyncStatus; records: number; message: string }>; tally: TallyView };
-export type TallyExportType = "masters" | "sales" | "purchases" | "all";
+export type TallyExportType = "masters" | "sales" | "purchases" | "notes" | "receipts" | "all";
 
 /* ---------- Excise ---------- */
 
@@ -244,6 +244,41 @@ export type LedgerResponse =
   | { kind: "receivables" | "payables"; range: DateRange; rows: AgingLedgerRow[]; totals: { count: number; balance: number; overdue: number }; buckets: Array<{ key: string; value: number; count: number }> }
   | { kind: "expenses"; range: DateRange; rows: ExpenseLedgerRow[]; totals: { count: number; amount: number; gst: number; cash: number }; byCategory: Array<{ category: string; amount: number }> };
 
+export type BookVoucherType = "Opening" | "Sales" | "Purchase" | "Receipt" | "Payment" | "Credit note" | "Debit note" | "Expense" | "Journal";
+export type BookVoucher = {
+  date: string;
+  type: BookVoucherType;
+  ref: string | null;
+  party: string | null;
+  narration: string;
+  amount: number;
+  lines: Array<{ account: string; dr: number; cr: number }>;
+  source: { type: "invoice" | "bill" | "payment" | "return" | "expense" | "ledger" | "party"; id: string | null };
+};
+export type StatementRow = { name: string; amount: number; account?: string };
+export type TrialBalanceRow = { account: string; name: string; group: string; type: "asset" | "liability" | "income" | "expense"; dr: number; cr: number };
+export type BooksReport = {
+  range: DateRange;
+  trialBalance: { rows: TrialBalanceRow[]; dr: number; cr: number; difference: number };
+  profitLoss: {
+    sales: number;
+    salesReturns: number;
+    netSales: number;
+    openingStock: number;
+    purchases: number;
+    purchaseReturns: number;
+    netPurchases: number;
+    closingStock: number;
+    cogs: number;
+    grossProfit: number;
+    expenses: StatementRow[];
+    totalExpenses: number;
+    netProfit: number;
+  };
+  balanceSheet: { assets: StatementRow[]; liabilities: StatementRow[]; totalAssets: number; totalLiabilities: number; difference: number };
+  dayBook: { rows: BookVoucher[]; truncated: boolean; totals: Partial<Record<BookVoucherType, { count: number; amount: number }>> };
+};
+
 export type AuditGst = {
   range: DateRange;
   output: { taxable: number; cgst: number; sgst: number; igst: number; total: number };
@@ -423,6 +458,39 @@ export function readAsDataUrl(file: File): Promise<string> {
 
 type RangeParams = { period?: Period; from?: string; to?: string };
 
+export const TRACE_TYPES = ["invoice", "bill", "po", "payment", "expense"] as const;
+export type TraceType = (typeof TRACE_TYPES)[number];
+export const isTraceType = (t: string | null): t is TraceType => (TRACE_TYPES as ReadonlyArray<string | null>).includes(t);
+export type TraceState = "ok" | "warn" | "bad" | "na";
+export type TraceStep = { label: string; title: string; detail: string; state: TraceState; link?: { type: string; id: string } };
+export type Trace = {
+  type: TraceType;
+  id: string;
+  title: string;
+  subtitle: string;
+  details: Array<[string, string]>;
+  steps: TraceStep[];
+  events: Array<{ at: string | null; by: string | null; summary: string }>;
+};
+
+export type Gstr2bRow = { gstin: string; supplier: string; invoiceNo: string; date: string | null; value: number; taxable: number; igst: number; cgst: number; sgst: number };
+export type Gstr2bStatus = "matched" | "mismatch" | "missing_2b" | "missing_books";
+export type Gstr2bResult = {
+  range: DateRange;
+  rows: Array<{
+    status: Gstr2bStatus;
+    gstin: string;
+    supplier: string;
+    invoiceNo: string;
+    date: string | null;
+    bill: { id: string; no: string; taxable: number; tax: number; total: number } | null;
+    portal: { taxable: number; tax: number; total: number } | null;
+    taxDiff: number;
+    note: string;
+  }>;
+  summary: { counts: Record<Gstr2bStatus, number>; itcBooks: number; itcPortal: number; itcMatched: number; itcAtRisk: number; itcNotBooked: number };
+};
+
 export const imsSystem = {
   integrations: () => get<IntegrationsOverview>("/integrations"),
   syncLog: (provider?: "tally" | "pos", limit?: number) => get<{ log: SyncLogEntry[] }>("/integrations/log", { provider, limit }),
@@ -454,6 +522,10 @@ export const imsSystem = {
   deleteAuditItem: (id: string) => del(`/audit/items/${id}`),
   ledger: (kind: LedgerKind, params: RangeParams & { q?: string } = {}) => get<LedgerResponse>(`/audit/ledger/${kind}`, params),
   auditGst: (range: RangeParams = {}) => get<AuditGst>("/audit/gst", range),
+  books: (range: RangeParams = {}) => get<BooksReport>("/audit/books", range),
+  trace: (type: TraceType, id: string, range: RangeParams = {}) => get<{ trace: Trace; findings: AuditIssue[] }>(`/audit/trace/${type}/${encodeURIComponent(id)}`, range),
+  gstr2b: (rows: Gstr2bRow[], range: RangeParams = {}) => post<Gstr2bResult>(`/audit/gstr2b${qs(range)}`, { rows }),
+  auditAsk: (q: string, range: RangeParams = {}) => get<{ question: string; range: DateRange; answer: string; rows: AuditIssue[]; matched: number }>("/audit/ask", { q, ...range }),
   auditEntities: (type: AuditEntityType, q: string) => get<{ entities: AuditEntity[] }>("/audit/entities", { type, q }),
 
   bank: (params: { status?: "unmatched" | "matched" | "ignored" | "all"; from?: string; to?: string } = {}) => get<BankOverview>("/audit/bank", params),
