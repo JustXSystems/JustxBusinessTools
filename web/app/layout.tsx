@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { ClientInit } from "@/components/ClientInit";
 import { AuthProvider } from "@/components/auth/AuthProvider";
@@ -23,6 +23,13 @@ const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   variable: "--font-plex-mono",
+  display: "swap",
+});
+// The "JustX IMS" preset and the kit's IMS skin read --font-inter.
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-inter",
   display: "swap",
 });
 
@@ -49,7 +56,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`h-full ${plexSans.variable} ${plexMono.variable}`}>
+    <html lang="en" className={`h-full ${plexSans.variable} ${plexMono.variable} ${inter.variable}`}>
       <body className="min-h-full">
         <ClientInit />
         <BrandingProvider>

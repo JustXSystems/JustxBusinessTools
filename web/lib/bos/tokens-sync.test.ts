@@ -6,6 +6,8 @@ import {
   BOS_MOTION_TOKENS,
   BOS_RADIUS_TOKENS,
   BOS_SPACE_TOKENS,
+  IMS_EXTRA_TOKENS,
+  IMS_SKIN_COLOR_TOKENS,
 } from "@/components/bos/tokens";
 
 const stylesDir = path.resolve(__dirname, "../../components/bos/styles");
@@ -48,7 +50,7 @@ describe("BOS token single source of truth", () => {
   });
 
   it("never styles bare elements outside a .bos scope", () => {
-    const files = ["bos.tokens.css", "bos.components.css", "bos.patterns.css"];
+    const files = ["bos.tokens.css", "bos.components.css", "bos.patterns.css", "bos.skin-ims.css"];
     for (const file of files) {
       const css = readFileSync(path.join(stylesDir, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
       const selectors = css
@@ -64,5 +66,38 @@ describe("BOS token single source of truth", () => {
         expect(scoped, `${file}: ${sel}`).toBe(true);
       }
     }
+  });
+});
+
+describe("IMS skin tokens", () => {
+  const imsCss = readFileSync(path.join(stylesDir, "bos.skin-ims.css"), "utf8").replace(/\r\n/g, "\n");
+  function imsDecl(selectorStart: string): Map<string, string> {
+    const start = imsCss.indexOf(selectorStart);
+    if (start < 0) throw new Error(`selector not found: ${selectorStart}`);
+    const open = imsCss.indexOf("{", start);
+    const body = imsCss.slice(open, imsCss.indexOf("}", open));
+    const out = new Map<string, string>();
+    for (const m of body.matchAll(/(--bos-[\w-]+)\s*:\s*([^;]+);/g)) out.set(m[1], m[2].trim());
+    return out;
+  }
+  const imsLight = imsDecl('.bos[data-bos-skin="ims"],\n.bos[data-bos-skin="ims"][data-bos-theme="light"]');
+  const imsDark = imsDecl('.bos[data-bos-skin="ims"][data-bos-theme="dark"] {');
+
+  it("light and dark IMS overrides match IMS_SKIN_COLOR_TOKENS", () => {
+    for (const t of IMS_SKIN_COLOR_TOKENS) {
+      expect(imsLight.get(t.cssVar)?.toUpperCase(), `${t.cssVar} (ims light)`).toBe(t.light.toUpperCase());
+      expect(imsDark.get(t.cssVar)?.toUpperCase(), `${t.cssVar} (ims dark)`).toBe(t.dark.toUpperCase());
+    }
+  });
+
+  it("only overrides tokens the base theme defines, plus --bos-ims-* extras", () => {
+    for (const key of imsLight.keys()) {
+      expect(light.has(key) || key.startsWith("--bos-ims-"), key).toBe(true);
+    }
+  });
+
+  it("light and dark IMS sets define the same tokens and every documented extra", () => {
+    expect([...imsDark.keys()].sort()).toEqual([...imsLight.keys()].sort());
+    for (const t of IMS_EXTRA_TOKENS) expect(imsLight.has(t.cssVar), t.cssVar).toBe(true);
   });
 });

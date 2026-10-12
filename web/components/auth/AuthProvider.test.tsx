@@ -14,8 +14,13 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/bos/")).toBe(true);
   });
 
+  it("lets the standalone IMS app render its own sign-in", () => {
+    expect(isPublicPath("/ims")).toBe(true);
+    expect(isPublicPath("/ims/")).toBe(true);
+  });
+
   it("does not open look-alike or operator routes", () => {
-    for (const p of ["/", "/boss", "/bosdesign", "/tools/bos", "/tools/bosdesign", "/invoices", "/admin/tools", "/settings"]) {
+    for (const p of ["/", "/boss", "/bosdesign", "/imsx", "/tools/bos", "/tools/bosdesign", "/tools/imsdealer", "/invoices", "/admin/tools", "/settings"]) {
       expect(isPublicPath(p)).toBe(false);
     }
   });

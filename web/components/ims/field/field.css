@@ -1,0 +1,51 @@
+/* Onsite Track */
+.bos .ims-fd-me { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.bos .ims-fd-me-head { display: flex; align-items: center; gap: 12px; }
+.bos .ims-fd-me-name { font-size: 16px; font-weight: 700; }
+.bos .ims-fd-visit { margin-top: 14px; padding: 12px 14px; border-radius: var(--bos-r-lg); background: var(--ims-grad-soft); display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.bos .ims-fd-visit b { font-size: 14px; }
+.bos .ims-fd-side { display: flex; flex-direction: column; gap: 12px; }
+.bos .ims-fd-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.bos .ims-fd-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bos .ims-fd-chips .bos-filter-chip { display: inline-flex; align-items: center; gap: 6px; }
+.bos .ims-fd-geo { display: flex; align-items: center; gap: 10px; font-size: 12.5px; padding: 10px 12px; border-radius: 10px; background: var(--ims-well); }
+.bos .ims-fd-geo > :first-child { flex: 1 1 auto; min-width: 0; }
+
+.bos .ims-fd-team { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.bos .ims-fd-member { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--bos-r-lg); border: 1px solid var(--ims-tile-border); background: var(--ims-tile); color: var(--bos-text); transition: border-color .15s ease, box-shadow .15s ease; }
+.bos .ims-fd-member:hover { border-color: var(--bos-border, var(--ims-tile-border)); }
+.bos .ims-fd-member.is-selected { border-color: var(--bos-blue); box-shadow: var(--ims-glow); }
+.bos .ims-fd-member-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.bos .ims-fd-member-head .ims-cell-stack { flex: 1 1 auto; }
+.bos .ims-fd-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; font-size: 11.5px; color: var(--bos-text-muted); }
+.bos .ims-fd-stats b { display: block; font-size: 15px; color: var(--bos-text); font-variant-numeric: tabular-nums; }
+.bos .ims-fd-site { font-size: 12.5px; color: var(--bos-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.bos .ims-fd-mapgrid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
+.bos .ims-fd-list { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; }
+.bos .ims-fd-list-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 11px; border-radius: 10px; background: var(--ims-well); font-size: 12.5px; }
+.bos .ims-fd-list-row a { color: var(--bos-blue-btn, var(--bos-blue)); font-weight: 600; white-space: nowrap; }
+
+.bos .ims-fd-timeline { list-style: none; margin: 0; padding: 0; }
+.bos .ims-fd-timeline li { position: relative; padding: 0 0 18px 28px; }
+.bos .ims-fd-timeline li::before { content: ""; position: absolute; left: 6px; top: 16px; bottom: 0; width: 2px; background: var(--ims-well); }
+.bos .ims-fd-timeline li:last-child::before { display: none; }
+.bos .ims-fd-node { position: absolute; left: 0; top: 3px; width: 14px; height: 14px; border-radius: 50%; border: 3px solid var(--bos-surface); box-shadow: 0 0 0 1px var(--ims-tile-border); }
+.bos .ims-fd-time { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--bos-text-faint); }
+.bos .ims-fd-title { font-size: 13px; font-weight: 600; }
+.bos .ims-fd-detail { font-size: 12.5px; color: var(--bos-text-muted); margin-top: 2px; }
+
+.bos .ims-fd-task-title { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.bos .ims-fd-task-title:hover { color: var(--bos-blue); }
+.bos .ims-fd-task-title:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; border-radius: 4px; }
+.bos .ims-fd-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; font-size: 13px; }
+.bos .ims-fd-facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--bos-text-faint); }
+.bos .ims-fd-facts dd { margin: 2px 0 0; }
+
+@media (max-width: 900px) {
+  .bos .ims-fd-me,
+  .bos .ims-fd-mapgrid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .bos .ims-fd-facts { grid-template-columns: minmax(0, 1fr); }
+}

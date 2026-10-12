@@ -1,0 +1,92 @@
+/* IMS system, compliance & interop (Tally/POS, excise, auditor workspace, help desk, connected tools) */
+
+.bos .ims-sys-kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 13px; margin: 0; }
+.bos .ims-sys-kv dt { color: var(--bos-text-muted); }
+.bos .ims-sys-kv dd { margin: 0; color: var(--bos-text); font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+
+.bos .ims-sys-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.bos .ims-sys-glyph { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; font-size: 20px; background: var(--bos-surface-2); border: 1px solid var(--bos-border-soft); }
+.bos .ims-sys-head-text { min-width: 0; }
+.bos .ims-sys-head-text b { display: block; font-size: 15px; color: var(--bos-text); }
+.bos .ims-sys-head-text small { display: block; font-size: 12.5px; color: var(--bos-text-muted); line-height: 1.45; }
+
+.bos .ims-sys-steps { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.bos .ims-sys-steps li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; padding: 10px 12px; border-radius: var(--bos-r-md); background: var(--bos-surface-2); border: 1px solid var(--bos-border-soft); }
+.bos .ims-sys-steps li > :last-child { min-width: 0; flex: 1; }
+
+/* Health score ring */
+.bos .ims-sys-ring { --pct: 0; --ring: var(--bos-emerald); flex: none; width: 112px; height: 112px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--ring) calc(var(--pct) * 1%), var(--bos-border-soft) 0); }
+.bos .ims-sys-ring > div { width: 88px; height: 88px; border-radius: 50%; background: var(--bos-surface); display: grid; place-items: center; text-align: center; }
+.bos .ims-sys-ring b { display: block; font-size: 26px; line-height: 1; color: var(--bos-text); font-variant-numeric: tabular-nums; }
+.bos .ims-sys-ring small { display: block; font-size: 11px; color: var(--bos-text-muted); margin-top: 2px; }
+
+/* Category tiles */
+.bos .ims-sys-cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.bos .ims-sys-cat { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 12px; border-radius: var(--bos-r-md); border: 1px solid var(--bos-border-soft); background: var(--bos-surface); color: var(--bos-text); cursor: pointer; font: inherit; }
+.bos .ims-sys-cat:hover { border-color: var(--bos-border); box-shadow: var(--bos-shadow-md); }
+.bos .ims-sys-cat[aria-pressed="true"] { border-color: var(--bos-blue-600); background: var(--bos-blue-100); }
+.bos .ims-sys-cat-ic { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--bos-surface-2); font-size: 14px; }
+.bos .ims-sys-cat b { display: block; font-size: 13px; }
+.bos .ims-sys-cat small { display: block; font-size: 12px; color: var(--bos-text-muted); }
+
+/* Issue rows */
+.bos .ims-sys-issues { display: grid; gap: 10px; }
+.bos .ims-sys-issue { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start; padding: 12px 14px; border-radius: var(--bos-r-md); border: 1px solid var(--bos-border-soft); background: var(--bos-surface); }
+.bos .ims-sys-issue.is-closed { opacity: 0.7; }
+.bos .ims-sys-issue-title { font-weight: 600; font-size: 13.5px; color: var(--bos-text); }
+.bos .ims-sys-issue-detail { font-size: 12.5px; color: var(--bos-text-muted); line-height: 1.5; margin-top: 2px; }
+.bos .ims-sys-issue-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--bos-text-faint); margin-top: 6px; }
+.bos .ims-sys-issue-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+@media (max-width: 720px) {
+  .bos .ims-sys-issue { grid-template-columns: 1fr; }
+  .bos .ims-sys-issue-actions { justify-content: flex-start; }
+}
+
+/* Insights */
+.bos .ims-sys-insights { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.bos .ims-sys-insights li { display: flex; gap: 10px; font-size: 13px; line-height: 1.5; color: var(--bos-text); }
+.bos .ims-sys-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--bos-blue); }
+.bos .ims-sys-dot.is-coral { background: var(--bos-coral); }
+.bos .ims-sys-dot.is-amber { background: var(--bos-amber); }
+.bos .ims-sys-dot.is-emerald { background: var(--bos-emerald); }
+
+/* Conversation threads (audit queries, tickets) */
+.bos .ims-sys-thread { display: grid; gap: 10px; max-height: 360px; overflow-y: auto; padding: 4px 2px; }
+.bos .ims-sys-msg { max-width: 86%; padding: 10px 12px; border-radius: 14px; background: var(--bos-surface-2); border: 1px solid var(--bos-border-soft); font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bos .ims-sys-msg.is-mine { justify-self: end; background: var(--bos-blue-100); border-color: transparent; }
+.bos .ims-sys-msg.is-system { justify-self: center; max-width: 100%; background: transparent; border: none; padding: 2px 8px; font-size: 12px; color: var(--bos-text-faint); text-align: center; }
+.bos .ims-sys-msg-meta { display: block; font-size: 11.5px; color: var(--bos-text-faint); margin-bottom: 3px; white-space: normal; }
+
+/* FAQ */
+.bos .ims-sys-faq { display: grid; gap: 8px; }
+.bos .ims-sys-faq details { border: 1px solid var(--bos-border-soft); border-radius: var(--bos-r-md); background: var(--bos-surface); }
+.bos .ims-sys-faq details[open] { border-color: var(--bos-border); }
+.bos .ims-sys-faq summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; font-weight: 600; font-size: 13.5px; color: var(--bos-text); }
+.bos .ims-sys-faq summary::-webkit-details-marker { display: none; }
+.bos .ims-sys-faq summary::after { content: "+"; color: var(--bos-text-faint); font-weight: 400; }
+.bos .ims-sys-faq details[open] summary::after { content: "−"; }
+.bos .ims-sys-faq-body { padding: 0 14px 14px; font-size: 13px; line-height: 1.6; color: var(--bos-text-muted); }
+.bos .ims-sys-faq-body p { margin: 0 0 6px; }
+.bos .ims-sys-faq-tag { font-size: 11px; font-weight: 500; color: var(--bos-text-faint); white-space: nowrap; }
+
+/* Connected tool cards */
+.bos .ims-sys-tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.bos .ims-sys-tool { display: flex; flex-direction: column; gap: 12px; }
+.bos .ims-sys-tool-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--bos-text-muted); }
+.bos .ims-sys-tool-stats b { color: var(--bos-text); font-variant-numeric: tabular-nums; }
+.bos .ims-sys-tool-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.bos .ims-sys-flow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--bos-text-muted); padding: 10px 12px; border-radius: var(--bos-r-md); background: var(--bos-surface-2); }
+
+/* File picker */
+.bos .ims-sys-drop { display: grid; place-items: center; gap: 6px; text-align: center; padding: 18px; border: 1.5px dashed var(--bos-border); border-radius: var(--bos-r-md); color: var(--bos-text-muted); font-size: 13px; cursor: pointer; }
+.bos .ims-sys-drop:hover,
+.bos .ims-sys-drop:focus-within { border-color: var(--bos-blue-600); color: var(--bos-text); }
+.bos .ims-sys-drop input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.bos .ims-sys-contact { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; }
+@media (max-width: 640px) {
+  .bos .ims-sys-contact { grid-template-columns: 1fr; }
+}
+
+.bos .ims-sys-mini { font-size: 12px; color: var(--bos-text-faint); }
+.bos .ims-sys-code { font-family: var(--bos-font-mono); font-size: 12px; background: var(--bos-surface-2); border: 1px solid var(--bos-border-soft); border-radius: 8px; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }

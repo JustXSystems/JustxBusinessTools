@@ -1,4 +1,4 @@
-import type { BosTheme } from "@/components/bos/tokens";
+import { isBosSkin, type BosSkin, type BosTheme } from "@/components/bos/tokens";
 
 export const BOS_THEME_STORAGE_KEY = "jbt.bos.theme";
 
@@ -18,8 +18,17 @@ export function resolveInitialBosTheme(input: {
   hostPack?: string | null;
 }): BosTheme {
   if (isBosTheme(input.stored)) return input.stored;
-  if (input.hostPack === "bos" && isBosTheme(input.hostScheme)) return input.hostScheme;
+  if ((input.hostPack === "bos" || input.hostPack === "ims") && isBosTheme(input.hostScheme)) return input.hostScheme;
   return "light";
+}
+
+/**
+ * Kit skin: an explicit `skin` prop wins; otherwise kit-based tools follow the
+ * org's design pack, so applying the "JustX IMS" preset reskins every one.
+ */
+export function resolveBosSkin(input: { explicit?: BosSkin | null; hostPack?: string | null }): BosSkin {
+  if (isBosSkin(input.explicit)) return input.explicit;
+  return input.hostPack === "ims" ? "ims" : "bos";
 }
 
 export function readStoredBosTheme(): string | null {

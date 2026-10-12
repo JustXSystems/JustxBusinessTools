@@ -52,6 +52,32 @@ export const JUSTX_BOS_DARK = {
   pack: "bos",
 };
 
+export const JUSTX_IMS_LIGHT = {
+  accent: "#4854EB",
+  teal: "#32C7F6",
+  accentStrong: "#3A46DE",
+  bg0: "#D6E1F8",
+  bg1: "#EFF4FD",
+  bg2: "#F7FBFE",
+  radius: "24px",
+  font: "var(--font-inter, 'Inter', system-ui)",
+  scheme: "light",
+  pack: "ims",
+};
+
+export const JUSTX_IMS_DARK = {
+  accent: "#7B85FF",
+  teal: "#45D3FF",
+  accentStrong: "#5E69F5",
+  bg0: "#0E1430",
+  bg1: "#161E40",
+  bg2: "#18204A",
+  radius: "24px",
+  font: "var(--font-inter, 'Inter', system-ui)",
+  scheme: "dark",
+  pack: "ims",
+};
+
 export const DEFAULT_THEME_TOKENS = { ...JUSTX_ELECTRIC };
 
 /** Built-in theme presets — keep in sync with `web/lib/theme-presets.ts`. */
@@ -60,6 +86,8 @@ export const THEME_PRESETS = [
   { name: "JustXSystems Light", tokens: JUSTX_LIGHT },
   { name: "JustX BOS (Light)", tokens: JUSTX_BOS_LIGHT },
   { name: "JustX BOS (Dark)", tokens: JUSTX_BOS_DARK },
+  { name: "JustX IMS (Light)", tokens: JUSTX_IMS_LIGHT },
+  { name: "JustX IMS (Dark)", tokens: JUSTX_IMS_DARK },
   {
     name: "Midnight Cyan",
     tokens: {

@@ -1,0 +1,281 @@
+/* ==========================================================================
+   JustX IMS design pack — active when <html data-pack="ims"> (Admin → Theme →
+   "JustX IMS (Light/Dark)"). Restyles the shared JBT chrome so every tool
+   (operator shell, admin, Quotation, Site Survey, calculators…) picks up the
+   IMS look: periwinkle canvas, frosted-glass panels, white pill navigation,
+   blue→cyan gradient actions with an indigo glow, 24px rounding, Inter.
+   Kit-based tools (BOS, IMS-Dealer) additionally switch to the kit's IMS skin
+   (components/bos/styles/bos.skin-ims.css).
+   Variables are declared on <body>: applyThemeTokens() writes the generic
+   surface vars inline on <html>, and only a descendant can out-rank those.
+   ========================================================================== */
+
+html[data-pack="ims"] body {
+  --radius-sm: 12px;
+  --radius-xl: 28px;
+  --ims-grad: linear-gradient(90deg, #4854EB 0%, #32C7F6 100%);
+  --ims-grad-hover: linear-gradient(90deg, #3A46DE 0%, #22B4E3 100%);
+  --ims-grad-soft: linear-gradient(90deg, #ECEEFE 0%, #E6F8FD 100%);
+  --ims-glow: 0 10px 26px -8px rgba(72, 84, 235, 0.45);
+  --ims-glass: rgba(255, 255, 255, 0.74);
+  --ims-glass-edge: rgba(255, 255, 255, 0.7);
+  --ims-glass-blur: blur(24px) saturate(1.15);
+  --ims-well: #EFF4FD;
+  --ims-solid: #F7FBFE;
+  --ims-nav-bg: rgba(244, 248, 254, 0.68);
+  --ims-tile: rgba(255, 255, 255, 0.88);
+  --ims-canvas: radial-gradient(120% 70% at 15% -10%, #FFFFFF 0%, rgba(255, 255, 255, 0) 55%), linear-gradient(180deg, #E4EAF8 0%, #D9E3F9 22%, #CFDCF7 55%, #D9E3F9 100%);
+  --grad: var(--ims-grad);
+  --grad-soft: var(--ims-grad-soft);
+  --on-accent: #FFFFFF;
+  --text-hi: #151B33;
+  --text-mid: #5B6486;
+  --text-low: #9098B8;
+  --glass-1: var(--ims-glass);
+  --glass-2: rgba(255, 255, 255, 0.86);
+  --glass-3: #FFFFFF;
+  --glass-hover: rgba(72, 84, 235, 0.06);
+  --border-hair: #DCE4F5;
+  --border-hair-strong: #C8D3EE;
+  --shadow-soft: 0 1px 2px rgba(30, 40, 90, 0.05), 0 4px 10px -4px rgba(30, 40, 90, 0.08);
+  --shadow-lift: 0 12px 32px -8px rgba(30, 40, 90, 0.22);
+  --danger: #E1483F;
+  --warning: #D98A1F;
+  --success: #1FA679;
+  --bos-coral: #E1483F;
+  --bos-coral-100: #FDEBEA;
+  --bos-coral-600: #C7362E;
+  --bos-shadow-xs: 0 1px 2px rgba(30, 40, 90, 0.06);
+  --bos-shadow-sm: 0 1px 2px rgba(30, 40, 90, 0.05), 0 4px 10px -4px rgba(30, 40, 90, 0.08);
+  --bos-shadow-md: 0 8px 20px -6px rgba(30, 40, 90, 0.18);
+}
+
+html[data-pack="ims"][data-scheme="dark"] body {
+  --ims-grad: linear-gradient(90deg, #5E69F5 0%, #36C8F5 100%);
+  --ims-grad-hover: linear-gradient(90deg, #6F79FF 0%, #4FD5FF 100%);
+  --ims-grad-soft: linear-gradient(90deg, #222B5C 0%, #0F3346 100%);
+  --ims-glow: 0 10px 28px -8px rgba(94, 105, 245, 0.6);
+  --ims-glass: rgba(26, 34, 68, 0.72);
+  --ims-glass-edge: rgba(255, 255, 255, 0.08);
+  --ims-well: #161E40;
+  --ims-solid: #18204A;
+  --ims-nav-bg: rgba(16, 22, 52, 0.7);
+  --ims-tile: rgba(28, 36, 72, 0.88);
+  --ims-canvas: radial-gradient(120% 70% at 15% -10%, rgba(72, 84, 235, 0.28) 0%, rgba(72, 84, 235, 0) 55%), linear-gradient(180deg, #0B1028 0%, #0E1430 40%, #111A3A 100%);
+  --text-hi: #E9EDFF;
+  --text-mid: #A4ACD3;
+  --text-low: #6D76A1;
+  --glass-2: rgba(30, 39, 78, 0.86);
+  --glass-3: #1F2852;
+  --glass-hover: rgba(123, 133, 255, 0.1);
+  --border-hair: #2C3766;
+  --border-hair-strong: #3A4680;
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px -4px rgba(0, 0, 0, 0.45);
+  --shadow-lift: 0 16px 38px -10px rgba(0, 0, 0, 0.65);
+  --danger: #F2675E;
+  --warning: #F0A945;
+  --success: #34C893;
+  --bos-coral: #F2675E;
+  --bos-coral-100: #3E1C1C;
+  --bos-coral-600: #FF9A92;
+  --bos-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --bos-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px -4px rgba(0, 0, 0, 0.45);
+  --bos-shadow-md: 0 10px 24px -8px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- Canvas ---------- */
+html[data-pack="ims"] body {
+  background: var(--ims-canvas);
+  background-color: var(--bg-0);
+  background-attachment: fixed;
+  letter-spacing: -0.003em;
+}
+
+/* ---------- Buttons ---------- */
+html[data-pack="ims"] .btn {
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 18px;
+}
+html[data-pack="ims"] .btn-sm { padding: 7px 13px; font-size: 12.5px; }
+html[data-pack="ims"] .btn-primary {
+  background: var(--ims-grad);
+  color: #fff;
+  box-shadow: var(--ims-glow);
+}
+html[data-pack="ims"] .btn-primary:hover:not(:disabled) {
+  background: var(--ims-grad-hover);
+  filter: none;
+  box-shadow: var(--ims-glow), 0 0 0 4px rgba(var(--accent-rgb), 0.14);
+}
+html[data-pack="ims"] .btn-secondary {
+  background: var(--ims-well);
+  border: 1px solid var(--ims-glass-edge);
+  color: var(--text-hi);
+  box-shadow: var(--bos-shadow-xs);
+}
+html[data-pack="ims"] .btn-secondary:hover:not(:disabled) {
+  background: var(--glass-3);
+  border-color: rgba(var(--accent-rgb), 0.3);
+  color: var(--accent-strong);
+  box-shadow: var(--bos-shadow-sm);
+}
+html[data-pack="ims"] .btn-ghost { border-color: transparent; }
+html[data-pack="ims"] .btn-ghost:hover:not(:disabled) { background: rgba(var(--accent-rgb), 0.08); color: var(--accent-strong); border-color: transparent; }
+html[data-pack="ims"] .btn-danger,
+html[data-pack="ims"] .btn-destructive {
+  background: var(--bos-coral-100);
+  color: var(--bos-coral-600);
+  border: 1px solid color-mix(in srgb, var(--bos-coral) 28%, transparent);
+}
+html[data-pack="ims"] .btn-danger:hover:not(:disabled),
+html[data-pack="ims"] .btn-destructive:hover:not(:disabled) {
+  background: linear-gradient(135deg, #EB5C53 0%, #E1483F 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 20px -6px rgba(225, 72, 63, 0.35);
+}
+
+/* ---------- Panels, cards, modals ---------- */
+html[data-pack="ims"] .panel,
+html[data-pack="ims"] .tool-card {
+  background: var(--ims-glass);
+  border: 1px solid var(--ims-glass-edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: var(--ims-glass-blur);
+  -webkit-backdrop-filter: var(--ims-glass-blur);
+}
+html[data-pack="ims"] .panel-title { text-transform: none; font-size: 15px; font-weight: 650; letter-spacing: -0.01em; opacity: 1; }
+html[data-pack="ims"] .tool-card:hover {
+  background: var(--glass-3);
+  border-color: rgba(var(--accent-rgb), 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -6px rgba(30, 40, 90, 0.18);
+}
+html[data-pack="ims"] .modal-box {
+  background: var(--ims-solid);
+  border: 1px solid var(--ims-glass-edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+}
+html[data-pack="ims"] .modal-overlay { background: rgba(21, 27, 51, 0.38); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+
+/* ---------- Form fields ---------- */
+html[data-pack="ims"] select,
+html[data-pack="ims"] .field input,
+html[data-pack="ims"] .field select,
+html[data-pack="ims"] .field textarea {
+  background: color-mix(in srgb, var(--ims-solid) 72%, transparent);
+  border: 1px solid var(--border-hair);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 400;
+  color-scheme: inherit;
+}
+html[data-pack="ims"] select:focus,
+html[data-pack="ims"] .field input:focus,
+html[data-pack="ims"] .field select:focus,
+html[data-pack="ims"] .field textarea:focus {
+  border-color: var(--accent);
+  background: var(--ims-solid);
+  box-shadow: 0 0 0 3.5px rgba(var(--accent-rgb), 0.18);
+}
+html[data-pack="ims"] select option,
+html[data-pack="ims"] select optgroup { background: var(--ims-solid); }
+html[data-pack="ims"] .field .label { font-size: 12.5px; font-weight: 500; }
+
+/* ---------- Operator / admin sidebar: glass rail, white pills, gradient active ---------- */
+html[data-pack="ims"] .desktop-sidebar,
+html[data-pack="ims"] .admin-sidebar {
+  background: var(--ims-nav-bg);
+  border-right: 1px solid var(--ims-glass-edge);
+  backdrop-filter: var(--ims-glass-blur);
+  -webkit-backdrop-filter: var(--ims-glass-blur);
+}
+html[data-pack="ims"] .ds-brand-panel {
+  background: var(--ims-tile);
+  border-color: var(--ims-glass-edge);
+  border-radius: var(--radius);
+  box-shadow: var(--bos-shadow-sm);
+}
+html[data-pack="ims"] .ds-nav-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; }
+html[data-pack="ims"] .ds-nav-section { gap: 6px; }
+html[data-pack="ims"] .ds-nav-link {
+  border-radius: var(--radius);
+  background: var(--ims-tile);
+  border: 1px solid var(--ims-glass-edge);
+  box-shadow: var(--bos-shadow-xs);
+  font-size: 14px;
+}
+html[data-pack="ims"] .ds-nav-link::before { display: none; }
+html[data-pack="ims"] .ds-nav-link:hover { background: var(--glass-3); color: var(--accent-strong); border-color: rgba(var(--accent-rgb), 0.25); }
+html[data-pack="ims"] .ds-nav-link.active {
+  background: var(--ims-grad);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: var(--ims-glow);
+}
+html[data-pack="ims"] .ds-nav-icon { background: transparent; border-radius: var(--radius-sm); }
+html[data-pack="ims"] .ds-nav-link.active .ds-nav-icon { color: #fff; background: rgba(255, 255, 255, 0.18); border-color: transparent; }
+
+/* ---------- Tool chrome: Site Survey (ssv1) + Quotation (qgv1) ---------- */
+html[data-pack="ims"] .ssv1-shell {
+  --ssv1-shadow: var(--bos-shadow-sm);
+  --ssv1-shadow-lift: var(--bos-shadow-md);
+}
+html[data-pack="ims"] .ssv1-panel,
+html[data-pack="ims"] .ssv1-card,
+html[data-pack="ims"] .ssv1-saved-wrap,
+html[data-pack="ims"] .ssv1-saved-filters,
+html[data-pack="ims"] .qgv1-card,
+html[data-pack="ims"] .qgv1-saved-wrap,
+html[data-pack="ims"] .qgv1-saved-filters {
+  background: var(--ims-glass);
+  border-color: var(--ims-glass-edge);
+  border-radius: var(--radius);
+  box-shadow: var(--bos-shadow-sm);
+  backdrop-filter: var(--ims-glass-blur);
+  -webkit-backdrop-filter: var(--ims-glass-blur);
+}
+html[data-pack="ims"] .ssv1-popup { background: var(--ims-solid); border-radius: var(--radius); box-shadow: var(--shadow-lift); }
+html[data-pack="ims"] .ssv1-btn,
+html[data-pack="ims"] .ssv1-btn-back,
+html[data-pack="ims"] .ssv1-btn-save,
+html[data-pack="ims"] .ssv1-btn-new,
+html[data-pack="ims"] .ssv1-filter-chip {
+  border-radius: var(--radius);
+  font-weight: 600;
+  box-shadow: var(--bos-shadow-xs);
+}
+html[data-pack="ims"] .ssv1-btn-next,
+html[data-pack="ims"] .ssv1-btn-submit,
+html[data-pack="ims"] .ssv1-btn-new-primary {
+  border-radius: var(--radius);
+  background: var(--ims-grad);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: var(--ims-glow);
+}
+html[data-pack="ims"] .ssv1-field input,
+html[data-pack="ims"] .ssv1-field select,
+html[data-pack="ims"] .ssv1-field textarea,
+html[data-pack="ims"] .qgv1-root .field input,
+html[data-pack="ims"] .qgv1-root .field select,
+html[data-pack="ims"] .qgv1-root .field textarea,
+html[data-pack="ims"] .qgv1-input,
+html[data-pack="ims"] .qgv1-cat {
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+html[data-pack="ims"] .ssv1-seg,
+html[data-pack="ims"] .qgv1-seg {
+  background: var(--ims-well);
+  border-radius: 16px;
+  box-shadow: var(--bos-shadow-xs);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html[data-pack="ims"] body { --ims-glass: var(--ims-solid); }
+}

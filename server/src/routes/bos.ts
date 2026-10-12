@@ -3,12 +3,13 @@ import { createBosRouter } from "../bos/index.js";
 import { jbtHost } from "../bos/hosts/jbt.js";
 import { quotationV1Connector } from "../bos/connectors/quotation-v1.js";
 import { siteSurveyV1Connector } from "../bos/connectors/site-survey-v1.js";
+import { imsDealerConnector } from "../bos/connectors/ims-dealer.js";
 
 /** Justx BOS plugged into JBT: JBT sessions & notifications, Quotation V1 + Site Survey V1 connectors. */
 const bosRouter = createBosRouter({
   db: pool,
   host: jbtHost,
-  connectors: [quotationV1Connector(pool), siteSurveyV1Connector(pool)],
+  connectors: [quotationV1Connector(pool), siteSurveyV1Connector(pool), imsDealerConnector(pool)],
 });
 
 export default bosRouter;

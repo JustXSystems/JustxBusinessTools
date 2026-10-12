@@ -27,6 +27,7 @@ import siteSurveyV1Router from "./routes/site-survey-v1.js";
 import artifactsRouter from "./routes/artifacts.js";
 import emailOutboxRouter from "./routes/email-outbox.js";
 import bosRouter from "./routes/bos.js";
+import imsRouter from "./routes/ims.js";
 import { requestContextMiddleware } from "./middleware/request-context.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
 import { requireBranchAccess } from "./middleware/require-write.js";
@@ -171,6 +172,7 @@ app.use("/api/site-survey-v1", siteSurveyV1Router);
 app.use("/api/artifacts", artifactsRouter);
 app.use("/api/email-outbox", emailOutboxRouter);
 app.use("/api/bos", bosRouter);
+app.use("/api/ims", imsRouter);
 
 app.use(
   (

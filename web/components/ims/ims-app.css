@@ -1,0 +1,170 @@
+/*
+ * Justx IMS-Dealer app layouts — only what the BOS kit doesn't already provide.
+ * Scoped under `.bos`; colours come from kit tokens so the IMS skin (and dark mode) apply.
+ * Fallbacks keep the layouts readable under the plain BOS skin.
+ */
+
+.bos .ims-app { --ims-grad: var(--bos-ims-grad, linear-gradient(90deg, var(--bos-blue-600), var(--bos-blue))); --ims-grad-soft: var(--bos-ims-grad-soft, var(--bos-blue-100)); --ims-well: var(--bos-ims-well, var(--bos-surface-2)); --ims-tile: var(--bos-ims-tile, var(--bos-surface)); --ims-tile-border: var(--bos-ims-tile-border, var(--bos-border-soft)); --ims-glow: var(--bos-ims-glow, none); }
+
+/* Standalone (/ims) */
+.bos.ims-standalone { min-height: 100dvh; padding-top: 16px; }
+.bos .ims-gate { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 32px 16px; text-align: center; }
+.bos .ims-gate-card { width: min(440px, 100%); padding: 28px; border-radius: var(--bos-r-xl); background: var(--bos-surface); border: 1px solid var(--bos-border-soft); box-shadow: var(--bos-shadow-md); backdrop-filter: var(--bos-ims-glass-blur, none); }
+.bos .ims-gate-logo { width: 64px; height: 64px; object-fit: contain; }
+
+/* Page header */
+.bos .ims-page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 0 0 20px; }
+.bos .ims-page-head-text { min-width: 0; }
+.bos .ims-page-title { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 750; letter-spacing: -0.02em; color: var(--bos-text); }
+.bos .ims-page-sub { margin: 6px 0 0; font-size: 13.5px; color: var(--bos-text-muted); max-width: 720px; }
+.bos .ims-page-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* Topbar */
+.bos .ims-topbar-label { margin-left: 4px; }
+.bos .ims-bell { position: relative; }
+.bos .ims-bell-dot { position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--bos-coral); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; pointer-events: none; box-shadow: 0 0 0 2px var(--bos-surface); }
+.bos .ims-role-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--ims-grad-soft); color: var(--bos-blue-600); font-size: 11.5px; font-weight: 650; white-space: nowrap; }
+
+/* Notifications panel (dialog body) */
+.bos .ims-notes { display: flex; flex-direction: column; gap: 8px; max-height: min(60vh, 520px); overflow-y: auto; }
+.bos .ims-note { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px; align-items: start; width: 100%; padding: 12px 14px; border: 1px solid var(--ims-tile-border); border-radius: var(--bos-r-md); background: var(--ims-tile); text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.bos .ims-note:hover { border-color: var(--bos-blue); }
+.bos .ims-note:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; }
+.bos .ims-note-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; }
+.bos .ims-note-title { font-weight: 650; font-size: 13.5px; }
+.bos .ims-note-body { font-size: 12.5px; color: var(--bos-text-muted); margin-top: 2px; }
+.bos .ims-note-at { font-size: 11px; color: var(--bos-text-faint); white-space: nowrap; }
+
+/* Dashboard hero */
+.bos .ims-hero { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 22px 24px; border-radius: var(--bos-r-xl); background: var(--ims-grad); color: #fff; box-shadow: var(--ims-glow); }
+.bos .ims-hero::after { content: ""; position: absolute; right: -60px; top: -80px; width: 260px; height: 260px; border-radius: 50%; background: rgba(255, 255, 255, 0.12); pointer-events: none; }
+.bos .ims-hero-greet { font-size: 13px; opacity: 0.85; }
+.bos .ims-hero-title { margin: 4px 0 0; font-size: 24px; font-weight: 750; letter-spacing: -0.02em; }
+.bos .ims-hero-sub { margin-top: 6px; font-size: 13px; opacity: 0.9; }
+.bos .ims-hero-stats { display: flex; gap: 22px; flex-wrap: wrap; position: relative; z-index: 1; }
+.bos .ims-hero-stat { display: flex; flex-direction: column; gap: 2px; min-width: 90px; }
+.bos .ims-hero-stat b { font-size: 20px; font-weight: 750; }
+.bos .ims-hero-stat span { font-size: 11.5px; opacity: 0.85; }
+
+/* Quick action pills */
+.bos .ims-quick { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.bos .ims-quick-btn { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--bos-r-lg); border: 1px solid var(--ims-tile-border); background: var(--ims-tile); color: var(--bos-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.bos .ims-quick-btn:hover { transform: translateY(-1px); border-color: var(--bos-blue); box-shadow: var(--ims-glow); }
+.bos .ims-quick-btn:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; }
+.bos .ims-quick-ic { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 12px; font-size: 16px; background: var(--ims-grad-soft); }
+
+/* More actions tiles */
+.bos .ims-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.bos .ims-tile { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 14px; border-radius: var(--bos-r-lg); border: 1px solid var(--ims-tile-border); background: var(--ims-tile); color: var(--bos-text); font: inherit; text-align: left; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.bos .ims-tile:hover { transform: translateY(-1px); border-color: var(--bos-blue); box-shadow: var(--ims-glow); }
+.bos .ims-tile:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; }
+.bos .ims-tile.is-editing { border-style: dashed; }
+.bos .ims-tile.is-fav { border-color: var(--bos-amber); }
+.bos .ims-tile-ic { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 14px; font-size: 19px; }
+.bos .ims-tile-title { font-size: 13.5px; font-weight: 650; }
+.bos .ims-tile-desc { font-size: 12px; color: var(--bos-text-muted); margin-top: 2px; }
+.bos .ims-tile-badge { position: absolute; top: 10px; right: 10px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--bos-coral); color: #fff; font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; }
+.bos .ims-tile-star { position: absolute; top: 8px; right: 10px; font-size: 15px; color: var(--bos-amber); }
+.bos .ims-group-title { margin: 22px 0 10px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--bos-text-faint); }
+
+/* Attention list */
+.bos .ims-attn { display: flex; flex-direction: column; gap: 8px; }
+.bos .ims-attn-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: var(--bos-r-md); background: var(--ims-well); border: 1px solid transparent; font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; }
+.bos .ims-attn-row:hover { border-color: var(--ims-tile-border); }
+.bos .ims-attn-ic { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; font-size: 16px; }
+
+/* Numbers */
+.bos .ims-num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.bos .ims-pos { color: var(--bos-emerald); }
+.bos .ims-neg { color: var(--bos-coral); }
+.bos .ims-muted { color: var(--bos-text-muted); }
+.bos .ims-faint { color: var(--bos-text-faint); font-size: 12px; }
+.bos .ims-strong { font-weight: 650; }
+.bos .ims-cell-stack { display: flex; flex-direction: column; line-height: 1.35; min-width: 0; }
+.bos .ims-cell-stack small { color: var(--bos-text-faint); font-size: 11.5px; }
+
+/* Rows & splits */
+.bos .ims-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bos .ims-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bos .ims-split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+.bos .ims-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.bos .ims-toolbar > .ims-grow { flex: 1 1 220px; min-width: 0; }
+
+/* Document line editor: item · qty · rate · disc% · GST% · amount · remove */
+.bos .ims-line-head,
+.bos .ims-line { display: grid; grid-template-columns: minmax(0, 2.2fr) 78px 100px 64px 70px 110px 30px; gap: 8px; align-items: center; }
+.bos .ims-line-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--bos-text-faint); font-weight: 650; padding: 0 0 6px; }
+.bos .ims-line { margin-bottom: 8px; }
+.bos .ims-line-amount { font-variant-numeric: tabular-nums; font-size: 13px; text-align: right; padding-right: 4px; }
+.bos .ims-line-amount small { display: block; font-size: 10.5px; color: var(--bos-text-faint); }
+.bos .ims-totals { display: grid; grid-template-columns: auto auto; gap: 6px 24px; justify-content: end; font-size: 13px; margin-top: 12px; }
+.bos .ims-totals dt { color: var(--bos-text-muted); }
+.bos .ims-totals dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.bos .ims-totals .is-grand { font-size: 16px; font-weight: 750; color: var(--bos-text); }
+
+/* Item picker results */
+.bos .ims-pick { display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow-y: auto; }
+.bos .ims-pick-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 1px solid transparent; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.bos .ims-pick-row:hover,
+.bos .ims-pick-row:focus-visible { background: var(--ims-well); border-color: var(--ims-tile-border); outline: none; }
+
+/* Stock check count sheet */
+.bos .ims-count-input { width: 96px; }
+.bos .ims-diff-pos { color: var(--bos-emerald); font-weight: 650; }
+.bos .ims-diff-neg { color: var(--bos-coral); font-weight: 650; }
+
+/* Bars (category / aging) */
+.bos .ims-bars { display: flex; flex-direction: column; gap: 12px; }
+.bos .ims-bar-row { display: grid; grid-template-columns: minmax(0, 140px) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 12.5px; }
+.bos .ims-bar-track { height: 8px; border-radius: 999px; background: var(--ims-well); overflow: hidden; }
+.bos .ims-bar-fill { height: 100%; border-radius: inherit; background: var(--ims-grad); }
+.bos .ims-stackbar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--ims-well); }
+.bos .ims-stackbar > span { height: 100%; }
+.bos .ims-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; font-size: 12px; color: var(--bos-text-muted); }
+.bos .ims-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+
+/* Scanner & map */
+.bos .ims-scanner { position: relative; width: 100%; max-width: 520px; aspect-ratio: 4 / 3; border-radius: var(--bos-r-lg); overflow: hidden; background: #0b1028; }
+.bos .ims-scanner video { width: 100%; height: 100%; object-fit: cover; }
+.bos .ims-scanner-frame { position: absolute; inset: 18%; border: 3px solid rgba(255, 255, 255, 0.85); border-radius: 18px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35); pointer-events: none; }
+.bos .ims-map { width: 100%; height: 360px; border: 0; border-radius: var(--bos-r-lg); background: var(--ims-well); }
+
+/* Printable documents (PO, invoice, closing) reuse the kit's .bos-inv-paper */
+.bos .ims-paper-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; font-size: 12px; margin: 16px 0; }
+.bos .ims-paper-meta b { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; margin-bottom: 3px; }
+.bos .ims-paper-seller { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.5; white-space: pre-line; }
+.bos .ims-paper-sub { font-size: 11px; color: #6b7280; font-weight: 500; margin-top: 2px; white-space: pre-line; }
+.bos .ims-paper-stamp { display: inline-block; margin-top: 8px; font-size: 10px; font-weight: 700; letter-spacing: .08em; padding: 3px 8px; border-radius: 999px; border: 1.5px solid currentColor; }
+.bos .ims-paper-words { font-size: 12px; color: #3a3f4a; font-style: italic; text-align: right; margin: 6px 0 18px; }
+.bos .ims-paper-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin: 40px 0 8px; font-size: 12px; color: #3a3f4a; line-height: 1.5; }
+.bos .ims-paper-sign-line { border-top: 1px solid #1f2430; margin-bottom: 6px; width: 80%; }
+.bos .bos-inv-paper-table td small { display: block; font-size: 10px; color: #9aa0ac; }
+
+/* Settings permission matrix */
+.bos .ims-matrix { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.bos .ims-matrix th,
+.bos .ims-matrix td { padding: 8px 10px; border-bottom: 1px solid var(--bos-border-soft); text-align: center; }
+.bos .ims-matrix th:first-child,
+.bos .ims-matrix td:first-child { text-align: left; position: sticky; left: 0; background: var(--bos-surface); }
+.bos .ims-matrix-wrap { overflow-x: auto; border: 1px solid var(--bos-border-soft); border-radius: var(--bos-r-md); }
+
+/* Footer */
+.bos .ims-foot { margin-top: 28px; }
+
+@media (max-width: 900px) {
+  .bos .ims-split { grid-template-columns: minmax(0, 1fr); }
+  .bos .ims-line-head { display: none; }
+  .bos .ims-line { grid-template-columns: minmax(0, 1fr) 70px 90px; }
+  .bos .ims-line > :nth-child(4),
+  .bos .ims-line > :nth-child(5) { display: none; }
+  .bos .ims-line > :nth-child(6) { grid-column: 1 / 3; text-align: left; }
+  .bos .ims-paper-meta { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 560px) {
+  .bos .ims-page-title { font-size: 20px; }
+  .bos .ims-hero { padding: 18px; }
+  .bos .ims-hero-title { font-size: 20px; }
+  .bos .ims-topbar-label { display: none; }
+  .bos .ims-bar-row { grid-template-columns: 90px minmax(0, 1fr) auto; }
+}

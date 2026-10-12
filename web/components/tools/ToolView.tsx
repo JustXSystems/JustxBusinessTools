@@ -47,6 +47,16 @@ const BosTool = dynamic(() => import("@/components/bos-app/BosTool"), {
   ),
 });
 
+const ImsDealerTool = dynamic(() => import("@/components/ims/ImsDealerTool"), {
+  ssr: false,
+  loading: () => (
+    <div className="empty-state">
+      <div className="es-icon">⏳</div>
+      <div className="es-title">Loading…</div>
+    </div>
+  ),
+});
+
 export function ToolView({ toolId }: { toolId: string }) {
   const { config, loading } = usePlatformConfig();
   const platformTools = config?.tools ?? [];
@@ -108,6 +118,10 @@ export function ToolView({ toolId }: { toolId: string }) {
 
   if (tool.id === "bos") {
     return <BosTool />;
+  }
+
+  if (tool.id === "imsdealer") {
+    return <ImsDealerTool />;
   }
 
   if (tool.id === "quotationv1") {

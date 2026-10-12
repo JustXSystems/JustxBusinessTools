@@ -1,0 +1,149 @@
+/* Sales & finance (invoices, POS, receivables, payables, ledger, daily closing). Scoped under `.bos`, kit tokens only. */
+
+/* Wider dialogs for editors and detail views (the kit's wide dialog is 460px). */
+.bos .bos-dialog-wide:has(.fin-xl) { width: min(900px, 100%); }
+.bos .bos-dialog-wide:has(.fin-lg) { width: min(640px, 100%); }
+
+/* Sections inside forms */
+.bos .fin-section { padding: 14px 0 4px; border-top: 1px solid var(--bos-border-soft); }
+.bos .fin-section:first-child { border-top: 0; padding-top: 0; }
+.bos .fin-section-title { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--bos-text-faint); }
+
+/* Key / value list */
+.bos .fin-kv { display: grid; grid-template-columns: minmax(110px, auto) minmax(0, 1fr); gap: 8px 16px; margin: 0; font-size: 13px; }
+.bos .fin-kv dt { color: var(--bos-text-faint); }
+.bos .fin-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
+
+/* Small stat tiles */
+.bos .fin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.bos .fin-stat { padding: 10px 12px; border-radius: var(--bos-r-md); background: var(--ims-well, var(--bos-surface-2)); min-width: 0; }
+.bos .fin-stat b { display: block; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.bos .fin-stat span { font-size: 11px; color: var(--bos-text-faint); text-transform: uppercase; letter-spacing: .05em; }
+.bos .fin-stat.is-coral b { color: var(--bos-coral-600, var(--bos-coral)); }
+.bos .fin-stat.is-amber b { color: var(--bos-amber-600, var(--bos-amber)); }
+.bos .fin-stat.is-emerald b { color: var(--bos-emerald-600, var(--bos-emerald)); }
+.bos .fin-stat.is-blue b { color: var(--bos-blue-600, var(--bos-blue)); }
+
+/* Timeline */
+.bos .fin-timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+.bos .fin-timeline::before { content: ""; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: var(--bos-border-soft); }
+.bos .fin-timeline li { position: relative; padding: 0 0 14px 24px; font-size: 13px; white-space: pre-line; overflow-wrap: anywhere; }
+.bos .fin-timeline li::before { content: ""; position: absolute; left: 1px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--bos-surface); border: 2px solid var(--bos-blue); }
+.bos .fin-timeline li.is-good::before { border-color: var(--bos-emerald); }
+.bos .fin-timeline li.is-bad::before { border-color: var(--bos-coral); }
+.bos .fin-timeline li.is-warn::before { border-color: var(--bos-amber); }
+.bos .fin-timeline small { display: block; color: var(--bos-text-faint); font-size: 11.5px; margin-top: 2px; }
+
+/* Quick-pick chips (reasons, amounts, categories) */
+.bos .fin-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bos .fin-chips button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px dashed var(--bos-border); background: var(--bos-surface); color: var(--bos-text); font: inherit; font-size: 12px; cursor: pointer; }
+.bos .fin-chips button:hover { border-color: var(--bos-blue); border-style: solid; }
+.bos .fin-chips button[aria-pressed="true"] { border-style: solid; border-color: var(--bos-blue); background: var(--bos-blue-100, var(--bos-surface-2)); }
+.bos .fin-chips button:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; }
+
+/* Document page: paper + side panel */
+.bos .fin-doc-page { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+.bos .fin-doc-side { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 88px; min-width: 0; }
+.bos .fin-back { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: var(--bos-text-muted); font: inherit; font-size: 13px; cursor: pointer; }
+.bos .fin-back:hover { color: var(--bos-text); }
+.bos .fin-back:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; border-radius: 4px; }
+
+/* Editor: party / meta boxes */
+.bos .fin-doc-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.bos .fin-box { padding: 14px; border-radius: var(--bos-r-lg); background: var(--ims-well, var(--bos-surface-2)); font-size: 12.5px; line-height: 1.55; min-width: 0; }
+.bos .fin-box-label { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--bos-text-faint); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.bos .fin-sticky-actions { position: sticky; bottom: 0; z-index: 2; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; padding: 12px 0; background: linear-gradient(to top, var(--bos-bg, var(--bos-surface)) 70%, transparent); }
+
+/* Share preview */
+.bos .fin-share { white-space: pre-wrap; font-size: 12.5px; line-height: 1.55; padding: 12px 14px; border-radius: var(--bos-r-md); background: var(--ims-well, var(--bos-surface-2)); max-height: 260px; overflow-y: auto; font-family: var(--bos-font-mono, ui-monospace, monospace); overflow-wrap: anywhere; }
+
+/* Plain tables inside cards / dialogs */
+.bos .fin-table-wrap { overflow-x: auto; }
+.bos .fin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bos .fin-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--bos-text-faint); font-weight: 650; padding: 0 8px 8px; white-space: nowrap; }
+.bos .fin-table td { padding: 8px; border-top: 1px solid var(--bos-border-soft); vertical-align: middle; }
+.bos .fin-table .is-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bos .fin-table tfoot td { font-weight: 700; border-top: 1.5px solid var(--bos-border); }
+.bos .fin-table tr.is-click { cursor: pointer; }
+.bos .fin-table tr.is-click:hover td { background: var(--ims-well, var(--bos-surface-2)); }
+
+/* Paper extras (HSN summary, statements, closing report) */
+.bos .fin-paper-section { margin-top: 18px; }
+.bos .fin-paper-h { font-family: var(--bos-font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #9aa0ac; font-weight: 650; margin: 0 0 6px; }
+.bos .bos-inv-paper .fin-paper-num { text-align: right; font-variant-numeric: tabular-nums; }
+.bos .fin-paper-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 20px; font-size: 12.5px; color: #3a3f4a; }
+.bos .fin-paper-grid b { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #9aa0ac; font-weight: 650; margin-bottom: 2px; }
+
+/* POS counter */
+.bos .fin-pos { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
+.bos .fin-cart { display: flex; flex-direction: column; }
+.bos .fin-cart-row { display: grid; grid-template-columns: minmax(0, 1fr) 112px 92px 28px; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--bos-border-soft); font-size: 13px; }
+.bos .fin-cart-row:last-child { border-bottom: 0; }
+.bos .fin-qty { display: inline-flex; align-items: center; gap: 4px; }
+.bos .fin-qty input { width: 52px; text-align: center; }
+.bos .fin-qty button { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--bos-border); background: var(--bos-surface); color: var(--bos-text); font: inherit; font-weight: 700; cursor: pointer; }
+.bos .fin-qty button:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; }
+.bos .fin-remove { width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: none; color: var(--bos-text-faint); border-radius: 8px; cursor: pointer; }
+.bos .fin-remove:hover { color: var(--bos-coral); background: var(--ims-well, var(--bos-surface-2)); }
+.bos .fin-remove svg { width: 14px; height: 14px; }
+.bos .fin-pos-total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 16px; border-radius: var(--bos-r-lg); background: var(--ims-grad, var(--bos-blue)); color: #fff; }
+.bos .fin-pos-total b { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.bos .fin-change { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 12px; border-radius: var(--bos-r-md); background: var(--ims-well, var(--bos-surface-2)); font-size: 13px; }
+.bos .fin-change b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.bos .fin-change.is-short b { color: var(--bos-coral-600, var(--bos-coral)); }
+.bos .fin-change.is-ok b { color: var(--bos-emerald-600, var(--bos-emerald)); }
+
+/* Big amount in dialogs */
+.bos .fin-amount { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
+/* Closing variance */
+.bos .fin-variance { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 16px; border-radius: var(--bos-r-lg); border: 1px solid var(--bos-border-soft); background: var(--ims-well, var(--bos-surface-2)); }
+.bos .fin-variance b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.bos .fin-variance.is-short { border-color: var(--bos-coral); }
+.bos .fin-variance.is-short b { color: var(--bos-coral-600, var(--bos-coral)); }
+.bos .fin-variance.is-over { border-color: var(--bos-amber); }
+.bos .fin-variance.is-over b { color: var(--bos-amber-600, var(--bos-amber)); }
+.bos .fin-variance.is-ok { border-color: var(--bos-emerald); }
+.bos .fin-variance.is-ok b { color: var(--bos-emerald-600, var(--bos-emerald)); }
+
+/* Party balance cards */
+.bos .fin-party-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.bos .fin-party { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: var(--bos-r-lg); border: 1px solid var(--ims-tile-border, var(--bos-border-soft)); background: var(--ims-tile, var(--bos-surface)); text-align: left; font: inherit; color: inherit; cursor: pointer; min-width: 0; }
+.bos .fin-party:hover { border-color: var(--bos-blue); }
+.bos .fin-party:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; }
+.bos .fin-party-name { font-weight: 650; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bos .fin-party-bal { font-size: 18px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.bos .fin-party-bal.is-pos { color: var(--bos-emerald-600, var(--bos-emerald)); }
+.bos .fin-party-bal.is-neg { color: var(--bos-coral-600, var(--bos-coral)); }
+.bos .fin-party small { font-size: 11.5px; color: var(--bos-text-faint); }
+
+/* Bulk-selection bar */
+.bos .fin-bulk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Notes under figures */
+.bos .fin-note { font-size: 12px; color: var(--bos-text-faint); line-height: 1.5; }
+
+/* Daily closing */
+.bos .fin-closing-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+.bos .fin-closing-side { position: sticky; top: 16px; }
+.bos .fin-denoms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.bos .fin-denom { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 6px; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.bos .fin-over { color: var(--bos-amber-600, var(--bos-amber)); }
+.bos .fin-paper-sign { display: flex; justify-content: space-between; gap: 40px; margin-top: 48px; font-size: 11px; color: #6b7280; }
+.bos .fin-paper-sign span { flex: 1; max-width: 200px; padding-top: 6px; border-top: 1px solid #c9ced6; text-align: center; }
+
+@media (max-width: 1080px) {
+  .bos .fin-doc-page { grid-template-columns: minmax(0, 1fr); }
+  .bos .fin-doc-side { position: static; }
+  .bos .fin-pos { grid-template-columns: minmax(0, 1fr); }
+  .bos .fin-closing-grid { grid-template-columns: minmax(0, 1fr); }
+  .bos .fin-closing-side { position: static; }
+}
+
+@media (max-width: 720px) {
+  .bos .fin-doc-grid { grid-template-columns: minmax(0, 1fr); }
+  .bos .fin-kv { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .bos .fin-kv dd { margin-bottom: 8px; }
+  .bos .fin-cart-row { grid-template-columns: minmax(0, 1fr) 104px 28px; }
+  .bos .fin-cart-row > :nth-child(3) { grid-column: 1 / 2; text-align: left !important; }
+}

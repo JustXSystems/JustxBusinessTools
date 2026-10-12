@@ -3,13 +3,14 @@
 import "./styles/bos.tokens.css";
 import "./styles/bos.components.css";
 import "./styles/bos.patterns.css";
+import "./styles/bos.skin-ims.css";
 
-import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import type { BosTheme } from "./tokens";
+import { useCallback, useMemo, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import type { BosSkin, BosTheme } from "./tokens";
 import { BosThemeContext, type BosThemeContextValue } from "./theme-context";
 import { ToastProvider } from "./overlays/Toast";
 import { cx } from "./cx";
-import { readStoredBosTheme, resolveInitialBosTheme, writeStoredBosTheme } from "@/lib/bos/theme";
+import { readStoredBosTheme, resolveBosSkin, resolveInitialBosTheme, writeStoredBosTheme } from "@/lib/bos/theme";
 
 function initialTheme(fallback?: BosTheme): BosTheme {
   if (typeof document === "undefined") return fallback ?? "light";
@@ -21,6 +22,21 @@ function initialTheme(fallback?: BosTheme): BosTheme {
   });
 }
 
+function subscribeHostPack(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-pack"] });
+  return () => observer.disconnect();
+}
+
+/** The org's JBT design pack (`<html data-pack>`), live as admins switch presets. */
+function useHostPack(): string | null {
+  return useSyncExternalStore(
+    subscribeHostPack,
+    () => document.documentElement.dataset.pack ?? null,
+    () => null,
+  );
+}
+
 export type BosRootProps = {
   children: ReactNode;
   /** Controlled theme. When omitted, BosRoot owns and persists the theme. */
@@ -28,6 +44,11 @@ export type BosRootProps = {
   onThemeChange?: (theme: BosTheme) => void;
   /** Theme to use when nothing is persisted (uncontrolled mode). */
   defaultTheme?: BosTheme;
+  /**
+   * Visual skin. When omitted the kit follows the org's design pack
+   * (`ims` pack → IMS skin, anything else → BOS skin).
+   */
+  skin?: BosSkin;
   /** Paint the BOS canvas background (full-page surfaces). */
   canvas?: boolean;
   className?: string;
@@ -43,12 +64,15 @@ export function BosRoot({
   theme: controlled,
   onThemeChange,
   defaultTheme,
+  skin: explicitSkin,
   canvas = false,
   className,
   style,
 }: BosRootProps) {
   const [owned, setOwned] = useState<BosTheme>(() => initialTheme(defaultTheme));
   const theme = controlled ?? owned;
+  const hostPack = useHostPack();
+  const skin = resolveBosSkin({ explicit: explicitSkin, hostPack });
 
   const setTheme = useCallback(
     (next: BosTheme) => {
@@ -62,13 +86,18 @@ export function BosRoot({
   );
 
   const value = useMemo<BosThemeContextValue>(
-    () => ({ theme, setTheme, toggleTheme: () => setTheme(theme === "dark" ? "light" : "dark") }),
-    [theme, setTheme],
+    () => ({ theme, setTheme, toggleTheme: () => setTheme(theme === "dark" ? "light" : "dark"), skin }),
+    [theme, setTheme, skin],
   );
 
   return (
     <BosThemeContext.Provider value={value}>
-      <div className={cx("bos", canvas && "bos-canvas", className)} data-bos-theme={theme} style={style}>
+      <div
+        className={cx("bos", canvas && "bos-canvas", className)}
+        data-bos-theme={theme}
+        data-bos-skin={skin === "bos" ? undefined : skin}
+        style={style}
+      >
         <ToastProvider>{children}</ToastProvider>
       </div>
     </BosThemeContext.Provider>

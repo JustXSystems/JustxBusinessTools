@@ -1,0 +1,103 @@
+/*
+ * Stock entry, stock checks, damage & returns and history layouts.
+ * Scoped under `.bos`; colours come from kit tokens so the IMS skin and dark mode apply.
+ */
+
+/* Quantity stepper */
+.bos .ims-b-stepper { display: inline-flex; align-items: stretch; border: 1px solid var(--bos-border); border-radius: 10px; overflow: hidden; background: var(--bos-surface); }
+.bos .ims-b-stepper button { width: 30px; border: 0; background: var(--ims-well, var(--bos-surface-2)); color: var(--bos-text); font: inherit; font-size: 15px; font-weight: 650; cursor: pointer; }
+.bos .ims-b-stepper button:hover:not(:disabled) { background: var(--bos-blue-100); color: var(--bos-blue-600); }
+.bos .ims-b-stepper button:disabled { opacity: .45; cursor: default; }
+.bos .ims-b-stepper button:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: -2px; }
+.bos .ims-b-stepper input { width: 64px; min-width: 0; border: 0; border-inline: 1px solid var(--bos-border-soft); background: transparent; color: var(--bos-text); font: inherit; font-size: 13.5px; font-variant-numeric: tabular-nums; text-align: center; padding: 6px 4px; }
+.bos .ims-b-stepper input:focus { outline: none; background: var(--bos-blue-100); }
+
+/* Reason chips */
+.bos .ims-b-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Mode banner */
+.bos .ims-b-mode { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--bos-r-lg); background: var(--ims-well, var(--bos-surface-2)); border: 1px solid var(--ims-tile-border, var(--bos-border-soft)); }
+.bos .ims-b-mode-ic { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; font-size: 18px; }
+.bos .ims-b-mode-title { font-weight: 700; font-size: 14px; }
+.bos .ims-b-mode-sub { font-size: 12.5px; color: var(--bos-text-muted); }
+
+/* Cart lines: item · qty · rate · after · remove */
+.bos .ims-b-cart { display: flex; flex-direction: column; gap: 8px; }
+.bos .ims-b-cart-head,
+.bos .ims-b-cart-line { display: grid; grid-template-columns: minmax(0, 2fr) 136px 112px minmax(120px, 1fr) 32px; gap: 10px; align-items: center; }
+.bos .ims-b-cart.is-norate .ims-b-cart-head,
+.bos .ims-b-cart.is-norate .ims-b-cart-line { grid-template-columns: minmax(0, 2fr) 136px minmax(120px, 1fr) 32px; }
+.bos .ims-b-cart-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--bos-text-faint); font-weight: 650; padding: 0 12px; }
+.bos .ims-b-cart-line { padding: 10px 12px; border-radius: var(--bos-r-md); border: 1px solid var(--ims-tile-border, var(--bos-border-soft)); background: var(--ims-tile, var(--bos-surface)); }
+.bos .ims-b-cart-line.is-error { border-color: var(--bos-coral); box-shadow: 0 0 0 1px var(--bos-coral) inset; }
+.bos .ims-b-cart-line.is-warn { border-color: var(--bos-amber); }
+.bos .ims-b-cart-line .bos-input { min-width: 0; }
+.bos .ims-b-after { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.bos .ims-b-after b { font-size: 13.5px; }
+.bos .ims-b-after small { font-size: 11px; }
+.bos .ims-b-warn { color: var(--bos-amber-600, var(--bos-amber)); }
+.bos .ims-b-err { color: var(--bos-coral); }
+.bos .ims-b-cart-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px 0; font-size: 13px; }
+.bos .ims-b-cart-foot b { font-variant-numeric: tabular-nums; }
+
+/* Success summary */
+.bos .ims-b-success { text-align: center; padding: 8px 0 4px; }
+.bos .ims-b-success-ic { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 50%; background: var(--bos-emerald-100, rgba(31, 166, 121, .14)); color: var(--bos-emerald); font-size: 26px; font-weight: 700; }
+.bos .ims-b-success-title { font-size: 18px; font-weight: 750; letter-spacing: -0.01em; }
+.bos .ims-b-success-sub { margin-top: 4px; font-size: 13px; color: var(--bos-text-muted); }
+
+/* Compact list rows (recent entries, damage log) */
+.bos .ims-b-list { display: flex; flex-direction: column; gap: 6px; }
+.bos .ims-b-list-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 10px; border-radius: var(--bos-r-md); background: var(--ims-well, var(--bos-surface-2)); font-size: 13px; }
+.bos .ims-b-list-row .ims-cell-stack { min-width: 0; }
+.bos .ims-b-list-row .ims-strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Count sheet */
+.bos .ims-b-sheet { display: flex; flex-direction: column; }
+.bos .ims-b-sheet-head,
+.bos .ims-b-sheet-row { display: grid; grid-template-columns: minmax(0, 2fr) 90px 150px 90px minmax(0, 1.2fr); gap: 10px; align-items: center; }
+.bos .ims-b-sheet-head { position: sticky; top: 0; z-index: 1; padding: 8px 12px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--bos-text-faint); font-weight: 650; background: var(--bos-surface); border-bottom: 1px solid var(--bos-border-soft); }
+.bos .ims-b-sheet-row { padding: 8px 12px; border-bottom: 1px solid var(--bos-border-soft); }
+.bos .ims-b-sheet-row.is-mismatch { background: color-mix(in srgb, var(--bos-amber) 7%, transparent); }
+.bos .ims-b-sheet-row.is-match { background: color-mix(in srgb, var(--bos-emerald) 5%, transparent); }
+.bos .ims-b-sheet-group { padding: 14px 12px 6px; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--bos-text-muted); display: flex; justify-content: space-between; gap: 8px; }
+.bos .ims-b-sheet-count { display: flex; align-items: center; gap: 6px; }
+.bos .ims-b-sheet-note .bos-input { width: 100%; }
+.bos .ims-b-drift { font-size: 11px; color: var(--bos-amber-600, var(--bos-amber)); }
+
+/* Status filter chips row */
+.bos .ims-b-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+/* Totals strip under tables */
+.bos .ims-b-totals { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.bos .ims-b-total { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: var(--bos-r-md); background: var(--ims-well, var(--bos-surface-2)); min-width: 120px; font-size: 12px; }
+.bos .ims-b-total b { font-size: 14px; font-variant-numeric: tabular-nums; }
+
+/* Activity feed */
+.bos .ims-b-feed { display: flex; flex-direction: column; }
+.bos .ims-b-feed-day { padding: 14px 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--bos-text-faint); }
+.bos .ims-b-feed-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--bos-border-soft); }
+.bos .ims-b-feed-summary { font-size: 13.5px; line-height: 1.4; }
+.bos .ims-b-feed-meta { font-size: 11.5px; color: var(--bos-text-faint); margin-top: 2px; }
+.bos .ims-b-link { border: 0; padding: 0; background: none; font: inherit; color: var(--bos-blue-btn, var(--bos-blue)); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.bos .ims-b-link:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; border-radius: 4px; }
+
+/* Return dialog lines: item · qty · rate · amount · remove */
+.bos .ims-b-rline { display: grid; grid-template-columns: minmax(0, 1.8fr) 130px 110px 96px 32px; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--bos-border-soft); }
+
+/* Reason bars */
+.bos .ims-b-reason { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 12.5px; }
+
+@media (max-width: 900px) {
+  .bos .ims-b-cart-head,
+  .bos .ims-b-sheet-head { display: none; }
+  .bos .ims-b-cart-line,
+  .bos .ims-b-cart.is-norate .ims-b-cart-line { grid-template-columns: minmax(0, 1fr) auto; }
+  .bos .ims-b-cart-line > :first-child { grid-column: 1 / -1; }
+  .bos .ims-b-sheet-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .bos .ims-b-sheet-row > :first-child,
+  .bos .ims-b-sheet-row > .ims-b-sheet-note { grid-column: 1 / -1; }
+  .bos .ims-b-rline { grid-template-columns: minmax(0, 1fr) 120px 32px; }
+  .bos .ims-b-rline > :nth-child(3),
+  .bos .ims-b-rline > :nth-child(4) { display: none; }
+}

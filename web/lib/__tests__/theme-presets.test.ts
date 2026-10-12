@@ -23,6 +23,24 @@ describe("theme presets", () => {
     expect(tokens?.pack).toBe("bos");
   });
 
+  it("ships the IMS master theme in both schemes with the ims pack", () => {
+    const light = findThemePresetTokens("JustX IMS (Light)");
+    const dark = findThemePresetTokens("JustX IMS (Dark)");
+    expect(light).toMatchObject({ scheme: "light", pack: "ims", accent: "#4854EB", radius: "24px" });
+    expect(dark).toMatchObject({ scheme: "dark", pack: "ims" });
+  });
+
+  it("matches the server preset list name-for-name and token-for-token", async () => {
+    // Server module reads the DB pool at import, so compare the source text.
+    const { readFileSync } = await import("node:fs");
+    const path = await import("node:path");
+    const src = readFileSync(path.resolve(__dirname, "../../../server/src/lib/theme-presets.ts"), "utf8");
+    for (const preset of THEME_PRESETS) {
+      expect(src, preset.name).toContain(`name: "${preset.name}"`);
+      if (preset.tokens.pack) expect(src, `${preset.name} accent`).toContain(`accent: "${preset.tokens.accent}"`);
+    }
+  });
+
   it("parses saved org theme keys", () => {
     expect(parseSavedThemeId("saved:42")).toBe(42);
     expect(parseSavedThemeId("JustXSystems Electric")).toBeNull();

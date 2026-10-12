@@ -82,6 +82,40 @@ export const JUSTX_BOS_DARK: ThemeTokens = {
   pack: "bos",
 };
 
+/**
+ * JustX IMS — the IMS master theme: periwinkle canvas, frosted-glass panels,
+ * blue→cyan gradient actions with an indigo glow, 24px rounding, Inter.
+ * The `ims` pack restyles every JBT tool (web/styles/ims-pack.css) and switches
+ * kit-based tools (BOS, IMS-Dealer) to the IMS skin. Mirrors
+ * server/src/lib/theme-presets.ts — keep in sync.
+ */
+export const JUSTX_IMS_LIGHT: ThemeTokens = {
+  accent: "#4854EB",
+  teal: "#32C7F6",
+  accentStrong: "#3A46DE",
+  bg0: "#D6E1F8",
+  bg1: "#EFF4FD",
+  bg2: "#F7FBFE",
+  radius: "24px",
+  font: "var(--font-inter, 'Inter', system-ui)",
+  scheme: "light",
+  pack: "ims",
+};
+
+/** JustX IMS Dark — deep indigo night with the same gradient family. */
+export const JUSTX_IMS_DARK: ThemeTokens = {
+  accent: "#7B85FF",
+  teal: "#45D3FF",
+  accentStrong: "#5E69F5",
+  bg0: "#0E1430",
+  bg1: "#161E40",
+  bg2: "#18204A",
+  radius: "24px",
+  font: "var(--font-inter, 'Inter', system-ui)",
+  scheme: "dark",
+  pack: "ims",
+};
+
 export const DEFAULT_THEME_TOKENS: ThemeTokens = { ...JUSTX_ELECTRIC };
 
 function schemeOf(tokens: Partial<ThemeTokens>): ColorScheme {

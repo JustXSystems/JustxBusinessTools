@@ -1,0 +1,29 @@
+/* Reports & GST */
+.bos .ims-rp-tile-text > span { display: block; }
+.bos .ims-rp-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.bos .ims-rp-head .ims-tile-ic { width: 44px; height: 44px; }
+.bos .ims-rp-head-text { flex: 1 1 260px; min-width: 0; }
+.bos .ims-rp-title { margin: 0; font-size: 18px; font-weight: 700; }
+.bos .ims-rp-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bos .ims-rp-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bos .ims-rp-section-title { margin: 0 0 10px; font-size: 14px; font-weight: 650; }
+.bos .ims-rp-kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; font-size: 13px; }
+.bos .ims-rp-kv dt { color: var(--bos-text-muted); }
+.bos .ims-rp-kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.bos .ims-rp-kv .is-strong { font-weight: 700; color: var(--bos-text); }
+.bos .ims-rp-kv .is-sep { border-top: 1px solid var(--ims-tile-border); padding-top: 8px; }
+.bos .ims-rp-mail { white-space: pre-wrap; font-size: 12.5px; line-height: 1.5; max-height: 220px; overflow-y: auto; padding: 10px 12px; border-radius: 10px; background: var(--ims-well); }
+.bos .ims-rp-steps { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--bos-text-muted); }
+
+/* Print sheet */
+.bos .ims-rp-paper { max-width: 100%; overflow-x: auto; }
+.bos .ims-rp-table { font-size: 11px; }
+.bos .ims-rp-table th,
+.bos .ims-rp-table td { padding: 5px 6px; }
+.bos .ims-rp-total td { font-weight: 700; border-top: 1.5px solid #1f2430; }
+.bos .ims-rp-paper h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin: 18px 0 6px; color: #3a3f4a; }
+
+@media print {
+  body.bos-printing .ims-rp-paper { overflow: visible; }
+  body.bos-printing .ims-rp-table { font-size: 9.5px; }
+}

@@ -13,7 +13,7 @@ function homeIds(catalog: Array<{ id: string; available: boolean }>, selection: 
   return [...filterHomeToolsBySelection(merged, selection), ...catalogEnabledOptInTools(catalog)].map((t) => t.id);
 }
 
-describe.each(["bosdesign", "bos"])("opt-in tool %s", (id) => {
+describe.each(["bosdesign", "bos", "imsdealer"])("opt-in tool %s", (id) => {
   it("resolves as a subscription-exempt utility route", () => {
     const def = resolveToolDefinition(id, []);
     expect(def?.type).toBe("utility");

@@ -135,3 +135,65 @@ export function tokensByGroup(group: BosTokenGroup): BosColorToken[] {
 }
 
 export const BOS_TOKEN_GROUPS: BosTokenGroup[] = ["neutrals", "blue", "emerald", "amber", "coral", "pastels"];
+
+/**
+ * Visual skins for the kit. `bos` is the calm default; `ims` is the Justx IMS
+ * look (gradient actions, frosted glass, 24px rounding) from
+ * `styles/bos.skin-ims.css`. Skins only re-map tokens and restyle classes —
+ * component APIs never change, so any kit-based tool can adopt either skin.
+ */
+export type BosSkin = "bos" | "ims";
+
+export const BOS_SKINS: { id: BosSkin; label: string; description: string }[] = [
+  { id: "bos", label: "Justx BOS", description: "Calm neutrals, IBM Plex, mono data" },
+  { id: "ims", label: "Justx IMS", description: "Blue→cyan gradients, frosted glass, Inter, 24px rounding" },
+];
+
+export function isBosSkin(value: unknown): value is BosSkin {
+  return value === "bos" || value === "ims";
+}
+
+/** IMS overrides of the semantic BOS colour tokens (same names, new values). */
+export const IMS_SKIN_COLOR_TOKENS: { cssVar: `--bos-${string}`; light: string; dark: string }[] = [
+  { cssVar: "--bos-bg", light: "#D6E1F8", dark: "#0E1430" },
+  { cssVar: "--bos-surface", light: "rgba(255, 255, 255, 0.74)", dark: "rgba(26, 34, 68, 0.72)" },
+  { cssVar: "--bos-surface-2", light: "#EFF4FD", dark: "#161E40" },
+  { cssVar: "--bos-border", light: "#D8E1F4", dark: "#2C3766" },
+  { cssVar: "--bos-border-soft", light: "rgba(255, 255, 255, 0.7)", dark: "rgba(255, 255, 255, 0.08)" },
+  { cssVar: "--bos-hairline", light: "#E3E9F7", dark: "#232D58" },
+  { cssVar: "--bos-text", light: "#151B33", dark: "#E9EDFF" },
+  { cssVar: "--bos-text-muted", light: "#5B6486", dark: "#A4ACD3" },
+  { cssVar: "--bos-text-faint", light: "#9098B8", dark: "#6D76A1" },
+  { cssVar: "--bos-blue", light: "#4854EB", dark: "#7B85FF" },
+  { cssVar: "--bos-blue-100", light: "#EAF0FE", dark: "#222B5C" },
+  { cssVar: "--bos-blue-600", light: "#3A46DE", dark: "#A3AAFF" },
+  { cssVar: "--bos-blue-btn", light: "#4854EB", dark: "#5E69F5" },
+  { cssVar: "--bos-emerald", light: "#1FA679", dark: "#34C893" },
+  { cssVar: "--bos-emerald-100", light: "#E7F8F1", dark: "#11392C" },
+  { cssVar: "--bos-emerald-600", light: "#17855F", dark: "#5EDCAE" },
+  { cssVar: "--bos-amber", light: "#D98A1F", dark: "#F0A945" },
+  { cssVar: "--bos-amber-100", light: "#FCF1E0", dark: "#3A2A14" },
+  { cssVar: "--bos-amber-600", light: "#A9680F", dark: "#F7C77F" },
+  { cssVar: "--bos-coral", light: "#E1483F", dark: "#F2675E" },
+  { cssVar: "--bos-coral-100", light: "#FDEBEA", dark: "#3E1C1C" },
+  { cssVar: "--bos-coral-600", light: "#C7362E", dark: "#FF9A92" },
+  { cssVar: "--bos-row-hover", light: "#EEF2FE", dark: "#1F2852" },
+];
+
+/** IMS-only tokens, available inside `.bos[data-bos-skin="ims"]`. */
+export const IMS_EXTRA_TOKENS: { cssVar: `--bos-ims-${string}`; role: string }[] = [
+  { cssVar: "--bos-ims-canvas", role: "Page background (radial highlight + periwinkle wash)" },
+  { cssVar: "--bos-ims-surface-solid", role: "Opaque sheet: dialogs, palettes, option lists" },
+  { cssVar: "--bos-ims-well", role: "Recessed fill: secondary buttons, segmented tracks" },
+  { cssVar: "--bos-ims-grad", role: "Primary action / active nav gradient" },
+  { cssVar: "--bos-ims-grad-hover", role: "Primary gradient on hover" },
+  { cssVar: "--bos-ims-grad-soft", role: "Soft banner / bulk-bar fill" },
+  { cssVar: "--bos-ims-grad-success", role: "Success action fill" },
+  { cssVar: "--bos-ims-grad-danger", role: "Destructive hover fill" },
+  { cssVar: "--bos-ims-glow", role: "Glow under gradient actions" },
+  { cssVar: "--bos-ims-cyan", role: "Secondary accent (gradient end)" },
+  { cssVar: "--bos-ims-orange", role: "Aging 61–90 days" },
+];
+
+/** Stock-aging bucket colours shared by IMS dashboards and reports. */
+export const IMS_AGING_COLORS = ["#1FA679", "#3A80EE", "#D98A1F", "#F2711C", "#E1483F"] as const;

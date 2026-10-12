@@ -48,6 +48,11 @@ async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
      VALUES (:orgId, 'bos', 'Utilities', 40, 0)`,
     { orgId },
   );
+  await pool.query(
+    `INSERT IGNORE INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available)
+     VALUES (:orgId, 'imsdealer', 'Utilities', 41, 0)`,
+    { orgId },
+  );
 }
 
 export async function getEffectiveConfig(): Promise<{

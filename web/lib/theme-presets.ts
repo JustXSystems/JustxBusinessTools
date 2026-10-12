@@ -1,5 +1,12 @@
 import type { ThemeTokens } from "./theme";
-import { JUSTX_BOS_DARK, JUSTX_BOS_LIGHT, JUSTX_ELECTRIC, JUSTX_LIGHT } from "./theme";
+import {
+  JUSTX_BOS_DARK,
+  JUSTX_BOS_LIGHT,
+  JUSTX_ELECTRIC,
+  JUSTX_IMS_DARK,
+  JUSTX_IMS_LIGHT,
+  JUSTX_LIGHT,
+} from "./theme";
 
 /** Built-in theme presets — keep in sync with `server/src/lib/theme-presets.ts`. */
 export const THEME_PRESETS: Array<{ name: string; tokens: ThemeTokens }> = [
@@ -7,6 +14,8 @@ export const THEME_PRESETS: Array<{ name: string; tokens: ThemeTokens }> = [
   { name: "JustXSystems Light", tokens: JUSTX_LIGHT },
   { name: "JustX BOS (Light)", tokens: JUSTX_BOS_LIGHT },
   { name: "JustX BOS (Dark)", tokens: JUSTX_BOS_DARK },
+  { name: "JustX IMS (Light)", tokens: JUSTX_IMS_LIGHT },
+  { name: "JustX IMS (Dark)", tokens: JUSTX_IMS_DARK },
   {
     name: "Midnight Cyan",
     tokens: {

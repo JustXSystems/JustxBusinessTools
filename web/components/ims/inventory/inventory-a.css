@@ -1,0 +1,145 @@
+/*
+ * Inventory screens (dashboard, items, full stock, restock, scanner).
+ * Dialogs render in a body portal outside `.ims-app`, so IMS vars always carry kit fallbacks.
+ */
+
+.bos .ims-inv-well { background: var(--bos-ims-well, var(--bos-surface-2)); }
+
+/* Clickable KPI wrapper */
+.bos .ims-kpi-btn { display: block; width: 100%; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: var(--bos-r-xl); }
+.bos .ims-kpi-btn:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 3px; }
+.bos .ims-kpi-btn > .bos-card { height: 100%; }
+
+/* Section heads inside a page */
+.bos .ims-inv-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.bos .ims-inv-section-title { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.bos .ims-inv-section-sub { font-size: 12px; color: var(--bos-text-faint); }
+
+/* Onboarding card */
+.bos .ims-inv-onboard { padding: 22px; border-radius: var(--bos-r-xl); background: var(--bos-ims-grad-soft, var(--bos-blue-100)); border: 1px solid color-mix(in srgb, var(--bos-blue) 18%, transparent); }
+.bos .ims-inv-onboard h2 { margin: 0; font-size: 18px; font-weight: 750; }
+.bos .ims-inv-onboard p { margin: 6px 0 16px; color: var(--bos-text-muted); font-size: 13.5px; max-width: 640px; }
+.bos .ims-inv-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.bos .ims-inv-step { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: var(--bos-r-lg); background: var(--bos-surface); border: 1px solid var(--bos-border-soft); font: inherit; color: inherit; text-align: left; cursor: pointer; transition: transform .15s ease, border-color .15s ease; }
+.bos .ims-inv-step:hover { transform: translateY(-1px); border-color: var(--bos-blue); }
+.bos .ims-inv-step:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; }
+.bos .ims-inv-step b { display: block; font-size: 13.5px; }
+.bos .ims-inv-step span { font-size: 12px; color: var(--bos-text-muted); }
+.bos .ims-inv-step-ic { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; font-size: 17px; background: var(--bos-ims-well, var(--bos-surface-2)); }
+
+/* 14-day flow chart */
+.bos .ims-flow { width: 100%; height: auto; display: block; overflow: visible; }
+.bos .ims-flow-in { fill: var(--bos-emerald); }
+.bos .ims-flow-out { fill: var(--bos-blue); opacity: .75; }
+.bos .ims-flow-axis { font-size: 9px; fill: var(--bos-text-faint); font-variant-numeric: tabular-nums; }
+.bos .ims-flow-grid { stroke: var(--bos-hairline); stroke-width: 1; }
+.bos .ims-flow-today { fill: var(--bos-text); font-weight: 700; }
+
+/* Summary pills */
+.bos .ims-inv-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.bos .ims-inv-pill { display: inline-flex; align-items: baseline; gap: 6px; padding: 7px 12px; border-radius: 999px; background: var(--bos-ims-well, var(--bos-surface-2)); border: 1px solid var(--bos-border-soft); font-size: 12px; color: var(--bos-text-muted); white-space: nowrap; }
+.bos .ims-inv-pill b { color: var(--bos-text); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* Aging / velocity chips */
+.bos .ims-inv-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; flex: none; }
+.bos .ims-inv-aging { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 650; white-space: nowrap; border: 1px solid currentColor; background: color-mix(in srgb, currentColor 10%, transparent); }
+
+/* Item cell */
+.bos .ims-inv-item { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.bos .ims-inv-avatar { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; font-size: 12px; font-weight: 750; color: #fff; letter-spacing: .02em; }
+.bos .ims-inv-stock { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+/* Grid (card) view */
+.bos .ims-inv-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.bos .ims-inv-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--bos-r-lg); border: 1px solid var(--bos-border-soft); background: var(--bos-surface); font: inherit; color: inherit; text-align: left; cursor: pointer; transition: transform .15s ease, border-color .15s ease; }
+.bos .ims-inv-card:hover { transform: translateY(-1px); border-color: var(--bos-blue); }
+.bos .ims-inv-card:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; }
+.bos .ims-inv-card-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12px; color: var(--bos-text-muted); }
+.bos .ims-inv-card-facts b { color: var(--bos-text); font-weight: 650; font-variant-numeric: tabular-nums; }
+
+/* Detail dialog */
+.bos .bos-dialog:has(.ims-inv-xl) { width: min(920px, 100%); }
+.bos .bos-dialog:has(.ims-inv-lg) { width: min(720px, 100%); }
+.bos .ims-inv-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.bos .ims-inv-tile { padding: 12px 14px; border-radius: var(--bos-r-md); background: var(--bos-ims-well, var(--bos-surface-2)); border: 1px solid var(--bos-border-soft); }
+.bos .ims-inv-tile small { display: block; font-size: 11px; color: var(--bos-text-faint); text-transform: uppercase; letter-spacing: .05em; font-weight: 650; }
+.bos .ims-inv-tile b { display: block; margin-top: 4px; font-size: 17px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.bos .ims-inv-tile span { font-size: 11.5px; color: var(--bos-text-muted); }
+.bos .ims-inv-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 18px; font-size: 13px; }
+.bos .ims-inv-kv dt { font-size: 11px; color: var(--bos-text-faint); text-transform: uppercase; letter-spacing: .05em; font-weight: 650; }
+.bos .ims-inv-kv dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.bos .ims-inv-subhead { margin: 18px 0 10px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--bos-text-faint); }
+.bos .ims-inv-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.bos .ims-inv-scroll { max-height: 340px; overflow: auto; }
+
+/* Form */
+.bos .ims-inv-inline { display: flex; gap: 6px; align-items: center; }
+.bos .ims-inv-inline > :first-child { flex: 1; min-width: 0; }
+.bos .ims-inv-formhead { grid-column: 1 / -1; margin: 6px 0 -4px; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--bos-text-faint); }
+
+/* Import mapping */
+.bos .ims-inv-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 14px; }
+.bos .ims-inv-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 28px 16px; border: 2px dashed var(--bos-border); border-radius: var(--bos-r-lg); text-align: center; cursor: pointer; color: var(--bos-text-muted); font-size: 13px; }
+.bos .ims-inv-drop:hover,
+.bos .ims-inv-drop.is-over { border-color: var(--bos-blue); background: var(--bos-blue-100); }
+.bos .ims-inv-errors { max-height: 160px; overflow: auto; margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: var(--bos-coral-600); }
+
+/* Highlighted row (deep links) */
+@keyframes ims-inv-flash { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 30% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--bos-blue) 45%, transparent); } }
+.bos .ims-inv-hl { animation: ims-inv-flash 1.6s ease 2; border-color: var(--bos-blue) !important; }
+
+/* Restock rows */
+.bos .ims-inv-rs { display: grid; grid-template-columns: 28px minmax(0, 2fr) minmax(110px, 1fr) 96px 110px auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: var(--bos-r-md); border: 1px solid transparent; }
+.bos .ims-inv-rs + .ims-inv-rs { margin-top: 4px; }
+.bos .ims-inv-rs:hover { background: var(--bos-ims-well, var(--bos-surface-2)); }
+.bos .ims-inv-rs-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--bos-text-faint); font-weight: 650; padding-top: 0; padding-bottom: 4px; }
+.bos .ims-inv-rs-head:hover { background: none; }
+.bos .ims-inv-qty { width: 88px; text-align: right; }
+
+/* Labels */
+.bos .bos-inv-paper.ims-label-paper { position: static; padding: 18px; }
+.bos .ims-labels { display: grid; gap: 8px; grid-template-columns: repeat(var(--ims-label-cols, 3), minmax(0, 1fr)); }
+.bos .ims-label { display: flex; gap: 8px; align-items: center; padding: 8px; border: 1px dashed #c9ced8; border-radius: 6px; break-inside: avoid; page-break-inside: avoid; min-height: 0; color: #1f2430; background: #fff; }
+.bos .ims-label.is-stacked { flex-direction: column; text-align: center; }
+.bos .ims-label img { flex: none; image-rendering: pixelated; }
+.bos .ims-label-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bos .ims-label-name { font-size: 11px; font-weight: 700; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.bos .ims-label-meta { font-size: 9px; color: #6b7280; font-family: var(--bos-font-mono, monospace); overflow-wrap: anywhere; }
+.bos .ims-label-price { font-size: 12px; font-weight: 800; }
+.bos .ims-label-ean { display: block; width: 100%; max-width: 190px; height: auto; margin: 0 auto; }
+.bos .ims-label-ean text { font-family: var(--bos-font-mono, monospace); font-size: 8px; fill: #1f2430; }
+
+@media print {
+  body.bos-printing .ims-label { border-color: #e2e5ea; }
+}
+
+/* Scanner */
+.bos .ims-scan-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+.bos .ims-scan-stage { position: relative; }
+.bos .ims-scanner.ims-scan-box { max-width: none; }
+.bos .ims-scan-idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: rgba(255, 255, 255, 0.85); text-align: center; padding: 20px; font-size: 13px; }
+.bos .ims-scan-idle b { font-size: 15px; color: #fff; }
+.bos .ims-scan-idle-ic { font-size: 40px; line-height: 1; opacity: .9; }
+@keyframes ims-scan-laser { 0% { top: 20%; } 50% { top: 78%; } 100% { top: 20%; } }
+.bos .ims-scan-laser { position: absolute; left: 20%; right: 20%; height: 2px; background: linear-gradient(90deg, transparent, #4ff0c8, transparent); box-shadow: 0 0 12px #4ff0c8; animation: ims-scan-laser 2.4s ease-in-out infinite; pointer-events: none; }
+.bos .ims-scan-tools { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; z-index: 2; }
+.bos .ims-scan-tool { display: grid; place-items: center; min-width: 36px; height: 36px; padding: 0 10px; border-radius: 12px; border: 0; background: rgba(10, 14, 40, 0.55); color: #fff; font: inherit; font-size: 13px; cursor: pointer; backdrop-filter: blur(6px); }
+.bos .ims-scan-tool[aria-pressed="true"] { background: #f6c343; color: #1b1f27; }
+.bos .ims-scan-tool:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.bos .ims-scan-badge { position: absolute; left: 10px; top: 10px; z-index: 2; padding: 4px 10px; border-radius: 999px; background: rgba(10, 14, 40, 0.55); color: #fff; font-size: 11.5px; font-weight: 650; }
+@keyframes ims-scan-hit { 0% { opacity: .7; } 100% { opacity: 0; } }
+.bos .ims-scan-flash { position: absolute; inset: 0; background: #34c893; animation: ims-scan-hit .45s ease forwards; pointer-events: none; }
+.bos .ims-scan-flash.is-miss { background: #e1483f; }
+.bos .ims-stepper { display: inline-flex; align-items: center; gap: 6px; }
+.bos .ims-stepper .bos-input { width: 84px; text-align: center; }
+.bos .ims-scan-session-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--bos-hairline); }
+.bos .ims-scan-session-row:last-child { border-bottom: 0; }
+.bos .ims-scan-history { display: flex; flex-wrap: wrap; gap: 6px; }
+
+@media (max-width: 900px) {
+  .bos .ims-scan-layout { grid-template-columns: minmax(0, 1fr); }
+  .bos .ims-inv-rs { grid-template-columns: 28px minmax(0, 1fr) 96px; }
+  .bos .ims-inv-rs > :nth-child(3),
+  .bos .ims-inv-rs > :nth-child(5) { display: none; }
+  .bos .ims-inv-rs > :nth-child(6) { grid-column: 2 / -1; }
+}
