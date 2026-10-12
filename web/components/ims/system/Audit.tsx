@@ -38,6 +38,7 @@ import {
   type BooksReport,
   type ExpenseLedgerRow,
   type Gstr2bResult,
+  type Gstr2bRow,
   type Gstr2bStatus,
   type InventoryLedgerRow,
   type LedgerKind,
@@ -468,31 +469,60 @@ const GSTR2B_LABEL: Record<Gstr2bStatus, { label: string; tone: "emerald" | "amb
   missing_books: { label: "Not in books", tone: "blue" },
 };
 
-function Gstr2bCard({ period, onTrace }: { period: Period; onTrace: Tracer }) {
+const monthRange = (month: string) => {
+  const [y, m] = month.split("-").map(Number);
+  return { period: "custom" as const, from: `${month}-01`, to: `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}` };
+};
+
+function Gstr2bCard({ onTrace }: { onTrace: Tracer }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ file: string; data: Gstr2bResult } | null>(null);
+  const [month, setMonth] = useState(() => {
+    const [y, m] = todayLocal().split("-").map(Number);
+    return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+  });
+  const [upload, setUpload] = useState<{ file: string; rows: Gstr2bRow[]; detected: string | null } | null>(null);
+  const [result, setResult] = useState<Gstr2bResult | null>(null);
   const [filter, setFilter] = useState<Gstr2bStatus | "">("");
 
-  const onFile = async (file: File | undefined) => {
-    if (!file) return;
+  const match = async (rows: Gstr2bRow[], forMonth: string) => {
     setBusy(true);
     setError(null);
     try {
-      const rows = await readGstr2bFile(file);
-      if (!rows.length) throw new Error("No B2B invoices found. Use the GSTR-2B JSON or Excel download from the GST portal.");
-      setResult({ file: file.name, data: await imsSystem.gstr2b(rows, { period }) });
+      setResult(await imsSystem.gstr2b(rows, monthRange(forMonth)));
       setFilter("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't match the invoices.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    try {
+      const { rows, period: detected } = await readGstr2bFile(file);
+      if (!rows.length) throw new Error("No B2B invoices found. Use the GSTR-2B JSON or Excel download from the GST portal.");
+      const forMonth = detected ?? month;
+      setMonth(forMonth);
+      setUpload({ file: file.name, rows, detected });
+      await match(rows, forMonth);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't read that file.");
     } finally {
-      setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
     }
   };
 
-  const d = result?.data;
+  const onMonth = (value: string) => {
+    if (!/^\d{4}-\d{2}$/.test(value)) return;
+    setMonth(value);
+    if (upload) void match(upload.rows, value);
+  };
+
+  const d = result;
   const list = d ? (filter ? d.rows.filter((r) => r.status === filter) : d.rows) : [];
   const exportCols: ReadonlyArray<ExportColumn<Gstr2bResult["rows"][number]>> = [
     { header: "Status", value: (r) => GSTR2B_LABEL[r.status].label },
@@ -512,7 +542,8 @@ function Gstr2bCard({ period, onTrace }: { period: Period; onTrace: Tracer }) {
       <Stack gap={12}>
         <div className="ims-between" style={{ flexWrap: "wrap", gap: 10 }}>
           <ToolHead glyph="⇆" title="GSTR-2B reconciliation" sub="Upload the GSTR-2B JSON or Excel from the GST portal. Each supplier invoice is matched to your bills by GSTIN and invoice number (or amount and date). The file is read in your browser and nothing is saved." />
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <Input size="sm" type="month" aria-label="GSTR-2B return month" title="GSTR-2B return month" value={month} max={todayLocal().slice(0, 7)} disabled={busy} style={{ maxWidth: 170 }} onChange={(e) => onMonth(e.target.value)} />
             {d ? (
               <Button size="sm" variant="ghost" icon="download" onClick={() => downloadCsv(`GSTR2B_reconciliation_${d.range.from}_${d.range.to}.csv`, d.rows, exportCols)}>
                 Export
@@ -528,7 +559,8 @@ function Gstr2bCard({ period, onTrace }: { period: Period; onTrace: Tracer }) {
         {d ? (
           <>
             <span className="ims-sys-mini">
-              {result?.file} · bills dated {dateRange(d.range.from, d.range.to)} (and earlier bills that 2B lists)
+              {upload?.file} · bills dated {dateRange(d.range.from, d.range.to)} (and earlier bills that 2B lists)
+              {upload?.detected && upload.detected !== month ? " · this file is for a different month than the one selected" : ""}
             </span>
             <Grid cols={4} min={160}>
               <KpiCard interactive={false} label="Credit in your books" value={inr(d.summary.itcBooks)} chip={{ color: "blue", glyph: "📒" }} />
@@ -1976,7 +2008,7 @@ function GstTab({ period, onTrace }: { period: Period; onTrace: Tracer }) {
               </Stack>
             </Card>
           </Grid>
-          <Gstr2bCard period={period} onTrace={onTrace} />
+          <Gstr2bCard onTrace={onTrace} />
           <Card interactive={false}>
             <div className="ims-between" style={{ flexWrap: "wrap", gap: 10 }}>
               <ToolHead glyph="🧮" title="GST returns workspace" sub="GSTR-1 and GSTR-3B summaries, HSN summary and JSON / Excel exports live in the GST module." />

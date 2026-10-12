@@ -252,7 +252,7 @@ const STOP_WORDS = new Set("the a an and or of to for in on is are was were why 
 
 export function auditAsk(question: string, issues: ReadonlyArray<AskableIssue>, today: string): { answer: string; rows: AskableIssue[]; matched: number } {
   const s = question.toLowerCase();
-  let list = issues.filter((i) => i.open || /closed|resolved|all/.test(s));
+  let list = issues.filter((i) => i.open || /closed|resolved|\ball\b/.test(s));
   const cats = AUDIT_INTENTS.filter((x) => x.re.test(s)).map((x) => x.category);
   if (cats.length) list = list.filter((i) => cats.includes(i.category));
 
@@ -309,9 +309,10 @@ async function loadSnapshot(db: Queryable, tenantId: number, business: string, p
       ? Promise.all([
           rows<{ name: string; brand: string | null; category: string | null; unit: string; current_stock: string; min_stock: string; max_stock: string | null; reorder_qty: string | null; purchase_price: string; supplier: string | null; sold30: string | null }>(
             db,
-            `SELECT i.name, i.brand, i.category, i.unit, i.current_stock, i.min_stock, i.max_stock, i.reorder_qty, i.purchase_price, s.name AS supplier,
-                    (SELECT SUM(m.qty) FROM ims_movements m WHERE m.tenant_id = i.tenant_id AND m.item_id = i.id AND m.type = 'OUT' AND m.movement_date >= :since30) AS sold30
-             FROM ims_items i LEFT JOIN ims_parties s ON s.tenant_id = i.tenant_id AND s.id = i.supplier_id
+            `SELECT i.name, i.brand, i.category, i.unit, i.current_stock, i.min_stock, i.max_stock, i.reorder_qty, i.purchase_price, s.name AS supplier, o.sold30
+             FROM ims_items i
+             LEFT JOIN ims_parties s ON s.tenant_id = i.tenant_id AND s.id = i.supplier_id
+             LEFT JOIN (SELECT item_id, SUM(qty) AS sold30 FROM ims_movements WHERE tenant_id = :tenantId AND type = 'OUT' AND movement_date >= :since30 GROUP BY item_id) o ON o.item_id = i.id
              WHERE i.tenant_id = :tenantId AND i.active = 1 ORDER BY i.name LIMIT 3000`,
             p,
           ),
@@ -396,6 +397,10 @@ export function registerAssistant(router: Router, deps: ImsDeps): void {
     const actor = actorOf(res);
     const input = parse(AskInput, req.body);
     const page = ASSISTANT_PAGES[input.page];
+    if (!input.question) {
+      res.json({ page: input.page, title: page.title, suggestions: page.suggestions, answer: null, context: "", business: null });
+      return;
+    }
     const parts = new Set<AssistantPart>(page.parts.filter((part) => PART_PERMS[part]?.some((perm) => can(res, perm)) ?? true));
     const settings = await getSettings(deps, actor.tenantId);
     const snap = await loadSnapshot(deps.db, actor.tenantId, settings.businessName || "this business", parts);
@@ -403,7 +408,7 @@ export function registerAssistant(router: Router, deps: ImsDeps): void {
       page: input.page,
       title: page.title,
       suggestions: page.suggestions,
-      answer: input.question ? assistantAnswer(input.question, snap) : null,
+      answer: assistantAnswer(input.question, snap),
       context: assistantContext(snap),
       business: settings.businessName || null,
     });

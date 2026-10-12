@@ -473,7 +473,7 @@ export type Trace = {
   events: Array<{ at: string | null; by: string | null; summary: string }>;
 };
 
-export type Gstr2bRow = { gstin: string; supplier: string; invoiceNo: string; date: string | null; value: number; taxable: number; igst: number; cgst: number; sgst: number };
+export type Gstr2bRow = { gstin: string; supplier: string; invoiceNo: string; date: string | null; value: number; taxable: number; igst: number; cgst: number; sgst: number; itcAvailable?: boolean };
 export type Gstr2bStatus = "matched" | "mismatch" | "missing_2b" | "missing_books";
 export type Gstr2bResult = {
   range: DateRange;

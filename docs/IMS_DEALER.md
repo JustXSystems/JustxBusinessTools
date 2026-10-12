@@ -88,7 +88,10 @@ Both features are read-only and add no tables.
   supplier GSTIN and normalised invoice number. When the number doesn't match,
   matching falls back to GSTIN + amount + date within 5 days. Results:
   matched, differs, not in 2B (credit at risk) and not in books. Nothing is
-  stored.
+  stored. Matching covers one return month: the month stated in the file
+  (JSON `rtnprd`, or the Excel "Tax period") or the month picked on the card,
+  so other months' bills are not reported as missing. Invoices the portal marks
+  as "ITC not available" show as differs and count as credit at risk.
 
 The sidebar shows a count on each module that has open alerts.
 
@@ -109,6 +112,25 @@ browser's localStorage (`justx.ims.gemini.v1`). The browser calls
 `generativelanguage.googleapis.com` directly with the question and the data
 summary. The server never sees or stores the key. Without a key, only the
 built-in answers are used.
+
+## Field map
+
+Onsite Track's team map and day trail use the source chosen in
+**Settings → Field map** (`GET /api/ims/settings/map` for every IMS user,
+`PUT` needs the settings permission). It is stored as the `map` row of
+`ims_integrations`, so there is no schema change.
+
+| Source | Outside requests | Notes |
+|---|---|---|
+| Built-in (default) | None | Positions, trails and a scale drawn in the browser. No street layer; Google Maps links for streets. |
+| Tile server | The tile host | Raster `{z}/{x}/{y}` URL: OpenStreetMap public servers (light use only), a provider such as Mappls, Ola Maps or MapTiler with a browser key restricted to the site, or the business's own tile server. |
+| Self-hosted PMTiles | Your own server only | One `.pmtiles` file (e.g. an India extract of a Protomaps build) drawn with protomaps-leaflet. The host must answer HTTP range requests (206) and allow CORS for the site if it's on another domain. |
+
+URLs must be `https://` or a path on the same site. A data credit is required
+for tile and PMTiles sources, and is shown on the map. Leaflet and
+protomaps-leaflet load only when a tile source is switched on. If tiles fail
+to load, the built-in map is shown instead. **Test and preview** checks a
+sample tile, or the PMTiles header and range support, before saving.
 
 ## Working with other JBT tools
 

@@ -112,4 +112,9 @@ describe("auditAsk", () => {
     expect(r.matched).toBe(3);
     expect(r.answer).toContain("1 high or critical");
   });
+
+  it("includes closed findings only when asked for all of them", () => {
+    expect(auditAsk("small GST issues", issues, "2026-10-12").matched).toBe(1);
+    expect(auditAsk("all GST issues", issues, "2026-10-12").matched).toBe(2);
+  });
 });

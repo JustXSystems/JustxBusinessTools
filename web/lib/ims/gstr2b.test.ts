@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isoDateOf, parseGstr2bJson, parseGstr2bTable } from "./gstr2b";
+import { gstr2bJsonPeriod, gstr2bSheetPeriod, isoDateOf, parseGstr2bJson, parseGstr2bTable } from "./gstr2b";
 
 describe("GSTR-2B parsing", () => {
   it("reads the portal JSON and sums item rates", () => {
@@ -50,6 +50,23 @@ describe("GSTR-2B parsing", () => {
       ["07ABCDE1234F1Z5", "A/9", "2026-09-01", 180],
     ]);
     expect(rows).toMatchObject([{ gstin: "07ABCDE1234F1Z5", invoiceNo: "A/9", date: "2026-09-01", igst: 180 }]);
+  });
+
+  it("reads ITC availability from the JSON and the Excel column", () => {
+    const json = parseGstr2bJson({ data: { docdata: { b2b: [{ ctin: "29ABCDE1234F1Z5", inv: [{ inum: "S-1", itcavl: "N", txval: 100, igst: 18 }] }] } } });
+    expect(json[0].itcAvailable).toBe(false);
+    const sheet = parseGstr2bTable([
+      ["GSTIN", "Invoice No", "IGST", "ITC Availability"],
+      ["07ABCDE1234F1Z5", "A/9", 180, "Yes"],
+    ]);
+    expect(sheet[0].itcAvailable).toBe(true);
+  });
+
+  it("detects the return month", () => {
+    expect(gstr2bJsonPeriod({ data: { rtnprd: "092026" } })).toBe("2026-09");
+    expect(gstr2bSheetPeriod([[["Financial Year", "2026-27"], ["Tax Period", "February"]]])).toBe("2027-02");
+    expect(gstr2bSheetPeriod([[["Tax period", "", "102026"]]])).toBe("2026-10");
+    expect(gstr2bSheetPeriod([[["GSTIN", "Invoice"]]])).toBeNull();
   });
 
   it("converts Excel serial dates", () => {

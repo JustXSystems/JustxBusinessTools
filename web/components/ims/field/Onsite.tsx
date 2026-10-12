@@ -15,7 +15,6 @@ import {
   googleMapsUrl,
   googleRouteUrl,
   minutesText,
-  osmEmbedUrl,
   outcomeMeta,
   priorityMeta,
   statusMeta,
@@ -32,6 +31,7 @@ import {
 import { addDaysISO, dateLabel, dayMonth, downloadCsv, downloadXlsx, inr, ROLE_LABEL, timeAgo, type ExportColumn } from "@/lib/ims/format";
 import { CheckInDialog, CheckOutDialog, StatusDialog, TaskDetailDialog, TaskDialog, type MemberOption } from "./dialogs";
 import { useLiveShare } from "./geo";
+import { TeamMap, type MapMarker } from "./TeamMap";
 
 type Tab = "today" | "tasks" | "history" | "timeline";
 
@@ -76,17 +76,7 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function OsmMap({ points, marker, title }: { points: ReadonlyArray<{ lat: number; lng: number }>; marker?: { lat: number; lng: number } | null; title: string }) {
-  const url = osmEmbedUrl(points, marker);
-  if (!url) {
-    return (
-      <EmptyState glyph="🗺" title="No location yet">
-        Locations appear once someone checks in with GPS or turns on live location.
-      </EmptyState>
-    );
-  }
-  return <iframe className="ims-map" src={url} title={title} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />;
-}
+const positionOf = (p: FieldPerson) => p.lastPing ?? (p.openVisit && p.openVisit.inLat !== null && p.openVisit.inLng !== null ? { lat: p.openVisit.inLat, lng: p.openVisit.inLng } : null);
 
 /* ---------- Module ---------- */
 
@@ -598,15 +588,25 @@ function TeamBoard({
 
 function MapSection({ data, manager, selected, onSelect }: { data: FieldOverview; manager: boolean; selected: number | null; onSelect: (userId: number) => void }) {
   const subject = data.team.find((p) => p.userId === selected) ?? data.me;
-  const point = subject.lastPing ?? (subject.openVisit && subject.openVisit.inLat !== null && subject.openVisit.inLng !== null ? { lat: subject.openVisit.inLat, lng: subject.openVisit.inLng } : null);
+  const point = positionOf(subject);
   const checkins = data.visits.filter((v) => v.inLat !== null && v.inLng !== null && (v.date === data.date || v.open));
-  const fallback = checkins.filter((v) => v.userId === subject.userId).map((v) => ({ lat: v.inLat as number, lng: v.inLng as number }));
+  const people: MapMarker[] = (manager ? data.team : [data.me]).flatMap((p) => {
+    const at = positionOf(p);
+    if (!at) return [];
+    const detail = [statusMeta(p.status).label, p.currentSite, p.lastPing?.at ? `fix ${timeAgo(p.lastPing.at)}` : null].filter(Boolean).join(" · ");
+    return [{ id: String(p.userId), lat: at.lat, lng: at.lng, label: p.isMe ? "You" : p.name, color: statusMeta(p.status).color, detail }];
+  });
+  const markers: MapMarker[] = people.length
+    ? people
+    : checkins
+        .filter((v) => manager || v.userId === data.me.userId)
+        .map((v) => ({ id: `visit-${v.id}`, lat: v.inLat as number, lng: v.inLng as number, label: v.siteName, color: "#9098B8", detail: `${manager && v.userName ? `${v.userName} · ` : ""}checked in ${timeOfDay(v.checkedInAt)}` }));
   return (
     <div className="ims-fd-mapgrid">
       <Card interactive={false}>
         <div className="ims-between" style={{ marginBottom: 12 }}>
           <h2 className="bos-widget-title" style={{ margin: 0 }}>
-            {point ? `Location · ${subject.isMe ? "You" : subject.name}` : "Map"}
+            {manager ? `Team map · ${people.length} located` : point ? "My location" : "Map"}
           </h2>
           <div className="ims-row">
             {manager && data.team.length > 1 ? (
@@ -626,11 +626,16 @@ function MapSection({ data, manager, selected, onSelect }: { data: FieldOverview
             ) : null}
           </div>
         </div>
-        <OsmMap points={point ? [point] : fallback} marker={point} title={`Map of ${subject.name}'s location`} />
+        <TeamMap
+          markers={markers}
+          selectedId={point ? String(subject.userId) : null}
+          onSelect={manager ? (id) => (/^\d+$/.test(id) ? onSelect(Number(id)) : undefined) : undefined}
+          title={manager ? "Team locations" : "My location"}
+        />
         {subject.lastPing ? (
           <div className="ims-faint" style={{ marginTop: 8 }}>
-            Last fix {timeAgo(subject.lastPing.at)}
-            {subject.lastPing.accuracy !== null ? ` · ±${subject.lastPing.accuracy} m` : ""} · map © OpenStreetMap contributors
+            {subject.isMe ? "Your" : `${subject.name}'s`} last fix {timeAgo(subject.lastPing.at)}
+            {subject.lastPing.accuracy !== null ? ` · ±${subject.lastPing.accuracy} m` : ""}
           </div>
         ) : null}
       </Card>
@@ -1089,9 +1094,13 @@ function TimelineTab({ manager, members, today, userId, onUser }: { manager: boo
               </Grid>
               <div className="ims-fd-mapgrid">
                 <div>
-                  <OsmMap points={points} marker={last} title={`${who}'s route on ${dateLabel(d.date)}`} />
+                  <TeamMap
+                    markers={last ? [{ id: "last", lat: last.lat, lng: last.lng, label: who, color: "#4C6FF5", detail: "Last known position" }] : []}
+                    path={points}
+                    title={`${who}'s route on ${dateLabel(d.date)}`}
+                  />
                   <div className="ims-between" style={{ marginTop: 8 }}>
-                    <span className="ims-faint">Marker shows the last known position · map © OpenStreetMap contributors</span>
+                    <span className="ims-faint">The line is the day&apos;s trail · the marker is the last known position</span>
                     <div className="ims-row">
                       {route ? (
                         <a className="ims-faint" href={route} target="_blank" rel="noreferrer">

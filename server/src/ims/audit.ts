@@ -847,7 +847,7 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
       ),
       rows<{ kind: string; status: string; n: number }>(deps.db, `SELECT kind, status, COUNT(*) AS n FROM ims_audit_items WHERE tenant_id = :tenantId GROUP BY kind, status`, { tenantId: t }),
       one<{ n: number }>(deps.db, `SELECT COUNT(*) AS n FROM ims_documents WHERE tenant_id = :tenantId`, { tenantId: t }),
-      rows<{ provider: string; enabled: number; last_sync_at: string | null; last_status: string | null }>(deps.db, `SELECT provider, enabled, last_sync_at, last_status FROM ims_integrations WHERE tenant_id = :tenantId`, { tenantId: t }),
+      rows<{ provider: string; enabled: number; last_sync_at: string | null; last_status: string | null }>(deps.db, `SELECT provider, enabled, last_sync_at, last_status FROM ims_integrations WHERE tenant_id = :tenantId AND provider IN ('tally', 'pos')`, { tenantId: t }),
       one<{ name: string; total: string }>(
         deps.db,
         `SELECT customer_name AS name, SUM(grand_total) AS total FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND invoice_date BETWEEN :from AND :to

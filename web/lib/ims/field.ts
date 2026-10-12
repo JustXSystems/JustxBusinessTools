@@ -251,23 +251,6 @@ export const field = {
 
 /* ---------- Maps ---------- */
 
-/** OpenStreetMap embed centred on a point (≈ 1.2 km box unless `spanDeg` widens it) or fitted to several. */
-export function osmEmbedUrl(points: ReadonlyArray<{ lat: number; lng: number }>, marker?: { lat: number; lng: number } | null, spanDeg = 0.012): string | null {
-  if (!points.length) return null;
-  const lats = points.map((p) => p.lat);
-  const lngs = points.map((p) => p.lng);
-  const pad = (a: number, b: number) => Math.max(spanDeg, (b - a) * 0.2);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  const pLat = pad(minLat, maxLat);
-  const pLng = pad(minLng, maxLng);
-  const bbox = [minLng - pLng, minLat - pLat, maxLng + pLng, maxLat + pLat].map((n) => n.toFixed(5)).join(",");
-  const m = marker ?? points[points.length - 1];
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${m.lat.toFixed(6)},${m.lng.toFixed(6)}`;
-}
-
 export const googleMapsUrl = (lat: number, lng: number) => `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lng.toFixed(6)}`;
 export const googleDirectionsUrl = (q: string) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
 

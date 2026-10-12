@@ -37,13 +37,52 @@ function merge(list: Gstr2bRow[]): Gstr2bRow[] {
       prev.cgst = r2(prev.cgst + r.cgst);
       prev.sgst = r2(prev.sgst + r.sgst);
       prev.value = Math.max(prev.value, r.value);
+      if (r.itcAvailable === false || (prev.itcAvailable === undefined && r.itcAvailable !== undefined)) prev.itcAvailable = r.itcAvailable;
     }
   }
   return [...m.values()];
 }
 
-type JsonInv = { inum?: unknown; dt?: unknown; val?: unknown; txval?: unknown; igst?: unknown; cgst?: unknown; sgst?: unknown; items?: Array<Record<string, unknown>> };
+/** "Yes"/"Y" → true, "No"/"N" → false, anything else (blank, "Temporary") → unknown. */
+function itcFlag(v: unknown): { itcAvailable?: boolean } {
+  const s = String(v ?? "").trim();
+  if (/^y/i.test(s)) return { itcAvailable: true };
+  if (/^n/i.test(s)) return { itcAvailable: false };
+  return {};
+}
+
+type JsonInv = { inum?: unknown; dt?: unknown; val?: unknown; txval?: unknown; igst?: unknown; cgst?: unknown; sgst?: unknown; itcavl?: unknown; items?: Array<Record<string, unknown>> };
 type JsonSupplier = { ctin?: unknown; trdnm?: unknown; inv?: JsonInv[] };
+
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/** The return period of a GSTR-2B download as yyyy-mm, from the JSON `rtnprd` (MMYYYY). */
+export function gstr2bJsonPeriod(data: unknown): string | null {
+  const d = data as { data?: { rtnprd?: unknown }; rtnprd?: unknown } | null;
+  const m = String(d?.data?.rtnprd ?? d?.rtnprd ?? "").match(/^(0[1-9]|1[0-2])(\d{4})$/);
+  return m ? `${m[2]}-${m[1]}` : null;
+}
+
+/** The portal Excel's "Tax period" (a month name) and "Financial year" (2026-27) cells → yyyy-mm. */
+export function gstr2bSheetPeriod(tables: ReadonlyArray<ReadonlyArray<ReadonlyArray<unknown>>>): string | null {
+  const after = (re: RegExp) => {
+    for (const t of tables)
+      for (const row of t.slice(0, 15)) {
+        const i = row.findIndex((c) => re.test(String(c ?? "")));
+        const v = i >= 0 ? row.slice(i + 1).find((c) => String(c ?? "").trim()) : undefined;
+        if (v !== undefined) return String(v).trim();
+      }
+    return "";
+  };
+  const period = after(/tax\s*period/i);
+  const coded = gstr2bJsonPeriod({ rtnprd: period });
+  if (coded) return coded;
+  const month = MONTHS.indexOf(period.slice(0, 3).toLowerCase());
+  const fy = after(/financial\s*year/i).match(/^(\d{4})/);
+  if (month < 0 || !fy) return null;
+  const year = Number(fy[1]) + (month < 3 ? 1 : 0);
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
 
 /** The portal's GSTR-2B JSON (`data.docdata.b2b[].inv[]`). Amendments and credit notes are left out. */
 export function parseGstr2bJson(data: unknown): Gstr2bRow[] {
@@ -67,6 +106,7 @@ export function parseGstr2bJson(data: unknown): Gstr2bRow[] {
         igst: r2(items.reduce((t, i) => t + num(i.igst), 0)),
         cgst: r2(items.reduce((t, i) => t + num(i.cgst), 0)),
         sgst: r2(items.reduce((t, i) => t + num(i.sgst), 0)),
+        ...itcFlag(inv.itcavl),
       });
     }
   }
@@ -82,6 +122,7 @@ const COLS: Array<[keyof Gstr2bRow, RegExp, RegExp?]> = [
   ["igst", /integrated|igst/i],
   ["cgst", /central|cgst/i],
   ["sgst", /state\s*\/?\s*ut\s*tax|sgst|state\s*tax/i],
+  ["itcAvailable", /itc\s*availab/i],
   ["supplier", /trade|legal|supplier\s*name|party|name/i, /gstin/i],
 ];
 
@@ -113,22 +154,30 @@ export function parseGstr2bTable(table: ReadonlyArray<ReadonlyArray<unknown>>): 
       igst: num(at("igst")),
       cgst: num(at("cgst")),
       sgst: num(at("sgst")),
+      ...itcFlag(at("itcAvailable")),
     });
   }
   return merge(out);
 }
 
-export async function readGstr2bFile(file: File): Promise<Gstr2bRow[]> {
+/** Invoice rows plus the return month (yyyy-mm) when the file states it. */
+export type Gstr2bFile = { rows: Gstr2bRow[]; period: string | null };
+
+export async function readGstr2bFile(file: File): Promise<Gstr2bFile> {
   if (/\.json$/i.test(file.name)) {
+    let data: unknown;
     try {
-      return parseGstr2bJson(JSON.parse(await file.text()));
+      data = JSON.parse(await file.text());
     } catch {
       throw new Error("That JSON file couldn't be read. Download GSTR-2B again from the GST portal.");
     }
+    return { rows: parseGstr2bJson(data), period: gstr2bJsonPeriod(data) };
   }
   const XLSX = await import("xlsx");
   const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
   const name = wb.SheetNames.find((n) => /^b2b$/i.test(n.trim())) ?? wb.SheetNames.find((n) => /b2b(?!a)/i.test(n)) ?? wb.SheetNames[0];
-  if (!name) return [];
-  return parseGstr2bTable(XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, raw: true, defval: "" }));
+  if (!name) return { rows: [], period: null };
+  const sheet = (n: string) => XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[n], { header: 1, raw: true, defval: "" });
+  const others = wb.SheetNames.filter((n) => n !== name && /read\s*me|summary|itc/i.test(n)).slice(0, 3);
+  return { rows: parseGstr2bTable(sheet(name)), period: gstr2bSheetPeriod([...others.map(sheet), sheet(name)]) };
 }

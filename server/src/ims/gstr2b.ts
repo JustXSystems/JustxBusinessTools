@@ -20,6 +20,8 @@ export const Gstr2bRowSchema = z.object({
   igst: z.coerce.number().min(-1e12).max(1e12).default(0),
   cgst: z.coerce.number().min(-1e12).max(1e12).default(0),
   sgst: z.coerce.number().min(-1e12).max(1e12).default(0),
+  /** GSTR-2B "ITC availability"; false when the portal says the credit can't be taken. */
+  itcAvailable: z.boolean().nullable().optional(),
 });
 export type Gstr2bRow = z.infer<typeof Gstr2bRowSchema>;
 
@@ -74,17 +76,20 @@ export function reconcileGstr2b(bills: ReadonlyArray<BookBill>, portal: Readonly
       bill = pool.find((b) => !used.has(b.id) && b.gstin === p.gstin && Math.abs(b.total - pTotal) <= tolerance && (!p.date || Math.abs(daysBetween(b.date, p.date)) <= 5)) ?? null;
       byAmount = Boolean(bill);
     }
-    const base = { gstin: p.gstin, supplier: p.supplier || bill?.supplier || "", invoiceNo: p.invoiceNo, date: p.date ?? null, portal: { taxable: round2(p.taxable), tax: pTax, total: round2(pTotal) } };
+    const blocked = p.itcAvailable === false;
+    const claimable = blocked ? 0 : pTax;
+    const base = { gstin: p.gstin, supplier: p.supplier || bill?.supplier || "", invoiceNo: p.invoiceNo, date: p.date ?? null, portal: { taxable: round2(p.taxable), tax: claimable, total: round2(pTotal) } };
     if (!bill) {
-      out.push({ ...base, status: "missing_books", bill: null, taxDiff: pTax, note: "In GSTR-2B but no bill recorded — record the purchase or confirm it isn't yours" });
+      out.push({ ...base, status: "missing_books", bill: null, taxDiff: claimable, note: `In GSTR-2B but no bill recorded — record the purchase or confirm it isn't yours${blocked ? ". The portal marks its credit as not available" : ""}` });
       continue;
     }
     used.add(bill.id);
-    const taxDiff = round2(bill.tax - pTax);
+    const taxDiff = round2(bill.tax - claimable);
     const valueDiff = round2(bill.total - pTotal);
-    const ok = Math.abs(taxDiff) <= tolerance && Math.abs(valueDiff) <= Math.max(tolerance, 1);
+    const ok = !blocked && Math.abs(taxDiff) <= tolerance && Math.abs(valueDiff) <= Math.max(tolerance, 1);
     const notes: string[] = [];
-    if (Math.abs(taxDiff) > tolerance) notes.push(`GST differs by ₹${Math.abs(taxDiff).toLocaleString("en-IN")} (${taxDiff > 0 ? "books higher" : "portal higher"})`);
+    if (blocked) notes.push(`GSTR-2B marks this ₹${pTax.toLocaleString("en-IN")} credit as not available — don't claim it`);
+    else if (Math.abs(taxDiff) > tolerance) notes.push(`GST differs by ₹${Math.abs(taxDiff).toLocaleString("en-IN")} (${taxDiff > 0 ? "books higher" : "portal higher"})`);
     if (Math.abs(valueDiff) > Math.max(tolerance, 1)) notes.push(`invoice value differs by ₹${Math.abs(valueDiff).toLocaleString("en-IN")}`);
     if (byAmount) notes.push(`matched by amount — bill records invoice no. "${bill.supplierBillNo ?? bill.no}"`);
     out.push({

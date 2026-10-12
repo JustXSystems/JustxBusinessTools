@@ -361,7 +361,11 @@ export function expenseTrace(f: ExpenseFacts): Omit<Trace, "events"> {
 
 const linesQty = (raw: unknown) => {
   const lines = json<ImsLine[]>(raw, []);
-  return { ordered: round2(lines.reduce((s, l) => s + (Number(l.qty) || 0), 0)), received: round2(lines.reduce((s, l) => s + (Number(l.receivedQty) || 0), 0)), catalog: lines.filter((l) => l.itemId).length };
+  return {
+    ordered: round2(lines.reduce((s, l) => s + (Number(l.qty) || 0), 0)),
+    received: round2(lines.reduce((s, l) => s + Math.min(Number(l.qty) || 0, Number(l.receivedQty) || 0), 0)),
+    catalog: lines.filter((l) => l.itemId).length,
+  };
 };
 
 async function payments(db: Queryable, tenantId: number, docType: "invoice" | "bill", ids: string[]): Promise<TracePay[]> {

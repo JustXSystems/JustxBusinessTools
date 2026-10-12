@@ -150,4 +150,11 @@ describe("GSTR-2B reconciliation", () => {
     expect(r.summary.counts.matched).toBe(1);
     expect(r.summary.counts.missing_2b).toBe(0);
   });
+
+  it("treats credit the portal marks as not available as a mismatch", () => {
+    const r = reconcileGstr2b([bill("1", "S-1", 180)], [row("S-1", 180, { itcAvailable: false })]);
+    expect(r.rows[0].status).toBe("mismatch");
+    expect(r.rows[0].note).toMatch(/not available/);
+    expect(r.summary.itcPortal).toBe(0);
+  });
 });

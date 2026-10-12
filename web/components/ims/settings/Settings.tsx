@@ -9,11 +9,12 @@ import { Loaded, PageHeader, Stack, SubTabs, useIms, useImsAction, useImsData } 
 import { CatalogTab, PermissionsTab } from "./AccessTabs";
 import { DataTab } from "./DataTab";
 import { BusinessTab, DocumentsTab } from "./GeneralTabs";
+import { MapTab } from "./MapTab";
 import type { SetDraft, SettingsErrors } from "./parts";
 import { RemindersTab } from "./RemindersTab";
 import { TeamTab } from "./TeamTab";
 
-type Tab = "business" | "documents" | "team" | "permissions" | "catalog" | "reminders" | "data";
+type Tab = "business" | "documents" | "team" | "permissions" | "catalog" | "reminders" | "map" | "data";
 
 const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: "business", label: "Business" },
@@ -22,6 +23,7 @@ const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: "permissions", label: "Role permissions" },
   { value: "catalog", label: "Catalog lists" },
   { value: "reminders", label: "Reminders" },
+  { value: "map", label: "Field map" },
   { value: "data", label: "Data" },
 ];
 
@@ -141,7 +143,7 @@ function SettingsEditor({ meta, initialTab }: { meta: ImsSettingsMeta; initialTa
   };
 
   const tabProps = { draft, set, errors: visibleErrors, readOnly };
-  const editsTab = tab !== "team" && tab !== "data";
+  const editsTab = tab !== "team" && tab !== "data" && tab !== "map";
 
   return (
     <Stack>
@@ -167,6 +169,8 @@ function SettingsEditor({ meta, initialTab }: { meta: ImsSettingsMeta; initialTa
           <CatalogTab {...tabProps} />
         ) : tab === "reminders" ? (
           <RemindersTab {...tabProps} />
+        ) : tab === "map" ? (
+          <MapTab />
         ) : (
           <DataTab />
         )}

@@ -26,6 +26,35 @@
 .bos .ims-fd-list-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 11px; border-radius: 10px; background: var(--ims-well); font-size: 12.5px; }
 .bos .ims-fd-list-row a { color: var(--bos-blue-btn, var(--bos-blue)); font-weight: 600; white-space: nowrap; }
 
+.bos .ims-map-builtin,
+.bos .ims-map-tiles { position: relative; overflow: hidden; z-index: 0; isolation: isolate; }
+.bos .ims-map-loading { animation: ims-map-pulse 1.4s ease-in-out infinite; }
+@keyframes ims-map-pulse { 50% { opacity: .55; } }
+.bos .ims-map-svg { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; }
+.bos .ims-map-svg:active { cursor: grabbing; }
+.bos .ims-map-grid { stroke: var(--ims-tile-border); stroke-width: 1; }
+.bos .ims-map-path { fill: none; stroke: #4C6FF5; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; opacity: .85; }
+.bos .ims-map-start { fill: var(--bos-surface); stroke: #4C6FF5; stroke-width: 2.5; }
+.bos .ims-map-dot { stroke: #fff; stroke-width: 2.5; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .3)); }
+.bos .ims-map-halo { fill: rgba(76, 111, 245, .22); }
+.bos .ims-map-marker.is-button { cursor: pointer; }
+.bos .ims-map-marker:focus { outline: none; }
+.bos .ims-map-marker:focus-visible .ims-map-dot { stroke: var(--bos-blue); stroke-width: 4; }
+.bos .ims-map-initials { fill: #fff; font: 700 11px/1 system-ui, sans-serif; pointer-events: none; }
+.bos .ims-map-label { fill: var(--bos-text); font: 600 11px/1 system-ui, sans-serif; paint-order: stroke; stroke: var(--bos-surface); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
+.bos .ims-map-scale line { stroke: var(--bos-text-muted); stroke-width: 2; }
+.bos .ims-map-scale text,
+.bos .ims-map-north { fill: var(--bos-text-muted); font: 600 11px/1 system-ui, sans-serif; }
+.bos .ims-map-ctl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 4px; }
+.bos .ims-map-ctl button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--ims-tile-border); background: var(--bos-surface); color: var(--bos-text); font-size: 16px; line-height: 1; cursor: pointer; }
+.bos .ims-map-ctl button:hover { background: var(--ims-well); }
+.bos .ims-map-ctl button:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 1px; }
+.bos .ims-map-note { position: absolute; right: 10px; bottom: 8px; font-size: 11px; color: var(--bos-text-faint); background: var(--bos-surface); padding: 2px 8px; border-radius: 6px; opacity: .9; }
+.bos .ims-map-tiles.leaflet-container { font: inherit; }
+.bos .ims-map-pin span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #fff; font: 700 11px/1 system-ui, sans-serif; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .35); box-sizing: border-box; }
+.bos .ims-map-pin.is-selected span { box-shadow: 0 0 0 5px rgba(76, 111, 245, .35), 0 1px 4px rgba(0, 0, 0, .35); }
+.bos .ims-map-pin em { position: absolute; top: 33px; left: 50%; transform: translateX(-50%); white-space: nowrap; font: 600 11px/1.3 system-ui, sans-serif; font-style: normal; color: #1d2433; background: rgba(255, 255, 255, .92); padding: 1px 6px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0, 0, 0, .2); }
+
 .bos .ims-fd-timeline { list-style: none; margin: 0; padding: 0; }
 .bos .ims-fd-timeline li { position: relative; padding: 0 0 18px 28px; }
 .bos .ims-fd-timeline li::before { content: ""; position: absolute; left: 6px; top: 16px; bottom: 0; width: 2px; background: var(--ims-well); }
