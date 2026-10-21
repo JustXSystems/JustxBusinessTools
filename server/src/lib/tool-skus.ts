@@ -69,6 +69,13 @@ export const DEFAULT_TOOL_SKUS: Array<
   { toolId: "notifications", name: "Notifications", category: "Utilities", priceInr: 0, includedFree: true },
   { toolId: "qrscanner", name: "QR Code Scanner", category: "Utilities", priceInr: 0, includedFree: true },
   { toolId: "qrgenerator", name: "QR Code Generator", category: "Utilities", priceInr: 0, includedFree: true },
+  {
+    toolId: "seo-meridian",
+    name: "Meridian SEO",
+    category: "Utilities",
+    priceInr: 999,
+    includedFree: false,
+  },
 ];
 
 let schemaReady: Promise<void> | null = null;

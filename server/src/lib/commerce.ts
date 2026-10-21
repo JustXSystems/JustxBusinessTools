@@ -111,6 +111,18 @@ export async function activateToolCommerce(input: {
     periodEnd: farthest,
   });
 
+  // External JBT product: Meridian SEO SaaS (path app) — auto-mint license key via webhook
+  try {
+    const { provisionMeridianSaasLicenses } = await import("./meridian-saas-provision.js");
+    await provisionMeridianSaasLicenses({
+      orgId: input.orgId,
+      toolIds: unique,
+      externalRef: input.externalRef ?? null,
+    });
+  } catch (e) {
+    console.error("[commerce] meridian saas provision", e);
+  }
+
   return { granted: unique, periodEnd: farthest, items };
 }
 
@@ -144,6 +156,12 @@ export async function deactivateToolCommerce(input: {
   toolIds?: string[];
 }): Promise<SubscriptionItem[]> {
   await revokeToolLicenses(input.orgId, input.toolIds);
+  try {
+    const { revokeMeridianSaasLicenses } = await import("./meridian-saas-provision.js");
+    await revokeMeridianSaasLicenses({ orgId: input.orgId, toolIds: input.toolIds });
+  } catch (e) {
+    console.error("[commerce] meridian saas revoke", e);
+  }
   return syncSubscriptionItemsFromLicenses(input.orgId);
 }
 
