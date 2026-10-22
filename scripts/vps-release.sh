@@ -426,11 +426,16 @@ install_or_preserve_win_agent_zip() {
   fi
 }
 
+# Paths kept on LIVE but omitted from the release tarball (see pack-release.sh).
+# Without these excludes, rsync --delete tries to remove them and fails when
+# deploy/observability is root-owned (Docker compose / bind-mount placeholders).
+RSYNC_PRESERVE_EXCLUDES=(--exclude '.git/' --exclude 'deploy/')
+
 activate_release_rsync() {
   local src="$1"
-  echo "==> Sync release → live (preserve .git; win agent zip only if missing from release)"
+  echo "==> Sync release → live (preserve .git + deploy/; win agent zip only if missing from release)"
   link_shared_into "$src"
-  local rsync_excludes=(--exclude '.git/')
+  local rsync_excludes=("${RSYNC_PRESERVE_EXCLUDES[@]}")
   if [[ ! -f "$src/$WIN_AGENT_ZIP_REL" ]]; then
     rsync_excludes+=(--exclude "$WIN_AGENT_ZIP_REL")
   fi
@@ -444,7 +449,7 @@ activate_release_mv() {
   echo "==> Prepare swap tree at $LIVE_NEW"
   rm -rf "$LIVE_NEW"
   mkdir -p "$LIVE_NEW"
-  local rsync_excludes=(--exclude '.git/')
+  local rsync_excludes=("${RSYNC_PRESERVE_EXCLUDES[@]}")
   # Always copy release contents; if zip is absent from src, exclude so we can
   # restore from live below without rsync deleting a placeholder path mid-copy.
   if [[ ! -f "$src/$WIN_AGENT_ZIP_REL" ]]; then

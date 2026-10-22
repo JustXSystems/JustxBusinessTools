@@ -471,6 +471,7 @@ DEPLOY_BRANCH=HEAD ./scripts/vps-deploy.sh
 | Actions: `DEPLOY_PATH` / apply fails | Path wrong or clone missing — fix Part 1.3 |
 | Actions: `server/.env missing` | Create `/var/www/jbt/server/.env` (Part 1.5) |
 | Actions: SCP / checksum fail | Re-run workflow; confirm both `.tgz` and `.sha256` uploaded |
+| Actions: rsync `Permission denied` on `deploy/observability` | Release tarball omits `deploy/`; live sync must **preserve** it (`vps-release.sh` excludes `deploy/`). If an older script still deletes it: pull latest scripts, or `sudo chown -R deploy:deploy /var/www/jbt/deploy` |
 | Disk full / preflight | Free space under `/var/www` (need ~3× artifact size); prune `jbt-releases` / backups |
 | Health fail then auto-rollback | Read Actions log; fix app bug; previous live tree restored automatically |
 | Web probe fail (`:3002`) | `pm2 logs justx-jbt-web`; confirm `NEXT_PUBLIC_BASE_PATH=/jbt` |

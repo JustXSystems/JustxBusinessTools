@@ -55,7 +55,8 @@ link_shared_into() {
 
 echo "==> Rollback to $RELEASE_ID → $LIVE (in-place rsync)"
 link_shared_into "$STAGE"
-rsync -a --delete --exclude '.git/' "$STAGE"/ "$LIVE"/
+# Preserve .git + deploy/ (observability stack; omitted from release tarball)
+rsync -a --delete --exclude '.git/' --exclude 'deploy/' "$STAGE"/ "$LIVE"/
 link_shared_into "$LIVE"
 
 cd "$LIVE"
