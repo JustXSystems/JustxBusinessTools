@@ -297,7 +297,9 @@ export default function SubscriptionPage() {
                       <span>
                         {item.source === "trial"
                           ? `Trial · until ${item.periodEnd?.slice(0, 10) ?? "—"}`
-                          : `${inr(item.unitPriceInr)}/mo${item.periodEnd ? ` · until ${item.periodEnd.slice(0, 10)}` : ""}`}
+                          : `${inr(item.unitPriceInr)}/mo${
+                              (item.quantity ?? 1) > 1 ? ` × ${item.quantity} seats` : ""
+                            }${item.periodEnd ? ` · until ${item.periodEnd.slice(0, 10)}` : ""}`}
                         {item.source && item.source !== "trial" ? ` · ${item.source}` : ""}
                       </span>
                     </li>

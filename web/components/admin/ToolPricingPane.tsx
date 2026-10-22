@@ -45,6 +45,12 @@ export type BundleState = {
   toolIds: string[];
 };
 
+export type ProfileOption = {
+  id: number;
+  businessName: string;
+  isDefault: boolean;
+};
+
 type FormState = {
   name: string;
   category: string;
@@ -87,16 +93,39 @@ export const ToolPricingPane = forwardRef<
     sku: SkuState | null;
     licensed: boolean;
     periodEnd: string | null;
+    recordLimitOverride?: number | null;
+    profiles: ProfileOption[];
+    businessProfileId: number | null;
+    onBusinessProfileChange: (id: number) => void;
+    seatCount?: number;
     bundles: BundleState[];
     onReload: () => Promise<void>;
     onMessage: (msg: string) => void;
   }
 >(function ToolPricingPane(
-  { toolId, toolName, toolCategory, sku, licensed, periodEnd, bundles, onReload, onMessage },
+  {
+    toolId,
+    toolName,
+    toolCategory,
+    sku,
+    licensed,
+    periodEnd,
+    recordLimitOverride,
+    profiles,
+    businessProfileId,
+    onBusinessProfileChange,
+    seatCount,
+    bundles,
+    onReload,
+    onMessage,
+  },
   ref,
 ) {
   const [form, setForm] = useState<FormState>(() => formFromSku(sku, toolName, toolCategory));
   const [grantDays, setGrantDays] = useState("30");
+  const [recordLimitInput, setRecordLimitInput] = useState(
+    recordLimitOverride == null ? "" : String(recordLimitOverride),
+  );
   const [saving, setSaving] = useState(false);
   const savedSnap = useRef("");
 
@@ -106,7 +135,12 @@ export const ToolPricingPane = forwardRef<
     savedSnap.current = JSON.stringify(next);
   }, [sku, toolId, toolName, toolCategory]);
 
+  useEffect(() => {
+    setRecordLimitInput(recordLimitOverride == null ? "" : String(recordLimitOverride));
+  }, [recordLimitOverride, toolId, businessProfileId]);
+
   const dirty = JSON.stringify(form) !== savedSnap.current;
+  const profilePayload = businessProfileId != null ? { businessProfileId } : {};
 
   const packsForTool = useMemo(
     () => bundles.filter((b) => b.id === "all_tools" || b.toolIds.includes(toolId)),
@@ -176,9 +210,9 @@ export const ToolPricingPane = forwardRef<
     try {
       await api("/admin/skus/grant", {
         method: "POST",
-        body: JSON.stringify({ toolIds: [toolId], days }),
+        body: JSON.stringify({ toolIds: [toolId], days, ...profilePayload }),
       });
-      onMessage(`${toolName} licensed for ${days} day(s).`);
+      onMessage(`${toolName} licensed for ${days} day(s) on this business profile.`);
       await onReload();
     } catch (err) {
       onMessage(err instanceof Error ? err.message : "Grant failed");
@@ -196,9 +230,10 @@ export const ToolPricingPane = forwardRef<
           toolIds: [toolId],
           days: Number(form.trialDays) || 14,
           preferTrial: true,
+          ...profilePayload,
         }),
       });
-      onMessage(`${toolName} trial license granted.`);
+      onMessage(`${toolName} trial license granted for this business profile.`);
       await onReload();
     } catch (err) {
       onMessage(err instanceof Error ? err.message : "Trial grant failed");
@@ -212,7 +247,7 @@ export const ToolPricingPane = forwardRef<
     try {
       await api("/admin/skus/extend", {
         method: "POST",
-        body: JSON.stringify({ toolIds: [toolId], days }),
+        body: JSON.stringify({ toolIds: [toolId], days, ...profilePayload }),
       });
       onMessage(`${toolName} license extended by ${days} day(s).`);
       await onReload();
@@ -228,12 +263,38 @@ export const ToolPricingPane = forwardRef<
     try {
       await api("/admin/skus/revoke", {
         method: "POST",
-        body: JSON.stringify({ toolIds: [toolId] }),
+        body: JSON.stringify({ toolIds: [toolId], ...profilePayload }),
       });
-      onMessage(`${toolName} license revoked.`);
+      onMessage(`${toolName} license revoked for this business profile.`);
       await onReload();
     } catch (err) {
       onMessage(err instanceof Error ? err.message : "Revoke failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveRecordLimit() {
+    setSaving(true);
+    try {
+      const trimmed = recordLimitInput.trim();
+      const recordLimit = trimmed === "" ? null : Math.max(0, Math.floor(Number(trimmed)));
+      if (trimmed !== "" && Number.isNaN(recordLimit)) {
+        onMessage("Record limit must be a number");
+        return;
+      }
+      await api("/admin/skus/record-limit", {
+        method: "POST",
+        body: JSON.stringify({ toolId, recordLimit, ...profilePayload }),
+      });
+      onMessage(
+        recordLimit == null
+          ? "Record limit override cleared for this profile."
+          : `Record limit set to ${recordLimit} for this profile.`,
+      );
+      await onReload();
+    } catch (err) {
+      onMessage(err instanceof Error ? err.message : "Record limit update failed");
     } finally {
       setSaving(false);
     }
@@ -439,19 +500,48 @@ export const ToolPricingPane = forwardRef<
       </form>
 
       <div className="tm-license-ops">
-        <h3 className="tm-section-title">Operator license</h3>
+        <h3 className="tm-section-title">Business profile license</h3>
         <p className="muted">
-          Grants entitlement for the active admin organization only. Does not change list price.
+          Licenses and record caps are per business profile. Org MRR counts one seat per licensed profile.
+          {seatCount != null && seatCount > 0 ? ` Currently ${seatCount} seat(s) across the org.` : ""}
         </p>
         <div className="admin-form-grid">
+          <label className="field field-span-2">
+            <span>Business profile</span>
+            <select
+              value={businessProfileId ?? ""}
+              disabled={profiles.length === 0}
+              onChange={(e) => onBusinessProfileChange(Number(e.target.value))}
+            >
+              {profiles.length === 0 ? <option value="">No profiles</option> : null}
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.businessName}
+                  {p.isDefault ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="field">
-            <span>Days</span>
+            <span>License days</span>
             <input
               type="number"
               min={1}
               value={grantDays}
               disabled={form.includedFree}
               onChange={(e) => setGrantDays(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Record limit override</span>
+            <input
+              type="number"
+              min={0}
+              step="1"
+              value={recordLimitInput}
+              disabled={form.includedFree || licensed}
+              placeholder="Platform / SKU default"
+              onChange={(e) => setRecordLimitInput(e.target.value)}
             />
           </label>
         </div>
@@ -493,7 +583,20 @@ export const ToolPricingPane = forwardRef<
           >
             Grant trial ({Number(form.trialDays) || 14}d)
           </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={saving || form.includedFree || licensed}
+            onClick={() => void saveRecordLimit()}
+          >
+            Save record limit
+          </button>
         </div>
+        <p className="muted tm-hint">
+          {licensed
+            ? "Licensed tools have unlimited records — clear the license to apply a freemium record-cap override."
+            : "Save record limit raises the freemium cap for this profile+tool without a paid license. Leave blank and save to clear."}
+        </p>
       </div>
 
       {packsForTool.length > 0 ? (

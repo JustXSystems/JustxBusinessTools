@@ -66,12 +66,12 @@ async function listEnabledGateways(orgId: number) {
   }
 }
 
-async function quoteForOrg(
-  orgId: number,
+async function quoteForProfile(
+  profileId: number,
   toolIds: string[],
   bundleId?: string,
 ): Promise<CartQuote | BundleCartQuote> {
-  const licensed = await licensedToolIdSet(orgId);
+  const licensed = await licensedToolIdSet(profileId);
   if (bundleId) {
     return quoteBundleCart(bundleId, licensed);
   }
@@ -98,10 +98,10 @@ router.get("/", async (_req, res) => {
       getLatestClaimForOrg(orgId),
       listEnabledGateways(orgId),
       listToolSkus(),
-      listActiveLicenses(orgId),
+      listActiveLicenses(profileId),
       listSubscriptionItems(orgId),
       listAvailableProductBundles(),
-      trialConsumedToolIdSet(orgId),
+      trialConsumedToolIdSet(profileId),
     ]);
 
     const logRejected = (label: string, idx: number) => {
@@ -194,7 +194,7 @@ router.get("/", async (_req, res) => {
       licenses,
       licensedToolIds: [...licensed],
       billingItems: items,
-      mrrInr: items.reduce((sum, i) => sum + i.unitPriceInr, 0),
+      mrrInr: items.reduce((sum, i) => sum + i.unitPriceInr * (i.quantity || 1), 0),
       upi: {
         ...publicPayee(payee),
         amountInr: 0,
@@ -229,7 +229,7 @@ router.get("/quote", async (req, res) => {
     const orgId = getActiveOrgId();
     const bundleId = String(req.query.bundleId ?? req.query.pack ?? "").trim();
     const toolIds = parseToolIds(req.query.tools ?? req.query.toolIds);
-    const quote = await quoteForOrg(orgId, toolIds, bundleId || undefined);
+    const quote = await quoteForProfile(getActiveProfileId(), toolIds, bundleId || undefined);
     const payee = await getUpiPayee();
     const label = isBundleQuote(quote)
       ? `JustXSystems ${quote.packName}`.slice(0, 50)
@@ -252,7 +252,7 @@ router.post("/upi-claims", async (req, res) => {
   try {
     const bundleId = String(req.body?.bundleId ?? req.body?.packId ?? "").trim();
     const toolIds = parseToolIds(req.body?.toolIds ?? req.body?.tools);
-    const quote = await quoteForOrg(getActiveOrgId(), toolIds, bundleId || undefined);
+    const quote = await quoteForProfile(getActiveProfileId(), toolIds, bundleId || undefined);
     const payerEmail = String(req.body?.payerEmail ?? "").trim();
     const payerName = String(req.body?.payerName ?? "").trim();
     const utr = String(req.body?.utr ?? "").trim();
@@ -296,7 +296,7 @@ router.post("/checkout", async (req, res) => {
   try {
     const bundleId = String(req.body?.bundleId ?? req.body?.packId ?? "").trim();
     const toolIds = parseToolIds(req.body?.toolIds ?? req.body?.tools);
-    const quote = await quoteForOrg(getActiveOrgId(), toolIds, bundleId || undefined);
+    const quote = await quoteForProfile(getActiveProfileId(), toolIds, bundleId || undefined);
     const profileId = getActiveProfileId();
     const orgId = getActiveOrgId();
     const gatewayId = Number(req.body?.gatewayId ?? 0);
@@ -351,6 +351,7 @@ router.post("/checkout", async (req, res) => {
         });
       } else {
         await activateToolCommerce({
+          profileId,
           orgId,
           toolIds: tools,
           source: bundleId ? "pack" : "card",
@@ -431,8 +432,8 @@ router.post("/trial", async (req, res) => {
 
     const [skus, licensed, trialConsumed] = await Promise.all([
       listToolSkus(),
-      licensedToolIdSet(orgId),
-      trialConsumedToolIdSet(orgId),
+      licensedToolIdSet(profileId),
+      trialConsumedToolIdSet(profileId),
     ]);
     const byId = new Map(skus.map((s) => [s.toolId, s]));
     const eligible: string[] = [];
@@ -472,6 +473,7 @@ router.post("/trial", async (req, res) => {
     }
 
     const result = await activateToolCommerce({
+      profileId,
       orgId,
       toolIds: eligible,
       source: "trial",
@@ -482,8 +484,8 @@ router.post("/trial", async (req, res) => {
     const subscription = await getSubscription(profileId);
     const [freshSkus, freshLicenses, freshConsumed, packs, items] = await Promise.all([
       listToolSkus(),
-      listActiveLicenses(orgId),
-      trialConsumedToolIdSet(orgId),
+      listActiveLicenses(profileId),
+      trialConsumedToolIdSet(profileId),
       listAvailableProductBundles(),
       listSubscriptionItems(orgId),
     ]);
@@ -500,7 +502,7 @@ router.post("/trial", async (req, res) => {
         licenses: freshLicenses,
         licensedToolIds: [...licensedSet],
         billingItems: items,
-        mrrInr: items.reduce((sum, i) => sum + i.unitPriceInr, 0),
+        mrrInr: items.reduce((sum, i) => sum + i.unitPriceInr * (i.quantity || 1), 0),
       },
     });
   } catch (err) {
@@ -515,11 +517,11 @@ router.post("/cancel", async (req, res) => {
   const toolIds = parseToolIds(req.body?.toolIds);
   const current = await getSubscription(profileId);
   if (toolIds.length > 0) {
-    await deactivateToolCommerce({ orgId, toolIds });
+    await deactivateToolCommerce({ profileId, orgId, toolIds });
     res.json(await getSubscription(profileId));
     return;
   }
-  await deactivateToolCommerce({ orgId });
+  await deactivateToolCommerce({ profileId, orgId });
   // If they held the All Tools Pack plan, step workspace back to freemium.
   if (current.isUnlimited || current.planId === "pro") {
     const subscription = await cancelSubscription(

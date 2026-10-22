@@ -212,6 +212,7 @@ export async function reviewClaim(
       });
     } else {
       await activateToolCommerce({
+        profileId: claim.profileId,
         orgId: claim.organizationId,
         toolIds: claim.toolIds,
         source: claim.planId.startsWith("pack:") ? "pack" : "upi",

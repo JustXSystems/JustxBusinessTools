@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FeatureSwitchesPanel } from "@/components/admin/FeatureSwitchesPanel";
 import { ToolPlacementPane } from "@/components/admin/ToolPlacementPane";
-import { ToolPricingPane, type BundleState, type SkuState } from "@/components/admin/ToolPricingPane";
+import {
+  ToolPricingPane,
+  type BundleState,
+  type ProfileOption,
+  type SkuState,
+} from "@/components/admin/ToolPricingPane";
 import { ToolSchemaPane } from "@/components/admin/ToolSchemaPane";
 import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
 import { getToolDefinition, uniqueTools } from "@/config/tools.config";
@@ -28,6 +33,8 @@ type License = {
   name: string;
   status: string;
   periodEnd: string | null;
+  recordLimitOverride?: number | null;
+  businessProfileId?: number;
 };
 
 type ToolDef = { id: string; toolType: string; definition: Record<string, unknown> };
@@ -44,6 +51,8 @@ type DirectoryItem = {
   sku: SkuState | null;
   licensed: boolean;
   periodEnd: string | null;
+  recordLimitOverride: number | null;
+  seatCount: number;
   definition: Record<string, unknown> | null;
 };
 
@@ -67,6 +76,10 @@ export default function AdminToolsPage() {
   const [catalog, setCatalog] = useState<CatalogRow[]>([]);
   const [skus, setSkus] = useState<SkuState[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
+  const [entitlements, setEntitlements] = useState<License[]>([]);
+  const [orgLicenses, setOrgLicenses] = useState<License[]>([]);
+  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
+  const [businessProfileId, setBusinessProfileId] = useState<number | null>(null);
   const [bundles, setBundles] = useState<BundleState[]>([]);
   const [defs, setDefs] = useState<ToolDef[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -108,22 +121,41 @@ export default function AdminToolsPage() {
   }
 
   const reload = useCallback(async () => {
+    const qs =
+      businessProfileId != null ? `?businessProfileId=${businessProfileId}` : "";
     const [c, s, d] = await Promise.all([
       api<{ tools: CatalogRow[] }>("/admin/catalog"),
-      api<{ skus: SkuState[]; licenses: License[]; bundles?: BundleState[] }>("/admin/skus"),
+      api<{
+        skus: SkuState[];
+        licenses: License[];
+        entitlements?: License[];
+        orgLicenses?: License[];
+        bundles?: BundleState[];
+        profiles?: ProfileOption[];
+        businessProfileId?: number;
+      }>(`/admin/skus${qs}`),
       api<{ tools: ToolDef[] }>("/admin/config/tools"),
     ]);
     setCatalog(c.tools);
     setSkus(s.skus);
     setLicenses(s.licenses);
+    setEntitlements(s.entitlements ?? []);
+    setOrgLicenses(s.orgLicenses ?? []);
     setBundles(s.bundles ?? []);
+    setProfiles(s.profiles ?? []);
+    if (s.businessProfileId != null) setBusinessProfileId(s.businessProfileId);
     setDefs(d.tools);
-  }, []);
+  }, [businessProfileId]);
 
   const directory = useMemo<DirectoryItem[]>(() => {
     const catMap = new Map(catalog.map((t) => [t.id, t]));
     const skuMap = new Map(skus.map((t) => [t.toolId, t]));
     const licMap = new Map(licenses.map((t) => [t.toolId, t]));
+    const entMap = new Map(entitlements.map((t) => [t.toolId, t]));
+    const seatMap = new Map<string, number>();
+    for (const lic of orgLicenses) {
+      seatMap.set(lic.toolId, (seatMap.get(lic.toolId) ?? 0) + 1);
+    }
     const defMap = new Map(defs.map((t) => [t.id, t]));
     const ids = new Set<string>([
       ...catalog.map((t) => t.id),
@@ -138,6 +170,8 @@ export default function AdminToolsPage() {
       const sku = skuMap.get(id) ?? null;
       const builtin = getToolDefinition(id);
       const def = defMap.get(id);
+      const lic = licMap.get(id);
+      const ent = entMap.get(id);
       return {
         id,
         name: sku?.name || builtin?.name || id,
@@ -145,12 +179,14 @@ export default function AdminToolsPage() {
         toolType: def?.toolType || builtin?.type || cat?.toolType || "utility",
         catalog: cat,
         sku,
-        licensed: Boolean(licMap.get(id)),
-        periodEnd: licMap.get(id)?.periodEnd ?? null,
+        licensed: Boolean(lic),
+        periodEnd: lic?.periodEnd ?? null,
+        recordLimitOverride: ent?.recordLimitOverride ?? lic?.recordLimitOverride ?? null,
+        seatCount: seatMap.get(id) ?? 0,
         definition: def?.definition ?? null,
       };
     });
-  }, [catalog, skus, licenses, defs]);
+  }, [catalog, skus, licenses, entitlements, orgLicenses, defs]);
 
   const stats = useMemo(() => {
     const live = directory.filter((t) => t.catalog?.available !== false).length;
@@ -588,6 +624,11 @@ export default function AdminToolsPage() {
                   sku={selected.sku}
                   licensed={selected.licensed}
                   periodEnd={selected.periodEnd}
+                  recordLimitOverride={selected.recordLimitOverride}
+                  profiles={profiles}
+                  businessProfileId={businessProfileId}
+                  onBusinessProfileChange={setBusinessProfileId}
+                  seatCount={selected.seatCount}
                   bundles={bundles}
                   onReload={async () => {
                     await reload();

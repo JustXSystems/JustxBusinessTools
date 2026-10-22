@@ -187,9 +187,17 @@ export async function getRecordLimit(
     return freemiumCap();
   }
 
-  const orgId = await getOrganizationIdForProfile(profileId);
   const sku = await getToolSku(toolId);
-  if (orgId && (await licensedOrIncluded(orgId, toolId, sku))) return null;
+  if (await licensedOrIncluded(profileId, toolId, sku)) return null;
+
+  // Per-profile freemium override (admin record-cap extension) wins over SKU/plan defaults.
+  try {
+    const { getProfileToolEntitlement } = await import("./tool-licenses.js");
+    const ent = await getProfileToolEntitlement(profileId, toolId);
+    if (ent?.recordLimitOverride != null) return ent.recordLimitOverride;
+  } catch {
+    /* schema may still be booting */
+  }
 
   if (sku?.accessPolicy === "hard_lock") return 0;
   if (sku?.unlicensedRecordLimit != null) return sku.unlicensedRecordLimit;
@@ -321,8 +329,8 @@ export async function cancelSubscription(
   const limited = await getLimitedPlan();
   const orgId = await getOrganizationIdForProfile(profileId);
   if (orgId) {
-    const { revokeToolLicenses } = await import("./tool-licenses.js");
-    await revokeToolLicenses(orgId);
+    const { revokeToolLicensesForOrg } = await import("./tool-licenses.js");
+    await revokeToolLicensesForOrg(orgId);
   }
   const sub = await applyPlanToProfile(
     profileId,

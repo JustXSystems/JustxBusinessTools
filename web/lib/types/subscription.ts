@@ -48,12 +48,16 @@ export type ToolLicense = {
   name: string;
   status: string;
   periodEnd: string | null;
+  recordLimitOverride?: number | null;
+  businessProfileId?: number;
 };
 
 export type BillingItem = {
   toolId: string;
   name: string;
   unitPriceInr: number;
+  /** Seats = business profiles licensed for this tool */
+  quantity?: number;
   status: string;
   source: string | null;
   externalRef: string | null;

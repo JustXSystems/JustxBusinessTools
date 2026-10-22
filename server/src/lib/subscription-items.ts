@@ -1,12 +1,14 @@
 import { pool } from "../db.js";
 import { ensureTablesUtf8mb4UnicodeCi, INNODB_UTF8MB4_UNICODE } from "./mysql-charset.js";
 import { listToolSkus } from "./tool-skus.js";
-import { listActiveLicenses } from "./tool-licenses.js";
+import { listActiveLicensesForOrg } from "./tool-licenses.js";
 
 export type SubscriptionItem = {
   toolId: string;
   name: string;
   unitPriceInr: number;
+  /** Number of business profiles actively licensed for this tool */
+  quantity: number;
   status: string;
   source: string | null;
   externalRef: string | null;
@@ -56,6 +58,13 @@ export async function ensureSubscriptionItemsSchema(): Promise<void> {
         "org_subscription_items",
         "checkout_intents",
       ]);
+      try {
+        await pool.query(
+          `ALTER TABLE org_subscription_items ADD COLUMN quantity INT UNSIGNED NOT NULL DEFAULT 1`,
+        );
+      } catch {
+        /* column already exists */
+      }
     })().catch((err: unknown) => {
       schemaReady = null;
       throw err;
@@ -67,8 +76,8 @@ export async function ensureSubscriptionItemsSchema(): Promise<void> {
 export async function listSubscriptionItems(orgId: number): Promise<SubscriptionItem[]> {
   await ensureSubscriptionItemsSchema();
   const [rows] = await pool.query(
-    `SELECT i.tool_id, i.unit_price_inr, i.status, i.source, i.external_ref,
-            i.current_period_end, i.created_at, i.updated_at, s.name
+    `SELECT i.tool_id, i.unit_price_inr, COALESCE(i.quantity, 1) AS quantity, i.status, i.source,
+            i.external_ref, i.current_period_end, i.created_at, i.updated_at, s.name
      FROM org_subscription_items i
      LEFT JOIN tool_skus s ON s.tool_id = i.tool_id
      WHERE i.organization_id = :orgId AND i.status = 'active'
@@ -81,6 +90,7 @@ export async function listSubscriptionItems(orgId: number): Promise<Subscription
       toolId: String(r.tool_id),
       name: String(r.name ?? r.tool_id),
       unitPriceInr: Number(r.unit_price_inr ?? 0),
+      quantity: Math.max(1, Number(r.quantity ?? 1)),
       status: String(r.status),
       source: r.source == null ? null : String(r.source),
       externalRef: r.external_ref == null ? null : String(r.external_ref),
@@ -92,7 +102,8 @@ export async function listSubscriptionItems(orgId: number): Promise<Subscription
 }
 
 /**
- * Rebuild active billing line items from active licenses + current SKU list prices.
+ * Rebuild active billing line items from active profile licenses + current SKU list prices.
+ * Quantity = number of business profiles licensed for that tool (seat count).
  * Keeps org_subscriptions.mrr_inr aligned with the commercial ledger.
  */
 export async function syncSubscriptionItemsFromLicenses(
@@ -100,8 +111,22 @@ export async function syncSubscriptionItemsFromLicenses(
   meta?: { source?: string | null; externalRef?: string | null },
 ): Promise<SubscriptionItem[]> {
   await ensureSubscriptionItemsSchema();
-  const [licenses, skus] = await Promise.all([listActiveLicenses(orgId), listToolSkus()]);
+  const [licenses, skus] = await Promise.all([listActiveLicensesForOrg(orgId), listToolSkus()]);
   const byId = new Map(skus.map((s) => [s.toolId, s]));
+
+  const seats = new Map<
+    string,
+    { quantity: number; farthestEnd: Date | null }
+  >();
+  for (const lic of licenses) {
+    const cur = seats.get(lic.toolId) ?? { quantity: 0, farthestEnd: null };
+    cur.quantity += 1;
+    if (lic.periodEnd) {
+      const end = new Date(lic.periodEnd);
+      if (!cur.farthestEnd || end > cur.farthestEnd) cur.farthestEnd = end;
+    }
+    seats.set(lic.toolId, cur);
+  }
 
   await pool.query(
     `UPDATE org_subscription_items SET status = 'cancelled'
@@ -109,30 +134,32 @@ export async function syncSubscriptionItemsFromLicenses(
     { orgId },
   );
 
-  for (const lic of licenses) {
-    const sku = byId.get(lic.toolId);
+  for (const [toolId, seat] of seats) {
+    const sku = byId.get(toolId);
     const listPrice = sku && !sku.includedFree ? sku.priceInr : 0;
     await pool.query(
       `INSERT INTO org_subscription_items
-         (organization_id, tool_id, unit_price_inr, status, source, external_ref, current_period_end)
-       VALUES (:orgId, :toolId, :price, 'active', :source, :externalRef, :periodEnd)
+         (organization_id, tool_id, unit_price_inr, quantity, status, source, external_ref, current_period_end)
+       VALUES (:orgId, :toolId, :price, :quantity, 'active', :source, :externalRef, :periodEnd)
        ON DUPLICATE KEY UPDATE
          unit_price_inr = CASE
            WHEN :source = 'trial' THEN 0
            WHEN source = 'trial' AND :source IS NULL THEN 0
            ELSE :price
          END,
+         quantity = :quantity,
          status = 'active',
          source = COALESCE(:source, source),
          external_ref = COALESCE(:externalRef, external_ref),
          current_period_end = :periodEnd`,
       {
         orgId,
-        toolId: lic.toolId,
+        toolId,
         price: meta?.source === "trial" ? 0 : listPrice,
+        quantity: seat.quantity,
         source: meta?.source ?? null,
         externalRef: meta?.externalRef ?? null,
-        periodEnd: lic.periodEnd ? new Date(lic.periodEnd) : null,
+        periodEnd: seat.farthestEnd,
       },
     );
   }
@@ -162,7 +189,7 @@ export async function repriceActiveItemsForSku(
   await pool.query(
     `UPDATE org_subscriptions os
      SET mrr_inr = (
-       SELECT COALESCE(SUM(i.unit_price_inr), 0)
+       SELECT COALESCE(SUM(i.unit_price_inr * COALESCE(i.quantity, 1)), 0)
        FROM org_subscription_items i
        WHERE i.organization_id = os.organization_id AND i.status = 'active'
      )
@@ -193,7 +220,7 @@ export async function alignOrgItemPricesWithSkus(orgId: number): Promise<number>
     );
   }
   const [sumRows] = await pool.query(
-    `SELECT COALESCE(SUM(unit_price_inr), 0) AS mrr
+    `SELECT COALESCE(SUM(unit_price_inr * COALESCE(quantity, 1)), 0) AS mrr
      FROM org_subscription_items
      WHERE organization_id = :orgId AND status = 'active'`,
     { orgId },
