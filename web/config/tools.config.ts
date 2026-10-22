@@ -63,6 +63,13 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
   { id: "bosdesign", name: "Justx BOS Design", category: "Utilities", icon: "🧩", desc: "Standard UI/UX system with live HR, Finance & Invoice samples" },
   { id: "bos", name: "Justx BOS", category: "Utilities", icon: "🏢", desc: "Business Operating System — Finance, GST invoicing, HR & projects, synced with your tools" },
   { id: "imsdealer", name: "Justx IMS — Dealer", category: "Utilities", icon: "📦", desc: "Inventory, purchasing, GST sales, receivables & field ops for dealers and distributors" },
+  {
+    id: "seo-meridian",
+    name: "Meridian SEO",
+    category: "Utilities",
+    icon: "📡",
+    desc: "SEO command center — Search Console, verify, Command Brief (SaaS)",
+  },
 ];
 
 /**
@@ -105,6 +112,7 @@ const TOOL_TYPES: Record<string, ToolType> = {
   bos: "utility",
   imsdealer: "utility",
   notifications: "screen",
+  "seo-meridian": "screen",
 };
 
 export function uniqueTools(): ToolCatalogEntry[] {
@@ -120,15 +128,18 @@ export function getToolDefinition(id: string): ToolDefinition | undefined {
   const entry = uniqueTools().find((t) => t.id === id);
   if (!entry) return undefined;
   const type = TOOL_TYPES[id] ?? "utility";
+  const external =
+    id === "seo-meridian" ? "https://justxsystems.com/jbt/tools/seo-meridian" : null;
   const subscriptionExempt =
     id !== "quotationv1" &&
     id !== "sitesurveyv1" &&
+    id !== "seo-meridian" &&
     (type === "calculator" || type === "utility" || id === "notifications");
   return {
     ...entry,
     type,
     subscriptionExempt,
-    route: id === "notifications" ? "/notifications" : `/tools/${id}`,
+    route: external || (id === "notifications" ? "/notifications" : `/tools/${id}`),
     showOnHome: id !== "notifications" && !OPT_IN_TOOL_IDS.has(id),
   };
 }
