@@ -186,9 +186,10 @@ export async function recordSaasTransaction(
   }
 
   if (status === "success" && type === "subscription_charge") {
+    const mrr = Number.isFinite(Number(amountInr)) ? Math.max(0, Number(amountInr)) : 0;
     await pool.query(
       `UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`,
-      { orgId, mrr: amountInr },
+      { orgId, mrr },
     );
   }
   return "inserted";

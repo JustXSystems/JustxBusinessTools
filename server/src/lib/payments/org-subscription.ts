@@ -20,11 +20,14 @@ export async function syncOrgSubscription(
   mrrInr?: number,
   periodEnd?: Date,
 ): Promise<void> {
+  // mrr_inr is NOT NULL — never insert NULL (callers often omit mrr and refresh later).
+  const mrr =
+    mrrInr == null || !Number.isFinite(Number(mrrInr)) ? null : Math.max(0, Number(mrrInr));
   await pool.query(
     `INSERT INTO org_subscriptions
      (organization_id, plan_id, status, current_period_start, current_period_end,
       payment_provider, external_subscription_id, mrr_inr)
-     VALUES (:orgId, :planId, :status, NOW(), :periodEnd, :provider, :externalId, :mrr)
+     VALUES (:orgId, :planId, :status, NOW(), :periodEnd, :provider, :externalId, COALESCE(:mrr, 0))
      ON DUPLICATE KEY UPDATE
        plan_id = :planId,
        status = :status,
@@ -40,7 +43,7 @@ export async function syncOrgSubscription(
       periodEnd: periodEnd ?? null,
       provider,
       externalId: externalSubscriptionId ?? null,
-      mrr: mrrInr ?? null,
+      mrr,
     },
   );
 

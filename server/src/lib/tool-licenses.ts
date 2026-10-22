@@ -478,9 +478,10 @@ export async function refreshOrgMrr(orgId: number): Promise<number> {
        WHERE organization_id = :orgId AND status = 'active'`,
       { orgId },
     );
-    const mrr = Number(
+    const raw = Number(
       (Array.isArray(sumRows) ? (sumRows[0] as { mrr: number }) : { mrr: 0 }).mrr ?? 0,
     );
+    const mrr = Number.isFinite(raw) ? Math.max(0, raw) : 0;
     await pool.query(`UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`, {
       mrr,
       orgId,
@@ -498,7 +499,8 @@ export async function refreshOrgMrr(orgId: number): Promise<number> {
     for (const [toolId, qty] of seats) {
       const sku = byId.get(toolId);
       if (!sku || sku.includedFree) continue;
-      mrr += sku.priceInr * qty;
+      const line = Number(sku.priceInr) * qty;
+      if (Number.isFinite(line)) mrr += line;
     }
     await pool.query(`UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`, {
       mrr,

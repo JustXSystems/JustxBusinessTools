@@ -188,11 +188,11 @@ export async function repriceActiveItemsForSku(
   );
   await pool.query(
     `UPDATE org_subscriptions os
-     SET mrr_inr = (
+     SET mrr_inr = COALESCE((
        SELECT COALESCE(SUM(i.unit_price_inr * COALESCE(i.quantity, 1)), 0)
        FROM org_subscription_items i
        WHERE i.organization_id = os.organization_id AND i.status = 'active'
-     )
+     ), 0)
      WHERE EXISTS (
        SELECT 1 FROM org_subscription_items x
        WHERE x.organization_id = os.organization_id
@@ -225,9 +225,10 @@ export async function alignOrgItemPricesWithSkus(orgId: number): Promise<number>
      WHERE organization_id = :orgId AND status = 'active'`,
     { orgId },
   );
-  const mrr = Number(
+  const raw = Number(
     (Array.isArray(sumRows) ? (sumRows[0] as { mrr: number }) : { mrr: 0 }).mrr ?? 0,
   );
+  const mrr = Number.isFinite(raw) ? Math.max(0, raw) : 0;
   try {
     await pool.query(`UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`, {
       mrr,
