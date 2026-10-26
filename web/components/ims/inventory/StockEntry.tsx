@@ -543,17 +543,18 @@ function RecentEntries({ mode, showValue }: { mode: Mode; showValue: boolean }) 
     <WidgetCard title={`Recent ${MODE[mode].tab.toLowerCase()}`} dot="blue" note={<Segmented size="sm" role="radio" aria-label="Recent period" value={period} onChange={setPeriod} options={[{ value: "today", label: "Today" }, { value: "7d", label: "7 days" }]} />}>
       <Loaded state={state} rows={1}>
         {(d) => {
-          const t = d.totals[mode];
-          if (!d.movements.length) return <p className="ims-faint">No entries {period === "today" ? "today" : "in the last 7 days"}.</p>;
+          const movements = Array.isArray(d.movements) ? d.movements : [];
+          const t = d.totals?.[mode];
+          if (!movements.length) return <p className="ims-faint">No entries {period === "today" ? "today" : "in the last 7 days"}.</p>;
           return (
             <Stack gap={10}>
               <div className="ims-row" style={{ gap: 6 }}>
-                <Badge tone="neutral">{t?.count ?? d.movements.length} entries</Badge>
+                <Badge tone="neutral">{t?.count ?? movements.length} entries</Badge>
                 {t ? <Badge tone={MODE[mode].tone === "coral" ? "coral" : "blue"}>{qtyText(t.qty)} units</Badge> : null}
                 {t && showValue && mode !== "ADJUSTMENT" ? <Badge tone="emerald">{inr(t.value)}</Badge> : null}
               </div>
               <div className="ims-b-list">
-                {d.movements.slice(0, 12).map((m) => (
+                {movements.slice(0, 12).map((m) => (
                   <button key={m.id} type="button" className="ims-b-list-row ims-pick-row" onClick={() => navigate("items", `open:${m.itemId}`)}>
                     <span className="ims-cell-stack">
                       <span className="ims-strong">{m.itemName}</span>

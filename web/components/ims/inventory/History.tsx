@@ -292,7 +292,7 @@ function MovementsTab({ initialTypes, initialItemId }: { initialTypes: MovementT
           const pages = Math.max(1, Math.ceil(rows.length / PAGE));
           const current = Math.min(page, pages - 1);
           const shown = rows.slice(current * PAGE, current * PAGE + PAGE);
-          const totals = TYPES.flatMap((t) => (d.totals[t] ? [{ t, ...d.totals[t] }] : []));
+          const totals = TYPES.flatMap((t) => (d.totals?.[t] ? [{ t, ...d.totals[t] }] : []));
           const net = round3(totals.reduce((s, t) => s + (t.delta ?? 0), 0));
           const file = `stock-movements-${d.range.from}-to-${d.range.to}`;
           return (
