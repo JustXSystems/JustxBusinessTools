@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { errorText } from "@/lib/ims/api";
 import { field, type GeoFix } from "@/lib/ims/field";
 
@@ -57,7 +57,8 @@ export function useLiveShare(onSent?: () => void) {
   const [on, setOn] = useState(() => typeof window !== "undefined" && window.sessionStorage.getItem(LIVE_KEY) === "1" && !unsupported());
   const [status, setStatus] = useState<{ lastSentAt: number | null; accuracy: number | null; error: string | null }>({ lastSentAt: null, accuracy: null, error: null });
   const latest = useRef<GeoFix | null>(null);
-  const notify = useEffectEvent(() => onSent?.());
+  const onSentRef = useRef(onSent);
+  onSentRef.current = onSent;
 
   useEffect(() => {
     if (!on) return;
@@ -69,7 +70,7 @@ export function useLiveShare(onSent?: () => void) {
         await field.ping(fix);
         if (!alive) return;
         setStatus((s) => ({ ...s, lastSentAt: Date.now(), error: null }));
-        notify();
+        onSentRef.current?.();
       } catch (err) {
         if (alive) setStatus((s) => ({ ...s, error: errorText(err) }));
       }

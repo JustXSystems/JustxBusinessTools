@@ -907,3 +907,5 @@ function GstPaper({
     </article>
   );
 }
+
+export default GstModule;

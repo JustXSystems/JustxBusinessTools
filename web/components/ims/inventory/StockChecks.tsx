@@ -1026,3 +1026,5 @@ function CountPaper({ check, lines, blind, business, address }: { check: CountSh
     </article>
   );
 }
+
+export default StockChecksModule;

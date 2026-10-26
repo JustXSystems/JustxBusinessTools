@@ -203,3 +203,5 @@ function SettingsEditor({ meta, initialTab }: { meta: ImsSettingsMeta; initialTa
     </Stack>
   );
 }
+
+export default SettingsModule;

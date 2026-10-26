@@ -647,3 +647,5 @@ function LinksTab({ tools }: { tools: ReadonlyArray<{ id: string; label: string 
     </Card>
   );
 }
+
+export default ConnectModule;

@@ -554,3 +554,5 @@ function DeleteEntryDialog({ entry, onClose }: { entry: LedgerEntry | null; onCl
     />
   );
 }
+
+export default LedgerModule;

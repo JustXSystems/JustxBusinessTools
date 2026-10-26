@@ -320,3 +320,5 @@ export function LowStockModule() {
     </Stack>
   );
 }
+
+export default LowStockModule;

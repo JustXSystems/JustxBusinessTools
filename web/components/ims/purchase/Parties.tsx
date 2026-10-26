@@ -441,3 +441,5 @@ export function PartiesModule() {
     </div>
   );
 }
+
+export default PartiesModule;

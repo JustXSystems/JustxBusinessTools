@@ -2,7 +2,7 @@
 
 import "./ims-app.css";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
 import {
   AppShell,
   Avatar,
@@ -152,6 +152,31 @@ const MOBILE_NAV: ReadonlyArray<{ key: ImsModuleKey; label: string }> = [
   { key: "stock", label: "Stock" },
   { key: "more", label: "More" },
 ];
+
+/** Keeps one broken screen from blanking the whole IMS shell (and surfaces a real message, not a minified TypeError). */
+class ModuleBoundary extends Component<{ moduleKey: string; children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error(`[IMS ${this.props.moduleKey}]`, error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <ErrorBlock
+          error={this.state.error}
+          onRetry={() => this.setState({ error: null })}
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function MobileNav({ available, active, onSelect }: { available: ReadonlySet<ImsModuleKey>; active: ImsModuleKey; onSelect: (key: ImsModuleKey) => void }) {
   const items = MOBILE_NAV.filter((n) => available.has(n.key));
@@ -317,9 +342,11 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
             aria-label="IMS modules"
           >
             <div key={`${current.key}:${nav.seq}`} className="bos-fade-in">
-              <Suspense fallback={<LoadingBlock />}>
-                <Module />
-              </Suspense>
+              <ModuleBoundary moduleKey={current.key}>
+                <Suspense fallback={<LoadingBlock />}>
+                  <Module />
+                </Suspense>
+              </ModuleBoundary>
             </div>
           </AppShell>
 

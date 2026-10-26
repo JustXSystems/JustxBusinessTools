@@ -116,3 +116,5 @@ export function MoreActionsModule() {
     </Stack>
   );
 }
+
+export default MoreActionsModule;

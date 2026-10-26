@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useEffectEvent, useState, type CSSProperties, type DependencyList, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type DependencyList, type ReactNode } from "react";
 import { Alert, Avatar, Badge, Button, Card, Grid, Segmented, Skeleton, useToast, type BosTone } from "@/components/bos";
 import { ImsApiError, errorText, type ImsModuleKey, type ImsNotification, type ImsPermission, type ImsSession, type ImsSettings, type Period } from "@/lib/ims/api";
 import { initialsOf, PERIOD_OPTIONS, toneFor, type BadgeView } from "@/lib/ims/format";
@@ -53,11 +53,13 @@ export function useImsData<T>(loader: () => Promise<T>, deps: DependencyList = [
   const [tick, setTick] = useState(0);
   const key = JSON.stringify([version, tick, ...deps]);
   const [state, setState] = useState<{ data: T | null; error: unknown; key: string | null }>({ data: null, error: null, key: null });
-  const load = useEffectEvent(() => loader());
+  // Ref (not useEffectEvent): stays callable on every React build Next ships, and never minifies to "i is not a function".
+  const loaderRef = useRef(loader);
+  loaderRef.current = loader;
 
   useEffect(() => {
     let alive = true;
-    load().then(
+    loaderRef.current().then(
       (data) => alive && setState({ data, error: null, key }),
       (error: unknown) => alive && setState((s) => ({ data: s.data, error, key })),
     );

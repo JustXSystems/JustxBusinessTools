@@ -3004,3 +3004,5 @@ function AccessTab() {
     </>
   );
 }
+
+export default AuditModule;

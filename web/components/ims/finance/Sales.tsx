@@ -242,3 +242,5 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
     </Loaded>
   );
 }
+
+export default SalesModule;

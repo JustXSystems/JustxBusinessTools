@@ -1,4 +1,4 @@
-const CACHE = "jbt-shell-v9";
+const CACHE = "jbt-shell-v10";
 
 function appBase() {
   try {

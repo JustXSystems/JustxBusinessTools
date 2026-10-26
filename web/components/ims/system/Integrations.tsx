@@ -710,3 +710,5 @@ function LogTab({ log }: { log: SyncLogEntry[] }) {
     </Card>
   );
 }
+
+export default IntegrationsModule;

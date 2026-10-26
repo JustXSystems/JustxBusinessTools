@@ -724,3 +724,5 @@ function ClosingPaper({ closing: c, expenses, day }: { closing: ImsClosing; expe
     </article>
   );
 }
+
+export default ClosingModule;

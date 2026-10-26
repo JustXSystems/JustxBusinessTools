@@ -1,11 +1,11 @@
 "use client";
 
 import "./purchase.css";
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Badge, Button, DataTable, EmptyState, FilterChip, Grid, KpiCard, Pagination, ProgressBar, SearchInput, Select, type BosColumn } from "@/components/bos";
 import type { Period } from "@/lib/ims/api";
 import { PERIOD_OPTIONS, dateLabel, downloadCsv, inr, inrCompact, type ExportColumn } from "@/lib/ims/format";
-import { PO_STATUS_LABEL, RECEIVABLE_STATUSES, purchase, type PoList, type PoShare, type PoStatus, type PurchaseOrder, type ReorderDraft } from "@/lib/ims/purchase";
+import { PO_STATUS_LABEL, RECEIVABLE_STATUSES, purchase, type PoList, type PoShare, type PoStatus, type PurchaseOrder } from "@/lib/ims/purchase";
 import { ErrorBlock, LoadingBlock, Loaded, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData } from "../core";
 import { lineKey } from "../shared/LineEditor";
 import { usePartyOptions } from "../shared/pickers";
@@ -64,16 +64,16 @@ export function PurchaseModule() {
 function ReorderLoader({ supplierId, onReady, onCancel }: { supplierId: string; onReady: (p: PoPrefill) => void; onCancel: () => void }) {
   const state = useImsData(() => purchase.reorderDraft(supplierId), [supplierId]);
   const d = state.data;
-  const ready = useEffectEvent((draft: ReorderDraft) =>
-    onReady({
-      supplierId: draft.supplier?.id ?? null,
-      supplierName: draft.supplier?.name,
-      lines: draft.lines.map((l) => ({ key: lineKey(), itemId: l.itemId ?? null, name: l.name, sku: l.sku ?? null, hsn: l.hsn ?? null, unit: l.unit ?? null, qty: l.qty, rate: l.rate, discountPct: l.discountPct ?? 0, gstRate: l.gstRate })),
-      note: `Restock of ${draft.lines.length} low-stock item${draft.lines.length === 1 ? "" : "s"}${draft.supplier ? ` from ${draft.supplier.name}` : ""}.`,
-    }),
-  );
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
   useEffect(() => {
-    if (d && d.lines.length > 0) ready(d);
+    if (!d || d.lines.length === 0) return;
+    onReadyRef.current({
+      supplierId: d.supplier?.id ?? null,
+      supplierName: d.supplier?.name,
+      lines: d.lines.map((l) => ({ key: lineKey(), itemId: l.itemId ?? null, name: l.name, sku: l.sku ?? null, hsn: l.hsn ?? null, unit: l.unit ?? null, qty: l.qty, rate: l.rate, discountPct: l.discountPct ?? 0, gstRate: l.gstRate })),
+      note: `Restock of ${d.lines.length} low-stock item${d.lines.length === 1 ? "" : "s"}${d.supplier ? ` from ${d.supplier.name}` : ""}.`,
+    });
   }, [d]);
 
   return (
@@ -412,3 +412,5 @@ function PoList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) => 
     </Stack>
   );
 }
+
+export default PurchaseModule;

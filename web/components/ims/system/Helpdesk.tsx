@@ -456,3 +456,5 @@ function ContactCard() {
     </Card>
   );
 }
+
+export default HelpdeskModule;

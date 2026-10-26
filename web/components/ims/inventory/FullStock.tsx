@@ -387,3 +387,5 @@ export function FullStockModule() {
     </Stack>
   );
 }
+
+export default FullStockModule;

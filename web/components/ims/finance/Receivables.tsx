@@ -533,3 +533,5 @@ function ReceivablesBody({ data, intent }: { data: ReceivablesData; intent: stri
     </>
   );
 }
+
+export default ReceivablesModule;

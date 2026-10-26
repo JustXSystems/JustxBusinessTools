@@ -532,3 +532,5 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
     </Stack>
   );
 }
+
+export default DashboardModule;

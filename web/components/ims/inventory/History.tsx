@@ -513,3 +513,5 @@ function ActivityTab({ initialEntity }: { initialEntity: string }) {
     </Stack>
   );
 }
+
+export default HistoryModule;

@@ -674,3 +674,5 @@ export function ScannerModule() {
     </Stack>
   );
 }
+
+export default ScannerModule;

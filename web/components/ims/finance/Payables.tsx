@@ -619,3 +619,5 @@ function BillBody({ detail }: { detail: BillDetail }) {
     </>
   );
 }
+
+export default PayablesModule;

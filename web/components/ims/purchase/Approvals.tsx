@@ -534,3 +534,5 @@ function History() {
     </Loaded>
   );
 }
+
+export default ApprovalsModule;

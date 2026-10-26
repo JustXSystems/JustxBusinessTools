@@ -412,3 +412,5 @@ function ReportBody({
     </Stack>
   );
 }
+
+export default ReportsModule;

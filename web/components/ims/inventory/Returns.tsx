@@ -1105,3 +1105,5 @@ function DamageLog({ damage, canSeeCost }: { damage: ImsMovement[]; canSeeCost: 
     </Card>
   );
 }
+
+export default ReturnsModule;

@@ -718,3 +718,5 @@ export function ItemsModule() {
     </Stack>
   );
 }
+
+export default ItemsModule;

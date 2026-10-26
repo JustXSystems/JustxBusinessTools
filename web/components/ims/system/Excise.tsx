@@ -587,3 +587,5 @@ function PrintDialog({ open, onClose, data }: { open: boolean; onClose: () => vo
     </Dialog>
   );
 }
+
+export default ExciseModule;
