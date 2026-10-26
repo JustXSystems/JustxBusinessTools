@@ -6,7 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useEffectEvent,
+  useRef,
   useState,
   type CSSProperties,
   type DependencyList,
@@ -85,11 +85,14 @@ export function useBosData<T>(loader: () => Promise<T>, deps: DependencyList = [
   const [tick, setTick] = useState(0);
   const key = JSON.stringify([version, tick, ...deps]);
   const [state, setState] = useState<{ data: T | null; error: unknown; key: string | null }>({ data: null, error: null, key: null });
-  const load = useEffectEvent(() => loader());
+  // Ref (not useEffectEvent): same contract as IMS — avoids React 19 cleanup /
+  // dispatcher edge cases that surface in production as "i is not a function".
+  const loaderRef = useRef(loader);
+  loaderRef.current = loader;
 
   useEffect(() => {
     let alive = true;
-    load().then(
+    loaderRef.current().then(
       (data) => alive && setState({ data, error: null, key }),
       (error: unknown) => alive && setState((s) => ({ data: s.data, error, key })),
     );

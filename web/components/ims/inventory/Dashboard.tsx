@@ -189,16 +189,19 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
   const { can, navigate } = useIms();
   const k = d.kpis;
   const ins = d.insights;
-  const empty = k.totalItems === 0;
-  const attention = k.lowStock + k.outOfStock;
+  const totalItems = Number(k?.totalItems ?? 0);
+  const lowStock = Number(k?.lowStock ?? 0);
+  const outOfStock = Number(k?.outOfStock ?? 0);
+  const empty = totalItems === 0;
+  const attention = lowStock + outOfStock;
 
   const kpis: Array<(BosKpi & { key: string; onClick?: () => void }) | null> = [
     {
       key: "items",
       label: "Total items",
-      value: k.totalItems.toLocaleString("en-IN"),
+      value: totalItems.toLocaleString("en-IN"),
       chip: { color: "blue", glyph: "📦" },
-      delta: ins ? `${qtyText(ins.totalUnits)} units on hand` : `${k.goodStock} in stock`,
+      delta: ins ? `${qtyText(ins.totalUnits)} units on hand` : `${Number(k?.goodStock ?? 0)} in stock`,
       deltaTone: "muted",
       onClick: () => navigate("items"),
     },

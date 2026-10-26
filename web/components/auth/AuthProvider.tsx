@@ -90,7 +90,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refresh().finally(() => setLoading(false));
+    let alive = true;
+    void refresh().finally(() => {
+      if (alive) setLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
   }, [refresh]);
 
   useEffect(() => {

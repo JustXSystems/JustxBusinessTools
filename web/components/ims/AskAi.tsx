@@ -134,7 +134,9 @@ export function AskDialog({
   const inputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" }), [turns]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [turns]);
 
   const ask = async (question: string) => {
     const text = question.trim();

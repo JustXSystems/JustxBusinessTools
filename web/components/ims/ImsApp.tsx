@@ -32,6 +32,7 @@ import { initialsOf, timeAgo } from "@/lib/ims/format";
 import { rememberModule } from "@/lib/ims/recent";
 import { PageAskAi } from "./AskAi";
 import { ErrorBlock, ImsAppProvider, LoadingBlock, type ImsAppContextValue, type ImsAppMode } from "./core";
+import { errorText } from "@/lib/ims/api";
 import { MODULE_KEYS, moduleDef, visibleModules } from "./modules";
 
 export const IMS_LOGO = "/icons/justx-bos-mark.png";
@@ -153,24 +154,38 @@ const MOBILE_NAV: ReadonlyArray<{ key: ImsModuleKey; label: string }> = [
   { key: "more", label: "More" },
 ];
 
-/** Keeps one broken screen from blanking the whole IMS shell (and surfaces a real message, not a minified TypeError). */
-class ModuleBoundary extends Component<{ moduleKey: string; children: ReactNode }, { error: Error | null }> {
-  state: { error: Error | null } = { error: null };
+type BoundaryState = { error: Error | null; stack: string | null; moduleKey: string };
+
+/**
+ * Must sit *outside* the keyed module remount. If the boundary shares the
+ * module's `key`, it unmounts with the screen and cannot catch effect-cleanup
+ * errors (React 19: non-function `useEffect` return → "i is not a function").
+ */
+class ModuleBoundary extends Component<{ moduleKey: string; children: ReactNode }, BoundaryState> {
+  state: BoundaryState = { error: null, stack: null, moduleKey: this.props.moduleKey };
 
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
 
+  static getDerivedStateFromProps(props: { moduleKey: string }, state: BoundaryState) {
+    if (state.moduleKey !== props.moduleKey) return { error: null, stack: null, moduleKey: props.moduleKey };
+    return null;
+  }
+
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error(`[IMS ${this.props.moduleKey}]`, error, info.componentStack);
+    const stack = info.componentStack ?? null;
+    console.error(`[IMS ${this.props.moduleKey}]`, error, stack);
+    this.setState({ stack });
   }
 
   render() {
     if (this.state.error) {
+      const detail = this.state.stack ? `${errorText(this.state.error)}\n\n${this.state.stack.trim()}` : this.state.error;
       return (
         <ErrorBlock
-          error={this.state.error}
-          onRetry={() => this.setState({ error: null })}
+          error={detail}
+          onRetry={() => this.setState({ error: null, stack: null })}
         />
       );
     }
@@ -341,13 +356,13 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
             footer={<TimePill />}
             aria-label="IMS modules"
           >
-            <div key={`${current.key}:${nav.seq}`} className="bos-fade-in">
-              <ModuleBoundary moduleKey={current.key}>
+            <ModuleBoundary moduleKey={current.key}>
+              <div key={`${current.key}:${nav.seq}`} className="bos-fade-in">
                 <Suspense fallback={<LoadingBlock />}>
                   <Module />
                 </Suspense>
-              </ModuleBoundary>
-            </div>
+              </div>
+            </ModuleBoundary>
           </AppShell>
 
           <div className="ims-foot">

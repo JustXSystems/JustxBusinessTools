@@ -15,6 +15,9 @@ const basePath = normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH);
 
 const nextConfig: NextConfig = {
   ...(basePath ? { basePath } : {}),
+  // Surface real file/component names in production console stacks (React 19
+  // "i is not a function" effect-cleanup bugs are otherwise unreadable).
+  productionBrowserSourceMaps: true,
   transpilePackages: ["@jbt/shared"],
   turbopack: {
     root: path.join(__dirname, ".."),
