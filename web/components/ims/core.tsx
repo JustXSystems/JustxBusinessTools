@@ -180,6 +180,9 @@ export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () =>
 
 /** Renders loading / error / content for a `useImsData` result. */
 export function Loaded<T>({ state, children, rows }: { state: ImsData<T>; children: (data: T) => ReactNode; rows?: number }) {
+  if (typeof children !== "function") {
+    return <ErrorBlock error={new Error("IMS screen miswired: Loaded expects a render function as children")} />;
+  }
   if (state.data !== null) {
     return (
       <>
@@ -213,6 +216,13 @@ export function RequirePerm({ perm, what, children }: { perm: ImsPermission | Im
 }
 
 export function StatusBadge({ view, auto }: { view: BadgeView; auto?: boolean }) {
+  if (!view) {
+    return (
+      <Badge tone="neutral" auto={auto}>
+        —
+      </Badge>
+    );
+  }
   return (
     <Badge tone={view.tone} auto={auto}>
       {view.text}

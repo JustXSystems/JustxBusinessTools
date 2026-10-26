@@ -28,6 +28,9 @@ export function Field({ label, hint, error, full, className, children }: BosFiel
   const id = useId();
   const noteId = `${id}-note`;
   const hasNote = Boolean(error || hint);
+  if (typeof children !== "function") {
+    throw new Error("Field expects a render-prop child: ({ id }) => <Input id={id} … />");
+  }
   return (
     <div className={cx("bos-field", full && "bos-form-grid-full", className)}>
       <label className="bos-field-label" htmlFor={id}>
