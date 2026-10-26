@@ -145,20 +145,20 @@ export function DashboardModule() {
         </div>
         <div className="ims-hero-stats">
           <div className="ims-hero-stat">
-            <b>{d ? qtyText(d.kpis.todayIn) : "—"}</b>
+            <b>{d ? qtyText(Number(d.kpis?.todayIn ?? 0)) : "—"}</b>
             <span>Stock in today</span>
           </div>
           <div className="ims-hero-stat">
-            <b>{d ? qtyText(d.kpis.todayOut) : "—"}</b>
+            <b>{d ? qtyText(Number(d.kpis?.todayOut ?? 0)) : "—"}</b>
             <span>Stock out today</span>
           </div>
           <div className="ims-hero-stat">
-            <b>{d ? d.kpis.todayEntries : "—"}</b>
+            <b>{d ? Number(d.kpis?.todayEntries ?? 0) : "—"}</b>
             <span>Entries today</span>
           </div>
           {canSeeCost ? (
             <div className="ims-hero-stat">
-              <b>{d ? inrCompact(d.kpis.stockValue) : "—"}</b>
+              <b>{d ? inrCompact(Number(d.kpis?.stockValue ?? 0)) : "—"}</b>
               <span>Stock value</span>
             </div>
           ) : null}
@@ -187,11 +187,25 @@ export function DashboardModule() {
 
 function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPlus; period: Period; setPeriod: (p: Period) => void; canSeeCost: boolean }) {
   const { can, navigate } = useIms();
-  const k = d.kpis;
+  // Defensive: partial API payloads must not throw during render (that blanked the
+  // whole tool via route error.tsx). Every KPI / series access is null-safe.
+  const k = d.kpis ?? ({} as ImsDashboardPlus["kpis"]);
   const ins = d.insights;
-  const totalItems = Number(k?.totalItems ?? 0);
-  const lowStock = Number(k?.lowStock ?? 0);
-  const outOfStock = Number(k?.outOfStock ?? 0);
+  const pending = d.pending ?? { po: 0, bills: 0, checks: 0 };
+  const aging = Array.isArray(d.aging) ? d.aging : [];
+  const categories = Array.isArray(d.categories) ? d.categories : [];
+  const topMovers = Array.isArray(d.topMovers) ? d.topMovers : [];
+  const series = Array.isArray(d.series) ? d.series : [];
+  const asNum = (v: unknown) => Number(v ?? 0);
+  const totalItems = asNum(k.totalItems);
+  const lowStock = asNum(k.lowStock);
+  const outOfStock = asNum(k.outOfStock);
+  const overStock = asNum(k.overStock);
+  const goodStock = asNum(k.goodStock);
+  const damagedUnits = asNum(k.damagedUnits);
+  const overdue = asNum(k.overdue);
+  const overdueCount = asNum(k.overdueCount);
+  const pendingApprovals = asNum(k.pendingApprovals);
   const empty = totalItems === 0;
   const attention = lowStock + outOfStock;
 
@@ -201,7 +215,7 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
       label: "Total items",
       value: totalItems.toLocaleString("en-IN"),
       chip: { color: "blue", glyph: "📦" },
-      delta: ins ? `${qtyText(ins.totalUnits)} units on hand` : `${Number(k?.goodStock ?? 0)} in stock`,
+      delta: ins ? `${qtyText(ins.totalUnits)} units on hand` : `${goodStock} in stock`,
       deltaTone: "muted",
       onClick: () => navigate("items"),
     },
@@ -209,9 +223,9 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
       ? {
           key: "value",
           label: "Stock value (cost)",
-          value: inrCompact(k.stockValue),
+          value: inrCompact(asNum(k.stockValue)),
           chip: { color: "mint", glyph: "₹" },
-          delta: `Retail ${inrCompact(k.retailValue)}${ins && ins.marginPct ? ` · ${pct(ins.marginPct, 1)} margin` : ""}`,
+          delta: `Retail ${inrCompact(asNum(k.retailValue))}${ins && ins.marginPct ? ` · ${pct(ins.marginPct, 1)} margin` : ""}`,
           deltaTone: "info",
           onClick: () => navigate("stock"),
         }
@@ -220,60 +234,60 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
       key: "low",
       label: "Low / out of stock",
       value: attention,
-      valueTone: k.outOfStock ? "coral" : attention ? "amber" : undefined,
+      valueTone: outOfStock ? "coral" : attention ? "amber" : undefined,
       chip: { color: "amber", glyph: "⚠" },
-      delta: attention ? `${k.outOfStock} out · ${k.lowStock} low` : "All above minimum",
-      deltaTone: k.outOfStock ? "down" : attention ? "warn" : "up",
+      delta: attention ? `${outOfStock} out · ${lowStock} low` : "All above minimum",
+      deltaTone: outOfStock ? "down" : attention ? "warn" : "up",
       onClick: () => navigate("lowstock"),
     },
     {
       key: "damaged",
       label: "Damaged units",
-      value: qtyText(k.damagedUnits),
+      value: qtyText(damagedUnits),
       chip: { color: "rose", glyph: "🔧" },
-      delta: k.overStock ? `${k.overStock} items overstocked` : "Quarantined from sale",
-      deltaTone: k.damagedUnits ? "warn" : "muted",
+      delta: overStock ? `${overStock} items overstocked` : "Quarantined from sale",
+      deltaTone: damagedUnits ? "warn" : "muted",
       onClick: can("damage") ? () => navigate("returns") : undefined,
     },
     can("sales") || can("reports")
-      ? { key: "sales", label: "Sales this month", value: inrCompact(k.salesMtd), chip: { color: "sage", glyph: "🧾" }, delta: "Issued GST invoices", deltaTone: "muted", onClick: can("sales") ? () => navigate("sales") : undefined }
+      ? { key: "sales", label: "Sales this month", value: inrCompact(asNum(k.salesMtd)), chip: { color: "sage", glyph: "🧾" }, delta: "Issued GST invoices", deltaTone: "muted", onClick: can("sales") ? () => navigate("sales") : undefined }
       : null,
     can("receivables")
       ? {
           key: "ar",
           label: "Receivable",
-          value: inrCompact(k.receivable),
+          value: inrCompact(asNum(k.receivable)),
           chip: { color: "lavender", glyph: "💰" },
-          delta: k.overdue > 0 ? `${inrCompact(k.overdue)} overdue · ${k.overdueCount} invoice${k.overdueCount === 1 ? "" : "s"}` : "Nothing overdue",
-          deltaTone: k.overdue > 0 ? "down" : "up",
+          delta: overdue > 0 ? `${inrCompact(overdue)} overdue · ${overdueCount} invoice${overdueCount === 1 ? "" : "s"}` : "Nothing overdue",
+          deltaTone: overdue > 0 ? "down" : "up",
           onClick: () => navigate("receivables"),
         }
       : null,
-    can("payables") ? { key: "ap", label: "Payable", value: inrCompact(k.payable), chip: { color: "blue", glyph: "📤" }, delta: "Open supplier bills", deltaTone: "muted", onClick: () => navigate("payables") } : null,
+    can("payables") ? { key: "ap", label: "Payable", value: inrCompact(asNum(k.payable)), chip: { color: "blue", glyph: "📤" }, delta: "Open supplier bills", deltaTone: "muted", onClick: () => navigate("payables") } : null,
     can("approvals")
       ? {
           key: "approvals",
           label: "Pending approvals",
-          value: k.pendingApprovals,
-          valueTone: k.pendingApprovals ? "blue" : undefined,
+          value: pendingApprovals,
+          valueTone: pendingApprovals ? "blue" : undefined,
           chip: { color: "amber", glyph: "🛡" },
-          delta: k.pendingApprovals ? `${d.pending.po} PO · ${d.pending.bills} bills · ${d.pending.checks} checks` : "You're all caught up",
-          deltaTone: k.pendingApprovals ? "info" : "up",
+          delta: pendingApprovals ? `${pending.po} PO · ${pending.bills} bills · ${pending.checks} checks` : "You're all caught up",
+          deltaTone: pendingApprovals ? "info" : "up",
           onClick: () => navigate("approvals"),
         }
       : null,
   ];
 
   const health = [
-    { key: "GOOD", label: "In stock", value: k.goodStock, tone: "emerald" as const },
-    { key: "LOW", label: "Low", value: k.lowStock, tone: "amber" as const },
-    { key: "OUT_OF_STOCK", label: "Out", value: k.outOfStock, tone: "coral" as const },
-    { key: "OVERSTOCK", label: "Overstock", value: k.overStock, tone: "blue" as const },
+    { key: "GOOD", label: "In stock", value: goodStock, tone: "emerald" as const },
+    { key: "LOW", label: "Low", value: lowStock, tone: "amber" as const },
+    { key: "OUT_OF_STOCK", label: "Out", value: outOfStock, tone: "coral" as const },
+    { key: "OVERSTOCK", label: "Overstock", value: overStock, tone: "blue" as const },
   ];
-  const agingTotal = d.aging.reduce((s, a) => s + (canSeeCost ? a.value : a.items), 0);
-  const catMax = Math.max(1, ...d.categories.map((c) => (canSeeCost ? c.value : c.units)));
-  const moverMax = Math.max(1, ...d.topMovers.map((m) => m.qty));
-  const fastest = d.topMovers[0];
+  const agingTotal = aging.reduce((s, a) => s + (canSeeCost ? a.value : a.items), 0);
+  const catMax = Math.max(1, ...categories.map((c) => (canSeeCost ? c.value : c.units)), 0);
+  const moverMax = Math.max(1, ...topMovers.map((m) => m.qty), 0);
+  const fastest = topMovers[0];
 
   return (
     <Stack>
@@ -297,17 +311,17 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
             <div className="ims-inv-tiles">
               <div className="ims-inv-tile">
                 <small>Stock in</small>
-                <b className="ims-pos">{qtyText(k.stockIn)}</b>
+                <b className="ims-pos">{qtyText(asNum(k.stockIn))}</b>
                 <span>{canSeeCost && ins ? `Purchases ${inrCompact(ins.period.purchasedValue)}` : "Units received"}</span>
               </div>
               <div className="ims-inv-tile">
                 <small>Stock out</small>
-                <b>{qtyText(k.stockOut)}</b>
-                <span>Sales value {inrCompact(k.salesValue)}</span>
+                <b>{qtyText(asNum(k.stockOut))}</b>
+                <span>Sales value {inrCompact(asNum(k.salesValue))}</span>
               </div>
               <div className="ims-inv-tile">
                 <small>Damaged</small>
-                <b className={k.damaged ? "ims-neg" : undefined}>{qtyText(k.damaged)}</b>
+                <b className={asNum(k.damaged) ? "ims-neg" : undefined}>{qtyText(asNum(k.damaged))}</b>
                 <span>{canSeeCost && ins?.period.damagedValue ? `Loss ${inrCompact(ins.period.damagedValue)}` : "Units written down"}</span>
               </div>
               {ins ? (
@@ -331,21 +345,21 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
 
           <Grid template="minmax(0, 1.6fr) minmax(0, 1fr)">
             <WidgetCard title="Stock in vs out" dot="blue" note="Last 14 days">
-              <FlowChart series={d.series} today={d.today} />
+              <FlowChart series={series} today={d.today} />
               <div className="ims-legend">
                 <span>
                   <i style={{ background: "var(--bos-emerald)" }} />
-                  In {qtyText(d.series.reduce((s, x) => s + x.in, 0))}
+                  In {qtyText(series.reduce((s, x) => s + x.in, 0))}
                 </span>
                 <span>
                   <i style={{ background: "var(--bos-blue)" }} />
-                  Out {qtyText(d.series.reduce((s, x) => s + x.out, 0))}
+                  Out {qtyText(series.reduce((s, x) => s + x.out, 0))}
                 </span>
               </div>
             </WidgetCard>
-            <WidgetCard title="Stock health" dot="sage" note={`${k.totalItems} items`}>
+            <WidgetCard title="Stock health" dot="sage" note={`${totalItems} items`}>
               <div className="ims-row" style={{ justifyContent: "center", gap: 20 }}>
-                <DonutChart segments={health.map((h) => ({ label: h.label, value: h.value, tone: h.tone }))} centerValue={pct(k.totalItems ? (k.goodStock / k.totalItems) * 100 : 0)} centerLabel="HEALTHY" rounded ariaLabel="Stock health" />
+                <DonutChart segments={health.map((h) => ({ label: h.label, value: h.value, tone: h.tone }))} centerValue={pct(totalItems ? (goodStock / totalItems) * 100 : 0)} centerLabel="HEALTHY" rounded ariaLabel="Stock health" />
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 140 }}>
                   {health.map((h) => (
                     <WidgetRow
@@ -366,10 +380,10 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
           </Grid>
 
           <Grid template="minmax(0, 1fr) minmax(0, 1fr)">
-            <WidgetCard title={canSeeCost ? "Value by category" : "Units by category"} dot="lavender" note={`${d.categories.length} categories`}>
-              {d.categories.length ? (
+            <WidgetCard title={canSeeCost ? "Value by category" : "Units by category"} dot="lavender" note={`${categories.length} categories`}>
+              {categories.length ? (
                 <div className="ims-bars">
-                  {d.categories.slice(0, 7).map((c) => {
+                  {categories.slice(0, 7).map((c) => {
                     const v = canSeeCost ? c.value : c.units;
                     return (
                       <button
@@ -399,14 +413,14 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
             </WidgetCard>
 
             <WidgetCard title="Stock aging" dot="rose" note="Days since last movement">
-              <div className="ims-stackbar" role="img" aria-label={`Stock aging: ${d.aging.map((a) => `${a.label} ${a.items} items`).join(", ")}`}>
-                {d.aging.map((a) => {
+              <div className="ims-stackbar" role="img" aria-label={`Stock aging: ${aging.map((a) => `${a.label} ${a.items} items`).join(", ")}`}>
+                {aging.map((a) => {
                   const v = canSeeCost ? a.value : a.items;
                   return agingTotal > 0 && v > 0 ? <span key={a.key} style={{ width: `${(v / agingTotal) * 100}%`, background: a.color }} title={`${a.label}: ${a.items} items`} /> : null;
                 })}
               </div>
               <div style={{ marginTop: 12 }}>
-                {d.aging.map((a) => (
+                {aging.map((a) => (
                   <WidgetRow
                     key={a.key}
                     label={
@@ -426,36 +440,36 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
       ) : null}
 
       <Grid template="minmax(0, 1.3fr) minmax(0, 1fr)">
-        <WidgetCard title="Needs attention" dot="rose" note={d.notifications.length ? `${d.notifications.length}` : undefined}>
-          {d.notifications.length ? (
+        <WidgetCard title="Needs attention" dot="rose" note={(d.notifications ?? []).length ? `${d.notifications.length}` : undefined}>
+          {(d.notifications ?? []).length ? (
             <div className="ims-attn">
-              {d.notifications.slice(0, 8).map((n) => (
+              {(d.notifications ?? []).slice(0, 8).map((note) => (
                 <AttentionRow
-                  key={n.id}
-                  icon={NOTE_ICON[n.module] ?? "•"}
-                  tone={n.tone}
-                  title={n.title}
-                  body={n.body}
-                  meta={n.at ? timeAgo(n.at) : undefined}
-                  onClick={() => navigate(n.module, n.open ? `open:${n.open}` : undefined)}
+                  key={note.id}
+                  icon={NOTE_ICON[note.module] ?? "•"}
+                  tone={note.tone}
+                  title={note.title}
+                  body={note.body}
+                  meta={note.at ? timeAgo(note.at) : undefined}
+                  onClick={() => navigate(note.module, note.open ? `open:${note.open}` : undefined)}
                 />
               ))}
             </div>
           ) : (
             <p className="ims-faint">Nothing needs you right now — no low stock, approvals or overdue dues. ✓</p>
           )}
-          {can("approvals") && k.pendingApprovals ? (
+          {can("approvals") && pendingApprovals ? (
             <div style={{ marginTop: 12 }}>
-              <WidgetRow label="Purchase orders awaiting approval" value={String(d.pending.po)} valueTone={d.pending.po ? "blue" : "faint"} onClick={() => navigate("approvals")} />
-              <WidgetRow label="Supplier bills awaiting approval" value={String(d.pending.bills)} valueTone={d.pending.bills ? "blue" : "faint"} onClick={() => navigate("approvals")} />
-              <WidgetRow label="Stock checks awaiting approval" value={String(d.pending.checks)} valueTone={d.pending.checks ? "blue" : "faint"} onClick={() => navigate("checks")} />
+              <WidgetRow label="Purchase orders awaiting approval" value={String(pending.po)} valueTone={pending.po ? "blue" : "faint"} onClick={() => navigate("approvals")} />
+              <WidgetRow label="Supplier bills awaiting approval" value={String(pending.bills)} valueTone={pending.bills ? "blue" : "faint"} onClick={() => navigate("approvals")} />
+              <WidgetRow label="Stock checks awaiting approval" value={String(pending.checks)} valueTone={pending.checks ? "blue" : "faint"} onClick={() => navigate("checks")} />
             </div>
           ) : null}
         </WidgetCard>
 
         <WidgetCard title="Inventory insights" dot="mint">
           <WidgetRow label={attention ? `${attention} item${attention === 1 ? " is" : "s are"} at or below minimum` : "Every item is above its minimum level"} value={attention ? "Restock ›" : "✓"} valueTone={attention ? "amber" : "emerald"} onClick={() => navigate("lowstock")} />
-          {canSeeCost ? <WidgetRow label={`${inr(k.stockValue)} of stock on hand at cost`} value={ins ? `${pct(ins.marginPct, 1)} margin` : inrCompact(k.retailValue)} valueTone="emerald" onClick={() => navigate("stock")} /> : null}
+          {canSeeCost ? <WidgetRow label={`${inr(asNum(k.stockValue))} of stock on hand at cost`} value={ins ? `${pct(ins.marginPct, 1)} margin` : inrCompact(asNum(k.retailValue))} valueTone="emerald" onClick={() => navigate("stock")} /> : null}
           {fastest ? <WidgetRow label={`${fastest.name} is the fastest mover`} value={`${qtyText(fastest.qty)} out`} valueTone="blue" onClick={() => navigate("items", `open:${fastest.itemId}`)} /> : null}
           {ins && ins.deadStock.items ? (
             <WidgetRow label={`${ins.deadStock.items} item${ins.deadStock.items === 1 ? "" : "s"} idle for 90+ days`} value={canSeeCost ? inrCompact(ins.deadStock.value) : "View ›"} valueTone="coral" onClick={() => navigate("stock", "aging:90+")} />
@@ -472,9 +486,9 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
       {!empty ? (
         <Grid template="minmax(0, 1fr) minmax(0, 1fr)">
           <WidgetCard title="Top movers" dot="blue" note={dateRange(d.range.from, d.range.to)}>
-            {d.topMovers.length ? (
+            {topMovers.length ? (
               <div className="ims-bars">
-                {d.topMovers.map((m) => (
+                {topMovers.map((m) => (
                   <button
                     key={m.itemId}
                     type="button"
@@ -501,9 +515,9 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
           </WidgetCard>
 
           <WidgetCard title="Recent movements" dot="sage">
-            {d.recent.length ? (
+            {(d.recent ?? []).length ? (
               <div className="ims-attn">
-                {d.recent.map((m) => {
+                {(d.recent ?? []).map((m) => {
                   const delta = movementDelta({ type: m.type, qty: m.qty });
                   return (
                     <AttentionRow

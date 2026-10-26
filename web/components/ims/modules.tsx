@@ -7,12 +7,9 @@ import StockOutScreen from "./inventory/StockOut";
 
 /**
  * Module registry — the single source for the sidebar, the command palette,
- * More actions and deep links (`?m=<key>&open=<id>`). Each module is a lazy,
- * prop-less component that reads the app through `useIms()`.
- *
- * Screens export **default**. Stock In/Out are also imported statically and
- * wrapped with `eager()` so a bad async-chunk/re-export interop cannot leave
- * `default` undefined (production crash: "i is not a function").
+ * More actions and deep links (`?m=<key>&open=<id>`). Most modules are lazy
+ * screens; Stock In/Out are **static** components (same chunk as the shell) so
+ * React.lazy / webpack `default` remapping cannot leave a non-callable type.
  */
 
 export type ImsSection = "Inventory" | "Purchasing" | "Sales & Finance" | "Operations" | "Insights" | "Auditing" | "System";
@@ -31,15 +28,9 @@ export type ImsModuleDef = {
   when?: (session: ImsSession) => boolean;
   /** Hidden from the sidebar but reachable from More actions / palette / links. */
   navHidden?: boolean;
-  component: LazyExoticComponent<ComponentType>;
+  /** Lazy or eager — both are valid `createElement` types. */
+  component: ComponentType | LazyExoticComponent<ComponentType>;
 };
-
-/** React.lazy over a component already in this chunk — no async export remapping. */
-const eager = (Comp: ComponentType, name: string): LazyExoticComponent<ComponentType> =>
-  lazy(async () => {
-    if (typeof Comp !== "function") throw new Error(`IMS screen "${name}" is not a component`);
-    return { default: Comp };
-  });
 
 /** Dynamic import with a hard check that `default` is actually callable. */
 const screen = (name: string, load: () => Promise<{ default: ComponentType }>): LazyExoticComponent<ComponentType> =>
@@ -55,8 +46,8 @@ const screen = (name: string, load: () => Promise<{ default: ComponentType }>): 
 export const IMS_MODULES: ReadonlyArray<ImsModuleDef> = [
   /* Inventory */
   { key: "dashboard", label: "Dashboard", icon: "◧", section: "Inventory", desc: "Stock health, movements and what needs attention", keywords: "home overview kpi", component: screen("dashboard", () => import("./inventory/Dashboard")) },
-  { key: "stockin", label: "Stock In", icon: "⬇", section: "Inventory", desc: "Receive goods into stock", keywords: "goods received inward grn", anyOf: ["stockIn"], component: eager(StockInScreen, "stockin") },
-  { key: "stockout", label: "Stock Out", icon: "⬆", section: "Inventory", desc: "Issue or sell goods from stock", keywords: "outward dispatch issue", anyOf: ["stockOut"], component: eager(StockOutScreen, "stockout") },
+  { key: "stockin", label: "Stock In", icon: "⬇", section: "Inventory", desc: "Receive goods into stock", keywords: "goods received inward grn", anyOf: ["stockIn"], component: StockInScreen },
+  { key: "stockout", label: "Stock Out", icon: "⬆", section: "Inventory", desc: "Issue or sell goods from stock", keywords: "outward dispatch issue", anyOf: ["stockOut"], component: StockOutScreen },
   { key: "stock", label: "Full Stock", icon: "▦", section: "Inventory", desc: "Every item with stock, value and aging", keywords: "inventory valuation aging", component: screen("stock", () => import("./inventory/FullStock")) },
   { key: "checks", label: "Stock Check", icon: "☑", section: "Inventory", desc: "Count physical stock and reconcile", keywords: "audit count physical verification", anyOf: ["stockCheck", "approvals"], component: screen("checks", () => import("./inventory/StockChecks")) },
   { key: "lowstock", label: "Restock List", icon: "⚠", section: "Inventory", desc: "Items below minimum and reorder suggestions", keywords: "low stock reorder", component: screen("lowstock", () => import("./inventory/LowStock")) },

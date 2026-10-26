@@ -47,15 +47,25 @@ const BosTool = dynamic(() => import("@/components/bos-app/BosTool"), {
   ),
 });
 
-const ImsDealerTool = dynamic(() => import("@/components/ims/ImsDealerTool"), {
-  ssr: false,
-  loading: () => (
-    <div className="empty-state">
-      <div className="es-icon">⏳</div>
-      <div className="es-title">Loading…</div>
-    </div>
-  ),
-});
+const ImsDealerTool = dynamic(
+  () =>
+    import("@/components/ims/ImsDealerTool").then((m) => {
+      const Comp = m.default;
+      if (typeof Comp !== "function") {
+        throw new Error(`ImsDealerTool failed to load (default export is ${typeof Comp})`);
+      }
+      return Comp;
+    }),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="empty-state">
+        <div className="es-icon">⏳</div>
+        <div className="es-title">Loading…</div>
+      </div>
+    ),
+  },
+);
 
 export function ToolView({ toolId }: { toolId: string }) {
   const { config, loading } = usePlatformConfig();

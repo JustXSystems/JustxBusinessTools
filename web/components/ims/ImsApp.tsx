@@ -26,13 +26,12 @@ import {
   type BosCommand,
 } from "@/components/bos";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
-import { ims, ImsApiError, type ImsModuleKey, type ImsNotification, type ImsSearchResult, type ImsSession, type ImsSettings } from "@/lib/ims/api";
+import { errorText, ims, ImsApiError, type ImsModuleKey, type ImsNotification, type ImsSearchResult, type ImsSession, type ImsSettings } from "@/lib/ims/api";
 import { isAssistantPage } from "@/lib/ims/assistant";
 import { initialsOf, timeAgo } from "@/lib/ims/format";
 import { rememberModule } from "@/lib/ims/recent";
 import { PageAskAi } from "./AskAi";
 import { ErrorBlock, ImsAppProvider, LoadingBlock, type ImsAppContextValue, type ImsAppMode } from "./core";
-import { errorText } from "@/lib/ims/api";
 import { MODULE_KEYS, moduleDef, visibleModules } from "./modules";
 
 export const IMS_LOGO = "/icons/justx-bos-mark.png";
@@ -432,6 +431,33 @@ function SessionGate({ mode, onSignOut }: { mode: ImsAppMode; onSignOut?: () => 
 /** Matches the horizontal padding of the JBT `.page-shell` the tool renders in. */
 const HOST_GUTTER = { "--bos-bleed": "20px" } as CSSProperties;
 
+/** Survives module switches; surfaces componentStack so prod "i is not a function" is diagnosable. */
+class ShellBoundary extends Component<{ children: ReactNode }, { error: Error | null; stack: string | null }> {
+  state: { error: Error | null; stack: string | null } = { error: null, stack: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    const stack = info.componentStack ?? null;
+    console.error("[IMS shell]", error, stack);
+    this.setState({ stack });
+  }
+
+  render() {
+    if (this.state.error) {
+      const detail = this.state.stack ? `${errorText(this.state.error)}\n\n${this.state.stack.trim()}` : this.state.error;
+      return (
+        <div className="bos-wrap" style={{ paddingTop: 32, paddingBottom: 32 }}>
+          <ErrorBlock error={detail} onRetry={() => this.setState({ error: null, stack: null })} />
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 /**
  * Justx IMS — Dealer. Always renders with the IMS skin (glass, gradients, Inter),
  * whatever theme pack the org uses, and follows the host's light / dark scheme.
@@ -439,7 +465,9 @@ const HOST_GUTTER = { "--bos-bleed": "20px" } as CSSProperties;
 export function ImsApp({ mode, onSignOut }: { mode: ImsAppMode; onSignOut?: () => void }) {
   return (
     <BosRoot skin="ims" canvas className={mode === "tool" ? "bos-bleed" : "ims-standalone"} style={mode === "tool" ? HOST_GUTTER : undefined}>
-      <SessionGate mode={mode} onSignOut={onSignOut} />
+      <ShellBoundary>
+        <SessionGate mode={mode} onSignOut={onSignOut} />
+      </ShellBoundary>
     </BosRoot>
   );
 }

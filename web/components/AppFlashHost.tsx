@@ -14,7 +14,11 @@ import {
 export function AppFlashHost() {
   const [items, setItems] = useState<AppFlashItem[]>([]);
 
-  useEffect(() => subscribeAppFlash(setItems), []);
+  useEffect(() => {
+    // Must not use expression-body form: subscribe's return is the cleanup.
+    // Keep braces so a future API change cannot silently return a non-function.
+    return subscribeAppFlash(setItems);
+  }, []);
 
   if (!items.length) return null;
 
