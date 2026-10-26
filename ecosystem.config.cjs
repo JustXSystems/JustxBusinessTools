@@ -16,12 +16,17 @@ module.exports = {
       interpreter: "none",
       env: {
         NODE_ENV: "production",
+        // Pin listen port — do not rely on dotenv cwd during pm2 reload.
+        PORT: "4002",
         WEB_BASE_PATH: "/jbt",
         JBT_PROCESS_ROLE: "api",
       },
       max_memory_restart: "512M",
       time: true,
       autorestart: true,
+      kill_timeout: 10_000,
+      listen_timeout: 15_000,
+      wait_ready: false,
     },
     {
       name: "justx-jbt-worker",

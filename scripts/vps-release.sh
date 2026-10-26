@@ -328,6 +328,40 @@ fi
 
 run_task "$STAGE" "$POST_DEPLOY_TASK"
 
+dump_pm2_debug() {
+  echo "==> PM2 debug dump" >&2
+  pm2 list >&2 || true
+  pm2 describe justx-jbt-api >&2 | tail -n 50 || true
+  echo "==> API logs (last 60)" >&2
+  pm2 logs justx-jbt-api --lines 60 --nostream >&2 || true
+  echo "==> ss :${API_PORT}" >&2
+  ss -ltnp "sport = :${API_PORT}" 2>/dev/null >&2 || netstat -ltnp 2>/dev/null | grep ":${API_PORT}" >&2 || true
+}
+
+# Wait until something accepts TCP on API_PORT (pm2 reload returns before listen).
+wait_for_api_port() {
+  local retries="${HEALTH_PORT_RETRIES:-45}"
+  local sleep_s="${HEALTH_PORT_SLEEP_SEC:-2}"
+  echo "==> Waiting for API TCP :${API_PORT} (up to $((retries * sleep_s))s)"
+  local i
+  for i in $(seq 1 "$retries"); do
+    if curl -fsS --max-time 3 "http://127.0.0.1:${API_PORT}/api/health" >/dev/null 2>&1; then
+      echo "    API responding on attempt ${i}/${retries}"
+      return 0
+    fi
+    # Also accept plain TCP open (health path may 500 while still booting)
+    if (echo >/dev/tcp/127.0.0.1/"${API_PORT}") >/dev/null 2>&1; then
+      echo "    port open on attempt ${i}/${retries} (waiting for /api/health)…"
+    else
+      echo "    attempt ${i}/${retries}: nothing on :${API_PORT}"
+    fi
+    sleep "$sleep_s"
+  done
+  echo "ERROR: API never became reachable on :${API_PORT}" >&2
+  dump_pm2_debug
+  return 1
+}
+
 apply_pm2() {
   local root="$1"
   case "$PM2_MODE" in
@@ -335,11 +369,13 @@ apply_pm2() {
       echo "==> Skipping PM2"
       ;;
     reload)
-      echo "==> PM2 reload"
+      # npm-script apps are flaky with `reload`; prefer delete+start when already known,
+      # falling back to restart which fully respawns the npm wrapper.
+      echo "==> PM2 restart (reload mode uses restart for npm apps)"
       (
         cd "$root"
         if pm2 describe justx-jbt-api >/dev/null 2>&1; then
-          pm2 reload ecosystem.config.cjs --update-env
+          pm2 restart ecosystem.config.cjs --update-env
         else
           pm2 start ecosystem.config.cjs
         fi
@@ -373,8 +409,12 @@ apply_pm2() {
 run_health() {
   local root="$1"
   export API_PORT WEB_PORT WEB_BASE_PATH
+  wait_for_api_port || return 1
   if [[ -x "$root/scripts/vps-healthcheck.sh" ]]; then
-    bash "$root/scripts/vps-healthcheck.sh"
+    bash "$root/scripts/vps-healthcheck.sh" || {
+      dump_pm2_debug
+      return 1
+    }
   else
     die "vps-healthcheck.sh missing in $root"
   fi
