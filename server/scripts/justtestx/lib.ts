@@ -235,3 +235,111 @@ export async function wipeBosTenant(db: Db, tenantId: number): Promise<number> {
   }
   return total;
 }
+
+/** Child-first wipe of every ims_* row for a tenant. */
+export const IMS_WIPE_ORDER = [
+  "ims_events",
+  "ims_sync_log",
+  "ims_ar_activity",
+  "ims_documents",
+  "ims_audit_items",
+  "ims_bank_txns",
+  "ims_payments",
+  "ims_payment_runs",
+  "ims_ledger_entries",
+  "ims_expenses",
+  "ims_daily_closings",
+  "ims_movements",
+  "ims_returns",
+  "ims_stock_checks",
+  "ims_invoices",
+  "ims_bills",
+  "ims_purchase_orders",
+  "ims_field_visits",
+  "ims_field_checkins",
+  "ims_field_tasks",
+  "ims_excise_records",
+  "ims_reports",
+  "ims_tickets",
+  "ims_links",
+  "ims_integrations",
+  "ims_items",
+  "ims_parties",
+  "ims_members",
+  "ims_sequences",
+  "ims_settings",
+] as const;
+
+export async function wipeImsTenant(db: Db, tenantId: number): Promise<number> {
+  let total = 0;
+  for (const table of IMS_WIPE_ORDER) {
+    try {
+      const r = await exec(db, `DELETE FROM ${table} WHERE tenant_id = :t`, { t: tenantId });
+      total += r.affectedRows;
+    } catch (err) {
+      const e = err as { code?: string; errno?: number };
+      if (e.code === "ER_NO_SUCH_TABLE" || e.errno === 1146) continue;
+      throw err;
+    }
+  }
+  return total;
+}
+
+/** Mark Justx IMS — Dealer Live for the org (same effect as Admin → Tools → Visible on home → Live). */
+export async function enableImsDealer(
+  conn: PoolConnection,
+  orgId: number,
+  profileId: number,
+  userId: number,
+  ownerName: string,
+): Promise<void> {
+  await exec(
+    conn,
+    `INSERT INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available)
+     VALUES (:orgId, 'imsdealer', 'Utilities', 41, 1)
+     ON DUPLICATE KEY UPDATE available = 1, group_name = 'Utilities', sort_order = 41`,
+    { orgId },
+  );
+  try {
+    await exec(
+      conn,
+      `INSERT INTO profile_tool_licenses (business_profile_id, tool_id, status)
+       VALUES (:profileId, 'imsdealer', 'active')
+       ON DUPLICATE KEY UPDATE status = 'active'`,
+      { profileId },
+    );
+  } catch {
+    /* license table optional on older DBs */
+  }
+
+  // Append imsdealer to every branch home allowlist in the org (null = show all — leave alone).
+  const profiles = await q(conn, `SELECT id, home_tool_ids FROM business_profiles WHERE organization_id = :orgId`, { orgId });
+  for (const p of profiles) {
+    let home: string[] | null = null;
+    try {
+      const raw = p.home_tool_ids;
+      if (raw == null) home = null;
+      else home = typeof raw === "string" ? JSON.parse(raw) : Array.isArray(raw) ? (raw as string[]) : [];
+    } catch {
+      home = [];
+    }
+    if (home == null) continue;
+    if (home.includes("imsdealer")) continue;
+    const next = [...home.filter((x) => x !== "imsdealer"), "imsdealer"];
+    if (!next.includes("bos")) next.unshift("bos");
+    await exec(conn, `UPDATE business_profiles SET home_tool_ids = :h WHERE id = :id`, {
+      id: p.id,
+      h: JSON.stringify([...new Set(next)]),
+    });
+  }
+
+  await exec(conn, `UPDATE business_profiles SET config_version = config_version + 1 WHERE organization_id = :orgId`, { orgId });
+
+  await exec(
+    conn,
+    `INSERT INTO ims_members (tenant_id, user_id, display_name, ims_role, is_account_manager, active)
+     VALUES (:t, :userId, :name, 'owner', 1, 1)
+     ON DUPLICATE KEY UPDATE display_name = VALUES(display_name), ims_role = 'owner', active = 1`,
+    { t: profileId, userId, name: ownerName },
+  );
+}

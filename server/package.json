@@ -14,6 +14,10 @@
     "db:seed:justtestx": "tsx scripts/justtestx/seed.ts",
     "db:wipe:justtestx": "tsx scripts/justtestx/wipe.ts",
     "db:audit:justtestx": "tsx scripts/justtestx/audit.ts",
+    "db:seed:justtestx:ims": "tsx scripts/justtestx/seed-ims.ts",
+    "db:enable:justtestx:ims": "tsx scripts/justtestx/enable-ims.ts",
+    "db:wipe:justtestx:ims": "tsx scripts/justtestx/wipe-ims.ts",
+    "db:audit:justtestx:ims": "tsx scripts/justtestx/audit-ims.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:migrate:pending": "tsx scripts/migrate.ts --pending",
     "analytics:rollup": "tsx scripts/rollup-analytics.ts"
