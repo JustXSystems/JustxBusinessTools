@@ -1936,6 +1936,27 @@
   padding: 10px 14px;
 }
 
+.qgv1-qs-gst-note.is-empty {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.qgv1-qs-gst-note ul {
+  margin: 0;
+  padding-left: 1.15em;
+}
+
+.qgv1-compose .qgv1-gst-note-field {
+  margin-top: 12px;
+}
+
+.qgv1-compose .qgv1-gst-note-area {
+  min-height: 4.5rem;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .qgv1-qs-totals {
   width: 280px;
   border-collapse: collapse;

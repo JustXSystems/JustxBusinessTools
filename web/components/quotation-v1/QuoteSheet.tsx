@@ -5,6 +5,7 @@ import {
   buybackLabelOf,
   computeTotals,
   fmtDate,
+  gstNoteOf,
   money,
   numToWordsIndian,
   typeLabel,
@@ -22,6 +23,10 @@ type Props = {
 
 export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
   const t = computeTotals(q, c);
+  const gstNoteLines = gstNoteOf(q)
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
   const accentStyle = documentAccentCssVars(c.documentAccentColor) as CSSProperties;
   return (
     <div
@@ -189,15 +194,17 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
       </table>
 
       <div className="qgv1-qs-totals-wrap">
-        <div className="qgv1-qs-gst-note">
-          <ul>
-            <li>
-              Note: GST/CGST/SGST/IGST, as applicable, shall be charged extra as per prevailing
-              Government regulations.
-            </li>
-            <li>All pricing are in Indian currency only.</li>
-          </ul>
-        </div>
+        {gstNoteLines.length ? (
+          <div className="qgv1-qs-gst-note">
+            <ul>
+              {gstNoteLines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="qgv1-qs-gst-note is-empty" aria-hidden="true" />
+        )}
         <table className="qgv1-qs-totals">
           <tbody>
             <tr>

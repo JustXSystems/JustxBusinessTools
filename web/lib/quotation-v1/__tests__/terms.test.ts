@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   BASE_TERMS,
   buildTerms,
+  DEFAULT_GST_NOTE,
   ENGAGEMENTS,
+  gstNoteOf,
   newQuotationDraft,
+  normalizeQuotation,
   quoteTermsForOptions,
 } from "@/lib/quotation-v1";
 
@@ -26,6 +29,23 @@ describe("buildTerms with Business Profile terms per For", () => {
   it("seeds a new draft with the profile terms for its For", () => {
     const q = newQuotationDraft("solar", "epc", "", { epc: "EPC terms" });
     expect(q.notes).toBe("EPC terms");
+  });
+});
+
+describe("gstNote", () => {
+  it("seeds drafts with the default GST note", () => {
+    expect(newQuotationDraft().gstNote).toBe(DEFAULT_GST_NOTE);
+  });
+
+  it("keeps the default for legacy quotes without gstNote", () => {
+    const q = newQuotationDraft();
+    delete q.gstNote;
+    expect(gstNoteOf(q)).toBe(DEFAULT_GST_NOTE);
+    expect(normalizeQuotation(q).gstNote).toBe(DEFAULT_GST_NOTE);
+  });
+
+  it("allows clearing the note so the sheet can hide it", () => {
+    expect(gstNoteOf({ gstNote: "" })).toBe("");
   });
 });
 

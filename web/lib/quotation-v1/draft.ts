@@ -38,15 +38,25 @@ export function blankCustomer(): QuoteCustomer {
 
 export const DEFAULT_BUYBACK_LABEL = "Less Of old buyback";
 
+export const DEFAULT_GST_NOTE =
+  "Note: GST/CGST/SGST/IGST, as applicable, shall be charged extra as per prevailing Government regulations.\nAll pricing are in Indian currency only.";
+
 export function buybackLabelOf(q: Pick<QuotationV1, "buybackLabel">): string {
   return q.buybackLabel?.trim() || DEFAULT_BUYBACK_LABEL;
 }
 
-/** Backfill fields added after v1 (city, followUpDate) on older saved docs. */
+/** Sheet/PDF text; legacy quotes without the field keep the default; blank hides the note. */
+export function gstNoteOf(q: Pick<QuotationV1, "gstNote">): string {
+  if (q.gstNote === undefined || q.gstNote === null) return DEFAULT_GST_NOTE;
+  return q.gstNote;
+}
+
+/** Backfill fields added after v1 (city, followUpDate, gstNote) on older saved docs. */
 export function normalizeQuotation(q: QuotationV1): QuotationV1 {
   return {
     ...q,
     followUpDate: q.followUpDate ?? "",
+    gstNote: q.gstNote ?? DEFAULT_GST_NOTE,
     customer: {
       ...blankCustomer(),
       ...(q.customer ?? {}),
@@ -93,6 +103,7 @@ export function newQuotationDraft(
     extraCharge: { label: "Transport / Miscellaneous", amount: 0, gst: 0 },
     buybackLabel: DEFAULT_BUYBACK_LABEL,
     notes: buildTerms(category, eng, profileTerms),
+    gstNote: DEFAULT_GST_NOTE,
     gstOverride: { mode: "manual", cgst: 0, sgst: 0, igst: null },
     createdAt: new Date().toISOString(),
     history: [{ ts: new Date().toISOString(), event: "Draft created" }],

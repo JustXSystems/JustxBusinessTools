@@ -16,6 +16,7 @@ import {
   computeTotals,
   DEFAULT_BUYBACK_LABEL,
   DEFAULT_COMPANY,
+  DEFAULT_GST_NOTE,
   DEFAULT_SEND_SETTINGS,
   DEFAULT_WHATSAPP_MESSAGE,
   engMeta,
@@ -1654,6 +1655,20 @@ export function QuotationGeneratorV1() {
               >
                 Reset GST to auto
               </button>
+
+              <label className="field qgv1-gst-note-field">
+                <span>
+                  GST / tax note
+                  <span className="muted"> · Beside totals on PDF</span>
+                </span>
+                <textarea
+                  className="qgv1-notes-area qgv1-gst-note-area"
+                  rows={3}
+                  value={current.gstNote ?? DEFAULT_GST_NOTE}
+                  onChange={(e) => patch((q) => ({ ...q, gstNote: e.target.value }))}
+                  placeholder={DEFAULT_GST_NOTE}
+                />
+              </label>
             </section>
 
             <details className="qgv1-card qgv1-card-compact qgv1-disclosure qgv1-notes-card" open>

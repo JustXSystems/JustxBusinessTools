@@ -76,6 +76,11 @@ export type QuotationV1 = {
   /** Totals row label for negative line amounts; blank falls back to the default. */
   buybackLabel?: string;
   notes: string;
+  /**
+   * Short tax / currency note printed beside the totals on the quote sheet.
+   * Undefined on older docs falls back to the built-in default; blank hides the note.
+   */
+  gstNote?: string;
   gstOverride: GstOverride;
   createdAt: string;
   updatedAt?: string;
