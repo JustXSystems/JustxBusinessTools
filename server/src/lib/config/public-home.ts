@@ -270,12 +270,11 @@ function toolCard(partial?: Partial<ToolCard>, fallbackId = "tool"): ToolCard {
 
 /**
  * Default marketing home — futuristic corporate JustX look.
- * `enabled` defaults to false so production deploys do not change guest `/`
- * until an admin turns Public home on (Experience → Public home).
+ * Enabled for guests at `/` by default; admins can still turn it off in Experience.
  */
 export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
   version: 1,
-  enabled: false,
+  enabled: true,
   seo: {
     title: "JustX Business Tools — Operate smarter",
     description:

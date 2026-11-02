@@ -6,14 +6,14 @@ import {
 } from "../public-home.js";
 
 describe("parsePublicHome", () => {
-  it("defaults to disabled so deploys do not flip guest landing", () => {
-    expect(DEFAULT_PUBLIC_HOME.enabled).toBe(false);
-    expect(parsePublicHome(null).enabled).toBe(false);
-    expect(parsePublicHome({}).enabled).toBe(false);
+  it("defaults to enabled so guests see the marketing home at /", () => {
+    expect(DEFAULT_PUBLIC_HOME.enabled).toBe(true);
+    expect(parsePublicHome(null).enabled).toBe(true);
+    expect(parsePublicHome({}).enabled).toBe(true);
   });
 
-  it("preserves enabled true when explicitly set", () => {
-    expect(parsePublicHome({ enabled: true }).enabled).toBe(true);
+  it("preserves enabled false when explicitly set", () => {
+    expect(parsePublicHome({ enabled: false }).enabled).toBe(false);
   });
 
   it("recovers from garbage / double-encoded JSON", () => {

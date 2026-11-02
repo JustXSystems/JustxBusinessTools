@@ -1043,8 +1043,7 @@ export const PublicHomePanel = forwardRef<ExperienceSaveHandle>(function PublicH
             Enabled for guests at `/`
           </label>
           <span className="muted" style={{ fontSize: "0.82rem" }}>
-            Off by default after deploy — turn on when ready. Logged-in users always see the operator
-            home.
+            Guests see this at `/` when enabled. Logged-in users always see the operator home.
           </span>
           <a className="btn" href="/" target="_blank" rel="noreferrer">
             Open public home

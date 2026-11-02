@@ -60,7 +60,7 @@ export default function ExperienceInner() {
         <h2>Experience</h2>
         <p className="muted">
           Theme tokens, platform branding, and the guest public home. Logged-in operators always keep
-          the normal tool home; public home is off until you enable it under Public home.
+          the normal tool home.
         </p>
       </section>
 
