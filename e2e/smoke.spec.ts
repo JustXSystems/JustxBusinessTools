@@ -3,7 +3,11 @@ import { test, expect } from "@playwright/test";
 test.describe("smoke", () => {
   test("home page loads", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".brand-name")).toHaveText("JustXSystems");
+    // Guests: public marketing home (when enabled) or login fallback (default / API miss).
+    // Signed-in sessions: operator home with .brand-name.
+    await expect(
+      page.locator(".ph-root, form.login-form, .brand-name").first(),
+    ).toBeVisible({ timeout: 20000 });
   });
 
   test("settings page loads", async ({ page }) => {

@@ -7,6 +7,7 @@ export function isUnauthenticatedApiPath(pathname: string): boolean {
   return (
     path === "/api/health" ||
     path === "/api/config/branding" ||
+    path === "/api/config/public-home" ||
     path === "/api/config/effective" ||
     path === "/api/config/install-icon.png" ||
     path === "/api/config/favicon.png" ||

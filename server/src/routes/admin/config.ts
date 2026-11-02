@@ -6,6 +6,12 @@ import {
   saveRegistrationCopy,
 } from "../../lib/config/registration-copy.js";
 import { getToolGrouping, saveToolGrouping } from "../../lib/config/tool-grouping.js";
+import {
+  getPublicHome,
+  parsePublicHome,
+  savePublicHome,
+  signPublicHomeMedia,
+} from "../../lib/config/public-home.js";
 import { getEffectiveConfig, listToolDefinitions, publishToolDefinition } from "../../lib/config/effective.js";
 
 const router = Router();
@@ -49,7 +55,31 @@ router.get("/platform", async (_req, res) => {
   if (!config.tool_grouping) {
     config.tool_grouping = await getToolGrouping();
   }
+  if (!config.public_home) {
+    config.public_home = signPublicHomeMedia(await getPublicHome());
+  } else {
+    config.public_home = signPublicHomeMedia(parsePublicHome(config.public_home));
+  }
   res.json({ config });
+});
+
+router.get("/public-home", async (_req, res) => {
+  res.json({ publicHome: signPublicHomeMedia(await getPublicHome()) });
+});
+
+router.put("/public-home", async (req, res) => {
+  try {
+    if (req.body?.reset) {
+      const { DEFAULT_PUBLIC_HOME } = await import("../../lib/config/public-home.js");
+      const publicHome = await savePublicHome(structuredClone(DEFAULT_PUBLIC_HOME));
+      res.json({ publicHome });
+      return;
+    }
+    const publicHome = await savePublicHome(req.body?.publicHome ?? req.body ?? {});
+    res.json({ publicHome });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Save failed" });
+  }
 });
 
 router.put("/tool-grouping", async (req, res) => {

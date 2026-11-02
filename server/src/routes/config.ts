@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Router } from "express";
 import { getPlatformBranding, INSTALL_ICON_FOLLOW_LOGO } from "../lib/config/branding.js";
 import { getPoweredBy } from "../lib/config/powered-by.js";
+import { getPublicHome, signPublicHomeMedia } from "../lib/config/public-home.js";
 import { getEffectiveConfig } from "../lib/config/effective.js";
 import {
   isPathInsideRoot,
@@ -100,6 +101,12 @@ router.get("/branding", async (_req, res) => {
     },
     poweredBy,
   });
+});
+
+/** Public marketing home configuration (no auth required). */
+router.get("/public-home", async (_req, res) => {
+  const publicHome = signPublicHomeMedia(await getPublicHome());
+  res.json({ publicHome });
 });
 
 /**

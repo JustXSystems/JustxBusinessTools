@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Sans, IBM_Plex_Mono, Inter } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Mono, Inter, Outfit, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ClientInit } from "@/components/ClientInit";
 import { AuthProvider } from "@/components/auth/AuthProvider";
@@ -32,6 +32,19 @@ const inter = Inter({
   variable: "--font-inter",
   display: "swap",
 });
+// Public marketing home — corporate futuristic display + body.
+const phSans = Outfit({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-ph-sans",
+  display: "swap",
+});
+const phDisplay = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-ph-display",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "JustXSystems",
@@ -56,7 +69,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`h-full ${plexSans.variable} ${plexMono.variable} ${inter.variable}`}>
+    <html
+      lang="en"
+      className={`h-full ${plexSans.variable} ${plexMono.variable} ${inter.variable} ${phSans.variable} ${phDisplay.variable}`}
+    >
       <body className="min-h-full">
         <ClientInit />
         <BrandingProvider>

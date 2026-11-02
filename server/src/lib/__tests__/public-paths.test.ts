@@ -5,6 +5,7 @@ describe("isUnauthenticatedApiPath", () => {
   it("allows public quotation and health", () => {
     expect(isUnauthenticatedApiPath("/api/health")).toBe(true);
     expect(isUnauthenticatedApiPath("/api/config/branding")).toBe(true);
+    expect(isUnauthenticatedApiPath("/api/config/public-home")).toBe(true);
     expect(isUnauthenticatedApiPath("/api/config/effective")).toBe(true);
     expect(isUnauthenticatedApiPath("/api/config/favicon.png")).toBe(true);
     expect(isUnauthenticatedApiPath("/api/config/favicon.ico")).toBe(true);

@@ -70,7 +70,15 @@ const PUBLIC_PREFIXES = ["/login", "/register", "/status", "/q"];
 const SELF_GATED_ROOTS = ["/bos", "/ims"];
 
 export function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p)) || SELF_GATED_ROOTS.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+  return (
+    PUBLIC_PREFIXES.some((p) => pathname.startsWith(p)) ||
+    SELF_GATED_ROOTS.some((r) => pathname === r || pathname.startsWith(`${r}/`))
+  );
+}
+
+/** Paths guests may open without a session (includes marketing home at `/`). */
+export function isGuestAllowedPath(pathname: string): boolean {
+  return pathname === "/" || pathname === "" || isPublicPath(pathname);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -101,8 +109,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loading) return;
+    const guestOk = isGuestAllowedPath(pathname);
     const isPublic = isPublicPath(pathname);
-    if (!user && !isPublic) {
+    if (!user && !guestOk) {
       router.replace("/login?next=" + encodeURIComponent(pathname));
     } else if (user && !canAccessAdmin(user) && pathname.startsWith("/admin")) {
       router.replace("/");
@@ -223,12 +232,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, loading, login, verifyOtp, register, logout, switchBranch, refresh],
   );
 
-  const isPublic = isPublicPath(pathname);
-  const blocking = loading || (!user && !isPublic);
+  const guestOk = isGuestAllowedPath(pathname);
+  const blocking = loading || (!user && !guestOk);
 
   return (
     <AuthContext.Provider value={value}>
-      {blocking && !isPublic ? (
+      {blocking && !guestOk ? (
         brandingLoading ? <EmptySplash /> : <SplashMark branding={branding} />
       ) : (
         children
