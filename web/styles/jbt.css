@@ -5526,10 +5526,51 @@ body:has(.mobile-menu) .float-dock {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* Long forms (Public home, Branding, etc.) must scroll; Theme Studio
+     with preview-workspace opts back into the clipped flex model below. */
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: 12px;
+}
+
+.admin-page-body:has(> .preview-workspace) {
+  overflow: hidden;
+  padding-bottom: 0;
 }
 
 .admin-page-body > .preview-workspace {
   flex: 1;
+  min-height: 0;
+}
+
+/* Public-home editor: keep nested grids/panels from clipping off-screen */
+.admin-public-home {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.admin-public-home > *,
+.admin-public-home details.panel,
+.admin-public-home .panel {
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.admin-public-home .input,
+.admin-public-home input,
+.admin-public-home textarea,
+.admin-public-home select {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.admin-public-home details[open] {
+  overflow: visible;
 }
 
 .admin-page-head .result-grid {
@@ -5645,6 +5686,7 @@ body:has(.mobile-menu) .float-dock {
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 4px;
+  flex-shrink: 0;
 }
 
 .admin-tabs-bar .admin-tabs {

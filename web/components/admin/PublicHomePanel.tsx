@@ -110,7 +110,13 @@ function MediaEditor({
       style={{ padding: "0.75rem", display: "grid", gap: "0.55rem", background: "var(--glass-1)" }}
     >
       <strong style={{ fontSize: "0.85rem" }}>{label}</strong>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.55rem" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))",
+          gap: "0.55rem",
+        }}
+      >
         <Field label="Kind">
           <select
             className="input"
@@ -209,7 +215,13 @@ function StyleEditor({
     <details>
       <summary style={{ cursor: "pointer", fontWeight: 600 }}>Section styles</summary>
       <div style={{ display: "grid", gap: "0.55rem", marginTop: "0.65rem" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.55rem" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+            gap: "0.55rem",
+          }}
+        >
           <Field label="Background type">
             <select
               className="input"
@@ -251,7 +263,13 @@ function StyleEditor({
         <Field label="Background overlay">
           <TextInput value={value.backgroundOverlay} onChange={(backgroundOverlay) => onChange({ ...value, backgroundOverlay })} />
         </Field>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.55rem" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))",
+            gap: "0.55rem",
+          }}
+        >
           <Field label="Text color">
             <TextInput value={value.textColor} onChange={(textColor) => onChange({ ...value, textColor })} />
           </Field>
@@ -262,7 +280,13 @@ function StyleEditor({
             <TextInput value={value.accentColor} onChange={(accentColor) => onChange({ ...value, accentColor })} />
           </Field>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.55rem" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+            gap: "0.55rem",
+          }}
+        >
           <Field label="Font family">
             <TextInput value={value.fontFamily} onChange={(fontFamily) => onChange({ ...value, fontFamily })} />
           </Field>
@@ -270,7 +294,13 @@ function StyleEditor({
             <TextInput value={value.fontSize} onChange={(fontSize) => onChange({ ...value, fontSize })} />
           </Field>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.55rem" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 110px), 1fr))",
+            gap: "0.55rem",
+          }}
+        >
           <Field label="Padding Y">
             <TextInput value={value.paddingY} onChange={(paddingY) => onChange({ ...value, paddingY })} />
           </Field>
@@ -302,7 +332,14 @@ function NavListEditor({
   return (
     <div style={{ display: "grid", gap: "0.5rem" }}>
       {items.map((item, index) => (
-        <div key={item.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "0.4rem" }}>
+        <div
+          key={item.id}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto",
+            gap: "0.4rem",
+          }}
+        >
           <TextInput
             value={item.label}
             onChange={(label) => {
@@ -354,7 +391,13 @@ function CtaListEditor({
     <div style={{ display: "grid", gap: "0.5rem" }}>
       {items.map((item, index) => (
         <div key={item.id} style={{ display: "grid", gap: "0.4rem" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "0.4rem" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto",
+              gap: "0.4rem",
+            }}
+          >
             <TextInput
               value={item.label}
               onChange={(label) => {
@@ -547,7 +590,13 @@ function StatsItemsEditor({
           className="panel"
           style={{ padding: "0.75rem", display: "grid", gap: "0.5rem", background: "var(--glass-1)" }}
         >
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "0.4rem" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto",
+              gap: "0.4rem",
+            }}
+          >
             <TextInput
               value={item.value}
               onChange={(value) => {
@@ -644,7 +693,13 @@ function PillarsItemsEditor({
               Remove
             </button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+              gap: "0.4rem",
+            }}
+          >
             <Field label="Tag">
               <TextInput
                 value={item.tag}
@@ -703,7 +758,13 @@ function PillarsItemsEditor({
               rows={4}
             />
           </Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+              gap: "0.4rem",
+            }}
+          >
             <Field label="Link href">
               <TextInput
                 value={item.href}
@@ -812,8 +873,17 @@ function SectionEditor({
   };
 
   return (
-    <details className="panel admin-card" style={{ padding: "0.85rem 1rem" }}>
-      <summary style={{ cursor: "pointer", display: "flex", gap: "0.75rem", alignItems: "center" }}>
+    <details className="panel admin-card" style={{ padding: "0.85rem 1rem", overflow: "visible" }}>
+      <summary
+        style={{
+          cursor: "pointer",
+          display: "flex",
+          gap: "0.75rem",
+          alignItems: "center",
+          flexWrap: "wrap",
+          minWidth: 0,
+        }}
+      >
         <strong style={{ textTransform: "capitalize" }}>{section.type}</strong>
         <span className="muted">#{section.id}</span>
         <label style={{ marginLeft: "auto", display: "inline-flex", gap: "0.35rem", alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
@@ -914,7 +984,13 @@ function SectionEditor({
               onChange={(subheadline) => updateSection(setConfig, section.id, { subheadline })}
             />
           </Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.55rem" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
+              gap: "0.55rem",
+            }}
+          >
             <Field label="Media position (legacy / no slides)">
               <select
                 className="input"
@@ -1053,7 +1129,14 @@ function SectionEditor({
               }
             />
           </Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.55rem" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))",
+              gap: "0.55rem",
+              alignItems: "end",
+            }}
+          >
             <Field label="Speed (sec)">
               <TextInput
                 value={String(section.speedSec)}
@@ -1076,7 +1159,7 @@ function SectionEditor({
                 <option value="right">Right</option>
               </select>
             </Field>
-            <label style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center", marginTop: "1.4rem" }}>
+            <label style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center", minHeight: "2.5rem" }}>
               <input
                 type="checkbox"
                 checked={section.pauseOnHover}
@@ -1503,7 +1586,7 @@ export const PublicHomePanel = forwardRef<ExperienceSaveHandle>(function PublicH
   }
 
   return (
-    <div style={{ display: "grid", gap: "1rem" }}>
+    <div className="admin-public-home" style={{ display: "grid", gap: "1rem", minWidth: 0 }}>
       <section className="panel admin-card" style={{ padding: "1rem", display: "grid", gap: "0.75rem" }}>
         <div style={{ display: "flex", gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
           <label style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center" }}>
@@ -1582,7 +1665,13 @@ export const PublicHomePanel = forwardRef<ExperienceSaveHandle>(function PublicH
             </Field>
           ))}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.55rem" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+            gap: "0.55rem",
+          }}
+        >
           <Field label="Body font CSS">
             <TextInput
               value={config.theme.fontSans}
