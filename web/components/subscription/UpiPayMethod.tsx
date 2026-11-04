@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { submitUpiClaim } from "@/lib/api";
 import { invalidateLiveData } from "@/hooks/useLiveRefresh";
 import type { PendingUpiClaim, UpiPayInfo } from "@/lib/types/subscription";
+import { useBrandCopy } from "@/lib/use-brand-copy";
 
 function formatInr(amount: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
@@ -28,6 +29,7 @@ export function UpiPayMethod({
   onToast: (msg: string) => void;
 }) {
   const { user } = useAuth();
+  const { appName, legalName } = useBrandCopy();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -105,7 +107,7 @@ export function UpiPayMethod({
         <p className="muted">
           Amount {formatInr(pendingClaim.amountInr)}
           {pendingClaim.toolIds?.length ? ` · ${pendingClaim.toolIds.length} tool(s)` : ""}.
-          Licensed access starts after JustXSystems approves this payment.
+          Licensed access starts after {appName} approves this payment.
         </p>
       </div>
     );
@@ -125,10 +127,10 @@ export function UpiPayMethod({
           {upi?.enabled && upi.intent ? (
             <canvas ref={canvasRef} width={188} height={188} aria-label="UPI QR code" />
           ) : (
-            <p className="muted">UPI is not configured. Contact JustXSystems.</p>
+            <p className="muted">UPI is not configured. Contact {appName}.</p>
           )}
           <p className="co-vpa">
-            {upi?.payeeName || "JustXSystems LLP"}
+            {upi?.payeeName || legalName}
             <strong>{upi?.vpa || "—"}</strong>
           </p>
           <div className="admin-form-row">
@@ -222,7 +224,7 @@ export function UpiPayMethod({
             {busy ? "Submitting…" : "Submit payment confirmation"}
           </button>
           <p className="muted billing-legal">
-            Tools unlock after JustXSystems verifies the credit. Card payments below are processed by the selected gateway.
+            Tools unlock after {appName} verifies the credit. Card payments below are processed by the selected gateway.
           </p>
         </form>
       </div>

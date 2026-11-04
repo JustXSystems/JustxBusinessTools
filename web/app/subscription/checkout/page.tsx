@@ -12,6 +12,7 @@ import { fetchCartQuote } from "@/lib/api";
 import { catalogPriceFingerprint } from "@/lib/commerce-revision";
 import { clearToolCart, readActivePack, readToolCart } from "@/lib/tool-cart";
 import type { CartQuote } from "@/lib/types/subscription";
+import { useBrandCopy } from "@/lib/use-brand-copy";
 
 function inr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
@@ -21,6 +22,7 @@ type PayMethod = "upi" | "debit" | "credit";
 
 export default function SubscriptionCheckoutPage() {
   const router = useRouter();
+  const { appName, legalName } = useBrandCopy();
   const { subscription, loading, error, refresh } = useSubscription();
   const { showToast } = useToast();
   const [quote, setQuote] = useState<CartQuote | null>(null);
@@ -123,7 +125,7 @@ export default function SubscriptionCheckoutPage() {
         </Link>
         <div className="tool-header-text">
           <div className="tool-header-title">Checkout</div>
-          <div className="tool-header-sub">Secure payment to JustXSystems · UPI is the default settlement method</div>
+          <div className="tool-header-sub">Secure payment to {appName} · UPI is the default settlement method</div>
         </div>
       </div>
 
@@ -166,7 +168,7 @@ export default function SubscriptionCheckoutPage() {
             </div>
             <div>
               <dt>Merchant</dt>
-              <dd>{quote?.upi?.payeeName || subscription?.upi?.payeeName || "JustXSystems LLP"}</dd>
+              <dd>{quote?.upi?.payeeName || subscription?.upi?.payeeName || legalName}</dd>
             </div>
           </dl>
           <Link href="/subscription" className="btn btn-secondary btn-sm">

@@ -1,5 +1,5 @@
 /**
- * Live-first data policy for JustX Business Tools.
+ * Live-first data policy for Justxsystems Business Tools.
  *
  * 1. Always attempt a fresh network/DB fetch when online.
  * 2. Persist successful responses as contingency only (offline / outage).

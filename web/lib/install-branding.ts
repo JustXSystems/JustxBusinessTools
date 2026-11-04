@@ -33,7 +33,8 @@ export function isTransparentInstallBg(bg: unknown): boolean {
 export function resolveInstallName(appName: string, installName?: string | null): string {
   const custom = String(installName || "").trim();
   if (custom) return custom;
-  return String(appName || "JustXSystems").trim() || "JustXSystems";
+  const fallback = String(appName || "").trim();
+  return fallback || "Justxsystems";
 }
 
 /** Map legacy generated icons → official JustX logo. */

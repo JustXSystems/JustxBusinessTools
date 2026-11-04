@@ -1,4 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { BRAND_DEFAULTS } from "@jbt/shared";
 
 const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
@@ -78,7 +79,7 @@ export function totpOtpauthUrl(input: {
   accountName: string;
   issuer?: string;
 }): string {
-  const issuer = encodeURIComponent(input.issuer ?? "JustXSystems");
+  const issuer = encodeURIComponent(input.issuer ?? BRAND_DEFAULTS.appName);
   const account = encodeURIComponent(input.accountName);
   return `otpauth://totp/${issuer}:${account}?secret=${input.secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
 }

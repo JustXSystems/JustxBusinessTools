@@ -1,3 +1,4 @@
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PUBLIC_HOME,
@@ -44,7 +45,7 @@ describe("parsePublicHome", () => {
         {
           type: "hero",
           id: "hero",
-          brandLabel: "JustX",
+          brandLabel: BRAND_DEFAULTS.appName,
           slides: [
             {
               id: "s1",
@@ -77,7 +78,7 @@ describe("parsePublicHome", () => {
       ],
     });
     const hero = cfg.sections.find((s) => s.type === "hero");
-    expect(hero && hero.type === "hero" ? hero.brandLabel : "").toBe("JustX");
+    expect(hero && hero.type === "hero" ? hero.brandLabel : "").toBe(BRAND_DEFAULTS.appName);
     expect(hero && hero.type === "hero" ? hero.slides.length : 0).toBe(1);
     expect(hero && hero.type === "hero" ? hero.slides[0].words : []).toEqual(["A", "B"]);
     expect(hero && hero.type === "hero" ? hero.chips : []).toEqual(["GST"]);
@@ -94,7 +95,7 @@ describe("parsePublicHome", () => {
     expect(DEFAULT_PUBLIC_HOME.sections.some((s) => s.type === "pillars")).toBe(true);
     const hero = DEFAULT_PUBLIC_HOME.sections.find((s) => s.type === "hero");
     expect(hero && hero.type === "hero" ? hero.slides.length : 0).toBeGreaterThan(0);
-    expect(hero && hero.type === "hero" ? hero.brandLabel : "").toContain("JustX");
+    expect(hero && hero.type === "hero" ? hero.brandLabel : "").toContain(BRAND_DEFAULTS.productName);
   });
 
   it("clamps marquee speed", () => {

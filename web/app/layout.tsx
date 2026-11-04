@@ -47,11 +47,11 @@ const phDisplay = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "JustXSystems",
+  title: "Justxsystems",
   description: "Quotations, invoices, stock, projects, and calculators for Indian businesses.",
   appleWebApp: {
     capable: true,
-    title: "JustXSystems",
+    title: "Justxsystems",
     statusBarStyle: "black-translucent",
   },
   icons: {

@@ -1,3 +1,4 @@
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import { describe, expect, it } from "vitest";
 import {
   generateTotpSecret,
@@ -10,7 +11,7 @@ describe("totp", () => {
   it("generates base32 secrets and otpauth URLs", () => {
     const secret = generateTotpSecret();
     expect(secret.length).toBeGreaterThanOrEqual(16);
-    expect(totpOtpauthUrl({ secret, accountName: "a@b.c", issuer: "JustX" })).toContain(
+    expect(totpOtpauthUrl({ secret, accountName: "a@b.c", issuer: BRAND_DEFAULTS.appName })).toContain(
       "otpauth://totp/",
     );
   });

@@ -9,6 +9,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  BRAND_DEFAULTS,
+  brandCopyright,
+  coerceBrandAppName,
+  coerceBrandLegalName,
+  coerceBrandPoweredBy,
+  coerceBrandProductName,
+} from "@jbt/shared";
 import { apiUrl } from "@/lib/api-base";
 import {
   DEFAULT_INSTALL_ICON_URL,
@@ -36,6 +44,8 @@ export type PlatformBranding = {
   logoUrl: string;
   appName: string;
   tagline: string;
+  legalName: string;
+  productName: string;
   splashDurationMs: number;
   splashAnimation: SplashAnimation;
   splashIntensity: SplashIntensity;
@@ -55,22 +65,26 @@ export type PoweredByConfig = {
 
 export const DEFAULT_BRANDING: PlatformBranding = {
   logoUrl: "/icons/justx-logo.png",
-  appName: "JustXSystems",
-  tagline: "JustXSystems",
+  appName: BRAND_DEFAULTS.appName,
+  tagline: BRAND_DEFAULTS.tagline,
+  legalName: BRAND_DEFAULTS.legalName,
+  productName: BRAND_DEFAULTS.productName,
   splashDurationMs: 2200,
   splashAnimation: "dash",
   splashIntensity: "balanced",
   splashShowProgress: true,
-  installName: "JustXSystems",
+  installName: BRAND_DEFAULTS.installName,
   installIconUrl: DEFAULT_INSTALL_ICON_URL,
   installIconBg: "transparent",
   publishSiteFavicon: true,
 };
 
 export const DEFAULT_POWERED_BY: PoweredByConfig = {
-  text: "Powered by JustXSystems LLP",
+  text: BRAND_DEFAULTS.poweredBy,
   locked: true,
 };
+
+export { BRAND_DEFAULTS, brandCopyright };
 
 export const SPLASH_SEEN_KEY = "jbt.splash.seen";
 /** Contingency mirror only — never preferred over a live DB response while online. */
@@ -81,6 +95,8 @@ export function splashFingerprint(b: PlatformBranding): string {
     b.logoUrl,
     b.appName,
     b.tagline,
+    b.legalName,
+    b.productName,
     String(b.splashDurationMs),
     b.splashAnimation,
     b.splashIntensity,
@@ -121,11 +137,20 @@ function normalizePayload(data: {
   const rawInstall = canonicalizeBrandIconUrl(
     String(b.installIconUrl || DEFAULT_BRANDING.installIconUrl).trim() || DEFAULT_BRANDING.installIconUrl,
   );
+  const appName = coerceBrandAppName(b.appName, DEFAULT_BRANDING.appName);
   return {
     branding: {
       logoUrl: publicAssetUrl(rawLogo),
-      appName: String(b.appName || DEFAULT_BRANDING.appName),
-      tagline: String(b.tagline || DEFAULT_BRANDING.tagline),
+      appName,
+      tagline: coerceBrandAppName(b.tagline, DEFAULT_BRANDING.tagline),
+      legalName: coerceBrandLegalName(
+        (b as { legalName?: string }).legalName ?? b.appName,
+        DEFAULT_BRANDING.legalName,
+      ),
+      productName: coerceBrandProductName(
+        (b as { productName?: string }).productName,
+        DEFAULT_BRANDING.productName,
+      ),
       splashDurationMs: Number.isFinite(Number(b.splashDurationMs))
         ? Math.max(0, Math.round(Number(b.splashDurationMs)))
         : DEFAULT_BRANDING.splashDurationMs,
@@ -135,7 +160,7 @@ function normalizePayload(data: {
         b.splashShowProgress == null
           ? DEFAULT_BRANDING.splashShowProgress
           : Boolean(b.splashShowProgress),
-      installName: String(b.installName || DEFAULT_BRANDING.installName).trim() || DEFAULT_BRANDING.installName,
+      installName: coerceBrandAppName(b.installName || appName, DEFAULT_BRANDING.installName),
       installIconUrl: publicAssetUrl(resolveInstallIconUrl(rawLogo, rawInstall)),
       installIconBg: parseInstallIconBg(b.installIconBg ?? DEFAULT_BRANDING.installIconBg),
       publishSiteFavicon:
@@ -144,7 +169,7 @@ function normalizePayload(data: {
           : Boolean(b.publishSiteFavicon),
     },
     poweredBy: {
-      text: String(p.text || DEFAULT_POWERED_BY.text),
+      text: coerceBrandPoweredBy(p.text, DEFAULT_POWERED_BY.text),
       locked: p.locked == null ? true : Boolean(p.locked),
     },
   };

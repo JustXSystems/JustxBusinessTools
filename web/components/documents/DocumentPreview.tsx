@@ -1,3 +1,5 @@
+"use client";
+
 import type { DocumentConfig } from "@/config/tools.config";
 import type { BusinessProfile } from "@/lib/types/business-profile";
 import type { DocumentState } from "@/lib/types/document";
@@ -6,6 +8,7 @@ import { documentAccentCssVars } from "@/lib/document-accent";
 import { fmtDate, fmtINR } from "@/lib/format";
 import { publicAssetUrl } from "@/lib/base-path";
 import type { CSSProperties } from "react";
+import { useBrandCopy } from "@/lib/use-brand-copy";
 
 type Props = {
   config: DocumentConfig;
@@ -14,6 +17,7 @@ type Props = {
 };
 
 export function DocumentPreview({ config, state, profile }: Props) {
+  const { appName } = useBrandCopy();
   const { computed, totalQty, taxable, cgst, sgst, igst, totalTax, grand } =
     docComputeTotals(state);
   const words = wordsTotal(grand);
@@ -132,7 +136,7 @@ export function DocumentPreview({ config, state, profile }: Props) {
       ) : null}
 
       <p className="doc-muted-foot">
-        Generated with JustXSystems
+        Generated with {appName}
       </p>
     </div>
   );

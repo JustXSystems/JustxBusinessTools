@@ -1,3 +1,4 @@
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import { pool } from "../../db.js";
 import { jsonVal } from "../admin/approvals.js";
 import { logAudit } from "../audit.js";
@@ -103,7 +104,7 @@ export async function createClaim(input: {
     { orgId: input.orgId },
   );
   if (Array.isArray(pending) && pending[0]) {
-    throw Object.assign(new Error("A payment is already waiting for JustXSystems verification"), { status: 409 });
+    throw Object.assign(new Error(`A payment is already waiting for ${BRAND_DEFAULTS.appName} verification`), { status: 409 });
   }
 
   const [result] = await pool.query(
@@ -147,7 +148,7 @@ export async function createClaim(input: {
   publishNotification({
     eventType: "billing.upi_claim_submitted",
     title: "UPI payment awaiting verification",
-    body: `${claim.payerName} · ₹${claim.amountInr} · UTR ${claim.utr}. JustXSystems will verify and notify you.`,
+    body: `${claim.payerName} · ₹${claim.amountInr} · UTR ${claim.utr}. ${BRAND_DEFAULTS.appName} will verify and notify you.`,
     href: "/admin/approvals?kind=upi_claim",
     organizationId: claim.organizationId,
     businessProfileId: claim.profileId,
@@ -243,7 +244,7 @@ export async function reviewClaim(
       amount: next.amountInr,
       utr: next.utr,
       status: action,
-      reviewNote: next.reviewNote ?? (action === "approved" ? "Selected tools are now licensed." : "Please contact JustXSystems if this looks wrong."),
+      reviewNote: next.reviewNote ?? (action === "approved" ? "Selected tools are now licensed." : `Please contact ${BRAND_DEFAULTS.appName} if this looks wrong.`),
     },
     next.id,
     next.payerEmail,

@@ -109,6 +109,8 @@ router.put("/branding", async (req, res) => {
       logoUrl: req.body?.logoUrl,
       appName: req.body?.appName,
       tagline: req.body?.tagline,
+      legalName: req.body?.legalName,
+      productName: req.body?.productName,
       splashDurationMs: req.body?.splashDurationMs,
       splashAnimation: req.body?.splashAnimation,
       splashIntensity: req.body?.splashIntensity,

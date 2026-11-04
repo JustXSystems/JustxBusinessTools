@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import { pool } from "../db.js";
 import { getConfiguredProviderName, getPaymentProvider } from "../lib/payments/index.js";
 import { getActiveOrgId, getActiveProfileId, getActiveUserId } from "../lib/request-context.js";
@@ -151,7 +152,7 @@ router.get("/", async (_req, res) => {
     const payee =
       settled[2].status === "fulfilled"
         ? settled[2].value
-        : { enabled: false, vpa: "", payeeName: "JustXSystems LLP", merchantCode: "" };
+        : { enabled: false, vpa: "", payeeName: BRAND_DEFAULTS.legalName, merchantCode: "" };
     const claim = settled[3].status === "fulfilled" ? settled[3].value : null;
     const gateways = settled[4].status === "fulfilled" ? settled[4].value : [];
     const skus = settled[5].status === "fulfilled" ? settled[5].value : [];
@@ -232,8 +233,8 @@ router.get("/quote", async (req, res) => {
     const quote = await quoteForProfile(getActiveProfileId(), toolIds, bundleId || undefined);
     const payee = await getUpiPayee();
     const label = isBundleQuote(quote)
-      ? `JustXSystems ${quote.packName}`.slice(0, 50)
-      : `JustXSystems ${quote.lines.length} tool${quote.lines.length === 1 ? "" : "s"}`.slice(0, 50);
+      ? `${BRAND_DEFAULTS.appName} ${quote.packName}`.slice(0, 50)
+      : `${BRAND_DEFAULTS.appName} ${quote.lines.length} tool${quote.lines.length === 1 ? "" : "s"}`.slice(0, 50);
     res.json({
       ...quote,
       upi: {
@@ -284,7 +285,7 @@ router.post("/upi-claims", async (req, res) => {
     });
     res.status(201).json({
       claim,
-      message: "Submitted. JustXSystems will verify this UPI payment and notify you.",
+      message: `Submitted. ${BRAND_DEFAULTS.appName} will verify this UPI payment and notify you.`,
     });
   } catch (err) {
     const status = Number((err as { status?: number }).status) || 400;

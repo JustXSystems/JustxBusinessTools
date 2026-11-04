@@ -3,6 +3,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { PaymentsActionHandle } from "@/components/admin/payments-actions";
 import { api } from "@/lib/api";
+import { useBrandCopy } from "@/lib/use-brand-copy";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type Payee = { enabled: boolean; vpa: string; payeeName: string; merchantCode: string };
@@ -73,6 +74,7 @@ export const UpiPaymentsPanel = forwardRef<
   PaymentsActionHandle,
   { initialStatus?: string; focusClaimId?: number | null }
 >(function UpiPaymentsPanel({ initialStatus = "pending", focusClaimId = null }, ref) {
+  const { appName } = useBrandCopy();
   const [payee, setPayee] = useState<Payee>({ enabled: true, vpa: "", payeeName: "", merchantCode: "" });
   const [notify, setNotify] = useState<Notify>({
     emailEnabled: true,
@@ -194,7 +196,7 @@ export const UpiPaymentsPanel = forwardRef<
         <section className="panel admin-card">
           <div className="analytics-toolbar">
             <div>
-              <h2>JustXSystems UPI account</h2>
+              <h2>{appName} UPI account</h2>
               <p className="muted">Default checkout is a UPI QR to this VPA. Gateways stay optional.</p>
             </div>
             {dirty ? <span className="pill pill-warning">Unsaved changes</span> : null}
@@ -233,7 +235,7 @@ export const UpiPaymentsPanel = forwardRef<
               Company alerts
             </h3>
             <label className="field">
-              <span>Email JustXSystems</span>
+              <span>Email {appName}</span>
               <select
                 value={notify.emailEnabled ? "1" : "0"}
                 onChange={(e) => setNotify({ ...notify, emailEnabled: e.target.value === "1" })}

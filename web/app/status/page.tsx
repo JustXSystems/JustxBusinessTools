@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiUrl, withBasePath } from "@/lib/api-base";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
+import { useBrandCopy } from "@/lib/use-brand-copy";
 
 type StatusPayload = {
   ok: boolean;
@@ -12,6 +13,7 @@ type StatusPayload = {
 };
 
 export default function StatusPage() {
+  const { productName } = useBrandCopy();
   const [status, setStatus] = useState<StatusPayload | null>(null);
   const [error, setError] = useState("");
 
@@ -43,7 +45,7 @@ export default function StatusPage() {
           <PlatformBrandMark size="md" showText={false} />
           <div>
             <h1>System status</h1>
-            <p className="muted">JustX Business Tools</p>
+            <p className="muted">{productName}</p>
           </div>
         </div>
         {error ? <p className="field-error">{error}</p> : null}

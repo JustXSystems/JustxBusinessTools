@@ -9,6 +9,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import { api } from "@/lib/api";
 import type { ExperienceSaveHandle } from "@/components/admin/experience-save";
 import { invalidateAdminData } from "@/hooks/useLiveRefresh";
@@ -1438,7 +1439,7 @@ function newSection(type: PublicHomeSection["type"]): PublicHomeSection {
         type,
         sticky: true,
         logo: { ...EMPTY_MEDIA },
-        logoText: "JustX",
+        logoText: BRAND_DEFAULTS.productName,
         logoHref: "/",
         menus: [],
         actions: [],
@@ -1447,7 +1448,7 @@ function newSection(type: PublicHomeSection["type"]): PublicHomeSection {
       return {
         ...base,
         type,
-        brandLabel: "JustX Business Tools",
+        brandLabel: BRAND_DEFAULTS.productName,
         eyebrow: "",
         headline: "Headline",
         subheadline: "",
@@ -1522,7 +1523,7 @@ function newSection(type: PublicHomeSection["type"]): PublicHomeSection {
         ...base,
         type,
         logo: { ...EMPTY_MEDIA },
-        logoText: "JustX",
+        logoText: BRAND_DEFAULTS.appName,
         tagline: "",
         columns: [],
         legalText: "",
@@ -1615,7 +1616,7 @@ export const PublicHomePanel = forwardRef<ExperienceSaveHandle>(function PublicH
                     { method: "PUT", body: JSON.stringify({ reset: true }) },
                   );
                   setConfig(d.publicHome);
-                  setMessage("Reset to JustX marketing defaults.");
+                  setMessage(`Reset to ${BRAND_DEFAULTS.appName} marketing defaults.`);
                 } catch (e) {
                   setMessage(e instanceof Error ? e.message : "Reset failed");
                 } finally {

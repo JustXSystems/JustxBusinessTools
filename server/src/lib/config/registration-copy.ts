@@ -1,3 +1,4 @@
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import { pool } from "../../db.js";
 
 export type RegistrationCopy = {
@@ -13,15 +14,12 @@ export type RegistrationCopy = {
 
 export const DEFAULT_REGISTRATION_COPY: RegistrationCopy = {
   pendingOwnerTitle: "Welcome — you're in",
-  pendingOwnerMessage:
-    "Your Owner account is ready. You can start using JustX Business Tools right away while JustX reviews your business profile.",
-  pendingOwnerDetail:
-    "Signed in as {{email}}. A JustX admin may review your Business Profile later; approval is not required to continue.",
+  pendingOwnerMessage: `Your Owner account is ready. You can start using ${BRAND_DEFAULTS.productName} right away while ${BRAND_DEFAULTS.appName} reviews your business profile.`,
+  pendingOwnerDetail: `Signed in as {{email}}. A ${BRAND_DEFAULTS.appName} admin may review your Business Profile later; approval is not required to continue.`,
   pendingJoinTitle: "Awaiting approval",
   pendingJoinMessage:
     "Request sent. The Business Profile Owner must approve you before you can sign in.",
-  pendingJoinDetail:
-    "We registered {{email}}. You will be able to sign in after the Business Profile Owner (or a JustX admin) approves your request.",
+  pendingJoinDetail: `We registered {{email}}. You will be able to sign in after the Business Profile Owner (or a ${BRAND_DEFAULTS.appName} admin) approves your request.`,
 };
 
 const KEY = "registration_copy";

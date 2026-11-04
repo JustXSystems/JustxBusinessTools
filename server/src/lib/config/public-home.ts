@@ -1,3 +1,4 @@
+import { BRAND_DEFAULTS, brandCopyright } from "@jbt/shared";
 import { pool } from "../../db.js";
 import {
   canonicalizeStoredImageUrl,
@@ -367,13 +368,13 @@ function pillarItem(partial?: Partial<PillarItem>, fallbackId = "pillar"): Pilla
 
 /**
  * Default marketing home — industrial SaaS look inspired by high-end ops sites,
- * tuned for JustX (brand-first, register CTAs, admin-configurable media).
+ * tuned for Justxsystems (brand-first, register CTAs, admin-configurable media).
  */
 export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
   version: 1,
   enabled: true,
   seo: {
-    title: "JustX Business Tools — Operate smarter",
+    title: `${BRAND_DEFAULTS.productName} — Operate smarter`,
     description:
       "Quotations, invoices, inventory, field ops, and calculators — one modern platform for Indian dealers, distributors, and growing teams.",
   },
@@ -395,13 +396,13 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       id: "header",
       enabled: true,
       sticky: true,
-      logo: media({ kind: "image", url: "/icons/justx-logo.png", alt: "JustXSystems" }),
-      logoText: "JustX Business Tools",
+      logo: media({ kind: "image", url: "/icons/justx-logo.png", alt: BRAND_DEFAULTS.appName }),
+      logoText: BRAND_DEFAULTS.productName,
       logoHref: "/",
       menus: [
         nav({ id: "m-pillars", label: "Capabilities", href: "#pillars" }),
         nav({ id: "m-tools", label: "Tools", href: "#tools" }),
-        nav({ id: "m-features", label: "Why JustX", href: "#features" }),
+        nav({ id: "m-features", label: `Why ${BRAND_DEFAULTS.appName}`, href: "#features" }),
         nav({ id: "m-status", label: "Status", href: "/status" }),
       ],
       actions: [
@@ -420,11 +421,10 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       type: "hero",
       id: "hero",
       enabled: true,
-      brandLabel: "JustX Business Tools",
+      brandLabel: BRAND_DEFAULTS.productName,
       eyebrow: "Business operating suite",
       headline: "Run quotations to field ops in one workspace.",
-      subheadline:
-        "JustX unifies sales, inventory, service, and finance workflows — built for dealers, distributors, and growing Indian teams.",
+      subheadline: `${BRAND_DEFAULTS.appName} unifies sales, inventory, service, and finance workflows — built for dealers, distributors, and growing Indian teams.`,
       actions: [
         cta({ id: "hero-start", label: "Start free", href: "/register", variant: "primary" }),
         cta({ id: "hero-login", label: "Sign in", href: "/login", variant: "secondary" }),
@@ -432,7 +432,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       media: media({
         kind: "image",
         url: "/icons/justx-logo.png",
-        alt: "JustX Business Tools",
+        alt: BRAND_DEFAULTS.productName,
         objectFit: "contain",
       }),
       mediaPosition: "background",
@@ -523,7 +523,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       type: "pillars",
       id: "pillars",
       enabled: true,
-      eyebrow: "What you run on JustX",
+      eyebrow: `What you run on ${BRAND_DEFAULTS.appName}`,
       title: "Three operating pillars. One accountable platform.",
       subtitle:
         "Sell with confidence, keep stock honest, and close the loop from field to finance — without stitching five vendors together.",
@@ -644,7 +644,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
         toolCard({
           id: "t-ims",
           toolId: "imsdealer",
-          name: "Justx IMS — Dealer",
+          name: "JustX IMS — Dealer",
           description: "Inventory, purchasing, GST sales, receivables, and field ops in one system.",
           icon: "📦",
           features: ["Stock in / out", "Purchase orders", "Field map & onsite"],
@@ -654,7 +654,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
         toolCard({
           id: "t-bos",
           toolId: "bos",
-          name: "Justx BOS",
+          name: "JustX BOS",
           description: "Finance, GST invoicing, HR and projects — synced with your business tools.",
           icon: "🏢",
           features: ["Invoicing", "HR samples", "Operating system UI"],
@@ -705,7 +705,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       type: "features",
       id: "features",
       enabled: true,
-      eyebrow: "Why JustX",
+      eyebrow: `Why ${BRAND_DEFAULTS.appName}`,
       title: "Corporate control. Operator speed.",
       subtitle: "Admin-tunable experience, subscription-ready catalog, built for Indian commerce.",
       layout: "grid",
@@ -794,8 +794,8 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       type: "footer",
       id: "footer",
       enabled: true,
-      logo: media({ kind: "image", url: "/icons/justx-logo.png", alt: "JustXSystems" }),
-      logoText: "JustXSystems",
+      logo: media({ kind: "image", url: "/icons/justx-logo.png", alt: BRAND_DEFAULTS.appName }),
+      logoText: BRAND_DEFAULTS.appName,
       tagline: "Business tools for modern Indian teams.",
       columns: [
         {
@@ -804,7 +804,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
           links: [
             nav({ id: "fl-pillars", label: "Capabilities", href: "#pillars" }),
             nav({ id: "fl-tools", label: "Tools", href: "#tools" }),
-            nav({ id: "fl-features", label: "Why JustX", href: "#features" }),
+            nav({ id: "fl-features", label: `Why ${BRAND_DEFAULTS.appName}`, href: "#features" }),
             nav({ id: "fl-status", label: "Status", href: "/status" }),
           ],
         },
@@ -817,7 +817,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
           ],
         },
       ],
-      legalText: "© JustXSystems LLP. All rights reserved.",
+      legalText: brandCopyright(),
       socialLinks: [],
       style: style({
         backgroundType: "color",

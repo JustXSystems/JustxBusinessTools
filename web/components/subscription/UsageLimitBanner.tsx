@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useToast } from "@/components/common/ToastProvider";
 import { useSubscription } from "@/hooks/useSubscription";
 import type { ToolUsage } from "@/lib/types/tool-record";
+import { useBrandCopy } from "@/lib/use-brand-copy";
 
 export function ToolUsageCounter({
   usage,
@@ -37,6 +38,7 @@ export function UsageLimitBanner({
 }) {
   const { openUpgrade, isToolLicensed, subscription, startTrial } = useSubscription();
   const { showToast } = useToast();
+  const { appName } = useBrandCopy();
   const [busy, setBusy] = useState(false);
 
   if (!usage || isToolLicensed(usage.toolId) || usage.limit === null) return null;
@@ -67,7 +69,7 @@ export function UsageLimitBanner({
             ? "This tool requires a license before you can create records."
             : `You have reached the limit of ${limit} records for this tool.`}
           {subscription?.pendingClaim?.status === "pending"
-            ? " Your UPI payment is waiting for JustXSystems verification."
+            ? ` Your UPI payment is waiting for ${appName} verification.`
             : trialEligible
               ? " Start a free trial or subscribe for unlimited records."
               : " Delete a record or subscribe to this tool for unlimited records."}

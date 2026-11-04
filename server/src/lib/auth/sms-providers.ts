@@ -1,3 +1,4 @@
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import type { SmsProvider } from "./phone-otp.js";
 
 /** Dev provider — logs OTP to server console. */
@@ -19,7 +20,7 @@ export class TwilioSmsProvider implements SmsProvider {
     const body = new URLSearchParams({
       To: phone,
       From: this.fromNumber,
-      Body: `Your JustXSystems verification code is ${code}. Valid for 5 minutes.`,
+      Body: `Your ${BRAND_DEFAULTS.appName} verification code is ${code}. Valid for 5 minutes.`,
     });
     const auth = Buffer.from(`${this.accountSid}:${this.authToken}`).toString("base64");
     const res = await fetch(
@@ -57,7 +58,7 @@ export class HttpSmsProvider implements SmsProvider {
   async sendOtp(phone: string, code: string): Promise<void> {
     const payload: HttpSmsTemplate = {
       phone,
-      message: `Your JustXSystems verification code is ${code}`,
+      message: `Your ${BRAND_DEFAULTS.appName} verification code is ${code}`,
     };
     const body: Record<string, string> = {
       [this.phoneKey]: payload.phone,
@@ -110,7 +111,7 @@ export class Msg91SmsProvider implements SmsProvider {
     }
     // Fallback: classic sendhttp API
     const res = await fetch(
-      `https://api.msg91.com/api/sendhttp.php?authkey=${encodeURIComponent(this.authKey)}&mobiles=${mobile}&message=${encodeURIComponent(`Your JustXSystems code is ${code}`)}&sender=${encodeURIComponent(process.env.MSG91_SENDER_ID ?? "JUSTXS")}&route=4&country=91`,
+      `https://api.msg91.com/api/sendhttp.php?authkey=${encodeURIComponent(this.authKey)}&mobiles=${mobile}&message=${encodeURIComponent(`Your ${BRAND_DEFAULTS.appName} code is ${code}`)}&sender=${encodeURIComponent(process.env.MSG91_SENDER_ID ?? "JUSTXS")}&route=4&country=91`,
     );
     if (!res.ok) {
       throw new Error(`MSG91 SMS failed (${res.status}): ${(await res.text()).slice(0, 200)}`);

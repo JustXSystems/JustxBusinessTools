@@ -76,7 +76,7 @@ export function DocumentIconSync() {
       `${withBasePath("/manifest.webmanifest")}?v=${encodeURIComponent(v)}`,
     );
 
-    const title = branding.appName || "JustXSystems";
+    const title = branding.appName || "Justxsystems";
     if (document.title !== title) document.title = title;
   }, [branding, loading]);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useBrandCopy } from "@/lib/use-brand-copy";
 import {
   CLOCK_DISPLAY_FORMATS,
   CLOCK_DISPLAY_TZ_LABEL,
@@ -195,9 +196,11 @@ function FormatPicker({
 export function ClockDisplaySettingsPanel({
   value,
   disabled,
-  poweredByText = "Powered by JustXSystems",
+  poweredByText,
   onChange,
 }: Props) {
+  const { appName } = useBrandCopy();
+  const resolvedPoweredByText = poweredByText || `Powered by ${appName}`;
   const settings = normalizeClockDisplaySettings(value);
 
   function patch(partial: Partial<ClockDisplaySettings>) {
@@ -240,7 +243,7 @@ export function ClockDisplaySettingsPanel({
       <StatusClockPreview
         format={settings.format}
         visible={settings.visible}
-        poweredByText={poweredByText}
+        poweredByText={resolvedPoweredByText}
       />
 
       <div className={settings.visible ? undefined : "clock-format-picker-wrap is-dimmed"}>

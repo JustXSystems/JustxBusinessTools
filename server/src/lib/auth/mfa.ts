@@ -1,3 +1,4 @@
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import { pool } from "../../db.js";
 import { decryptSecret, encryptSecret } from "../secret-box.js";
 import {
@@ -44,7 +45,7 @@ export async function beginMfaSetup(userId: number, email: string): Promise<{
   );
   return {
     secret,
-    otpauthUrl: totpOtpauthUrl({ secret, accountName: email, issuer: "JustXSystems" }),
+    otpauthUrl: totpOtpauthUrl({ secret, accountName: email, issuer: BRAND_DEFAULTS.appName }),
   };
 }
 

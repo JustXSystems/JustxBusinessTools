@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { submitUpiClaim, startCheckout } from "@/lib/api";
 import { invalidateLiveData } from "@/hooks/useLiveRefresh";
 import type { CartQuote, PayGatewayOption, PendingUpiClaim, UpiPayInfo } from "@/lib/types/subscription";
+import { useBrandCopy } from "@/lib/use-brand-copy";
 
 function formatInr(amount: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
@@ -26,6 +27,7 @@ export function UpiCheckout({
   onToast: (msg: string) => void;
 }) {
   const { user } = useAuth();
+  const { appName, legalName } = useBrandCopy();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -127,7 +129,7 @@ export function UpiCheckout({
         <p className="muted">
           Amount {formatInr(pendingClaim.amountInr)}
           {pendingClaim.toolIds?.length ? ` · ${pendingClaim.toolIds.length} tool(s)` : ""}.
-          Licensed access starts after JustXSystems approves this payment.
+          Licensed access starts after {appName} approves this payment.
         </p>
       </div>
     );
@@ -144,7 +146,7 @@ export function UpiCheckout({
 
       <ol className="billing-steps">
         <li>
-          <span>1</span> Pay {formatInr(amount)} to JustXSystems
+          <span>1</span> Pay {formatInr(amount)} to {appName}
         </li>
         <li>
           <span>2</span> Enter UTR
@@ -179,7 +181,7 @@ export function UpiCheckout({
             </div>
             <div>
               <dt>Beneficiary</dt>
-              <dd>{upi?.payeeName || "JustXSystems LLP"}</dd>
+              <dd>{upi?.payeeName || legalName}</dd>
             </div>
             <div>
               <dt>UPI ID</dt>
@@ -198,7 +200,7 @@ export function UpiCheckout({
             {upi?.enabled && upi.intent ? (
               <canvas ref={canvasRef} width={200} height={200} aria-label="UPI QR code" />
             ) : (
-              <p className="muted">UPI is not configured. Contact JustXSystems.</p>
+              <p className="muted">UPI is not configured. Contact {appName}.</p>
             )}
             {upi?.intent ? (
               <a className="btn btn-secondary btn-sm" href={upi.intent}>
@@ -211,7 +213,7 @@ export function UpiCheckout({
 
         <form className="billing-confirm" onSubmit={submit}>
           <h3>Confirm payment</h3>
-          <p className="muted">Use the same details as your UPI receipt. JustXSystems matches UTR against the company account.</p>
+          <p className="muted">Use the same details as your UPI receipt. {appName} matches UTR against the company account.</p>
 
           <fieldset className="billing-fieldset">
             <legend>Payer</legend>
@@ -296,7 +298,7 @@ export function UpiCheckout({
             {busy ? "Submitting…" : "Submit payment confirmation"}
           </button>
           <p className="muted billing-legal">
-            Selected tools unlock after JustXSystems verifies the credit. False UTR submissions may be rejected.
+            Selected tools unlock after {appName} verifies the credit. False UTR submissions may be rejected.
           </p>
 
           {gateways.length > 0 ? (

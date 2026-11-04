@@ -90,7 +90,7 @@ router.get("/effective", async (_req, res) => {
   });
 });
 
-/** Public JustXSystems branding for splash / login (no auth required). */
+/** Public platform branding for splash / login (no auth required). */
 router.get("/branding", async (_req, res) => {
   const [branding, poweredBy] = await Promise.all([getPlatformBranding(), getPoweredBy()]);
   res.json({

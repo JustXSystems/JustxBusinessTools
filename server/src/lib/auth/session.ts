@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import type { Response } from "express";
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import { pool } from "../../db.js";
 import type { OrgRole, RequestContext } from "../request-context.js";
 import { PROFILE_ID } from "../constants.js";
@@ -199,7 +200,7 @@ export async function loadSessionUser(userId: number, orgId: number, profileId: 
     phone: u.phone,
     role: (u.role as OrgRole) ?? "owner",
     organizationId: orgId,
-    organizationName: u.org_name ?? (platform ? "JustXSystems Platform" : "Organization"),
+    organizationName: u.org_name ?? (platform ? `${BRAND_DEFAULTS.appName} Platform` : "Organization"),
     businessProfileId: profileId,
     isPlatformAdmin: platform,
     branches,

@@ -9,6 +9,7 @@ import {
 } from "react";
 import { api } from "@/lib/api";
 import { SplashMark } from "@/components/auth/SplashScreen";
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import {
   DEFAULT_BRANDING,
   DEFAULT_POWERED_BY,
@@ -56,15 +57,12 @@ type RegistrationCopyForm = {
 
 const DEFAULT_REG_COPY: RegistrationCopyForm = {
   pendingOwnerTitle: "Welcome — you're in",
-  pendingOwnerMessage:
-    "Your Owner account is ready. You can start using JustX Business Tools right away while JustX reviews your business profile.",
-  pendingOwnerDetail:
-    "Signed in as {{email}}. A JustX admin may review your Business Profile later; approval is not required to continue.",
+  pendingOwnerMessage: `Your Owner account is ready. You can start using ${BRAND_DEFAULTS.productName} right away while ${BRAND_DEFAULTS.appName} reviews your business profile.`,
+  pendingOwnerDetail: `Signed in as {{email}}. A ${BRAND_DEFAULTS.appName} admin may review your Business Profile later; approval is not required to continue.`,
   pendingJoinTitle: "Awaiting approval",
   pendingJoinMessage:
     "Request sent. The Business Profile Owner must approve you before you can sign in.",
-  pendingJoinDetail:
-    "We registered {{email}}. You will be able to sign in after the Business Profile Owner (or a JustX admin) approves your request.",
+  pendingJoinDetail: `We registered {{email}}. You will be able to sign in after the Business Profile Owner (or a ${BRAND_DEFAULTS.appName} admin) approves your request.`,
 };
 
 export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingPanel(_props, ref) {
@@ -73,6 +71,8 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
   const [form, setForm] = useState({
     appName: DEFAULT_BRANDING.appName,
     tagline: DEFAULT_BRANDING.tagline,
+    legalName: DEFAULT_BRANDING.legalName,
+    productName: DEFAULT_BRANDING.productName,
     splashDurationMs: String(DEFAULT_BRANDING.splashDurationMs),
     splashAnimation: DEFAULT_BRANDING.splashAnimation as SplashAnimation,
     splashIntensity: DEFAULT_BRANDING.splashIntensity as SplashIntensity,
@@ -101,6 +101,8 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
     setForm({
       appName: b.appName || DEFAULT_BRANDING.appName,
       tagline: b.tagline || DEFAULT_BRANDING.tagline,
+      legalName: b.legalName || DEFAULT_BRANDING.legalName,
+      productName: b.productName || DEFAULT_BRANDING.productName,
       splashDurationMs: String(b.splashDurationMs ?? DEFAULT_BRANDING.splashDurationMs),
       splashAnimation: b.splashAnimation || DEFAULT_BRANDING.splashAnimation,
       splashIntensity: b.splashIntensity || DEFAULT_BRANDING.splashIntensity,
@@ -184,6 +186,8 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
         const body: Record<string, unknown> = {
           appName: form.appName.trim(),
           tagline: form.tagline.trim(),
+          legalName: form.legalName.trim() || form.appName.trim(),
+          productName: form.productName.trim() || `${form.appName.trim()} Business Tools`,
           splashDurationMs: Number.isFinite(splash) ? splash : DEFAULT_BRANDING.splashDurationMs,
           splashAnimation: form.splashAnimation,
           splashIntensity: form.splashIntensity,
@@ -276,6 +280,8 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
     logoUrl: previewLogo,
     appName: form.appName || DEFAULT_BRANDING.appName,
     tagline: form.tagline || DEFAULT_BRANDING.tagline,
+    legalName: form.legalName || DEFAULT_BRANDING.legalName,
+    productName: form.productName || DEFAULT_BRANDING.productName,
     splashDurationMs: Number.isFinite(Number(form.splashDurationMs))
       ? Math.max(0, Math.round(Number(form.splashDurationMs)))
       : DEFAULT_BRANDING.splashDurationMs,
@@ -293,7 +299,10 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
       <div className="preview-editor">
         <section className="panel admin-card">
           <h2>Platform branding</h2>
-          <p className="muted">Logo, app name, tagline, and splash motion used across operator and admin.</p>
+          <p className="muted">
+            Single source for brand copy across operator, admin, public home defaults, UPI, and emails.
+            Change names here once — surfaces read these fields at runtime.
+          </p>
           {message ? <p className="muted">{message}</p> : null}
           <div className="admin-form-grid">
             <label className="field">
@@ -304,6 +313,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
                   setForm({ ...form, appName: e.target.value });
                   setPreviewKey((k) => k + 1);
                 }}
+                placeholder={BRAND_DEFAULTS.appName}
               />
             </label>
             <label className="field">
@@ -314,6 +324,28 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
                   setForm({ ...form, tagline: e.target.value });
                   setPreviewKey((k) => k + 1);
                 }}
+              />
+            </label>
+            <label className="field">
+              <span>Legal name (LLP / copyright / UPI payee fallback)</span>
+              <input
+                value={form.legalName}
+                onChange={(e) => {
+                  setForm({ ...form, legalName: e.target.value });
+                  setPreviewKey((k) => k + 1);
+                }}
+                placeholder={BRAND_DEFAULTS.legalName}
+              />
+            </label>
+            <label className="field">
+              <span>Product name (marketing title)</span>
+              <input
+                value={form.productName}
+                onChange={(e) => {
+                  setForm({ ...form, productName: e.target.value });
+                  setPreviewKey((k) => k + 1);
+                }}
+                placeholder={BRAND_DEFAULTS.productName}
               />
             </label>
             <label className="field">
@@ -386,7 +418,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
               disabled={saving}
               onClick={() => void saveAll({ clearLogo: true })}
             >
-              Reset logo to JustX
+              Reset logo to default
             </button>
           </div>
         </section>
@@ -394,7 +426,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
         <section className="panel admin-card" style={{ marginTop: 16 }}>
           <h2>Favicon &amp; install icon</h2>
           <p className="muted">
-            Browser tab favicon, PWA / desktop install icon, and apple touch icon. Choose the official JustX mark,
+            Browser tab favicon, PWA / desktop install icon, and apple touch icon. Choose the official brand mark,
             match your platform logo, or upload a custom square PNG.
           </p>
           <div className="admin-form-grid">
@@ -402,7 +434,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
               <span>Install name</span>
               <input
                 maxLength={40}
-                placeholder={form.appName || "JustXSystems"}
+                placeholder={form.appName || BRAND_DEFAULTS.appName}
                 value={form.installName}
                 onChange={(e) => {
                   setForm({ ...form, installName: e.target.value });
@@ -615,7 +647,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
                 </span>
                 <div>
                   <strong>{previewInstallName}</strong>
-                  <p>Install JustXSystems</p>
+                  <p>Install {previewInstallName || BRAND_DEFAULTS.appName}</p>
                 </div>
               </div>
             </div>

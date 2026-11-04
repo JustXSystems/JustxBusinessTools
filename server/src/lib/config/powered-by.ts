@@ -1,3 +1,4 @@
+import { BRAND_DEFAULTS, coerceBrandPoweredBy } from "@jbt/shared";
 import { pool } from "../../db.js";
 
 export type PoweredByConfig = {
@@ -7,7 +8,7 @@ export type PoweredByConfig = {
 };
 
 export const DEFAULT_POWERED_BY: PoweredByConfig = {
-  text: "Powered by JustXSystems LLP",
+  text: BRAND_DEFAULTS.poweredBy,
   locked: true,
 };
 
@@ -21,7 +22,7 @@ function parsePoweredBy(raw: unknown): PoweredByConfig {
         ? (raw as Record<string, unknown>)
         : {};
   return {
-    text: String(obj.text ?? DEFAULT_POWERED_BY.text).trim() || DEFAULT_POWERED_BY.text,
+    text: coerceBrandPoweredBy(obj.text, DEFAULT_POWERED_BY.text),
     locked: obj.locked == null ? true : Boolean(obj.locked),
   };
 }

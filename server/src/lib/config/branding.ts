@@ -1,3 +1,10 @@
+import {
+  BRAND_DEFAULTS,
+  brandCopyright,
+  coerceBrandAppName,
+  coerceBrandLegalName,
+  coerceBrandProductName,
+} from "@jbt/shared";
 import { pool } from "../../db.js";
 import { canonicalizeStoredImageUrl, saveImageUpload, withFileAccessToken } from "../storage.js";
 import {
@@ -25,6 +32,10 @@ export type PlatformBranding = {
   logoUrl: string;
   appName: string;
   tagline: string;
+  /** Legal / UPI payee / copyright entity (Admin → Branding). */
+  legalName: string;
+  /** Marketing product title (Admin → Branding). */
+  productName: string;
   splashDurationMs: number;
   splashAnimation: SplashAnimation;
   splashIntensity: SplashIntensity;
@@ -49,17 +60,21 @@ export const INSTALL_ICON_FOLLOW_LOGO = "__logo__";
 
 export const DEFAULT_BRANDING: PlatformBranding = {
   logoUrl: "/icons/justx-logo.png",
-  appName: "JustXSystems",
-  tagline: "JustXSystems",
+  appName: BRAND_DEFAULTS.appName,
+  tagline: BRAND_DEFAULTS.tagline,
+  legalName: BRAND_DEFAULTS.legalName,
+  productName: BRAND_DEFAULTS.productName,
   splashDurationMs: 2200,
   splashAnimation: "dash",
   splashIntensity: "balanced",
   splashShowProgress: true,
-  installName: "JustXSystems",
+  installName: BRAND_DEFAULTS.installName,
   installIconUrl: DEFAULT_INSTALL_ICON_URL,
   installIconBg: "transparent",
   publishSiteFavicon: true,
 };
+
+export { brandCopyright, BRAND_DEFAULTS };
 
 const KEY = "branding";
 const MIN_SPLASH_MS = 0;
@@ -107,10 +122,13 @@ function parseBranding(raw: unknown): PlatformBranding {
   ) {
     installIconUrl = DEFAULT_BRANDING.installIconUrl;
   }
+  const appName = coerceBrandAppName(obj.appName, DEFAULT_BRANDING.appName);
   return {
     logoUrl,
-    appName: String(obj.appName ?? DEFAULT_BRANDING.appName).trim() || DEFAULT_BRANDING.appName,
-    tagline: String(obj.tagline ?? DEFAULT_BRANDING.tagline).trim() || DEFAULT_BRANDING.tagline,
+    appName,
+    tagline: coerceBrandAppName(obj.tagline, DEFAULT_BRANDING.tagline),
+    legalName: coerceBrandLegalName(obj.legalName ?? obj.appName, DEFAULT_BRANDING.legalName),
+    productName: coerceBrandProductName(obj.productName, DEFAULT_BRANDING.productName),
     splashDurationMs: Number.isFinite(splash)
       ? Math.min(MAX_SPLASH_MS, Math.max(MIN_SPLASH_MS, Math.round(splash)))
       : DEFAULT_BRANDING.splashDurationMs,
@@ -120,7 +138,7 @@ function parseBranding(raw: unknown): PlatformBranding {
       obj.splashShowProgress == null
         ? DEFAULT_BRANDING.splashShowProgress
         : Boolean(obj.splashShowProgress),
-    installName: installName || DEFAULT_BRANDING.installName,
+    installName: coerceBrandAppName(installName || appName, DEFAULT_BRANDING.installName),
     installIconUrl,
     installIconBg: parseInstallIconBg(obj.installIconBg ?? DEFAULT_BRANDING.installIconBg),
     publishSiteFavicon:
@@ -144,6 +162,8 @@ export async function savePlatformBranding(input: {
   logoUrl?: string | null;
   appName?: string;
   tagline?: string;
+  legalName?: string;
+  productName?: string;
   splashDurationMs?: number;
   splashAnimation?: string;
   splashIntensity?: string;
@@ -194,10 +214,25 @@ export async function savePlatformBranding(input: {
       ? String(input.installName).trim().slice(0, MAX_INSTALL_NAME)
       : current.installName;
 
+  const nextAppName =
+    input.appName != null
+      ? coerceBrandAppName(input.appName, current.appName)
+      : current.appName;
   const next: PlatformBranding = {
     logoUrl,
-    appName: input.appName != null ? String(input.appName).trim() || current.appName : current.appName,
-    tagline: input.tagline != null ? String(input.tagline).trim() || current.tagline : current.tagline,
+    appName: nextAppName,
+    tagline:
+      input.tagline != null
+        ? coerceBrandAppName(input.tagline, current.tagline)
+        : current.tagline,
+    legalName:
+      input.legalName != null
+        ? coerceBrandLegalName(input.legalName, current.legalName)
+        : current.legalName,
+    productName:
+      input.productName != null
+        ? coerceBrandProductName(input.productName, current.productName)
+        : current.productName,
     splashDurationMs:
       input.splashDurationMs != null
         ? Math.min(MAX_SPLASH_MS, Math.max(MIN_SPLASH_MS, Math.round(Number(input.splashDurationMs))))
@@ -214,7 +249,10 @@ export async function savePlatformBranding(input: {
       input.splashShowProgress != null
         ? Boolean(input.splashShowProgress)
         : current.splashShowProgress,
-    installName: nextInstallName || DEFAULT_BRANDING.installName,
+    installName: coerceBrandAppName(
+      nextInstallName || nextAppName,
+      DEFAULT_BRANDING.installName,
+    ),
     installIconUrl: installIconUrl || DEFAULT_BRANDING.installIconUrl,
     installIconBg:
       input.installIconBg != null

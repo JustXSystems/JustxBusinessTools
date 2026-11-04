@@ -1,3 +1,4 @@
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import { api } from "@/lib/api";
 import { apiUrl, getApiBase } from "@/lib/api-base";
 import { withBasePath } from "@/lib/base-path";
@@ -215,7 +216,7 @@ export function buildAgentLauncherScript(input: {
     ? `$env:JBT_DOWNLOAD_FOLDER = @'\n${input.downloadFolder}\n'@`
     : "# $env:JBT_DOWNLOAD_FOLDER = '\\\\fileserver\\shared\\business-artifacts'";
   const packUrl = (input.agentPackUrl || "").replace(/"/g, '`"');
-  return `# JustXSystems Desktop Sync Agent launcher
+  return `# ${BRAND_DEFAULTS.appName} Desktop Sync Agent launcher
 # Generated from Sync Center - keep this file private (contains your agent token).
 #
 # Usage (customer PC needs only Windows + Node.js 18+):

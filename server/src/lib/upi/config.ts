@@ -1,3 +1,4 @@
+import { BRAND_DEFAULTS } from "@jbt/shared";
 import { pool } from "../../db.js";
 import { jsonVal } from "../admin/approvals.js";
 import { ensureTablesUtf8mb4UnicodeCi, INNODB_UTF8MB4_UNICODE } from "../mysql-charset.js";
@@ -23,7 +24,7 @@ export type UpiNotify = {
 const DEFAULT_PAYEE: UpiPayee = {
   enabled: true,
   vpa: "justx@upi",
-  payeeName: "JustXSystems LLP",
+  payeeName: BRAND_DEFAULTS.legalName,
   merchantCode: "",
 };
 
@@ -35,9 +36,8 @@ const DEFAULT_NOTIFY: UpiNotify = {
   submitSubject: "New UPI subscription payment to verify",
   submitBody:
     "Claim #{{id}} from {{payerName}} ({{payerEmail}} / {{payerPhone}}) paid ₹{{amount}} via UPI. UTR {{utr}}. Payer UPI: {{payerUpi}}. Org: {{orgName}}.",
-  decisionSubject: "JustXSystems subscription payment {{status}}",
-  decisionBody:
-    "Hello {{payerName}}, your JustXSystems payment of ₹{{amount}} (UTR {{utr}}) was {{status}}. {{reviewNote}}",
+  decisionSubject: `${BRAND_DEFAULTS.appName} subscription payment {{status}}`,
+  decisionBody: `Hello {{payerName}}, your ${BRAND_DEFAULTS.appName} payment of ₹{{amount}} (UTR {{utr}}) was {{status}}. {{reviewNote}}`,
 };
 
 let schemaReady: Promise<void> | null = null;
@@ -131,7 +131,7 @@ export async function saveUpiPayee(input: Partial<UpiPayee>): Promise<UpiPayee> 
   const next: UpiPayee = {
     enabled: input.enabled ?? current.enabled,
     vpa: String(input.vpa ?? current.vpa).trim(),
-    payeeName: String(input.payeeName ?? current.payeeName).trim() || "JustXSystems LLP",
+    payeeName: String(input.payeeName ?? current.payeeName).trim() || BRAND_DEFAULTS.legalName,
     merchantCode: String(input.merchantCode ?? current.merchantCode ?? "").trim(),
   };
   await writeConfig("upi_payee", next);

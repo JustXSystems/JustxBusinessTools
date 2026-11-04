@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { startCheckout } from "@/lib/api";
 import type { PayGatewayOption } from "@/lib/types/subscription";
+import { useBrandCopy } from "@/lib/use-brand-copy";
 
 function formatInr(amount: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
@@ -30,6 +31,7 @@ export function CardPayMethod({
   onDone: () => Promise<void>;
   onToast: (msg: string) => void;
 }) {
+  const { appName } = useBrandCopy();
   const eligible = useMemo(() => gateways.filter(supportsCards), [gateways]);
   const [gatewayId, setGatewayId] = useState<number | null>(eligible[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
@@ -69,7 +71,7 @@ export function CardPayMethod({
       <div className="co-card-empty">
         <h3>{title}</h3>
         <p className="muted">
-          No card payment gateway is enabled for this workspace. Use UPI (default), or ask JustXSystems to enable Razorpay,
+          No card payment gateway is enabled for this workspace. Use UPI (default), or ask {appName} to enable Razorpay,
           Cashfree, or Stripe under Admin → Gateways.
         </p>
       </div>
@@ -80,7 +82,7 @@ export function CardPayMethod({
     <div className="co-method-body">
       <h3>Pay by {title.toLowerCase()}</h3>
       <p className="muted">
-        Card numbers are entered on the payment gateway — not on JustXSystems. Choose a processor, then continue to a
+        Card numbers are entered on the payment gateway — not on {appName}. Choose a processor, then continue to a
         PCI-compliant hosted checkout for {formatInr(amountInr)}.
       </p>
 

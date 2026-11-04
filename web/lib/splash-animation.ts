@@ -1,3 +1,5 @@
+import { BRAND_DEFAULTS } from "@jbt/shared";
+
 /** Splash motion presets — shared by operator splash + admin branding UI. */
 
 export const SPLASH_ANIMATIONS = ["none", "elegant", "orbit", "spark", "dash", "signal"] as const;
@@ -12,7 +14,7 @@ export const SPLASH_ANIMATION_LABELS: Record<SplashAnimation, string> = {
   orbit: "Orbit pulse",
   spark: "Spark reveal",
   dash: "Dash cinema",
-  signal: "Brand signal (JustXSystems)",
+  signal: `Brand signal (${BRAND_DEFAULTS.appName})`,
 };
 
 export const SPLASH_INTENSITY_LABELS: Record<SplashIntensity, string> = {

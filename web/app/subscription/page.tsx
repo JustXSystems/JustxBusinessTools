@@ -21,6 +21,7 @@ import { SUBSCRIPTION_SYNCED_EVENT } from "@/lib/subscription-cache";
 import type { CartQuote, ProductPack, ToolCatalogSku } from "@/lib/types/subscription";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { groupItemsByKey } from "@/lib/group-items";
+import { useBrandCopy } from "@/lib/use-brand-copy";
 
 function inr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
@@ -28,6 +29,7 @@ function inr(n: number) {
 
 export default function SubscriptionPage() {
   const { config } = usePlatformConfig();
+  const { appName } = useBrandCopy();
   const groupProducts = config?.toolGrouping?.enabled !== false;
   const { subscription, loading, error, isToolLicensed, refresh } = useSubscription();
   const { showToast } = useToast();
@@ -245,7 +247,7 @@ export default function SubscriptionPage() {
           {pending?.status === "pending" ? (
             <div className="billing-pending">
               <p className="billing-pending-kicker">Payment under review</p>
-              <h3>UTR {pending.utr} is with JustXSystems accounts</h3>
+              <h3>UTR {pending.utr} is with {appName} accounts</h3>
               <p className="muted">You can review the order on the checkout page. Tools license after verification.</p>
               <Link href="/subscription/checkout" className="btn btn-primary btn-sm">
                 View checkout
