@@ -85,7 +85,7 @@ router.post("/:userId/approve", async (req, res) => {
   }
   if (row.role === "owner" || row.role === "admin") {
     res.status(403).json({
-      error: "Owner and Admin accounts must be approved by a JustX admin",
+      error: "Owner and Admin accounts must be approved by a Justxsystems admin",
     });
     return;
   }
@@ -145,7 +145,7 @@ router.post("/:userId/reject", async (req, res) => {
   }
   if (row.role === "owner" || row.role === "admin") {
     res.status(403).json({
-      error: "Owner and Admin accounts must be handled by a JustX admin",
+      error: "Owner and Admin accounts must be handled by a Justxsystems admin",
     });
     return;
   }

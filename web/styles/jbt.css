@@ -1377,7 +1377,7 @@ body:has(.mobile-menu) .float-dock {
   box-shadow: 0 2px 10px rgba(239, 147, 147, 0.18);
 }
 
-/* ---------- JustX BOS pack: exact button treatment from the BOS design system ---------- */
+/* ---------- Justxsystems BOS pack: exact button treatment from the BOS design system ---------- */
 [data-pack="bos"][data-scheme="light"] {
   --bos-coral: #ee8b76;
   --bos-coral-100: #fcebe7;
@@ -4017,7 +4017,7 @@ body:has(.mobile-menu) .float-dock {
   box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.65);
 }
 
-/* —— Animation presets —— */
+/* ï¿½ï¿½ Animation presets ï¿½ï¿½ */
 .splash-anim-none .splash-ring,
 .splash-anim-none .splash-spark,
 .splash-anim-none .splash-streak,
@@ -4325,7 +4325,7 @@ body:has(.mobile-menu) .float-dock {
 }
 
 
-/* â€”â€” Brand signal (JustXSystems value story) â€” logo always on top â€”â€” */
+/* â€”â€” Brand signal (Justxsystems value story) â€” logo always on top â€”â€” */
 .splash-signal {
   position: absolute;
   inset: 0;
@@ -8494,7 +8494,7 @@ html[data-scheme="light"] .field textarea {
   color: var(--text-mid);
 }
 
-/* Floating cart dock — top-right commerce control */
+/* Floating cart dock ï¿½ top-right commerce control */
 .store-cart-dock {
   position: fixed;
   top: max(14px, calc(env(safe-area-inset-top, 0px) + 12px));
@@ -10345,7 +10345,7 @@ html[data-scheme="light"] .field textarea {
   }
 }
 
-/* —— Sync Center —— */
+/* ï¿½ï¿½ Sync Center ï¿½ï¿½ */
 .sync-center-page .page-header-row {
   display: flex;
   align-items: flex-start;
@@ -10414,7 +10414,7 @@ html[data-scheme="light"] .field textarea {
 .sync-msg-ok { color: var(--teal, #0ea5c9); }
 .sync-msg-err { color: #ef4444; }
 
-/* —— Admin audit console —— */
+/* ï¿½ï¿½ Admin audit console ï¿½ï¿½ */
 .audit-page .audit-kpis .audit-kpi {
   text-align: left;
   cursor: pointer;
@@ -10760,7 +10760,7 @@ html[data-scheme="light"] .field textarea {
   font-size: 0.92em;
 }
 
-/* —— Admin scroll system (all /admin screens) ——
+/* ï¿½ï¿½ Admin scroll system (all /admin screens) ï¿½ï¿½
    Detail panels grow with content; directory lists keep an inner scrollbar;
    the main page (or .admin-page-scroll) owns the primary scrollbar. */
 .admin-page {
@@ -10854,7 +10854,7 @@ html[data-scheme="light"] .field textarea {
   flex-shrink: 0;
 }
 
-/* Detail: grow with content — no inner height clamp */
+/* Detail: grow with content ï¿½ no inner height clamp */
 .admin-detail-panel {
   display: flex !important;
   flex-direction: column;

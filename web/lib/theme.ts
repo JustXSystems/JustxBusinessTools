@@ -37,7 +37,7 @@ export const JUSTX_ELECTRIC: ThemeTokens = {
   scheme: "dark",
 };
 
-/** Daytime companion to JustXSystems Electric — cool paper surfaces + deep cyan accent. */
+/** Daytime companion to Justxsystems Electric — cool paper surfaces + deep cyan accent. */
 export const JUSTX_LIGHT: ThemeTokens = {
   accent: "#007a99",
   teal: "#0f766e",
@@ -51,7 +51,7 @@ export const JUSTX_LIGHT: ThemeTokens = {
 };
 
 /**
- * JustX BOS — soft/calm system: white surfaces, soft shadows instead of glass,
+ * Justxsystems BOS — soft/calm system: white surfaces, soft shadows instead of glass,
  * low-saturation blue accent, generous rounding, IBM Plex type. Mirrors the
  * preset of the same name in server/src/routes/admin/themes.ts — keep in sync.
  */
@@ -68,7 +68,7 @@ export const JUSTX_BOS_LIGHT: ThemeTokens = {
   pack: "bos",
 };
 
-/** JustX BOS Dark — same soft/calm philosophy, macOS Dark Mode adjacent. */
+/** Justxsystems BOS Dark — same soft/calm philosophy, macOS Dark Mode adjacent. */
 export const JUSTX_BOS_DARK: ThemeTokens = {
   accent: "#6E9BFF",
   teal: "#3DCB8F",
@@ -83,7 +83,7 @@ export const JUSTX_BOS_DARK: ThemeTokens = {
 };
 
 /**
- * JustX IMS — the IMS master theme: periwinkle canvas, frosted-glass panels,
+ * Justxsystems IMS — the IMS master theme: periwinkle canvas, frosted-glass panels,
  * blue→cyan gradient actions with an indigo glow, 24px rounding, Inter.
  * The `ims` pack restyles every JBT tool (web/styles/ims-pack.css) and switches
  * kit-based tools (BOS, IMS-Dealer) to the IMS skin. Mirrors
@@ -102,7 +102,7 @@ export const JUSTX_IMS_LIGHT: ThemeTokens = {
   pack: "ims",
 };
 
-/** JustX IMS Dark — deep indigo night with the same gradient family. */
+/** Justxsystems IMS Dark — deep indigo night with the same gradient family. */
 export const JUSTX_IMS_DARK: ThemeTokens = {
   accent: "#7B85FF",
   teal: "#45D3FF",

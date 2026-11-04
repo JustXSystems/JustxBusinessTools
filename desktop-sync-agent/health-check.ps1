@@ -10,7 +10,7 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
-$InstallRoot = Join-Path $env:LOCALAPPDATA "JustX\sync-agent"
+$InstallRoot = Join-Path $env:LOCALAPPDATA "Justxsystems\sync-agent"
 $ConfigPath = Join-Path $InstallRoot "config.ps1"
 $pass = 0
 $fail = 0
@@ -32,7 +32,7 @@ function Show-Result([string]$Name, [string]$Status, [string]$Detail = "") {
   }
 }
 
-Write-Host "JustX sync agent health check" -ForegroundColor Cyan
+Write-Host "Justxsystems sync agent health check" -ForegroundColor Cyan
 Write-Host ("=" * 40)
 
 # Node
@@ -154,14 +154,14 @@ try {
 }
 
 # Scheduled task / startup
-$task = Get-ScheduledTask -TaskName "JustX Sync Agent" -ErrorAction SilentlyContinue
+$task = Get-ScheduledTask -TaskName "Justxsystems Sync Agent" -ErrorAction SilentlyContinue
 if ($task) {
   Show-Result "Scheduled Task" "OK" $task.State
 } else {
   Show-Result "Scheduled Task" "WARN" "Not registered - agent will not auto-start at logon"
 }
 
-$shortcut = Join-Path ([Environment]::GetFolderPath("Startup")) "JustX Sync Agent.lnk"
+$shortcut = Join-Path ([Environment]::GetFolderPath("Startup")) "Justxsystems Sync Agent.lnk"
 if (Test-Path -LiteralPath $shortcut) {
   Show-Result "Startup shortcut" "OK" $shortcut
 } else {

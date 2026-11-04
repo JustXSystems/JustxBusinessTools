@@ -4,7 +4,7 @@
 #   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
 #
 # Single job (no artifact upload/download round-trip). Slim tarball omits
-# node_modules. JustX-Sync-Agent-win-x64.zip is rebuilt automatically when
+# node_modules. Justxsystems-Sync-Agent-win-x64.zip is rebuilt automatically when
 # agent-related paths change (or when pack_win_agent=true); otherwise the VPS
 # keeps the previous zip.
 #
@@ -39,7 +39,7 @@ on:
         type: boolean
         default: false
       pack_win_agent:
-        description: "Force rebuild+ship JustX-Sync-Agent-win-x64.zip (~28MB). Auto-on when agent paths change."
+        description: "Force rebuild+ship Justxsystems-Sync-Agent-win-x64.zip (~28MB). Auto-on when agent paths change."
         type: boolean
         default: false
       force_cache_rebuild:
@@ -212,14 +212,14 @@ jobs:
           fi
           npm run build -w web
           if [[ "${{ env.PACK_WIN_AGENT }}" == "true" ]]; then
-            if [[ ! -f web/public/JustX-Sync-Agent-win-x64.zip ]]; then
-              echo "::error::PACK_WIN_AGENT=true but JustX-Sync-Agent-win-x64.zip was not built"
+            if [[ ! -f web/public/Justxsystems-Sync-Agent-win-x64.zip ]]; then
+              echo "::error::PACK_WIN_AGENT=true but Justxsystems-Sync-Agent-win-x64.zip was not built"
               exit 1
             fi
             echo "==> Packed agent version file:"
-            unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/PACK_VERSION.txt || true
+            unzip -p web/public/Justxsystems-Sync-Agent-win-x64.zip Justxsystems-Sync-Agent/PACK_VERSION.txt || true
             echo "==> AGENT_VERSION inside zip index.js:"
-            unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/app/src/index.js | grep -E 'export const AGENT_VERSION' || true
+            unzip -p web/public/Justxsystems-Sync-Agent-win-x64.zip Justxsystems-Sync-Agent/app/src/index.js | grep -E 'export const AGENT_VERSION' || true
           else
             echo "==> Skipped win agent pack (no agent path changes; set pack_win_agent=true to force)"
           fi
@@ -227,7 +227,7 @@ jobs:
       - name: Pack slim release tarball
         run: |
           chmod +x scripts/pack-release.sh
-          if [[ "${{ env.PACK_WIN_AGENT }}" == "true" && -f web/public/JustX-Sync-Agent-win-x64.zip ]]; then
+          if [[ "${{ env.PACK_WIN_AGENT }}" == "true" && -f web/public/Justxsystems-Sync-Agent-win-x64.zip ]]; then
             echo "==> Including win agent zip in this release"
             export JBT_INCLUDE_WIN_AGENT=1
           fi

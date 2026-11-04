@@ -589,7 +589,7 @@ function AdminProfilesInner() {
                           className="btn btn-destructive"
                           onClick={() =>
                             run(
-                              "Business rejected. If you are a JustX admin, all org users were suspended and logged out.",
+                              "Business rejected. If you are a Justxsystems admin, all org users were suspended and logged out.",
                               () =>
                                 api(`/admin/profiles/${selected.id}/reject`, {
                                   method: "POST",
@@ -601,7 +601,7 @@ function AdminProfilesInner() {
                           Reject
                         </button>
                         <p className="muted">
-                          JustX admin reject suspends every user on this business and ends all their sessions immediately.
+                          Justxsystems admin reject suspends every user on this business and ends all their sessions immediately.
                         </p>
                       </>
                     ) : null}

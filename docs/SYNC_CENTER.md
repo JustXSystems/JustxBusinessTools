@@ -16,7 +16,7 @@
 | **Company using Email Outbox → Open in Outlook** | **Yes (Owner installs on Outlook PC)** | Same desktop agent; Owner/Admin download setup zip once. Staff then use Email Outbox only. |
 | **Owner after a failed Drive/webhook delivery** | **Sometimes** | Open Sync Center to see pending/failed files and click **Retry**. |
 | **Staff / Viewer** | **No** | No Sync Center menu. Staff use tools + Email Outbox; Viewer uses Home + My Tools. |
-| **JustX engineer / Admin** | Platform / org Admin | Google OAuth client / Admin Console — not day-to-day customer Sync Center (Admin may open Sync Center with full access). |
+| **Justxsystems engineer / Admin** | Platform / org Admin | Google OAuth client / Admin Console — not day-to-day customer Sync Center (Admin may open Sync Center with full access). |
 
 **Short answer:** Sync Center is a **status / retry / UNC / Outlook-agent** page for **Owner (and Admin)**. It is **not** required for every customer. Drive/webhook companies configure **Company document delivery** on the profile; Sync Center is optional unless something fails or they use UNC/Outlook.
 
@@ -64,7 +64,7 @@ Email outbox PDF attachments are stored as artifacts with **`skipDispatch`** —
 | Sending quotation emails | [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) |
 | Notifications inbox | Notifications UI |
 | Choosing Drive vs webhook vs UNC | **Business Profile → Company document delivery** (Owner) |
-| Platform Google OAuth client | JustX `server/.env` |
+| Platform Google OAuth client | Justxsystems `server/.env` |
 
 **Badges:** Sync Center counts **pending files**. Email Outbox counts **pending/failed emails**. Do not mix them.
 
@@ -128,7 +128,7 @@ Sync Center is the **status / retry / optional UNC sync** page for **Owner/Admin
 | Same-filename / conflict policy | Same panel | Owner | Profile |
 | Desktop agent setup | **Sync Center** → Download setup for this PC | **Owner or Admin** | LocalAppData + agent row |
 | Browser-linked folder (FSA) | Sync Center → Link folder in this browser | **Owner or Admin** (Chrome/Edge) | Browser IndexedDB (this browser only) |
-| Platform Google OAuth client | **Admin → Integrations** (preferred) or VPS `server/.env` (`GOOGLE_CLIENT_*`) | JustX engineer / platform admin | Admin DB or server env |
+| Platform Google OAuth client | **Admin → Integrations** (preferred) or VPS `server/.env` (`GOOGLE_CLIENT_*`) | Justxsystems engineer / platform admin | Admin DB or server env |
 
 Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quotation emails**, not PDF file delivery. (Profile **artifact** webhook is separate.)
 
@@ -143,12 +143,12 @@ Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quo
 
 ### Customer PC — minimum software & environment (desktop agent)
 
-**Primary setup (Owner/Admin on the office PC):** Sync Center → **Download setup for this PC** → extract → double-click **Install JustX Sync Agent.cmd**. No separate Node.js or PowerShell skills required (portable Node is inside the zip). Staff do not open Sync Center — after install, they use tools and Email Outbox only.
+**Primary setup (Owner/Admin on the office PC):** Sync Center → **Download setup for this PC** → extract → double-click **Install Justxsystems Sync Agent.cmd**. No separate Node.js or PowerShell skills required (portable Node is inside the zip). Staff do not open Sync Center — after install, they use tools and Email Outbox only.
 
 | Requirement | UNC / file sync | Outlook compose | Notes |
 |-------------|-----------------|-----------------|--------|
 | **Windows 10 or 11** | Required | Required | Agent and Outlook COM are Windows-only |
-| **Outbound HTTPS** to JustX API | Required | Required | Same host as the web app API |
+| **Outbound HTTPS** to Justxsystems API | Required | Required | Same host as the web app API |
 | **Setup zip from Sync Center** | Required | Required | Personalized zip includes token + portable Node |
 | **Write access to Download Folder** | If syncing files | Not required | UNC/share ACL, mapped drive, and/or VPN as needed |
 | **Desktop Microsoft Outlook** | Not required | Required | Classic Outlook with COM — not Outlook on the web alone |
@@ -215,7 +215,7 @@ Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quo
 7. Generate a test quotation PDF → confirm it appears in the company Drive folder.  
 8. Sync Center should show **Company automatic delivery** ready.
 
-**Staff:** do nothing on Drive. They only use JustX tools.
+**Staff:** do nothing on Drive. They only use Justxsystems tools.
 
 **Troubleshoot:**
 
@@ -229,14 +229,14 @@ Nothing below is configured in `EMAIL_WEBHOOK_URL` — that env var is for **quo
 
 **Different from** `EMAIL_WEBHOOK_URL` (emails). This is **per Business Profile** for **PDF/files**.
 
-JustX does **not** generate the Webhook URL. You create an HTTPS inbound webhook in Microsoft Power Automate (or n8n/Make), then paste that URL into Business Profile.
+Justxsystems does **not** generate the Webhook URL. You create an HTTPS inbound webhook in Microsoft Power Automate (or n8n/Make), then paste that URL into Business Profile.
 
 #### What each field means
 
 | Field in Business Profile | What it is | How you get it |
 |---------------------------|------------|----------------|
-| **Webhook URL** | Public `https://…` endpoint that accepts JustX’s JSON POST when a PDF is ready | Created in Power Automate / Logic Apps / n8n / Make (steps below) |
-| **Webhook secret (optional)** | A password **you invent** (not from Microsoft). If set, JustX sends header `X-JustX-Signature: sha256=…` so your flow can verify the body | Type any long random string (e.g. password manager). Leave blank to skip signing. Leave blank later to **keep** a saved secret. |
+| **Webhook URL** | Public `https://…` endpoint that accepts Justxsystems’s JSON POST when a PDF is ready | Created in Power Automate / Logic Apps / n8n / Make (steps below) |
+| **Webhook secret (optional)** | A password **you invent** (not from Microsoft). If set, Justxsystems sends header `X-JustX-Signature: sha256=…` so your flow can verify the body | Type any long random string (e.g. password manager). Leave blank to skip signing. Leave blank later to **keep** a saved secret. |
 
 #### Recommended: SharePoint or OneDrive via Power Automate
 
@@ -249,7 +249,7 @@ Use this when the company wants files in **SharePoint document library** or **On
 3. Trigger: **When an HTTP request is received**.  
 4. After you **save** the flow once, open the trigger again and copy **HTTP POST URL**  
    - Looks like: `https://prod-xx.westus.logic.azure.com:443/workflows/…/triggers/manual/paths/invoke?api-version=…&sp=…&sv=…&sig=…`  
-   - That full URL **is** your **Webhook URL** for JustX.  
+   - That full URL **is** your **Webhook URL** for Justxsystems.  
 5. Optional: in the trigger, paste a sample JSON schema (Request Body JSON Schema) so dynamic content is easier:
 
 ```json
@@ -270,14 +270,14 @@ Use this when the company wants files in **SharePoint document library** or **On
 ```
 
 6. Add action **Create file** (OneDrive for Business) **or** **Create file** (SharePoint):  
-   - **Folder path / Site Address + Folder Path:** pick the company library folder (e.g. `/Shared Documents/JustX` or `/Quotations`).  
+   - **Folder path / Site Address + Folder Path:** pick the company library folder (e.g. `/Shared Documents/Justxsystems` or `/Quotations`).  
    - **File name:** use dynamic content `filename` from the trigger.  
    - **File content:** use expression to decode base64, e.g.  
      `base64ToBinary(triggerBody()?['contentBase64'])`  
 7. **Save** the flow and turn it **On**.  
 8. Copy the **HTTP POST URL** again if it changed after save.
 
-**Step B — Paste into JustX (Owner)**
+**Step B — Paste into Justxsystems (Owner)**
 
 1. Business Profile → **Company document delivery**.  
 2. Destination = **Corporate webhook** (or **Auto** if Drive is not connected).  
@@ -287,7 +287,7 @@ Use this when the company wants files in **SharePoint document library** or **On
 6. Generate a test Quotation/Site Survey PDF → confirm the file appears in SharePoint/OneDrive.  
 7. Sync Center → Company automatic delivery should look ready; pending should clear for webhook successes.
 
-#### What JustX POSTs (artifact webhook)
+#### What Justxsystems POSTs (artifact webhook)
 
 ```http
 POST <Webhook URL>
@@ -308,14 +308,14 @@ Body (JSON) includes at least: `event`, `artifactId`, `toolId`, `filename`, `mim
 | **Azure Logic Apps** | Same pattern as Power Automate (“When a HTTP request is received”) |
 | **Your API** | Any HTTPS endpoint that accepts the JSON above and stores the file |
 
-**Not valid as Webhook URL:** SharePoint site URL, OneDrive folder link, Graph API key alone, or email address. Those are destinations *inside* the automation — JustX only needs the **inbound HTTPS webhook**.
+**Not valid as Webhook URL:** SharePoint site URL, OneDrive folder link, Graph API key alone, or email address. Those are destinations *inside* the automation — Justxsystems only needs the **inbound HTTPS webhook**.
 
 #### Webhook secret — detail
 
 - Optional. Improves authenticity if the URL leaks.  
 - You **choose** the string; Microsoft does not give it to you.  
 - If set, verify: HMAC-SHA256 of the **raw JSON body** with your secret; compare to header value after `sha256=`.  
-- If you leave the field blank on a later Save, JustX **keeps** the previously stored secret.
+- If you leave the field blank on a later Save, Justxsystems **keeps** the previously stored secret.
 
 ---
 
@@ -331,30 +331,30 @@ Use this when files should land on a **Windows path** the office PC can write (o
 | **Download Folder path** | Absolute Windows or UNC path where the **desktop agent** (or browser folder sync) writes PDFs | From File Explorer address bar on a PC that can see the folder (examples below) |
 | **Conflict policy** | overwrite / rename / skip when the same filename exists | Owner chooses in the same panel |
 
-JustX does **not** invent this path. The Owner (or IT) decides the folder and pastes the path.
+Justxsystems does **not** invent this path. The Owner (or IT) decides the folder and pastes the path.
 
 #### Path examples
 
 ```text
-\\fileserver\shared\JustX-Artifacts
+\\fileserver\shared\Justxsystems-Artifacts
 \\fileserver\departments\Sales\Quotations
-D:\CompanyShare\JustX
-Z:\JustX
+D:\CompanyShare\Justxsystems
+Z:\Justxsystems
 ```
 
 **OneDrive (sync client on a Windows PC):**
 
 1. In File Explorer, open the synced OneDrive / “OneDrive - Contoso” folder.  
-2. Create e.g. `JustX-Artifacts`.  
+2. Create e.g. `Justxsystems-Artifacts`.  
 3. Click the address bar → copy the full path, e.g.  
-   `C:\Users\alex\OneDrive - Contoso\JustX-Artifacts`  
+   `C:\Users\alex\OneDrive - Contoso\Justxsystems-Artifacts`  
 4. Paste that as **Download Folder path**.  
 5. Install the Sync Center desktop agent **on a PC that keeps that OneDrive folder signed in and syncing** (often a always-on office PC).
 
 **SharePoint library via sync client:**
 
 1. Open the SharePoint document library in the browser → **Sync** (OneDrive sync).  
-2. After sync, open the local folder in Explorer (e.g. `C:\Users\alex\Contoso\Sales - Documents\JustX`).  
+2. After sync, open the local folder in Explorer (e.g. `C:\Users\alex\Contoso\Sales - Documents\Justxsystems`).  
 3. Copy that path into **Download Folder path**.  
 4. Same rule: desktop agent must run on a machine where that sync folder is available and writable.
 
@@ -362,11 +362,11 @@ Z:\JustX
 
 #### Setup steps (Owner + one PC)
 
-1. Create the target folder in File Explorer (example: `C:\JustX\Artifacts`).  
+1. Create the target folder in File Explorer (example: `C:\Justxsystems\Artifacts`).  
 2. Click the address bar → copy the **full absolute path**.  
 3. Business Profile → Company document delivery → destination **Company file server (UNC)** or **Auto** (with Download Folder set as fallback).  
 4. **Show UNC / file-server options**.  
-5. Paste **Download Folder path** (e.g. `C:\JustX\Artifacts` or `\\fileserver\shared\JustX`).  
+5. Paste **Download Folder path** (e.g. `C:\Justxsystems\Artifacts` or `\\fileserver\shared\Justxsystems`).  
 6. Conflict policy → usually **Overwrite**.  
 7. Profile **Save**.  
 8. Sync Center → confirm **Download Folder** shows that path.  
@@ -423,13 +423,13 @@ If destination is UNC and path is empty, Sync Center warns you to set the path.
 
 1. Sync Center → **Set up on this PC**.  
 2. Optional **PC label**.  
-3. Click **Download setup for this PC** → saves `JustX-Sync-Agent-Setup.zip`.  
+3. Click **Download setup for this PC** → saves `Justxsystems-Sync-Agent-Setup.zip`.  
 4. Extract the zip on the Windows PC.  
-5. Double-click **Install JustX Sync Agent.cmd** → wait for SUCCESS.  
+5. Double-click **Install Justxsystems Sync Agent.cmd** → wait for SUCCESS.  
 6. Return to Sync Center → **Desktop agent: Connected** → **Sync now** if Pending &gt; 0.  
 7. Confirm Pending drops and files land in the Download Folder (Connected alone is not enough — see below).
 
-Uninstall: run **Uninstall JustX Sync Agent.cmd**. Status: **Check Status.cmd**.
+Uninstall: run **Uninstall Justxsystems Sync Agent.cmd**. Status: **Check Status.cmd**.
 
 **Advanced (IT / PowerShell):** Sync Center → Advanced → Download PowerShell launcher, or use `desktop-sync-agent\install-agent.ps1`. See `desktop-sync-agent/README.md`.
 
@@ -448,15 +448,15 @@ Uninstall: run **Uninstall JustX Sync Agent.cmd**. Status: **Check Status.cmd**.
 | Production | `https://justxsystems.com/jbt/api` | `https://justxsystems.com/api` (hits marketing site HTML) |
 | Local dev | `http://localhost:4000/api` | — |
 
-Install writes `%LOCALAPPDATA%\JustX\sync-agent\config.json`. After Install, verify:
+Install writes `%LOCALAPPDATA%\Justxsystems\sync-agent\config.json`. After Install, verify:
 
 ```powershell
 # Bridge + last sync result
 Invoke-RestMethod http://127.0.0.1:17865/status | ConvertTo-Json -Depth 5
 
 # Config (do not share agentToken)
-Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\config.json"
-Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
+Get-Content "$env:LOCALAPPDATA\Justxsystems\sync-agent\config.json"
+Get-Content "$env:LOCALAPPDATA\Justxsystems\sync-agent\agent.log" -Tail 40
 ```
 
 `status.apiBase` must be the **correct** URL above. If sync fails, `lastError` / `lastResult.message` / `agent.log` show the real reason (wrong API base, folder inaccessible, auth error).
@@ -470,10 +470,10 @@ Outlook Corporate HTML and several bridge fixes require a **minimum agent app ve
 | Check | How |
 |-------|-----|
 | On PC after Install | `Invoke-RestMethod http://127.0.0.1:17865/health` → `version` |
-| Inside built zip | `JustX-Sync-Agent/PACK_VERSION.txt` and `app/src/index.js` (`AGENT_VERSION`) |
+| Inside built zip | `Justxsystems-Sync-Agent/PACK_VERSION.txt` and `app/src/index.js` (`AGENT_VERSION`) |
 | In CI | Deploy with **`pack_win_agent=true`**; **Build web** log prints `AGENT_VERSION` / pack version from the zip |
 
-**Critical:** Deploy **auto-rebuilds** `JustX-Sync-Agent-win-x64.zip` when agent-related paths change (see [`DEPLOY.md`](DEPLOY.md)#auto-pack-windows-sync-agent). Unrelated pushes skip the pack and the VPS **keeps the previous zip**. Reinstalling from Sync Center then reinstalls whatever is on the VPS. Force with workflow input **`pack_win_agent` = true** if needed. Confirm **Decide win agent pack** / Build web logs show `PACK_WIN_AGENT=true` and the packed `AGENT_VERSION`.
+**Critical:** Deploy **auto-rebuilds** `Justxsystems-Sync-Agent-win-x64.zip` when agent-related paths change (see [`DEPLOY.md`](DEPLOY.md)#auto-pack-windows-sync-agent). Unrelated pushes skip the pack and the VPS **keeps the previous zip**. Reinstalling from Sync Center then reinstalls whatever is on the VPS. Force with workflow input **`pack_win_agent` = true** if needed. Confirm **Decide win agent pack** / Build web logs show `PACK_WIN_AGENT=true` and the packed `AGENT_VERSION`.
 
 **Not the app version:** GitHub’s “Node 20 is being deprecated” on Actions, or cache key `agent-node-win-*-v20.18.1` — that is the **portable Node runtime** pinned inside the customer zip / CI cache, separate from `AGENT_VERSION`.
 
@@ -486,7 +486,7 @@ cd desktop-sync-agent
 npm install   # once
 $env:JBT_API_BASE = "https://justxsystems.com/jbt/api"   # must include /jbt in production
 $env:JBT_AGENT_TOKEN = "jxsa_PASTE_FROM_SYNC_CENTER"
-$env:JBT_DOWNLOAD_FOLDER = "C:\JustX\Artifacts"   # optional override of Profile path
+$env:JBT_DOWNLOAD_FOLDER = "C:\Justxsystems\Artifacts"   # optional override of Profile path
 $env:JBT_POLL_MS = "15000"      # 0 = only sync when UI clicks
 $env:JBT_BRIDGE_PORT = "17865"
 npm start
@@ -524,7 +524,7 @@ With agent running on Windows + **classic** Outlook (COM) installed: **Email Out
 
 ### UNC / local folder company
 
-- [ ] Owner: Destination **UNC** (or Auto) → paste absolute **Download Folder path** (e.g. `C:\JustX\Artifacts`) → Save  
+- [ ] Owner: Destination **UNC** (or Auto) → paste absolute **Download Folder path** (e.g. `C:\Justxsystems\Artifacts`) → Save  
 - [ ] Owner: Sync Center shows that Download Folder path  
 - [ ] Owner (or Admin): Sync Center → Download setup → Install on a PC that can write the folder  
 - [ ] Sync Center: **Connected** + `status.apiBase` is `…/jbt/api` in production  
@@ -543,13 +543,13 @@ With agent running on Windows + **classic** Outlook (COM) installed: **Email Out
 
 | Symptom | Check |
 |---------|--------|
-| **Connected but Pending never drops / Sync now no-op** | Open `http://127.0.0.1:17865/status` — inspect `apiBase`, `lastError`, `lastResult`. Read `%LOCALAPPDATA%\JustX\sync-agent\agent.log` |
+| **Connected but Pending never drops / Sync now no-op** | Open `http://127.0.0.1:17865/status` — inspect `apiBase`, `lastError`, `lastResult`. Read `%LOCALAPPDATA%\Justxsystems\sync-agent\agent.log` |
 | **`apiBase` is `https://justxsystems.com/api` (no `/jbt`)** | Wrong — must be `https://justxsystems.com/jbt/api`. Fix `config.json`, restart agent (or re-download setup after a web build that includes base-path fix). Wrong URL returns HTML and sync reports “No Download Folder…” falsely |
 | **`No Download Folder configured…` in log/status** | Often wrong `apiBase` (above). Else Owner must Save Download Folder on Profile; Sync Center must show the path |
 | **`No access to this business branch` (403)** | Agent token rejected by API branch ACL — deploy API fix that marks agent auth (`viaAgentToken`); or use **Sync now (this browser)** until deployed. Re-download setup only after API is fixed if token/profile mismatch suspected |
 | Pending never drops (other) | Destination UNC without agent/FSA; Drive not connected; webhook failing |
 | Agent “Not detected” | Agent not running on **this** PC; wrong machine; run Check Status.cmd |
-| Setup download fails / no file saved | Look for red error under the button (often version mismatch or missing zip). Zip must exist at `/jbt/JustX-Sync-Agent-win-x64.zip`. Redeploy with agent auto-pack / `pack_win_agent`. Browser may block popups — allow downloads. |
+| Setup download fails / no file saved | Look for red error under the button (often version mismatch or missing zip). Zip must exist at `/jbt/Justxsystems-Sync-Agent-win-x64.zip`. Redeploy with agent auto-pack / `pack_win_agent`. Browser may block popups — allow downloads. |
 | Agent reinstalled but `/health` version old | Win pack was skipped on deploy — VPS zip stale. Redeploy with **`pack_win_agent=true`**, then Download setup again — [Confirm version](#confirm-desktop-agent-version-in-build--on-pc) |
 | Agent pack download fails | Slim `desktop-sync-agent.zip` 404 — same redeploy |
 | Folder not reachable | Path wrong; PC not on VPN; agent user lacks share ACL; create folder first |

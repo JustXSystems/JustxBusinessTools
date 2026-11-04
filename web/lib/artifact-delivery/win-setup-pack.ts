@@ -1,8 +1,8 @@
 import { unzipSync, zipSync, strToU8, strFromU8 } from "fflate";
 import { withBasePath } from "@/lib/base-path";
 
-export const WIN_SETUP_PACK_PATH = "/JustX-Sync-Agent-win-x64.zip";
-export const WIN_SETUP_ROOT = "JustX-Sync-Agent";
+export const WIN_SETUP_PACK_PATH = "/Justxsystems-Sync-Agent-win-x64.zip";
+export const WIN_SETUP_ROOT = "Justxsystems-Sync-Agent";
 export const AGENT_PACK_VERSION = "1.1.3";
 
 export type AgentSetupConfig = {
@@ -71,19 +71,23 @@ export function personalizeWinSetupZip(
   if (embedded !== expected) {
     warning =
       `Server setup zip is agent ${embedded}, but this app build expects ${expected}. ` +
-      `Download will use ${embedded}. Engineer: redeploy so JustX-Sync-Agent-win-x64.zip is rebuilt ` +
+      `Download will use ${embedded}. Engineer: redeploy so Justxsystems-Sync-Agent-win-x64.zip is rebuilt ` +
       `(agent path changes auto-pack, or pack_win_agent=true).`;
   }
 
   const configPath = `${WIN_SETUP_ROOT}/config.json`;
   entries[configPath] = strToU8(buildAgentConfigJson({ ...config, packVersion: embedded }));
 
-  // Sanity: required install entry must exist
-  const installKey = Object.keys(entries).find((k) =>
-    k.replace(/\\/g, "/").endsWith("Install JustX Sync Agent.cmd"),
-  );
+  // Sanity: required install entry must exist (accept legacy JustX* pack filenames)
+  const installKey = Object.keys(entries).find((k) => {
+    const n = k.replace(/\\/g, "/");
+    return (
+      n.endsWith("Install Justxsystems Sync Agent.cmd") ||
+      n.endsWith("Install JustX Sync Agent.cmd")
+    );
+  });
   if (!installKey) {
-    throw new Error("Setup pack is missing Install JustX Sync Agent.cmd — redeploy web pack");
+    throw new Error("Setup pack is missing Install Justxsystems Sync Agent.cmd — redeploy web pack");
   }
   const nodeKey = Object.keys(entries).find((k) =>
     k.replace(/\\/g, "/").endsWith("runtime/node.exe"),
@@ -117,7 +121,7 @@ export async function fetchAndPersonalizeWinSetup(
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(
-      `Could not download Windows setup pack (${res.status}). Deploy may be missing JustX-Sync-Agent-win-x64.zip.`,
+      `Could not download Windows setup pack (${res.status}). Deploy may be missing Justxsystems-Sync-Agent-win-x64.zip.`,
     );
   }
   const buf = new Uint8Array(await res.arrayBuffer());

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MySQL + local uploads backup for JustX Business Tools (run on the VPS).
+# MySQL + local uploads backup for Justxsystems Business Tools (run on the VPS).
 # Example cron (daily 02:15 IST ≈ 20:45 UTC previous day — adjust TZ):
 #   15 2 * * * /var/www/jbt/scripts/backup-jbt.sh >> /home/deploy/backups/backup.log 2>&1
 #

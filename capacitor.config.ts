@@ -4,7 +4,7 @@ const serverUrl = process.env.CAPACITOR_SERVER_URL;
 
 const config: CapacitorConfig = {
   appId: "com.justx.businesstools",
-  appName: "JustXSystems",
+  appName: "Justxsystems",
   webDir: "web/out",
   android: {
     allowMixedContent: true,

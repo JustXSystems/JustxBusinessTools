@@ -258,7 +258,7 @@ export default function AdminIntegrationsPage() {
       <div className="admin-page">
         <section className="panel admin-card">
           <h2>Integrations</h2>
-          <p className="muted">Platform configuration is available to JustX platform admins only.</p>
+          <p className="muted">Platform configuration is available to Justxsystems platform admins only.</p>
         </section>
       </div>
     );

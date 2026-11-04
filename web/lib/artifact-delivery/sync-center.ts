@@ -244,7 +244,7 @@ function Find-AgentDir {
     (Join-Path $PSScriptRoot "desktop-sync-agent"),
     (Join-Path (Join-Path $PSScriptRoot "..") "desktop-sync-agent"),
     $PSScriptRoot,
-    (Join-Path $env:LOCALAPPDATA "JustX\\sync-agent\\src-pack\\desktop-sync-agent")
+    (Join-Path $env:LOCALAPPDATA "Justxsystems\\sync-agent\\src-pack\\desktop-sync-agent")
   )
   foreach ($dir in $candidates) {
     if (Test-Path (Join-Path $dir "src\\index.js")) { return $dir }
@@ -264,7 +264,7 @@ function Get-InstallScriptPath([string]$AgentDir) {
   if ($AgentDir -and (Test-Path (Join-Path $AgentDir "install-agent.ps1"))) {
     return Join-Path $AgentDir "install-agent.ps1"
   }
-  $local = Join-Path $env:LOCALAPPDATA "JustX\\sync-agent\\install-agent.ps1"
+  $local = Join-Path $env:LOCALAPPDATA "Justxsystems\\sync-agent\\install-agent.ps1"
   if (Test-Path $local) { return $local }
   return $null
 }
@@ -277,7 +277,7 @@ function Ensure-AgentSources {
     Write-Host "Re-download the launcher from Sync Center after deploy, or place desktop-sync-agent next to this script." -ForegroundColor Yellow
     exit 1
   }
-  $installRoot = Join-Path $env:LOCALAPPDATA "JustX\\sync-agent"
+  $installRoot = Join-Path $env:LOCALAPPDATA "Justxsystems\\sync-agent"
   $packRoot = Join-Path $installRoot "src-pack"
   $zipPath = Join-Path $env:TEMP ("jbt-agent-" + [guid]::NewGuid().ToString("n") + ".zip")
   New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
@@ -326,9 +326,9 @@ if ($Install) {
 }
 
 # Foreground: prefer installed app copy if present
-$runtime = Join-Path $env:LOCALAPPDATA "JustX\\sync-agent\\app"
+$runtime = Join-Path $env:LOCALAPPDATA "Justxsystems\\sync-agent\\app"
 if (Test-Path (Join-Path $runtime "src\\index.js")) {
-  $cfg = Join-Path $env:LOCALAPPDATA "JustX\\sync-agent\\config.ps1"
+  $cfg = Join-Path $env:LOCALAPPDATA "Justxsystems\\sync-agent\\config.ps1"
   if (Test-Path $cfg) { . $cfg }
   Set-Location $runtime
 } else {

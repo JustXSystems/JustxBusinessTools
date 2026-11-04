@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Remove JustX sync agent auto-start and local install files.
+  Remove Justxsystems sync agent auto-start and local install files.
 #>
 [CmdletBinding()]
 param(
@@ -10,8 +10,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$TaskName = "JustX Sync Agent"
-$InstallRoot = Join-Path $env:LOCALAPPDATA "JustX\sync-agent"
+$TaskName = "Justxsystems Sync Agent"
+$InstallRoot = Join-Path $env:LOCALAPPDATA "Justxsystems\sync-agent"
 
 function Write-Info([string]$Message, [string]$Color = "Cyan") {
   if (-not $Quiet) { Write-Host $Message -ForegroundColor $Color }
@@ -25,7 +25,7 @@ if ($existing) {
   Write-Info "No Scheduled Task named $TaskName"
 }
 
-$shortcutPath = Join-Path ([Environment]::GetFolderPath("Startup")) "JustX Sync Agent.lnk"
+$shortcutPath = Join-Path ([Environment]::GetFolderPath("Startup")) "Justxsystems Sync Agent.lnk"
 if (Test-Path -LiteralPath $shortcutPath) {
   Remove-Item -LiteralPath $shortcutPath -Force
   Write-Info "Removed Startup shortcut" "Green"

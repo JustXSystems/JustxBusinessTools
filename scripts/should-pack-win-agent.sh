@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Decide whether CI should rebuild JustX-Sync-Agent-win-x64.zip.
+# Decide whether CI should rebuild Justxsystems-Sync-Agent-win-x64.zip.
 # Prints: pack=true|false and reason=...
 # Exit 0 always (decision helper).
 set -euo pipefail

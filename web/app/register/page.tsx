@@ -240,7 +240,7 @@ export default function RegisterPage() {
         <h1>Register</h1>
         <p className="muted">
           Enter GSTIN and tab out to load an existing business. New GSTIN creates an Owner account you can use
-          immediately (JustX may review the Business Profile later). Joining an existing GSTIN sends a request for the
+          immediately (Justxsystems may review the Business Profile later). Joining an existing GSTIN sends a request for the
           Business Owner to approve as Staff or Viewer.
         </p>
         <form onSubmit={handleSubmit} className="login-form">
@@ -269,7 +269,7 @@ export default function RegisterPage() {
               ) : lookup === "done" && gstinValid ? (
                 <p className="muted">
                   GSTIN not found. Enter the business profile details to create it. You will be signed in as Owner right
-                  away; JustX can review the Business Profile later.
+                  away; Justxsystems can review the Business Profile later.
                 </p>
               ) : null}
               <div className="field">

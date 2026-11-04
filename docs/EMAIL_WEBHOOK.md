@@ -6,7 +6,7 @@ When staff use **Quotation → Send Via → Email**, the API posts a JSON payloa
 2. Else **Admin → Integrations → Email webhook**
 3. Else `EMAIL_WEBHOOK_URL` / `NOTIFY_EMAIL_WEBHOOK_URL`
 
-Without any of these, JustX saves a row in **Email Outbox** and prefers **Open in Outlook** (desktop agent, agent ≥ 1.1.3 for Corporate HTML + PDF) when available; otherwise **`mailto:`** with **plain text only** (HTML is not supported by mailto) and a PDF download for manual attach.
+Without any of these, Justxsystems saves a row in **Email Outbox** and prefers **Open in Outlook** (desktop agent, agent ≥ 1.1.3 for Corporate HTML + PDF) when available; otherwise **`mailto:`** with **plain text only** (HTML is not supported by mailto) and a PDF download for manual attach.
 
 Full setup for webhook vs mailto vs Outlook agent: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md).  
 **Any-device send with Microsoft 365 / Graph (Power Automate) — paste on Business Profile:** [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md).
@@ -15,8 +15,8 @@ Full setup for webhook vs mailto vs Outlook agent: [`EMAIL_OUTBOX.md`](EMAIL_OUT
 
 ## Where do these values come from?
 
-**JustX does not issue the webhook URL.**  
-It is the **public HTTPS URL of a webhook you create** in an external tool (usually one flow **per company mailbox**). JustX’s API will `POST` application/json to that URL when someone sends (or retries) an email.
+**Justxsystems does not issue the webhook URL.**  
+It is the **public HTTPS URL of a webhook you create** in an external tool (usually one flow **per company mailbox**). Justxsystems’s API will `POST` application/json to that URL when someone sends (or retries) an email.
 
 | Location | Role |
 |----------|------|
@@ -40,7 +40,7 @@ EMAIL_WEBHOOK_URL=https://n8n.example.com/webhook/jbt-email
 
 5. If using `.env`, reload the API (`pm2 reload … --update-env` or restart) so the new env is loaded.
 6. Map the JSON body fields (especially **`html`** and `pdfBase64`) to your “Send Email” action.
-7. Send a test quotation from JustX on that Business Profile and confirm the customer inbox.
+7. Send a test quotation from Justxsystems on that Business Profile and confirm the customer inbox.
 
 Provider-specific clicks:
 
@@ -50,7 +50,7 @@ Provider-specific clicks:
 ### What it is *not*
 
 - Not a SendGrid API key, SMTP password, or Gmail app password (those go **inside** your automation, not in the webhook URL field).
-- Not a URL on the JustX server like `/api/email-outbox` — JustX is the **caller**, your tool is the **receiver**.
+- Not a URL on the Justxsystems server like `/api/email-outbox` — Justxsystems is the **caller**, your tool is the **receiver**.
 - Not the Business Profile **artifact** webhook (Company document delivery / PDF files to SharePoint).
 ---
 

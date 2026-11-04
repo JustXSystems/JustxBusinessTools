@@ -32,7 +32,7 @@ Quotation emails (separate): [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)
 |---------------------------|------------------|---------|
 | **Webhook URL** | Power Automate → “When an HTTP request is received” → **HTTP POST URL** | `https://prod-….logic.azure.com/workflows/…` |
 | **Webhook secret** | You invent it (optional) | Long random string; not a Microsoft secret |
-| **Download Folder path** | File Explorer address bar on a writable folder | `\\server\share\JustX` or `C:\JustX\Artifacts` or `C:\Users\…\OneDrive - Co\JustX` |
+| **Download Folder path** | File Explorer address bar on a writable folder | `\\server\share\Justxsystems` or `C:\Justxsystems\Artifacts` or `C:\Users\…\OneDrive - Co\Justxsystems` |
 | **Company file server section** | UI: **Show UNC / file-server options** | Reveals Download Folder + conflict policy |
 
 Do **not** paste a SharePoint browser link or OneDrive sharing link into Webhook URL or Download Folder — those are not valid for these fields.

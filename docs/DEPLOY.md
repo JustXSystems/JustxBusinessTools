@@ -337,7 +337,7 @@ Push-to-`master` always uses the safe defaults (no exotic tasks).
 | Input | Default | Purpose |
 |-------|---------|---------|
 | `deploy_enabled` | `true` | Set `false` to **build + upload artifact only** (no VPS change) |
-| `pack_win_agent` | `false` | **Force** rebuild+ship ~28MB `JustX-Sync-Agent-win-x64.zip`. Usually unnecessary: deploy **auto-packs** when agent-related paths change (see below). Use to force a rebuild with no source diff. |
+| `pack_win_agent` | `false` | **Force** rebuild+ship ~28MB `Justxsystems-Sync-Agent-win-x64.zip`. Usually unnecessary: deploy **auto-packs** when agent-related paths change (see below). Use to force a rebuild with no source diff. |
 | `force_cache_rebuild` | `false` | Delete repo Actions caches, cold-build Next/npm, force VPS `npm ci` (rewrites caches) |
 | `run_migrations` | `true` | Apply `mysql/migrations` on **stage before** live swap |
 | `backup_db` | `false` | Force a MySQL + uploads backup even when no migrations are pending. A MySQL backup **always** runs automatically when the release has pending migrations (see below) |
@@ -401,7 +401,7 @@ Deploy decides `PACK_WIN_AGENT` via [`scripts/should-pack-win-agent.sh`](../scri
 |-----------|--------|
 | `workflow_dispatch` + `pack_win_agent=true` | Always pack |
 | Diff vs previous commit touches agent paths | Auto pack |
-| Otherwise | Skip pack — VPS keeps existing `JustX-Sync-Agent-win-x64.zip` |
+| Otherwise | Skip pack — VPS keeps existing `Justxsystems-Sync-Agent-win-x64.zip` |
 
 **Watched paths:** `desktop-sync-agent/**`, `scripts/pack-justx-sync-agent-win.mjs`, `scripts/pack-agent-artifacts.mjs`, `scripts/pack-desktop-sync-agent.mjs`, `scripts/lib/zip-store.mjs`, `web/lib/artifact-delivery/win-setup-pack.ts`.
 
@@ -424,7 +424,7 @@ Full Path C engineer checklist: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#engineer-sh
 **Notes**
 
 - Job-level env may still list `JBT_SKIP_WIN_AGENT_PACK: 1` (workflow default). The **Build web** step overrides it when `PACK_WIN_AGENT=true`.  
-- On the VPS, `vps-release.sh` **installs** `JustX-Sync-Agent-win-x64.zip` when the release tarball includes it; otherwise it **preserves** the live zip. Earlier builds always preserved live and never applied a newly packed zip — that is fixed. After shipping the fix, run one Deploy with **`pack_win_agent=true`** so the 1.1.3 zip actually lands on the VPS.  
+- On the VPS, `vps-release.sh` **installs** `Justxsystems-Sync-Agent-win-x64.zip` when the release tarball includes it; otherwise it **preserves** the live zip. Earlier builds always preserved live and never applied a newly packed zip — that is fixed. After shipping the fix, run one Deploy with **`pack_win_agent=true`** so the 1.1.3 zip actually lands on the VPS.  
 - Actions “Node 20 deprecated” / cache key `agent-node-win-*-v20.18.1` = portable **Node runtime** for the customer zip, **not** the agent app version. That cache only speeds `node.exe` download; it does **not** reuse an old agent `index.js`.  
 - Details: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#confirm-agent-version--113-path-c--html · [`SYNC_CENTER.md`](SYNC_CENTER.md)#confirm-desktop-agent-version-in-build--on-pc
 

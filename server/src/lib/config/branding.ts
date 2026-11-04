@@ -106,7 +106,7 @@ function parseBranding(raw: unknown): PlatformBranding {
   const installName = String(obj.installName ?? "").trim();
   let installIconUrl = String(obj.installIconUrl ?? "").trim();
   let logoUrl = String(obj.logoUrl ?? DEFAULT_BRANDING.logoUrl).trim() || DEFAULT_BRANDING.logoUrl;
-  // Drop legacy generated SVG/PNG presets — only the official JustX logo remains bundled.
+  // Drop legacy generated SVG/PNG presets — only the official Justxsystems logo remains bundled.
   if (
     /\/icons\/(jbt-icon|justxsystems-icon)\.svg$/i.test(logoUrl) ||
     /\/icons\/presets\//i.test(logoUrl)

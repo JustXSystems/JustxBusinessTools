@@ -88,7 +88,7 @@ export function TeamRequestsPanel() {
     >
       <p className="section-note">
         People who registered against your GSTIN wait here until you approve them as Staff or Viewer.
-        JustX admins can also approve these optionally.
+        Justxsystems admins can also approve these optionally.
       </p>
       {loading ? <p className="muted">Loading…</p> : null}
       {error ? <div className="error-banner">{error}</div> : null}

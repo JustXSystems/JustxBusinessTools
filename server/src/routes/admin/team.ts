@@ -386,7 +386,7 @@ router.post("/:userId/reject", async (req, res) => {
   const orgId = member.orgId;
   const role = await memberRole(orgId, userId);
 
-  // JustX rejecting an Owner = reject the business: suspend whole org + revoke sessions.
+  // Justxsystems rejecting an Owner = reject the business: suspend whole org + revoke sessions.
   if (role === "owner" && isPlatformAdmin()) {
     const { suspendOrganizationAccess } = await import("../../lib/admin/org-suspend.js");
     await pool.query(
@@ -398,11 +398,11 @@ router.post("/:userId/reject", async (req, res) => {
       {
         orgId,
         reviewer: getActiveUserId(),
-        note: req.body?.note ?? "Owner / business rejected by JustX admin",
+        note: req.body?.note ?? "Owner / business rejected by Justxsystems admin",
       },
     );
     const suspended = await suspendOrganizationAccess(orgId, {
-      note: req.body?.note ?? "Owner rejected by JustX admin",
+      note: req.body?.note ?? "Owner rejected by Justxsystems admin",
       actorIp: req.ip,
     });
     await logAudit(

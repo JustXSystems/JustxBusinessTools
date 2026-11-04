@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# External health probe for JustX Business Tools.
+# External health probe for Justxsystems Business Tools.
 # Cron every 5 min:
 #   */5 * * * * /var/www/jbt/scripts/health-monitor.sh >> /home/deploy/backups/health.log 2>&1
 #

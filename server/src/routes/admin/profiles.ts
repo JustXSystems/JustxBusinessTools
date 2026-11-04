@@ -516,11 +516,11 @@ router.post("/:id/reject", async (req, res) => {
   );
 
   let suspended: { userIds: number[]; sessionsRevoked: number } | null = null;
-  // JustX admin reject of a business: lock out the whole org and end sessions immediately.
+  // Justxsystems admin reject of a business: lock out the whole org and end sessions immediately.
   if (isPlatformAdmin()) {
     const { suspendOrganizationAccess } = await import("../../lib/admin/org-suspend.js");
     suspended = await suspendOrganizationAccess(orgId, {
-      note: req.body?.note ?? "Business profile rejected by JustX admin",
+      note: req.body?.note ?? "Business profile rejected by Justxsystems admin",
       actorIp: req.ip,
       profileId: id,
     });

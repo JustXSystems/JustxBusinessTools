@@ -2,9 +2,9 @@ import { pool } from "../db.js";
 import { getActiveOrgId, getRequestContext } from "./request-context.js";
 
 /**
- * Platform (JustX) operators who get the Admin Console and cross-org scope.
+ * Platform (Justxsystems) operators who get the Admin Console and cross-org scope.
  * Env: PLATFORM_ADMIN_EMAIL — comma-separated list.
- * Defaults include production JustX operator + local bootstrap.
+ * Defaults include production Justxsystems operator + local bootstrap.
  */
 const DEFAULT_PLATFORM_ADMIN_EMAILS = ["admin@justxsystems.com", "admin@justx.local"];
 

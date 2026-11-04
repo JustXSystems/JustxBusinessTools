@@ -52,7 +52,7 @@ describe("quotation email templates", () => {
       validTill: "22 Sep 2026",
       grandTotal: "1,000.00",
       grandTotalWords: "One Thousand Only",
-      companyName: "JustX & Co",
+      companyName: "Justxsystems & Co",
       companyPhone: "999",
       LoggedinUserName: "Sam Sender",
       LogginUserPhonenumber: "+91 90000 11111",
@@ -69,7 +69,7 @@ describe("quotation email templates", () => {
       vars,
       customCorporateMessage: `Dear {{customerName}},
 
-Custom intro for JustX & Co
+Custom intro for Justxsystems & Co
 
 {{quoteSummaryBlock}}
 
@@ -85,7 +85,7 @@ Warm regards,
     });
     expect(html).toBeTruthy();
     expect(html!).toContain("#0f3d3e");
-    expect(html!).toContain("JustX &amp; Co");
+    expect(html!).toContain("Justxsystems &amp; Co");
     expect(html!).not.toContain("<script>");
     expect(html!).toContain("View Full Quotation");
     expect(html!).toContain("GSTIN: 29ABCDE1234F1Z5");

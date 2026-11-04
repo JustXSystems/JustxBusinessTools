@@ -1,6 +1,6 @@
-# JustX Business Tools (JBT)
+# Justxsystems Business Tools (JBT)
 
-Multi-tenant business tools for quotations, site surveys, and more — by **JustXSystems**.
+Multi-tenant business tools for quotations, site surveys, and more — by **Justxsystems**.
 
 | | |
 |--|--|

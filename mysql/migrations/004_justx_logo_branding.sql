@@ -1,4 +1,4 @@
--- Point platform branding at the official JustX logo (drop generated SVG/PNG presets).
+-- Point platform branding at the official Justxsystems logo (drop generated SVG/PNG presets).
 UPDATE platform_config
 SET value = JSON_SET(
   COALESCE(value, JSON_OBJECT()),

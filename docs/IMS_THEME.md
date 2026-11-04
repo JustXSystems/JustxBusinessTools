@@ -7,7 +7,7 @@ The IMS theme is the visual language of the IMS Distributor template
 | Layer | File | Scope | How to turn it on |
 |---|---|---|---|
 | Kit skin | `web/components/bos/styles/bos.skin-ims.css` | Every component of the BOS kit (`components/bos/*`) | `<BosRoot skin="ims">`, or automatically when the org's design pack is `ims` |
-| Design pack | `web/styles/ims-pack.css` | Shared JBT chrome: operator shell, admin, Quotation, Site Survey, calculators | Admin → Theme → preset "JustX IMS (Light)" / "JustX IMS (Dark)" (sets `<html data-pack="ims">`) |
+| Design pack | `web/styles/ims-pack.css` | Shared JBT chrome: operator shell, admin, Quotation, Site Survey, calculators | Admin → Theme → preset "Justxsystems IMS (Light)" / "Justxsystems IMS (Dark)" (sets `<html data-pack="ims">`) |
 
 Both layers only re-map tokens and restyle classes. Markup and component APIs
 are unchanged, so a tool switches look with one prop or one preset.

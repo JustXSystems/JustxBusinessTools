@@ -301,7 +301,7 @@ router.post("/email_webhook/test", async (_req, res) => {
       body: JSON.stringify({
         channel: "email",
         to: "integrations-test@justx.local",
-        subject: "[JustX] Email webhook test",
+        subject: "[Justxsystems] Email webhook test",
         body: "Platform Admin test. Safe to ignore.",
         kind: "admin.integration.test",
         dryRun: true,
@@ -338,7 +338,7 @@ router.post("/whatsapp/test", async (_req, res) => {
         body: JSON.stringify({
           channel: "whatsapp",
           to: "910000000000",
-          message: "[JustX] WhatsApp webhook test",
+          message: "[Justxsystems] WhatsApp webhook test",
           kind: "admin.integration.test",
           dryRun: true,
         }),
@@ -441,7 +441,7 @@ router.post("/error_webhook/test", async (_req, res) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        text: "[JustX] Error webhook test — safe to ignore",
+        text: "[Justxsystems] Error webhook test — safe to ignore",
         service: "justx-jbt-api",
         kind: "admin.integration.test",
         dryRun: true,

@@ -1,4 +1,4 @@
-# JustX Business Tools — Observability (Grafana LGTM + Tempo)
+# Justxsystems Business Tools — Observability (Grafana LGTM + Tempo)
 #
 #   cd /var/www/jbt/deploy/observability
 #   cp .env.example .env   # set GF_SECURITY_ADMIN_PASSWORD (+ optional MySQL exporter DSN)

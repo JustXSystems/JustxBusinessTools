@@ -8,7 +8,7 @@
      --chrome-bottom is re-set per breakpoint / shell in jbt.css. */
   --bottom-nav-h: 60px;
   --chrome-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom));
-  /* JustXSystems Electric — deep royal blue surfaces + electric cyan accent */
+  /* Justxsystems Electric — deep royal blue surfaces + electric cyan accent */
   --bg-0: #081018;
   --bg-1: #0c1829;
   --bg-2: #122440;

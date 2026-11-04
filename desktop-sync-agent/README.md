@@ -1,6 +1,6 @@
-# JustXSystems Desktop Sync Agent
+# Justxsystems Desktop Sync Agent
 
-Copies pending tool artifacts from the JustXSystems API into the Business Profile **Download Folder**, and opens a localhost bridge for Sync Center / Email Outbox → Outlook.
+Copies pending tool artifacts from the Justxsystems API into the Business Profile **Download Folder**, and opens a localhost bridge for Sync Center / Email Outbox → Outlook.
 
 **Who needs this agent?** Only companies using **UNC / local-folder file sync** and/or **Email Outbox → Open in Outlook**. Drive/webhook PDF delivery and email webhook send do **not** need it. See [`docs/SYNC_CENTER.md`](../docs/SYNC_CENTER.md)#who-needs-sync-center.
 
@@ -10,17 +10,17 @@ Copies pending tool artifacts from the JustXSystems API into the Business Profil
 
 **Who:** Business **Owner** or **Admin** (Staff cannot open Sync Center — see [`docs/ROLES.md`](../docs/ROLES.md)).
 
-1. Owner: Business Profile → Company document delivery → destination **UNC** → paste **Download Folder path** (e.g. `C:\JustX\Artifacts`) → Save  
+1. Owner: Business Profile → Company document delivery → destination **UNC** → paste **Download Folder path** (e.g. `C:\Justxsystems\Artifacts`) → Save  
 2. Sign in as **Owner or Admin** → **Sync Center** → **Set up on this PC**  
 3. Click **Download setup for this PC**  
-4. Extract `JustX-Sync-Agent-Setup.zip`  
-5. Double-click **Install JustX Sync Agent.cmd**  
+4. Extract `Justxsystems-Sync-Agent-Setup.zip`  
+5. Double-click **Install Justxsystems Sync Agent.cmd**  
 6. Return to Sync Center — should show **Connected**  
 7. Click **Sync now (desktop agent)** and confirm Pending → 0 and files appear in the folder  
 
 No separate Node.js install. Portable Node is inside the zip. After install, **Staff** use My Tools and Email Outbox on that PC without opening Sync Center.
 
-Optional: **Check Status.cmd** · **Uninstall JustX Sync Agent.cmd**
+Optional: **Check Status.cmd** · **Uninstall Justxsystems Sync Agent.cmd**
 
 ### Connected ≠ sync working
 
@@ -34,8 +34,8 @@ Optional: **Check Status.cmd** · **Uninstall JustX Sync Agent.cmd**
 ```powershell
 Invoke-RestMethod http://127.0.0.1:17865/health
 Invoke-RestMethod http://127.0.0.1:17865/status | ConvertTo-Json -Depth 5
-Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\config.json"
-Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
+Get-Content "$env:LOCALAPPDATA\Justxsystems\sync-agent\config.json"
+Get-Content "$env:LOCALAPPDATA\Justxsystems\sync-agent\agent.log" -Tail 40
 ```
 
 If `apiBase` is wrong, edit `config.json`, restart the agent (or re-download setup after a fixed web deploy).  
@@ -54,7 +54,7 @@ npm run pack:agent -w web
 
 Produces:
 
-- `web/public/JustX-Sync-Agent-win-x64.zip` — primary Windows setup (Node win-x64 + CMD installers)
+- `web/public/Justxsystems-Sync-Agent-win-x64.zip` — primary Windows setup (Node win-x64 + CMD installers)
 - `web/public/desktop-sync-agent.zip` — slim sources for advanced PowerShell bootstrap
 
 `JBT_SKIP_WIN_AGENT_PACK=1` skips the ~28MB win zip. CI sets this automatically: **skip** when no agent path changes; **pack** when `desktop-sync-agent/**` (or pack scripts / `win-setup-pack.ts`) change, or when Deploy input **`pack_win_agent=true`**. See [`docs/DEPLOY.md`](../docs/DEPLOY.md)#auto-pack-windows-sync-agent.
@@ -69,7 +69,7 @@ Setup zip / launcher must embed `JBT_API_BASE` with the app **base path** (`/jbt
 |------|----------|
 | App version (source of truth) | `src/index.js` → `export const AGENT_VERSION` (exposed on `/health` + `/status`) |
 | Setup `packVersion` | `web/lib/artifact-delivery/win-setup-pack.ts` → `AGENT_PACK_VERSION` |
-| Pack stamp in zip | `JustX-Sync-Agent/PACK_VERSION.txt` (written by `scripts/pack-justx-sync-agent-win.mjs` from `AGENT_VERSION`) |
+| Pack stamp in zip | `Justxsystems-Sync-Agent/PACK_VERSION.txt` (written by `scripts/pack-justx-sync-agent-win.mjs` from `AGENT_VERSION`) |
 
 **Ship a new version to production customers**
 
@@ -93,7 +93,7 @@ Manual:
 ```powershell
 $env:JBT_API_BASE = "https://justxsystems.com/jbt/api"   # include /jbt
 $env:JBT_AGENT_TOKEN = "jxsa_…"
-$env:JBT_DOWNLOAD_FOLDER = "C:\JustX\Artifacts"          # optional
+$env:JBT_DOWNLOAD_FOLDER = "C:\Justxsystems\Artifacts"          # optional
 npm start
 ```
 

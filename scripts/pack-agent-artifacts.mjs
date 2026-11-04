@@ -20,7 +20,7 @@ function run(script) {
 run("pack-desktop-sync-agent.mjs");
 
 if (process.env.JBT_SKIP_WIN_AGENT_PACK === "1") {
-  console.log("Skipping JustX-Sync-Agent-win-x64.zip (JBT_SKIP_WIN_AGENT_PACK=1)");
+  console.log("Skipping Justxsystems-Sync-Agent-win-x64.zip (JBT_SKIP_WIN_AGENT_PACK=1)");
 } else {
   run("pack-justx-sync-agent-win.mjs");
 }

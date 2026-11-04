@@ -3,12 +3,12 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 
 echo.
-echo  JustX Sync Agent - Uninstall
+echo  Justxsystems Sync Agent - Uninstall
 echo  ============================
 echo.
 
-set "INSTALL=%LOCALAPPDATA%\JustX\sync-agent"
-set "TASKNAME=JustX Sync Agent"
+set "INSTALL=%LOCALAPPDATA%\Justxsystems\sync-agent"
+set "TASKNAME=Justxsystems Sync Agent"
 
 echo  Stopping agent and removing auto-start...
 schtasks /Delete /TN "%TASKNAME%" /F >nul 2>&1

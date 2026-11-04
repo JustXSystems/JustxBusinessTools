@@ -137,8 +137,8 @@ function AdminApprovalsInner() {
       <section className="panel admin-card admin-page-head">
         <h2>Approvals inbox</h2>
         <p className="muted">
-          Pending branches (JustX soft review — Owners can already use JBT), join requests, payment-desk items, and UPI
-          claims. Rejecting a business as JustX admin suspends all users on that org and ends their sessions.
+          Pending branches (Justxsystems soft review — Owners can already use JBT), join requests, payment-desk items, and UPI
+          claims. Rejecting a business as Justxsystems admin suspends all users on that org and ends their sessions.
         </p>
       </section>
 

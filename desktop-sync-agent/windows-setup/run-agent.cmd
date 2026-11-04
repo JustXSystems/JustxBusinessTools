@@ -18,6 +18,6 @@ if not exist "%JBT_CONFIG%" (
   exit /b 1
 )
 
-echo [%date% %time%] Starting JustX sync agent>> "%LOG%"
+echo [%date% %time%] Starting Justxsystems sync agent>> "%LOG%"
 "%~dp0runtime\node.exe" "%~dp0app\src\index.js" >> "%LOG%" 2>&1
 endlocal

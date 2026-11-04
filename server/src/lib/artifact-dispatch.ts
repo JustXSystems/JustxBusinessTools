@@ -266,7 +266,7 @@ async function deliverViaWebhook(
   const raw = JSON.stringify(payload);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "JustX-ArtifactDispatcher/1.0",
+    "User-Agent": "Justxsystems-ArtifactDispatcher/1.0",
     "X-JustX-Event": "artifact.ready",
     "X-JustX-Artifact-Id": row.id,
   };

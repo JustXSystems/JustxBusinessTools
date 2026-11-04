@@ -1,19 +1,19 @@
-JustX Sync Agent - Setup
+Justxsystems Sync Agent - Setup
 ========================
 
 For non-technical staff (Windows PC):
 
 1. Keep this whole folder together (do not move only one file).
-2. Double-click:  Install JustX Sync Agent.cmd
+2. Double-click:  Install Justxsystems Sync Agent.cmd
 3. Wait for "SUCCESS", then close the window.
-4. Open JustX Sync Center in your browser on THIS same PC.
+4. Open Justxsystems Sync Center in your browser on THIS same PC.
    It should show: Desktop agent Connected.
 5. If files are waiting: click Sync now (desktop agent).
    Confirm Pending goes to 0 and PDFs appear in your company folder.
 
 Optional:
 - Check Status.cmd     - see if the agent is running
-- Uninstall JustX Sync Agent.cmd  - remove auto-start and files
+- Uninstall Justxsystems Sync Agent.cmd  - remove auto-start and files
 
 Notes:
 - You do NOT need to install Node.js yourself (it is included).

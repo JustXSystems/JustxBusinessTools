@@ -24,7 +24,7 @@ export function resolveInitialBosTheme(input: {
 
 /**
  * Kit skin: an explicit `skin` prop wins; otherwise kit-based tools follow the
- * org's design pack, so applying the "JustX IMS" preset reskins every one.
+ * org's design pack, so applying the "Justxsystems IMS" preset reskins every one.
  */
 export function resolveBosSkin(input: { explicit?: BosSkin | null; hostPack?: string | null }): BosSkin {
   if (isBosSkin(input.explicit)) return input.explicit;

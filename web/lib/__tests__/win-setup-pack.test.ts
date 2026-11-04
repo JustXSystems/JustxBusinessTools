@@ -22,7 +22,7 @@ describe("win-setup-pack", () => {
 
   it("injects config.json into a minimal win setup zip", () => {
     const base = zipSync({
-      [`${WIN_SETUP_ROOT}/Install JustX Sync Agent.cmd`]: strToU8("@echo off\n"),
+      [`${WIN_SETUP_ROOT}/Install Justxsystems Sync Agent.cmd`]: strToU8("@echo off\n"),
       [`${WIN_SETUP_ROOT}/runtime/node.exe`]: strToU8("fake-node"),
       [`${WIN_SETUP_ROOT}/app/src/index.js`]: strToU8(
         'export const AGENT_VERSION = "1.1.3";\nconsole.log(1)\n',
@@ -47,7 +47,7 @@ describe("win-setup-pack", () => {
 
   it("allows outdated zip download but warns and stamps honest packVersion", () => {
     const base = zipSync({
-      [`${WIN_SETUP_ROOT}/Install JustX Sync Agent.cmd`]: strToU8("@echo off\n"),
+      [`${WIN_SETUP_ROOT}/Install Justxsystems Sync Agent.cmd`]: strToU8("@echo off\n"),
       [`${WIN_SETUP_ROOT}/runtime/node.exe`]: strToU8("fake-node"),
       [`${WIN_SETUP_ROOT}/app/src/index.js`]: strToU8(
         'export const AGENT_VERSION = "1.1.0";\n',

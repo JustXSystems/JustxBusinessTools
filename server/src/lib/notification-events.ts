@@ -347,7 +347,7 @@ export const NOTIFICATION_EVENTS = {
     icon: "🚫",
   },
 
-  // ── Admin / JustX platform ──────────────────────────────────────────────
+  // ── Admin / Justxsystems platform ──────────────────────────────────────────────
   "admin.business_update": {
     category: "system" as const,
     severity: "info" as const,

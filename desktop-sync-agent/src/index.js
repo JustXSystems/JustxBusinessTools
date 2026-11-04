@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * JustX Desktop Sync Agent
+ * Justxsystems Desktop Sync Agent
  *
  * Polls / can be triggered from the web Sync Center via a localhost bridge
  * (http://127.0.0.1:17865) so staff/owners can click "Sync now" in the UI.
@@ -573,7 +573,7 @@ async function bridgeAlreadyHealthy() {
 }
 
 async function main() {
-  console.log(`JustX sync agent v${AGENT_VERSION} → ${API_BASE}`);
+  console.log(`Justxsystems sync agent v${AGENT_VERSION} → ${API_BASE}`);
   if (fileCfg._configPath) console.log(`Config: ${fileCfg._configPath}`);
 
   if (!NO_BRIDGE && !ONCE) {

@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { pool } from "../db.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -36,10 +36,14 @@ function splitSqlStatements(sql: string): string[] {
     .filter(Boolean);
 }
 
+function migrationId(file: string): string {
+  return file.replace(/\.(sql|mjs)$/i, "");
+}
+
 async function migrationFiles(dir: string): Promise<string[] | null> {
   try {
     return (await readdir(dir))
-      .filter((f) => /^\d{3,}_.+\.sql$/i.test(f))
+      .filter((f) => /^\d{3,}_.+\.(sql|mjs)$/i.test(f))
       .sort((a, b) => a.localeCompare(b));
   } catch (err) {
     console.warn("[migrations] directory missing:", dir, err instanceof Error ? err.message : err);
@@ -62,7 +66,7 @@ export async function listPendingMigrations(): Promise<string[]> {
   } catch (err) {
     if ((err as { code?: string }).code !== "ER_NO_SUCH_TABLE") throw err;
   }
-  return files.map((f) => f.replace(/\.sql$/i, "")).filter((id) => !done.has(id));
+  return files.map(migrationId).filter((id) => !done.has(id));
 }
 
 export async function runPendingMigrations(): Promise<{ applied: string[]; skipped: string[] }> {
@@ -77,32 +81,42 @@ export async function runPendingMigrations(): Promise<{ applied: string[]; skipp
   const skipped: string[] = [];
 
   for (const file of files) {
-    const id = file.replace(/\.sql$/i, "");
+    const id = migrationId(file);
     if (done.has(id)) {
       skipped.push(id);
       continue;
     }
     const full = path.join(dir, file);
-    const raw = await readFile(full, "utf8");
-    const statements = splitSqlStatements(raw);
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
-      for (const stmt of statements) {
-        try {
-          await conn.query(stmt);
-        } catch (err) {
-          const code = (err as { code?: string }).code;
-          // Idempotent DDL: duplicate key/index/column is OK when re-applying repaired files.
-          if (
-            code === "ER_DUP_KEYNAME" ||
-            code === "ER_DUP_FIELDNAME" ||
-            code === "ER_TABLE_EXISTS_ERROR" ||
-            code === "ER_DUP_ENTRY"
-          ) {
-            continue;
+      if (/\.mjs$/i.test(file)) {
+        const mod = (await import(pathToFileURL(full).href)) as {
+          default?: (c: typeof conn) => Promise<void>;
+        };
+        if (typeof mod.default !== "function") {
+          throw new Error(`Migration ${file} must export default async function(conn)`);
+        }
+        await mod.default(conn);
+      } else {
+        const raw = await readFile(full, "utf8");
+        const statements = splitSqlStatements(raw);
+        for (const stmt of statements) {
+          try {
+            await conn.query(stmt);
+          } catch (err) {
+            const code = (err as { code?: string }).code;
+            // Idempotent DDL: duplicate key/index/column is OK when re-applying repaired files.
+            if (
+              code === "ER_DUP_KEYNAME" ||
+              code === "ER_DUP_FIELDNAME" ||
+              code === "ER_TABLE_EXISTS_ERROR" ||
+              code === "ER_DUP_ENTRY"
+            ) {
+              continue;
+            }
+            throw err;
           }
-          throw err;
         }
       }
       await conn.query(`INSERT INTO schema_migrations (id) VALUES (:id)`, { id });

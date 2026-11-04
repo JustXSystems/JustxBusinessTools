@@ -644,7 +644,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
         toolCard({
           id: "t-ims",
           toolId: "imsdealer",
-          name: "JustX IMS — Dealer",
+          name: "Justxsystems IMS — Dealer",
           description: "Inventory, purchasing, GST sales, receivables, and field ops in one system.",
           icon: "📦",
           features: ["Stock in / out", "Purchase orders", "Field map & onsite"],
@@ -654,7 +654,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
         toolCard({
           id: "t-bos",
           toolId: "bos",
-          name: "JustX BOS",
+          name: "Justxsystems BOS",
           description: "Finance, GST invoicing, HR and projects — synced with your business tools.",
           icon: "🏢",
           features: ["Invoicing", "HR samples", "Operating system UI"],

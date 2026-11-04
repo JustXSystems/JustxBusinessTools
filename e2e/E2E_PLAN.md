@@ -1,4 +1,4 @@
-# E2E Test Plan — JustXSystems
+# E2E Test Plan — Justxsystems
 
 Manual and automated scenarios for Playwright (`e2e/smoke.spec.ts`).
 

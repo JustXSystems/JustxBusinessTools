@@ -1,6 +1,6 @@
 /**
  * Pack slim desktop-sync-agent sources into web/public/desktop-sync-agent.zip
- * (advanced / PowerShell bootstrap). Customer primary pack is JustX-Sync-Agent-win-x64.zip.
+ * (advanced / PowerShell bootstrap). Customer primary pack is Justxsystems-Sync-Agent-win-x64.zip.
  */
 import fs from "node:fs";
 import path from "node:path";

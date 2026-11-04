@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Optional desktop agent that writes staged JustX artifacts to a UNC/local Download Folder",
+  "description": "Optional desktop agent that writes staged Justxsystems artifacts to a UNC/local Download Folder",
   "bin": {
     "jbt-sync-agent": "./src/index.js"
   },

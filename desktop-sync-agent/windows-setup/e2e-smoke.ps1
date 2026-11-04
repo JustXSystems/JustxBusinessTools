@@ -2,11 +2,11 @@ $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $repo
 
-$zip = Join-Path $repo "web\public\JustX-Sync-Agent-win-x64.zip"
+$zip = Join-Path $repo "web\public\Justxsystems-Sync-Agent-win-x64.zip"
 $stage = Join-Path $env:TEMP "jbt-win-setup-e2e"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
-$root = Join-Path $stage "JustX-Sync-Agent"
+$root = Join-Path $stage "Justxsystems-Sync-Agent"
 
 $api = "https://justxsystems.com/jbt/api"
 $token = "jxsa_test_placeholder"
@@ -27,7 +27,7 @@ $config = @{
 } | ConvertTo-Json -Compress
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText((Join-Path $root "config.json"), $config, $utf8NoBom)
-[System.IO.File]::WriteAllText((Join-Path $env:LOCALAPPDATA "JustX\sync-agent\config.json"), $config, $utf8NoBom)
+[System.IO.File]::WriteAllText((Join-Path $env:LOCALAPPDATA "Justxsystems\sync-agent\config.json"), $config, $utf8NoBom)
 
 Write-Host "Setup root: $root"
 Write-Host "node bytes: $((Get-Item (Join-Path $root 'runtime\node.exe')).Length)"
@@ -35,7 +35,7 @@ Write-Host "node bytes: $((Get-Item (Join-Path $root 'runtime\node.exe')).Length
 & (Join-Path $root "windows-stop-bridge.cmd") | Out-Null
 
 # Run install non-interactively by invoking the core steps (avoid pause)
-$install = Join-Path $env:LOCALAPPDATA "JustX\sync-agent"
+$install = Join-Path $env:LOCALAPPDATA "Justxsystems\sync-agent"
 New-Item -ItemType Directory -Force -Path "$install\runtime","$install\app\src" | Out-Null
 Copy-Item (Join-Path $root "config.json") "$install\config.json" -Force
 Copy-Item (Join-Path $root "runtime\node.exe") "$install\runtime\node.exe" -Force
@@ -44,9 +44,9 @@ Copy-Item (Join-Path $root "app\src\index.js") "$install\app\src\index.js" -Forc
 Copy-Item (Join-Path $root "run-agent.cmd") "$install\run-agent.cmd" -Force
 Copy-Item (Join-Path $root "windows-stop-bridge.cmd") "$install\windows-stop-bridge.cmd" -Force
 
-cmd /c "schtasks /Delete /TN \"JustX Sync Agent\" /F >nul 2>&1"
+cmd /c "schtasks /Delete /TN \"Justxsystems Sync Agent\" /F >nul 2>&1"
 $tr = "`"$install\run-agent.cmd`""
-cmd /c "schtasks /Create /TN \"JustX Sync Agent\" /SC ONLOGON /RL LIMITED /F /TR $tr >nul 2>&1"
+cmd /c "schtasks /Create /TN \"Justxsystems Sync Agent\" /SC ONLOGON /RL LIMITED /F /TR $tr >nul 2>&1"
 if ($LASTEXITCODE -ne 0) {
   Write-Host "schtasks create skipped or access denied - continuing with manual start"
 }

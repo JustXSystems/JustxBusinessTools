@@ -98,7 +98,7 @@ export function canWriteArea(
 
 /**
  * Who may open `/admin` (full admin console).
- * - JustX platform admins (`isPlatformAdmin` / PLATFORM_ADMIN_EMAIL)
+ * - Justxsystems platform admins (`isPlatformAdmin` / PLATFORM_ADMIN_EMAIL)
  * - Org role `admin` only — not Owner, Staff, or Viewer
  */
 export function canAccessAdmin(user: SessionUser | null | undefined): boolean {

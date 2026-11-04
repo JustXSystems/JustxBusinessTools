@@ -218,7 +218,7 @@ router.post("/register", async (req, res) => {
           `INSERT INTO subscriptions (business_profile_id, plan_id, status) VALUES (:profileId, 'free', 'active')`,
           { profileId },
         );
-        // Soft review queue for JustX — does not block Owner login or session.
+        // Soft review queue for Justxsystems — does not block Owner login or session.
         await conn.query(
           `INSERT IGNORE INTO business_profile_meta (business_profile_id, approval_status, requested_by)
            VALUES (:profileId, 'pending', :userId)`,
@@ -270,7 +270,7 @@ router.post("/register", async (req, res) => {
       return;
     }
 
-    // New business Owner: active immediately with session; JustX soft-reviews the Business Profile.
+    // New business Owner: active immediately with session; Justxsystems soft-reviews the Business Profile.
     await logAudit(
       "auth.register",
       "user",

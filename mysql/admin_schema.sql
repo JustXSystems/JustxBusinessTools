@@ -115,15 +115,17 @@ CREATE TABLE IF NOT EXISTS platform_config (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO platform_config (config_key, value)
-SELECT 'powered_by', JSON_OBJECT('text', 'Powered by JustX Systems LLP', 'locked', true)
+SELECT 'powered_by', JSON_OBJECT('text', 'Powered by Justxsystems LLP', 'locked', true)
 FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM platform_config WHERE config_key = 'powered_by');
 
 INSERT INTO platform_config (config_key, value)
 SELECT 'branding', JSON_OBJECT(
   'logoUrl', '/icons/justx-logo.png',
-  'appName', 'JustX Business Tools',
-  'tagline', 'JustX Systems',
+  'appName', 'Justxsystems',
+  'tagline', 'Justxsystems',
+  'legalName', 'Justxsystems LLP',
+  'productName', 'Justxsystems Business Tools',
   'splashDurationMs', 1800,
   'installIconUrl', '/icons/justx-logo.png'
 )

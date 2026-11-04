@@ -201,15 +201,15 @@ export default function SyncCenterPage() {
         agentToken: res.token,
         downloadFolder: profile?.downloadFolder ?? downloadFolder,
       });
-      downloadBinaryFile("JustX-Sync-Agent-Setup.zip", zipBytes.zip);
+      downloadBinaryFile("Justxsystems-Sync-Agent-Setup.zip", zipBytes.zip);
       if (zipBytes.warning) {
         showWarn(zipBytes.warning);
         showOk(
-          `Setup downloaded (agent ${zipBytes.agentVersion}). Extract → Install JustX Sync Agent.cmd. Note: server zip is behind this web build — see warning.`,
+          `Setup downloaded (agent ${zipBytes.agentVersion}). Extract → Install Justxsystems Sync Agent.cmd. Note: server zip is behind this web build — see warning.`,
         );
       } else {
         showOk(
-          `Setup downloaded (agent ${zipBytes.agentVersion}). Extract the zip, double-click Install JustX Sync Agent.cmd, then return here.`,
+          `Setup downloaded (agent ${zipBytes.agentVersion}). Extract the zip, double-click Install Justxsystems Sync Agent.cmd, then return here.`,
         );
       }
       setSetupOpen(true);
@@ -265,7 +265,7 @@ export default function SyncCenterPage() {
       <div className="page">
         <h1 className="page-title">Sync Center</h1>
         <p className="section-note">
-          Only Business Owners (and Admins) can open Sync Center. Staff use JustX tools —
+          Only Business Owners (and Admins) can open Sync Center. Staff use Justxsystems tools —
           company PDFs deliver automatically from Business Profile settings.
         </p>
         <Link href="/" className="btn btn-secondary">
@@ -284,7 +284,7 @@ export default function SyncCenterPage() {
         <div>
           <h1 className="page-title">Sync Center</h1>
           <p className="section-note" style={{ marginTop: 4 }}>
-            Each company (Business Profile) has its own destination. Staff only use JustX tools —
+            Each company (Business Profile) has its own destination. Staff only use Justxsystems tools —
             documents go to the company Drive/webhook automatically. Owners use this page for status,
             retries, and optional UNC agent setup. Quotation emails:{" "}
             <Link href="/email-outbox">Email Outbox</Link> (webhook, mailto, or Outlook via this
@@ -335,7 +335,7 @@ export default function SyncCenterPage() {
           ) : (
             <p className="section-note">
               Owner setup: Business Profile → Connect company Google Drive → save shared folder.
-              Other companies on JustX use their own connections.
+              Other companies on Justxsystems use their own connections.
             </p>
           )}
           <Link href="/profile" className="btn btn-secondary btn-sm">
@@ -445,11 +445,11 @@ export default function SyncCenterPage() {
               </li>
               <li>
                 Click <strong>Download setup for this PC</strong> (saves{" "}
-                <code>JustX-Sync-Agent-Setup.zip</code>).
+                <code>Justxsystems-Sync-Agent-Setup.zip</code>).
               </li>
               <li>
                 Extract the zip → open the folder → double-click{" "}
-                <strong>Install JustX Sync Agent.cmd</strong> → wait for SUCCESS.
+                <strong>Install Justxsystems Sync Agent.cmd</strong> → wait for SUCCESS.
               </li>
               <li>
                 Come back here and refresh. Status should show{" "}
@@ -512,8 +512,8 @@ export default function SyncCenterPage() {
               <div style={{ marginTop: 10 }}>
                 <p className="section-note">
                   Base pack (no token):{" "}
-                  <a href={withBasePath("/JustX-Sync-Agent-win-x64.zip")}>
-                    JustX-Sync-Agent-win-x64.zip
+                  <a href={withBasePath("/Justxsystems-Sync-Agent-win-x64.zip")}>
+                    Justxsystems-Sync-Agent-win-x64.zip
                   </a>
                   {" · "}
                   <a href={withBasePath("/desktop-sync-agent.zip")}>desktop-sync-agent.zip</a>

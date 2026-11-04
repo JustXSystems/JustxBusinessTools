@@ -9,7 +9,7 @@ import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { ShellRouter } from "@/components/ShellRouter";
 
 // Self-hosted by Next.js (no runtime request to Google Fonts). Only consumed
-// when the "JustX BOS" theme preset sets --font-sans/--font-mono to these
+// when the "Justxsystems BOS" theme preset sets --font-sans/--font-mono to these
 // variables — every other preset keeps using system-ui, so this costs
 // nothing for tenants who don't switch themes.
 const plexSans = IBM_Plex_Sans({
@@ -25,7 +25,7 @@ const plexMono = IBM_Plex_Mono({
   variable: "--font-plex-mono",
   display: "swap",
 });
-// The "JustX IMS" preset and the kit's IMS skin read --font-inter.
+// The "Justxsystems IMS" preset and the kit's IMS skin read --font-inter.
 const inter = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],

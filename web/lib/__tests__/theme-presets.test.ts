@@ -13,21 +13,26 @@ describe("theme presets", () => {
     expect(normalizeThemePreset("")).toBeNull();
     expect(normalizeThemePreset("default")).toBeNull();
     expect(normalizeThemePreset("__org_default__")).toBeNull();
-    expect(normalizeThemePreset("JustXSystems Electric")).toBe("JustXSystems Electric");
+    expect(normalizeThemePreset("Justxsystems Electric")).toBe("Justxsystems Electric");
   });
 
   it("resolves built-in preset tokens", () => {
     expect(THEME_PRESETS.length).toBeGreaterThan(3);
-    const tokens = findThemePresetTokens("JustX BOS (Light)");
+    const tokens = findThemePresetTokens("Justxsystems BOS (Light)");
     expect(tokens?.scheme).toBe("light");
     expect(tokens?.pack).toBe("bos");
   });
 
   it("ships the IMS master theme in both schemes with the ims pack", () => {
-    const light = findThemePresetTokens("JustX IMS (Light)");
-    const dark = findThemePresetTokens("JustX IMS (Dark)");
+    const light = findThemePresetTokens("Justxsystems IMS (Light)");
+    const dark = findThemePresetTokens("Justxsystems IMS (Dark)");
     expect(light).toMatchObject({ scheme: "light", pack: "ims", accent: "#4854EB", radius: "24px" });
     expect(dark).toMatchObject({ scheme: "dark", pack: "ims" });
+  });
+
+  it("resolves legacy JustX* preset aliases", () => {
+    expect(findThemePresetTokens("JustXSystems Electric")?.accent).toBeTruthy();
+    expect(findThemePresetTokens("JustX BOS (Light)")?.pack).toBe("bos");
   });
 
   it("matches the server preset list name-for-name and token-for-token", async () => {
@@ -43,7 +48,7 @@ describe("theme presets", () => {
 
   it("parses saved org theme keys", () => {
     expect(parseSavedThemeId("saved:42")).toBe(42);
-    expect(parseSavedThemeId("JustXSystems Electric")).toBeNull();
+    expect(parseSavedThemeId("Justxsystems Electric")).toBeNull();
     expect(savedThemePresetKey(7)).toBe("saved:7");
   });
 });

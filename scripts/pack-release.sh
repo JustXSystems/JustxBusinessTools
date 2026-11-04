@@ -48,10 +48,10 @@ chmod +x scripts/*.sh 2>/dev/null || true
 
 EXCLUDE_WIN=()
 if [[ "${JBT_INCLUDE_WIN_AGENT:-0}" != "1" ]]; then
-  EXCLUDE_WIN=(--exclude='web/public/JustX-Sync-Agent-win-x64.zip')
-  echo "    excluding JustX-Sync-Agent-win-x64.zip (preserved on VPS)"
+  EXCLUDE_WIN=(--exclude='web/public/Justxsystems-Sync-Agent-win-x64.zip')
+  echo "    excluding Justxsystems-Sync-Agent-win-x64.zip (preserved on VPS)"
 else
-  echo "    including JustX-Sync-Agent-win-x64.zip"
+  echo "    including Justxsystems-Sync-Agent-win-x64.zip"
 fi
 
 # Exclude bulky / non-runtime trees. web/.next is included (minus cache).

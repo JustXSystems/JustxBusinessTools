@@ -26,7 +26,7 @@ export const ThemeStudioPanel = forwardRef<ExperienceSaveHandle>(function ThemeS
   const [themes, setThemes] = useState<Theme[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [draft, setDraft] = useState<ThemeTokens>({ ...JUSTX_ELECTRIC });
-  const [name, setName] = useState("JustXSystems Electric");
+  const [name, setName] = useState("Justxsystems Electric");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [previewFrame, setPreviewFrame] = useState<PreviewFrame>("home");
@@ -246,16 +246,16 @@ export const ThemeStudioPanel = forwardRef<ExperienceSaveHandle>(function ThemeS
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => selectPreset({ name: "JustXSystems Electric", tokens: JUSTX_ELECTRIC })}
+                onClick={() => selectPreset({ name: "Justxsystems Electric", tokens: JUSTX_ELECTRIC })}
               >
-                Reset JustXSystems Electric
+                Reset Justxsystems Electric
               </button>
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => selectPreset({ name: "JustXSystems Light", tokens: JUSTX_LIGHT })}
+                onClick={() => selectPreset({ name: "Justxsystems Light", tokens: JUSTX_LIGHT })}
               >
-                JustXSystems Light
+                Justxsystems Light
               </button>
               <button type="button" className="btn btn-ghost" onClick={exportTheme}>
                 Export JSON

@@ -1,4 +1,4 @@
-# JustX Business Tools — Setup guide
+# Justxsystems Business Tools — Setup guide
 
 **Production URL:** https://justxsystems.com/jbt/  
 **OAuth owner account:** `justxsystems@gmail.com`
@@ -8,8 +8,8 @@ Production support / on-call: [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md).
 
 | Who | Section |
 |-----|---------|
-| JustX engineer / admin | [Local development](#local-development) · [Production deploy](#production-deploy) · [Google OAuth](#google-oauth-once) · [Environment reference](#environment-reference) · [Email delivery](#email-delivery-configuration) · [Sync Center & Email Outbox](#sync-center--email-outbox) |
-| JustX on-call / ops | [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md) |
+| Justxsystems engineer / admin | [Local development](#local-development) · [Production deploy](#production-deploy) · [Google OAuth](#google-oauth-once) · [Environment reference](#environment-reference) · [Email delivery](#email-delivery-configuration) · [Sync Center & Email Outbox](#sync-center--email-outbox) |
+| Justxsystems on-call / ops | [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md) |
 | Roles & menu access | [`ROLES.md`](ROLES.md) |
 | **Any-device email (M365 / Graph)** | [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md) |
 | Customer company Owner | [Client companies](#client-companies-part-b) |
@@ -22,7 +22,7 @@ Production support / on-call: [`PRODUCTION_SUPPORT.md`](PRODUCTION_SUPPORT.md).
 ABB / Schneider / Zigma staff  →  justxsystems.com/jbt
                                       │
                                       ▼
-                               JustX API + MySQL
+                               Justxsystems API + MySQL
                                       │
                     Business Profile A → that company’s folder / webhook / UNC
                     Business Profile B → that company’s folder / webhook / UNC
@@ -53,7 +53,7 @@ ABB / Schneider / Zigma staff  →  justxsystems.com/jbt
 | Email Path B (mailto) | **No** |
 | Email Path C (Outlook desktop agent) | **No** |
 
-**`justxsystems@gmail.com`** is only the Google Cloud Console account JustX uses to **own** the platform OAuth client when you *do* enable Google. It is not a runtime dependency and is not hardcoded. Any Google Cloud project/account can host the client.
+**`justxsystems@gmail.com`** is only the Google Cloud Console account Justxsystems uses to **own** the platform OAuth client when you *do* enable Google. It is not a runtime dependency and is not hardcoded. Any Google Cloud project/account can host the client.
 
 Without Google configured (Admin or env):
 
@@ -99,7 +99,7 @@ Supported path: **[`DEPLOY.md`](DEPLOY.md)** (GitHub Actions builds artifact →
 2. One-time VPS setup + `server/.env` + nginx `/jbt` (ports **3002** / **4002**)
 3. Push to `master` (or run the **Deploy** workflow with optional CD inputs)
 
-### Production checklist (JustX)
+### Production checklist (Justxsystems)
 
 - [ ] https://justxsystems.com/jbt/ loads
 - [ ] https://justxsystems.com/jbt/api/health → ok
@@ -115,12 +115,12 @@ Supported path: **[`DEPLOY.md`](DEPLOY.md)** (GitHub Actions builds artifact →
 
 **Skip this entire section** if customers will use webhook/UNC/email only (see [Is Google Cloud OAuth mandatory?](#is-google-cloud-oauth-mandatory)).
 
-When you want Sign in with Google and/or Company Google Drive delivery, create **one** platform OAuth client (JustX currently uses Google Cloud under `justxsystems@gmail.com` — any project owner works).
+When you want Sign in with Google and/or Company Google Drive delivery, create **one** platform OAuth client (Justxsystems currently uses Google Cloud under `justxsystems@gmail.com` — any project owner works).
 
 Sign in to [Google Cloud Console](https://console.cloud.google.com/).
 
-1. Project (e.g. **JustX-JBT**) → enable **Google Drive API** (and standard Google sign-in / People userinfo).
-2. **OAuth consent screen** → External → app **JustX Business Tools** → support/dev email `justxsystems@gmail.com`.
+1. Project (e.g. **Justxsystems-JBT**) → enable **Google Drive API** (and standard Google sign-in / People userinfo).
+2. **OAuth consent screen** → External → app **Justxsystems Business Tools** → support/dev email `justxsystems@gmail.com`.
 3. Scopes: `openid`, `email`, `profile`, `https://www.googleapis.com/auth/drive.file`.
 4. **Credentials → OAuth client ID → Web application**
 
@@ -198,24 +198,24 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 
 ## Email delivery configuration
 
-JustX does **not** send SMTP mail by itself. Choose one path (you can combine A + B/C).
+Justxsystems does **not** send SMTP mail by itself. Choose one path (you can combine A + B/C).
 
 | Path | Configure where | Who | Any device? |
 |------|-----------------|-----|-------------|
 | **A. Automatic HTML + PDF** (webhook; recommended **Power Automate + M365**) | **Business Profile → Send Via → Email → Email webhook URL** (per company); Admin Integrations / `EMAIL_WEBHOOK_URL` = fallback | Owner / Admin | **Yes** — [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md) |
 | **B. Mail app + PDF download** | Nothing required | Staff (default if A unset) | Partial (plain text) |
 | **C. Outlook with PDF attached** | **Sync Center** → `JBT_AGENT_TOKEN` | **Owner or Admin** on a Windows PC | **No** |
-| **D. Native Graph in JustX** | Entra app + future Admin/Profile UI | Not shipped | Yes (planned) — Part 2 in [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md) |
+| **D. Native Graph in Justxsystems** | Entra app + future Admin/Profile UI | Not shipped | Yes (planned) — Part 2 in [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md) |
 
 Canonical detail: **[`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)** · webhook JSON: **[`EMAIL_WEBHOOK.md`](EMAIL_WEBHOOK.md)** · **any-device M365:** **[`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md)** · Sync Center: **[`SYNC_CENTER.md`](SYNC_CENTER.md)**.
 
 ### Path A — Email webhook (Business Profile preferred)
 
-**What the value is:** the HTTPS URL of an **inbound webhook you create** outside JustX. JustX `POST`s JSON to it; your automation sends the real email. **Each company / GSTIN should have its own URL** (own Power Automate flow + From mailbox).
+**What the value is:** the HTTPS URL of an **inbound webhook you create** outside Justxsystems. Justxsystems `POST`s JSON to it; your automation sends the real email. **Each company / GSTIN should have its own URL** (own Power Automate flow + From mailbox).
 
 **Blind-follow (Microsoft 365 / Graph via Power Automate):** [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md)#part-1--blind-follow-path-a-via-power-automate--microsoft-365-outlook — create flow → paste URL on **Business Profile → Send Via → Email**.
 
-**What it is not:** a SendGrid API key, Gmail password, Graph client secret, JustX `/api/...` path, or the Profile **artifact** webhook (PDF file delivery).
+**What it is not:** a SendGrid API key, Gmail password, Graph client secret, Justxsystems `/api/...` path, or the Profile **artifact** webhook (PDF file delivery).
 
 **Preferred (per company, no PM2):**
 
@@ -270,7 +270,7 @@ Optional UI (Owner): **Business Profile → Send Via defaults → Email** (templ
 
 1. Sign in as **Owner or Admin** → **Sync Center** (`/sync`). Staff cannot open Sync Center — [`ROLES.md`](ROLES.md).
 2. **Set up on this PC** → **Download setup for this PC**.
-3. Extract zip → double-click **Install JustX Sync Agent.cmd**.
+3. Extract zip → double-click **Install Justxsystems Sync Agent.cmd**.
 4. Confirm Sync Center shows **Connected**, then prep classic Outlook (Inbox + COM) — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#prep-classic-outlook-on-windows-paths-b--c.
 5. Confirm agent **≥ 1.1.3** for Corporate HTML: `Invoke-RestMethod http://127.0.0.1:17865/health` → `version`. If still old after reinstall, Deploy with **`pack_win_agent=true`**, then download setup again — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md)#confirm-agent-version--113-path-c--html.
 6. **Staff** (or Owner) use **Email Outbox** → **Open in Outlook** (not **Open mail app** for HTML).
@@ -318,7 +318,7 @@ Do not confuse:
 - **Not every customer needs the desktop agent** — Drive/webhook + email webhook need none  
 - **Staff never open Sync Center** — see [`ROLES.md`](ROLES.md)
 
-**Local folder document delivery (quick):** Owner sets Profile destination UNC + **Download Folder path** (e.g. `C:\JustX\Artifacts`) → Save → install agent → Sync now. Step-by-step: [`SYNC_CENTER.md`](SYNC_CENTER.md)#14-company-file-server--download-folder-path-unc--optional.
+**Local folder document delivery (quick):** Owner sets Profile destination UNC + **Download Folder path** (e.g. `C:\Justxsystems\Artifacts`) → Save → install agent → Sync now. Step-by-step: [`SYNC_CENTER.md`](SYNC_CENTER.md)#14-company-file-server--download-folder-path-unc--optional.
 ---
 
 ## Client companies (Part B)
@@ -327,7 +327,7 @@ Give the matching subsection to each paying customer.
 
 ### B1 — Google Drive companies (needs platform Google OAuth)
 
-**Only the Business Profile Owner** connects Google Drive. Requires JustX to have configured [Google OAuth](#google-oauth-optional--only-for-google-login--company-drive).
+**Only the Business Profile Owner** connects Google Drive. Requires Justxsystems to have configured [Google OAuth](#google-oauth-optional--only-for-google-login--company-drive).
 
 #### Prerequisites
 
@@ -357,7 +357,7 @@ Give the matching subsection to each paying customer.
 
 | Symptom | Check |
 |---------|--------|
-| OAuth / Connect missing | Platform Google env (JustX Part A / deploy) |
+| OAuth / Connect missing | Platform Google env (Justxsystems Part A / deploy) |
 | `redirect_uri_mismatch` | Console URI vs `.env` character-for-character |
 | Connected, no files | Wrong folder link; reconnect; destination Auto/Drive |
 | Only one PC “works” | Delivery is server-side via Owner connection — not a personal PC folder |
@@ -372,7 +372,7 @@ Platform Google OAuth is **not** required. Owner still saves a Business Profile.
 | PDFs on file server / synced folder | **Download Folder path** + Sync Center setup on one PC — [`SYNC_CENTER.md`](SYNC_CENTER.md)#14-company-file-server--download-folder-path-unc--optional |
 | Email only | Leave company destination none/unset; use Email Outbox paths A/B/C — [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md) |
 
-**Local absolute paths work** (e.g. `C:\JustX\Artifacts`) — same as UNC; the desktop agent (or browser folder sync) writes on that PC. After install, production `apiBase` must be `https://justxsystems.com/jbt/api` — see [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
+**Local absolute paths work** (e.g. `C:\Justxsystems\Artifacts`) — same as UNC; the desktop agent (or browser folder sync) writes on that PC. After install, production `apiBase` must be `https://justxsystems.com/jbt/api` — see [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok.
 
 Staff log in with **email/password** (or Phone OTP if enabled). They never need a Google account.
 
@@ -385,7 +385,7 @@ Email send paths: [`EMAIL_OUTBOX.md`](EMAIL_OUTBOX.md).
 
 | Item | Owner |
 |------|--------|
-| Hosting, MySQL, `.env`, nginx, PM2 | JustXSystems |
-| Google Cloud OAuth client (optional) | JustXSystems (e.g. `justxsystems@gmail.com`) — only if Google login / Drive is offered |
+| Hosting, MySQL, `.env`, nginx, PM2 | Justxsystems |
+| Google Cloud OAuth client (optional) | Justxsystems (e.g. `justxsystems@gmail.com`) — only if Google login / Drive is offered |
 | Each company’s Business Profile + Drive **or** webhook/UNC | That company’s Owner |
 | Staff accounts | That company’s Owner / admins |

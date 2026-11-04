@@ -1,7 +1,7 @@
 import { pool } from "../db.js";
 import { jsonVal } from "./admin/approvals.js";
 
-/** JustXSystems Electric — deep royal blue surfaces + electric cyan (brand strip). */
+/** Justxsystems Electric — deep royal blue surfaces + electric cyan (brand strip). */
 export const JUSTX_ELECTRIC = {
   accent: "#00dfff",
   teal: "#00dfff",
@@ -82,12 +82,12 @@ export const DEFAULT_THEME_TOKENS = { ...JUSTX_ELECTRIC };
 
 /** Built-in theme presets — keep in sync with `web/lib/theme-presets.ts`. */
 export const THEME_PRESETS = [
-  { name: "JustXSystems Electric", tokens: JUSTX_ELECTRIC },
-  { name: "JustXSystems Light", tokens: JUSTX_LIGHT },
-  { name: "JustX BOS (Light)", tokens: JUSTX_BOS_LIGHT },
-  { name: "JustX BOS (Dark)", tokens: JUSTX_BOS_DARK },
-  { name: "JustX IMS (Light)", tokens: JUSTX_IMS_LIGHT },
-  { name: "JustX IMS (Dark)", tokens: JUSTX_IMS_DARK },
+  { name: "Justxsystems Electric", tokens: JUSTX_ELECTRIC },
+  { name: "Justxsystems Light", tokens: JUSTX_LIGHT },
+  { name: "Justxsystems BOS (Light)", tokens: JUSTX_BOS_LIGHT },
+  { name: "Justxsystems BOS (Dark)", tokens: JUSTX_BOS_DARK },
+  { name: "Justxsystems IMS (Light)", tokens: JUSTX_IMS_LIGHT },
+  { name: "Justxsystems IMS (Dark)", tokens: JUSTX_IMS_DARK },
   {
     name: "Midnight Cyan",
     tokens: {
@@ -149,8 +149,19 @@ export function normalizeThemePreset(raw: unknown): string | null {
   return s.slice(0, 120);
 }
 
+/** Old preset labels still stored on profiles before migration 035. */
+const THEME_PRESET_ALIASES: Record<string, string> = {
+  "JustXSystems Electric": "Justxsystems Electric",
+  "JustXSystems Light": "Justxsystems Light",
+  "JustX BOS (Light)": "Justxsystems BOS (Light)",
+  "JustX BOS (Dark)": "Justxsystems BOS (Dark)",
+  "JustX IMS (Light)": "Justxsystems IMS (Light)",
+  "JustX IMS (Dark)": "Justxsystems IMS (Dark)",
+};
+
 export function findPresetTokens(name: string): ThemeTokensRecord | null {
-  const hit = THEME_PRESETS.find((p) => p.name === name);
+  const resolved = THEME_PRESET_ALIASES[name] ?? name;
+  const hit = THEME_PRESETS.find((p) => p.name === resolved);
   return hit ? ({ ...hit.tokens } as ThemeTokensRecord) : null;
 }
 

@@ -37,7 +37,7 @@ export class StripePaymentProvider implements PaymentProvider {
     body.set("success_url", success);
     body.set("cancel_url", cancel);
     body.set("line_items[0][price_data][currency]", "inr");
-    body.set("line_items[0][price_data][product_data][name]", `JustX ${input.planId}`);
+    body.set("line_items[0][price_data][product_data][name]", `Justxsystems ${input.planId}`);
     body.set("line_items[0][price_data][unit_amount]", String(amountPaise));
     body.set("line_items[0][quantity]", "1");
     body.set("metadata[profileId]", String(input.profileId));

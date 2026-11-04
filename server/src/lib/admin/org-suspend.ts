@@ -3,7 +3,7 @@ import { logAudit } from "../audit.js";
 
 /**
  * Suspend every member of an organization and delete all their sessions
- * (forces immediate logout). Used when JustX rejects a business registration.
+ * (forces immediate logout). Used when Justxsystems rejects a business registration.
  */
 export async function suspendOrganizationAccess(
   orgId: number,

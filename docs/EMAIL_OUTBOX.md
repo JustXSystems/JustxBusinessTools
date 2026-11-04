@@ -57,7 +57,7 @@ Full “who / what / how” for files: [`SYNC_CENTER.md`](SYNC_CENTER.md)#who-ne
 | **A. Email webhook** (+ M365 / Graph via Power Automate) | Yes | Yes (`html` field) | **Yes** | **Owner:** Profile email webhook URL per company — **[`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md)** |
 | **B. Mailto + outbox** | No (download + attach) | **No** — plain text only in mail app | Partial | None on server; working default mail client |
 | **C. Outlook via agent** | Yes (COM) | **Yes** — Corporate `html` via Outlook `HTMLBody` (**agent ≥ 1.1.3** + classic Outlook) | **No** | Sync Center agent + **classic** Outlook COM |
-| **D. Native Graph in JustX** | Yes (planned) | Yes | **Yes** | **Not shipped** — Entra checklist in [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md)#part-2--entra-id-app-registration-for-native-path-d-or-custom-graph-caller |
+| **D. Native Graph in Justxsystems** | Yes (planned) | Yes | **Yes** | **Not shipped** — Entra checklist in [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md)#part-2--entra-id-app-registration-for-native-path-d-or-custom-graph-caller |
 
 **Recommended for production:** each company Owner sets **Business Profile → Email webhook URL** (Path A + Power Automate) so Staff send HTML + PDF from **any device**. Use **C** only as optional Windows convenience. **B** is plain-text fallback only.
 
@@ -95,7 +95,7 @@ Optional Owner polish (not required to send): **Business Profile → Send Via de
 
 ### What to configure
 
-JustX does **not** generate this URL. You create an inbound webhook in an external tool; JustX POSTs JSON to it.
+Justxsystems does **not** generate this URL. You create an inbound webhook in an external tool; Justxsystems POSTs JSON to it.
 
 | Location | Role |
 |----------|------|
@@ -111,7 +111,7 @@ JustX does **not** generate this URL. You create an inbound webhook in an extern
 
 ### Step-by-step
 
-#### 1) Create the webhook (outside JustX)
+#### 1) Create the webhook (outside Justxsystems)
 
 Pick one:
 
@@ -125,7 +125,7 @@ Pick one:
 
 **Not valid as the URL:** SendGrid API key, SMTP password, Gmail app password (those belong **inside** the automation).
 
-#### 2) Put URL on JustX
+#### 2) Put URL on Justxsystems
 
 **Preferred (per company):** Owner/Admin → correct branch → **Business Profile → Send Via → Email → Email webhook URL** → paste → profile **Save**.
 
@@ -213,7 +213,7 @@ Start-Process "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
 2. Turn **New Outlook** toggle **Off** if shown.  
 3. Manually **New Email** once to confirm compose works.
 
-#### 3) Confirm `mailto` outside JustX
+#### 3) Confirm `mailto` outside Justxsystems
 
 ```powershell
 Start-Process "mailto:your.email@example.com?subject=JBT%20test&body=Mailto%20works"
@@ -292,7 +292,7 @@ Uses the **same** Sync Center desktop agent as UNC / local-folder file sync.
 |-------------|---------|--------|
 | Windows 10/11 | Yes | Path C is Windows-only |
 | Sync Center setup zip + Install.cmd | Yes | No separate Node.js install |
-| Outbound HTTPS to JustX API | Yes | Token auth; production base must include `/jbt` |
+| Outbound HTTPS to Justxsystems API | Yes | Token auth; production base must include `/jbt` |
 | **Classic desktop Outlook** (COM) | Yes | Not Outlook on the web alone; New Outlook (`olk`) is insufficient |
 | Chrome/Edge on **same PC** as agent | Yes | Outbox talks to `http://127.0.0.1:17865` |
 | Download Folder / UNC | No | Only if also syncing files |
@@ -312,7 +312,7 @@ Canonical agent matrix: [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-
 **Who:** **Owner or Admin** must sign in on that Windows PC and open Sync Center. Staff cannot open Sync Center; after the agent is installed they use **Email Outbox** only.
 
 1. Sign in as **Owner (or Admin)** → Sync Center → **Set up on this PC** → **Download setup for this PC**.  
-2. Extract zip → **Install JustX Sync Agent.cmd**.  
+2. Extract zip → **Install Justxsystems Sync Agent.cmd**.  
 3. Sync Center shows **Desktop agent: Connected**.  
 4. Verify API base:
 
@@ -320,12 +320,12 @@ Canonical agent matrix: [`SYNC_CENTER.md`](SYNC_CENTER.md)#customer-pc--minimum-
 Invoke-RestMethod http://127.0.0.1:17865/status | ConvertTo-Json -Depth 5
 # apiBase must be https://justxsystems.com/jbt/api  (with /jbt)
 # version must be >= 1.1.3 for Corporate HTML in Outlook
-Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
+Get-Content "$env:LOCALAPPDATA\Justxsystems\sync-agent\agent.log" -Tail 40
 ```
 
 ### Confirm agent version ≥ 1.1.3 (Path C + HTML)
 
-Corporate HTML in Outlook needs agent **≥ 1.1.3**. Reinstalling from Sync Center only helps if production’s **`JustX-Sync-Agent-win-x64.zip` was rebuilt and shipped** in that deploy. Ordinary `push` deploys **skip** the ~28MB win pack (VPS keeps the old zip).
+Corporate HTML in Outlook needs agent **≥ 1.1.3**. Reinstalling from Sync Center only helps if production’s **`Justxsystems-Sync-Agent-win-x64.zip` was rebuilt and shipped** in that deploy. Ordinary `push` deploys **skip** the ~28MB win pack (VPS keeps the old zip).
 
 #### Where `1.1.3` lives in source / pack
 
@@ -333,8 +333,8 @@ Corporate HTML in Outlook needs agent **≥ 1.1.3**. Reinstalling from Sync Cent
 |----------|------------|
 | `desktop-sync-agent/src/index.js` → `AGENT_VERSION = "1.1.3"` | Runtime `/health` + `/status` → `version` (source of truth) |
 | `web/lib/artifact-delivery/win-setup-pack.ts` → `AGENT_PACK_VERSION` | Written into setup `config.json` as `packVersion` |
-| Pack script `scripts/pack-justx-sync-agent-win.mjs` | Reads `AGENT_VERSION` from `index.js`; writes `JustX-Sync-Agent/PACK_VERSION.txt` inside the zip |
-| Built zip → `JustX-Sync-Agent/app/src/index.js` | What Sync Center downloads and Install.cmd copies |
+| Pack script `scripts/pack-justx-sync-agent-win.mjs` | Reads `AGENT_VERSION` from `index.js`; writes `Justxsystems-Sync-Agent/PACK_VERSION.txt` inside the zip |
+| Built zip → `Justxsystems-Sync-Agent/app/src/index.js` | What Sync Center downloads and Install.cmd copies |
 
 **Not the agent version:** GitHub Actions “Node 20 is being deprecated” / runner Node 24. That is the **CI runner**. The customer zip still pins portable **Node 20.18.1 win-x64** on purpose (`NODE_VERSION` in the pack script). Cache keys like `agent-node-win-Linux-v20.18.1` are that portable runtime download, not app version `1.1.3`.
 
@@ -361,8 +361,8 @@ If `version` is still `1.1.0` / `1.1.1` / `1.1.2` while `packVersion` says `1.1.
 3. Optional local check of a built zip:
 
 ```bash
-unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/PACK_VERSION.txt
-unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/app/src/index.js | grep AGENT_VERSION
+unzip -p web/public/Justxsystems-Sync-Agent-win-x64.zip Justxsystems-Sync-Agent/PACK_VERSION.txt
+unzip -p web/public/Justxsystems-Sync-Agent-win-x64.zip Justxsystems-Sync-Agent/app/src/index.js | grep AGENT_VERSION
 ```
 
 Full deploy knobs: [`DEPLOY.md`](DEPLOY.md)#auto-pack-windows-sync-agent · pack details: `desktop-sync-agent/README.md`.
@@ -422,7 +422,7 @@ npm start
 
 ## End-to-end: UNC already working — add email only
 
-Typical customer who already has `C:\JustX\Artifacts` (or UNC) syncing:
+Typical customer who already has `C:\Justxsystems\Artifacts` (or UNC) syncing:
 
 1. **Do not change** Download Folder / UNC for email.  
 2. Run [Prep classic Outlook](#prep-classic-outlook-on-windows-paths-b--c).  
@@ -477,7 +477,7 @@ Filters: **Pending** = `pending` + `failed` + `opened` (UI note: “Pending / fa
 
 | Role | Configures / uses |
 |------|-------------------|
-| **JustX engineer** | Admin Integrations / `EMAIL_WEBHOOK_URL`, PM2, automation hosting; agent path changes auto-pack on Deploy (or force **`pack_win_agent=true`**) |
+| **Justxsystems engineer** | Admin Integrations / `EMAIL_WEBHOOK_URL`, PM2, automation hosting; agent path changes auto-pack on Deploy (or force **`pack_win_agent=true`**) |
 | **Admin** | Admin Console; may also use Operator Email Outbox / Sync Center with full access; login lands on `/admin` — [`ROLES.md`](ROLES.md) |
 | **Company Owner** | Profile email templates, accent; **Email webhook URL** (Path A per GSTIN); Sync Center setup if Path C / UNC; Email Outbox R/W |
 | **Staff** | Send quotations; Email Outbox actions; Outlook ready on their PC for B/C (agent installed by Owner); **no** Sync Center menu |
@@ -512,8 +512,8 @@ Filters: **Pending** = `pending` + `failed` + `opened` (UI note: “Pending / fa
 # Agent bridge + version
 Invoke-RestMethod http://127.0.0.1:17865/health
 Invoke-RestMethod http://127.0.0.1:17865/status | ConvertTo-Json -Depth 5
-Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\config.json"
-Get-Content "$env:LOCALAPPDATA\JustX\sync-agent\agent.log" -Tail 40
+Get-Content "$env:LOCALAPPDATA\Justxsystems\sync-agent\config.json"
+Get-Content "$env:LOCALAPPDATA\Justxsystems\sync-agent\agent.log" -Tail 40
 
 # Outlook processes
 Get-Process OUTLOOK, olk -ErrorAction SilentlyContinue |

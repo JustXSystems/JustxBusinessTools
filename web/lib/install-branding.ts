@@ -37,7 +37,7 @@ export function resolveInstallName(appName: string, installName?: string | null)
   return fallback || "Justxsystems";
 }
 
-/** Map legacy generated icons → official JustX logo. */
+/** Map legacy generated icons → official Justxsystems logo. */
 export function canonicalizeBrandIconUrl(raw: string): string {
   const u = String(raw || "").trim();
   if (!u) return JUSTX_LOGO_URL;

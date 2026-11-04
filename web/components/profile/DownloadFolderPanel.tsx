@@ -172,9 +172,9 @@ export function DownloadFolderPanel({
     <div className="panel">
       <h3 className="panel-title">Company document delivery</h3>
       <p className="section-note">
-        JustX is multi-tenant: <strong>each company (Business Profile) configures its own
+        Justxsystems is multi-tenant: <strong>each company (Business Profile) configures its own
         destination</strong>. The Business Owner connects the <strong>company Google account</strong>{" "}
-        once and picks a shared folder. After that, every staff member who logs into JustX on their
+        once and picks a shared folder. After that, every staff member who logs into Justxsystems on their
         own machine generates quotations/surveys as usual — those files are uploaded{" "}
         <strong>automatically to that company folder</strong>. Staff do not need Google access or
         Sync Center clicks.
@@ -187,7 +187,7 @@ export function DownloadFolderPanel({
         <li>
           Share the destination folder with your team in Google so employees can open files there.
         </li>
-        <li>Other companies on JustX never see your Drive — connections are per Business Profile.</li>
+        <li>Other companies on Justxsystems never see your Drive — connections are per Business Profile.</li>
       </ul>
       {deliveryNote ? <p className="section-note sync-msg-ok">{deliveryNote}</p> : null}
       <p className="section-note">
@@ -286,7 +286,7 @@ export function DownloadFolderPanel({
               </p>
               {!canEdit ? (
                 <p className="section-note">
-                  You are Staff: keep using JustX tools normally. Your PDFs go to this company folder
+                  You are Staff: keep using Justxsystems tools normally. Your PDFs go to this company folder
                   when delivery is active.
                 </p>
               ) : null}
@@ -296,7 +296,7 @@ export function DownloadFolderPanel({
               {!drive?.oauthClientConfigured ? (
                 <p className="section-note sync-msg-err">
                   Platform Google login is not configured yet (GOOGLE_CLIENT_ID /
-                  GOOGLE_CLIENT_SECRET). Ask your JustX admin — same keys as “Sign in with Google”.
+                  GOOGLE_CLIENT_SECRET). Ask your Justxsystems admin — same keys as “Sign in with Google”.
                 </p>
               ) : canEdit ? (
                 <>

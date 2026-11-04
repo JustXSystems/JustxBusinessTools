@@ -1,4 +1,4 @@
--- JustX Business Tools (JBT) schema — business profile, sequences, tool records
+-- Justxsystems Business Tools (JBT) schema — business profile, sequences, tool records
 
 CREATE TABLE IF NOT EXISTS business_profiles (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,

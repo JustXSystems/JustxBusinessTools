@@ -207,7 +207,7 @@ INSERT INTO platform_config (config_key, value)
 SELECT 'upi_payee', JSON_OBJECT(
   'enabled', true,
   'vpa', 'justx@upi',
-  'payeeName', 'JustX Systems LLP',
+  'payeeName', 'Justxsystems LLP',
   'merchantCode', ''
 )
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM platform_config WHERE config_key = 'upi_payee');
@@ -245,7 +245,7 @@ SELECT 'upi_notify', JSON_OBJECT(
   'whatsappTo', '',
   'submitSubject', 'New UPI subscription payment to verify',
   'submitBody', 'Claim #{{id}} from {{payerName}} ({{payerEmail}} / {{payerPhone}}) paid ₹{{amount}} via UPI. UTR {{utr}}. Payer UPI: {{payerUpi}}. Org: {{orgName}}.',
-  'decisionSubject', 'JustX subscription payment {{status}}',
-  'decisionBody', 'Hello {{payerName}}, your JustX payment of ₹{{amount}} (UTR {{utr}}) was {{status}}. {{reviewNote}}'
+  'decisionSubject', 'Justxsystems subscription payment {{status}}',
+  'decisionBody', 'Hello {{payerName}}, your Justxsystems payment of ₹{{amount}} (UTR {{utr}}) was {{status}}. {{reviewNote}}'
 )
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM platform_config WHERE config_key = 'upi_notify');

@@ -1,4 +1,4 @@
-# JustX Business Tools — Observability
+# Justxsystems Business Tools — Observability
 
 **Goal:** Dynatrace-class *operations* without rebuilding APM inside `/admin`.
 

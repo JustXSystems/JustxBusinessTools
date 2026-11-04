@@ -3,7 +3,7 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 
 echo.
-echo  JustX Sync Agent - Install
+echo  Justxsystems Sync Agent - Install
 echo  ==========================
 echo.
 
@@ -30,8 +30,8 @@ if not exist "%~dp0app\src\index.js" (
   exit /b 1
 )
 
-set "INSTALL=%LOCALAPPDATA%\JustX\sync-agent"
-set "TASKNAME=JustX Sync Agent"
+set "INSTALL=%LOCALAPPDATA%\Justxsystems\sync-agent"
+set "TASKNAME=Justxsystems Sync Agent"
 
 echo  Installing to:
 echo    %INSTALL%
@@ -52,7 +52,7 @@ copy /Y "%~dp0runtime\node.exe" "%INSTALL%\runtime\node.exe" >nul
 copy /Y "%~dp0app\package.json" "%INSTALL%\app\package.json" >nul
 copy /Y "%~dp0app\src\index.js" "%INSTALL%\app\src\index.js" >nul
 copy /Y "%~dp0run-agent.cmd" "%INSTALL%\run-agent.cmd" >nul
-copy /Y "%~dp0Uninstall JustX Sync Agent.cmd" "%INSTALL%\Uninstall JustX Sync Agent.cmd" >nul
+copy /Y "%~dp0Uninstall Justxsystems Sync Agent.cmd" "%INSTALL%\Uninstall Justxsystems Sync Agent.cmd" >nul
 copy /Y "%~dp0Check Status.cmd" "%INSTALL%\Check Status.cmd" >nul
 if exist "%~dp0windows-stop-bridge.cmd" copy /Y "%~dp0windows-stop-bridge.cmd" "%INSTALL%\windows-stop-bridge.cmd" >nul
 
@@ -64,10 +64,10 @@ if errorlevel 1 (
 )
 if errorlevel 1 (
   echo  Scheduled Task could not be created ^(policy^). Adding Startup shortcut instead...
-  powershell -NoProfile -Command "$install='%~dp0'; $install=$env:LOCALAPPDATA+'\JustX\sync-agent'; $s=[Environment]::GetFolderPath('Startup'); $p=Join-Path $s 'JustX Sync Agent.lnk'; $w=New-Object -ComObject WScript.Shell; $l=$w.CreateShortcut($p); $l.TargetPath=$env:ComSpec; $l.Arguments='/c \"\"'+$install+'\run-agent.cmd\"\"'; $l.WindowStyle=7; $l.WorkingDirectory=$install; $l.Save()"
+  powershell -NoProfile -Command "$install='%~dp0'; $install=$env:LOCALAPPDATA+'\Justxsystems\sync-agent'; $s=[Environment]::GetFolderPath('Startup'); $p=Join-Path $s 'Justxsystems Sync Agent.lnk'; $w=New-Object -ComObject WScript.Shell; $l=$w.CreateShortcut($p); $l.TargetPath=$env:ComSpec; $l.Arguments='/c \"\"'+$install+'\run-agent.cmd\"\"'; $l.WindowStyle=7; $l.WorkingDirectory=$install; $l.Save()"
 ) else (
   rem Remove legacy Startup shortcut if task succeeded
-  del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\JustX Sync Agent.lnk" >nul 2>&1
+  del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Justxsystems Sync Agent.lnk" >nul 2>&1
 )
 
 echo  Starting agent...

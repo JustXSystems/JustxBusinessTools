@@ -14,10 +14,10 @@ fi
 
 case "$MODE" in
   investigating|outage)
-    TEXT='We are investigating an issue affecting JustX Business Tools (justxsystems.com/jbt). Document generation and login may fail. We will update when service is restored.'
+    TEXT='We are investigating an issue affecting Justxsystems Business Tools (justxsystems.com/jbt). Document generation and login may fail. We will update when service is restored.'
     ;;
   restored|resolved)
-    TEXT='JustX Business Tools (justxsystems.com/jbt) has been restored. If you still see errors, hard-refresh or sign in again.'
+    TEXT='Justxsystems Business Tools (justxsystems.com/jbt) has been restored. If you still see errors, hard-refresh or sign in again.'
     ;;
   *)
     TEXT="$MODE"

@@ -1,5 +1,5 @@
 /**
- * Build JustX-Sync-Agent-win-x64.zip for non-technical Windows customers.
+ * Build Justxsystems-Sync-Agent-win-x64.zip for non-technical Windows customers.
  * Bundles official Node.js win-x64 + agent + double-click Install.cmd.
  *
  * Run: node scripts/pack-justx-sync-agent-win.mjs
@@ -18,7 +18,7 @@ const root = path.resolve(__dirname, "..");
 const agentDir = path.join(root, "desktop-sync-agent");
 const setupDir = path.join(agentDir, "windows-setup");
 const outDir = path.join(root, "web", "public");
-const outFile = path.join(outDir, "JustX-Sync-Agent-win-x64.zip");
+const outFile = path.join(outDir, "Justxsystems-Sync-Agent-win-x64.zip");
 const cacheDir = path.join(agentDir, ".runtime-cache");
 
 /** Pin Node 20 LTS win-x64 for reproducible customer packs (portable runtime inside the zip). */
@@ -38,8 +38,8 @@ function readAgentVersion() {
 
 const SETUP_FILES = [
   "START-HERE.txt",
-  "Install JustX Sync Agent.cmd",
-  "Uninstall JustX Sync Agent.cmd",
+  "Install Justxsystems Sync Agent.cmd",
+  "Uninstall Justxsystems Sync Agent.cmd",
   "Check Status.cmd",
   "run-agent.cmd",
   "windows-stop-bridge.cmd",
@@ -135,7 +135,7 @@ async function main() {
 
   const nodeExe = await ensureNodeExe();
   const files = [];
-  const prefix = "JustX-Sync-Agent";
+  const prefix = "Justxsystems-Sync-Agent";
 
   for (const name of SETUP_FILES) {
     addFile(files, `${prefix}/${name}`, path.join(setupDir, name));
@@ -160,7 +160,7 @@ async function main() {
   console.log(
     `Packed ${files.length} files -> ${path.relative(root, outFile)} (${zip.length} bytes, sha256:${sha}, agent ${PACK_VERSION})`,
   );
-  console.log(`==> Confirm: unzip -p web/public/JustX-Sync-Agent-win-x64.zip JustX-Sync-Agent/PACK_VERSION.txt`);
+  console.log(`==> Confirm: unzip -p web/public/Justxsystems-Sync-Agent-win-x64.zip Justxsystems-Sync-Agent/PACK_VERSION.txt`);
 }
 
 main().catch((err) => {

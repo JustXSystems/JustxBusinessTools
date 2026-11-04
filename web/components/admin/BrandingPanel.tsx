@@ -450,7 +450,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {(
                   [
-                    ["justx", "Official JustX logo"],
+                    ["justx", "Official Justxsystems logo"],
                     ["logo", "Same as platform logo"],
                     ["custom", "Custom upload"],
                   ] as const
@@ -491,7 +491,7 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
             <div>
               <strong>
                 {iconSource === "justx"
-                  ? "Official JustX logo"
+                  ? "Official Justxsystems logo"
                   : iconSource === "logo"
                     ? "Platform logo"
                     : "Custom icon"}

@@ -1,6 +1,6 @@
-# JustX Business Tools — Production Support Guide
+# Justxsystems Business Tools — Production Support Guide
 
-**Audience:** JustX on-call / ops / engineering supporting the live SaaS  
+**Audience:** Justxsystems on-call / ops / engineering supporting the live SaaS  
 **Production URL:** https://justxsystems.com/jbt/  
 **API health:** https://justxsystems.com/jbt/api/health  
 
@@ -24,7 +24,7 @@ Related docs (do not duplicate full setup here):
 
 | Item | Value |
 |------|--------|
-| Product | JustX Business Tools (JBT) |
+| Product | Justxsystems Business Tools (JBT) |
 | Public UI | https://justxsystems.com/jbt/ |
 | Public API prefix | https://justxsystems.com/jbt/api/ |
 | VPS | Hostinger KVM — `193.203.161.219` |
@@ -66,12 +66,12 @@ Browser  →  https://justxsystems.com/jbt/...
 
 | Area | Owner | Support action |
 |------|--------|----------------|
-| VPS, nginx, PM2, MySQL, `server/.env` | JustXSystems | SSH, restart, env, backups |
-| Google Cloud OAuth client | JustXSystems (`justxsystems@gmail.com`) | Fix redirect URIs, client secret rotation |
-| Deploy / GitHub Actions secrets | JustXSystems | Fix `DEPLOY_*` secrets, re-run workflow |
+| VPS, nginx, PM2, MySQL, `server/.env` | Justxsystems | SSH, restart, env, backups |
+| Google Cloud OAuth client | Justxsystems (`justxsystems@gmail.com`) | Fix redirect URIs, client secret rotation |
+| Deploy / GitHub Actions secrets | Justxsystems | Fix `DEPLOY_*` secrets, re-run workflow |
 | Business Profile + company Drive folder | Customer **Owner** | Guide them via Profile UI (do not use personal Gmail) |
 | Staff invites / roles | Customer Owner / Admin | Approve users, assign tools |
-| Razorpay live keys / webhooks | JustXSystems (billing) | Dashboard + `RAZORPAY_*` env |
+| Razorpay live keys / webhooks | Justxsystems (billing) | Dashboard + `RAZORPAY_*` env |
 | UNC desktop sync agent | Customer **Owner** / IT | Windows; Sync Center setup zip (Owner/Admin only — [`ROLES.md`](ROLES.md)); [`SYNC_CENTER.md`](SYNC_CENTER.md)#connected--sync-ok · `apiBase` must be `…/jbt/api` |
 
 **Role capabilities (default matrix + menu ACL)**
@@ -346,7 +346,7 @@ ORDER BY created_at;
 
 | Symptom | Likely cause | Action |
 |---------|--------------|--------|
-| Connect button missing / OAuth fails | Platform Google env / redirect URI | Fix JustX `.env` + Console (not the customer) |
+| Connect button missing / OAuth fails | Platform Google env / redirect URI | Fix Justxsystems `.env` + Console (not the customer) |
 | Connected but no files | Wrong folder; destination `none`; token revoked | Owner reconnect + verify folder + destination Auto/Drive |
 | Only one PC “works” | Misunderstanding — Drive/webhook are **server-side**, not a local folder | Explain model; optional UNC agent for LAN/local folders |
 | UNC Connected but Pending stuck | Wrong `apiBase` (`…/api` without `/jbt`) or agent 403 | Check `127.0.0.1:17865/status` + `agent.log`; fix to `…/jbt/api`; browser Sync now workaround — [`SYNC_CENTER.md`](SYNC_CENTER.md)#troubleshooting |
@@ -577,7 +577,7 @@ Clear old backups if safe; investigate upload growth; consider S3 for logos if l
 
 - [ ] MySQL dump / `backup-jbt.sh` succeeded and copied off-box  
 - [ ] Disk usage & SSL expiry (`certbot certificates`)  
-- [ ] Spot-check test PDF → Drive on a JustX-owned profile  
+- [ ] Spot-check test PDF → Drive on a Justxsystems-owned profile  
 - [ ] Razorpay webhook success rate (if live)  
 - [ ] Review failed `artifact_deliveries` older than 24h  
 
@@ -618,7 +618,7 @@ Public base in production always includes **`/jbt`** before `/api`.
 Public page: https://justxsystems.com/jbt/status · API: `/api/public/status`  
 Ops notify (Slack/Discord): `ALERT_WEBHOOK_URL=... ./scripts/notify-outage.sh investigating|restored`
 
-> We are investigating an issue affecting JustX Business Tools (justxsystems.com/jbt). Document generation and login may fail. We will update when service is restored.
+> We are investigating an issue affecting Justxsystems Business Tools (justxsystems.com/jbt). Document generation and login may fail. We will update when service is restored.
 
 ### Drive delivery (customer Owner)
 

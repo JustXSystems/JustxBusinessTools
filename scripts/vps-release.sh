@@ -443,7 +443,7 @@ fi
 mkdir -p "$LIVE"
 [[ -w "$LIVE" ]] || die "LIVE path not writable: $LIVE (chown to deploy)"
 
-WIN_AGENT_ZIP_REL="web/public/JustX-Sync-Agent-win-x64.zip"
+WIN_AGENT_ZIP_REL="web/public/Justxsystems-Sync-Agent-win-x64.zip"
 
 # When the release tarball includes a newly packed win agent zip, install it.
 # When it does not, keep the current live zip (ordinary deploys skip the ~28MB pack).
