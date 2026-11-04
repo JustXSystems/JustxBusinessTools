@@ -75,6 +75,37 @@ export type FooterColumn = {
   links: NavItem[];
 };
 
+export type HeroSlide = {
+  id: string;
+  eyebrow: string;
+  headline: string;
+  subheadline: string;
+  words: string[];
+  actions: CtaButton[];
+  background: MediaRef;
+};
+
+export type StatItem = {
+  id: string;
+  value: string;
+  label: string;
+  icon: string;
+  media: MediaRef;
+};
+
+export type PillarItem = {
+  id: string;
+  tag: string;
+  title: string;
+  subtitle: string;
+  bullets: string[];
+  href: string;
+  linkLabel: string;
+  icon: string;
+  media: MediaRef;
+  iconMedia: MediaRef;
+};
+
 type SectionBase = {
   id: string;
   enabled: boolean;
@@ -93,12 +124,31 @@ export type HeaderSection = SectionBase & {
 
 export type HeroSection = SectionBase & {
   type: "hero";
+  brandLabel: string;
   eyebrow: string;
   headline: string;
   subheadline: string;
   actions: CtaButton[];
   media: MediaRef;
   mediaPosition: "right" | "left" | "bottom" | "background";
+  slides: HeroSlide[];
+  chips: string[];
+  autoplaySec: number;
+};
+
+export type StatsSection = SectionBase & {
+  type: "stats";
+  items: StatItem[];
+};
+
+export type PillarsSection = SectionBase & {
+  type: "pillars";
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  note: string;
+  actions: CtaButton[];
+  items: PillarItem[];
 };
 
 export type MarqueeSection = SectionBase & {
@@ -152,6 +202,8 @@ export type FooterSection = SectionBase & {
 export type PublicHomeSection =
   | HeaderSection
   | HeroSection
+  | StatsSection
+  | PillarsSection
   | MarqueeSection
   | ToolsShowcaseSection
   | FeaturesSection
@@ -268,9 +320,54 @@ function toolCard(partial?: Partial<ToolCard>, fallbackId = "tool"): ToolCard {
   };
 }
 
+function heroSlide(partial?: Partial<HeroSlide>, fallbackId = "slide"): HeroSlide {
+  const words = Array.isArray(partial?.words)
+    ? partial!.words.map((w) => String(w ?? "").trim()).filter(Boolean)
+    : [];
+  return {
+    id: String(partial?.id ?? fallbackId).trim() || fallbackId,
+    eyebrow: String(partial?.eyebrow ?? "").trim(),
+    headline: String(partial?.headline ?? "").trim(),
+    subheadline: String(partial?.subheadline ?? "").trim(),
+    words,
+    actions: Array.isArray(partial?.actions)
+      ? partial!.actions.map((a, i) => cta(a, `${fallbackId}-cta-${i}`))
+      : [],
+    background: media(partial?.background),
+  };
+}
+
+function statItem(partial?: Partial<StatItem>, fallbackId = "stat"): StatItem {
+  return {
+    id: String(partial?.id ?? fallbackId).trim() || fallbackId,
+    value: String(partial?.value ?? "").trim(),
+    label: String(partial?.label ?? "").trim(),
+    icon: String(partial?.icon ?? "").trim(),
+    media: media(partial?.media),
+  };
+}
+
+function pillarItem(partial?: Partial<PillarItem>, fallbackId = "pillar"): PillarItem {
+  const bullets = Array.isArray(partial?.bullets)
+    ? partial!.bullets.map((b) => String(b ?? "").trim()).filter(Boolean)
+    : [];
+  return {
+    id: String(partial?.id ?? fallbackId).trim() || fallbackId,
+    tag: String(partial?.tag ?? "").trim(),
+    title: String(partial?.title ?? "").trim(),
+    subtitle: String(partial?.subtitle ?? "").trim(),
+    bullets,
+    href: String(partial?.href ?? "").trim(),
+    linkLabel: String(partial?.linkLabel ?? "").trim(),
+    icon: String(partial?.icon ?? "").trim(),
+    media: media(partial?.media),
+    iconMedia: media(partial?.iconMedia),
+  };
+}
+
 /**
- * Default marketing home — futuristic corporate JustX look.
- * Enabled for guests at `/` by default; admins can still turn it off in Experience.
+ * Default marketing home — industrial SaaS look inspired by high-end ops sites,
+ * tuned for JustX (brand-first, register CTAs, admin-configurable media).
  */
 export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
   version: 1,
@@ -278,19 +375,19 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
   seo: {
     title: "JustX Business Tools — Operate smarter",
     description:
-      "Quotations, invoices, inventory, field ops, and calculators — one modern platform for Indian businesses.",
+      "Quotations, invoices, inventory, field ops, and calculators — one modern platform for Indian dealers, distributors, and growing teams.",
   },
   theme: {
     colorScheme: "dark",
-    bg0: "#050b14",
-    bg1: "#0a1628",
-    accent: "#00dfff",
-    accentStrong: "#1a6fd4",
+    bg0: "#0A1628",
+    bg1: "#0F1F3D",
+    accent: "#00D4FF",
+    accentStrong: "#FF6B1A",
     textHi: "rgba(255,255,255,0.96)",
-    textMid: "rgba(220,230,245,0.68)",
+    textMid: "#B7C2D6",
     fontSans: "var(--font-ph-sans), system-ui, sans-serif",
     fontDisplay: "var(--font-ph-display), system-ui, sans-serif",
-    radius: "18px",
+    radius: "14px",
   },
   sections: [
     {
@@ -302,8 +399,9 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       logoText: "JustX Business Tools",
       logoHref: "/",
       menus: [
+        nav({ id: "m-pillars", label: "Capabilities", href: "#pillars" }),
         nav({ id: "m-tools", label: "Tools", href: "#tools" }),
-        nav({ id: "m-features", label: "Features", href: "#features" }),
+        nav({ id: "m-features", label: "Why JustX", href: "#features" }),
         nav({ id: "m-status", label: "Status", href: "/status" }),
       ],
       actions: [
@@ -312,20 +410,21 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       ],
       style: style({
         backgroundType: "color",
-        backgroundValue: "rgba(5,11,20,0.72)",
+        backgroundValue: "rgba(10,22,40,0.92)",
         textAlign: "left",
-        paddingY: "0.75rem",
-        paddingX: "1.25rem",
+        paddingY: "0.85rem",
+        paddingX: "1.5rem",
       }),
     },
     {
       type: "hero",
       id: "hero",
       enabled: true,
+      brandLabel: "JustX Business Tools",
       eyebrow: "Business operating suite",
-      headline: "Run quotations to field ops in one electric workspace.",
+      headline: "Run quotations to field ops in one workspace.",
       subheadline:
-        "JustX Business Tools unifies sales, inventory, service, and finance workflows — designed for dealers, distributors, and growing Indian teams.",
+        "JustX unifies sales, inventory, service, and finance workflows — built for dealers, distributors, and growing Indian teams.",
       actions: [
         cta({ id: "hero-start", label: "Start free", href: "/register", variant: "primary" }),
         cta({ id: "hero-login", label: "Sign in", href: "/login", variant: "secondary" }),
@@ -333,26 +432,167 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       media: media({
         kind: "image",
         url: "/icons/justx-logo.png",
-        alt: "JustX Business Tools product preview",
+        alt: "JustX Business Tools",
         objectFit: "contain",
       }),
-      mediaPosition: "right",
+      mediaPosition: "background",
+      slides: [
+        heroSlide(
+          {
+            id: "hs-1",
+            eyebrow: "Business operating suite",
+            headline: "Operate from quote to cash — without the tool sprawl.",
+            subheadline:
+              "One signed-in workspace for quotations, GST billing, stock, field teams, and finance — designed for how Indian businesses actually work.",
+            words: ["Quote", "Stock", "Service", "Collect"],
+            actions: [
+              cta({ id: "hs1-a", label: "Create account", href: "/register", variant: "primary" }),
+              cta({ id: "hs1-b", label: "Explore tools", href: "#tools", variant: "secondary" }),
+            ],
+            background: { ...EMPTY_MEDIA },
+          },
+          "hs-1",
+        ),
+        heroSlide(
+          {
+            id: "hs-2",
+            eyebrow: "Inventory & GST",
+            headline: "Dealer-grade inventory with GST that matches the floor.",
+            subheadline:
+              "Stock in/out, purchase orders, party ledgers, and GST-ready sales — so warehouse and accounts stay on the same truth.",
+            words: ["Stock", "Purchase", "GST", "Parties"],
+            actions: [
+              cta({ id: "hs2-a", label: "Start free", href: "/register", variant: "primary" }),
+              cta({ id: "hs2-b", label: "See capabilities", href: "#pillars", variant: "secondary" }),
+            ],
+            background: { ...EMPTY_MEDIA },
+          },
+          "hs-2",
+        ),
+        heroSlide(
+          {
+            id: "hs-3",
+            eyebrow: "Field & surveys",
+            headline: "Site surveys and field ops that close the loop.",
+            subheadline:
+              "Capture on-site work, generate PDFs customers trust, and keep HQ informed — without WhatsApp chaos.",
+            words: ["Survey", "Map", "Approve", "Deliver"],
+            actions: [
+              cta({ id: "hs3-a", label: "Get started", href: "/register", variant: "primary" }),
+              cta({ id: "hs3-b", label: "Sign in", href: "/login", variant: "ghost" }),
+            ],
+            background: { ...EMPTY_MEDIA },
+          },
+          "hs-3",
+        ),
+      ],
+      chips: ["GST-ready", "Multi-branch", "Admin themes", "Subscription catalog"],
+      autoplaySec: 7,
       style: style({
         backgroundType: "gradient",
         backgroundValue:
-          "radial-gradient(ellipse 80% 60% at 70% 20%, rgba(0,223,255,0.18), transparent 55%), radial-gradient(ellipse 50% 40% at 10% 80%, rgba(26,111,212,0.22), transparent 50%), linear-gradient(180deg, #050b14 0%, #0a1628 100%)",
+          "radial-gradient(ellipse 70% 55% at 75% 15%, rgba(0,212,255,0.16), transparent 55%), radial-gradient(ellipse 45% 40% at 8% 85%, rgba(255,107,26,0.12), transparent 50%), linear-gradient(180deg, #0A1628 0%, #0F1F3D 100%)",
+        backgroundOverlay: "rgba(10,22,40,0.35)",
         textAlign: "left",
-        paddingY: "5rem",
+        paddingY: "0",
         paddingX: "1.5rem",
-        minHeight: "88vh",
-        maxWidth: "1180px",
+        minHeight: "92vh",
+        maxWidth: "1280px",
+      }),
+    },
+    {
+      type: "stats",
+      id: "stats",
+      enabled: true,
+      items: [
+        statItem({ id: "st-1", value: "20+", label: "Business tools\nin one suite", icon: "◆" }),
+        statItem({ id: "st-2", value: "GST", label: "Indian tax\nworkflows built-in", icon: "▣" }),
+        statItem({ id: "st-3", value: "1", label: "Signed-in workspace\nfor every team", icon: "⬡" }),
+        statItem({ id: "st-4", value: "Admin", label: "Themes, branding &\nhome media control", icon: "◎" }),
+      ],
+      style: style({
+        backgroundType: "color",
+        backgroundValue: "#0F1F3D",
+        textAlign: "center",
+        paddingY: "2.2rem",
+        paddingX: "1.5rem",
+        maxWidth: "1280px",
+      }),
+    },
+    {
+      type: "pillars",
+      id: "pillars",
+      enabled: true,
+      eyebrow: "What you run on JustX",
+      title: "Three operating pillars. One accountable platform.",
+      subtitle:
+        "Sell with confidence, keep stock honest, and close the loop from field to finance — without stitching five vendors together.",
+      note: "Every pillar is module-based: enable what your organization needs, price SKUs from Admin, and keep operators on a clean home.",
+      actions: [cta({ id: "pillars-cta", label: "Create account", href: "/register", variant: "primary" })],
+      items: [
+        pillarItem({
+          id: "p-sell",
+          tag: "01 — Sell",
+          title: "Quotations & billing",
+          subtitle: "Customer-facing documents that look branded and stay GST-correct.",
+          bullets: [
+            "Category-based quotations with approvals",
+            "GST invoices and tax-ready line items",
+            "PDF delivery your customers can trust",
+            "Sales orders that feed operations",
+          ],
+          href: "#tools",
+          linkLabel: "Explore sell tools",
+          icon: "01",
+        }),
+        pillarItem({
+          id: "p-stock",
+          tag: "02 — Stock",
+          title: "Inventory & purchasing",
+          subtitle: "Dealer and distributor flows for real warehouses — not spreadsheet theatre.",
+          bullets: [
+            "Stock in / out with history",
+            "Purchase orders and party masters",
+            "Low-stock and full-stock views",
+            "IMS Dealer for denser ops",
+          ],
+          href: "#tools",
+          linkLabel: "Explore stock tools",
+          icon: "02",
+        }),
+        pillarItem({
+          id: "p-field",
+          tag: "03 — Field",
+          title: "Field, surveys & finance",
+          subtitle: "On-site capture through receivables — one trail from job to cash.",
+          bullets: [
+            "Site survey generator with PDF reports",
+            "Field map and onsite workflows",
+            "Receivables, payables, and ledgers",
+            "Calculators for GST, EMI, and margin",
+          ],
+          href: "#tools",
+          linkLabel: "Explore field tools",
+          icon: "03",
+        }),
+      ],
+      style: style({
+        backgroundType: "color",
+        backgroundValue: "#F4F6F9",
+        textColor: "#1E2530",
+        mutedColor: "#5B6472",
+        accentColor: "#FF6B1A",
+        textAlign: "center",
+        paddingY: "5.5rem",
+        paddingX: "1.5rem",
+        maxWidth: "1280px",
       }),
     },
     {
       type: "marquee",
       id: "marquee",
       enabled: true,
-      title: "Every tool your team needs",
+      title: "Modules your team can enable",
       source: "catalog",
       toolIds: [
         "quotationv1",
@@ -374,7 +614,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       direction: "left",
       style: style({
         backgroundType: "color",
-        backgroundValue: "rgba(255,255,255,0.02)",
+        backgroundValue: "#0A1628",
         textAlign: "center",
         paddingY: "1.75rem",
         paddingX: "0",
@@ -386,7 +626,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       enabled: true,
       eyebrow: "Platform",
       title: "Tools built for real operations",
-      subtitle: "Showcase screenshots and capabilities for each module your team can enable.",
+      subtitle: "Showcase screenshots and capabilities for each module — every image is editable from Admin → Experience.",
       layout: "grid",
       source: "custom",
       toolIds: [],
@@ -453,11 +693,12 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
         }),
       ],
       style: style({
-        backgroundType: "none",
+        backgroundType: "color",
+        backgroundValue: "#0A1628",
         textAlign: "left",
         paddingY: "5rem",
         paddingX: "1.5rem",
-        maxWidth: "1180px",
+        maxWidth: "1280px",
       }),
     },
     {
@@ -465,15 +706,15 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       id: "features",
       enabled: true,
       eyebrow: "Why JustX",
-      title: "Corporate-grade control. Futuristic speed.",
-      subtitle: "Admin-configurable experience, multi-branch ready, built for Indian commerce.",
-      layout: "alternating",
+      title: "Corporate control. Operator speed.",
+      subtitle: "Admin-tunable experience, subscription-ready catalog, built for Indian commerce.",
+      layout: "grid",
       items: [
         {
           id: "f1",
           title: "Admin-tunable experience",
           description:
-            "Themes, branding, and this public home — every section, style, and media asset controllable from Admin → Experience.",
+            "Themes, branding, and this public home — every section, style, image, SVG, and video controllable from Admin → Experience.",
           icon: "🎛️",
           media: { ...EMPTY_MEDIA },
         },
@@ -493,15 +734,41 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
           icon: "⚡",
           media: { ...EMPTY_MEDIA },
         },
+        {
+          id: "f4",
+          title: "Built for Indian teams",
+          description:
+            "GST, party workflows, dealer inventory patterns, and documents that match how businesses here actually operate.",
+          icon: "🇮🇳",
+          media: { ...EMPTY_MEDIA },
+        },
+        {
+          id: "f5",
+          title: "Multi-branch ready",
+          description:
+            "Organize people and tools around how your company is structured — without fragmenting data trails.",
+          icon: "🗂️",
+          media: { ...EMPTY_MEDIA },
+        },
+        {
+          id: "f6",
+          title: "Status you can trust",
+          description:
+            "Public status and a product surface that stays fast, mobile-friendly, and operator-clear.",
+          icon: "📡",
+          media: { ...EMPTY_MEDIA },
+        },
       ],
       style: style({
-        backgroundType: "gradient",
-        backgroundValue:
-          "linear-gradient(180deg, transparent 0%, rgba(0,223,255,0.04) 40%, transparent 100%)",
-        textAlign: "left",
+        backgroundType: "color",
+        backgroundValue: "#F0F8FC",
+        textColor: "#1E2530",
+        mutedColor: "#5B6472",
+        accentColor: "#FF6B1A",
+        textAlign: "center",
         paddingY: "5rem",
         paddingX: "1.5rem",
-        maxWidth: "1180px",
+        maxWidth: "1280px",
       }),
     },
     {
@@ -516,10 +783,9 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       ],
       style: style({
         backgroundType: "gradient",
-        backgroundValue:
-          "linear-gradient(135deg, rgba(26,111,212,0.35) 0%, rgba(0,223,255,0.18) 100%)",
+        backgroundValue: "linear-gradient(120deg, #0A1628 0%, #122647 55%, #0F1F3D 100%)",
         textAlign: "center",
-        paddingY: "4.5rem",
+        paddingY: "5rem",
         paddingX: "1.5rem",
         maxWidth: "900px",
       }),
@@ -536,8 +802,9 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
           id: "fc-product",
           title: "Product",
           links: [
+            nav({ id: "fl-pillars", label: "Capabilities", href: "#pillars" }),
             nav({ id: "fl-tools", label: "Tools", href: "#tools" }),
-            nav({ id: "fl-features", label: "Features", href: "#features" }),
+            nav({ id: "fl-features", label: "Why JustX", href: "#features" }),
             nav({ id: "fl-status", label: "Status", href: "/status" }),
           ],
         },
@@ -554,11 +821,11 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       socialLinks: [],
       style: style({
         backgroundType: "color",
-        backgroundValue: "#040910",
+        backgroundValue: "#0D1421",
         textAlign: "left",
         paddingY: "3.5rem",
         paddingX: "1.5rem",
-        maxWidth: "1180px",
+        maxWidth: "1280px",
       }),
     },
   ],
@@ -635,6 +902,55 @@ function parseToolCard(raw: unknown, i: number): ToolCard {
   );
 }
 
+function parseHeroSlide(raw: unknown, i: number): HeroSlide {
+  const o = asObj(raw);
+  return heroSlide(
+    {
+      id: String(o.id ?? `slide-${i}`),
+      eyebrow: String(o.eyebrow ?? ""),
+      headline: String(o.headline ?? ""),
+      subheadline: String(o.subheadline ?? ""),
+      words: Array.isArray(o.words) ? o.words.map((w) => String(w ?? "")) : [],
+      actions: parseCtas(o.actions),
+      background: parseMedia(o.background),
+    },
+    `slide-${i}`,
+  );
+}
+
+function parseStatItem(raw: unknown, i: number): StatItem {
+  const o = asObj(raw);
+  return statItem(
+    {
+      id: String(o.id ?? `stat-${i}`),
+      value: String(o.value ?? ""),
+      label: String(o.label ?? ""),
+      icon: String(o.icon ?? ""),
+      media: parseMedia(o.media),
+    },
+    `stat-${i}`,
+  );
+}
+
+function parsePillarItem(raw: unknown, i: number): PillarItem {
+  const o = asObj(raw);
+  return pillarItem(
+    {
+      id: String(o.id ?? `pillar-${i}`),
+      tag: String(o.tag ?? ""),
+      title: String(o.title ?? ""),
+      subtitle: String(o.subtitle ?? ""),
+      bullets: Array.isArray(o.bullets) ? o.bullets.map((b) => String(b ?? "")) : [],
+      href: String(o.href ?? ""),
+      linkLabel: String(o.linkLabel ?? ""),
+      icon: String(o.icon ?? ""),
+      media: parseMedia(o.media),
+      iconMedia: parseMedia(o.iconMedia),
+    },
+    `pillar-${i}`,
+  );
+}
+
 function parseSection(raw: unknown, index: number): PublicHomeSection | null {
   const o = asObj(raw);
   const type = String(o.type ?? "");
@@ -662,6 +978,7 @@ function parseSection(raw: unknown, index: number): PublicHomeSection | null {
       type: "hero",
       id,
       enabled,
+      brandLabel: String(o.brandLabel ?? "").trim(),
       eyebrow: String(o.eyebrow ?? "").trim(),
       headline: String(o.headline ?? "").trim(),
       subheadline: String(o.subheadline ?? "").trim(),
@@ -671,6 +988,34 @@ function parseSection(raw: unknown, index: number): PublicHomeSection | null {
         pos === "left" || pos === "bottom" || pos === "background" || pos === "right"
           ? pos
           : "right",
+      slides: Array.isArray(o.slides) ? o.slides.map((s, i) => parseHeroSlide(s, i)) : [],
+      chips: Array.isArray(o.chips)
+        ? o.chips.map((c) => String(c ?? "").trim()).filter(Boolean)
+        : [],
+      autoplaySec: Math.min(30, Math.max(0, Number(o.autoplaySec) || 0)),
+      style: baseStyle,
+    };
+  }
+  if (type === "stats") {
+    return {
+      type: "stats",
+      id,
+      enabled,
+      items: Array.isArray(o.items) ? o.items.map((item, i) => parseStatItem(item, i)) : [],
+      style: baseStyle,
+    };
+  }
+  if (type === "pillars") {
+    return {
+      type: "pillars",
+      id,
+      enabled,
+      eyebrow: String(o.eyebrow ?? "").trim(),
+      title: String(o.title ?? "").trim(),
+      subtitle: String(o.subtitle ?? "").trim(),
+      note: String(o.note ?? "").trim(),
+      actions: parseCtas(o.actions),
+      items: Array.isArray(o.items) ? o.items.map((item, i) => parsePillarItem(item, i)) : [],
       style: baseStyle,
     };
   }
@@ -871,11 +1216,39 @@ async function hydrateConfigMedia(cfg: PublicHomeConfig): Promise<PublicHomeConf
       continue;
     }
     if (section.type === "hero") {
+      const slides = [];
+      for (const slide of section.slides) {
+        slides.push({
+          ...slide,
+          background: await hydrateMedia(slide.background, "public-home"),
+        });
+      }
       sections.push({
         ...section,
         style: nextStyle,
         media: await hydrateMedia(section.media, "public-home"),
+        slides,
       });
+      continue;
+    }
+    if (section.type === "stats") {
+      const items = [];
+      for (const item of section.items) {
+        items.push({ ...item, media: await hydrateMedia(item.media, "public-home") });
+      }
+      sections.push({ ...section, style: nextStyle, items });
+      continue;
+    }
+    if (section.type === "pillars") {
+      const items = [];
+      for (const item of section.items) {
+        items.push({
+          ...item,
+          media: await hydrateMedia(item.media, "public-home"),
+          iconMedia: await hydrateMedia(item.iconMedia, "public-home"),
+        });
+      }
+      sections.push({ ...section, style: nextStyle, items });
       continue;
     }
     if (section.type === "marquee") {
@@ -952,7 +1325,33 @@ export function signPublicHomeMedia(cfg: PublicHomeConfig): PublicHomeConfig {
         return { ...section, style: styleNext, logo: signMedia(section.logo) };
       }
       if (section.type === "hero") {
-        return { ...section, style: styleNext, media: signMedia(section.media) };
+        return {
+          ...section,
+          style: styleNext,
+          media: signMedia(section.media),
+          slides: section.slides.map((slide) => ({
+            ...slide,
+            background: signMedia(slide.background),
+          })),
+        };
+      }
+      if (section.type === "stats") {
+        return {
+          ...section,
+          style: styleNext,
+          items: section.items.map((item) => ({ ...item, media: signMedia(item.media) })),
+        };
+      }
+      if (section.type === "pillars") {
+        return {
+          ...section,
+          style: styleNext,
+          items: section.items.map((item) => ({
+            ...item,
+            media: signMedia(item.media),
+            iconMedia: signMedia(item.iconMedia),
+          })),
+        };
       }
       if (section.type === "marquee") {
         return {

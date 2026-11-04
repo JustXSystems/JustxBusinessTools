@@ -17,11 +17,14 @@ import {
   EMPTY_MEDIA,
   EMPTY_STYLE,
   type CtaButton,
+  type HeroSlide,
   type MediaRef,
   type NavItem,
+  type PillarItem,
   type PublicHomeConfig,
   type PublicHomeSection,
   type SectionStyle,
+  type StatItem,
 } from "@/lib/public-home/types";
 
 function uid(prefix: string) {
@@ -408,6 +411,367 @@ function CtaListEditor({
   );
 }
 
+function HeroSlidesEditor({
+  slides,
+  onChange,
+}: {
+  slides: HeroSlide[];
+  onChange: (next: HeroSlide[]) => void;
+}) {
+  return (
+    <div style={{ display: "grid", gap: "0.65rem" }}>
+      <strong style={{ fontSize: "0.85rem" }}>Hero slides (cinematic mode)</strong>
+      <p className="muted" style={{ margin: 0, fontSize: "0.78rem" }}>
+        When slides exist, the hero uses full-bleed backgrounds and rotates copy. Upload image/video
+        per slide from Admin.
+      </p>
+      {slides.map((slide, index) => (
+        <div
+          key={slide.id}
+          className="panel"
+          style={{ padding: "0.75rem", display: "grid", gap: "0.5rem", background: "var(--glass-1)" }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
+            <strong style={{ fontSize: "0.82rem" }}>Slide {index + 1}</strong>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => onChange(slides.filter((_, i) => i !== index))}
+            >
+              Remove
+            </button>
+          </div>
+          <Field label="Eyebrow">
+            <TextInput
+              value={slide.eyebrow}
+              onChange={(eyebrow) => {
+                const next = [...slides];
+                next[index] = { ...slide, eyebrow };
+                onChange(next);
+              }}
+            />
+          </Field>
+          <Field label="Headline">
+            <TextArea
+              value={slide.headline}
+              onChange={(headline) => {
+                const next = [...slides];
+                next[index] = { ...slide, headline };
+                onChange(next);
+              }}
+            />
+          </Field>
+          <Field label="Subheadline">
+            <TextArea
+              value={slide.subheadline}
+              onChange={(subheadline) => {
+                const next = [...slides];
+                next[index] = { ...slide, subheadline };
+                onChange(next);
+              }}
+            />
+          </Field>
+          <Field label="Words (comma-separated)">
+            <TextInput
+              value={slide.words.join(", ")}
+              onChange={(v) => {
+                const next = [...slides];
+                next[index] = {
+                  ...slide,
+                  words: v
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                };
+                onChange(next);
+              }}
+            />
+          </Field>
+          <MediaEditor
+            label="Slide background (image / video / SVG)"
+            value={slide.background}
+            onChange={(background) => {
+              const next = [...slides];
+              next[index] = { ...slide, background };
+              onChange(next);
+            }}
+          />
+          <Field label="Slide CTAs">
+            <CtaListEditor
+              items={slide.actions}
+              onChange={(actions) => {
+                const next = [...slides];
+                next[index] = { ...slide, actions };
+                onChange(next);
+              }}
+            />
+          </Field>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="btn"
+        onClick={() =>
+          onChange([
+            ...slides,
+            {
+              id: uid("slide"),
+              eyebrow: "",
+              headline: "New slide",
+              subheadline: "",
+              words: [],
+              actions: [],
+              background: { ...EMPTY_MEDIA },
+            },
+          ])
+        }
+      >
+        Add slide
+      </button>
+    </div>
+  );
+}
+
+function StatsItemsEditor({
+  items,
+  onChange,
+}: {
+  items: StatItem[];
+  onChange: (next: StatItem[]) => void;
+}) {
+  return (
+    <div style={{ display: "grid", gap: "0.65rem" }}>
+      {items.map((item, index) => (
+        <div
+          key={item.id}
+          className="panel"
+          style={{ padding: "0.75rem", display: "grid", gap: "0.5rem", background: "var(--glass-1)" }}
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "0.4rem" }}>
+            <TextInput
+              value={item.value}
+              onChange={(value) => {
+                const next = [...items];
+                next[index] = { ...item, value };
+                onChange(next);
+              }}
+              placeholder="Value e.g. 20+"
+            />
+            <TextInput
+              value={item.icon}
+              onChange={(icon) => {
+                const next = [...items];
+                next[index] = { ...item, icon };
+                onChange(next);
+              }}
+              placeholder="Icon glyph"
+            />
+            <button
+              type="button"
+              className="btn"
+              onClick={() => onChange(items.filter((_, i) => i !== index))}
+            >
+              ✕
+            </button>
+          </div>
+          <Field label="Label (use \\n for line break)">
+            <TextArea
+              value={item.label}
+              onChange={(label) => {
+                const next = [...items];
+                next[index] = { ...item, label };
+                onChange(next);
+              }}
+              rows={2}
+            />
+          </Field>
+          <MediaEditor
+            label="Stat icon media"
+            value={item.media}
+            onChange={(media) => {
+              const next = [...items];
+              next[index] = { ...item, media };
+              onChange(next);
+            }}
+          />
+        </div>
+      ))}
+      <button
+        type="button"
+        className="btn"
+        onClick={() =>
+          onChange([
+            ...items,
+            {
+              id: uid("stat"),
+              value: "0",
+              label: "Label",
+              icon: "◆",
+              media: { ...EMPTY_MEDIA },
+            },
+          ])
+        }
+      >
+        Add stat
+      </button>
+    </div>
+  );
+}
+
+function PillarsItemsEditor({
+  items,
+  onChange,
+}: {
+  items: PillarItem[];
+  onChange: (next: PillarItem[]) => void;
+}) {
+  return (
+    <div style={{ display: "grid", gap: "0.65rem" }}>
+      <strong style={{ fontSize: "0.85rem" }}>Pillar cards</strong>
+      {items.map((item, index) => (
+        <div
+          key={item.id}
+          className="panel"
+          style={{ padding: "0.75rem", display: "grid", gap: "0.5rem", background: "var(--glass-1)" }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <strong style={{ fontSize: "0.82rem" }}>Pillar {index + 1}</strong>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => onChange(items.filter((_, i) => i !== index))}
+            >
+              Remove
+            </button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+            <Field label="Tag">
+              <TextInput
+                value={item.tag}
+                onChange={(tag) => {
+                  const next = [...items];
+                  next[index] = { ...item, tag };
+                  onChange(next);
+                }}
+              />
+            </Field>
+            <Field label="Icon text">
+              <TextInput
+                value={item.icon}
+                onChange={(icon) => {
+                  const next = [...items];
+                  next[index] = { ...item, icon };
+                  onChange(next);
+                }}
+              />
+            </Field>
+          </div>
+          <Field label="Title">
+            <TextInput
+              value={item.title}
+              onChange={(title) => {
+                const next = [...items];
+                next[index] = { ...item, title };
+                onChange(next);
+              }}
+            />
+          </Field>
+          <Field label="Subtitle">
+            <TextArea
+              value={item.subtitle}
+              onChange={(subtitle) => {
+                const next = [...items];
+                next[index] = { ...item, subtitle };
+                onChange(next);
+              }}
+            />
+          </Field>
+          <Field label="Bullets (one per line)">
+            <TextArea
+              value={item.bullets.join("\n")}
+              onChange={(v) => {
+                const next = [...items];
+                next[index] = {
+                  ...item,
+                  bullets: v
+                    .split("\n")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                };
+                onChange(next);
+              }}
+              rows={4}
+            />
+          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+            <Field label="Link href">
+              <TextInput
+                value={item.href}
+                onChange={(href) => {
+                  const next = [...items];
+                  next[index] = { ...item, href };
+                  onChange(next);
+                }}
+              />
+            </Field>
+            <Field label="Link label">
+              <TextInput
+                value={item.linkLabel}
+                onChange={(linkLabel) => {
+                  const next = [...items];
+                  next[index] = { ...item, linkLabel };
+                  onChange(next);
+                }}
+              />
+            </Field>
+          </div>
+          <MediaEditor
+            label="Card background media"
+            value={item.media}
+            onChange={(media) => {
+              const next = [...items];
+              next[index] = { ...item, media };
+              onChange(next);
+            }}
+          />
+          <MediaEditor
+            label="Icon media"
+            value={item.iconMedia}
+            onChange={(iconMedia) => {
+              const next = [...items];
+              next[index] = { ...item, iconMedia };
+              onChange(next);
+            }}
+          />
+        </div>
+      ))}
+      <button
+        type="button"
+        className="btn"
+        onClick={() =>
+          onChange([
+            ...items,
+            {
+              id: uid("pillar"),
+              tag: "",
+              title: "New pillar",
+              subtitle: "",
+              bullets: [],
+              href: "#",
+              linkLabel: "Learn more",
+              icon: "",
+              media: { ...EMPTY_MEDIA },
+              iconMedia: { ...EMPTY_MEDIA },
+            },
+          ])
+        }
+      >
+        Add pillar
+      </button>
+    </div>
+  );
+}
+
 function updateSection(
   setConfig: Dispatch<SetStateAction<PublicHomeConfig | null>>,
   id: string,
@@ -526,51 +890,134 @@ function SectionEditor({
 
       {section.type === "hero" ? (
         <div style={{ display: "grid", gap: "0.65rem" }}>
+          <Field label="Brand label (hero-level)">
+            <TextInput
+              value={section.brandLabel}
+              onChange={(brandLabel) => updateSection(setConfig, section.id, { brandLabel })}
+            />
+          </Field>
+          <Field label="Fallback eyebrow (used when no slides)">
+            <TextInput
+              value={section.eyebrow}
+              onChange={(eyebrow) => updateSection(setConfig, section.id, { eyebrow })}
+            />
+          </Field>
+          <Field label="Fallback headline">
+            <TextArea
+              value={section.headline}
+              onChange={(headline) => updateSection(setConfig, section.id, { headline })}
+            />
+          </Field>
+          <Field label="Fallback subheadline">
+            <TextArea
+              value={section.subheadline}
+              onChange={(subheadline) => updateSection(setConfig, section.id, { subheadline })}
+            />
+          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.55rem" }}>
+            <Field label="Media position (legacy / no slides)">
+              <select
+                className="input"
+                value={section.mediaPosition}
+                onChange={(e) =>
+                  updateSection(setConfig, section.id, {
+                    mediaPosition: e.target.value as typeof section.mediaPosition,
+                  })
+                }
+              >
+                <option value="right">Right</option>
+                <option value="left">Left</option>
+                <option value="bottom">Bottom</option>
+                <option value="background">Background</option>
+              </select>
+            </Field>
+            <Field label="Slide autoplay (sec, 0 = off)">
+              <TextInput
+                value={String(section.autoplaySec ?? 0)}
+                onChange={(v) =>
+                  updateSection(setConfig, section.id, {
+                    autoplaySec: Math.max(0, Number(v) || 0),
+                  })
+                }
+              />
+            </Field>
+          </div>
+          <MediaEditor
+            label="Side / fallback media"
+            value={section.media}
+            onChange={(media) => updateSection(setConfig, section.id, { media })}
+          />
+          <Field label="Fallback CTAs">
+            <CtaListEditor
+              items={section.actions}
+              onChange={(actions) => updateSection(setConfig, section.id, { actions })}
+            />
+          </Field>
+          <Field label="Chips (comma-separated)">
+            <TextInput
+              value={(section.chips ?? []).join(", ")}
+              onChange={(v) =>
+                updateSection(setConfig, section.id, {
+                  chips: v
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+            />
+          </Field>
+          <HeroSlidesEditor
+            slides={section.slides ?? []}
+            onChange={(slides) => updateSection(setConfig, section.id, { slides })}
+          />
+        </div>
+      ) : null}
+
+      {section.type === "stats" ? (
+        <div style={{ display: "grid", gap: "0.65rem" }}>
+          <StatsItemsEditor
+            items={section.items}
+            onChange={(items) => updateSection(setConfig, section.id, { items })}
+          />
+        </div>
+      ) : null}
+
+      {section.type === "pillars" ? (
+        <div style={{ display: "grid", gap: "0.65rem" }}>
           <Field label="Eyebrow">
             <TextInput
               value={section.eyebrow}
               onChange={(eyebrow) => updateSection(setConfig, section.id, { eyebrow })}
             />
           </Field>
-          <Field label="Headline">
-            <TextArea
-              value={section.headline}
-              onChange={(headline) => updateSection(setConfig, section.id, { headline })}
+          <Field label="Title">
+            <TextInput
+              value={section.title}
+              onChange={(title) => updateSection(setConfig, section.id, { title })}
             />
           </Field>
-          <Field label="Subheadline">
+          <Field label="Subtitle">
             <TextArea
-              value={section.subheadline}
-              onChange={(subheadline) => updateSection(setConfig, section.id, { subheadline })}
+              value={section.subtitle}
+              onChange={(subtitle) => updateSection(setConfig, section.id, { subtitle })}
             />
           </Field>
-          <Field label="Media position">
-            <select
-              className="input"
-              value={section.mediaPosition}
-              onChange={(e) =>
-                updateSection(setConfig, section.id, {
-                  mediaPosition: e.target.value as typeof section.mediaPosition,
-                })
-              }
-            >
-              <option value="right">Right</option>
-              <option value="left">Left</option>
-              <option value="bottom">Bottom</option>
-              <option value="background">Background</option>
-            </select>
+          <Field label="Note">
+            <TextArea
+              value={section.note}
+              onChange={(note) => updateSection(setConfig, section.id, { note })}
+            />
           </Field>
-          <MediaEditor
-            label="Hero screenshot / media"
-            value={section.media}
-            onChange={(media) => updateSection(setConfig, section.id, { media })}
-          />
-          <Field label="CTAs">
+          <Field label="Section CTAs">
             <CtaListEditor
               items={section.actions}
               onChange={(actions) => updateSection(setConfig, section.id, { actions })}
             />
           </Field>
+          <PillarsItemsEditor
+            items={section.items}
+            onChange={(items) => updateSection(setConfig, section.id, { items })}
+          />
         </div>
       ) : null}
 
@@ -917,12 +1364,33 @@ function newSection(type: PublicHomeSection["type"]): PublicHomeSection {
       return {
         ...base,
         type,
+        brandLabel: "JustX Business Tools",
         eyebrow: "",
         headline: "Headline",
         subheadline: "",
         actions: [],
         media: { ...EMPTY_MEDIA },
-        mediaPosition: "right",
+        mediaPosition: "background",
+        slides: [],
+        chips: [],
+        autoplaySec: 7,
+      };
+    case "stats":
+      return {
+        ...base,
+        type,
+        items: [],
+      };
+    case "pillars":
+      return {
+        ...base,
+        type,
+        eyebrow: "",
+        title: "Capabilities",
+        subtitle: "",
+        note: "",
+        actions: [],
+        items: [],
       };
     case "marquee":
       return {
@@ -977,6 +1445,10 @@ function newSection(type: PublicHomeSection["type"]): PublicHomeSection {
         legalText: "",
         socialLinks: [],
       };
+    default: {
+      const _exhaustive: never = type;
+      return _exhaustive;
+    }
   }
 }
 
@@ -1060,7 +1532,7 @@ export const PublicHomePanel = forwardRef<ExperienceSaveHandle>(function PublicH
                     { method: "PUT", body: JSON.stringify({ reset: true }) },
                   );
                   setConfig(d.publicHome);
-                  setMessage("Reset to elegant corporate defaults.");
+                  setMessage("Reset to JustX marketing defaults.");
                 } catch (e) {
                   setMessage(e instanceof Error ? e.message : "Reset failed");
                 } finally {
@@ -1155,6 +1627,8 @@ export const PublicHomePanel = forwardRef<ExperienceSaveHandle>(function PublicH
             [
               "header",
               "hero",
+              "stats",
+              "pillars",
               "marquee",
               "toolsShowcase",
               "features",

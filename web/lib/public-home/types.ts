@@ -68,6 +68,37 @@ export type FooterColumn = {
   links: NavItem[];
 };
 
+export type HeroSlide = {
+  id: string;
+  eyebrow: string;
+  headline: string;
+  subheadline: string;
+  words: string[];
+  actions: CtaButton[];
+  background: MediaRef;
+};
+
+export type StatItem = {
+  id: string;
+  value: string;
+  label: string;
+  icon: string;
+  media: MediaRef;
+};
+
+export type PillarItem = {
+  id: string;
+  tag: string;
+  title: string;
+  subtitle: string;
+  bullets: string[];
+  href: string;
+  linkLabel: string;
+  icon: string;
+  media: MediaRef;
+  iconMedia: MediaRef;
+};
+
 type SectionBase = {
   id: string;
   enabled: boolean;
@@ -86,12 +117,31 @@ export type HeaderSection = SectionBase & {
 
 export type HeroSection = SectionBase & {
   type: "hero";
+  brandLabel: string;
   eyebrow: string;
   headline: string;
   subheadline: string;
   actions: CtaButton[];
   media: MediaRef;
   mediaPosition: "right" | "left" | "bottom" | "background";
+  slides: HeroSlide[];
+  chips: string[];
+  autoplaySec: number;
+};
+
+export type StatsSection = SectionBase & {
+  type: "stats";
+  items: StatItem[];
+};
+
+export type PillarsSection = SectionBase & {
+  type: "pillars";
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  note: string;
+  actions: CtaButton[];
+  items: PillarItem[];
 };
 
 export type MarqueeSection = SectionBase & {
@@ -145,6 +195,8 @@ export type FooterSection = SectionBase & {
 export type PublicHomeSection =
   | HeaderSection
   | HeroSection
+  | StatsSection
+  | PillarsSection
   | MarqueeSection
   | ToolsShowcaseSection
   | FeaturesSection

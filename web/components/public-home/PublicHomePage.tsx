@@ -12,6 +12,8 @@ import {
   PhHeaderSection,
   PhHeroSection,
   PhMarqueeSection,
+  PhPillarsSection,
+  PhStatsSection,
   PhToolsShowcaseSection,
 } from "./sections";
 
@@ -22,6 +24,10 @@ function SectionView({ section }: { section: PublicHomeSection }) {
       return <PhHeaderSection section={section} />;
     case "hero":
       return <PhHeroSection section={section} />;
+    case "stats":
+      return <PhStatsSection section={section} />;
+    case "pillars":
+      return <PhPillarsSection section={section} />;
     case "marquee":
       return <PhMarqueeSection section={section} />;
     case "toolsShowcase":

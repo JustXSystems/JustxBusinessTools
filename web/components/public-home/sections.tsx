@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TOOL_CATALOG } from "@/config/tools.config";
 import { sectionInlineStyle, hasRenderableMedia } from "@/lib/public-home/style";
@@ -10,9 +10,13 @@ import type {
   FooterSection,
   HeaderSection,
   HeroSection,
+  HeroSlide,
   MarqueeSection,
+  PillarsSection,
+  StatsSection,
   ToolsShowcaseSection,
 } from "@/lib/public-home/types";
+import { EMPTY_MEDIA } from "@/lib/public-home/types";
 import { PhCtaButtons, PhNavLink } from "./PhCta";
 import { PhMedia } from "./PhMedia";
 
@@ -82,6 +86,18 @@ function SectionShell({
   );
 }
 
+function slideFromLegacy(section: HeroSection): HeroSlide {
+  return {
+    id: `${section.id}-legacy`,
+    eyebrow: section.eyebrow,
+    headline: section.headline,
+    subheadline: section.subheadline,
+    words: [],
+    actions: section.actions,
+    background: EMPTY_MEDIA,
+  };
+}
+
 export function PhHeaderSection({ section }: { section: HeaderSection }) {
   const [open, setOpen] = useState(false);
   const inline = sectionInlineStyle(section.style);
@@ -133,14 +149,107 @@ export function PhHeaderSection({ section }: { section: HeaderSection }) {
 }
 
 export function PhHeroSection({ section }: { section: HeroSection }) {
+  const slides = section.slides.length ? section.slides : [slideFromLegacy(section)];
+  const [active, setActive] = useState(0);
+  const current = slides[Math.min(active, slides.length - 1)] ?? slides[0];
+  const cinematic = section.slides.length > 0 || section.mediaPosition === "background";
+
+  useEffect(() => {
+    if (slides.length < 2 || !section.autoplaySec) return;
+    const ms = Math.max(3, section.autoplaySec) * 1000;
+    const id = window.setInterval(() => {
+      setActive((i) => (i + 1) % slides.length);
+    }, ms);
+    return () => window.clearInterval(id);
+  }, [slides.length, section.autoplaySec]);
+
   const asBackground =
-    section.mediaPosition === "background" && hasRenderableMedia(section.media);
+    !cinematic &&
+    section.mediaPosition === "background" &&
+    hasRenderableMedia(section.media);
   const mediaClass =
     section.mediaPosition === "background"
       ? ""
       : `has-media-${section.mediaPosition}`;
   const showSideMedia =
-    hasRenderableMedia(section.media) && section.mediaPosition !== "background";
+    !cinematic &&
+    hasRenderableMedia(section.media) &&
+    section.mediaPosition !== "background";
+
+  if (cinematic) {
+    return (
+      <SectionShell
+        id={section.id}
+        style={section.style}
+        className="ph-shell ph-hero-cinematic"
+        backdrop={
+          <div className="ph-hero-bgs" aria-hidden>
+            {slides.map((slide, i) => (
+              <div
+                key={slide.id}
+                className={`ph-hero-bg ${i === active ? "is-on" : ""} ${
+                  hasRenderableMedia(slide.background) ? "has-media" : `tint-${(i % 3) + 1}`
+                }`}
+              >
+                {hasRenderableMedia(slide.background) ? (
+                  <PhMedia media={slide.background} className="ph-hero-bg-media" />
+                ) : null}
+              </div>
+            ))}
+            <div className="ph-hero-grid-mask" />
+          </div>
+        }
+      >
+        <div className="ph-hero-stage">
+          <div className="ph-hero-copy ph-rise" key={current.id}>
+            {section.brandLabel ? (
+              <div className="ph-brand-signal">{section.brandLabel}</div>
+            ) : null}
+            {current.eyebrow ? <div className="ph-eyebrow">{current.eyebrow}</div> : null}
+            <h1 className="ph-display">{current.headline}</h1>
+            {current.words.length ? (
+              <div className="ph-hero-words" aria-hidden>
+                {current.words.map((w, i) => (
+                  <span key={`${w}-${i}`}>
+                    {i > 0 ? <span className="ph-hero-word-sep">·</span> : null}
+                    <span>{w}</span>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {current.subheadline ? <p className="ph-lead">{current.subheadline}</p> : null}
+            <div className="ph-hero-actions">
+              <PhCtaButtons actions={current.actions.length ? current.actions : section.actions} />
+            </div>
+            {section.chips.length ? (
+              <div className="ph-hero-chips">
+                {section.chips.map((chip) => (
+                  <span key={chip} className="ph-hero-chip">
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          {slides.length > 1 ? (
+            <div className="ph-hero-dots" role="tablist" aria-label="Hero slides">
+              {slides.map((slide, i) => (
+                <button
+                  key={slide.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={i === active}
+                  aria-label={`Show slide ${i + 1}`}
+                  className={`ph-hero-dot ${i === active ? "is-on" : ""}`}
+                  onClick={() => setActive(i)}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </SectionShell>
+    );
+  }
 
   return (
     <SectionShell
@@ -157,12 +266,24 @@ export function PhHeroSection({ section }: { section: HeroSection }) {
     >
       <div className={`ph-hero ${showSideMedia ? mediaClass : ""}`}>
         <div className="ph-hero-copy ph-rise">
+          {section.brandLabel ? (
+            <div className="ph-brand-signal">{section.brandLabel}</div>
+          ) : null}
           {section.eyebrow ? <div className="ph-eyebrow">{section.eyebrow}</div> : null}
           <h1 className="ph-display">{section.headline}</h1>
           {section.subheadline ? <p className="ph-lead">{section.subheadline}</p> : null}
-          <div style={{ marginTop: "1.6rem" }}>
+          <div className="ph-hero-actions">
             <PhCtaButtons actions={section.actions} />
           </div>
+          {section.chips.length ? (
+            <div className="ph-hero-chips">
+              {section.chips.map((chip) => (
+                <span key={chip} className="ph-hero-chip">
+                  {chip}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
         {showSideMedia ? (
           <div className="ph-hero-media ph-rise-delay">
@@ -170,6 +291,91 @@ export function PhHeroSection({ section }: { section: HeroSection }) {
           </div>
         ) : null}
       </div>
+    </SectionShell>
+  );
+}
+
+export function PhStatsSection({ section }: { section: StatsSection }) {
+  return (
+    <SectionShell id={section.id} style={section.style} className="ph-shell ph-stats">
+      <div className="ph-stats-grid">
+        {section.items.map((item) => (
+          <div key={item.id} className="ph-stat">
+            <div className="ph-stat-icon" aria-hidden>
+              {hasRenderableMedia(item.media) ? (
+                <PhMedia media={item.media} />
+              ) : (
+                <span>{item.icon || "◆"}</span>
+              )}
+            </div>
+            <div className="ph-stat-value">{item.value}</div>
+            <div className="ph-stat-label">
+              {item.label.split("\n").map((line) => (
+                <span key={line}>
+                  {line}
+                  <br />
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </SectionShell>
+  );
+}
+
+export function PhPillarsSection({ section }: { section: PillarsSection }) {
+  return (
+    <SectionShell id={section.id} style={section.style} className="ph-shell ph-pillars">
+      <div className="ph-section-head is-center">
+        {section.eyebrow ? <div className="ph-eyebrow">{section.eyebrow}</div> : null}
+        <h2>{section.title}</h2>
+        {section.subtitle ? <p>{section.subtitle}</p> : null}
+      </div>
+      <div className="ph-pillar-grid">
+        {section.items.map((item) => (
+          <article
+            key={item.id}
+            className={`ph-pillar-card ${hasRenderableMedia(item.media) ? "has-bg" : ""}`}
+          >
+            {hasRenderableMedia(item.media) ? (
+              <div className="ph-pillar-bg" aria-hidden>
+                <PhMedia media={item.media} />
+              </div>
+            ) : null}
+            <div className="ph-pillar-top">
+              <div className="ph-pillar-icon" aria-hidden>
+                {hasRenderableMedia(item.iconMedia) ? (
+                  <PhMedia media={item.iconMedia} />
+                ) : (
+                  <span>{item.icon || "◇"}</span>
+                )}
+              </div>
+              {item.tag ? <span className="ph-pillar-tag">{item.tag}</span> : null}
+            </div>
+            <h3>{item.title}</h3>
+            {item.subtitle ? <p className="ph-pillar-sub">{item.subtitle}</p> : null}
+            {item.bullets.length ? (
+              <ul className="ph-tick-list">
+                {item.bullets.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+            ) : null}
+            {item.href && item.linkLabel ? (
+              <a className="ph-pillar-link" href={item.href}>
+                {item.linkLabel} <span aria-hidden>→</span>
+              </a>
+            ) : null}
+          </article>
+        ))}
+      </div>
+      {section.note ? <p className="ph-pillar-note">{section.note}</p> : null}
+      {section.actions.length ? (
+        <div className="ph-section-cta">
+          <PhCtaButtons actions={section.actions} />
+        </div>
+      ) : null}
     </SectionShell>
   );
 }
@@ -313,21 +519,37 @@ export function PhToolsShowcaseSection({ section }: { section: ToolsShowcaseSect
 }
 
 export function PhFeaturesSection({ section }: { section: FeaturesSection }) {
+  const isGrid = section.layout === "grid";
   return (
     <SectionShell id={section.id} style={section.style} className="ph-shell">
-      <div className="ph-section-head">
+      <div className={`ph-section-head ${isGrid ? "is-center" : ""}`}>
         {section.eyebrow ? <div className="ph-eyebrow">{section.eyebrow}</div> : null}
         <h2>{section.title}</h2>
         {section.subtitle ? <p>{section.subtitle}</p> : null}
       </div>
-      <div className="ph-features">
+      <div className={isGrid ? "ph-why-grid" : "ph-features"}>
         {section.items.map((item, index) => {
           const hasMedia = hasRenderableMedia(item.media);
+          if (isGrid) {
+            return (
+              <article key={item.id} className={`ph-why-card tint-${(index % 6) + 1}`}>
+                <div className="ph-why-index">{String(index + 1).padStart(2, "0")}</div>
+                {item.icon ? <div className="ph-tool-icon">{item.icon}</div> : null}
+                <h3>{item.title}</h3>
+                <p>{item.description}</p>
+                {hasMedia ? (
+                  <div className="ph-feature-media">
+                    <PhMedia media={item.media} />
+                  </div>
+                ) : null}
+              </article>
+            );
+          }
           return (
             <div
               key={item.id}
               className={`ph-feature-row ${hasMedia ? "has-media" : ""} ${
-                section.layout === "alternating" && index % 2 === 1 ? "is-flip" : ""
+                index % 2 === 1 ? "is-flip" : ""
               }`}
             >
               <div className="ph-feature-copy">
@@ -350,7 +572,9 @@ export function PhFeaturesSection({ section }: { section: FeaturesSection }) {
 
 export function PhCtaSection({ section }: { section: CtaSection }) {
   return (
-    <SectionShell id={section.id} style={section.style} className="ph-shell ph-cta">
+    <SectionShell id={section.id} style={section.style} className="ph-shell ph-cta has-orbs">
+      <div className="ph-orb ph-orb-cyan" aria-hidden />
+      <div className="ph-orb ph-orb-orange" aria-hidden />
       <div className="ph-cta-panel">
         <h2>{section.title}</h2>
         {section.subtitle ? <p>{section.subtitle}</p> : null}
