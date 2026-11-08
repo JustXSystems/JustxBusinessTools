@@ -57,6 +57,19 @@ function writeUrl(module: ImsModuleKey) {
   if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url.href);
 }
 
+/** Full-screen app URL (`/ims`), keeping the current module / open deep-link. */
+function standaloneHref(module: ImsModuleKey, intent: string | null): string {
+  const params = new URLSearchParams();
+  if (module !== "dashboard") params.set("m", module);
+  if (intent?.startsWith("open:")) params.set("open", intent.slice(5));
+  const qs = params.toString();
+  return withBasePath(qs ? `/ims?${qs}` : "/ims");
+}
+
+function openFullscreen(module: ImsModuleKey, intent: string | null) {
+  window.open(standaloneHref(module, intent), "_blank", "noopener");
+}
+
 const NOTE_DOT: Record<ImsNotification["tone"], string> = { coral: "var(--bos-coral)", amber: "var(--bos-amber)", blue: "var(--bos-blue)", emerald: "var(--bos-emerald)" };
 
 function NotificationsDialog({ open, onClose, notes, onOpen }: { open: boolean; onClose: () => void; notes: ImsNotification[]; onOpen: (n: ImsNotification) => void }) {
@@ -296,19 +309,29 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
     ...(askPage ? [{ id: "q-ask", section: "Quick actions", label: `Ask AI about ${current.label}`, icon: "✦", keywords: "assistant question gemini help", onSelect: () => setAskOpen(true) }] : []),
     ...modules.map((x) => ({ id: `m-${x.key}`, section: x.section, label: x.label, icon: x.icon, keywords: `${x.desc} ${x.keywords ?? ""}`, onSelect: go(x.key) })),
     { id: "theme", section: "Preferences", label: `Switch to ${theme === "dark" ? "light" : "dark"} mode`, icon: "◐", onSelect: toggleTheme },
-    ...(mode === "standalone" ? [{ id: "jbt", section: "Preferences", label: "Open Justx Business Tools", icon: "⤺", onSelect: () => window.location.assign(withBasePath("/")) }] : []),
+    mode === "tool"
+      ? {
+          id: "fullscreen",
+          section: "Quick actions",
+          label: "Open IMS as a full-screen app",
+          icon: "⤢",
+          keywords: "standalone fullscreen expand",
+          onSelect: () => openFullscreen(current.key, nav.intent?.module === current.key ? nav.intent.value : null),
+        }
+      : { id: "jbt", section: "Preferences", label: "Open Justx Business Tools", icon: "⤺", onSelect: () => window.location.assign(withBasePath("/")) },
     ...(onSignOut ? [{ id: "signout", section: "Preferences", label: "Sign out", icon: "⎋", onSelect: onSignOut }] : []),
   ];
 
   const actorName = session.actor.name ?? session.actor.email ?? "You";
   const businessName = session.settings.businessName || session.brand?.name || "Your business";
   const Module = current.component;
+  const openIntent = nav.intent?.module === current.key ? nav.intent.value : null;
 
   return (
     <ImsAppProvider value={ctx}>
       <div className="ims-app">
         <Topbar sticky="desktop">
-          <Brand logoSrc={logoSrc} name="Justx IMS" sub={`${businessName} · Dealer`} />
+          <Brand logoSrc={logoSrc} name="Justx IMS" sub={`${businessName} · ${mode === "tool" ? "in JBT" : "Dealer"}`} />
           <div className="bos-topbar-actions">
             <SearchInput
               readOnly
@@ -333,7 +356,17 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
             <span className="ims-role-pill" title="Your IMS role">
               {session.access.roleLabel}
             </span>
-            {onSignOut ? (
+            {mode === "tool" ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openFullscreen(current.key, openIntent)}
+                title="Open IMS as a full-screen app"
+                aria-label="Full screen"
+              >
+                <span className="ims-topbar-label">Full screen</span> ↗
+              </Button>
+            ) : onSignOut ? (
               <Button size="sm" variant="ghost" icon="login" onClick={onSignOut} aria-label="Sign out">
                 <span className="ims-topbar-label">Sign out</span>
               </Button>
