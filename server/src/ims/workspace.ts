@@ -1,5 +1,6 @@
 import type { Router } from "express";
-import { accessOf, actorOf, qint, qstr, type ImsDeps } from "./context.js";
+import { moduleAllowed } from "../lib/ims-profile-modules.js";
+import { accessOf, actorOf, enabledModulesOf, qint, qstr, type ImsDeps } from "./context.js";
 import { isoOf, likeOf, money, rows, tsOf } from "./db.js";
 import { AGING_BUCKETS, IMS_ROLE_LABELS, addDaysISO, agingBucket, daysBetween, monthStartISO, periodRange, round2, round3, stockStatus, todayISO, type AgingKey } from "./logic.js";
 import { getSettings } from "./settings.js";
@@ -64,9 +65,15 @@ type ItemAgg = {
   created_at: string;
 };
 
-async function notifications(deps: ImsDeps, tenantId: number, perms: ReadonlySet<string>): Promise<ImsNotification[]> {
+async function notifications(
+  deps: ImsDeps,
+  tenantId: number,
+  perms: ReadonlySet<string>,
+  enabled: ReadonlyArray<ImsModuleKey> | null = null,
+): Promise<ImsNotification[]> {
   const today = todayISO();
   const out: ImsNotification[] = [];
+  const allow = (m: ImsModuleKey) => moduleAllowed(enabled, m);
   const low = await rows<{ id: string; name: string; current_stock: string; min_stock: string; unit: string; updated_at: string }>(
     deps.db,
     `SELECT id, name, current_stock, min_stock, unit, updated_at FROM ims_items
@@ -74,7 +81,7 @@ async function notifications(deps: ImsDeps, tenantId: number, perms: ReadonlySet
      ORDER BY (current_stock <= 0) DESC, current_stock / NULLIF(min_stock, 0) ASC LIMIT 8`,
     { tenantId },
   );
-  for (const i of low) {
+  if (allow("lowstock")) for (const i of low) {
     const out_ = money(i.current_stock) <= 0;
     out.push({
       id: `low:${i.id}`,
@@ -86,13 +93,13 @@ async function notifications(deps: ImsDeps, tenantId: number, perms: ReadonlySet
       at: tsOf(i.updated_at),
     });
   }
-  if (perms.has("approvals")) {
+  if (perms.has("approvals") && (allow("approvals") || allow("checks") || allow("purchase"))) {
     const pos = await rows<{ id: string; po_no: string; supplier_name: string; grand_total: string; updated_at: string }>(
       deps.db,
       `SELECT id, po_no, supplier_name, grand_total, updated_at FROM ims_purchase_orders WHERE tenant_id = :tenantId AND status = 'pending_approval' ORDER BY updated_at DESC LIMIT 5`,
       { tenantId },
     );
-    for (const p of pos) {
+    if (allow("approvals") || allow("purchase")) for (const p of pos) {
       out.push({ id: `po:${p.id}`, tone: "blue", title: `PO ${p.po_no} needs approval`, body: `${p.supplier_name} · ₹${round2(money(p.grand_total)).toLocaleString("en-IN")}`, module: "approvals", open: p.id, at: tsOf(p.updated_at) });
     }
     const checks = await rows<{ id: string; check_no: string; title: string; updated_at: string }>(
@@ -100,11 +107,11 @@ async function notifications(deps: ImsDeps, tenantId: number, perms: ReadonlySet
       `SELECT id, check_no, title, updated_at FROM ims_stock_checks WHERE tenant_id = :tenantId AND status = 'submitted' ORDER BY updated_at DESC LIMIT 3`,
       { tenantId },
     );
-    for (const c of checks) {
+    if (allow("approvals") || allow("checks")) for (const c of checks) {
       out.push({ id: `check:${c.id}`, tone: "blue", title: `Stock check ${c.check_no} awaits approval`, body: c.title, module: "checks", open: c.id, at: tsOf(c.updated_at) });
     }
   }
-  if (perms.has("receivables") || perms.has("sales")) {
+  if ((perms.has("receivables") || perms.has("sales")) && allow("receivables")) {
     const overdue = await rows<{ id: string; invoice_no: string; customer_name: string; balance: string; due_date: string }>(
       deps.db,
       `SELECT id, invoice_no, customer_name, grand_total - amount_paid AS balance, due_date FROM ims_invoices
@@ -117,7 +124,7 @@ async function notifications(deps: ImsDeps, tenantId: number, perms: ReadonlySet
       out.push({ id: `ar:${i.id}`, tone: days > 60 ? "coral" : "amber", title: `${i.invoice_no} overdue ${days} days`, body: `${i.customer_name} · ₹${round2(money(i.balance)).toLocaleString("en-IN")} due`, module: "receivables", open: i.id, at: null });
     }
   }
-  if (perms.has("payables")) {
+  if (perms.has("payables") && allow("payables")) {
     const due = await rows<{ id: string; bill_no: string; supplier_name: string; balance: string; due_date: string; status: string }>(
       deps.db,
       `SELECT id, bill_no, supplier_name, grand_total - amount_paid AS balance, due_date, status FROM ims_bills
@@ -145,12 +152,15 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
   router.get("/session", async (_req, res) => {
     const actor = actorOf(res);
     const access = accessOf(res);
+    const enabledModules = enabledModulesOf(res) as ImsModuleKey[] | null;
     const [settings, brand] = await Promise.all([getSettings(deps, actor.tenantId), deps.host.brand(actor.tenantId).catch(() => null)]);
     res.json({
       host: deps.host.id,
       tenantId: actor.tenantId,
       actor: { userId: actor.userId, name: actor.name, email: actor.email, platformRole: actor.role },
       access: { role: access.role, roleLabel: IMS_ROLE_LABELS[access.role], perms: [...access.perms] },
+      /** Admin ceiling for left-nav modules. `null` = all modules allowed for this profile. */
+      enabledModules,
       settings,
       brand: brand ? { name: brand.name, logoUrl: brand.logoUrl, gstin: brand.gstin, state: brand.state, address: brand.address, phone: brand.phone, email: brand.email } : null,
       sources: deps.sources.map((s) => ({ id: s.id, label: s.label, icon: s.icon, href: s.href, description: s.description, kind: "documents" })),
@@ -331,7 +341,7 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       series: fullSeries,
       topMovers: topMovers.map((m) => ({ itemId: m.item_id, name: m.item_name, qty: round3(money(m.qty)), value: round2(money(m.value)) })),
       recent: recent.map((m) => ({ id: m.id, itemId: m.item_id, itemName: m.item_name, type: m.type, qty: round3(money(m.qty)), after: round3(money(m.after_qty)), refNo: m.ref_no, partyName: m.party_name, actorName: m.actor_name, createdAt: tsOf(m.created_at) })),
-      notifications: await notifications(deps, tenantId, access.perms),
+      notifications: await notifications(deps, tenantId, access.perms, enabledModulesOf(res) as ImsModuleKey[] | null),
       insights: {
         totalUnits: round3(totalUnits),
         potentialMargin: round2(retailValue - stockValue),
@@ -354,7 +364,9 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
 
   router.get("/notifications", async (_req, res) => {
     const actor = actorOf(res);
-    res.json({ notifications: await notifications(deps, actor.tenantId, accessOf(res).perms) });
+    res.json({
+      notifications: await notifications(deps, actor.tenantId, accessOf(res).perms, enabledModulesOf(res) as ImsModuleKey[] | null),
+    });
   });
 
   /** Activity history / audit trail. */

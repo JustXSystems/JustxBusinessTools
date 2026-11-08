@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FeatureSwitchesPanel } from "@/components/admin/FeatureSwitchesPanel";
+import { ImsModulesPane } from "@/components/admin/ImsModulesPane";
 import { ToolPlacementPane } from "@/components/admin/ToolPlacementPane";
 import {
   ToolPricingPane,
@@ -39,7 +40,7 @@ type License = {
 
 type ToolDef = { id: string; toolType: string; definition: Record<string, unknown> };
 
-type Tab = "placement" | "pricing" | "schema";
+type Tab = "placement" | "pricing" | "schema" | "modules";
 type DirFilter = "all" | "live" | "hidden" | "paid" | "licensed";
 
 type DirectoryItem = {
@@ -56,9 +57,10 @@ type DirectoryItem = {
   definition: Record<string, unknown> | null;
 };
 
-function tabFromSearch(raw: string | null): Tab {
+function tabFromSearch(raw: string | null, toolId: string): Tab {
   if (raw === "pricing" || raw === "skus" || raw === "licenses") return "pricing";
   if (raw === "schema" || raw === "config" || raw === "fields") return "schema";
+  if (raw === "modules" && toolId === "imsdealer") return "modules";
   return "placement";
 }
 
@@ -101,6 +103,7 @@ export default function AdminToolsPage() {
   const placementRef = useRef<ToolsSaveHandle>(null);
   const pricingRef = useRef<ToolsSaveHandle>(null);
   const schemaRef = useRef<ToolsSaveHandle>(null);
+  const modulesRef = useRef<ToolsSaveHandle>(null);
 
   async function setToolGrouping(enabled: boolean) {
     setGroupingBusy(true);
@@ -223,9 +226,11 @@ export default function AdminToolsPage() {
         if (!didBootTools.current) {
           didBootTools.current = true;
           const params = new URLSearchParams(window.location.search);
-          setTab(tabFromSearch(params.get("tab")));
-          const fromUrl = params.get("tool");
+          const fromUrl = params.get("tool") || "";
           if (fromUrl) setSelectedId(fromUrl);
+          setTab(tabFromSearch(params.get("tab"), fromUrl));
+          const profileRaw = Number(params.get("profile") || params.get("businessProfileId"));
+          if (Number.isInteger(profileRaw) && profileRaw > 0) setBusinessProfileId(profileRaw);
         }
       } catch (e) {
         setMessage(e instanceof Error ? e.message : "Failed to load tools");
@@ -239,24 +244,36 @@ export default function AdminToolsPage() {
     if (!selectedId) setSelectedId(selected.id);
     setGroupName(selected.catalog?.groupName || selected.groupName);
     setAvailable(selected.catalog?.available ?? true);
-  }, [selected, selectedId]);
+    if (tab === "modules" && selected.id !== "imsdealer") {
+      setTab("placement");
+      syncUrl(selected.id, "placement");
+    }
+  }, [selected, selectedId, tab]);
 
   function select(id: string, nextTab = tab) {
     setSelectedId(id);
-    setTab(nextTab);
+    const resolved = nextTab === "modules" && id !== "imsdealer" ? "placement" : nextTab;
+    setTab(resolved);
     setMessage("");
-    syncUrl(id, nextTab);
+    syncUrl(id, resolved);
   }
 
   function goTab(next: Tab) {
     if (!selected) return;
+    if (next === "modules" && selected.id !== "imsdealer") return;
     setTab(next);
     syncUrl(selected.id, next);
   }
 
   async function saveActive() {
     const handle =
-      tab === "placement" ? placementRef.current : tab === "pricing" ? pricingRef.current : schemaRef.current;
+      tab === "placement"
+        ? placementRef.current
+        : tab === "pricing"
+          ? pricingRef.current
+          : tab === "modules"
+            ? modulesRef.current
+            : schemaRef.current;
     if (!handle) return;
     setSaving(true);
     try {
@@ -275,7 +292,9 @@ export default function AdminToolsPage() {
         ? selected?.sku
           ? "Save product"
           : "Publish product"
-        : "Publish revision";
+        : tab === "modules"
+          ? "Save modules"
+          : "Publish revision";
 
   async function move(id: string, dir: -1 | 1) {
     const idx = catalog.findIndex((t) => t.id === id);
@@ -583,6 +602,16 @@ export default function AdminToolsPage() {
                   >
                     Schema
                   </button>
+                  {selected.id === "imsdealer" ? (
+                    <button
+                      type="button"
+                      role="tab"
+                      className={tab === "modules" ? "active" : ""}
+                      onClick={() => goTab("modules")}
+                    >
+                      Modules
+                    </button>
+                  ) : null}
                 </div>
                 <div className="admin-tabs-actions">
                   <button
@@ -651,6 +680,18 @@ export default function AdminToolsPage() {
                   }}
                 />
               </div>
+
+              {selected.id === "imsdealer" ? (
+                <div hidden={tab !== "modules"} className={tab === "modules" ? undefined : "payments-tab-park"}>
+                  <ImsModulesPane
+                    ref={modulesRef}
+                    profiles={profiles}
+                    businessProfileId={businessProfileId}
+                    onBusinessProfileChange={setBusinessProfileId}
+                    onSaved={(msg) => setMessage(msg)}
+                  />
+                </div>
+              ) : null}
             </>
           ) : (
             <section className="panel admin-card">

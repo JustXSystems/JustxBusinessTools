@@ -37,6 +37,11 @@ export function accessOf(res: Response): ImsAccess {
   return access;
 }
 
+/** Admin ceiling for left-nav modules. `null` = unrestricted (all modules). */
+export function enabledModulesOf(res: Response): string[] | null {
+  return (res.locals.imsEnabledModules as string[] | null | undefined) ?? null;
+}
+
 export function can(res: Response, perm: ImsPermission): boolean {
   return accessOf(res).perms.has(perm);
 }

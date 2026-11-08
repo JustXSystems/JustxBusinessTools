@@ -1,4 +1,5 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
+import { getProfileImsModules, pathAllowedForModules } from "../lib/ims-profile-modules.js";
 import { registerAssistant } from "./assistant.js";
 import { registerFieldMap } from "./fieldmap.js";
 import { registerAudit } from "./audit.js";
@@ -63,10 +64,23 @@ export function createImsRouter({ db, host, sources = [], catalogs = [] }: Creat
       }
       res.locals.imsActor = actor;
       res.locals.imsAccess = await resolveAccess(deps, actor);
+      res.locals.imsEnabledModules = await getProfileImsModules(deps.db, actor.tenantId);
       next();
     } catch (err) {
       next(err);
     }
+  });
+
+  router.use((req, res, next) => {
+    const enabled = res.locals.imsEnabledModules as string[] | null | undefined;
+    if (!pathAllowedForModules(req.path, enabled)) {
+      res.status(403).json({
+        error: "This IMS module isn't enabled for this business profile. Ask a platform admin to turn it on under Admin → Tools → Justx IMS → Modules.",
+        code: "IMS_MODULE_DISABLED",
+      });
+      return;
+    }
+    next();
   });
 
   router.use((req, res, next) => {

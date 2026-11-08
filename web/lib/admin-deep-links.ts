@@ -39,6 +39,10 @@ export const adminDeepLink = {
   experienceTheme: () => "/admin/experience?tab=theme",
   tools: () => "/admin/tools",
   toolsPricing: () => "/admin/tools?tab=pricing",
+  imsModules: (profileId?: number) =>
+    profileId != null && profileId > 0
+      ? `/admin/tools?tool=imsdealer&tab=modules&profile=${profileId}`
+      : "/admin/tools?tool=imsdealer&tab=modules",
   analytics: () => "/admin/analytics",
   gateways: (filter?: "unhealthy" | "enabled" | "live" | "off" | "test") =>
     filter ? `/admin/gateways?filter=${filter}` : "/admin/gateways",

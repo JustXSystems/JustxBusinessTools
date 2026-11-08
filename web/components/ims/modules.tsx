@@ -91,10 +91,17 @@ export const IMS_MODULES: ReadonlyArray<ImsModuleDef> = [
 
 export const MODULE_KEYS: ReadonlySet<string> = new Set(IMS_MODULES.map((x) => x.key));
 
-/** Modules this caller can see (permission + business-type gates). */
+/** Modules this caller can see (Admin profile ceiling + permission + business-type gates). */
 export function visibleModules(session: ImsSession): ImsModuleDef[] {
   const perms = new Set(session.access.perms);
-  return IMS_MODULES.filter((x) => (!x.anyOf || x.anyOf.some((p) => perms.has(p))) && (!x.when || x.when(session)));
+  const ceiling = session.enabledModules;
+  const allowed = ceiling == null ? null : new Set(ceiling);
+  return IMS_MODULES.filter(
+    (x) =>
+      (allowed == null || allowed.has(x.key)) &&
+      (!x.anyOf || x.anyOf.some((p) => perms.has(p))) &&
+      (!x.when || x.when(session)),
+  );
 }
 
 export const moduleDef = (key: string): ImsModuleDef | undefined => IMS_MODULES.find((x) => x.key === key);

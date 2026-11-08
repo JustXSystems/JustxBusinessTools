@@ -147,18 +147,6 @@ export type ImsSourceRef = { id: string; label: string; icon: string; href: stri
 
 export type ImsBrand = { name: string; logoUrl: string | null; gstin: string | null; state: string | null; address: string | null; phone: string | null; email: string | null };
 
-export type ImsSession = {
-  host: string;
-  tenantId: number;
-  actor: { userId: number | null; name: string | null; email: string | null; platformRole: string };
-  access: { role: ImsRole; roleLabel: string; perms: ImsPermission[] };
-  settings: ImsSettings;
-  brand: ImsBrand | null;
-  sources: ImsSourceRef[];
-  catalogs: ImsSourceRef[];
-  today: string;
-};
-
 /* ---------- Workspace ---------- */
 
 export type ImsModuleKey =
@@ -192,6 +180,20 @@ export type ImsModuleKey =
   | "helpdesk"
   | "settings"
   | "more";
+
+export type ImsSession = {
+  host: string;
+  tenantId: number;
+  actor: { userId: number | null; name: string | null; email: string | null; platformRole: string };
+  access: { role: ImsRole; roleLabel: string; perms: ImsPermission[] };
+  /** Admin ceiling for left-nav modules. `null` / omitted = all modules allowed for this profile. */
+  enabledModules?: ImsModuleKey[] | null;
+  settings: ImsSettings;
+  brand: ImsBrand | null;
+  sources: ImsSourceRef[];
+  catalogs: ImsSourceRef[];
+  today: string;
+};
 
 export type ImsNotification = { id: string; tone: "coral" | "amber" | "blue" | "emerald"; title: string; body: string; module: ImsModuleKey; open?: string; at: string | null };
 
