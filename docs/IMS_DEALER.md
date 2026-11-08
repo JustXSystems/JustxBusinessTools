@@ -80,7 +80,7 @@ Industry-agnostic package BOMs live inside IMS (migration `036_ims_bom.sql`):
 | Piece | Tables / module | Role |
 |---|---|---|
 | Package templates | `ims_bom_packages` + `ims_bom_package_lines` · `?m=bomPackages` | Reusable recipes (sections, stock/service/overhead/scaled lines, default margin/tax) |
-| Customer BOMs | `ims_bom_docs` + `ims_bom_doc_lines` · `?m=bom` | Instance for a customer/site with live paper preview and print |
+| Customer BOMs | `ims_bom_docs` + `ims_bom_doc_lines` · `?m=bom` | Instance for a customer/site with live paper preview and print; list chips for status / invoice / stock |
 | GST invoice | `POST /bom/docs/:id/create-invoice` | Confirmed BOM → draft or issued invoice; user chooses **lump-sum** or **explode every line** |
 | Stock issue | `POST /bom/docs/:id/issue-stock` | OUT movements for stock lines linked to catalogue items (`ref_type=bom`) |
 | Excel | Client (`bom-excel.ts`) | Export customer BOM sheet; import multi-sheet workbooks into packages with catalogue auto-match (SKU/name); Match catalogue on packages |

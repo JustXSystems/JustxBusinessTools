@@ -263,7 +263,10 @@ export function previewBomInvoice(
     taxable,
     tax,
     grand: round2(taxable + tax),
-    note: doc.marginAmount > 0 ? "Margin spread across line rates; GST from item/BOM rate." : "Each BOM line becomes an invoice line.",
+    note:
+      doc.marginAmount > 0
+        ? "Margin spread across line rates. GST preview is approximate — catalogue items may use their own GST %."
+        : "Each BOM line becomes an invoice line. GST preview is approximate — catalogue items may use their own GST %.",
   };
 }
 
@@ -282,8 +285,22 @@ export const bom = {
   duplicatePackage: (id: string) => post<{ package: BomPackage }>(`/bom/packages/${id}/duplicate`),
   seedSamples: () => post<{ created: number; packages: BomPackage[] }>("/bom/packages/seed-samples"),
 
-  docs: (params?: { q?: string; status?: string; limit?: number; offset?: number }) =>
-    get<{ docs: BomDoc[]; total: number; invoiceConvertModes: BomInvoiceConvertMode[] }>("/bom/docs", params),
+  docs: (params?: {
+    q?: string;
+    status?: string;
+    invoice?: "linked" | "none" | "all";
+    stock?: "issued" | "pending" | "all";
+    limit?: number;
+    offset?: number;
+  }) =>
+    get<{ docs: BomDoc[]; total: number; invoiceConvertModes: BomInvoiceConvertMode[] }>("/bom/docs", {
+      q: params?.q,
+      status: params?.status,
+      invoice: params?.invoice && params.invoice !== "all" ? params.invoice : undefined,
+      stock: params?.stock && params.stock !== "all" ? params.stock : undefined,
+      limit: params?.limit,
+      offset: params?.offset,
+    }),
   doc: (id: string) =>
     get<{
       doc: BomDoc;

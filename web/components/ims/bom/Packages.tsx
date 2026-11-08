@@ -37,7 +37,11 @@ export default function BomPackagesScreen() {
   return (
     <RequirePerm perm="bom" what="BOM packages">
       {view.mode === "edit" ? (
-        <PackageEditor id={view.id} onBack={() => setView({ mode: "list" })} />
+        <PackageEditor
+          id={view.id}
+          onBack={() => setView({ mode: "list" })}
+          onOpen={(id) => setView({ mode: "edit", id })}
+        />
       ) : (
         <PackageList onNew={() => setView({ mode: "edit", id: null })} onOpen={(id) => setView({ mode: "edit", id })} />
       )}
@@ -80,11 +84,24 @@ function PackageList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string
                 const file = e.target.files?.[0];
                 e.target.value = "";
                 if (!file) return;
-                const out = await run("import", () => importExcel(file), {
-                  success: "Packages imported from Excel",
-                  description: "Exact/strong catalogue matches were linked. Open a package and use Match catalogue for the rest.",
+                const out = await run("import", async () => {
+                  const result = await importExcel(file);
+                  return result;
                 });
-                if (out) state.reload();
+                if (out) {
+                  const { created, summary } = out;
+                  await run(
+                    "import-summary",
+                    async () => true,
+                    {
+                      success: `Imported ${created} package${created === 1 ? "" : "s"}`,
+                      description: `Catalogue: ${summary.matched} matched · ${summary.ambiguous} ambiguous · ${summary.unmatched} unmatched`,
+                      tone: summary.ambiguous || summary.unmatched ? "amber" : "emerald",
+                      refresh: false,
+                    },
+                  );
+                  state.reload();
+                }
               }}
             />
             <Button variant="ghost" disabled={Boolean(busy)} onClick={() => fileRef.current?.click()}>
@@ -144,14 +161,14 @@ function PackageList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string
   );
 }
 
-function PackageEditor({ id, onBack }: { id: string | null; onBack: () => void }) {
+function PackageEditor({ id, onBack, onOpen }: { id: string | null; onBack: () => void; onOpen: (id: string) => void }) {
   const state = useImsData(() => (id ? bom.package(id).then((r) => r.package) : Promise.resolve(null)), [id]);
   if (id && state.data === null && !state.error) return <LoadingBlock />;
   if (id && state.error) return <ErrorBlock error={state.error} onRetry={state.reload} />;
-  return <PackageForm key={id ?? "new"} initial={state.data} onBack={onBack} />;
+  return <PackageForm key={id ?? "new"} initial={state.data} onBack={onBack} onOpen={onOpen} />;
 }
 
-function PackageForm({ initial, onBack }: { initial: BomPackage | null; onBack: () => void }) {
+function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; onBack: () => void; onOpen: (id: string) => void }) {
   const { run, busy } = useImsAction();
   const [code, setCode] = useState(initial?.code ?? "");
   const [name, setName] = useState(initial?.name ?? "");
@@ -263,7 +280,7 @@ function PackageForm({ initial, onBack }: { initial: BomPackage | null; onBack: 
                   disabled={Boolean(busy)}
                   onClick={async () => {
                     const out = await run("dup", () => bom.duplicatePackage(initial.id), { success: "Package duplicated" });
-                    if (out?.package?.id) onBack();
+                    if (out?.package?.id) onOpen(out.package.id);
                   }}
                 >
                   Duplicate
@@ -291,37 +308,39 @@ function PackageForm({ initial, onBack }: { initial: BomPackage | null; onBack: 
               variant="ghost"
               disabled={Boolean(busy)}
               onClick={async () => {
-                const out = await run(
-                  "match",
-                  async () => {
-                    const catalog = await ims.items({ includeInactive: false }).then((r) => r.items);
-                    const { packages: next, summary } = applyCatalogMatches(
-                      [{ name, lines: lines.map(({ key: _k, ...rest }) => rest) }],
-                      catalog,
-                    );
-                    const linked = next[0]?.lines ?? [];
-                    setLines((prev) =>
-                      prev.map((l, i) => {
-                        const m = linked[i];
-                        if (!m?.itemId || l.itemId) return l;
-                        return {
-                          ...l,
-                          itemId: m.itemId,
-                          unit: m.unit || l.unit,
-                          defaultRate: l.defaultRate || m.defaultRate || 0,
-                          makeText: l.makeText || m.makeText || "",
-                        };
-                      }),
-                    );
-                    return summary;
-                  },
-                  {
-                    success: "Catalogue match finished",
-                    description: "Exact and strong matches were linked. Ambiguous rows stay for manual pick.",
-                  },
-                );
+                const out = await run("match", async () => {
+                  const catalog = await ims.items({ includeInactive: false }).then((r) => r.items);
+                  const { packages: next, summary } = applyCatalogMatches(
+                    [{ name, lines: lines.map(({ key: _k, ...rest }) => rest) }],
+                    catalog,
+                  );
+                  const linked = next[0]?.lines ?? [];
+                  setLines((prev) =>
+                    prev.map((l, i) => {
+                      const m = linked[i];
+                      if (!m?.itemId || l.itemId) return l;
+                      return {
+                        ...l,
+                        itemId: m.itemId,
+                        unit: m.unit || l.unit,
+                        defaultRate: l.defaultRate || m.defaultRate || 0,
+                        makeText: l.makeText || m.makeText || "",
+                      };
+                    }),
+                  );
+                  return summary;
+                });
                 if (out) {
-                  /* toast already shown */
+                  await run(
+                    "match-summary",
+                    async () => true,
+                    {
+                      success: "Catalogue match finished",
+                      description: `${out.matched} linked · ${out.ambiguous} ambiguous · ${out.unmatched} unmatched`,
+                      tone: out.ambiguous || out.unmatched ? "amber" : "emerald",
+                      refresh: false,
+                    },
+                  );
                 }
               }}
             >
@@ -415,6 +434,7 @@ function PackageForm({ initial, onBack }: { initial: BomPackage | null; onBack: 
                         Unlink
                       </Button>
                     ) : null}
+                    {l.itemId ? <span style={{ opacity: 0.6 }}>Linked</span> : null}
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
                       <input
                         type="checkbox"
@@ -427,20 +447,20 @@ function PackageForm({ initial, onBack }: { initial: BomPackage | null; onBack: 
                 </div>
               ))}
           </div>
-          <div style={{ marginTop: 10 }}>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                const next = window.prompt("New section name", "Extras");
-                if (next?.trim()) setLines((prev) => [...prev, blankLine(next.trim())]);
-              }}
-            >
-              Add section
-            </Button>
-          </div>
         </Card>
       ))}
+      <div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            const next = window.prompt("New section name", "Extras");
+            if (next?.trim()) setLines((prev) => [...prev, blankLine(next.trim())]);
+          }}
+        >
+          Add section
+        </Button>
+      </div>
 
       <ItemPickerDialog
         open={Boolean(pickFor)}

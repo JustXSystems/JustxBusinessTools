@@ -1,8 +1,8 @@
 "use client";
 
 import "./bom.css";
-import { useMemo, useState } from "react";
-import { Alert, Badge, Button, Card, EmptyState, Field, FormGrid, Input, Select, Textarea } from "@/components/bos";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, Badge, Button, Card, EmptyState, Field, FilterChip, FormGrid, Input, Select, Textarea } from "@/components/bos";
 import {
   BOM_DOC_STATUS_LABEL,
   BOM_INVOICE_CONVERT_LABEL,
@@ -80,12 +80,23 @@ export default function BomBuilderScreen() {
 
 function BomList({ onNew, onOpen }: { onNew: (packageId: string | null) => void; onOpen: (id: string) => void }) {
   const [q, setQ] = useState("");
+  const [qDebounced, setQDebounced] = useState("");
   const [status, setStatus] = useState("all");
+  const [invoice, setInvoice] = useState<"all" | "linked" | "none">("all");
+  const [stock, setStock] = useState<"all" | "issued" | "pending">("all");
   const [pkgId, setPkgId] = useState("");
-  const docsState = useImsData(() => bom.docs({ q, status, limit: 100 }), [q, status]);
+  useEffect(() => {
+    const t = window.setTimeout(() => setQDebounced(q.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [q]);
+  const docsState = useImsData(
+    () => bom.docs({ q: qDebounced, status, invoice, stock, limit: 100 }),
+    [qDebounced, status, invoice, stock],
+  );
   const pkgsState = useImsData(() => bom.packages({ limit: 100 }), []);
   const docs = docsState.data?.docs ?? [];
   const packages = pkgsState.data?.packages ?? [];
+  const filtered = status !== "all" || invoice !== "all" || stock !== "all" || Boolean(qDebounced);
 
   return (
     <Stack>
@@ -99,16 +110,6 @@ function BomList({ onNew, onOpen }: { onNew: (packageId: string | null) => void;
         <FormGrid>
           <Field label="Search">
             {({ id }) => <Input id={id} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Doc no, customer, location…" />}
-          </Field>
-          <Field label="Status">
-            {({ id }) => (
-              <Select id={id} value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="all">All</option>
-                <option value="draft">Draft</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="cancelled">Cancelled</option>
-              </Select>
-            )}
           </Field>
           <Field label="Start from package">
             {({ id }) => (
@@ -124,30 +125,85 @@ function BomList({ onNew, onOpen }: { onNew: (packageId: string | null) => void;
             )}
           </Field>
         </FormGrid>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+          {(["all", "draft", "confirmed", "cancelled"] as const).map((s) => (
+            <FilterChip key={s} active={status === s} onClick={() => setStatus(s)}>
+              {s === "all" ? "All status" : BOM_DOC_STATUS_LABEL[s]}
+            </FilterChip>
+          ))}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+          <FilterChip active={invoice === "all"} onClick={() => setInvoice("all")}>
+            Any invoice
+          </FilterChip>
+          <FilterChip active={invoice === "none"} onClick={() => setInvoice("none")}>
+            No invoice
+          </FilterChip>
+          <FilterChip active={invoice === "linked"} onClick={() => setInvoice("linked")}>
+            Invoiced
+          </FilterChip>
+          <FilterChip active={stock === "all"} onClick={() => setStock("all")}>
+            Any stock
+          </FilterChip>
+          <FilterChip active={stock === "pending"} onClick={() => setStock("pending")}>
+            Stock pending
+          </FilterChip>
+          <FilterChip active={stock === "issued"} onClick={() => setStock("issued")}>
+            Stock issued
+          </FilterChip>
+        </div>
       </Card>
 
       {docsState.error ? <ErrorBlock error={docsState.error} onRetry={docsState.reload} /> : null}
       {!docsState.data && !docsState.error ? <LoadingBlock /> : null}
       {docsState.data && docs.length === 0 ? (
         <EmptyState
-          title="No BOM documents yet"
+          title={filtered ? "No BOMs match these filters" : "No BOM documents yet"}
           actions={
-            <Button onClick={() => onNew(pkgId || null)}>Create first BOM</Button>
+            filtered ? (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setQ("");
+                  setStatus("all");
+                  setInvoice("all");
+                  setStock("all");
+                }}
+              >
+                Clear filters
+              </Button>
+            ) : (
+              <Button onClick={() => onNew(pkgId || null)}>Create first BOM</Button>
+            )
           }
         >
-          Pick a package template above (or start blank), then fill customer and lines.
+          {filtered
+            ? stock === "pending"
+              ? "No confirmed BOMs are waiting on stock for this view."
+              : "Try another status, invoice or stock chip."
+            : "Pick a package template above (or start blank), then fill customer and lines."}
         </EmptyState>
       ) : null}
 
       {docs.map((d) => (
         <Card key={d.id} interactive onClick={() => onOpen(d.id)}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
             <div>
               <div style={{ fontWeight: 700 }}>
                 {d.docNo} · {d.customerName || "Untitled customer"}
               </div>
               <div style={{ opacity: 0.7, fontSize: 13, marginTop: 4 }}>
                 {[d.capacityLabel || d.title, d.location, d.docDate, inr(d.grandTotal)].filter(Boolean).join(" · ")}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                {d.invoiceId ? (
+                  <Badge tone="blue">
+                    Invoice{d.invoiceConvertMode ? ` · ${BOM_INVOICE_CONVERT_LABEL[d.invoiceConvertMode]}` : ""}
+                  </Badge>
+                ) : d.status === "confirmed" ? (
+                  <Badge tone="amber">No invoice</Badge>
+                ) : null}
+                {d.stockIssuedAt ? <Badge tone="emerald">Stock out</Badge> : d.status === "confirmed" ? <Badge tone="amber">Needs stock</Badge> : null}
               </div>
             </div>
             <Badge tone={d.status === "confirmed" ? "emerald" : d.status === "cancelled" ? "coral" : "amber"}>
@@ -175,6 +231,15 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
   );
   const allowNegative = Boolean(availability.data?.allowNegativeStock);
   const blockOnShortfall = stockShortfalls.length > 0 && !allowNegative;
+  const linkedInvoice = state.data?.linkedInvoice ?? null;
+  const explodeDraftLinked =
+    Boolean(doc?.invoiceId) &&
+    doc?.invoiceConvertMode === "explode_lines" &&
+    linkedInvoice?.status === "draft";
+  const explodeStockPosted =
+    doc?.invoiceConvertMode === "explode_lines" &&
+    linkedInvoice?.status === "issued" &&
+    Boolean(linkedInvoice?.stockPosted);
 
   if (!state.data && !state.error) return <LoadingBlock />;
   if (state.error || !state.data || !doc) return <ErrorBlock error={state.error ?? new Error("Not found")} onRetry={state.reload} />;
@@ -284,6 +349,11 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
                 </div>
               ) : can("sales") ? (
                 <>
+                  {!doc.partyId ? (
+                    <Alert tone="amber" title="Walk-in / free-text customer">
+                      No saved party is linked — GSTIN and billing address won’t auto-fill on the invoice. Pick a catalogue customer if you need full GST details.
+                    </Alert>
+                  ) : null}
                   <Field label="Convert mode">
                     {({ id: fid }) => (
                       <Select id={fid} value={convertMode} onChange={(e) => setConvertMode(e.target.value as BomInvoiceConvertMode)}>
@@ -383,13 +453,7 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
                   <Badge tone="emerald">
                     Stock issued · {doc.stockIssueCount} item{doc.stockIssueCount === 1 ? "" : "s"} · {doc.stockIssuedAt}
                   </Badge>
-                  {can("stockOut") &&
-                  !(
-                    doc.invoiceConvertMode === "explode_lines" &&
-                    state.data?.linkedInvoice &&
-                    state.data.linkedInvoice.status === "issued" &&
-                    state.data.linkedInvoice.stockPosted
-                  ) ? (
+                  {can("stockOut") && !explodeStockPosted ? (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -402,16 +466,25 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
                     >
                       Reverse stock
                     </Button>
-                  ) : doc.invoiceConvertMode === "explode_lines" && state.data?.linkedInvoice?.stockPosted ? (
+                  ) : explodeStockPosted ? (
                     <span style={{ fontSize: 13, opacity: 0.75 }}>Stock came from the explode invoice — cancel that invoice to return materials.</span>
                   ) : null}
                 </div>
               ) : can("stockOut") ? (
-                doc.invoiceConvertMode === "explode_lines" &&
-                state.data?.linkedInvoice?.status === "issued" &&
-                state.data.linkedInvoice.stockPosted ? (
+                explodeStockPosted ? (
                   <Alert tone="amber" title="Stock already posted">
                     Materials went out with the linked explode invoice. Cancel that invoice if you need to return stock.
+                  </Alert>
+                ) : explodeDraftLinked ? (
+                  <Alert tone="amber" title="Draft explode invoice linked">
+                    Issue or delete the draft explode invoice before issuing stock from this BOM — otherwise Sales issue will be blocked.
+                    {can("sales") && doc.invoiceId ? (
+                      <div style={{ marginTop: 8 }}>
+                        <Button size="sm" onClick={() => navigate("sales", `open:${doc.invoiceId}`)}>
+                          Open draft invoice
+                        </Button>
+                      </div>
+                    ) : null}
                   </Alert>
                 ) : (
                   <>
@@ -483,6 +556,7 @@ function BomEditor({
   if (id && !existing.data && !existing.error) return <LoadingBlock />;
   if (id && existing.error) return <ErrorBlock error={existing.error} onRetry={existing.reload} />;
   if (packageId && !id && !pkgState.data && !pkgState.error) return <LoadingBlock />;
+  if (packageId && !id && pkgState.error) return <ErrorBlock error={pkgState.error} onRetry={pkgState.reload} />;
 
   return (
     <BomEditorForm
@@ -735,6 +809,12 @@ function BomEditorForm({
 
       <div className="ims-bom-layout">
         <div className="ims-bom-compose">
+          {seeded && !seeded.active ? (
+            <Alert tone="amber" title="Inactive package template">
+              This package is inactive. You can still compose the BOM, but saving from it may be rejected — reactivate the package or copy lines into a blank BOM.
+            </Alert>
+          ) : null}
+
           <Card>
             <FormGrid>
               <Field label="Customer">
@@ -840,20 +920,20 @@ function BomEditorForm({
                     </div>
                   ))}
               </div>
-              <div style={{ marginTop: 10 }}>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    const next = window.prompt("New section name", "Extras");
-                    if (next?.trim()) setLines((prev) => [...prev, blankLine(next.trim())]);
-                  }}
-                >
-                  Add section
-                </Button>
-              </div>
             </Card>
           ))}
+          <div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const next = window.prompt("New section name", "Extras");
+                if (next?.trim()) setLines((prev) => [...prev, blankLine(next.trim())]);
+              }}
+            >
+              Add section
+            </Button>
+          </div>
         </div>
 
         <div className="ims-bom-preview-wrap">

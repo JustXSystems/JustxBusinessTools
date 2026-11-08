@@ -516,15 +516,17 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
   await assertDayOpen(conn, actor.tenantId, invoiceDate);
   const invoiceNo = await nextDocNo(conn, actor.tenantId, "invoice", settings.invoicePrefix, invoiceDate, settings.fiscalYearStart);
 
-  // BOM may already have issued materials — refuse explode-style issue to avoid a second OUT.
+  // BOM explode invoices: refuse a second OUT and keep stock_issued_at in sync. Lump-sum never owns the BOM stock flag.
   const bomStockItems = row.source_tool === "ims_bom" && row.source_ref ? [...new Set(lines.filter((l) => l.itemId && l.qty > 0).map((l) => l.itemId!))] : [];
+  let bomExplode = false;
   if (row.source_tool === "ims_bom" && row.source_ref && bomStockItems.length) {
-    const bom = await one<{ stock_issued_at: string | null }>(
+    const bom = await one<{ stock_issued_at: string | null; invoice_convert_mode: string | null }>(
       conn,
-      `SELECT stock_issued_at FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+      `SELECT stock_issued_at, invoice_convert_mode FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
       { tenantId: actor.tenantId, id: row.source_ref },
     );
-    if (bom?.stock_issued_at) {
+    bomExplode = bom?.invoice_convert_mode === "explode_lines";
+    if (bomExplode && bom?.stock_issued_at) {
       throw conflict("Materials for this BOM were already issued. Use a lump-sum invoice, or reverse the BOM stock issue before issuing this explode invoice.");
     }
   }
@@ -559,8 +561,7 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
     id,
     invoiceNo,
   });
-  // Keep BOM stock flag in sync when Sales issues a late explode draft (create-invoice after-hook only runs on convert).
-  if (row.source_tool === "ims_bom" && row.source_ref && bomStockItems.length) {
+  if (row.source_tool === "ims_bom" && row.source_ref && bomExplode && bomStockItems.length) {
     await exec(
       conn,
       `UPDATE ims_bom_docs SET stock_issued_at = CURRENT_TIMESTAMP, stock_issue_count = :n

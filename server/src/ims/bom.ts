@@ -709,6 +709,9 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           break;
         }
       }
+      if (!code) {
+        code = `${src.code.slice(0, 28)}-${randomUUID().slice(0, 8)}`.slice(0, 40);
+      }
     }
     await tx(deps.db, async (conn) => {
       await exec(
@@ -804,6 +807,8 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const actor = actorOf(res);
     const q = qstr(req.query.q, 80);
     const status = qstr(req.query.status, 16);
+    const invoice = qstr(req.query.invoice, 16); // linked | none
+    const stock = qstr(req.query.stock, 16); // issued | pending
     const limit = qint(req.query.limit, 50, 1, 200);
     const offset = qint(req.query.offset, 0, 0, 100000);
     const params: Record<string, unknown> = { tenantId: actor.tenantId, limit, offset };
@@ -812,6 +817,10 @@ export function registerBom(router: Router, deps: ImsDeps): void {
       where += ` AND status = :status`;
       params.status = status;
     }
+    if (invoice === "linked") where += ` AND invoice_id IS NOT NULL`;
+    else if (invoice === "none") where += ` AND invoice_id IS NULL`;
+    if (stock === "issued") where += ` AND stock_issued_at IS NOT NULL`;
+    else if (stock === "pending") where += ` AND stock_issued_at IS NULL AND status = 'confirmed'`;
     if (q) {
       where += ` AND (doc_no LIKE :q OR customer_name LIKE :q OR IFNULL(location,'') LIKE :q OR IFNULL(title,'') LIKE :q OR IFNULL(capacity_label,'') LIKE :q)`;
       params.q = likeOf(q);
@@ -1287,6 +1296,9 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         `SELECT stock_posted, status FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id LIMIT 1`,
         { tenantId: actor.tenantId, id: doc.invoiceId },
       );
+      if (inv && inv.status === "draft") {
+        throw conflict("A draft explode invoice is linked. Issue or delete that draft before issuing stock from the BOM.");
+      }
       if (inv && inv.status === "issued" && inv.stock_posted) {
         throw conflict("Stock was already posted when the linked explode invoice was issued");
       }
@@ -1338,6 +1350,9 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           `SELECT stock_posted, status FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id LIMIT 1`,
           { tenantId: actor.tenantId, id: locked.invoice_id },
         );
+        if (inv && inv.status === "draft") {
+          throw conflict("A draft explode invoice is linked. Issue or delete that draft before issuing stock from the BOM.");
+        }
         if (inv && inv.status === "issued" && inv.stock_posted) {
           throw conflict("Stock was already posted when the linked explode invoice was issued");
         }
