@@ -351,7 +351,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
       id: "nav-collapse",
       section: "Preferences",
       label: navCollapsed ? "Expand left navigation" : "Collapse left navigation",
-      icon: navCollapsed ? "»</ : "«",
+      icon: navCollapsed ? ">>" : "<<",
       keywords: "sidebar collapse expand space",
       onSelect: () => setCollapsed(!navCollapsed),
     },

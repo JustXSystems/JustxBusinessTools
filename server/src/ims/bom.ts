@@ -1236,7 +1236,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
             );
             if (inv?.stock_posted) {
               const uniqueItems = new Set(
-                doc.lines.filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0).map((l) => l.itemId!),
+                (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0).map((l) => l.itemId!),
               ).size;
               await exec(
                 conn,
