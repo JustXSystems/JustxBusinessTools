@@ -91,7 +91,7 @@ export function applyCatalogMatches(
           skuHint: undefined,
           itemId: hit.item.id,
           unit: hit.item.unit || line.unit,
-          defaultRate: line.defaultRate > 0 ? line.defaultRate : hit.item.sellingPrice,
+          defaultRate: line.defaultRate != null && line.defaultRate > 0 ? line.defaultRate : hit.item.sellingPrice,
           makeText: line.makeText || hit.item.brand || null,
         };
       }
