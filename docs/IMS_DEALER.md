@@ -32,7 +32,7 @@ IMS has its own roles (`ims_members`), separate from JBT roles:
 | viewer | Read-only |
 
 Permissions are a matrix (Settings → Roles) over: `stockIn, stockOut, damage,
-stockCheck, items, suppliers, po, approvals, sales, receivables, payables,
+stockCheck, items, suppliers, po, approvals, sales, bom, receivables, payables,
 closing, field, reports, integrations, audit, settings`. Owners always have
 every permission. Non-GET requests need a write role.
 
@@ -53,6 +53,8 @@ every permission. Non-GET requests need a write role.
 | | `purchase` | POs: draft → approval (limit in settings) → sent → receive (partial) → bill |
 | | `approvals` | PO and bill approvals queue |
 | Sales & Finance | `sales` | GST invoices (CGST/SGST or IGST by place of supply), POS quick sale, print |
+| | `bomPackages` | Reusable BOM package templates; Excel import; sample templates |
+| | `bom` | BOM Builder — compose, live preview, Excel export, GST invoice convert (lump-sum / explode), stock issue |
 | | `receivables` | Aging, priorities, reminders (WhatsApp/SMS/email templates), promises, disputes |
 | | `payables` | Bills, approvals, holds, scheduled payment runs |
 | | `ledger` | Party ledger and statements, manual entries, expenses |
@@ -70,6 +72,20 @@ every permission. Non-GET requests need a write role.
 Stock only changes through movements (`ims_movements`), posted inside a
 transaction with the item row locked. Document numbers come from
 `ims_sequences` per fiscal year, e.g. `PO/26-27/0007`.
+
+### Bill of Materials (BOM)
+
+Industry-agnostic package BOMs live inside IMS (migration `036_ims_bom.sql`):
+
+| Piece | Tables / module | Role |
+|---|---|---|
+| Package templates | `ims_bom_packages` + `ims_bom_package_lines` · `?m=bomPackages` | Reusable recipes (sections, stock/service/overhead/scaled lines, default margin/tax) |
+| Customer BOMs | `ims_bom_docs` + `ims_bom_doc_lines` · `?m=bom` | Instance for a customer/site with live paper preview and print |
+| GST invoice | `POST /bom/docs/:id/create-invoice` | Confirmed BOM → draft or issued invoice; user chooses **lump-sum** or **explode every line** |
+| Stock issue | `POST /bom/docs/:id/issue-stock` | OUT movements for stock lines linked to catalogue items (`ref_type=bom`) |
+| Excel | Client (`bom-excel.ts`) | Export customer BOM sheet; import multi-sheet workbooks into packages with catalogue auto-match (SKU/name); Match catalogue on packages |
+
+BOM documents are commercial materials schedules (margin + tax %), not GST tax invoices. Sample templates are opt-in via **Add sample templates**. Schema: `036_ims_bom.sql` + `037_ims_bom_stock.sql`. Stock issue and explode+issue are mutually exclusive to prevent double OUT. Lines marked **Scale with capacity** multiply qty by the first number in the capacity label (e.g. `3KW` → ×3) when a package is applied to a new BOM. Convert is atomic (BOM row locked); deleting a draft invoice or cancelling an issued BOM invoice unlinks the BOM (explode cancel also clears the stock-issued flag after reverse). Availability (`GET /bom/docs/:id/availability`) gates Issue stock and explode+issue unless negative stock is allowed; `POST …/reverse-stock` returns BOM-issued materials. Explode spreads margin into line rates so taxable ≈ materials + margin. Billing address comes from the party; site stays in notes. Packages referenced by BOMs are deactivated rather than hard-deleted.
 
 ## Document trail and GSTR-2B
 

@@ -24,14 +24,22 @@ const STATUS_TABS: ReadonlyArray<{ value: "all" | InvoiceDisplayStatus; label: s
   { value: "cancelled", label: "Cancelled" },
 ];
 
-export const sourceBadge = (inv: Pick<ImsInvoice, "sourceTool">) =>
-  inv.sourceTool === "pos" ? (
-    <Badge tag="mint">POS</Badge>
-  ) : inv.sourceTool ? (
-    <Badge tag="lavender" title={`Created from ${inv.sourceTool}`}>
-      From Quotation
-    </Badge>
-  ) : null;
+export const sourceBadge = (inv: Pick<ImsInvoice, "sourceTool">) => {
+  if (inv.sourceTool === "pos") return <Badge tag="mint">POS</Badge>;
+  if (inv.sourceTool === "ims_bom")
+    return (
+      <Badge tag="lavender" title="Created from BOM Builder">
+        From BOM
+      </Badge>
+    );
+  if (inv.sourceTool)
+    return (
+      <Badge tag="lavender" title={`Created from ${inv.sourceTool}`}>
+        From Quotation
+      </Badge>
+    );
+  return null;
+};
 
 export function SalesModule() {
   const { takeIntent } = useIms();
@@ -81,7 +89,7 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
   const [period, setPeriod] = useState<PeriodOrAll>("all");
   const [q, setQ] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [source, setSource] = useState<"" | "pos" | "quotation">("");
+  const [source, setSource] = useState<"" | "pos" | "quotation" | "bom">("");
   const customers = usePartyOptions("customer");
   const state = useImsData(() => finance.invoices({ period, status, q: q.trim() || undefined, customerId: customerId || undefined, source: source || undefined }), [period, status, q, customerId, source]);
 
@@ -169,10 +177,11 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
                     </option>
                   ))}
                 </Select>
-                <Select size="sm" value={source} onChange={(e) => setSource(e.target.value as "" | "pos" | "quotation")} aria-label="Source" style={{ maxWidth: 170 }}>
+                <Select size="sm" value={source} onChange={(e) => setSource(e.target.value as "" | "pos" | "quotation" | "bom")} aria-label="Source" style={{ maxWidth: 170 }}>
                   <option value="">All sources</option>
                   <option value="pos">POS counter</option>
                   <option value="quotation">From quotations</option>
+                  <option value="bom">From BOM</option>
                 </Select>
                 <Button
                   size="sm"

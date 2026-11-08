@@ -393,6 +393,7 @@ export const IMS_PERMISSIONS = [
   { key: "po", label: "Purchase orders" },
   { key: "approvals", label: "Approvals (PO, bills, stock checks)" },
   { key: "sales", label: "Sales invoices" },
+  { key: "bom", label: "BOM packages & documents" },
   { key: "receivables", label: "Receivables & collections" },
   { key: "payables", label: "Payables & payments" },
   { key: "closing", label: "Daily closing & expenses" },
@@ -412,8 +413,8 @@ const grant = (keys: ReadonlyArray<ImsPermission>): Record<ImsPermission, boolea
 export const DEFAULT_PERMISSIONS: PermissionMatrix = {
   manager: grant(ALL_PERMS.filter((k) => k !== "settings" && k !== "integrations")),
   incharge: grant(["stockIn", "stockOut", "damage", "stockCheck", "po", "field"]),
-  staff: grant(["stockIn", "stockOut", "damage", "stockCheck", "po", "sales"]),
-  accountant: grant(["sales", "receivables", "payables", "closing", "reports", "suppliers"]),
+  staff: grant(["stockIn", "stockOut", "damage", "stockCheck", "po", "sales", "bom"]),
+  accountant: grant(["sales", "bom", "receivables", "payables", "closing", "reports", "suppliers"]),
   auditor: grant(["reports", "audit"]),
   field: grant(["field"]),
   viewer: grant(["reports"]),

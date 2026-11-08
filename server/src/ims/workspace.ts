@@ -20,6 +20,8 @@ export type ImsModuleKey =
   | "purchase"
   | "approvals"
   | "sales"
+  | "bom"
+  | "bomPackages"
   | "receivables"
   | "payables"
   | "ledger"
@@ -404,7 +406,7 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       return;
     }
     const params = { tenantId: actor.tenantId, q: likeOf(q), exact: q };
-    const [items, parties, invoices, pos, bills] = await Promise.all([
+    const [items, parties, invoices, pos, bills, boms, packages] = await Promise.all([
       rows<{ id: string; name: string; sku: string | null; current_stock: string; unit: string }>(
         deps.db,
         `SELECT id, name, sku, current_stock, unit FROM ims_items WHERE tenant_id = :tenantId AND (name LIKE :q OR sku LIKE :q OR barcode = :exact) ORDER BY name LIMIT 8`,
@@ -430,6 +432,20 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
         `SELECT id, bill_no, supplier_name FROM ims_bills WHERE tenant_id = :tenantId AND (bill_no LIKE :q OR supplier_bill_no LIKE :q OR supplier_name LIKE :q) ORDER BY bill_date DESC LIMIT 5`,
         params,
       ),
+      rows<{ id: string; doc_no: string; customer_name: string; status: string; grand_total: string }>(
+        deps.db,
+        `SELECT id, doc_no, customer_name, status, grand_total FROM ims_bom_docs
+         WHERE tenant_id = :tenantId AND (doc_no LIKE :q OR customer_name LIKE :q OR IFNULL(title,'') LIKE :q OR IFNULL(capacity_label,'') LIKE :q)
+         ORDER BY doc_date DESC LIMIT 5`,
+        params,
+      ).catch(() => [] as Array<{ id: string; doc_no: string; customer_name: string; status: string; grand_total: string }>),
+      rows<{ id: string; name: string; code: string | null; capacity_label: string | null }>(
+        deps.db,
+        `SELECT id, name, code, capacity_label FROM ims_bom_packages
+         WHERE tenant_id = :tenantId AND active = 1 AND (name LIKE :q OR IFNULL(code,'') LIKE :q OR IFNULL(capacity_label,'') LIKE :q)
+         ORDER BY name LIMIT 4`,
+        params,
+      ).catch(() => [] as Array<{ id: string; name: string; code: string | null; capacity_label: string | null }>),
     ]);
     res.json({
       results: [
@@ -438,6 +454,22 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
         ...invoices.map((i) => ({ kind: "invoice", id: i.id, title: i.invoice_no, sub: `${i.customer_name} · ₹${round2(money(i.grand_total)).toLocaleString("en-IN")}`, module: "sales", open: i.id })),
         ...pos.map((p) => ({ kind: "po", id: p.id, title: p.po_no, sub: `${p.supplier_name} · ${p.status.replace(/_/g, " ")}`, module: "purchase", open: p.id })),
         ...bills.map((b) => ({ kind: "bill", id: b.id, title: b.bill_no, sub: b.supplier_name, module: "payables", open: b.id })),
+        ...boms.map((b) => ({
+          kind: "bom",
+          id: b.id,
+          title: b.doc_no,
+          sub: `${b.customer_name || "No customer"} · ${b.status} · ₹${round2(money(b.grand_total)).toLocaleString("en-IN")}`,
+          module: "bom",
+          open: b.id,
+        })),
+        ...packages.map((p) => ({
+          kind: "bom_package",
+          id: p.id,
+          title: p.name,
+          sub: [p.code, p.capacity_label].filter(Boolean).join(" · ") || "BOM package",
+          module: "bomPackages",
+          open: p.id,
+        })),
       ],
     });
   });

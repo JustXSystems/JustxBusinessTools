@@ -1,0 +1,231 @@
+.ims-bom-layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .ims-bom-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ims-bom-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ims-bom-preview-wrap {
+  position: sticky;
+  top: 12px;
+  min-width: 0;
+}
+
+.ims-bom-paper {
+  position: relative;
+  background: #fff;
+  color: #111;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 4px;
+  padding: 22px 24px;
+  font-size: 12px;
+  line-height: 1.35;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.ims-bom-paper-watermark {
+  position: absolute;
+  inset: 28% 0 auto;
+  text-align: center;
+  font-size: 72px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: rgba(15, 23, 42, 0.07);
+  transform: rotate(-18deg);
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
+.ims-bom-paper > *:not(.ims-bom-paper-watermark) {
+  position: relative;
+  z-index: 1;
+}
+
+.ims-bom-paper-brand {
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.ims-bom-paper-title-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 8px;
+  margin-top: 12px;
+  align-items: stretch;
+}
+
+.ims-bom-paper-title {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  padding: 8px 10px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.ims-bom-paper-capacity {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 10px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  background: #fff59d;
+}
+
+.ims-bom-paper-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ims-bom-paper-meta div {
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  padding: 8px 10px;
+  min-height: 38px;
+}
+
+.ims-bom-paper-meta b {
+  display: block;
+  font-size: 11px;
+  opacity: 0.7;
+  margin-bottom: 2px;
+}
+
+.ims-bom-paper-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 14px;
+  font-size: 11.5px;
+}
+
+.ims-bom-paper-table th,
+.ims-bom-paper-table td {
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  padding: 5px 6px;
+  vertical-align: top;
+}
+
+.ims-bom-paper-table th {
+  background: rgba(15, 23, 42, 0.06);
+  text-align: center;
+  font-weight: 700;
+}
+
+.ims-bom-paper-table td.num,
+.ims-bom-paper-table th.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ims-bom-paper-table td.ctr,
+.ims-bom-paper-table th.ctr {
+  text-align: center;
+}
+
+.ims-bom-section-row td {
+  background: rgba(15, 23, 42, 0.05);
+  font-weight: 700;
+}
+
+.ims-bom-paper-totals {
+  margin-top: 10px;
+  margin-left: auto;
+  width: min(280px, 100%);
+}
+
+.ims-bom-paper-totals-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 8px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-top: none;
+}
+
+.ims-bom-paper-totals-row:first-child {
+  border-top: 1px solid rgba(15, 23, 42, 0.14);
+}
+
+.ims-bom-paper-totals-row.is-accent {
+  background: #fff59d;
+  font-weight: 700;
+}
+
+.ims-bom-paper-notes {
+  margin-top: 12px;
+  white-space: pre-wrap;
+  opacity: 0.85;
+}
+
+.ims-bom-line-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.ims-bom-line-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1.6fr) minmax(90px, 0.9fr) 70px 70px 90px 90px 28px;
+  gap: 6px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .ims-bom-line-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.ims-bom-section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.04);
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+@media print {
+  .ims-bom-compose,
+  .ims-bom-section-bar,
+  .ims-bom-line-editor {
+    display: none !important;
+  }
+  .ims-bom-layout {
+    display: block;
+  }
+  .ims-bom-preview-wrap {
+    position: static;
+  }
+  .ims-bom-paper {
+    box-shadow: none;
+    border: none;
+    padding: 0;
+  }
+  .ims-bom-paper-table tr {
+    page-break-inside: avoid;
+  }
+  .ims-bom-paper-totals {
+    page-break-inside: avoid;
+  }
+}

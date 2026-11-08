@@ -70,8 +70,16 @@ function InvoiceBody({ detail, onEdit, onGone }: { detail: InvoiceDetail; onEdit
               <StatusBadge view={INVOICE_BADGE[inv.displayStatus]} />
             </div>
             {inv.sourceTool && inv.sourceTool !== "pos" ? (
-              <div style={{ marginBottom: 10 }}>
-                <Badge tag="lavender">From Quotation{inv.sourceRef ? ` · ${inv.sourceRef}` : ""}</Badge>
+              <div style={{ marginBottom: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <Badge tag="lavender">
+                  {inv.sourceTool === "ims_bom" ? "From BOM" : "From Quotation"}
+                  {inv.sourceRef ? ` · ${inv.sourceRef.slice(0, 8)}` : ""}
+                </Badge>
+                {inv.sourceTool === "ims_bom" && inv.sourceRef && can("bom") ? (
+                  <Button size="sm" variant="ghost" onClick={() => navigate("bom", `open:${inv.sourceRef}`)}>
+                    Open BOM
+                  </Button>
+                ) : null}
               </div>
             ) : null}
             <Stats

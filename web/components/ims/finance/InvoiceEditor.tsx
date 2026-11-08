@@ -33,7 +33,7 @@ export function InvoiceEditor({ id, onClose }: { id: string | null; onClose: (id
 }
 
 function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: (id: string | null) => void }) {
-  const { session } = useIms();
+  const { session, navigate, can } = useIms();
   const settings = session.settings;
   const { run, busy } = useImsAction();
   const catalog = useItemCatalog();
@@ -144,7 +144,18 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
       <PageHeader
         title={draft ? "Edit draft invoice" : "New invoice"}
         sub="Stock moves out when the invoice is issued. Drafts don't touch stock or the invoice number series."
-        actions={inv?.sourceTool && inv.sourceTool !== "pos" ? <Badge tag="lavender">From Quotation{inv.sourceRef ? ` · ${inv.sourceRef}` : ""}</Badge> : null}
+        actions={
+          inv?.sourceTool && inv.sourceTool !== "pos" ? (
+            <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+              <Badge tag="lavender">{inv.sourceTool === "ims_bom" ? "From BOM" : "From Quotation"}</Badge>
+              {inv.sourceTool === "ims_bom" && inv.sourceRef && can("bom") ? (
+                <Button size="sm" variant="ghost" onClick={() => navigate("bom", `open:${inv.sourceRef}`)}>
+                  Open BOM
+                </Button>
+              ) : null}
+            </span>
+          ) : null
+        }
       />
 
       <Card interactive={false}>

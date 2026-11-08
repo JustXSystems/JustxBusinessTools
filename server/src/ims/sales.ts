@@ -468,6 +468,39 @@ async function insertInvoice(db: Queryable, actor: ImsActor, id: string, values:
   );
 }
 
+/** Create a draft (or draft+issue) invoice from another IMS module (e.g. BOM). */
+export async function createLinkedInvoice(
+  deps: ImsDeps,
+  actor: ImsActor,
+  input: InvoiceInputT & { issue?: boolean; sourceTool?: string | null; sourceRef?: string | null },
+  hooks?: {
+    /** Runs inside the invoice transaction before insert (use FOR UPDATE locks here). */
+    before?: (conn: PoolConnection) => Promise<void>;
+    /** Runs inside the same transaction after insert/issue so callers can link source rows atomically. */
+    after?: (conn: PoolConnection, invoiceId: string) => Promise<void>;
+  },
+) {
+  const settings = await getSettings(deps, actor.tenantId);
+  const id = randomUUID();
+  const values = await invoiceValues(deps.db, actor, settings, input);
+  const invoiceNo = await tx(deps.db, async (conn) => {
+    await hooks?.before?.(conn);
+    await insertInvoice(conn, actor, id, values, { sourceTool: input.sourceTool ?? null, sourceRef: input.sourceRef ?? null });
+    const issuedNo = input.issue ? (await issueDraft(conn, actor, settings, id, "invoice")).invoiceNo : null;
+    await hooks?.after?.(conn, id);
+    return issuedNo;
+  });
+  await recordEvent(deps, actor, {
+    type: input.issue ? "invoice.issued" : "invoice.created",
+    entityType: "invoice",
+    entityId: id,
+    summary: input.issue
+      ? `Issued invoice ${invoiceNo} to ${values.customerName} (${formatINR(values.grandTotal)})`
+      : `Saved draft invoice for ${values.customerName} (${formatINR(values.grandTotal)})`,
+  });
+  return invoiceDetail(deps, actor.tenantId, id);
+}
+
 /**
  * Issue a draft in the caller's transaction: number it, post an OUT movement for every item-linked
  * line (respecting the negative-stock rule) and mark stock as posted.
@@ -482,6 +515,20 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
   const invoiceDate = isoOf(row.invoice_date);
   await assertDayOpen(conn, actor.tenantId, invoiceDate);
   const invoiceNo = await nextDocNo(conn, actor.tenantId, "invoice", settings.invoicePrefix, invoiceDate, settings.fiscalYearStart);
+
+  // BOM may already have issued materials — refuse explode-style issue to avoid a second OUT.
+  const bomStockItems = row.source_tool === "ims_bom" && row.source_ref ? [...new Set(lines.filter((l) => l.itemId && l.qty > 0).map((l) => l.itemId!))] : [];
+  if (row.source_tool === "ims_bom" && row.source_ref && bomStockItems.length) {
+    const bom = await one<{ stock_issued_at: string | null }>(
+      conn,
+      `SELECT stock_issued_at FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+      { tenantId: actor.tenantId, id: row.source_ref },
+    );
+    if (bom?.stock_issued_at) {
+      throw conflict("Materials for this BOM were already issued. Use a lump-sum invoice, or reverse the BOM stock issue before issuing this explode invoice.");
+    }
+  }
+
   for (const l of lines) {
     if (!l.itemId || !(l.qty > 0)) continue;
     try {
@@ -512,6 +559,15 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
     id,
     invoiceNo,
   });
+  // Keep BOM stock flag in sync when Sales issues a late explode draft (create-invoice after-hook only runs on convert).
+  if (row.source_tool === "ims_bom" && row.source_ref && bomStockItems.length) {
+    await exec(
+      conn,
+      `UPDATE ims_bom_docs SET stock_issued_at = CURRENT_TIMESTAMP, stock_issue_count = :n
+       WHERE tenant_id = :tenantId AND id = :id AND stock_issued_at IS NULL`,
+      { tenantId: actor.tenantId, id: row.source_ref, n: bomStockItems.length },
+    );
+  }
   return { invoiceNo, row };
 }
 
@@ -607,7 +663,8 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     }
     const source = qstr(req.query.source, 20);
     if (source === "pos") where.push("i.source_tool = 'pos'");
-    else if (source === "quotation") where.push("i.source_tool IS NOT NULL AND i.source_tool <> 'pos'");
+    else if (source === "bom") where.push("i.source_tool = 'ims_bom'");
+    else if (source === "quotation") where.push("i.source_tool IS NOT NULL AND i.source_tool <> 'pos' AND i.source_tool <> 'ims_bom'");
     const q = qstr(req.query.q);
     if (q) {
       where.push("(i.invoice_no LIKE :q OR i.customer_name LIKE :q OR i.customer_gstin LIKE :q OR i.customer_mobile LIKE :q OR i.source_ref LIKE :q)");
@@ -691,20 +748,12 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     const actor = actorOf(res);
     requirePerm(res, "sales");
     const input = parse(InvoiceInput.extend({ issue: z.boolean().optional() }), req.body);
-    const settings = await getSettings(deps, actor.tenantId);
-    const id = randomUUID();
-    const values = await invoiceValues(deps.db, actor, settings, input);
-    const invoiceNo = await tx(deps.db, async (conn) => {
-      await insertInvoice(conn, actor, id, values);
-      return input.issue ? (await issueDraft(conn, actor, settings, id, "invoice")).invoiceNo : null;
+    const created = await createLinkedInvoice(deps, actor, {
+      ...input,
+      sourceTool: null,
+      sourceRef: null,
     });
-    await recordEvent(deps, actor, {
-      type: input.issue ? "invoice.issued" : "invoice.created",
-      entityType: "invoice",
-      entityId: id,
-      summary: input.issue ? `Issued invoice ${invoiceNo} to ${values.customerName} (${formatINR(values.grandTotal)})` : `Saved draft invoice for ${values.customerName} (${formatINR(values.grandTotal)})`,
-    });
-    res.status(201).json(await invoiceDetail(deps, actor.tenantId, id));
+    res.status(201).json(created);
   });
 
   /* Edit a draft (full replace of the editable fields). */
@@ -753,12 +802,33 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       const r = await loadInvoiceRow(conn, actor.tenantId, req.params.id, true);
       if (r.status !== "issued") throw conflict(r.status === "draft" ? "Drafts are deleted, not cancelled" : "This invoice is already cancelled");
       if (money(r.amount_paid) > 0.005) throw conflict(`${formatINR(money(r.amount_paid))} has been received against this invoice. Void those payments first, then cancel.`);
+      const hadStock = Boolean(r.stock_posted);
       await reverseInvoiceStock(conn, actor, r, "Invoice cancelled");
       await exec(conn, `UPDATE ims_invoices SET status = 'cancelled', stock_posted = 0, cancelled_at = CURRENT_TIMESTAMP, cancel_reason = :reason WHERE tenant_id = :tenantId AND id = :id`, {
         tenantId: actor.tenantId,
         id: r.id,
         reason: input.reason,
       });
+      // Free the BOM so convert can run again. Explode stock came from this invoice — clear the flag after reverse.
+      if (r.source_tool === "ims_bom" && r.source_ref) {
+        const bom = await one<{ invoice_convert_mode: string | null }>(
+          conn,
+          `SELECT invoice_convert_mode FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+          { tenantId: actor.tenantId, id: r.source_ref },
+        );
+        const clearStock = bom?.invoice_convert_mode === "explode_lines" && hadStock;
+        await exec(
+          conn,
+          clearStock
+            ? `UPDATE ims_bom_docs
+               SET invoice_id = NULL, invoice_convert_mode = NULL, stock_issued_at = NULL, stock_issue_count = 0
+               WHERE tenant_id = :tenantId AND id = :bomId AND invoice_id = :invoiceId`
+            : `UPDATE ims_bom_docs
+               SET invoice_id = NULL, invoice_convert_mode = NULL
+               WHERE tenant_id = :tenantId AND id = :bomId AND invoice_id = :invoiceId`,
+          { tenantId: actor.tenantId, bomId: r.source_ref, invoiceId: r.id },
+        );
+      }
       return r;
     });
     await recordEvent(deps, actor, {
@@ -808,6 +878,16 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       await exec(conn, `DELETE FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`, { tenantId: actor.tenantId, id: row.id });
       if (row.source_tool && row.source_ref) {
         await exec(conn, `DELETE FROM ims_links WHERE tenant_id = :tenantId AND target_type = 'invoice' AND target_id = :id`, { tenantId: actor.tenantId, id: row.id });
+      }
+      // Free the BOM so the dealer can convert again after discarding a draft invoice.
+      if (row.source_tool === "ims_bom" && row.source_ref) {
+        await exec(
+          conn,
+          `UPDATE ims_bom_docs
+           SET invoice_id = NULL, invoice_convert_mode = NULL
+           WHERE tenant_id = :tenantId AND id = :bomId AND invoice_id = :invoiceId`,
+          { tenantId: actor.tenantId, bomId: row.source_ref, invoiceId: row.id },
+        );
       }
     });
     await recordEvent(deps, actor, { type: "invoice.deleted", entityType: "invoice", entityId: row.id, summary: `Deleted draft invoice for ${row.customer_name}` });

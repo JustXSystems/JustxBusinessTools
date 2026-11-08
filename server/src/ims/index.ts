@@ -2,6 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import { registerAssistant } from "./assistant.js";
 import { registerFieldMap } from "./fieldmap.js";
 import { registerAudit } from "./audit.js";
+import { registerBom } from "./bom.js";
 import { registerConnect } from "./connect.js";
 import type { ImsDeps } from "./context.js";
 import type { ImsDb } from "./db.js";
@@ -83,6 +84,7 @@ export function createImsRouter({ db, host, sources = [], catalogs = [] }: Creat
   registerParties(router, deps);
   registerPurchase(router, deps);
   registerSales(router, deps);
+  registerBom(router, deps);
   registerPayables(router, deps);
   registerLedger(router, deps);
   registerField(router, deps);

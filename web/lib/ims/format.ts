@@ -189,7 +189,7 @@ export function toCsv<T>(rows: ReadonlyArray<T>, columns: ReadonlyArray<ExportCo
   return [columns.map((c) => csvCell(c.header)).join(","), ...rows.map((r) => columns.map((c) => csvCell(c.value(r))).join(","))].join("\r\n");
 }
 
-function saveBlob(blob: Blob, filename: string) {
+export function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

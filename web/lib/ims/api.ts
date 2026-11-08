@@ -79,6 +79,7 @@ export type ImsPermission =
   | "po"
   | "approvals"
   | "sales"
+  | "bom"
   | "receivables"
   | "payables"
   | "closing"
@@ -175,6 +176,8 @@ export type ImsModuleKey =
   | "purchase"
   | "approvals"
   | "sales"
+  | "bom"
+  | "bomPackages"
   | "receivables"
   | "payables"
   | "ledger"
@@ -229,7 +232,14 @@ export type ImsDashboard = {
 
 export type ImsEvent = { id: number; actorName: string | null; type: string; entityType: string | null; entityId: string | null; summary: string; createdAt: string | null };
 
-export type ImsSearchResult = { kind: "item" | "party" | "invoice" | "po" | "bill"; id: string; title: string; sub: string; module: ImsModuleKey; open: string };
+export type ImsSearchResult = {
+  kind: "item" | "party" | "invoice" | "po" | "bill" | "bom" | "bom_package";
+  id: string;
+  title: string;
+  sub: string;
+  module: ImsModuleKey;
+  open: string;
+};
 
 /* ---------- Settings & team ---------- */
 

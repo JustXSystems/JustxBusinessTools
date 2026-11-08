@@ -562,7 +562,7 @@ export type ClosingHistory = { closings: ImsClosing[]; stats: { days: number; sh
 
 /* ---------- Endpoints ---------- */
 
-export type InvoiceQuery = { period?: Period | "all"; from?: string; to?: string; customerId?: string; source?: "pos" | "quotation"; q?: string; status?: string };
+export type InvoiceQuery = { period?: Period | "all"; from?: string; to?: string; customerId?: string; source?: "pos" | "quotation" | "bom"; q?: string; status?: string };
 export type BillQuery = { status?: string; supplierId?: string; q?: string; priority?: string };
 
 export const finance = {
