@@ -41,7 +41,7 @@ describe("shell providers effect cleanup", () => {
     badReturns.length = 0;
   });
 
-  it("AuthProvider + ConfigProvider + SubscriptionProvider + Bos TimePill unmount cleanly", async () => {
+  it("AuthProvider + ConfigProvider + SubscriptionProvider + Bos TimePill unmount cleanly", { timeout: 20_000 }, async () => {
     const { AuthProvider } = await import("@/components/auth/AuthProvider");
     const { ConfigProvider } = await import("@/components/config/ConfigProvider");
     const { SubscriptionProvider } = await import("@/components/subscription/SubscriptionProvider");

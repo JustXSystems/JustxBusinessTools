@@ -30,6 +30,10 @@ export type BosAppShellProps<K extends string> = {
   footer?: ReactNode;
   /** `fixed` = 480px demo frame, `fill` = fills its parent, default = natural height. */
   size?: "auto" | "fixed" | "fill";
+  /** Desktop: collapse the sidebar to icons to free horizontal space. */
+  collapsible?: boolean;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
   children: ReactNode;
   "aria-label"?: string;
 };
@@ -46,6 +50,9 @@ export function AppShell<K extends string>({
   navLabel,
   footer,
   size = "auto",
+  collapsible = false,
+  collapsed = false,
+  onCollapsedChange,
   children,
   ...aria
 }: BosAppShellProps<K>) {
@@ -53,14 +60,35 @@ export function AppShell<K extends string>({
 
   useEffect(() => {
     revealInline(navRef.current, navRef.current?.querySelector(".bos-nav-item.is-active"));
-  }, [active]);
+  }, [active, collapsed]);
 
   return (
-    <div className={cx("bos-shell", size === "fixed" && "bos-shell-fixed", size === "fill" && "bos-shell-fill")}>
+    <div
+      className={cx(
+        "bos-shell",
+        size === "fixed" && "bos-shell-fixed",
+        size === "fill" && "bos-shell-fill",
+        collapsible && collapsed && "is-nav-collapsed",
+      )}
+    >
       <nav ref={navRef} className={cx("bos-nav", accent === "emerald" && "bos-nav-emerald")} aria-label={aria["aria-label"] ?? "Module navigation"}>
-        {brand ? <div className="bos-nav-brand">{brand}</div> : null}
+        <div className="bos-nav-head">
+          {brand ? <div className="bos-nav-brand">{brand}</div> : <span />}
+          {collapsible ? (
+            <button
+              type="button"
+              className="bos-nav-collapse"
+              onClick={() => onCollapsedChange?.(!collapsed)}
+              aria-expanded={!collapsed}
+              aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+              title={collapsed ? "Expand navigation" : "Collapse navigation"}
+            >
+              <BosIcon name={collapsed ? "chevronRight" : "chevronLeft"} width={14} height={14} />
+            </button>
+          ) : null}
+        </div>
         {onSearch ? (
-          <button type="button" className="bos-nav-search" onClick={onSearch} aria-label={searchLabel}>
+          <button type="button" className="bos-nav-search" onClick={onSearch} aria-label={searchLabel} title={searchLabel}>
             <BosIcon name="search" />
             <span className="bos-nav-search-label">{searchLabel}</span>
           </button>
@@ -73,6 +101,7 @@ export function AppShell<K extends string>({
               type="button"
               className={cx("bos-nav-item", item.key === active && "is-active")}
               aria-current={item.key === active ? "page" : undefined}
+              title={item.label}
               onClick={() => onSelect(item.key)}
             >
               {item.icon ? (

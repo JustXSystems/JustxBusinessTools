@@ -6,8 +6,15 @@
 
 .bos .ims-app { --ims-grad: var(--bos-ims-grad, linear-gradient(90deg, var(--bos-blue-600), var(--bos-blue))); --ims-grad-soft: var(--bos-ims-grad-soft, var(--bos-blue-100)); --ims-well: var(--bos-ims-well, var(--bos-surface-2)); --ims-tile: var(--bos-ims-tile, var(--bos-surface)); --ims-tile-border: var(--bos-ims-tile-border, var(--bos-border-soft)); --ims-glow: var(--bos-ims-glow, none); }
 
-/* Standalone (/ims) */
+/* Standalone (/ims) — use admin-configured viewport share (default 90%), not the 1180px kit cap */
 .bos.ims-standalone { min-height: 100dvh; padding-top: 16px; }
+.bos.ims-standalone .ims-wrap,
+.bos.ims-standalone .bos-wrap {
+  max-width: none;
+  width: var(--ims-content-width, 90%);
+  margin-inline: auto;
+  box-sizing: border-box;
+}
 .bos .ims-gate { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 32px 16px; text-align: center; }
 .bos .ims-gate-card { width: min(440px, 100%); padding: 28px; border-radius: var(--bos-r-xl); background: var(--bos-surface); border: 1px solid var(--bos-border-soft); box-shadow: var(--bos-shadow-md); backdrop-filter: var(--bos-ims-glass-blur, none); }
 .bos .ims-gate-logo { width: 64px; height: 64px; object-fit: contain; }

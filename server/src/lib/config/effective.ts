@@ -2,6 +2,7 @@ import { pool } from "../../db.js";
 import { getActiveOrgId, getActiveProfileId } from "../request-context.js";
 import { getPlatformBranding, type PlatformBranding } from "./branding.js";
 import { getPoweredBy, type PoweredByConfig } from "./powered-by.js";
+import { getImsLayout, type ImsLayoutConfig } from "./ims-layout.js";
 import { getToolGrouping, type ToolGroupingConfig } from "./tool-grouping.js";
 import {
   appendToolToOrgHomeSelections,
@@ -59,6 +60,7 @@ export async function getEffectiveConfig(): Promise<{
   poweredBy: PoweredByConfig;
   branding: PlatformBranding;
   toolGrouping: ToolGroupingConfig;
+  imsLayout: ImsLayoutConfig;
   configVersion: number;
   tools: Array<{ id: string; toolType: string; definition: Record<string, unknown> }>;
   catalog: OrgCatalogTool[];
@@ -72,10 +74,11 @@ export async function getEffectiveConfig(): Promise<{
   const orgId = getActiveOrgId();
   const profileId = getActiveProfileId();
 
-  const [poweredBy, branding, toolGrouping] = await Promise.all([
+  const [poweredBy, branding, toolGrouping, imsLayout] = await Promise.all([
     getPoweredBy(),
     getPlatformBranding(),
     getToolGrouping(),
+    getImsLayout(),
   ]);
 
   await ensureClockDisplayColumns();
@@ -126,6 +129,7 @@ export async function getEffectiveConfig(): Promise<{
     poweredBy,
     branding,
     toolGrouping,
+    imsLayout,
     configVersion,
     tools,
     catalog,

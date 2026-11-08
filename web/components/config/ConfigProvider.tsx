@@ -37,6 +37,12 @@ import {
 } from "@/lib/flash-display";
 import { configureAppFlashDurations } from "@/lib/app-flash";
 
+function clampImsContentWidthPct(raw: unknown): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return 90;
+  return Math.min(100, Math.max(50, Math.round(n)));
+}
+
 export type PlatformToolDefinition = {
   id: string;
   toolType: string;
@@ -54,6 +60,8 @@ export type EffectiveConfig = {
   poweredBy: { text: string; locked: boolean };
   branding: PlatformBranding;
   toolGrouping?: { enabled: boolean };
+  /** Full-screen IMS (`/ims`) content width as % of the viewport. */
+  imsLayout?: { contentWidthPct: number };
   configVersion: number;
   tools: PlatformToolDefinition[];
   catalog?: PlatformCatalogTool[];
@@ -85,6 +93,7 @@ const DEFAULT_CONFIG: EffectiveConfig = {
   poweredBy: DEFAULT_POWERED_BY,
   branding: DEFAULT_BRANDING,
   toolGrouping: { enabled: true },
+  imsLayout: { contentWidthPct: 90 },
   configVersion: 1,
   tools: [],
   catalog: [],
@@ -104,6 +113,9 @@ function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefi
     branding: data?.branding ?? DEFAULT_BRANDING,
     toolGrouping: {
       enabled: data?.toolGrouping?.enabled !== false,
+    },
+    imsLayout: {
+      contentWidthPct: clampImsContentWidthPct(data?.imsLayout?.contentWidthPct),
     },
     configVersion: Number(data?.configVersion) || 1,
     tools: Array.isArray(data?.tools) ? data.tools : [],

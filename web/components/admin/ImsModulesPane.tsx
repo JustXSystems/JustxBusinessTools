@@ -2,6 +2,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
+import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { api } from "@/lib/api";
 
 type ProfileOption = { id: number; businessName: string; isDefault: boolean };
@@ -17,6 +18,12 @@ type ModulesState = {
   catalog: CatalogRow[];
 };
 
+function clampWidthPct(raw: unknown): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return 90;
+  return Math.min(100, Math.max(50, Math.round(n)));
+}
+
 export const ImsModulesPane = forwardRef<
   ToolsSaveHandle,
   {
@@ -26,9 +33,11 @@ export const ImsModulesPane = forwardRef<
     onSaved: (msg: string) => void;
   }
 >(function ImsModulesPane({ profiles, businessProfileId, onBusinessProfileChange, onSaved }, ref) {
+  const { refresh: refreshConfig } = usePlatformConfig();
   const [state, setState] = useState<ModulesState | null>(null);
   const [unrestricted, setUnrestricted] = useState(true);
   const [enabled, setEnabled] = useState<Set<string>>(new Set());
+  const [contentWidthPct, setContentWidthPct] = useState(90);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState("");
 
@@ -36,10 +45,14 @@ export const ImsModulesPane = forwardRef<
     setLoadError("");
     const qs = profileId != null ? `?businessProfileId=${profileId}` : "";
     try {
-      const data = await api<ModulesState>(`/admin/ims-modules${qs}`);
+      const [data, layout] = await Promise.all([
+        api<ModulesState>(`/admin/ims-modules${qs}`),
+        api<{ imsLayout: { contentWidthPct: number } }>("/admin/config/ims-layout"),
+      ]);
       setState(data);
       setUnrestricted(data.unrestricted);
       setEnabled(new Set(data.enabled));
+      setContentWidthPct(clampWidthPct(layout.imsLayout?.contentWidthPct));
       if (data.businessProfileId !== profileId) onBusinessProfileChange(data.businessProfileId);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Failed to load IMS modules");
@@ -93,21 +106,30 @@ export const ImsModulesPane = forwardRef<
     if (!state) return;
     setBusy(true);
     try {
-      const data = await api<ModulesState>("/admin/ims-modules", {
-        method: "PUT",
-        body: JSON.stringify({
-          businessProfileId: state.businessProfileId,
-          unrestricted,
-          enabled: unrestricted ? undefined : [...enabled],
+      const width = clampWidthPct(contentWidthPct);
+      const [data, layout] = await Promise.all([
+        api<ModulesState>("/admin/ims-modules", {
+          method: "PUT",
+          body: JSON.stringify({
+            businessProfileId: state.businessProfileId,
+            unrestricted,
+            enabled: unrestricted ? undefined : [...enabled],
+          }),
         }),
-      });
+        api<{ imsLayout: { contentWidthPct: number } }>("/admin/config/ims-layout", {
+          method: "PUT",
+          body: JSON.stringify({ contentWidthPct: width }),
+        }),
+      ]);
       setState(data);
       setUnrestricted(data.unrestricted);
       setEnabled(new Set(data.enabled));
+      setContentWidthPct(clampWidthPct(layout.imsLayout.contentWidthPct));
+      await refreshConfig().catch(() => undefined);
       onSaved(
         unrestricted
-          ? "All IMS left-nav modules are available for this business profile."
-          : `IMS modules saved — ${data.enabled.length} modules enabled for this profile.`,
+          ? `IMS layout ${width}% · all left-nav modules available for this profile.`
+          : `IMS layout ${width}% · ${data.enabled.length} modules enabled for this profile.`,
       );
     } catch (err) {
       onSaved(err instanceof Error ? err.message : "Save failed");
@@ -125,18 +147,33 @@ export const ImsModulesPane = forwardRef<
       label: () => "Save modules",
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- latest form state closed over on each render
-    [busy, state, unrestricted, enabled],
+    [busy, state, unrestricted, enabled, contentWidthPct],
   );
 
   const profileList = state?.profiles?.length ? state.profiles : profiles;
 
   return (
     <section className="panel admin-card tm-pane" aria-label="IMS modules">
-      <h2>Modules</h2>
+      <h2>Layout &amp; modules</h2>
       <p className="muted">
-        Choose which Justx IMS left-navigation items this business profile may use. Team roles can only further
-        restrict within this list — they cannot turn a module back on.
+        Full-screen IMS (`/ims`) uses a configurable share of the browser width. Per profile, choose which left-nav
+        items are available — team roles can only further restrict within that list.
       </p>
+
+      <label className="field" style={{ maxWidth: 420, marginTop: 16 }}>
+        <span>Full-screen content width ({contentWidthPct}% of window)</span>
+        <input
+          type="range"
+          min={50}
+          max={100}
+          step={1}
+          value={contentWidthPct}
+          disabled={busy}
+          onChange={(e) => setContentWidthPct(clampWidthPct(e.target.value))}
+          aria-label="IMS full-screen content width percent"
+        />
+        <span className="muted small">Applies org-wide to `/ims`. Default 90%. Sidebar can still be collapsed inside the app.</span>
+      </label>
 
       <label className="field" style={{ maxWidth: 360, marginTop: 12 }}>
         <span>Business profile</span>

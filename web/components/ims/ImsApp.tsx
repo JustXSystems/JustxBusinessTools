@@ -25,6 +25,7 @@ import {
   useCommandHotkey,
   type BosCommand,
 } from "@/components/bos";
+import { useOptionalPlatformConfig } from "@/components/config/ConfigProvider";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import { errorText, ims, ImsApiError, type ImsModuleKey, type ImsNotification, type ImsSearchResult, type ImsSession, type ImsSettings } from "@/lib/ims/api";
 import { isAssistantPage } from "@/lib/ims/assistant";
@@ -35,6 +36,23 @@ import { ErrorBlock, ImsAppProvider, LoadingBlock, type ImsAppContextValue, type
 import { MODULE_KEYS, moduleDef, visibleModules } from "./modules";
 
 export const IMS_LOGO = "/icons/justx-bos-mark.png";
+const NAV_COLLAPSE_KEY = "ims.nav.collapsed";
+
+function readNavCollapsed(): boolean {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(NAV_COLLAPSE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeNavCollapsed(collapsed: boolean) {
+  try {
+    window.localStorage.setItem(NAV_COLLAPSE_KEY, collapsed ? "1" : "0");
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
 
 type NavState = { module: ImsModuleKey; intent: { module: ImsModuleKey; value: string } | null; seq: number };
 
@@ -234,8 +252,18 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
   const [askOpen, setAskOpen] = useState(false);
   const [notes, setNotes] = useState<ImsNotification[]>([]);
   const [notesTick, setNotesTick] = useState(0);
+  const [navCollapsed, setNavCollapsed] = useState(false);
+
+  useEffect(() => {
+    setNavCollapsed(readNavCollapsed());
+  }, []);
 
   useCommandHotkey(() => setPaletteOpen(true));
+
+  const setCollapsed = useCallback((collapsed: boolean) => {
+    setNavCollapsed(collapsed);
+    writeNavCollapsed(collapsed);
+  }, []);
 
   const modules = useMemo(() => visibleModules(session), [session]);
   const current = modules.find((x) => x.key === nav.module) ?? modules[0];
@@ -319,6 +347,14 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
           onSelect: () => openFullscreen(current.key, nav.intent?.module === current.key ? nav.intent.value : null),
         }
       : { id: "jbt", section: "Preferences", label: "Open Justx Business Tools", icon: "⤺", onSelect: () => window.location.assign(withBasePath("/")) },
+    {
+      id: "nav-collapse",
+      section: "Preferences",
+      label: navCollapsed ? "Expand left navigation" : "Collapse left navigation",
+      icon: navCollapsed ? "»</ : "«",
+      keywords: "sidebar collapse expand space",
+      onSelect: () => setCollapsed(!navCollapsed),
+    },
     ...(onSignOut ? [{ id: "signout", section: "Preferences", label: "Sign out", icon: "⎋", onSelect: onSignOut }] : []),
   ];
 
@@ -377,7 +413,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
           </div>
         </Topbar>
 
-        <div className="bos-wrap" style={{ paddingTop: 20 }}>
+        <div className="bos-wrap ims-wrap" style={{ paddingTop: 20 }}>
           <AppShell
             brand={<NavBrand name="IMS — Dealer" mark="I" />}
             items={modules.map((x) => ({ key: x.key, label: x.label, icon: x.icon, section: x.section, badge: navBadges.get(x.key) }))}
@@ -386,6 +422,9 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
             onSearch={() => setPaletteOpen(true)}
             searchLabel="Jump to… ⌘K"
             footer={<TimePill />}
+            collapsible
+            collapsed={navCollapsed}
+            onCollapsedChange={setCollapsed}
             aria-label="IMS modules"
           >
             <ModuleBoundary moduleKey={current.key}>
@@ -496,8 +535,15 @@ class ShellBoundary extends Component<{ children: ReactNode }, { error: Error | 
  * whatever theme pack the org uses, and follows the host's light / dark scheme.
  */
 export function ImsApp({ mode, onSignOut }: { mode: ImsAppMode; onSignOut?: () => void }) {
+  const { config } = useOptionalPlatformConfig() ?? { config: null };
+  const widthPct = config?.imsLayout?.contentWidthPct ?? 90;
+  const rootStyle = {
+    ...(mode === "tool" ? HOST_GUTTER : null),
+    "--ims-content-width": `${widthPct}%`,
+  } as CSSProperties;
+
   return (
-    <BosRoot skin="ims" canvas className={mode === "tool" ? "bos-bleed" : "ims-standalone"} style={mode === "tool" ? HOST_GUTTER : undefined}>
+    <BosRoot skin="ims" canvas className={mode === "tool" ? "bos-bleed" : "ims-standalone"} style={rootStyle}>
       <ShellBoundary>
         <SessionGate mode={mode} onSignOut={onSignOut} />
       </ShellBoundary>

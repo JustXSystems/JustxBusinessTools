@@ -2,7 +2,21 @@
   display: grid;
   gap: 20px;
   grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
-  align-items: start;
+  align-items: stretch;
+  min-width: 0;
+}
+
+@media (min-width: 1101px) {
+  .ims-bom-layout {
+    max-height: calc(100dvh - 200px);
+  }
+  .ims-bom-compose,
+  .ims-bom-preview-wrap {
+    max-height: 100%;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
 }
 
 @media (max-width: 1100px) {

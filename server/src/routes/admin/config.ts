@@ -5,6 +5,7 @@ import {
   getRegistrationCopy,
   saveRegistrationCopy,
 } from "../../lib/config/registration-copy.js";
+import { getImsLayout, saveImsLayout } from "../../lib/config/ims-layout.js";
 import { getToolGrouping, saveToolGrouping } from "../../lib/config/tool-grouping.js";
 import {
   getPublicHome,
@@ -55,6 +56,9 @@ router.get("/platform", async (_req, res) => {
   if (!config.tool_grouping) {
     config.tool_grouping = await getToolGrouping();
   }
+  if (!config.ims_layout) {
+    config.ims_layout = await getImsLayout();
+  }
   if (!config.public_home) {
     config.public_home = signPublicHomeMedia(await getPublicHome());
   } else {
@@ -88,6 +92,21 @@ router.put("/tool-grouping", async (req, res) => {
       enabled: req.body?.enabled == null ? undefined : Boolean(req.body.enabled),
     });
     res.json({ toolGrouping });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Save failed" });
+  }
+});
+
+router.get("/ims-layout", async (_req, res) => {
+  res.json({ imsLayout: await getImsLayout() });
+});
+
+router.put("/ims-layout", async (req, res) => {
+  try {
+    const imsLayout = await saveImsLayout({
+      contentWidthPct: req.body?.contentWidthPct == null ? undefined : Number(req.body.contentWidthPct),
+    });
+    res.json({ imsLayout });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : "Save failed" });
   }

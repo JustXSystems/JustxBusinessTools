@@ -7,7 +7,7 @@ dealers and distributors. Built on the BOS kit with the IMS skin
 | Where | How |
 |---|---|
 | Inside JBT | `/tools/imsdealer` (tool id `imsdealer`, opt-in: Admin → Tools → Visible on home → Live) |
-| Full screen | `/ims` (same app without JBT chrome; topbar **Full screen** / ⌘K from the tool, or open `/ims` directly) |
+| Full screen | `/ims` (same app without JBT chrome; topbar **Full screen** / ⌘K from the tool, or open `/ims` directly). Width is Admin → Tools → IMS → Modules (`ims_layout.contentWidthPct`, default 90%). Left nav is collapsible. |
 | API | `/api/ims/*` |
 | Schema | `mysql/migrations/028_ims_core.sql` + `029`–`038` (all tables prefixed `ims_`) |
 | Module ceiling | Admin → Tools → Justx IMS → **Modules** (per business profile). `NULL` `ims_modules` = all modules. Roles can only further restrict. |
