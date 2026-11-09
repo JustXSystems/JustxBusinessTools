@@ -331,201 +331,207 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
         }
       />
 
-      <div className="ims-bom-layout">
+      <div className={`ims-bom-layout${confirmed ? " ims-bom-layout--confirm" : ""}`}>
         <div className="ims-bom-compose">
           {confirmed ? (
-            <Card>
-              <Alert tone="blue" title="Create GST invoice">
-                Choose how this BOM becomes a tax invoice. Lump-sum bills one package line; explode copies every BOM line (stock lines keep catalogue links).
-              </Alert>
-              {doc.invoiceId ? (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <Badge tone="emerald">Invoice linked · {doc.invoiceConvertMode ? BOM_INVOICE_CONVERT_LABEL[doc.invoiceConvertMode] : "—"}</Badge>
-                  {can("sales") ? (
-                    <Button size="sm" onClick={() => navigate("sales", `open:${doc.invoiceId}`)}>
-                      Open invoice
-                    </Button>
-                  ) : null}
-                </div>
-              ) : can("sales") ? (
-                <>
-                  {!doc.partyId ? (
-                    <Alert tone="amber" title="Walk-in / free-text customer">
-                      No saved party is linked — GSTIN and billing address won’t auto-fill on the invoice. Pick a catalogue customer if you need full GST details.
-                    </Alert>
-                  ) : null}
-                  <Field label="Convert mode">
-                    {({ id: fid }) => (
-                      <Select id={fid} value={convertMode} onChange={(e) => setConvertMode(e.target.value as BomInvoiceConvertMode)}>
-                        {BOM_INVOICE_CONVERT_MODES.map((m) => (
-                          <option key={m} value={m}>
-                            {BOM_INVOICE_CONVERT_LABEL[m]}
-                          </option>
-                        ))}
-                      </Select>
-                    )}
-                  </Field>
-                  <Field label="On create">
-                    {({ id: fid }) => (
-                      <Select
-                        id={fid}
-                        value={issueOnCreate ? "issue" : "draft"}
-                        onChange={(e) => setIssueOnCreate(e.target.value === "issue")}
-                        disabled={Boolean(doc.stockIssuedAt && convertMode === "explode_lines")}
-                      >
-                        <option value="draft">Save as draft invoice</option>
-                        <option value="issue" disabled={Boolean(doc.stockIssuedAt && convertMode === "explode_lines")}>
-                          Create and issue (posts stock for linked lines)
-                        </option>
-                      </Select>
-                    )}
-                  </Field>
-                  {doc.stockIssuedAt && convertMode === "explode_lines" ? (
-                    <Alert tone="amber" title="Stock already issued">
-                      Explode + issue is blocked. Create a draft explode invoice, or switch to lump-sum.
-                    </Alert>
-                  ) : null}
-                  {issueOnCreate && convertMode === "explode_lines" && !can("stockOut") ? (
-                    <Alert tone="amber" title="Stock-out permission needed">
-                      Issuing an explode invoice posts stock. Ask an owner for Stock out, or save as draft.
-                    </Alert>
-                  ) : null}
-                  {issueOnCreate && convertMode === "explode_lines" && stockShortfalls.length ? (
-                    <Alert tone={blockOnShortfall ? "coral" : "amber"} title={blockOnShortfall ? "Insufficient stock" : "Stock below need"}>
-                      {stockShortfalls
-                        .slice(0, 4)
-                        .map((s) => `${s.name}: need ${s.need} ${s.unit}, have ${s.have}`)
-                        .join(" · ")}
-                      {allowNegative ? " · Negative stock is allowed in Settings." : ""}
-                    </Alert>
-                  ) : null}
-                  {(() => {
-                    const gstRate = doc.taxPct > 0 ? doc.taxPct : 18;
-                    const preview = previewBomInvoice(doc, convertMode, gstRate);
-                    return (
-                      <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85 }}>
-                        <div>
-                          Preview · taxable {inrExact(preview.taxable)} · GST ~{gstRate}% {inrExact(preview.tax)} · ~{inrExact(preview.grand)}
-                        </div>
-                        <div style={{ marginTop: 4 }}>{preview.note}</div>
-                      </div>
-                    );
-                  })()}
-                  <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <Button
-                      disabled={
-                        Boolean(busy) ||
-                        (issueOnCreate && convertMode === "explode_lines" && Boolean(doc.stockIssuedAt)) ||
-                        (issueOnCreate && convertMode === "explode_lines" && !can("stockOut")) ||
-                        (issueOnCreate && convertMode === "explode_lines" && blockOnShortfall)
-                      }
-                      onClick={async () => {
-                        const out = await run(
-                          "invoice",
-                          () => bom.createInvoice(doc.id, { mode: convertMode, issue: issueOnCreate }),
-                          { success: issueOnCreate ? "Invoice issued from BOM" : "Draft invoice created" },
-                        );
-                        if (out?.invoice?.invoice?.id) {
-                          reloadAll();
-                          navigate("sales", `open:${out.invoice.invoice.id}`);
-                        }
-                      }}
-                    >
-                      Create invoice
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <Alert tone="amber" title="Sales permission needed">
-                  Your IMS role needs Sales invoices to convert a BOM.
+            <div className="ims-bom-compose-actions">
+              <Card className="ims-bom-action-card">
+                <Alert tone="blue" title="Create GST invoice">
+                  Choose how this BOM becomes a tax invoice. Lump-sum bills one package line; explode copies every BOM line (stock lines keep catalogue links).
                 </Alert>
-              )}
-            </Card>
-          ) : null}
-
-          {confirmed ? (
-            <Card>
-              <Alert tone="blue" title="Issue materials (stock out)">
-                Posts OUT movements for stock lines linked to catalogue items. Use this when the invoice is lump-sum (or not issued yet) and you still need to deduct components.
-              </Alert>
-              {doc.stockIssuedAt ? (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <Badge tone="emerald">
-                    Stock issued · {doc.stockIssueCount} item{doc.stockIssueCount === 1 ? "" : "s"} · {doc.stockIssuedAt}
-                  </Badge>
-                  {can("stockOut") && !explodeStockPosted ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={Boolean(busy)}
-                      onClick={async () => {
-                        if (!window.confirm("Return these materials to stock and clear the BOM issue flag?")) return;
-                        const out = await run("revstock", () => bom.reverseStock(doc.id), { success: "BOM stock reversed" });
-                        if (out) reloadAll();
-                      }}
-                    >
-                      Reverse stock
-                    </Button>
-                  ) : explodeStockPosted ? (
-                    <span style={{ fontSize: 13, opacity: 0.75 }}>Stock came from the explode invoice — cancel that invoice to return materials.</span>
-                  ) : null}
-                </div>
-              ) : can("stockOut") ? (
-                explodeStockPosted ? (
-                  <Alert tone="amber" title="Stock already posted">
-                    Materials went out with the linked explode invoice. Cancel that invoice if you need to return stock.
-                  </Alert>
-                ) : explodeDraftLinked ? (
-                  <Alert tone="amber" title="Draft explode invoice linked">
-                    Issue or delete the draft explode invoice before issuing stock from this BOM — otherwise Sales issue will be blocked.
-                    {can("sales") && doc.invoiceId ? (
-                      <div style={{ marginTop: 8 }}>
-                        <Button size="sm" onClick={() => navigate("sales", `open:${doc.invoiceId}`)}>
-                          Open draft invoice
-                        </Button>
-                      </div>
+                {doc.invoiceId ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <Badge tone="emerald">Invoice linked · {doc.invoiceConvertMode ? BOM_INVOICE_CONVERT_LABEL[doc.invoiceConvertMode] : "—"}</Badge>
+                    {can("sales") ? (
+                      <Button size="sm" onClick={() => navigate("sales", `open:${doc.invoiceId}`)}>
+                        Open invoice
+                      </Button>
                     ) : null}
-                  </Alert>
-                ) : (
+                  </div>
+                ) : can("sales") ? (
                   <>
-                    <div style={{ opacity: 0.75, fontSize: 13, marginBottom: 10 }}>
-                      {stockable
-                        ? `${stockable} stock line${stockable === 1 ? "" : "s"} ready to issue.`
-                        : "No stock-linked lines yet — edit the BOM and link catalogue items on stock lines."}
+                    {!doc.partyId ? (
+                      <Alert tone="amber" title="Walk-in / free-text customer">
+                        No saved party is linked — GSTIN and billing address won’t auto-fill on the invoice. Pick a catalogue customer if you need full GST details.
+                      </Alert>
+                    ) : null}
+                    <div className="ims-bom-action-fields">
+                      <Field label="Convert mode">
+                        {({ id: fid }) => (
+                          <Select id={fid} value={convertMode} onChange={(e) => setConvertMode(e.target.value as BomInvoiceConvertMode)}>
+                            {BOM_INVOICE_CONVERT_MODES.map((m) => (
+                              <option key={m} value={m}>
+                                {BOM_INVOICE_CONVERT_LABEL[m]}
+                              </option>
+                            ))}
+                          </Select>
+                        )}
+                      </Field>
+                      <Field label="On create">
+                        {({ id: fid }) => (
+                          <Select
+                            id={fid}
+                            value={issueOnCreate ? "issue" : "draft"}
+                            onChange={(e) => setIssueOnCreate(e.target.value === "issue")}
+                            disabled={Boolean(doc.stockIssuedAt && convertMode === "explode_lines")}
+                          >
+                            <option value="draft">Save as draft invoice</option>
+                            <option value="issue" disabled={Boolean(doc.stockIssuedAt && convertMode === "explode_lines")}>
+                              Create and issue (posts stock for linked lines)
+                            </option>
+                          </Select>
+                        )}
+                      </Field>
                     </div>
-                    {stockShortfalls.length ? (
+                    {doc.stockIssuedAt && convertMode === "explode_lines" ? (
+                      <Alert tone="amber" title="Stock already issued">
+                        Explode + issue is blocked. Create a draft explode invoice, or switch to lump-sum.
+                      </Alert>
+                    ) : null}
+                    {issueOnCreate && convertMode === "explode_lines" && !can("stockOut") ? (
+                      <Alert tone="amber" title="Stock-out permission needed">
+                        Issuing an explode invoice posts stock. Ask an owner for Stock out, or save as draft.
+                      </Alert>
+                    ) : null}
+                    {issueOnCreate && convertMode === "explode_lines" && stockShortfalls.length ? (
                       <Alert tone={blockOnShortfall ? "coral" : "amber"} title={blockOnShortfall ? "Insufficient stock" : "Stock below need"}>
                         {stockShortfalls
                           .slice(0, 4)
                           .map((s) => `${s.name}: need ${s.need} ${s.unit}, have ${s.have}`)
                           .join(" · ")}
-                        {stockShortfalls.length > 4 ? ` · +${stockShortfalls.length - 4} more` : ""}
                         {allowNegative ? " · Negative stock is allowed in Settings." : ""}
                       </Alert>
                     ) : null}
-                    <Button
-                      disabled={Boolean(busy) || !stockable || blockOnShortfall}
-                      onClick={async () => {
-                        if (stockShortfalls.length && allowNegative) {
-                          if (!window.confirm("On-hand is below need, but negative stock is allowed. Issue anyway?")) return;
+                    {(() => {
+                      const gstRate = doc.taxPct > 0 ? doc.taxPct : 18;
+                      const preview = previewBomInvoice(doc, convertMode, gstRate);
+                      return (
+                        <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85 }}>
+                          <div>
+                            Preview · taxable {inrExact(preview.taxable)} · GST ~{gstRate}% {inrExact(preview.tax)} · ~{inrExact(preview.grand)}
+                          </div>
+                          <div style={{ marginTop: 4 }}>{preview.note}</div>
+                        </div>
+                      );
+                    })()}
+                    <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <Button
+                        disabled={
+                          Boolean(busy) ||
+                          (issueOnCreate && convertMode === "explode_lines" && Boolean(doc.stockIssuedAt)) ||
+                          (issueOnCreate && convertMode === "explode_lines" && !can("stockOut")) ||
+                          (issueOnCreate && convertMode === "explode_lines" && blockOnShortfall)
                         }
-                        const out = await run("stock", () => bom.issueStock(doc.id), { success: "Stock issued from BOM" });
-                        if (out) reloadAll();
-                      }}
-                    >
-                      Issue stock
-                    </Button>
+                        onClick={async () => {
+                          const out = await run(
+                            "invoice",
+                            () => bom.createInvoice(doc.id, { mode: convertMode, issue: issueOnCreate }),
+                            { success: issueOnCreate ? "Invoice issued from BOM" : "Draft invoice created" },
+                          );
+                          if (out?.invoice?.invoice?.id) {
+                            reloadAll();
+                            navigate("sales", `open:${out.invoice.invoice.id}`);
+                          }
+                        }}
+                      >
+                        Create invoice
+                      </Button>
+                    </div>
                   </>
-                )
-              ) : (
-                <Alert tone="amber" title="Stock-out permission needed">
-                  Your IMS role needs Stock out to issue materials.
-                </Alert>
-              )}
-            </Card>
-          ) : null}
+                ) : (
+                  <Alert tone="amber" title="Sales permission needed">
+                    Your IMS role needs Sales invoices to convert a BOM.
+                  </Alert>
+                )}
+              </Card>
 
-          {doc.notes ? (
+              <Card className="ims-bom-action-card">
+                <Alert tone="blue" title="Issue materials (stock out)">
+                  Posts OUT movements for stock lines linked to catalogue items. Use this when the invoice is lump-sum (or not issued yet) and you still need to deduct components.
+                </Alert>
+                {doc.stockIssuedAt ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <Badge tone="emerald">
+                      Stock issued · {doc.stockIssueCount} item{doc.stockIssueCount === 1 ? "" : "s"} · {doc.stockIssuedAt}
+                    </Badge>
+                    {can("stockOut") && !explodeStockPosted ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={Boolean(busy)}
+                        onClick={async () => {
+                          if (!window.confirm("Return these materials to stock and clear the BOM issue flag?")) return;
+                          const out = await run("revstock", () => bom.reverseStock(doc.id), { success: "BOM stock reversed" });
+                          if (out) reloadAll();
+                        }}
+                      >
+                        Reverse stock
+                      </Button>
+                    ) : explodeStockPosted ? (
+                      <span style={{ fontSize: 13, opacity: 0.75 }}>Stock came from the explode invoice — cancel that invoice to return materials.</span>
+                    ) : null}
+                  </div>
+                ) : can("stockOut") ? (
+                  explodeStockPosted ? (
+                    <Alert tone="amber" title="Stock already posted">
+                      Materials went out with the linked explode invoice. Cancel that invoice if you need to return stock.
+                    </Alert>
+                  ) : explodeDraftLinked ? (
+                    <Alert tone="amber" title="Draft explode invoice linked">
+                      Issue or delete the draft explode invoice before issuing stock from this BOM — otherwise Sales issue will be blocked.
+                      {can("sales") && doc.invoiceId ? (
+                        <div style={{ marginTop: 8 }}>
+                          <Button size="sm" onClick={() => navigate("sales", `open:${doc.invoiceId}`)}>
+                            Open draft invoice
+                          </Button>
+                        </div>
+                      ) : null}
+                    </Alert>
+                  ) : (
+                    <>
+                      <div style={{ opacity: 0.75, fontSize: 13, marginBottom: 10 }}>
+                        {stockable
+                          ? `${stockable} stock line${stockable === 1 ? "" : "s"} ready to issue.`
+                          : "No stock-linked lines yet — edit the BOM and link catalogue items on stock lines."}
+                      </div>
+                      {stockShortfalls.length ? (
+                        <Alert tone={blockOnShortfall ? "coral" : "amber"} title={blockOnShortfall ? "Insufficient stock" : "Stock below need"}>
+                          {stockShortfalls
+                            .slice(0, 4)
+                            .map((s) => `${s.name}: need ${s.need} ${s.unit}, have ${s.have}`)
+                            .join(" · ")}
+                          {stockShortfalls.length > 4 ? ` · +${stockShortfalls.length - 4} more` : ""}
+                          {allowNegative ? " · Negative stock is allowed in Settings." : ""}
+                        </Alert>
+                      ) : null}
+                      <Button
+                        disabled={Boolean(busy) || !stockable || blockOnShortfall}
+                        onClick={async () => {
+                          if (stockShortfalls.length && allowNegative) {
+                            if (!window.confirm("On-hand is below need, but negative stock is allowed. Issue anyway?")) return;
+                          }
+                          const out = await run("stock", () => bom.issueStock(doc.id), { success: "Stock issued from BOM" });
+                          if (out) reloadAll();
+                        }}
+                      >
+                        Issue stock
+                      </Button>
+                    </>
+                  )
+                ) : (
+                  <Alert tone="amber" title="Stock-out permission needed">
+                    Your IMS role needs Stock out to issue materials.
+                  </Alert>
+                )}
+              </Card>
+
+              {doc.notes ? (
+                <Card className="ims-bom-action-card ims-bom-action-card--notes">
+                  <div style={{ whiteSpace: "pre-wrap" }}>{doc.notes}</div>
+                </Card>
+              ) : null}
+            </div>
+          ) : doc.notes ? (
             <Card>
               <div style={{ whiteSpace: "pre-wrap" }}>{doc.notes}</div>
             </Card>

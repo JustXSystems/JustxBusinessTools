@@ -1,27 +1,39 @@
 .ims-bom-layout {
   display: grid;
-  gap: 20px;
-  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
   align-items: stretch;
+  width: 100%;
   min-width: 0;
+}
+
+/* Confirmed / post-confirm actions: give compose the majority of the width */
+.ims-bom-layout--confirm {
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
 }
 
 @media (min-width: 1101px) {
   .ims-bom-layout {
-    max-height: calc(100dvh - 200px);
+    height: calc(100dvh - 168px);
+    max-height: calc(100dvh - 168px);
   }
   .ims-bom-compose,
   .ims-bom-preview-wrap {
-    max-height: 100%;
+    min-height: 0;
+    height: 100%;
     overflow: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
+    scrollbar-width: thin;
   }
 }
 
 @media (max-width: 1100px) {
-  .ims-bom-layout {
+  .ims-bom-layout,
+  .ims-bom-layout--confirm {
     grid-template-columns: 1fr;
+    height: auto;
+    max-height: none;
   }
 }
 
@@ -30,12 +42,62 @@
   flex-direction: column;
   gap: 14px;
   min-width: 0;
+  width: 100%;
+}
+
+.ims-bom-compose > .bos-card,
+.ims-bom-compose > .bos-alert,
+.ims-bom-action-card {
+  width: 100%;
+  max-width: none;
+}
+
+.ims-bom-compose-actions {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr;
+  width: 100%;
+  align-content: start;
+}
+
+@media (min-width: 1101px) {
+  .ims-bom-layout--confirm .ims-bom-compose-actions {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .ims-bom-layout--confirm .ims-bom-action-card--notes {
+    grid-column: 1 / -1;
+  }
+}
+
+.ims-bom-action-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ims-bom-action-fields {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+@media (max-width: 720px) {
+  .ims-bom-action-fields {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ims-bom-preview-wrap {
   position: sticky;
-  top: 12px;
+  top: 0;
   min-width: 0;
+  width: 100%;
+}
+
+.ims-bom-preview-wrap .ims-bom-paper {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .ims-bom-paper {
