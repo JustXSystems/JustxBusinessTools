@@ -397,6 +397,8 @@ a {
   min-height: 0;
   overflow: auto;
   padding-right: 2px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .admin-page .preview-pane {
@@ -5365,6 +5367,8 @@ body:has(.mobile-menu) .float-dock {
   overscroll-behavior: contain;
   padding: 0 0 8px;
   -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .admin-sidebar-footer {
@@ -5502,9 +5506,14 @@ body:has(.mobile-menu) .float-dock {
   overflow: auto;
   display: flex;
   flex-direction: column;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
-.admin-content:has(.admin-page) {
+/* Pages that own an inner scrollport (tabs + body / tools workspace / preview) */
+.admin-content:has(.admin-page > .admin-page-scroll),
+.admin-content:has(.admin-page > .tm-workspace),
+.admin-content:has(.preview-workspace) {
   overflow: hidden;
 }
 
@@ -5514,7 +5523,11 @@ body:has(.mobile-menu) .float-dock {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 .admin-page-head {
@@ -5533,6 +5546,8 @@ body:has(.mobile-menu) .float-dock {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding-bottom: 12px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .admin-page-body:has(> .preview-workspace) {
@@ -9007,6 +9022,8 @@ html[data-scheme="light"] .field textarea {
   overflow: auto;
   flex: 1;
   min-height: 0;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .tm-dir-item {
@@ -10760,16 +10777,18 @@ html[data-scheme="light"] .field textarea {
   font-size: 0.92em;
 }
 
-/* �� Admin scroll system (all /admin screens) ��
-   Detail panels grow with content; directory lists keep an inner scrollbar;
-   the main page (or .admin-page-scroll) owns the primary scrollbar. */
+/* —— Admin scroll system (all /admin screens) ——
+   Every admin view must expose a scrollbar when content exceeds the viewport.
+   Default: `.admin-page` scrolls. Nested owners (page-scroll / tools / preview)
+   take over and keep visible thin scrollbars. */
 .admin-page {
-  overflow-x: hidden;
+  overflow-x: clip;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
-/* Viewport-locked editors only (tools / experience preview) */
+/* Viewport-locked editors (tools workspace / experience body) */
 .admin-page:has(> .tm-workspace),
 .admin-page:has(> .admin-page-body) {
   overflow: hidden;
@@ -10789,6 +10808,58 @@ html[data-scheme="light"] .field textarea {
   gap: 16px;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+/* Visible thin scrollbars on every admin scrollport */
+.admin-content::-webkit-scrollbar,
+.admin-page::-webkit-scrollbar,
+.admin-page-scroll::-webkit-scrollbar,
+.admin-page-body::-webkit-scrollbar,
+.admin-nav::-webkit-scrollbar,
+.tm-directory-body::-webkit-scrollbar,
+.tm-detail > .admin-page-scroll::-webkit-scrollbar,
+.tm-detail > .panel.tm-pane::-webkit-scrollbar,
+.admin-dir-list::-webkit-scrollbar,
+.admin-page .audit-page::-webkit-scrollbar,
+.admin-page .analytics-page::-webkit-scrollbar,
+.admin-page .preview-editor::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.admin-content::-webkit-scrollbar-thumb,
+.admin-page::-webkit-scrollbar-thumb,
+.admin-page-scroll::-webkit-scrollbar-thumb,
+.admin-page-body::-webkit-scrollbar-thumb,
+.admin-nav::-webkit-scrollbar-thumb,
+.tm-directory-body::-webkit-scrollbar-thumb,
+.tm-detail > .admin-page-scroll::-webkit-scrollbar-thumb,
+.tm-detail > .panel.tm-pane::-webkit-scrollbar-thumb,
+.admin-dir-list::-webkit-scrollbar-thumb,
+.admin-page .audit-page::-webkit-scrollbar-thumb,
+.admin-page .analytics-page::-webkit-scrollbar-thumb,
+.admin-page .preview-editor::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-mid, #889) 55%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.admin-content::-webkit-scrollbar-track,
+.admin-page::-webkit-scrollbar-track,
+.admin-page-scroll::-webkit-scrollbar-track,
+.admin-page-body::-webkit-scrollbar-track,
+.admin-nav::-webkit-scrollbar-track,
+.tm-directory-body::-webkit-scrollbar-track,
+.tm-detail > .admin-page-scroll::-webkit-scrollbar-track,
+.tm-detail > .panel.tm-pane::-webkit-scrollbar-track,
+.admin-dir-list::-webkit-scrollbar-track,
+.admin-page .audit-page::-webkit-scrollbar-track,
+.admin-page .analytics-page::-webkit-scrollbar-track,
+.admin-page .preview-editor::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--bg-0, transparent) 70%, transparent);
 }
 
 .admin-page > .admin-tabs-bar {
@@ -10914,6 +10985,8 @@ html[data-scheme="light"] .field textarea {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .audit-timeline,
@@ -10932,6 +11005,8 @@ html[data-scheme="light"] .field textarea {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 /* Long directory-style lists on stacked pages: prefer page scroll over nested caps */

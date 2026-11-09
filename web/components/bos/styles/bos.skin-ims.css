@@ -467,6 +467,7 @@
   border-radius: var(--bos-r-xl);
   box-shadow: var(--bos-shadow-md);
   grid-template-columns: 256px minmax(0, 1fr);
+  transition: grid-template-columns 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .bos[data-bos-skin="ims"] .bos-nav {
   background: var(--bos-ims-nav-bg);
@@ -475,6 +476,53 @@
   border-right-color: var(--bos-border-soft);
   padding: 12px;
   gap: 6px;
+  min-width: 0;
+}
+/* Must beat the IMS 256px rail — otherwise icons hide but the panel stays wide. */
+@media (min-width: 901px) {
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav {
+    padding: 8px 6px;
+    gap: 4px;
+    align-items: center;
+  }
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-head {
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 6px;
+  }
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-brand,
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-brand-name,
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-search-label,
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-label,
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-item-label,
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-foot {
+    display: none;
+  }
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-search {
+    width: 40px;
+    min-width: 40px;
+    justify-content: center;
+    padding: 9px;
+    margin-bottom: 6px;
+  }
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-item {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    justify-content: center;
+    gap: 0;
+    padding: 10px 0;
+  }
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-ic {
+    width: 20px;
+    margin: 0 auto;
+  }
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-shell-main {
+    padding: 16px 18px;
+  }
 }
 .bos[data-bos-skin="ims"] .bos-nav-brand { padding: 4px 8px 14px; gap: 10px; border-bottom: 1px solid var(--bos-border-soft); margin-bottom: 6px; }
 .bos[data-bos-skin="ims"] .bos-nav-brand img { width: 36px; height: 36px; border-radius: var(--bos-r-xl); border: 1px solid var(--bos-border-soft); object-fit: cover; }

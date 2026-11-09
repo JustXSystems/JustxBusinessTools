@@ -140,8 +140,8 @@
 .bos .bos-nav-collapse:hover { color: var(--bos-text); border-color: var(--bos-blue); }
 .bos .bos-nav-collapse:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; }
 @media (min-width: 901px) {
-  .bos .bos-shell.is-nav-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
-  .bos .bos-shell.is-nav-collapsed .bos-nav { padding: 10px 8px; align-items: center; }
+  .bos .bos-shell.is-nav-collapsed { grid-template-columns: 56px minmax(0, 1fr); }
+  .bos .bos-shell.is-nav-collapsed .bos-nav { padding: 8px 6px; align-items: center; min-width: 0; }
   .bos .bos-shell.is-nav-collapsed .bos-nav-head { width: 100%; justify-content: center; margin-bottom: 8px; }
   .bos .bos-shell.is-nav-collapsed .bos-nav-brand,
   .bos .bos-shell.is-nav-collapsed .bos-nav-brand-name,
@@ -149,8 +149,8 @@
   .bos .bos-shell.is-nav-collapsed .bos-nav-label,
   .bos .bos-shell.is-nav-collapsed .bos-nav-item-label,
   .bos .bos-shell.is-nav-collapsed .bos-nav-foot { display: none; }
-  .bos .bos-shell.is-nav-collapsed .bos-nav-search { width: 40px; justify-content: center; padding: 9px; margin-bottom: 10px; }
-  .bos .bos-shell.is-nav-collapsed .bos-nav-item { position: relative; width: 40px; justify-content: center; padding: 9px; }
+  .bos .bos-shell.is-nav-collapsed .bos-nav-search { width: 40px; min-width: 40px; justify-content: center; padding: 9px; margin-bottom: 10px; }
+  .bos .bos-shell.is-nav-collapsed .bos-nav-item { position: relative; width: 40px; min-width: 40px; max-width: 40px; justify-content: center; gap: 0; padding: 9px 0; }
   .bos .bos-shell.is-nav-collapsed .bos-nav-badge { position: absolute; top: 2px; right: 2px; min-width: 14px; height: 14px; padding: 0 3px; font-size: 9px; line-height: 14px; }
 }
 .bos .bos-nav-brand { display: flex; align-items: center; gap: 8px; padding: 2px 4px 8px 12px; min-width: 0; }
