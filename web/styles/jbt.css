@@ -5500,34 +5500,34 @@ body:has(.mobile-menu) .float-dock {
 }
 
 .admin-content {
-  padding: 20px 24px 20px;
+  padding: 20px 24px 28px;
   flex: 1;
   min-height: 0;
+  /* Primary admin scrollbar — always available so long forms/panels are reachable */
   overflow: auto;
   display: flex;
   flex-direction: column;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
-/* Pages that own an inner scrollport (tabs + body / tools workspace / preview) */
-.admin-content:has(.admin-page > .admin-page-scroll),
-.admin-content:has(.admin-page > .tm-workspace),
+/* Only Theme Studio / live preview stays viewport-locked with inner panes */
 .admin-content:has(.preview-workspace) {
   overflow: hidden;
 }
 
 .admin-page {
-  flex: 1;
+  flex: 0 0 auto;
+  width: 100%;
   min-height: 0;
+  height: auto;
+  max-height: none;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow-x: clip;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
 }
 
 .admin-page-head {
@@ -5535,22 +5535,21 @@ body:has(.mobile-menu) .float-dock {
 }
 
 .admin-page-body {
-  flex: 1;
+  flex: 0 0 auto;
+  width: 100%;
   min-height: 0;
+  height: auto;
+  max-height: none;
   display: flex;
   flex-direction: column;
-  /* Long forms (Public home, Branding, etc.) must scroll; Theme Studio
-     with preview-workspace opts back into the clipped flex model below. */
-  overflow-x: auto;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overflow: visible;
   padding-bottom: 12px;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
 }
 
 .admin-page-body:has(> .preview-workspace) {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
   padding-bottom: 0;
 }
@@ -5558,6 +5557,13 @@ body:has(.mobile-menu) .float-dock {
 .admin-page-body > .preview-workspace {
   flex: 1;
   min-height: 0;
+}
+
+.admin-content:has(.preview-workspace) .admin-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* Public-home editor: keep nested grids/panels from clipping off-screen */
@@ -8993,17 +8999,22 @@ html[data-scheme="light"] .field textarea {
   display: grid;
   grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
   gap: 18px;
-  align-items: stretch;
-  flex: 1;
+  align-items: start;
+  flex: 0 0 auto;
+  width: 100%;
   min-height: 0;
+  height: auto;
 }
 
 .tm-directory {
   min-height: 0;
-  max-height: none;
+  max-height: min(78vh, 860px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: sticky;
+  top: 0;
+  align-self: start;
 }
 
 .tm-directory-head {
@@ -9079,9 +9090,11 @@ html[data-scheme="light"] .field textarea {
 
 .tm-detail {
   min-height: 0;
+  height: auto;
+  max-height: none;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   gap: 10px;
 }
 
@@ -10778,38 +10791,29 @@ html[data-scheme="light"] .field textarea {
 }
 
 /* —— Admin scroll system (all /admin screens) ——
-   Every admin view must expose a scrollbar when content exceeds the viewport.
-   Default: `.admin-page` scrolls. Nested owners (page-scroll / tools / preview)
-   take over and keep visible thin scrollbars. */
-.admin-page {
-  overflow-x: clip;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-}
-
-/* Viewport-locked editors (tools workspace / experience body) */
+   Content grows; `.admin-content` is the single primary scrollbar so panels
+   never clip off-screen. Directory lists keep their own bounded scroll.
+   Theme Studio (preview-workspace) is the only viewport-locked exception. */
+.admin-page,
 .admin-page:has(> .tm-workspace),
-.admin-page:has(> .admin-page-body) {
-  overflow: hidden;
-}
-
-/* Sticky header + scrollable body */
+.admin-page:has(> .admin-page-body),
 .admin-page:has(> .admin-page-scroll) {
-  overflow: hidden;
+  overflow: visible;
+  flex: 0 0 auto;
+  height: auto;
+  max-height: none;
 }
 
 .admin-page-scroll {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  width: 100%;
   min-height: 0;
-  overflow: auto;
+  height: auto;
+  max-height: none;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
 }
 
 /* Visible thin scrollbars on every admin scrollport */
@@ -10878,8 +10882,8 @@ html[data-scheme="light"] .field textarea {
 .admin-page > .admin-tabs-bar ~ .admin-split,
 .admin-page > .admin-tabs-bar ~ .payments-split,
 .admin-page > .admin-tabs-bar ~ .admin-stack {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: auto;
 }
 
 .admin-page-scroll > .admin-split,
@@ -10970,10 +10974,12 @@ html[data-scheme="light"] .field textarea {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Tools editor stays viewport-locked with pane scroll */
+/* Tools editor: detail grows with content; page scroll reveals the rest */
 .tm-detail {
   min-height: 0;
-  overflow: hidden;
+  height: auto;
+  max-height: none;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -10982,11 +10988,11 @@ html[data-scheme="light"] .field textarea {
 .tm-detail > .admin-page-scroll,
 .tm-detail > [hidden] + *,
 .tm-detail > .panel.tm-pane {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: auto;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .audit-timeline,
@@ -11002,11 +11008,11 @@ html[data-scheme="light"] .field textarea {
 
 .admin-page .audit-page,
 .admin-page .analytics-page {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: auto;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 /* Long directory-style lists on stacked pages: prefer page scroll over nested caps */

@@ -27,6 +27,7 @@ import { inr, inrExact } from "@/lib/ims/format";
 import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
 import { ItemPickerDialog, PartySelect } from "../shared/pickers";
 import { BomPaper, modelFromDoc, type BomPaperModel } from "./BomPaper";
+import { BomSplitLayout } from "./BomSplitLayout";
 import { exportBomExcel } from "@/lib/ims/bom-excel";
 
 type View =
@@ -331,9 +332,10 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
         }
       />
 
-      <div className={`ims-bom-layout${confirmed ? " ims-bom-layout--confirm" : ""}`}>
-        <div className="ims-bom-compose">
-          {confirmed ? (
+      <BomSplitLayout
+        confirm={confirmed}
+        compose={
+          confirmed ? (
             <div className="ims-bom-compose-actions">
               <Card className="ims-bom-action-card">
                 <Alert tone="blue" title="Create GST invoice">
@@ -535,12 +537,10 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
             <Card>
               <div style={{ whiteSpace: "pre-wrap" }}>{doc.notes}</div>
             </Card>
-          ) : null}
-        </div>
-        <div className="ims-bom-preview-wrap">
-          <BomPaper model={model} />
-        </div>
-      </div>
+          ) : null
+        }
+        preview={<BomPaper model={model} />}
+      />
     </Stack>
   );
 }
@@ -813,8 +813,9 @@ function BomEditorForm({
         }
       />
 
-      <div className="ims-bom-layout">
-        <div className="ims-bom-compose">
+      <BomSplitLayout
+        compose={
+          <>
           {seeded && !seeded.active ? (
             <Alert tone="amber" title="Inactive package template">
               This package is inactive. You can still compose the BOM, but saving from it may be rejected — reactivate the package or copy lines into a blank BOM.
@@ -940,12 +941,10 @@ function BomEditorForm({
               Add section
             </Button>
           </div>
-        </div>
-
-        <div className="ims-bom-preview-wrap">
-          <BomPaper model={paperModel} />
-        </div>
-      </div>
+          </>
+        }
+        preview={<BomPaper model={paperModel} />}
+      />
 
       <ItemPickerDialog
         open={Boolean(pickFor)}

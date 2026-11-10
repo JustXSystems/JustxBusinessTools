@@ -1,15 +1,73 @@
 .ims-bom-layout {
+  --ims-bom-compose-pct: 50%;
   display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
+  gap: 0;
+  grid-template-columns: minmax(0, var(--ims-bom-compose-pct)) 12px minmax(0, 1fr);
   align-items: stretch;
   width: 100%;
   min-width: 0;
 }
 
-/* Confirmed / post-confirm actions: give compose the majority of the width */
-.ims-bom-layout--confirm {
-  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
+.ims-bom-layout.is-resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+
+.ims-bom-split-handle {
+  position: relative;
+  z-index: 2;
+  width: 12px;
+  margin: 0;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.ims-bom-split-handle::before {
+  content: "";
+  width: 2px;
+  height: 100%;
+  min-height: 48px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bos-border, rgba(15, 23, 42, 0.18)) 85%, transparent);
+  transition: background 0.15s ease, width 0.15s ease;
+}
+
+.ims-bom-split-handle:hover::before,
+.ims-bom-split-handle.is-active::before,
+.ims-bom-split-handle:focus-visible::before {
+  width: 3px;
+  background: var(--bos-blue, #2563eb);
+}
+
+.ims-bom-split-handle:focus-visible {
+  outline: 2px solid var(--bos-blue, #2563eb);
+  outline-offset: 2px;
+}
+
+.ims-bom-split-grip {
+  position: absolute;
+  width: 4px;
+  height: 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bos-text-muted, #64748b) 55%, transparent);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.ims-bom-split-handle:hover .ims-bom-split-grip,
+.ims-bom-split-handle.is-active .ims-bom-split-grip {
+  opacity: 1;
+  background: var(--bos-blue, #2563eb);
+}
+
+body.is-bom-resizing {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 @media (min-width: 1101px) {
@@ -35,6 +93,9 @@
     height: auto;
     max-height: none;
   }
+  .ims-bom-split-handle {
+    display: none;
+  }
 }
 
 .ims-bom-compose {
@@ -43,6 +104,7 @@
   gap: 14px;
   min-width: 0;
   width: 100%;
+  padding-right: 6px;
 }
 
 .ims-bom-compose > .bos-card,
@@ -93,6 +155,7 @@
   top: 0;
   min-width: 0;
   width: 100%;
+  padding-left: 6px;
 }
 
 .ims-bom-preview-wrap .ims-bom-paper {
