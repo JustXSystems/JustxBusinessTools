@@ -572,7 +572,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
    */
   router.post("/items/ensure", async (req, res) => {
     const actor = actorOf(res);
-    requireAnyPerm(res, ["items", "bom"]);
+    requireAnyPerm(res, ["items", "bom", "bomPackages"]);
     const body = parse(
       z.object({
         items: z

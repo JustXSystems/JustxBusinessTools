@@ -80,6 +80,7 @@ export type ImsPermission =
   | "approvals"
   | "sales"
   | "bom"
+  | "bomPackages"
   | "receivables"
   | "payables"
   | "closing"

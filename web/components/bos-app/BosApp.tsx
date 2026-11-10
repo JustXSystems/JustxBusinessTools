@@ -184,11 +184,12 @@ function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mod
   ];
 
   const actorName = session.actor.name ?? session.actor.email ?? "You";
+  const companyName = session.brand?.name || session.settings.companyName || "Justx BOS";
 
   return (
     <BosAppProvider value={ctx}>
       <Topbar sticky="desktop">
-        <Brand logoSrc={logoSrc} name="Justx BOS" sub={`${session.settings.companyName} · ${mode === "tool" ? "in JBT" : "Business OS"}`} />
+        <Brand logoSrc={logoSrc} name={companyName} sub={`Justx BOS · ${mode === "tool" ? "in JBT" : "Business OS"}`} />
         <div className="bos-topbar-actions">
           <SearchInput
             readOnly

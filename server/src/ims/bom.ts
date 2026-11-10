@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getOrgFeatureSwitches } from "../lib/feature-switches.js";
 import { getRequestContext } from "../lib/request-context.js";
-import { actorOf, isoDate, optText, parse, parsePatch, qint, qstr, recordEvent, requirePerm, type ImsDeps } from "./context.js";
+import { actorOf, isoDate, optText, parse, parsePatch, qint, qstr, recordEvent, requireAnyPerm, requirePerm, type ImsDeps } from "./context.js";
 import { exec, isoOf, likeOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
 import { badRequest, conflict, forbidden, notFound } from "./host.js";
 import { round2, round3, todayISO, type ImsLineInput } from "./logic.js";
@@ -528,7 +528,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
   /* ---------- Packages ---------- */
 
   router.get("/bom/packages", async (req, res) => {
-    requirePerm(res, "bom");
+    requireAnyPerm(res, ["bom", "bomPackages"]);
     const actor = actorOf(res);
     const q = qstr(req.query.q, 80);
     const activeOnly = String(req.query.active ?? "1") !== "0";
@@ -553,14 +553,14 @@ export function registerBom(router: Router, deps: ImsDeps): void {
   });
 
   router.get("/bom/packages/:id", async (req, res) => {
-    requirePerm(res, "bom");
+    requireAnyPerm(res, ["bom", "bomPackages"]);
     const pkg = await loadPackage(deps.db, actorOf(res).tenantId, String(req.params.id));
     if (!pkg) throw notFound("Package not found");
     res.json({ package: pkg });
   });
 
   router.post("/bom/packages", async (req, res) => {
-    requirePerm(res, "bom");
+    requirePerm(res, "bomPackages");
     const actor = actorOf(res);
     const body = parse(packageInput, req.body);
     const id = randomUUID();
@@ -592,7 +592,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
   });
 
   router.put("/bom/packages/:id", async (req, res) => {
-    requirePerm(res, "bom");
+    requirePerm(res, "bomPackages");
     const actor = actorOf(res);
     const id = String(req.params.id);
     const existing = await loadPackage(deps.db, actor.tenantId, id);
@@ -624,7 +624,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
   });
 
   router.patch("/bom/packages/:id", async (req, res) => {
-    requirePerm(res, "bom");
+    requirePerm(res, "bomPackages");
     const actor = actorOf(res);
     const id = String(req.params.id);
     const existing = await one<PkgRow>(deps.db, `SELECT * FROM ims_bom_packages WHERE tenant_id = :tenantId AND id = :id LIMIT 1`, { tenantId: actor.tenantId, id });
@@ -656,7 +656,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
   });
 
   router.delete("/bom/packages/:id", async (req, res) => {
-    requirePerm(res, "bom");
+    requirePerm(res, "bomPackages");
     const actor = actorOf(res);
     const id = String(req.params.id);
     const existing = await loadPackage(deps.db, actor.tenantId, id);
@@ -691,7 +691,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
   });
 
   router.post("/bom/packages/:id/duplicate", async (req, res) => {
-    requirePerm(res, "bom");
+    requirePerm(res, "bomPackages");
     const actor = actorOf(res);
     const src = await loadPackage(deps.db, actor.tenantId, String(req.params.id));
     if (!src) throw notFound("Package not found");
@@ -764,7 +764,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
   });
 
   router.post("/bom/packages/seed-samples", async (_req, res) => {
-    requirePerm(res, "bom");
+    requirePerm(res, "bomPackages");
     const ctx = getRequestContext();
     const features = ctx ? await getOrgFeatureSwitches(ctx.organizationId) : null;
     if (!features?.["ims.bom.sample_templates"]) {

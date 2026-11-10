@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { publicAssetUrl } from "@/lib/base-path";
 import { inrExact, qtyText } from "@/lib/ims/format";
 import type { BomBusiness, BomDoc, BomDocLine, BomTotals } from "@/lib/ims/bom";
@@ -50,6 +50,9 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness): BomPaperModel 
 export function BomPaper({ model }: { model: BomPaperModel }) {
   const b = model.business;
   const [logoFailed, setLogoFailed] = useState(false);
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [b.logoUrl]);
   const logoSrc = !logoFailed && b.logoUrl ? publicAssetUrl(b.logoUrl) : "";
   const sections: Array<{ name: string; lines: BomPaperModel["lines"]; start: number }> = [];
   let idx = 0;

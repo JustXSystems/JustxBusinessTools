@@ -103,7 +103,7 @@ function BomList({ onNew, onOpen }: { onNew: (packageId: string | null) => void;
   return (
     <Stack>
       <PageHeader
-        title="BOM Builder"
+        title="BILL OF MATERIALS - BOM"
         sub="Compose a customer bill of materials from a package template — live preview, save and print."
         actions={<Button onClick={() => onNew(pkgId || null)}>New BOM</Button>}
       />

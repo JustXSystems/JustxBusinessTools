@@ -5,7 +5,7 @@ import { ensureDocumentAccentColorColumn } from "../../lib/document-accent.js";
 import type { NotificationEventType } from "../../lib/notification-events.js";
 import { publishNotificationAsync } from "../../lib/notification-publish.js";
 import { getRequestContext } from "../../lib/request-context.js";
-import { withFileAccessToken } from "../../lib/storage.js";
+import { withBrowserFileAccessToken } from "../../lib/storage.js";
 import { requireWriteAccess } from "../../middleware/require-write.js";
 import type { ImsActor, ImsBrand, ImsHost, ImsHostRole, ImsHostUser, ImsNoticeKind } from "../host.js";
 
@@ -88,13 +88,25 @@ export const jbtImsHost: ImsHost = {
 
   async brand(tenantId: number): Promise<ImsBrand> {
     await ensureDocumentAccentColorColumn().catch(() => undefined);
-    const [rows] = await pool.query(
-      `SELECT business_name, gstin, state, state_code, address_line1, address_line2, email, phone,
-              logo_data_url, document_accent_color
-       FROM business_profiles WHERE id = :id LIMIT 1`,
-      { id: tenantId },
-    );
-    const r = (Array.isArray(rows) ? rows[0] : null) as Record<string, string | null> | null;
+    const params = { id: tenantId };
+    let r: Record<string, string | null> | null = null;
+    try {
+      const [rows] = await pool.query(
+        `SELECT business_name, gstin, state, state_code, address_line1, address_line2, email, phone,
+                logo_data_url, document_accent_color
+         FROM business_profiles WHERE id = :id LIMIT 1`,
+        params,
+      );
+      r = (Array.isArray(rows) ? rows[0] : null) as Record<string, string | null> | null;
+    } catch {
+      const [rows] = await pool.query(
+        `SELECT business_name, gstin, state, state_code, address_line1, address_line2, email, phone,
+                logo_data_url
+         FROM business_profiles WHERE id = :id LIMIT 1`,
+        params,
+      );
+      r = (Array.isArray(rows) ? rows[0] : null) as Record<string, string | null> | null;
+    }
     const address = [r?.address_line1, r?.address_line2].filter(Boolean).join(", ");
     return {
       name: r?.business_name || "",
@@ -104,7 +116,7 @@ export const jbtImsHost: ImsHost = {
       address: address || null,
       email: r?.email ?? null,
       phone: r?.phone ?? null,
-      logoUrl: r?.logo_data_url ? withFileAccessToken(r.logo_data_url) : null,
+      logoUrl: r?.logo_data_url ? withBrowserFileAccessToken(r.logo_data_url) : null,
       accent: r?.document_accent_color ?? null,
     };
   },

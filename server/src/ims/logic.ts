@@ -393,7 +393,8 @@ export const IMS_PERMISSIONS = [
   { key: "po", label: "Purchase orders" },
   { key: "approvals", label: "Approvals (PO, bills, stock checks)" },
   { key: "sales", label: "Sales invoices" },
-  { key: "bom", label: "BOM packages & documents" },
+  { key: "bom", label: "Bill of materials (BOM)" },
+  { key: "bomPackages", label: "BOM package templates" },
   { key: "receivables", label: "Receivables & collections" },
   { key: "payables", label: "Payables & payments" },
   { key: "closing", label: "Daily closing & expenses" },
@@ -411,8 +412,9 @@ const grant = (keys: ReadonlyArray<ImsPermission>): Record<ImsPermission, boolea
   Object.fromEntries(ALL_PERMS.map((k) => [k, keys.includes(k)])) as Record<ImsPermission, boolean>;
 
 export const DEFAULT_PERMISSIONS: PermissionMatrix = {
-  manager: grant(ALL_PERMS.filter((k) => k !== "settings" && k !== "integrations")),
-  incharge: grant(["stockIn", "stockOut", "damage", "stockCheck", "po", "field"]),
+  // bomPackages stays owner-only by default (platform owners/admins are IMS owners).
+  manager: grant(ALL_PERMS.filter((k) => k !== "settings" && k !== "integrations" && k !== "bomPackages")),
+  incharge: grant(["stockIn", "stockOut", "damage", "stockCheck", "po", "field", "bom"]),
   staff: grant(["stockIn", "stockOut", "damage", "stockCheck", "po", "sales", "bom"]),
   accountant: grant(["sales", "bom", "receivables", "payables", "closing", "reports", "suppliers"]),
   auditor: grant(["reports", "audit"]),

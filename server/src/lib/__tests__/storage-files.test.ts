@@ -5,6 +5,7 @@ import {
   isPathInsideRoot,
   publicFileUrl,
   verifyFileAccessToken,
+  withBrowserFileAccessToken,
   withFileAccessToken,
 } from "../storage.js";
 
@@ -51,6 +52,16 @@ describe("file access tokens", () => {
   it("extracts keys under /jbt and rejects traversal", () => {
     expect(extractLocalFileKey("/jbt/api/files/logos/a.png")).toBe("logos/a.png");
     expect(extractLocalFileKey("/api/files/../etc/passwd")).toBeNull();
+  });
+
+  it("returns browser-relative signed logo URLs even when API_PUBLIC_URL is absolute", () => {
+    saveEnv();
+    process.env.JWT_SECRET = "a".repeat(48);
+    process.env.API_PUBLIC_URL = "https://internal.example:4000";
+    delete process.env.UPLOAD_DRIVER;
+    const url = withBrowserFileAccessToken("/api/files/logos/demo.png", 3600);
+    expect(url).toMatch(/^\/api\/files\/logos\/demo\.png\?exp=\d+&sig=/);
+    expect(url).not.toContain("internal.example");
   });
 
   it("hardens upload root containment", () => {

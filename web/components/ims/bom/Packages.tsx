@@ -39,7 +39,7 @@ export default function BomPackagesScreen() {
   const openId = useOpenIntent("bomPackages");
   const [view, setView] = useState<View>(() => (openId ? { mode: "edit", id: openId } : { mode: "list" }));
   return (
-    <RequirePerm perm="bom" what="BOM packages">
+    <RequirePerm perm="bomPackages" what="BOM packages">
       {view.mode === "edit" ? (
         <PackageEditor
           id={view.id}
@@ -151,7 +151,7 @@ function PackageList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string
             </>
           }
         >
-          Create a template once, or import Excel — then generate customer BOMs from it in BOM Builder.
+          Create a template once, or import Excel — then generate customer BOMs from BILL OF MATERIALS - BOM.
         </EmptyState>
       ) : null}
       {packages.length ? (

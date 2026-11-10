@@ -361,6 +361,8 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
   const actorName = session.actor.name ?? session.actor.email ?? "You";
   const businessName = session.settings.businessName || session.brand?.name || "Your business";
   const companyLogoSrc = session.brand?.logoUrl ? publicAssetUrl(session.brand.logoUrl) : undefined;
+  /** Topbar + nav: company logo when set; Justx mark only as fallback. */
+  const chromeLogoSrc = companyLogoSrc || logoSrc;
   const Module = current.component;
   const openIntent = nav.intent?.module === current.key ? nav.intent.value : null;
 
@@ -368,7 +370,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
     <ImsAppProvider value={ctx}>
       <div className="ims-app">
         <Topbar sticky="desktop">
-          <Brand logoSrc={logoSrc} name="Justx IMS" sub={`${businessName} · ${mode === "tool" ? "in JBT" : "Dealer"}`} />
+          <Brand logoSrc={chromeLogoSrc} name={businessName} sub={`Justx IMS · ${mode === "tool" ? "in JBT" : "Dealer"}`} />
           <div className="bos-topbar-actions">
             <SearchInput
               readOnly
@@ -416,7 +418,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
 
         <div className="bos-wrap ims-wrap" style={{ paddingTop: 20 }}>
           <AppShell
-            brand={<NavBrand name={businessName} logoSrc={companyLogoSrc} mark="I" />}
+            brand={<NavBrand name={businessName} logoSrc={chromeLogoSrc} mark="I" />}
             items={modules.map((x) => ({ key: x.key, label: x.label, icon: x.icon, section: x.section, badge: navBadges.get(x.key) }))}
             active={current.key}
             onSelect={(k) => navigate(k)}

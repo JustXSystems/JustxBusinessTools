@@ -213,8 +213,13 @@ describe("purchase orders", () => {
 describe("roles & settings", () => {
   it("gives owners everything and others their matrix row", () => {
     expect(permissionsFor("owner", DEFAULT_PERMISSIONS)).toContain("settings");
+    expect(permissionsFor("owner", DEFAULT_PERMISSIONS)).toContain("bomPackages");
     expect(permissionsFor("field", DEFAULT_PERMISSIONS)).toEqual(["field"]);
     expect(permissionsFor("manager", DEFAULT_PERMISSIONS)).not.toContain("settings");
+    expect(permissionsFor("manager", DEFAULT_PERMISSIONS)).not.toContain("bomPackages");
+    expect(permissionsFor("manager", DEFAULT_PERMISSIONS)).toContain("bom");
+    expect(permissionsFor("staff", DEFAULT_PERMISSIONS)).toContain("bom");
+    expect(permissionsFor("incharge", DEFAULT_PERMISSIONS)).toContain("bom");
   });
 
   it("normalizes stored permission matrices", () => {

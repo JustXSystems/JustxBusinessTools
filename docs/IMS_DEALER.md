@@ -60,8 +60,8 @@ permissions apply.
 | | `purchase` | POs: draft → approval (limit in settings) → sent → receive (partial) → bill |
 | | `approvals` | PO and bill approvals queue |
 | Sales & Finance | `sales` | GST invoices (CGST/SGST or IGST by place of supply), POS quick sale, print |
-| | `bomPackages` | Reusable BOM package templates; Excel import; sample templates |
-| | `bom` | BOM Builder — compose, live preview, Excel export, GST invoice convert (lump-sum / explode), stock issue |
+| | `bomPackages` | Reusable BOM package templates; Excel import; sample templates (permission `bomPackages` — owners/admins by default) |
+| | `bom` | BILL OF MATERIALS - BOM — compose, live preview, Excel export, GST invoice convert (lump-sum / explode), stock issue |
 | | `receivables` | Aging, priorities, reminders (WhatsApp/SMS/email templates), promises, disputes |
 | | `payables` | Bills, approvals, holds, scheduled payment runs |
 | | `ledger` | Party ledger and statements, manual entries, expenses |

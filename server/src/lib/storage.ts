@@ -131,6 +131,32 @@ export function withFileAccessToken(
   return `${base}${sep}exp=${expiresAtSec}&sig=${sig}`;
 }
 
+/**
+ * Same as withFileAccessToken, but always returns an app-relative `/api/files/...`
+ * path for local uploads. Use this in SPA session payloads so the web app can
+ * apply its public base path (/jbt) — absolute API_PUBLIC_URL hosts often break <img>.
+ */
+export function withBrowserFileAccessToken(
+  urlOrPath: string | null | undefined,
+  ttlSec: number = DEFAULT_FILE_URL_TTL_SEC,
+): string | null {
+  const signed = withFileAccessToken(urlOrPath, ttlSec);
+  if (!signed) return null;
+  if (signed.startsWith("data:") || uploadDriver() === "s3") return signed;
+  const key = extractLocalFileKey(signed);
+  if (!key) return signed;
+  try {
+    const u = signed.includes("://") ? new URL(signed) : null;
+    const exp = u?.searchParams.get("exp");
+    const sig = u?.searchParams.get("sig");
+    if (exp && sig) return `/api/files/${key}?exp=${exp}&sig=${sig}`;
+  } catch {
+    /* fall through */
+  }
+  const q = signed.indexOf("?");
+  return q >= 0 ? `/api/files/${key}${signed.slice(q)}` : `/api/files/${key}`;
+}
+
 function parseDataUrl(input: string): { mime: string; buffer: Buffer } {
   const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(input.replace(/\s/g, ""));
   if (!match) {
