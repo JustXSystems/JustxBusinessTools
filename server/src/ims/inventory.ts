@@ -27,6 +27,7 @@ import {
   type MovementType,
   type StockStatus,
 } from "./logic.js";
+import { inventItemFromBomLine } from "./item-invent.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo, postMovement, type PostedMovement } from "./stock.js";
 
@@ -562,6 +563,186 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     const id = await insertItem(deps, actor, input, openingQty ? { qty: openingQty } : null, settings.allowNegativeStock);
     await recordEvent(deps, actor, { type: "item.created", entityType: "item", entityId: id, summary: `Added item ${input.name}${openingQty ? ` with ${openingQty} ${input.unit} opening stock` : ""}` });
     res.status(201).json({ item: await getItem(deps, actor.tenantId, id) });
+  });
+
+  /**
+   * Link-or-create catalogue rows (BOM import / sync, inline picker).
+   * Excel map: description→name, make/vendor→brand, unit→unit, price/unit→sellingPrice.
+   * Other fields (SKU, barcode, category, HSN, GST, cost, min stock) are invented on create.
+   */
+  router.post("/items/ensure", async (req, res) => {
+    const actor = actorOf(res);
+    requireAnyPerm(res, ["items", "bom"]);
+    const body = parse(
+      z.object({
+        items: z
+          .array(
+            z.object({
+              name: z.string().trim().min(1).max(200),
+              brand: optText(80),
+              sku: optText(64),
+              barcode: optText(64),
+              unit: z.string().trim().min(1).max(20).optional(),
+              sellingPrice: z.coerce.number().min(0).max(1e10).optional(),
+              category: optText(80),
+              section: optText(80),
+              remarks: optText(500),
+              typicalQty: z.coerce.number().min(0).max(1e9).optional(),
+              notes: optText(2000),
+            }),
+          )
+          .min(1)
+          .max(500),
+        source: optText(80),
+      }),
+      req.body,
+    );
+    const settings = await getSettings(deps, actor.tenantId);
+    const sourceNote = body.source?.trim() || "BOM catalogue sync";
+    const cache = new Map<string, string>();
+    const results: Array<{ index: number; id: string; status: "linked" | "created" }> = [];
+    let created = 0;
+    let linked = 0;
+
+    const normKey = (name: string, brand?: string | null, sku?: string | null) =>
+      `n:${name.trim().toLowerCase()}|b:${(brand ?? "").trim().toLowerCase()}|s:${(sku ?? "").trim().toLowerCase()}`;
+
+    for (const [index, raw] of body.items.entries()) {
+      const invented = inventItemFromBomLine({
+        name: raw.name,
+        brand: raw.brand,
+        unit: raw.unit,
+        sellingPrice: raw.sellingPrice,
+        sku: raw.sku,
+        barcode: raw.barcode,
+        category: raw.category,
+        section: raw.section,
+        remarks: raw.remarks,
+        typicalQty: raw.typicalQty,
+        source: sourceNote,
+        defaultGstRate: settings.defaultGstRate,
+      });
+      const name = invented.name;
+      const brand = invented.brand;
+      const skuHint = raw.sku?.trim() || null;
+      const dedupe = normKey(name, brand, skuHint);
+      const cached = cache.get(dedupe);
+      if (cached) {
+        results.push({ index, id: cached, status: "linked" });
+        linked += 1;
+        continue;
+      }
+
+      const byCode = skuHint
+        ? await one<{ id: string }>(deps.db, `SELECT id FROM ims_items WHERE tenant_id = :tenantId AND sku = :code LIMIT 1`, {
+            tenantId: actor.tenantId,
+            code: skuHint,
+          })
+        : null;
+
+      let matchId = byCode?.id ?? null;
+      if (!matchId) {
+        if (brand) {
+          const hit = await one<{ id: string }>(
+            deps.db,
+            `SELECT id FROM ims_items WHERE tenant_id = :tenantId AND LOWER(name) = LOWER(:name) AND LOWER(COALESCE(brand, '')) = LOWER(:brand)
+             ORDER BY active DESC LIMIT 1`,
+            { tenantId: actor.tenantId, name, brand },
+          );
+          matchId = hit?.id ?? null;
+        } else {
+          const hits = await rows<{ id: string }>(
+            deps.db,
+            `SELECT id FROM ims_items WHERE tenant_id = :tenantId AND LOWER(name) = LOWER(:name) AND active = 1 ORDER BY created_at ASC LIMIT 3`,
+            { tenantId: actor.tenantId, name },
+          );
+          if (hits.length === 1) matchId = hits[0]!.id;
+          else if (hits.length > 1) {
+            const bare = await one<{ id: string }>(
+              deps.db,
+              `SELECT id FROM ims_items WHERE tenant_id = :tenantId AND LOWER(name) = LOWER(:name) AND (brand IS NULL OR brand = '') AND active = 1 LIMIT 1`,
+              { tenantId: actor.tenantId, name },
+            );
+            matchId = bare?.id ?? hits[0]!.id;
+          }
+        }
+      }
+
+      if (matchId) {
+        await exec(
+          deps.db,
+          `UPDATE ims_items SET
+             brand = COALESCE(NULLIF(brand, ''), :brand),
+             unit = IF(unit IS NULL OR unit = '' OR unit = 'pcs', :unit, unit),
+             selling_price = IF(selling_price = 0 AND :rate > 0, :rate, selling_price),
+             category = COALESCE(NULLIF(category, ''), :category),
+             hsn = COALESCE(NULLIF(hsn, ''), :hsn),
+             purchase_price = IF(purchase_price = 0 AND :cost > 0, :cost, purchase_price),
+             mrp = COALESCE(mrp, :mrp)
+           WHERE tenant_id = :tenantId AND id = :id`,
+          {
+            tenantId: actor.tenantId,
+            id: matchId,
+            brand,
+            unit: invented.unit,
+            rate: invented.sellingPrice,
+            category: invented.category,
+            hsn: invented.hsn,
+            cost: invented.purchasePrice,
+            mrp: invented.mrp,
+          },
+        );
+        cache.set(dedupe, matchId);
+        results.push({ index, id: matchId, status: "linked" });
+        linked += 1;
+        continue;
+      }
+
+      // Avoid SKU clash if invented code already exists — append short suffix.
+      let sku = invented.sku;
+      const skuClash = await one<{ id: string }>(deps.db, `SELECT id FROM ims_items WHERE tenant_id = :tenantId AND sku = :sku LIMIT 1`, {
+        tenantId: actor.tenantId,
+        sku,
+      });
+      if (skuClash) sku = `${sku.slice(0, 58)}-${String(index).padStart(2, "0")}`.slice(0, 64);
+
+      const id = await insertItem(
+        deps,
+        actor,
+        {
+          name,
+          sku,
+          barcode: invented.barcode,
+          brand,
+          category: invented.category,
+          unit: invented.unit,
+          hsn: invented.hsn,
+          gstRate: invented.gstRate,
+          purchasePrice: invented.purchasePrice,
+          sellingPrice: invented.sellingPrice,
+          mrp: invented.mrp,
+          minStock: invented.minStock,
+          notes: raw.notes?.trim() || invented.notes,
+          active: true,
+        },
+        null,
+        settings.allowNegativeStock,
+      );
+      cache.set(dedupe, id);
+      results.push({ index, id, status: "created" });
+      created += 1;
+    }
+
+    if (created || linked) {
+      await recordEvent(deps, actor, {
+        type: "item.ensured",
+        entityType: "item",
+        entityId: "ensure",
+        summary: `Catalogue ensure (${sourceNote}): ${created} created, ${linked} linked`,
+        payload: { created, linked, source: sourceNote },
+      });
+    }
+    res.json({ created, linked, results });
   });
 
   /** Bulk import (CSV / Excel parsed on the client). Upserts by SKU; new items may carry opening stock. */

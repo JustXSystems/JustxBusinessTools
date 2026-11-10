@@ -195,11 +195,48 @@ body.is-bom-resizing {
   z-index: 1;
 }
 
+.ims-bom-paper-brand-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.ims-bom-paper-logo {
+  display: block;
+  height: 52px;
+  width: auto;
+  max-width: 200px;
+  object-fit: contain;
+  object-position: center;
+  margin: 0 auto 2px;
+}
+
 .ims-bom-paper-brand {
   font-size: 22px;
   font-weight: 700;
   text-align: center;
   letter-spacing: 0.02em;
+}
+
+.ims-bom-paper-brand-meta {
+  text-align: center;
+  opacity: 0.75;
+  margin-top: 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 92%;
+}
+
+@media print {
+  .ims-bom-paper-logo {
+    height: 48px;
+    max-width: 180px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 
 .ims-bom-paper-title-row {
@@ -316,6 +353,15 @@ body.is-bom-resizing {
 .ims-bom-line-editor {
   display: grid;
   gap: 8px;
+}
+
+.ims-bom-line-meta {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 8px 34px;
+  font-size: 12px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .ims-bom-line-row {

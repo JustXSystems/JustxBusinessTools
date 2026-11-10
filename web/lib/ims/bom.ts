@@ -178,6 +178,8 @@ export type BomBusiness = {
   state: string | null;
   phone: string | null;
   email: string | null;
+  /** Business profile company logo (tokenized file URL). */
+  logoUrl?: string | null;
 };
 
 export type BomTotals = {

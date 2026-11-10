@@ -35,6 +35,12 @@ export const FEATURE_SWITCHES = [
     label: "Staff delete only their own bills and drafts in BOS",
     description: "Staff can delete only the vendor bills and draft invoices they created. Owners and admins can still delete any of them.",
   },
+  {
+    key: "ims.bom.sample_templates",
+    tool: "imsdealer",
+    label: "BOM sample package templates",
+    description: "Shows “Add sample templates” on BOM Packages so staff can seed Small/Large starter kits. Leave off once you use real packages or Excel import.",
+  },
 ] as const;
 
 export type FeatureSwitch = (typeof FEATURE_SWITCHES)[number];

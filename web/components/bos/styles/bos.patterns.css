@@ -167,6 +167,19 @@
   font-weight: 700;
   font-size: 11px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.bos .bos-nav-brand-mark--logo {
+  background: color-mix(in srgb, var(--bos-surface) 88%, var(--bos-border-soft));
+  border: 1px solid var(--bos-border-soft);
+  padding: 2px;
+  box-sizing: border-box;
+}
+.bos .bos-nav-brand-mark--logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 .bos .bos-nav-brand-name { font-family: var(--bos-font-display); font-weight: 700; font-size: 13px; color: var(--bos-text); }
 .bos .bos-nav-search {

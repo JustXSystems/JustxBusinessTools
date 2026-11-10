@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { BosIcon } from "../icons";
 import { cx } from "../cx";
 import { revealInline } from "../scroll";
@@ -125,13 +125,20 @@ export function AppShell<K extends string>({
   );
 }
 
-/** Logo + name for the nav header. Use `mark` for the gradient "J" tile. */
+/**
+ * Logo + name for the nav header.
+ * Prefer company `logoSrc` inside the brand-mark tile; fall back to letter `mark`.
+ */
 export function NavBrand({ name, logoSrc, mark }: { name: ReactNode; logoSrc?: string; mark?: string }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const showLogo = Boolean(logoSrc) && logoSrc !== failedSrc;
   return (
     <>
-      {logoSrc ? (
-        // eslint-disable-next-line @next/next/no-img-element -- static brand asset under the app base path
-        <img src={logoSrc} alt="" />
+      {showLogo ? (
+        <span className="bos-nav-brand-mark bos-nav-brand-mark--logo" aria-hidden="true">
+          {/* eslint-disable-next-line @next/next/no-img-element -- tenant or product mark under the app base path */}
+          <img src={logoSrc} alt="" onError={() => setFailedSrc(logoSrc ?? null)} />
+        </span>
       ) : (
         <span className="bos-nav-brand-mark" aria-hidden="true">
           {mark ?? "J"}

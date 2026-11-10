@@ -72,10 +72,13 @@ function writeUrl(ws: WorkspaceKey, module: string | undefined) {
 }
 
 function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mode: BosAppMode; onSignOut?: () => void }) {
-  const logoSrc = publicAssetUrl(BOS_LOGO);
+  const productLogo = publicAssetUrl(BOS_LOGO);
   const { theme, setTheme, toggleTheme } = useBosTheme();
   const { show } = useToast();
   const [session, setSession] = useState(initial);
+  const companyLogo = session.brand?.logoUrl ? publicAssetUrl(session.brand.logoUrl) : null;
+  /** Nav / chrome: company logo when set, else Justx product mark. */
+  const logoSrc = companyLogo || productLogo;
   const [nav, setNav] = useState<NavState>(navFromUrl);
   const [version, setVersion] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);

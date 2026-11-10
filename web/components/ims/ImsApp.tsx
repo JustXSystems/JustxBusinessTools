@@ -360,6 +360,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
 
   const actorName = session.actor.name ?? session.actor.email ?? "You";
   const businessName = session.settings.businessName || session.brand?.name || "Your business";
+  const companyLogoSrc = session.brand?.logoUrl ? publicAssetUrl(session.brand.logoUrl) : undefined;
   const Module = current.component;
   const openIntent = nav.intent?.module === current.key ? nav.intent.value : null;
 
@@ -415,7 +416,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
 
         <div className="bos-wrap ims-wrap" style={{ paddingTop: 20 }}>
           <AppShell
-            brand={<NavBrand name="IMS — Dealer" mark="I" />}
+            brand={<NavBrand name={businessName} logoSrc={companyLogoSrc} mark="I" />}
             items={modules.map((x) => ({ key: x.key, label: x.label, icon: x.icon, section: x.section, badge: navBadges.get(x.key) }))}
             active={current.key}
             onSelect={(k) => navigate(k)}

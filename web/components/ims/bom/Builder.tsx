@@ -24,11 +24,12 @@ import {
 } from "@/lib/ims/bom";
 import type { ImsItem } from "@/lib/ims/api";
 import { inr, inrExact } from "@/lib/ims/format";
+import { formatCatalogEnsureSummary, exportBomExcel } from "@/lib/ims/bom-excel";
+import { ensureBomPackageCatalog, ensureStockLinesForSave } from "@/lib/ims/ensure-catalog";
 import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
 import { ItemPickerDialog, PartySelect } from "../shared/pickers";
 import { BomPaper, modelFromDoc, type BomPaperModel } from "./BomPaper";
 import { BomSplitLayout } from "./BomSplitLayout";
-import { exportBomExcel } from "@/lib/ims/bom-excel";
 
 type View =
   | { mode: "list" }
@@ -218,7 +219,7 @@ function BomList({ onNew, onOpen }: { onNew: (packageId: string | null) => void;
 }
 
 function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onEdit: () => void }) {
-  const { can, navigate } = useIms();
+  const { can, navigate, session } = useIms();
   const { run, busy } = useImsAction();
   const print = usePrint();
   const state = useImsData(() => bom.doc(id), [id]);
@@ -245,7 +246,10 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
   if (!state.data && !state.error) return <LoadingBlock />;
   if (state.error || !state.data || !doc) return <ErrorBlock error={state.error ?? new Error("Not found")} onRetry={state.reload} />;
 
-  const { business } = state.data;
+  const business = {
+    ...state.data.business,
+    logoUrl: state.data.business.logoUrl || session.brand?.logoUrl || null,
+  };
   const model = modelFromDoc(doc, business);
   const confirmed = doc.status === "confirmed";
   const stockable = (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0).length;
@@ -576,6 +580,7 @@ function BomEditor({
           state: null,
           phone: null,
           email: null,
+          logoUrl: null,
         }
       }
       fromPackage={pkgState.data}
@@ -682,6 +687,7 @@ function BomEditorForm({
       state: business.state || settings.state,
       phone: business.phone || settings.phone,
       email: business.email || settings.email,
+      logoUrl: business.logoUrl || session.brand?.logoUrl || null,
     },
     docNo: initial?.docNo ?? "Draft",
     docDate,
@@ -782,13 +788,45 @@ function BomEditorForm({
   });
 
   const save = async () => {
+    const ensured = await run(
+      "ensure-catalog",
+      () => ensureStockLinesForSave(lines.filter((l) => l.description.trim()), { source: "BOM document save", rateKey: "rate" }),
+      { refresh: false },
+    );
+    const synced = ensured?.lines ?? lines.filter((l) => l.description.trim());
+    if (ensured?.lines) {
+      setLines((prev) =>
+        prev.map((l) => {
+          const s = synced.find((x) => x.key === l.key);
+          return s ? { ...l, ...s, baseQty: l.baseQty } : l;
+        }),
+      );
+    }
     const body = payload();
+    body.lines = synced.map((l, i) => ({
+      id: l.id,
+      section: l.section.trim() || "Main Items",
+      sortNo: i,
+      lineKind: l.lineKind,
+      itemId: l.itemId ?? null,
+      description: l.description.trim(),
+      makeText: l.makeText?.trim() || null,
+      qty: Number(l.qty) || 0,
+      unit: l.unit.trim() || "nos",
+      scaleByCapacity: Boolean(l.scaleByCapacity),
+      rate: Number(l.rate) || 0,
+      remarks: l.remarks?.trim() || null,
+    }));
     if (!body.lines.length) return;
+    const syncNote =
+      ensured?.summary && (ensured.summary.created || ensured.summary.matched)
+        ? formatCatalogEnsureSummary(ensured.summary)
+        : undefined;
     if (initial) {
-      const out = await run("save", () => bom.saveDoc(initial.id, body), { success: "BOM saved" });
+      const out = await run("save", () => bom.saveDoc(initial.id, body), { success: "BOM saved", description: syncNote });
       if (out?.doc) onSaved(out.doc.id);
     } else {
-      const out = await run("create", () => bom.createDoc(body), { success: "BOM created" });
+      const out = await run("create", () => bom.createDoc(body), { success: "BOM created", description: syncNote });
       if (out?.doc) onSaved(out.doc.id);
     }
   };
@@ -797,7 +835,7 @@ function BomEditorForm({
     <Stack>
       <PageHeader
         title={initial ? `Edit ${initial.docNo}` : "New BOM"}
-        sub="Compose on the left — live paper preview on the right. Print uses the browser PDF dialog."
+        sub="Stock lines sync to Inventory Items on save. Compose left — live preview right."
         actions={
           <>
             <Button variant="ghost" onClick={onBack}>
@@ -805,6 +843,55 @@ function BomEditorForm({
             </Button>
             <Button variant="ghost" onClick={print}>
               Print / PDF
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={Boolean(busy)}
+              onClick={async () => {
+                const out = await run("sync-inventory", async () => {
+                  const { packages: next, summary } = await ensureBomPackageCatalog(
+                    [
+                      {
+                        name: "doc",
+                        lines: lines.map(({ key: _k, rate, ...rest }) => ({
+                          ...rest,
+                          defaultRate: rate,
+                        })),
+                      },
+                    ],
+                    { source: "BOM document sync" },
+                  );
+                  const linked = next[0]?.lines ?? [];
+                  setLines((prev) =>
+                    prev.map((l, i) => {
+                      const m = linked[i];
+                      if (!m?.itemId) return l;
+                      return {
+                        ...l,
+                        itemId: m.itemId,
+                        unit: m.unit || l.unit,
+                        rate: l.rate || m.defaultRate || 0,
+                        makeText: l.makeText || m.makeText || "",
+                      };
+                    }),
+                  );
+                  return summary;
+                });
+                if (out) {
+                  await run(
+                    "sync-summary",
+                    async () => true,
+                    {
+                      success: "Inventory sync finished",
+                      description: formatCatalogEnsureSummary(out),
+                      tone: out.ambiguous || out.unmatched ? "amber" : "emerald",
+                      refresh: false,
+                    },
+                  );
+                }
+              }}
+            >
+              Sync inventory
             </Button>
             <Button onClick={() => void save()} disabled={Boolean(busy) || !lines.some((l) => l.description.trim())}>
               Save
@@ -905,16 +992,20 @@ function BomEditorForm({
                           ×
                         </Button>
                       </div>
-                      <div style={{ display: "flex", gap: 8, margin: "4px 0 8px 34px", fontSize: 12, flexWrap: "wrap", alignItems: "center" }}>
+                      <div className="ims-bom-line-meta">
                         <Button size="sm" variant="ghost" onClick={() => setPickFor(l.key)}>
-                          {l.itemId ? "Change item" : "Link catalogue item"}
+                          {l.itemId ? "Change item" : "Pick inventory item"}
                         </Button>
                         {l.itemId ? (
                           <Button size="sm" variant="ghost" onClick={() => updateLine(l.key, { itemId: null })}>
                             Unlink
                           </Button>
                         ) : null}
-                        {l.itemId ? <span style={{ opacity: 0.6 }}>Linked</span> : null}
+                        {l.itemId ? (
+                          <Badge tone="emerald">In inventory</Badge>
+                        ) : l.lineKind === "stock" && l.description.trim() ? (
+                          <Badge tone="amber">Will sync on save</Badge>
+                        ) : null}
                         <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
                           <input
                             type="checkbox"
@@ -949,7 +1040,9 @@ function BomEditorForm({
       <ItemPickerDialog
         open={Boolean(pickFor)}
         onClose={() => setPickFor(null)}
-        title="Link catalogue item"
+        title="Link inventory item"
+        allowCreate
+        createHint={pickFor ? lines.find((l) => l.key === pickFor)?.description : undefined}
         onPick={(item) => {
           if (pickFor) linkItem(pickFor, item);
         }}

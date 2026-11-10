@@ -478,6 +478,31 @@ export const ims = {
   updateItem: (id: string, input: Partial<ItemInput>) => patch<{ item: ImsItem }>(`/items/${id}`, input),
   deleteItem: (id: string) => del<{ archived?: boolean } | undefined>(`/items/${id}`),
   importItems: (items: Array<Record<string, unknown>>) => post<{ created: number; updated: number; errors: string[] }>("/items/bulk", { items }),
+  /** Link existing catalogue rows or create missing ones (BOM + Items). */
+  ensureItems: (input: {
+    source?: string;
+    items: Array<{
+      /** Item Description → Item name */
+      name: string;
+      /** Vendor / Make → Brand */
+      brand?: string | null;
+      sku?: string | null;
+      barcode?: string | null;
+      /** Unit → Unit */
+      unit?: string;
+      /** Price Per Unit → Selling price */
+      sellingPrice?: number;
+      category?: string | null;
+      section?: string | null;
+      remarks?: string | null;
+      typicalQty?: number;
+      notes?: string | null;
+    }>;
+  }) =>
+    post<{ created: number; linked: number; results: Array<{ index: number; id: string; status: "linked" | "created" }> }>(
+      "/items/ensure",
+      input,
+    ),
   inventoryMeta: () => get<{ taxonomy: Taxonomy; suppliers: Array<{ id: string; name: string }>; allowNegativeStock: boolean; canSeeCost: boolean }>("/inventory/meta"),
 
   postMovements: (input: MovementInput) => post<{ movements: PostedMovement[] }>("/movements", input),

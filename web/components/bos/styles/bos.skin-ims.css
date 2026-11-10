@@ -525,8 +525,22 @@
   }
 }
 .bos[data-bos-skin="ims"] .bos-nav-brand { padding: 4px 8px 14px; gap: 10px; border-bottom: 1px solid var(--bos-border-soft); margin-bottom: 6px; }
-.bos[data-bos-skin="ims"] .bos-nav-brand img { width: 36px; height: 36px; border-radius: var(--bos-r-xl); border: 1px solid var(--bos-border-soft); object-fit: cover; }
+.bos[data-bos-skin="ims"] .bos-nav-brand > img { width: 36px; height: 36px; border-radius: var(--bos-r-xl); border: 1px solid var(--bos-border-soft); object-fit: contain; background: var(--bos-surface); }
 .bos[data-bos-skin="ims"] .bos-nav-brand-mark { width: 36px; height: 36px; border-radius: var(--bos-r-xl); background: var(--bos-ims-grad); box-shadow: var(--bos-ims-glow); font-size: 15px; }
+.bos[data-bos-skin="ims"] .bos-nav-brand-mark--logo {
+  background: var(--bos-surface);
+  border: 1px solid var(--bos-border-soft);
+  box-shadow: none;
+  padding: 3px;
+}
+.bos[data-bos-skin="ims"] .bos-nav-brand-mark--logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
 .bos[data-bos-skin="ims"] .bos-nav-brand-name { font-weight: 650; font-size: 15px; letter-spacing: -0.01em; }
 .bos[data-bos-skin="ims"] .bos-nav-search { border-radius: var(--bos-r-md); background: var(--bos-surface); border-color: var(--bos-border-soft); font-size: 13px; padding: 9px 12px; }
 .bos[data-bos-skin="ims"] .bos-nav-label {

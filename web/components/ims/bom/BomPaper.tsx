@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
+import { publicAssetUrl } from "@/lib/base-path";
 import { inrExact, qtyText } from "@/lib/ims/format";
 import type { BomBusiness, BomDoc, BomDocLine, BomTotals } from "@/lib/ims/bom";
 
@@ -48,6 +49,8 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness): BomPaperModel 
 /** Printable commercial BOM sheet (not a GST tax invoice). */
 export function BomPaper({ model }: { model: BomPaperModel }) {
   const b = model.business;
+  const [logoFailed, setLogoFailed] = useState(false);
+  const logoSrc = !logoFailed && b.logoUrl ? publicAssetUrl(b.logoUrl) : "";
   const sections: Array<{ name: string; lines: BomPaperModel["lines"]; start: number }> = [];
   let idx = 0;
   for (const line of model.lines) {
@@ -69,10 +72,21 @@ export function BomPaper({ model }: { model: BomPaperModel }) {
   return (
     <article className="ims-bom-paper bos-inv-paper" aria-label="Bill of materials">
       {watermark ? <div className="ims-bom-paper-watermark" aria-hidden="true">{watermark}</div> : null}
-      <div className="ims-bom-paper-brand">{b.name || "Your business"}</div>
-      <div style={{ textAlign: "center", opacity: 0.75, marginTop: 2, whiteSpace: "pre-wrap" }}>
-        {[b.address, b.state, b.gstin ? `GSTIN ${b.gstin}` : null, b.phone, b.email].filter(Boolean).join(" · ")}
-      </div>
+      <header className="ims-bom-paper-brand-block">
+        {logoSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element -- tenant logo from /api/files
+          <img
+            className="ims-bom-paper-logo"
+            src={logoSrc}
+            alt=""
+            onError={() => setLogoFailed(true)}
+          />
+        ) : null}
+        <div className="ims-bom-paper-brand">{b.name || "Your business"}</div>
+        <div className="ims-bom-paper-brand-meta">
+          {[b.address, b.state, b.gstin ? `GSTIN ${b.gstin}` : null, b.phone, b.email].filter(Boolean).join(" · ")}
+        </div>
+      </header>
 
       <div className="ims-bom-paper-title-row">
         <div className="ims-bom-paper-title">BILL OF MATERIALS</div>

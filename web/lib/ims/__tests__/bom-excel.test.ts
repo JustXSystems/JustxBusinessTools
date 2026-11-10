@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import { inferBaseQty } from "../bom";
-import { applyCatalogMatches, matchCatalogItem, parseBomPackageWorkbook } from "../bom-excel";
+import { applyCatalogMatches, formatCatalogEnsureSummary, matchCatalogItem, parseBomPackageWorkbook } from "../bom-excel";
 
 describe("inferBaseQty", () => {
   it("unscales saved qty using capacity", () => {
@@ -48,6 +48,11 @@ describe("matchCatalogItem", () => {
     expect(summary.ambiguous).toBe(1);
     expect(packages[0]!.lines![0]!.itemId).toBe("1");
     expect(packages[0]!.lines![1]!.itemId).toBeFalsy();
+  });
+
+  it("formats ensure summary for toasts", () => {
+    expect(formatCatalogEnsureSummary({ matched: 3, created: 5, ambiguous: 1, unmatched: 0 })).toContain("5 created");
+    expect(formatCatalogEnsureSummary({ matched: 3, created: 5, ambiguous: 1, unmatched: 0 })).toContain("need a pick");
   });
 });
 

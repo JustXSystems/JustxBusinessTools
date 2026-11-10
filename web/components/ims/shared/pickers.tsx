@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Badge, Button, Dialog, Input, Select } from "@/components/bos";
 import { ims, type ImsItem, type PartyOption } from "@/lib/ims/api";
 import { inr, qtyText, stockBadge } from "@/lib/ims/format";
-import { useImsData } from "../core";
+import { useImsAction, useImsData } from "../core";
 
 /** All active items, loaded once per mount (and after mutations). Filter client-side for instant search. */
 export function useItemCatalog() {
@@ -27,22 +27,49 @@ export function ItemSearch({
   placeholder = "Search name, SKU or scan barcode…",
   exclude,
   autoFocus,
+  allowCreate = false,
+  createHint,
 }: {
   onPick: (item: ImsItem) => void;
   price?: "selling" | "purchase";
   placeholder?: string;
   exclude?: ReadonlySet<string>;
   autoFocus?: boolean;
+  /** When search misses, offer create-and-link into Inventory Items. */
+  allowCreate?: boolean;
+  createHint?: string;
 }) {
   const catalog = useItemCatalog();
-  const [q, setQ] = useState("");
+  const { run, busy } = useImsAction();
+  const [q, setQ] = useState(createHint?.trim() || "");
   const hits = useMemo(() => (catalog.data ?? []).filter((i) => !exclude?.has(i.id) && matchItem(i, q)).slice(0, 30), [catalog.data, q, exclude]);
   const pick = (item: ImsItem) => {
     onPick(item);
     setQ("");
   };
+  const createLabel = q.trim() || createHint?.trim() || "";
+  const createAndLink = async () => {
+    if (!createLabel || busy) return;
+    const out = await run(
+      "ensure-item",
+      async () => {
+        const ensured = await ims.ensureItems({
+          source: "Item picker",
+          items: [{ name: createLabel, unit: "nos", sellingPrice: 0 }],
+        });
+        const id = ensured.results[0]?.id;
+        if (!id) throw new Error("Could not create inventory item");
+        const fresh = await ims.item(id);
+        catalog.reload();
+        return fresh.item;
+      },
+      { success: "Inventory item ready", refresh: false },
+    );
+    if (out) pick(out);
+  };
+
   return (
-    <div>
+    <div className="ims-item-search">
       <Input
         autoFocus={autoFocus}
         placeholder={placeholder}
@@ -75,9 +102,23 @@ export function ItemSearch({
             </button>
           ))
         ) : (
-          <p className="ims-faint">{q ? `No items match “${q}”.` : "No items yet — add them in Items."}</p>
+          <div className="ims-item-search-empty">
+            <p className="ims-faint">{q ? `No items match “${q}”.` : "No items yet — create the first from here or Items."}</p>
+            {allowCreate && createLabel ? (
+              <Button size="sm" disabled={Boolean(busy)} onClick={() => void createAndLink()}>
+                Create “{createLabel.slice(0, 48)}{createLabel.length > 48 ? "…" : ""}” in inventory
+              </Button>
+            ) : null}
+          </div>
         )}
       </div>
+      {allowCreate && hits.length > 0 && createLabel && !hits.some((h) => h.name.toLowerCase() === createLabel.toLowerCase()) ? (
+        <div className="ims-item-search-create">
+          <Button size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => void createAndLink()}>
+            Or create “{createLabel.slice(0, 40)}{createLabel.length > 40 ? "…" : ""}” as new inventory item
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -90,6 +131,8 @@ export function ItemPickerDialog({
   price,
   title = "Add items",
   exclude,
+  allowCreate = false,
+  createHint,
 }: {
   open: boolean;
   onClose: () => void;
@@ -97,20 +140,28 @@ export function ItemPickerDialog({
   price?: "selling" | "purchase";
   title?: string;
   exclude?: ReadonlySet<string>;
+  allowCreate?: boolean;
+  createHint?: string;
 }) {
   return (
     <Dialog
       open={open}
       onClose={onClose}
       title={title}
-      description="Pick as many as you need — press Enter to add the first match."
+      description={
+        allowCreate
+          ? "Search the inventory catalogue, or create a missing item and link it in one step."
+          : "Pick as many as you need — press Enter to add the first match."
+      }
       actions={
         <Button variant="primary" onClick={onClose}>
           Done
         </Button>
       }
     >
-      {open ? <ItemSearch onPick={onPick} price={price} exclude={exclude} autoFocus /> : null}
+      {open ? (
+        <ItemSearch onPick={onPick} price={price} exclude={exclude} autoFocus allowCreate={allowCreate} createHint={createHint} />
+      ) : null}
     </Dialog>
   );
 }

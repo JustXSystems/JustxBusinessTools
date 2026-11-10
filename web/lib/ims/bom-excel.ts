@@ -17,7 +17,17 @@ export type CatalogMatchItem = {
 
 export type CatalogMatchConfidence = "exact" | "strong" | "ambiguous" | "none";
 
-export type CatalogMatchSummary = { matched: number; ambiguous: number; unmatched: number };
+export type CatalogMatchSummary = { matched: number; ambiguous: number; unmatched: number; created?: number };
+
+export function formatCatalogEnsureSummary(summary: CatalogMatchSummary): string {
+  const parts = [
+    `${summary.matched} linked`,
+    `${summary.created ?? 0} created in inventory`,
+  ];
+  if (summary.ambiguous) parts.push(`${summary.ambiguous} need a pick`);
+  if (summary.unmatched) parts.push(`${summary.unmatched} still open`);
+  return parts.join(" · ");
+}
 
 type ParsedLine = BomPackageLineInput & { skuHint?: string | null };
 
@@ -218,12 +228,17 @@ export async function parseBomPackageWorkbook(file: File): Promise<BomPackageInp
 
     // Map columns by header text
     const headers = (grid[headerRow] ?? []).map((h) => String(h ?? "").toLowerCase());
+    // Inventory map: Item Description→name, Vendor/Make→brand, Unit→unit, Price/Unit→sellingPrice
     const idx = {
       desc: headers.findIndex((h) => h.includes("item") || h.includes("description")),
-      make: headers.findIndex((h) => h.includes("make") || h.includes("brand")),
+      make: (() => {
+        const preferred = headers.findIndex((h) => h.includes("make") || h.includes("brand"));
+        if (preferred >= 0) return preferred;
+        return headers.findIndex((h) => h.includes("vendor") || h.includes("manufacturer"));
+      })(),
       qty: headers.findIndex((h) => h === "qty" || h.includes("qty") || h.includes("quantity")),
-      unit: headers.findIndex((h) => h.includes("unit")),
-      rate: headers.findIndex((h) => h.includes("price") || h.includes("rate")),
+      unit: headers.findIndex((h) => h.includes("unit") && !h.includes("price")),
+      rate: headers.findIndex((h) => h.includes("price") || h.includes("rate") || h.includes("price/unit") || h.includes("price per")),
       remarks: headers.findIndex((h) => h.includes("remark")),
       sl: headers.findIndex((h) => h.includes("sl") || h === "#" || h.includes("sno")),
       sku: headers.findIndex((h) => h.includes("sku") || h.includes("item code") || h === "code" || h.includes("barcode")),

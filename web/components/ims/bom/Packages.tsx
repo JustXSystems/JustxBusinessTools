@@ -11,10 +11,14 @@ import {
   type BomPackage,
   type BomPackageLineInput,
 } from "@/lib/ims/bom";
-import { ims, type ImsItem } from "@/lib/ims/api";
-import { applyCatalogMatches, parseBomPackageWorkbook } from "@/lib/ims/bom-excel";
+import { type ImsItem } from "@/lib/ims/api";
+import { formatCatalogEnsureSummary, parseBomPackageWorkbook } from "@/lib/ims/bom-excel";
+import { ensureBomPackageCatalog, ensureStockLinesForSave } from "@/lib/ims/ensure-catalog";
+import { useFeatureSwitch } from "@/components/config/ConfigProvider";
 import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useImsAction, useImsData, useOpenIntent } from "../core";
 import { ItemPickerDialog } from "../shared/pickers";
+
+const SAMPLE_TEMPLATES_SWITCH = "ims.bom.sample_templates";
 
 type View = { mode: "list" } | { mode: "edit"; id: string | null };
 
@@ -54,14 +58,16 @@ function PackageList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string
   const state = useImsData(() => bom.packages({ active: false, limit: 200 }), []);
   const packages = state.data?.packages ?? [];
   const fileRef = useRef<HTMLInputElement>(null);
+  const sampleTemplatesOn = useFeatureSwitch(SAMPLE_TEMPLATES_SWITCH);
 
   const importExcel = async (file: File) => {
     const parsed = await parseBomPackageWorkbook(file);
     if (!parsed.length) throw new Error("No package sheets found in that workbook");
-    const catalog = await ims.items({ includeInactive: false }).then((r) => r.items);
-    const { packages: matched, summary } = applyCatalogMatches(parsed, catalog);
+    const { packages: ensured, summary } = await ensureBomPackageCatalog(parsed, {
+      source: "BOM Excel import",
+    });
     let created = 0;
-    for (const pkg of matched) {
+    for (const pkg of ensured) {
       await bom.createPackage(pkg);
       created += 1;
     }
@@ -72,7 +78,7 @@ function PackageList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string
     <Stack>
       <PageHeader
         title="BOM packages"
-        sub="Reusable bill-of-materials templates for any industry — kits, project packages, assemblies."
+        sub="Reusable materials templates. Excel import syncs every stock line into Inventory Items (link or create)."
         actions={
           <>
             <input
@@ -95,7 +101,7 @@ function PackageList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string
                     async () => true,
                     {
                       success: `Imported ${created} package${created === 1 ? "" : "s"}`,
-                      description: `Catalogue: ${summary.matched} matched · ${summary.ambiguous} ambiguous · ${summary.unmatched} unmatched`,
+                      description: formatCatalogEnsureSummary(summary),
                       tone: summary.ambiguous || summary.unmatched ? "amber" : "emerald",
                       refresh: false,
                     },
@@ -107,16 +113,18 @@ function PackageList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string
             <Button variant="ghost" disabled={Boolean(busy)} onClick={() => fileRef.current?.click()}>
               Import Excel
             </Button>
-            <Button
-              variant="ghost"
-              disabled={Boolean(busy)}
-              onClick={async () => {
-                const out = await run("seed", () => bom.seedSamples(), { success: "Sample packages added" });
-                if (out) state.reload();
-              }}
-            >
-              Add sample templates
-            </Button>
+            {sampleTemplatesOn ? (
+              <Button
+                variant="ghost"
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  const out = await run("seed", () => bom.seedSamples(), { success: "Sample packages added" });
+                  if (out) state.reload();
+                }}
+              >
+                Add sample templates
+              </Button>
+            ) : null}
             <Button onClick={onNew}>New package</Button>
           </>
         }
@@ -127,17 +135,23 @@ function PackageList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string
         <EmptyState
           title="No packages yet"
           actions={
-            <Button
-              onClick={async () => {
-                const out = await run("seed", () => bom.seedSamples(), { success: "Sample packages added" });
-                if (out) state.reload();
-              }}
-            >
-              Add sample templates
-            </Button>
+            <>
+              <Button onClick={onNew}>New package</Button>
+              {sampleTemplatesOn ? (
+                <Button
+                  variant="ghost"
+                  onClick={async () => {
+                    const out = await run("seed", () => bom.seedSamples(), { success: "Sample packages added" });
+                    if (out) state.reload();
+                  }}
+                >
+                  Add sample templates
+                </Button>
+              ) : null}
+            </>
           }
         >
-          Create a template once, then generate customer BOMs from it in BOM Builder.
+          Create a template once, or import Excel — then generate customer BOMs from it in BOM Builder.
         </EmptyState>
       ) : null}
       {packages.length ? (
@@ -204,6 +218,14 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
   }, [lines]);
 
   const save = async () => {
+    if (!name.trim()) return;
+    const ensured = await run(
+      "ensure-catalog",
+      () => ensureStockLinesForSave(lines.filter((l) => l.description.trim()), { source: "BOM package save" }),
+      { refresh: false },
+    );
+    const synced = ensured?.lines ?? lines.filter((l) => l.description.trim());
+    if (ensured?.lines) setLines((prev) => prev.map((l) => synced.find((s) => s.key === l.key) ?? l));
     const body = {
       code: code.trim() || null,
       name: name.trim(),
@@ -212,28 +234,37 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
       defaultMarginPct: Number(marginPct) || 0,
       defaultTaxPct: Number(taxPct) || 0,
       active,
-      lines: lines
-        .filter((l) => l.description.trim())
-        .map((l, i) => ({
-          id: l.id,
-          section: l.section.trim() || "Main Items",
-          sortNo: i,
-          lineKind: l.lineKind,
-          itemId: l.itemId ?? null,
-          description: l.description.trim(),
-          makeText: l.makeText?.trim() || null,
-          qty: Number(l.qty) || 0,
-          unit: l.unit.trim() || "nos",
-          scaleByCapacity: Boolean(l.scaleByCapacity),
-          defaultRate: Number(l.defaultRate) || 0,
-          remarks: l.remarks?.trim() || null,
-          active: l.active !== false,
-        })),
+      lines: synced.map((l, i) => ({
+        id: l.id,
+        section: l.section.trim() || "Main Items",
+        sortNo: i,
+        lineKind: l.lineKind,
+        itemId: l.itemId ?? null,
+        description: l.description.trim(),
+        makeText: l.makeText?.trim() || null,
+        qty: Number(l.qty) || 0,
+        unit: l.unit.trim() || "nos",
+        scaleByCapacity: Boolean(l.scaleByCapacity),
+        defaultRate: Number(l.defaultRate) || 0,
+        remarks: l.remarks?.trim() || null,
+        active: l.active !== false,
+      })),
     };
-    if (!body.name) return;
     const out = initial
-      ? await run("save", () => bom.savePackage(initial.id, body), { success: "Package saved" })
-      : await run("create", () => bom.createPackage(body), { success: "Package created" });
+      ? await run("save", () => bom.savePackage(initial.id, body), {
+          success: "Package saved",
+          description:
+            ensured?.summary && (ensured.summary.created || ensured.summary.matched)
+              ? formatCatalogEnsureSummary(ensured.summary)
+              : undefined,
+        })
+      : await run("create", () => bom.createPackage(body), {
+          success: "Package created",
+          description:
+            ensured?.summary && (ensured.summary.created || ensured.summary.matched)
+              ? formatCatalogEnsureSummary(ensured.summary)
+              : undefined,
+        });
     if (out) onBack();
   };
 
@@ -267,7 +298,7 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
     <Stack>
       <PageHeader
         title={initial ? "Edit package" : "New package"}
-        sub="Templates are industry-neutral. Link stock lines to catalogue items when you have them."
+        sub="Stock lines sync to Inventory Items — existing catalogue rows are linked; missing ones are created on sync or save."
         actions={
           <>
             <Button variant="ghost" onClick={onBack}>
@@ -308,17 +339,16 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
               variant="ghost"
               disabled={Boolean(busy)}
               onClick={async () => {
-                const out = await run("match", async () => {
-                  const catalog = await ims.items({ includeInactive: false }).then((r) => r.items);
-                  const { packages: next, summary } = applyCatalogMatches(
+                const out = await run("sync-inventory", async () => {
+                  const { packages: next, summary } = await ensureBomPackageCatalog(
                     [{ name, lines: lines.map(({ key: _k, ...rest }) => rest) }],
-                    catalog,
+                    { source: "BOM package sync" },
                   );
                   const linked = next[0]?.lines ?? [];
                   setLines((prev) =>
                     prev.map((l, i) => {
                       const m = linked[i];
-                      if (!m?.itemId || l.itemId) return l;
+                      if (!m?.itemId) return l;
                       return {
                         ...l,
                         itemId: m.itemId,
@@ -332,11 +362,11 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
                 });
                 if (out) {
                   await run(
-                    "match-summary",
+                    "sync-summary",
                     async () => true,
                     {
-                      success: "Catalogue match finished",
-                      description: `${out.matched} linked · ${out.ambiguous} ambiguous · ${out.unmatched} unmatched`,
+                      success: "Inventory sync finished",
+                      description: formatCatalogEnsureSummary(out),
                       tone: out.ambiguous || out.unmatched ? "amber" : "emerald",
                       refresh: false,
                     },
@@ -344,7 +374,7 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
                 }
               }}
             >
-              Match catalogue
+              Sync inventory
             </Button>
             <Button onClick={() => void save()} disabled={Boolean(busy) || !name.trim()}>
               Save package
@@ -386,8 +416,8 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
         </div>
       </Card>
 
-      <Alert tone="blue" title="Line kinds">
-        Stock lines can later post inventory. Service / overhead / capacity-scaled lines stay commercial (no stock movement).
+      <Alert tone="blue" title="Inventory-backed stock lines">
+        Excel / line map → Inventory: Description → name · Vendor/Make → brand · Unit → unit · Price/unit → selling price. Other catalogue fields (SKU, barcode, category, HSN, GST, estimated cost) are invented when an item is created. Service, overhead and capacity-scaled lines stay commercial only.
       </Alert>
 
       {sections.map((section) => (
@@ -425,16 +455,20 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
                       ×
                     </Button>
                   </div>
-                  <div style={{ display: "flex", gap: 8, margin: "4px 0 8px 34px", fontSize: 12, flexWrap: "wrap", alignItems: "center" }}>
+                  <div className="ims-bom-line-meta">
                     <Button size="sm" variant="ghost" onClick={() => setPickFor(l.key)}>
-                      {l.itemId ? "Change item" : "Link catalogue item"}
+                      {l.itemId ? "Change item" : "Pick inventory item"}
                     </Button>
                     {l.itemId ? (
                       <Button size="sm" variant="ghost" onClick={() => updateLine(l.key, { itemId: null })}>
                         Unlink
                       </Button>
                     ) : null}
-                    {l.itemId ? <span style={{ opacity: 0.6 }}>Linked</span> : null}
+                    {l.itemId ? (
+                      <Badge tone="emerald">In inventory</Badge>
+                    ) : l.lineKind === "stock" && l.description.trim() ? (
+                      <Badge tone="amber">Will sync on save</Badge>
+                    ) : null}
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
                       <input
                         type="checkbox"
@@ -465,7 +499,9 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
       <ItemPickerDialog
         open={Boolean(pickFor)}
         onClose={() => setPickFor(null)}
-        title="Link catalogue item"
+        title="Link inventory item"
+        allowCreate
+        createHint={pickFor ? lines.find((l) => l.key === pickFor)?.description : undefined}
         onPick={(item) => {
           if (pickFor) linkItem(pickFor, item);
         }}

@@ -1,9 +1,11 @@
 import type { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { getOrgFeatureSwitches } from "../lib/feature-switches.js";
+import { getRequestContext } from "../lib/request-context.js";
 import { actorOf, isoDate, optText, parse, parsePatch, qint, qstr, recordEvent, requirePerm, type ImsDeps } from "./context.js";
 import { exec, isoOf, likeOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
-import { badRequest, conflict, notFound } from "./host.js";
+import { badRequest, conflict, forbidden, notFound } from "./host.js";
 import { round2, round3, todayISO, type ImsLineInput } from "./logic.js";
 import { createLinkedInvoice } from "./sales.js";
 import { getSettings } from "./settings.js";
@@ -763,6 +765,11 @@ export function registerBom(router: Router, deps: ImsDeps): void {
 
   router.post("/bom/packages/seed-samples", async (_req, res) => {
     requirePerm(res, "bom");
+    const ctx = getRequestContext();
+    const features = ctx ? await getOrgFeatureSwitches(ctx.organizationId) : null;
+    if (!features?.["ims.bom.sample_templates"]) {
+      throw forbidden("Sample BOM templates are turned off. An admin can enable them in Admin → Tools → Justx IMS — Dealer → Switches.");
+    }
     const actor = actorOf(res);
     const created: BomPackage[] = [];
     await tx(deps.db, async (conn) => {
@@ -841,7 +848,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const actor = actorOf(res);
     const doc = await loadDoc(deps.db, actor.tenantId, String(req.params.id));
     if (!doc) throw notFound("BOM document not found");
-    const settings = await getSettings(deps, actor.tenantId);
+    const [settings, brand] = await Promise.all([getSettings(deps, actor.tenantId), deps.host.brand(actor.tenantId)]);
     let linkedInvoice: { id: string; status: string; stockPosted: boolean } | null = null;
     if (doc.invoiceId) {
       const inv = await one<{ id: string; status: string; stock_posted: number }>(
@@ -861,6 +868,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         state: settings.state,
         phone: settings.phone,
         email: settings.email,
+        logoUrl: brand.logoUrl ?? null,
       },
     });
   });
