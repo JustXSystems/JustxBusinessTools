@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BOM_PAPER_ERA_FILTERS,
   BOM_PAPER_TEMPLATES,
   BOM_PAPER_TEMPLATE_META,
   bomCostComposition,
@@ -13,28 +14,20 @@ import {
 describe("bom-paper templates", () => {
   it("normalizes known and unknown ids", () => {
     expect(normalizeBomPaperTemplate("tiered")).toBe("tiered");
-    expect(normalizeBomPaperTemplate("AURORA")).toBe("aurora");
-    expect(normalizeBomPaperTemplate("prism")).toBe("prism");
+    expect(normalizeBomPaperTemplate("ORBIT")).toBe("orbit");
+    expect(normalizeBomPaperTemplate("folio")).toBe("folio");
     expect(normalizeBomPaperTemplate("nope")).toBe("classic");
     expect(normalizeBomPaperTemplate(null)).toBe("classic");
   });
 
-  it("exposes nine marketplace layouts with meta", () => {
-    expect(BOM_PAPER_TEMPLATES).toEqual([
-      "classic",
-      "tiered",
-      "epc",
-      "executive",
-      "field",
-      "aurora",
-      "ledger",
-      "atelier",
-      "prism",
-    ]);
-    expect(BOM_PAPER_TEMPLATE_META).toHaveLength(9);
+  it("exposes thirteen marketplace layouts with compact meta", () => {
+    expect(BOM_PAPER_TEMPLATES).toHaveLength(13);
+    expect(BOM_PAPER_TEMPLATE_META).toHaveLength(13);
+    expect(BOM_PAPER_ERA_FILTERS[0]!.id).toBe("all");
     for (const id of BOM_PAPER_TEMPLATES) {
       const meta = bomPaperTemplateMeta(id);
       expect(meta.id).toBe(id);
+      expect(meta.short.length).toBeGreaterThan(0);
       expect(meta.label.length).toBeGreaterThan(0);
       expect(meta.era.length).toBeGreaterThan(0);
       expect(meta.features.length).toBeGreaterThan(0);

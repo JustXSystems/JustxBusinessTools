@@ -123,7 +123,11 @@ export type BomPaperTemplateId =
   | "aurora"
   | "ledger"
   | "atelier"
-  | "prism";
+  | "prism"
+  | "orbit"
+  | "forge"
+  | "nova"
+  | "folio";
 
 export type ImsSettings = {
   businessName: string;

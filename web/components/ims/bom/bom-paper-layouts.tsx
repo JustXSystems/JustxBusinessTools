@@ -1023,3 +1023,349 @@ export function PrismBomPaper({ model }: { model: BomPaperModel }) {
     </PaperShell>
   );
 }
+
+/* ---------- Orbit — digital proposal cockpit ---------- */
+
+export function OrbitBomPaper({ model }: { model: BomPaperModel }) {
+  const sections = groupBomSections(model.lines, model.totals.materialsTotal);
+  const c = bomCostComposition(model.totals);
+  const lineCount = model.lines.length;
+  return (
+    <PaperShell model={model} title="ORBIT" tpl="orbit" badge={<div className="ims-bom-paper-chip">Cockpit</div>}>
+      <div className="ims-bom-orbit-kpis">
+        <div>
+          <b>Capacity</b>
+          <span>{model.capacityLabel || "—"}</span>
+        </div>
+        <div>
+          <b>Lines</b>
+          <span>{lineCount}</span>
+        </div>
+        <div>
+          <b>Sections</b>
+          <span>{sections.length}</span>
+        </div>
+        <div>
+          <b>Materials</b>
+          <span>{inrExact(c.materials)}</span>
+        </div>
+        <div className="is-total">
+          <b>Grand total</b>
+          <span>{inrExact(c.grand)}</span>
+        </div>
+      </div>
+      <PartyBlock model={model} />
+      <CompositionBars sections={sections} />
+      <CostRibbon model={model} />
+      <table className="bos-inv-paper-table ims-bom-orbit-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Component</th>
+            <th>Kind</th>
+            <th>Make</th>
+            <th>Qty</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sections.length ? (
+            sections.flatMap((sec) =>
+              sec.lines.map((l, i) => (
+                <tr key={`${sec.name}-${i}`}>
+                  <td>{i + 1}</td>
+                  <td style={{ whiteSpace: "normal" }}>
+                    <strong className="ims-bom-orbit-sec">{sec.name}</strong>
+                    {l.description}
+                    {l.remarks ? <small>{l.remarks}</small> : null}
+                  </td>
+                  <td>
+                    {lineKindLabel(l.lineKind) ? (
+                      <span className={`ims-bom-kind ims-bom-kind--${l.lineKind}`}>{lineKindLabel(l.lineKind)}</span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td style={{ whiteSpace: "normal" }}>{l.makeText || "—"}</td>
+                  <td>{qtyText(l.qty, l.unit)}</td>
+                  <td>{inrExact(lineAmount(l))}</td>
+                </tr>
+              )),
+            )
+          ) : (
+            <EmptyRows cols={6} />
+          )}
+        </tbody>
+      </table>
+      <CommercialTotals model={model} />
+      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
+      <SignBlock model={model} />
+    </PaperShell>
+  );
+}
+
+/* ---------- Forge — procurement / marketplace BOQ ---------- */
+
+export function ForgeBomPaper({ model }: { model: BomPaperModel }) {
+  const sections = groupBomSections(model.lines, model.totals.materialsTotal);
+  const stock = model.lines.filter((l) => (l.lineKind || "stock") === "stock" || l.lineKind === "scaled");
+  const other = model.lines.filter((l) => l.lineKind === "service" || l.lineKind === "overhead");
+  const c = bomCostComposition(model.totals);
+
+  const renderBuy = (lines: typeof model.lines, title: string) => (
+    <section className="ims-bom-forge-block">
+      <header>
+        <h4>{title}</h4>
+        <span>{lines.length} lines</span>
+      </header>
+      <table className="bos-inv-paper-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Item</th>
+            <th>Supplier / make</th>
+            <th>Qty</th>
+            <th>Unit</th>
+            <th>Rate</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.length ? (
+            lines.map((l, i) => (
+              <tr key={`${title}-${i}`}>
+                <td>{i + 1}</td>
+                <td style={{ whiteSpace: "normal" }}>
+                  {l.description}
+                  <small>
+                    {l.section}
+                    {l.remarks ? ` · ${l.remarks}` : ""}
+                  </small>
+                </td>
+                <td style={{ whiteSpace: "normal" }}>{l.makeText || "TBD"}</td>
+                <td>{qtyText(l.qty)}</td>
+                <td>{l.unit || "—"}</td>
+                <td>{inrExact(l.rate)}</td>
+                <td>{inrExact(lineAmount(l))}</td>
+              </tr>
+            ))
+          ) : (
+            <EmptyRows cols={7} />
+          )}
+        </tbody>
+      </table>
+    </section>
+  );
+
+  return (
+    <PaperShell model={model} title="FORGE PROCUREMENT BOQ" tpl="forge" badge={<div className="ims-bom-paper-chip">Buy list</div>}>
+      <div className="ims-bom-forge-banner">
+        <div>
+          <b>Job</b>
+          {model.title || "Bill of materials"} · {model.capacityLabel || "—"}
+        </div>
+        <div>
+          <b>Ship to</b>
+          {model.customerName || "—"}
+          {model.location ? ` · ${model.location}` : ""}
+        </div>
+        <div>
+          <b>Ref</b>
+          {model.docNo || "Draft"} · {model.docDate ? dateLabel(model.docDate) : "—"}
+        </div>
+      </div>
+      {renderBuy(stock, "Materials to procure")}
+      {other.length ? renderBuy(other, "Services & overhead") : null}
+      {!stock.length && !other.length ? (
+        <div className="bos-inv-paper-empty">No items</div>
+      ) : null}
+      <div className="ims-bom-forge-foot">
+        <div>
+          <span>Materials</span>
+          <b>{inrExact(c.materials)}</b>
+        </div>
+        <div>
+          <span>Margin{model.marginPct ? ` ${model.marginPct}%` : ""}</span>
+          <b>{inrExact(c.margin)}</b>
+        </div>
+        <div>
+          <span>Tax{model.taxPct ? ` ${model.taxPct}%` : ""}</span>
+          <b>{inrExact(c.tax)}</b>
+        </div>
+        <div className="is-total">
+          <span>Grand total</span>
+          <b>{inrExact(c.grand)}</b>
+        </div>
+      </div>
+      {sections.length ? <CompositionBars sections={sections} /> : null}
+      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
+      <SignBlock model={model} left="Procurement checked" />
+    </PaperShell>
+  );
+}
+
+/* ---------- Nova — investment close ---------- */
+
+export function NovaBomPaper({ model }: { model: BomPaperModel }) {
+  const sections = groupBomSections(model.lines, model.totals.materialsTotal);
+  const c = bomCostComposition(model.totals);
+  return (
+    <PaperShell model={model} title="NOVA" tpl="nova" badge={<div className="ims-bom-paper-chip">Close</div>}>
+      <div className="ims-bom-nova-hero">
+        <div>
+          <p className="ims-bom-nova-eyebrow">Your system investment</p>
+          <h2>{model.capacityLabel || "Package"}</h2>
+          <p>
+            {model.customerName || "Customer"}
+            {model.location ? ` · ${model.location}` : ""}
+          </p>
+        </div>
+        <div className="ims-bom-nova-total">
+          <span>Outlay</span>
+          <strong>{inrExact(c.grand)}</strong>
+          <small>{rupeesInWords(c.grand)}</small>
+        </div>
+      </div>
+      <ol className="ims-bom-nova-steps">
+        <li>
+          <span>01</span>
+          <div>
+            <b>Materials</b>
+            <em>{inrExact(c.materials)}</em>
+          </div>
+        </li>
+        <li>
+          <span>02</span>
+          <div>
+            <b>Margin{model.marginPct ? ` · ${model.marginPct}%` : ""}</b>
+            <em>{inrExact(c.margin)}</em>
+          </div>
+        </li>
+        <li>
+          <span>03</span>
+          <div>
+            <b>Tax{model.taxPct ? ` · ${model.taxPct}%` : ""}</b>
+            <em>{inrExact(c.tax)}</em>
+          </div>
+        </li>
+        <li className="is-total">
+          <span>04</span>
+          <div>
+            <b>Grand total</b>
+            <em>{inrExact(c.grand)}</em>
+          </div>
+        </li>
+      </ol>
+      <DocMeta model={model} />
+      {sections.map((sec) => (
+        <section key={`nova-${sec.index}`} className="ims-bom-nova-sec">
+          <header>
+            <h4>{sec.name}</h4>
+            <b>{inrExact(sec.materials)}</b>
+          </header>
+          <ul>
+            {sec.lines.map((l, i) => (
+              <li key={`${sec.name}-${i}`}>
+                <span>
+                  {l.description}
+                  {l.makeText ? <small> · {l.makeText}</small> : null}
+                </span>
+                <span>
+                  {qtyText(l.qty, l.unit)} · {inrExact(lineAmount(l))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
+      <div className="ims-bom-nova-accept">
+        <div>
+          <strong>Ready to proceed?</strong>
+          <p>Sign to accept this materials schedule and commercial outlay.</p>
+        </div>
+        <div className="ims-bom-accept" style={{ margin: 0 }}>
+          <div>
+            <div className="ims-paper-sign-line" />
+            Customer
+          </div>
+          <div>
+            <div className="ims-paper-sign-line" />
+            {model.preparedBy || model.business.name || "Business"}
+          </div>
+        </div>
+      </div>
+    </PaperShell>
+  );
+}
+
+/* ---------- Folio — card stream / mobile-era ---------- */
+
+export function FolioBomPaper({ model }: { model: BomPaperModel }) {
+  const sections = groupBomSections(model.lines, model.totals.materialsTotal);
+  const c = bomCostComposition(model.totals);
+  return (
+    <PaperShell model={model} title="FOLIO" tpl="folio" badge={<div className="ims-bom-paper-chip">Cards</div>}>
+      <div className="ims-bom-folio-top">
+        <div>
+          <b>{model.title || "Bill of materials"}</b>
+          <span>
+            {model.capacityLabel || "—"} · {model.customerName || "—"}
+            {model.location ? ` · ${model.location}` : ""}
+          </span>
+        </div>
+        <div className="ims-bom-folio-total">
+          <span>Total</span>
+          <strong>{inrExact(c.grand)}</strong>
+        </div>
+      </div>
+      {sections.map((sec) => (
+        <section key={`folio-${sec.index}`} className="ims-bom-folio-sec">
+          <h4>
+            {sec.roman}. {sec.name}
+            <em>{inrExact(sec.materials)}</em>
+          </h4>
+          <div className="ims-bom-folio-grid">
+            {sec.lines.map((l, i) => (
+              <article key={`${sec.name}-${i}`} className="ims-bom-folio-card">
+                <header>
+                  <span>{String(i + 1).padStart(2, "0")}</span>
+                  {lineKindLabel(l.lineKind) ? (
+                    <span className={`ims-bom-kind ims-bom-kind--${l.lineKind}`}>{lineKindLabel(l.lineKind)}</span>
+                  ) : null}
+                </header>
+                <h5>{l.description}</h5>
+                <p>{l.makeText || "—"}</p>
+                {l.remarks ? <small>{l.remarks}</small> : null}
+                <footer>
+                  <span>{qtyText(l.qty, l.unit)}</span>
+                  <b>{inrExact(lineAmount(l))}</b>
+                </footer>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+      <div className="ims-bom-folio-foot">
+        <div>
+          <span>Materials</span>
+          <b>{inrExact(c.materials)}</b>
+        </div>
+        <div>
+          <span>Margin</span>
+          <b>{inrExact(c.margin)}</b>
+        </div>
+        <div>
+          <span>Tax</span>
+          <b>{inrExact(c.tax)}</b>
+        </div>
+        <div className="is-total">
+          <span>Grand</span>
+          <b>{inrExact(c.grand)}</b>
+        </div>
+      </div>
+      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
+      <SignBlock model={model} />
+    </PaperShell>
+  );
+}

@@ -15,22 +15,41 @@ export const BOM_PAPER_TEMPLATES = [
   "ledger",
   "atelier",
   "prism",
+  "orbit",
+  "forge",
+  "nova",
+  "folio",
 ] as const;
 
 export type BomPaperTemplateId = (typeof BOM_PAPER_TEMPLATES)[number];
 
+export type BomPaperEra = "timeless" | "commercial" | "technical" | "executive" | "field" | "futuristic";
+
+export const BOM_PAPER_ERA_FILTERS: ReadonlyArray<{ id: "all" | BomPaperEra; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "futuristic", label: "Futuristic" },
+  { id: "commercial", label: "Commercial" },
+  { id: "technical", label: "Technical" },
+  { id: "executive", label: "Executive" },
+  { id: "field", label: "Field" },
+  { id: "timeless", label: "Classic" },
+];
+
 export type BomPaperTemplateMeta = {
   id: BomPaperTemplateId;
+  /** Compact picker label */
+  short: string;
   label: string;
   tagline: string;
   audience: string;
-  era: "timeless" | "commercial" | "technical" | "executive" | "field" | "futuristic";
+  era: BomPaperEra;
   features: ReadonlyArray<string>;
 };
 
 export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
   {
     id: "classic",
+    short: "Classic",
     label: "Classic Dealer",
     tagline: "Refined dealer sheet — clear sections, make, rates, margin & tax.",
     audience: "Day-to-day customer BOM",
@@ -39,6 +58,7 @@ export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
   },
   {
     id: "tiered",
+    short: "Tiered",
     label: "Tiered Proposal",
     tagline: "Marketplace tiers with roll-ups, kind cues and a cost waterfall.",
     audience: "Sales proposals & C&I bids",
@@ -47,6 +67,7 @@ export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
   },
   {
     id: "epc",
+    short: "EPC",
     label: "EPC Technical",
     tagline: "Dense EPC / GeM-style schedule with units, remarks and section totals.",
     audience: "Technical packs & tenders",
@@ -55,6 +76,7 @@ export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
   },
   {
     id: "executive",
+    short: "Executive",
     label: "Executive Brief",
     tagline: "Board-ready economics first — investment hero, then compact lines.",
     audience: "Owners & decision makers",
@@ -63,6 +85,7 @@ export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
   },
   {
     id: "field",
+    short: "Field",
     label: "Field Pack",
     tagline: "Install-crew checklist — quantities only, no commercial rates.",
     audience: "Site teams & technicians",
@@ -71,6 +94,7 @@ export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
   },
   {
     id: "aurora",
+    short: "Aurora",
     label: "Aurora",
     tagline: "Futuristic masthead, soft panels and a living cost composition.",
     audience: "Modern EPC & premium residential",
@@ -79,6 +103,7 @@ export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
   },
   {
     id: "ledger",
+    short: "Ledger",
     label: "Precision Ledger",
     tagline: "Engineering ledger — index rail, mono figures, hairline precision.",
     audience: "Engineers & estimators",
@@ -87,6 +112,7 @@ export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
   },
   {
     id: "atelier",
+    short: "Atelier",
     label: "Atelier",
     tagline: "Editorial proposal — generous space, display title, quiet luxury.",
     audience: "Boutique & brand-forward sellers",
@@ -95,11 +121,48 @@ export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
   },
   {
     id: "prism",
+    short: "Prism",
     label: "Prism Split",
     tagline: "Split identity rail + schedule — capacity badge and layered totals.",
     audience: "Premium quotes & digital-first print",
     era: "futuristic",
     features: ["Identity rail", "Capacity badge", "Layered totals", "Compact lines"],
+  },
+  {
+    id: "orbit",
+    short: "Orbit",
+    label: "Orbit Cockpit",
+    tagline: "2026 digital-proposal feel — KPI chips, density map, transparent schedule.",
+    audience: "Digital-first EPC sales",
+    era: "futuristic",
+    features: ["KPI cockpit", "Density map", "Transparent rows", "Live total"],
+  },
+  {
+    id: "forge",
+    short: "Forge",
+    label: "Forge Procurement",
+    tagline: "Marketplace / BOQ handoff — stock-first, make as supplier, qty locked.",
+    audience: "Procurement & sourcing desks",
+    era: "technical",
+    features: ["Stock-first", "Supplier make", "Qty lock", "Buy list"],
+  },
+  {
+    id: "nova",
+    short: "Nova",
+    label: "Nova Close",
+    tagline: "Investment narrative for close — capacity, outlay steps, accept strip.",
+    audience: "Homeowner & C&I closing packs",
+    era: "commercial",
+    features: ["Outlay steps", "Capacity focus", "Close strip", "Clean lines"],
+  },
+  {
+    id: "folio",
+    short: "Folio",
+    label: "Folio Cards",
+    tagline: "Mobile-era dossier — one card per line, scannable on phone or print.",
+    audience: "Field + customer WhatsApp share",
+    era: "futuristic",
+    features: ["Line cards", "Scan-friendly", "Kind chips", "Compact total"],
   },
 ];
 

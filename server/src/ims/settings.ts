@@ -31,6 +31,10 @@ export const BOM_PAPER_TEMPLATES = [
   "ledger",
   "atelier",
   "prism",
+  "orbit",
+  "forge",
+  "nova",
+  "folio",
 ] as const;
 export type BomPaperTemplateId = (typeof BOM_PAPER_TEMPLATES)[number];
 

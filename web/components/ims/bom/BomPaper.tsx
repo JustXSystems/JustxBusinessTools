@@ -14,7 +14,11 @@ import {
   EpcBomPaper,
   ExecutiveBomPaper,
   FieldBomPaper,
+  FolioBomPaper,
+  ForgeBomPaper,
   LedgerBomPaper,
+  NovaBomPaper,
+  OrbitBomPaper,
   PrismBomPaper,
   TieredBomPaper,
 } from "./bom-paper-layouts";
@@ -93,6 +97,14 @@ export function BomPaper({ model }: { model: BomPaperModel }) {
       return <AtelierBomPaper model={model} />;
     case "prism":
       return <PrismBomPaper model={model} />;
+    case "orbit":
+      return <OrbitBomPaper model={model} />;
+    case "forge":
+      return <ForgeBomPaper model={model} />;
+    case "nova":
+      return <NovaBomPaper model={model} />;
+    case "folio":
+      return <FolioBomPaper model={model} />;
     case "classic":
     default:
       return <ClassicBomPaper model={model} />;

@@ -1,8 +1,16 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Alert, Field, FormGrid, Input, Select, Textarea } from "@/components/bos";
 import type { BomPaperTemplateId, ImsSettingsMeta } from "@/lib/ims/api";
-import { BOM_PAPER_TEMPLATE_META, normalizeBomPaperTemplate, sampleBomPaperModel } from "@/lib/ims/bom-paper";
+import {
+  BOM_PAPER_ERA_FILTERS,
+  BOM_PAPER_TEMPLATE_META,
+  bomPaperTemplateMeta,
+  normalizeBomPaperTemplate,
+  sampleBomPaperModel,
+  type BomPaperEra,
+} from "@/lib/ims/bom-paper";
 import { GST_RATES, inr } from "@/lib/ims/format";
 import { GST_STATES, MONTHS, PREFIX_FIELDS, docNoSample, fiscalYearLabel, gstinPlace } from "@/lib/ims/settings";
 import "../bom/bom.css";
@@ -126,7 +134,13 @@ export function BusinessTab({ draft, set, errors, readOnly, meta }: TabProps & {
 export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
   const { session } = useIms();
   const today = session.today;
+  const [eraFilter, setEraFilter] = useState<"all" | BomPaperEra>("all");
   const bomTemplate = normalizeBomPaperTemplate(draft.bomPaperTemplate);
+  const selectedMeta = bomPaperTemplateMeta(bomTemplate);
+  const visibleTemplates = useMemo(
+    () => (eraFilter === "all" ? BOM_PAPER_TEMPLATE_META : BOM_PAPER_TEMPLATE_META.filter((t) => t.era === eraFilter)),
+    [eraFilter],
+  );
   const previewModel = {
     ...sampleBomPaperModel(draft.businessName || session.brand?.name || "Your business"),
     template: bomTemplate,
@@ -136,10 +150,28 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
     <fieldset className="ims-set-fieldset" disabled={readOnly}>
       <SectionCard
         title="BOM paper template"
-        desc="Nine out-of-the-box layouts for live preview and print/PDF. One tenant default restyles every BOM sheet."
+        desc={`${BOM_PAPER_TEMPLATE_META.length} layouts for preview and print/PDF. Pick a compact card — details and live preview appear below.`}
       >
-        <div className="ims-bom-tpl-grid" role="radiogroup" aria-label="BOM paper template">
-          {BOM_PAPER_TEMPLATE_META.map((t) => {
+        <div className="ims-bom-tpl-filters" role="tablist" aria-label="Filter BOM templates">
+          {BOM_PAPER_ERA_FILTERS.map((f) => {
+            const active = eraFilter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={`ims-bom-tpl-filter${active ? " is-active" : ""}`}
+                onClick={() => setEraFilter(f.id)}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="ims-bom-tpl-mini-grid" role="radiogroup" aria-label="BOM paper template">
+          {visibleTemplates.map((t) => {
             const selected = bomTemplate === t.id;
             return (
               <button
@@ -147,35 +179,41 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                className={`ims-bom-tpl-card${selected ? " is-selected" : ""}`}
+                title={`${t.label} — ${t.tagline}`}
+                className={`ims-bom-tpl-mini${selected ? " is-selected" : ""}`}
                 disabled={readOnly}
                 onClick={() => set("bomPaperTemplate", t.id as BomPaperTemplateId)}
               >
-                <div className={`ims-bom-tpl-swatch ims-bom-tpl-swatch--${t.id}`} aria-hidden>
+                <span className={`ims-bom-tpl-swatch ims-bom-tpl-swatch--${t.id}`} aria-hidden>
                   <span className="ims-bom-tpl-swatch-rail" />
                   <span className="ims-bom-tpl-swatch-block is-a" />
                   <span className="ims-bom-tpl-swatch-block is-b" />
                   <span className="ims-bom-tpl-swatch-lines" />
-                </div>
-                <div className="ims-bom-tpl-card-top">
-                  <strong>{t.label}</strong>
-                  <span className="ims-bom-tpl-era">{t.era}</span>
-                </div>
-                <p>{t.tagline}</p>
-                <div className="ims-bom-tpl-audience">{t.audience}</div>
-                <ul>
-                  {t.features.slice(0, 3).map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
+                </span>
+                <span className="ims-bom-tpl-mini-label">{t.short}</span>
               </button>
             );
           })}
         </div>
-        <div className="ims-bom-tpl-preview" aria-label="BOM template preview">
-          <div className="ims-bom-tpl-preview-label">
-            Live preview · {BOM_PAPER_TEMPLATE_META.find((t) => t.id === bomTemplate)?.label}
+
+        <div className="ims-bom-tpl-inspect" aria-live="polite">
+          <div className="ims-bom-tpl-inspect-main">
+            <div className="ims-bom-tpl-inspect-title">
+              <strong>{selectedMeta.label}</strong>
+              <span className="ims-bom-tpl-era">{selectedMeta.era}</span>
+            </div>
+            <p>{selectedMeta.tagline}</p>
+            <div className="ims-bom-tpl-audience">{selectedMeta.audience}</div>
           </div>
+          <ul className="ims-bom-tpl-inspect-feats">
+            {selectedMeta.features.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="ims-bom-tpl-preview" aria-label="BOM template preview">
+          <div className="ims-bom-tpl-preview-label">Live preview · {selectedMeta.label}</div>
           <div className="ims-bom-tpl-preview-frame">
             <BomPaper model={previewModel} />
           </div>
