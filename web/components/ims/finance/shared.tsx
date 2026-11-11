@@ -378,6 +378,7 @@ export function sellerOf(session: ImsSession): PaperParty {
     state: s.state ? `${s.state}${s.stateCode ? ` (${s.stateCode})` : ""}` : (b?.state ?? null),
     phone: s.phone ?? b?.phone ?? null,
     email: s.email ?? b?.email ?? null,
+    logoUrl: b?.logoUrl ?? null,
   };
 }
 

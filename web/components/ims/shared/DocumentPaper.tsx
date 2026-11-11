@@ -1,9 +1,54 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { publicAssetUrl } from "@/lib/base-path";
 import { inrExact, qtyText, rupeesInWords, type ImsLine, type ImsTotals } from "@/lib/ims/format";
 
-export type PaperParty = { label: string; name: string; gstin?: string | null; address?: string | null; state?: string | null; phone?: string | null; email?: string | null };
+export type PaperParty = {
+  label: string;
+  name: string;
+  gstin?: string | null;
+  address?: string | null;
+  state?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  /** Customer/tenant logo (business profile). Shown like Quotation sheets. */
+  logoUrl?: string | null;
+};
+
+/**
+ * Company mark + name for printable papers (matches Quotation `qgv1-qs-logo` placement).
+ */
+export function PaperBrandHead({
+  name,
+  logoUrl,
+  detail,
+}: {
+  name: string;
+  logoUrl?: string | null;
+  detail?: string | null;
+}) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  useEffect(() => {
+    setFailedSrc(null);
+  }, [logoUrl]);
+  const raw = logoUrl?.trim() || "";
+  const src = raw && raw !== failedSrc ? publicAssetUrl(raw) : "";
+  return (
+    <div>
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element -- tenant logo from /api/files or data URL
+        <img className="ims-paper-logo" src={src} alt="" onError={() => setFailedSrc(raw)} />
+      ) : null}
+      <div className="bos-inv-paper-brand">{name || "Your business"}</div>
+      {detail ? <div className="ims-paper-seller">{detail}</div> : null}
+    </div>
+  );
+}
+
+export function sellerDetail(p: Pick<PaperParty, "address" | "state" | "gstin" | "phone" | "email">): string {
+  return [p.address, p.state, p.gstin ? `GSTIN ${p.gstin}` : null, p.phone, p.email].filter(Boolean).join("\n");
+}
 
 /**
  * Printable GST document (purchase order, tax invoice, bill, credit note) on the kit's
@@ -22,6 +67,8 @@ export function DocumentPaper({
   stamp,
   footer,
   showReceived,
+  /** Own-company logo when `seller` is a counterparty (e.g. purchase bills). */
+  brandLogoUrl,
 }: {
   title: string;
   seller: PaperParty;
@@ -35,24 +82,21 @@ export function DocumentPaper({
   stamp?: { text: string; color: string } | null;
   footer?: ReactNode;
   showReceived?: boolean;
+  brandLogoUrl?: string | null;
 }) {
   const lines: ImsLine[] = totals.lines;
+  const logoUrl = brandLogoUrl ?? seller.logoUrl ?? null;
   const block = (p: PaperParty) => (
     <div>
       <div className="bos-inv-paper-label">{p.label}</div>
       <div className="bos-inv-paper-value">{p.name || "—"}</div>
-      <div className="ims-paper-sub">
-        {[p.address, p.state, p.gstin ? `GSTIN ${p.gstin}` : null, p.phone, p.email].filter(Boolean).join("\n")}
-      </div>
+      <div className="ims-paper-sub">{sellerDetail(p)}</div>
     </div>
   );
   return (
     <article className="bos-inv-paper" aria-label={title} style={{ position: "static" }}>
       <div className="bos-inv-paper-top">
-        <div>
-          <div className="bos-inv-paper-brand">{seller.name || "Your business"}</div>
-          <div className="ims-paper-seller">{[seller.address, seller.state, seller.gstin ? `GSTIN ${seller.gstin}` : null, seller.phone, seller.email].filter(Boolean).join("\n")}</div>
-        </div>
+        <PaperBrandHead name={seller.name} logoUrl={logoUrl} detail={sellerDetail(seller)} />
         <div style={{ textAlign: "right" }}>
           <div className="bos-inv-paper-title">{title}</div>
           {stamp ? (

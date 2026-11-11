@@ -6,6 +6,7 @@ import { Alert, Badge, Button, Card, DataTable, Dialog, EmptyState, Field, FormG
 import { finance, methodLabel, PAY_METHODS, type ClosingDay, type DayFigures, type ImsClosing, type ImsExpense, type PayMethod } from "@/lib/ims/finance";
 import { dateLabel, inrCompact, inrExact, num, round2, stampLabel } from "@/lib/ims/format";
 import { Loaded, PageHeader, RequirePerm, Stack, SubTabs, useIms, useImsAction, useImsData, usePrint } from "../core";
+import { PaperBrandHead } from "../shared/DocumentPaper";
 import { MethodSelect, ReasonDialog, sellerOf, Stats } from "./shared";
 
 type Tab = "day" | "history";
@@ -602,10 +603,11 @@ function ClosingPaper({ closing: c, expenses, day }: { closing: ImsClosing; expe
   return (
     <article className="bos-inv-paper" aria-label={`Closing report — ${dateLabel(c.date)}`} style={{ position: "static" }}>
       <div className="bos-inv-paper-top">
-        <div>
-          <div className="bos-inv-paper-brand">{seller.name || "Your business"}</div>
-          <div className="ims-paper-seller">{[seller.address, seller.state, seller.gstin ? `GSTIN ${seller.gstin}` : null, seller.phone].filter(Boolean).join("\n")}</div>
-        </div>
+        <PaperBrandHead
+          name={seller.name || "Your business"}
+          logoUrl={seller.logoUrl}
+          detail={[seller.address, seller.state, seller.gstin ? `GSTIN ${seller.gstin}` : null, seller.phone].filter(Boolean).join("\n")}
+        />
         <div style={{ textAlign: "right" }}>
           <div className="bos-inv-paper-title">DAY CLOSE</div>
           <div className="ims-paper-sub">{dateLabel(c.date)}</div>

@@ -5,6 +5,7 @@ import { Button, Dialog } from "@/components/bos";
 import { finance, STATEMENT_KIND_LABEL, type Statement } from "@/lib/ims/finance";
 import { dateLabel, downloadCsv, inrExact } from "@/lib/ims/format";
 import { Loaded, useIms, useImsData, usePrint } from "../core";
+import { PaperBrandHead, sellerDetail } from "../shared/DocumentPaper";
 import { PeriodSelect, sellerOf, type PeriodOrAll } from "./shared";
 
 /** Positive = the party owes you (Dr), negative = you owe them (Cr). */
@@ -17,10 +18,7 @@ export function StatementPaper({ data }: { data: Statement }) {
   return (
     <article className="bos-inv-paper" aria-label={`Statement of account — ${p.name}`} style={{ position: "static" }}>
       <div className="bos-inv-paper-top">
-        <div>
-          <div className="bos-inv-paper-brand">{seller.name || "Your business"}</div>
-          <div className="ims-paper-seller">{[seller.address, seller.state, seller.gstin ? `GSTIN ${seller.gstin}` : null, seller.phone, seller.email].filter(Boolean).join("\n")}</div>
-        </div>
+        <PaperBrandHead name={seller.name || "Your business"} logoUrl={seller.logoUrl} detail={sellerDetail(seller)} />
         <div style={{ textAlign: "right" }}>
           <div className="bos-inv-paper-title">STATEMENT</div>
           <div className="ims-paper-sub">

@@ -3,6 +3,7 @@
 import { Fragment } from "react";
 import { dateLabel, inrExact, qtyText, rupeesInWords } from "@/lib/ims/format";
 import type { BomBusiness, BomDoc, BomDocLine, BomTotals } from "@/lib/ims/bom";
+import { PaperBrandHead, sellerDetail } from "../shared/DocumentPaper";
 
 export type BomPaperModel = {
   business: BomBusiness;
@@ -79,12 +80,11 @@ export function BomPaper({ model }: { model: BomPaperModel }) {
   return (
     <article className="bos-inv-paper" aria-label="Bill of materials" style={{ position: "static" }}>
       <div className="bos-inv-paper-top">
-        <div>
-          <div className="bos-inv-paper-brand">{b.name || "Your business"}</div>
-          <div className="ims-paper-seller">
-            {[b.address, b.state, b.gstin ? `GSTIN ${b.gstin}` : null, b.phone, b.email].filter(Boolean).join("\n")}
-          </div>
-        </div>
+        <PaperBrandHead
+          name={b.name || "Your business"}
+          logoUrl={b.logoUrl}
+          detail={sellerDetail({ address: b.address, state: b.state, gstin: b.gstin, phone: b.phone, email: b.email })}
+        />
         <div style={{ textAlign: "right" }}>
           <div className="bos-inv-paper-title">{title}</div>
           {stamp ? (

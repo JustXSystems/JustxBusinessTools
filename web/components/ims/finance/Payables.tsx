@@ -424,6 +424,7 @@ function BillBody({ detail }: { detail: BillDetail }) {
               title="PURCHASE BILL"
               seller={{ label: "From", name: b.supplierName, gstin: b.supplierGstin, phone: b.supplierMobile, email: b.supplierEmail }}
               party={{ ...sellerOf(session), label: "Billed to" }}
+              brandLogoUrl={session.brand?.logoUrl ?? null}
               meta={[
                 { label: "Bill no.", value: b.billNo },
                 { label: "Supplier bill", value: b.supplierBillNo || "—" },

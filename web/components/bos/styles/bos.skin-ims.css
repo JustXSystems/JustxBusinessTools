@@ -493,7 +493,13 @@
     justify-content: center;
     margin-bottom: 6px;
   }
-  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-brand,
+  .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-brand {
+    display: flex;
+    justify-content: center;
+    padding: 4px 0 10px;
+    border-bottom: 0;
+    margin-bottom: 0;
+  }
   .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-brand-name,
   .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-search-label,
   .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed .bos-nav-label,

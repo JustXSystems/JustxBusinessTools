@@ -4,6 +4,7 @@ import "./insights.css";
 import { useState, type ReactNode } from "react";
 import { Alert, Badge, Button, Card, DataTable, EmptyState, FilterChip, Grid, Input, KpiCard, ProgressBar, Segmented, type BosColumn } from "@/components/bos";
 import { Loaded, PageHeader, PeriodPicker, RequirePerm, Stack, SubTabs, useIms, useImsData, usePrint } from "../core";
+import { PaperBrandHead } from "../shared/DocumentPaper";
 import type { Period } from "@/lib/ims/api";
 import {
   gst,
@@ -314,6 +315,7 @@ function GstWorkspace() {
     name: session.brand?.name || session.settings.businessName,
     gstin: session.brand?.gstin ?? session.settings.gstin,
     address: [session.brand?.address ?? session.settings.address, session.brand?.state ?? session.settings.state].filter(Boolean).join(", ") || null,
+    logoUrl: session.brand?.logoUrl ?? null,
   };
   const startPrint = () => {
     setPaper(true);
@@ -818,17 +820,18 @@ function GstPaper({
   summary: GstSummary | null;
   hsn: GstHsn | null;
   items: GstItemsCheck | null;
-  business: { name: string; gstin: string | null; address: string | null };
+  business: { name: string; gstin: string | null; address: string | null; logoUrl?: string | null };
 }) {
   const range = tab === "hsn" ? hsn?.range : summary?.range;
   const title = TABS.find((t) => t.value === tab)?.label ?? "GST";
   return (
     <article className="bos-inv-paper ims-rp-paper" aria-label={`${title} — print view`} style={{ position: "static" }}>
       <div className="bos-inv-paper-top">
-        <div>
-          <div className="bos-inv-paper-brand">{business.name || "Your business"}</div>
-          <div className="ims-paper-seller">{[business.address, business.gstin ? `GSTIN ${business.gstin}` : "GSTIN not set"].filter(Boolean).join("\n")}</div>
-        </div>
+        <PaperBrandHead
+          name={business.name || "Your business"}
+          logoUrl={business.logoUrl}
+          detail={[business.address, business.gstin ? `GSTIN ${business.gstin}` : "GSTIN not set"].filter(Boolean).join("\n")}
+        />
         <div style={{ textAlign: "right" }}>
           <div className="bos-inv-paper-title">{title}</div>
           <div className="ims-paper-sub">{tab === "items" ? `As of ${new Date().toLocaleDateString("en-IN")}` : range ? `Return period ${dateRange(range.from, range.to)}` : ""}</div>

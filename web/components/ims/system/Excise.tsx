@@ -6,6 +6,7 @@ import { ims, type Period } from "@/lib/ims/api";
 import { dateLabel, dateRange, downloadCsv, downloadXlsx, inr, qtyText, round2, stampLabel, todayLocal, type ExportColumn } from "@/lib/ims/format";
 import { EXCISE_STATUS_LABEL, EXCISE_STATUS_TONE, imsSystem, type ExciseInput, type ExciseList, type ExciseRecord, type ExciseRegisterRow, type ExciseStatus } from "@/lib/ims/system";
 import { Loaded, PageHeader, PeriodPicker, Stack, SubTabs, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
+import { PaperBrandHead } from "../shared/DocumentPaper";
 import { ConfirmDialog, KeyValues, useDebounced } from "./shared";
 
 type Tab = "records" | "register";
@@ -493,13 +494,14 @@ function PrintDialog({ open, onClose, data }: { open: boolean; onClose: () => vo
       }
     >
       <div className="bos-inv-paper" style={{ position: "static" }}>
-        <div className="ims-between" style={{ alignItems: "flex-start" }}>
-          <div>
-            <b style={{ fontSize: 16 }}>{brand?.name ?? session.settings.businessName}</b>
-            <div className="ims-paper-seller">{[brand?.address, brand?.gstin ? `GSTIN ${brand.gstin}` : null].filter(Boolean).join("\n")}</div>
-          </div>
+        <div className="bos-inv-paper-top">
+          <PaperBrandHead
+            name={brand?.name ?? session.settings.businessName}
+            logoUrl={brand?.logoUrl}
+            detail={[brand?.address, brand?.gstin ? `GSTIN ${brand.gstin}` : null].filter(Boolean).join("\n")}
+          />
           <div style={{ textAlign: "right" }}>
-            <b style={{ fontSize: 15 }}>EXCISE STOCK REGISTER</b>
+            <div className="bos-inv-paper-title">EXCISE STOCK REGISTER</div>
             <div className="ims-paper-sub">{dateRange(data.range.from, data.range.to)}</div>
           </div>
         </div>

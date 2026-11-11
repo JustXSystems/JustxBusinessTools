@@ -180,6 +180,22 @@
 /* Printable documents (PO, invoice, closing) reuse the kit's .bos-inv-paper */
 .bos .ims-paper-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; font-size: 12px; margin: 16px 0; }
 .bos .ims-paper-meta b { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; margin-bottom: 3px; }
+/* Customer logo on papers — same placement language as Quotation `qgv1-qs-logo` */
+.bos .ims-paper-logo {
+  display: block;
+  height: 48px;
+  width: auto;
+  max-width: 180px;
+  object-fit: contain;
+  object-position: left center;
+  margin: 0 0 8px;
+}
+@media print {
+  .bos .ims-paper-logo {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
 .bos .ims-paper-seller { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.5; white-space: pre-line; }
 .bos .ims-paper-sub { font-size: 11px; color: #6b7280; font-weight: 500; margin-top: 2px; white-space: pre-line; }
 .bos .ims-paper-stamp { display: inline-block; margin-top: 8px; font-size: 10px; font-weight: 700; letter-spacing: .08em; padding: 3px 8px; border-radius: 999px; border: 1.5px solid currentColor; }

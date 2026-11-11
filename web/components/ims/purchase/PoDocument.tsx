@@ -24,12 +24,22 @@ export const totalsOf = (o: PurchaseOrder): ImsTotals => ({
 });
 
 export function PoPaper({ order }: { order: PurchaseOrder }) {
+  const { session } = useIms();
   const s = order.supplier;
   const b = order.business;
   return (
     <DocumentPaper
       title="PURCHASE ORDER"
-      seller={{ label: "From", name: b.name, gstin: b.gstin, address: b.address, state: b.state ? `${b.state}${b.stateCode ? ` (${b.stateCode})` : ""}` : null, phone: b.phone, email: b.email }}
+      seller={{
+        label: "From",
+        name: b.name,
+        gstin: b.gstin,
+        address: b.address,
+        state: b.state ? `${b.state}${b.stateCode ? ` (${b.stateCode})` : ""}` : null,
+        phone: b.phone,
+        email: b.email,
+        logoUrl: session.brand?.logoUrl ?? null,
+      }}
       party={{ label: "Supplier", name: s.name, gstin: s.gstin, address: [s.contactPerson ? `Attn: ${s.contactPerson}` : null, s.address, s.city].filter(Boolean).join("\n") || null, state: s.state ? `${s.state}${s.stateCode ? ` (${s.stateCode})` : ""}` : null, phone: s.mobile, email: s.email }}
       shipTo={order.deliveryAddress ? { label: "Deliver to", name: b.name, address: order.deliveryAddress } : null}
       meta={[

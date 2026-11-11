@@ -143,7 +143,12 @@
   .bos .bos-shell.is-nav-collapsed { grid-template-columns: 56px minmax(0, 1fr); }
   .bos .bos-shell.is-nav-collapsed .bos-nav { padding: 8px 6px; align-items: center; min-width: 0; }
   .bos .bos-shell.is-nav-collapsed .bos-nav-head { width: 100%; justify-content: center; margin-bottom: 8px; }
-  .bos .bos-shell.is-nav-collapsed .bos-nav-brand,
+  /* Keep customer brand mark visible when rail collapses; hide the name only */
+  .bos .bos-shell.is-nav-collapsed .bos-nav-brand {
+    display: flex;
+    justify-content: center;
+    padding: 2px 0 8px;
+  }
   .bos .bos-shell.is-nav-collapsed .bos-nav-brand-name,
   .bos .bos-shell.is-nav-collapsed .bos-nav-search-label,
   .bos .bos-shell.is-nav-collapsed .bos-nav-label,

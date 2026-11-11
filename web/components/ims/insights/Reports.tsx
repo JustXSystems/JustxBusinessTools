@@ -157,6 +157,7 @@ function ReportRunner({ spec, meta, today, onBack, onSave }: { spec: RunnerSpec;
     name: session.brand?.name || session.settings.businessName,
     gstin: session.brand?.gstin ?? session.settings.gstin,
     address: [session.brand?.address ?? session.settings.address, session.brand?.state ?? session.settings.state].filter(Boolean).join(", ") || null,
+    logoUrl: session.brand?.logoUrl ?? null,
   };
   const fileBase = (r: ReportResult) => `${spec.type}-${r.range ? `${r.range.from}-to-${r.range.to}` : r.asOf}`;
 

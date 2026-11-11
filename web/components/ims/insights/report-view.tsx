@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Badge, Button, DataTable, Pagination, Select, type BosBadgeTone, type BosColumn } from "@/components/bos";
 import type { ReportCatalogEntry, ReportCell, ReportCellKind, ReportChart, ReportFilterKey, ReportFilters, ReportMeta, ReportResult, ReportRow } from "@/lib/ims/reports";
 import { dateLabel, dateRange, inr, inrExact, pct, qtyText, type ExportColumn } from "@/lib/ims/format";
+import { PaperBrandHead } from "../shared/DocumentPaper";
 
 export function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value);
@@ -235,7 +236,7 @@ export function filtersText(entry: ReportCatalogEntry, meta: ReportMeta | null, 
 
 const PRINT_ROWS = 1500;
 
-export type PaperBusiness = { name: string; gstin: string | null; address: string | null };
+export type PaperBusiness = { name: string; gstin: string | null; address: string | null; logoUrl?: string | null };
 
 export function ReportPaper({ report, business, filters, preparedBy }: { report: ReportResult; business: PaperBusiness; filters: string[]; preparedBy: string | null }) {
   const totals = columnTotals(report);
@@ -245,10 +246,11 @@ export function ReportPaper({ report, business, filters, preparedBy }: { report:
   return (
     <article className="bos-inv-paper ims-rp-paper" aria-label={`${report.title} — print view`} style={{ position: "static" }}>
       <div className="bos-inv-paper-top">
-        <div>
-          <div className="bos-inv-paper-brand">{business.name || "Your business"}</div>
-          <div className="ims-paper-seller">{[business.address, business.gstin ? `GSTIN ${business.gstin}` : null].filter(Boolean).join("\n")}</div>
-        </div>
+        <PaperBrandHead
+          name={business.name || "Your business"}
+          logoUrl={business.logoUrl}
+          detail={[business.address, business.gstin ? `GSTIN ${business.gstin}` : null].filter(Boolean).join("\n")}
+        />
         <div style={{ textAlign: "right" }}>
           <div className="bos-inv-paper-title">{report.title}</div>
           <div className="ims-paper-sub">{periodText(report)}</div>

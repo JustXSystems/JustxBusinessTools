@@ -29,6 +29,7 @@ import { errorText, ims, type CheckStatus, type ImsItem } from "@/lib/ims/api";
 import { imsB, type CountLine, type CountSheet } from "@/lib/ims/inventory-b";
 import { dateLabel, downloadCsv, inr, num, qtyText, round2, round3, signedQty, stampLabel, timeAgo, todayLocal, type BadgeView } from "@/lib/ims/format";
 import { Loaded, PageHeader, Stack, StatusBadge, useIms, useImsAction, useImsData, usePrint } from "../core";
+import { PaperBrandHead } from "../shared/DocumentPaper";
 import { ItemSearch, useItemCatalog } from "../shared/pickers";
 import { useInventoryMeta } from "./stock-shared";
 
@@ -859,7 +860,16 @@ function CountSheetView({ check }: { check: CountSheet }) {
           </>
         }
       >
-        {dialog === "print" ? <CountPaper check={check} lines={filtered.length ? filtered : lines} blind={blind} business={session.settings.businessName || session.brand?.name || ""} address={session.settings.address} /> : null}
+        {dialog === "print" ? (
+          <CountPaper
+            check={check}
+            lines={filtered.length ? filtered : lines}
+            blind={blind}
+            business={session.settings.businessName || session.brand?.name || ""}
+            address={session.settings.address}
+            logoUrl={session.brand?.logoUrl ?? null}
+          />
+        ) : null}
       </Dialog>
     </Stack>
   );
@@ -957,14 +967,25 @@ function DecisionFacts({ summary, total }: { summary: { counted: number; mismatc
   );
 }
 
-function CountPaper({ check, lines, blind, business, address }: { check: CountSheet; lines: SheetLine[]; blind: boolean; business: string; address: string | null }) {
+function CountPaper({
+  check,
+  lines,
+  blind,
+  business,
+  address,
+  logoUrl,
+}: {
+  check: CountSheet;
+  lines: SheetLine[];
+  blind: boolean;
+  business: string;
+  address: string | null;
+  logoUrl?: string | null;
+}) {
   return (
     <article className="bos-inv-paper" aria-label="Count sheet" style={{ position: "static" }}>
       <div className="bos-inv-paper-top">
-        <div>
-          <div className="bos-inv-paper-brand">{business || "Your business"}</div>
-          {address ? <div className="ims-paper-seller">{address}</div> : null}
-        </div>
+        <PaperBrandHead name={business || "Your business"} logoUrl={logoUrl} detail={address} />
         <div style={{ textAlign: "right" }}>
           <div className="bos-inv-paper-title">Stock count sheet</div>
           <div className="ims-paper-sub">{check.checkNo}</div>
