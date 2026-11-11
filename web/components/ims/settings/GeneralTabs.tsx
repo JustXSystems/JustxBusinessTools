@@ -136,7 +136,7 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
     <fieldset className="ims-set-fieldset" disabled={readOnly}>
       <SectionCard
         title="BOM paper template"
-        desc="Used for Bill of Materials live preview and print/PDF. One tenant default — change here to restyle every BOM sheet."
+        desc="Nine out-of-the-box layouts for live preview and print/PDF. One tenant default restyles every BOM sheet."
       >
         <div className="ims-bom-tpl-grid" role="radiogroup" aria-label="BOM paper template">
           {BOM_PAPER_TEMPLATE_META.map((t) => {
@@ -151,13 +151,20 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
                 disabled={readOnly}
                 onClick={() => set("bomPaperTemplate", t.id as BomPaperTemplateId)}
               >
+                <div className={`ims-bom-tpl-swatch ims-bom-tpl-swatch--${t.id}`} aria-hidden>
+                  <span className="ims-bom-tpl-swatch-rail" />
+                  <span className="ims-bom-tpl-swatch-block is-a" />
+                  <span className="ims-bom-tpl-swatch-block is-b" />
+                  <span className="ims-bom-tpl-swatch-lines" />
+                </div>
                 <div className="ims-bom-tpl-card-top">
                   <strong>{t.label}</strong>
-                  <span>{t.audience}</span>
+                  <span className="ims-bom-tpl-era">{t.era}</span>
                 </div>
                 <p>{t.tagline}</p>
+                <div className="ims-bom-tpl-audience">{t.audience}</div>
                 <ul>
-                  {t.features.map((f) => (
+                  {t.features.slice(0, 3).map((f) => (
                     <li key={f}>{f}</li>
                   ))}
                 </ul>
@@ -166,7 +173,9 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
           })}
         </div>
         <div className="ims-bom-tpl-preview" aria-label="BOM template preview">
-          <div className="ims-bom-tpl-preview-label">Preview · {BOM_PAPER_TEMPLATE_META.find((t) => t.id === bomTemplate)?.label}</div>
+          <div className="ims-bom-tpl-preview-label">
+            Live preview · {BOM_PAPER_TEMPLATE_META.find((t) => t.id === bomTemplate)?.label}
+          </div>
           <div className="ims-bom-tpl-preview-frame">
             <BomPaper model={previewModel} />
           </div>

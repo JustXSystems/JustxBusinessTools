@@ -114,7 +114,16 @@ export type ReminderRuleKey = "3b" | "due" | "7d" | "15d" | "30d" | "60d" | "90d
 export type ReminderTemplate = { key: string; label: string; channel: "whatsapp" | "sms" | "email"; subject?: string; body: string };
 export type ReminderSettings = { autoEnabled: boolean; rules: Record<ReminderRuleKey, boolean>; channels: Array<"whatsapp" | "sms" | "email">; templates: ReminderTemplate[] };
 
-export type BomPaperTemplateId = "classic" | "tiered" | "epc" | "executive" | "field";
+export type BomPaperTemplateId =
+  | "classic"
+  | "tiered"
+  | "epc"
+  | "executive"
+  | "field"
+  | "aurora"
+  | "ledger"
+  | "atelier"
+  | "prism";
 
 export type ImsSettings = {
   businessName: string;

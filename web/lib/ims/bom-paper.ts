@@ -2,54 +2,104 @@
  * BOM paper templates — tenant-wide layouts for live preview and print/PDF.
  * Maps only to fields already on BomDoc / BomDocLine (no extra schema).
  */
-import type { BomPaperTemplateId } from "./api";
 import type { BomBusiness, BomDocLine, BomLineKind, BomTotals } from "./bom";
 import { BOM_LINE_KIND_LABEL } from "./bom";
 
-export const BOM_PAPER_TEMPLATES = ["classic", "tiered", "epc", "executive", "field"] as const;
-export type { BomPaperTemplateId };
+export const BOM_PAPER_TEMPLATES = [
+  "classic",
+  "tiered",
+  "epc",
+  "executive",
+  "field",
+  "aurora",
+  "ledger",
+  "atelier",
+  "prism",
+] as const;
 
-export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<{
+export type BomPaperTemplateId = (typeof BOM_PAPER_TEMPLATES)[number];
+
+export type BomPaperTemplateMeta = {
   id: BomPaperTemplateId;
   label: string;
   tagline: string;
   audience: string;
+  era: "timeless" | "commercial" | "technical" | "executive" | "field" | "futuristic";
   features: ReadonlyArray<string>;
-}> = [
+};
+
+export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
   {
     id: "classic",
     label: "Classic Dealer",
-    tagline: "Industry dealer sheet — sections, make, rates, margin & tax.",
+    tagline: "Refined dealer sheet — clear sections, make, rates, margin & tax.",
     audience: "Day-to-day customer BOM",
-    features: ["Section bands", "Make column", "Margin / tax footer", "Signatory"],
+    era: "timeless",
+    features: ["Accent rail", "Section bands", "Make · rate · amount", "Signatory"],
   },
   {
     id: "tiered",
     label: "Tiered Proposal",
-    tagline: "Marketplace-style tiers with section roll-ups and line-kind cues.",
+    tagline: "Marketplace tiers with roll-ups, kind cues and a cost waterfall.",
     audience: "Sales proposals & C&I bids",
-    features: ["Tier badges", "Section subtotals", "Stock / service / overhead tags", "Cost waterfall"],
+    era: "commercial",
+    features: ["Tier marks", "Section subtotals", "Kind tags", "Cost waterfall"],
   },
   {
     id: "epc",
     label: "EPC Technical",
-    tagline: "Dense EPC / GeM-style schedule with units and remarks.",
+    tagline: "Dense EPC / GeM-style schedule with units, remarks and section totals.",
     audience: "Technical packs & tenders",
-    features: ["Roman section marks", "Separate units", "Remarks column", "Capacity strip"],
+    era: "technical",
+    features: ["Roman sections", "Units column", "Remarks", "Capacity strip"],
   },
   {
     id: "executive",
-    label: "Executive Summary",
-    tagline: "Board-ready overview — section economics first, lines second.",
+    label: "Executive Brief",
+    tagline: "Board-ready economics first — investment hero, then compact lines.",
     audience: "Owners & decision makers",
-    features: ["Hero total", "Section cards", "Compact line list", "Acceptance block"],
+    era: "executive",
+    features: ["Investment hero", "KPI mosaic", "Section cards", "Acceptance"],
   },
   {
     id: "field",
     label: "Field Pack",
     tagline: "Install-crew checklist — quantities only, no commercial rates.",
     audience: "Site teams & technicians",
-    features: ["No rates / amounts", "Check boxes", "Make & remarks", "Site header"],
+    era: "field",
+    features: ["No pricing", "Check boxes", "Make & remarks", "Site handoff"],
+  },
+  {
+    id: "aurora",
+    label: "Aurora",
+    tagline: "Futuristic masthead, soft panels and a living cost composition.",
+    audience: "Modern EPC & premium residential",
+    era: "futuristic",
+    features: ["Signal masthead", "Glass panels", "Composition bars", "Dual sign-off"],
+  },
+  {
+    id: "ledger",
+    label: "Precision Ledger",
+    tagline: "Engineering ledger — index rail, mono figures, hairline precision.",
+    audience: "Engineers & estimators",
+    era: "technical",
+    features: ["Index rail", "Mono amounts", "Kind codes", "Tight grid"],
+  },
+  {
+    id: "atelier",
+    label: "Atelier",
+    tagline: "Editorial proposal — generous space, display title, quiet luxury.",
+    audience: "Boutique & brand-forward sellers",
+    era: "commercial",
+    features: ["Display title", "Quiet tables", "Section chapters", "Acceptance folio"],
+  },
+  {
+    id: "prism",
+    label: "Prism Split",
+    tagline: "Split identity rail + schedule — capacity badge and layered totals.",
+    audience: "Premium quotes & digital-first print",
+    era: "futuristic",
+    features: ["Identity rail", "Capacity badge", "Layered totals", "Compact lines"],
   },
 ];
 
@@ -58,7 +108,7 @@ export function normalizeBomPaperTemplate(v: unknown): BomPaperTemplateId {
   return (BOM_PAPER_TEMPLATES as readonly string[]).includes(s) ? (s as BomPaperTemplateId) : "classic";
 }
 
-export function bomPaperTemplateMeta(id: BomPaperTemplateId | null | undefined) {
+export function bomPaperTemplateMeta(id: BomPaperTemplateId | null | undefined): BomPaperTemplateMeta {
   const n = normalizeBomPaperTemplate(id);
   return BOM_PAPER_TEMPLATE_META.find((t) => t.id === n) ?? BOM_PAPER_TEMPLATE_META[0]!;
 }
@@ -74,16 +124,23 @@ export type BomPaperSection = {
   roman: string;
   lines: ReadonlyArray<BomPaperLine>;
   materials: number;
+  /** 0–100 share of materials total (for composition bars). */
+  sharePct: number;
 };
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"] as const;
 
-export function groupBomSections(lines: ReadonlyArray<BomPaperLine>): BomPaperSection[] {
-  const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-  const sections: BomPaperSection[] = [];
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+export function lineAmount(line: Pick<BomPaperLine, "qty" | "rate" | "amount">): number {
+  return round2(Number(line.amount ?? Number(line.qty || 0) * Number(line.rate || 0)));
+}
+
+export function groupBomSections(lines: ReadonlyArray<BomPaperLine>, materialsTotal?: number): BomPaperSection[] {
+  const sections: Array<Omit<BomPaperSection, "sharePct"> & { sharePct?: number }> = [];
   for (const line of lines) {
     const last = sections[sections.length - 1];
-    const amount = round2(Number(line.amount ?? Number(line.qty || 0) * Number(line.rate || 0)));
+    const amount = lineAmount(line);
     if (!last || last.name !== line.section) {
       const index = sections.length;
       sections.push({
@@ -98,12 +155,60 @@ export function groupBomSections(lines: ReadonlyArray<BomPaperLine>): BomPaperSe
       last.materials = round2(last.materials + amount);
     }
   }
-  return sections;
+  const base = materialsTotal && materialsTotal > 0 ? materialsTotal : sections.reduce((s, x) => s + x.materials, 0);
+  return sections.map((sec) => ({
+    ...sec,
+    sharePct: base > 0 ? Math.round((sec.materials / base) * 1000) / 10 : 0,
+  }));
 }
 
 export function lineKindLabel(kind: BomLineKind | null | undefined): string | null {
   if (!kind) return null;
   return BOM_LINE_KIND_LABEL[kind] ?? kind;
+}
+
+export function lineKindCode(kind: BomLineKind | null | undefined): string {
+  switch (kind) {
+    case "stock":
+      return "STK";
+    case "service":
+      return "SRV";
+    case "overhead":
+      return "OVH";
+    case "scaled":
+      return "SCL";
+    default:
+      return "—";
+  }
+}
+
+export type BomCostComposition = {
+  materials: number;
+  margin: number;
+  tax: number;
+  grand: number;
+  subtotal: number;
+  materialsPct: number;
+  marginPctOfGrand: number;
+  taxPctOfGrand: number;
+};
+
+export function bomCostComposition(totals: BomTotals): BomCostComposition {
+  const materials = round2(totals.materialsTotal);
+  const margin = round2(totals.marginAmount);
+  const tax = round2(totals.taxAmount);
+  const grand = round2(totals.grandTotal) || 1;
+  const subtotal = round2(materials + margin);
+  return {
+    materials,
+    margin,
+    tax,
+    grand: totals.grandTotal,
+    subtotal,
+    materialsPct: Math.round((materials / grand) * 1000) / 10,
+    marginPctOfGrand: Math.round((margin / grand) * 1000) / 10,
+    taxPctOfGrand: Math.round((tax / grand) * 1000) / 10,
+  };
 }
 
 /** Demo model for Settings picker previews — uses only real BOM fields. */

@@ -21,7 +21,17 @@ import {
 } from "./logic.js";
 
 /** Tenant-wide BOM preview / print paper layout. */
-export const BOM_PAPER_TEMPLATES = ["classic", "tiered", "epc", "executive", "field"] as const;
+export const BOM_PAPER_TEMPLATES = [
+  "classic",
+  "tiered",
+  "epc",
+  "executive",
+  "field",
+  "aurora",
+  "ledger",
+  "atelier",
+  "prism",
+] as const;
 export type BomPaperTemplateId = (typeof BOM_PAPER_TEMPLATES)[number];
 
 export function normalizeBomPaperTemplate(v: unknown): BomPaperTemplateId {
