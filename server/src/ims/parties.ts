@@ -4,6 +4,7 @@ import { z } from "zod";
 import { actorOf, can, optText, parse, parsePatch, qstr, recordEvent, requirePerm, type ImsDeps } from "./context.js";
 import { exec, isoOf, likeOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
 import { conflict, forbidden, notFound, type ImsActor } from "./host.js";
+import { syncBosPartyProjection } from "../parties/index.js";
 import { OPEN_PO_STATUSES, isValidGstin, panFromGstin, resolvePartyState, round2, round3, stockStatus } from "./logic.js";
 
 export const PARTY_KINDS = ["supplier", "customer", "both"] as const;
@@ -462,6 +463,7 @@ export function registerParties(router: Router, deps: ImsDeps): void {
     const values = await normalizeParty(deps, actor, input, null);
     await assertUniqueGstin(deps.db, actor.tenantId, input.gstin, null);
     const id = await insertParty(deps.db, actor, values);
+    await syncBosPartyProjection(deps.db, actor.tenantId, id);
     await recordEvent(deps, actor, { type: "party.created", entityType: "party", entityId: id, summary: `Added ${input.kind === "both" ? "supplier & customer" : input.kind} ${input.name}` });
     res.status(201).json({ party: await loadParty(deps.db, actor.tenantId, id) });
   });
@@ -492,9 +494,11 @@ export function registerParties(router: Router, deps: ImsDeps): void {
           const sent = Object.fromEntries(Object.entries(input).filter(([k]) => mapped[k] !== undefined)) as Partial<PartyInputT>;
           if (sent.kind && sent.kind !== current.kind && current.kind !== "both") sent.kind = "both";
           await updateParty(deps.db, actor.tenantId, current.id, { ...(await normalizeParty(deps, actor, sent, current)), active: true });
+          await syncBosPartyProjection(deps.db, actor.tenantId, current.id);
           updated += 1;
         } else {
-          await insertParty(deps.db, actor, await normalizeParty(deps, actor, input, null));
+          const id = await insertParty(deps.db, actor, await normalizeParty(deps, actor, input, null));
+          await syncBosPartyProjection(deps.db, actor.tenantId, id);
           created += 1;
         }
       } catch (err) {
@@ -520,6 +524,7 @@ export function registerParties(router: Router, deps: ImsDeps): void {
     if (patch.gstin) await assertUniqueGstin(deps.db, actor.tenantId, patch.gstin, current.id);
     const fields = await updateParty(deps.db, actor.tenantId, current.id, values);
     if (fields.length) {
+      await syncBosPartyProjection(deps.db, actor.tenantId, current.id);
       const restored = patch.active === true && !current.active;
       const archived = patch.active === false && current.active;
       await recordEvent(deps, actor, {
@@ -553,12 +558,15 @@ export function registerParties(router: Router, deps: ImsDeps): void {
     );
     if (Number(used?.n) > 0 || party.openingBalance !== 0) {
       await exec(deps.db, `UPDATE ims_parties SET active = 0 WHERE tenant_id = :tenantId AND id = :id`, p);
+      await syncBosPartyProjection(deps.db, actor.tenantId, party.id);
       await recordEvent(deps, actor, { type: "party.archived", entityType: "party", entityId: party.id, summary: `Archived ${party.name}` });
       res.json({ archived: true });
       return;
     }
     await tx(deps.db, async (conn) => {
       await exec(conn, `DELETE FROM ims_links WHERE tenant_id = :tenantId AND target_type = 'party' AND target_id = :id`, p);
+      await exec(conn, `DELETE FROM jbt_party_origins WHERE tenant_id = :tenantId AND party_id = :id`, p);
+      await exec(conn, `DELETE FROM bos_parties WHERE tenant_id = :tenantId AND id = :id`, p).catch(() => undefined);
       await exec(conn, `DELETE FROM ims_parties WHERE tenant_id = :tenantId AND id = :id`, p);
     });
     await recordEvent(deps, actor, { type: "party.deleted", entityType: "party", entityId: party.id, summary: `Deleted ${party.name}` });

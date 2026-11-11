@@ -57,7 +57,7 @@ The web app has no host-specific code either. It only calls `/api/bos/*`, and th
 | Area | Tables |
 |------|--------|
 | Core | `bos_settings`, `bos_sequences` (invoice/employee numbering per fiscal year), `bos_events` (activity feed + event bus), `bos_links` (source-tool record → BOS entity) |
-| Finance | `bos_parties` (customers & vendors), `bos_invoices` (GST lines as JSON, CGST/SGST/IGST), `bos_payments`, `bos_bills`, `bos_expenses` |
+| Finance | Customers & vendors via shared `jbt_parties` registry (IMS-canonical UI; `bos_parties` kept as same-UUID projection), `bos_invoices` (GST lines as JSON, CGST/SGST/IGST), `bos_payments`, `bos_bills`, `bos_expenses` |
 | HR | `bos_departments`, `bos_employees`, `bos_profile_changes`, `bos_leave_requests`, `bos_attendance`, `bos_holidays` |
 | Projects | `bos_projects` |
 | Payroll (migration 012) | `bos_payroll_settings` (one JSON config per tenant), `bos_salary_structures` (per employee), `bos_payroll_runs` (one per month), `bos_payslips` (a frozen snapshot of each employee's month) |

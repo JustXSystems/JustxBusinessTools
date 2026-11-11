@@ -44,6 +44,7 @@ import {
 } from "../lib/quotation-followup-reminders.js";
 import { requireBusinessProfileOwner } from "../middleware/require-business-profile-owner.js";
 import { signatureOf, signatureUpdateDecision } from "../lib/quotation-signature.js";
+import { upsertRegistryParty } from "../parties/index.js";
 
 const TOOL_ID = "quotationv1";
 const COMPANY_KEY = "quotation_v1_company";
@@ -668,10 +669,44 @@ router.post("/", async (req, res) => {
   }
 
   const id = String(body.id ?? newDocumentId(TOOL_ID));
-  const customer = (body.customer as { name?: string; phone?: string }) ?? {};
+  const customer = (body.customer as {
+    name?: string;
+    phone?: string;
+    company?: string;
+    email?: string;
+    gstin?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+  }) ?? {};
   if (!String(body.preparedBy ?? "").trim() || !String(customer.name ?? "").trim() || !String(customer.phone ?? "").trim()) {
     res.status(400).json({ error: "Prepared By, Customer Name, and Customer Phone are required" });
     return;
+  }
+
+  /** Keep Quotation customers in the shared Party Registry (IMS Suppliers & Customers). */
+  let partyId = body.partyId ? String(body.partyId) : "";
+  try {
+    const profileId = getActiveProfileId();
+    if (profileId) {
+      const upserted = await upsertRegistryParty(pool, profileId, {
+        kind: "customer",
+        name: String(customer.name),
+        company: customer.company ?? null,
+        mobile: customer.phone ?? null,
+        email: customer.email ?? null,
+        gstin: customer.gstin ?? null,
+        address: customer.address ?? null,
+        city: customer.city ?? null,
+        state: customer.state ?? null,
+        createdBy: getActiveUserId(),
+        sourceTool: TOOL_ID,
+        sourceRef: id,
+      });
+      partyId = upserted.party.id;
+    }
+  } catch (err) {
+    console.warn("[quotation-v1] party registry upsert skipped", err instanceof Error ? err.message : err);
   }
 
   let existing: QuoteBody | null = null;
@@ -722,6 +757,7 @@ router.post("/", async (req, res) => {
     quoteNo,
     status,
     updatedAt: now,
+    ...(partyId ? { partyId } : {}),
   };
   if (isNew) {
     if (getActiveUserId()) payload.createdByUserId = getActiveUserId();

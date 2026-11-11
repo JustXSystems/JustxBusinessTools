@@ -70,6 +70,8 @@ export type QuotationV1 = {
   preparedByEmail?: string;
   /** Set by the server on first save; only this user may change the signature afterwards. */
   createdByUserId?: number;
+  /** Shared Party Registry id (IMS Suppliers & Customers / BOS). */
+  partyId?: string;
   customer: QuoteCustomer;
   items: QuoteItem[];
   extraCharge: ExtraCharge;

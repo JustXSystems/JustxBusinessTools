@@ -49,7 +49,9 @@ import {
   EMPTY_SAVED_FILTERS,
   SAVED_STATUS_OPTIONS,
   suggestCustomersFromQuotations,
+  mergeCustomerSuggestions,
   customerFromSuggestion,
+  CUSTOMER_SUGGEST_MIN_CHARS,
   classifyQuoteAlert,
   quoteAlertMatchesFilter,
   quoteAlertFilterStats,
@@ -200,6 +202,7 @@ export function QuotationGeneratorV1() {
   const [alertBusy, setAlertBusy] = useState(false);
   const [customerSuggestOpen, setCustomerSuggestOpen] = useState(false);
   const [customerSuggestIndex, setCustomerSuggestIndex] = useState(0);
+  const [registryCustomerSuggestions, setRegistryCustomerSuggestions] = useState<SuggestedCustomer[]>([]);
   const [reverseItemId, setReverseItemId] = useState<string | null>(null);
   /** Off-screen QuoteSheet host when exporting a saved quote that is not on the new/edit route. */
   const [pdfHostQuote, setPdfHostQuote] = useState<QuotationV1 | null>(null);
@@ -257,19 +260,66 @@ export function QuotationGeneratorV1() {
   );
   const activityStats = useMemo(() => quoteActivityStats(filteredActivity), [filteredActivity]);
   const activityStatsAll = useMemo(() => quoteActivityStats(activityRows), [activityRows]);
-  const customerSuggestions = useMemo(
+  const quoteCustomerSuggestions = useMemo(
     () => suggestCustomersFromQuotations(list, current.customer.name),
     [list, current.customer.name],
+  );
+  const customerSuggestions = useMemo(
+    () => mergeCustomerSuggestions(registryCustomerSuggestions, quoteCustomerSuggestions),
+    [registryCustomerSuggestions, quoteCustomerSuggestions],
   );
   const reverseItem = useMemo(
     () => (reverseItemId ? current.items.find((x) => x.id === reverseItemId) ?? null : null),
     [current.items, reverseItemId],
   );
 
+  useEffect(() => {
+    const q = current.customer.name.trim();
+    if (q.length < CUSTOMER_SUGGEST_MIN_CHARS) {
+      setRegistryCustomerSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void api<{
+        suggestions: Array<SuggestedCustomer & { id?: string }>;
+      }>(`/parties/suggest?kind=customer&q=${encodeURIComponent(q)}`)
+        .then((res) => {
+          if (cancelled) return;
+          setRegistryCustomerSuggestions(
+            (res.suggestions ?? []).map((s) => ({
+              key: s.id || s.key || s.phone || s.name,
+              sourceQuoteId: "",
+              partyId: s.id || s.partyId,
+              name: s.name,
+              company: s.company ?? "",
+              address: s.address ?? "",
+              city: s.city ?? "",
+              state: s.state ?? "",
+              gstin: s.gstin ?? "",
+              phone: s.phone ?? "",
+              email: s.email ?? "",
+            })),
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setRegistryCustomerSuggestions([]);
+        });
+    }, 220);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [current.customer.name]);
+
   const applySuggestedCustomer = useCallback((s: SuggestedCustomer) => {
     setCustomerSuggestOpen(false);
     setCustomerSuggestIndex(0);
-    setCurrent((q) => ({ ...q, customer: customerFromSuggestion(s) }));
+    setCurrent((q) => ({
+      ...q,
+      partyId: s.partyId || q.partyId,
+      customer: customerFromSuggestion(s),
+    }));
   }, []);
 
   const flash = useCallback((msg: string, kind = "ok") => {
@@ -1280,9 +1330,7 @@ export function QuotationGeneratorV1() {
                   onActiveIndexChange={setCustomerSuggestIndex}
                   onValueChange={(name) => {
                     setCustomerSuggestIndex(0);
-                    setCustomerSuggestOpen(
-                      suggestCustomersFromQuotations(list, name).length > 0,
-                    );
+                    setCustomerSuggestOpen(name.trim().length >= CUSTOMER_SUGGEST_MIN_CHARS);
                     patch((q) => ({ ...q, customer: { ...q.customer, name } }));
                   }}
                   onSelect={applySuggestedCustomer}

@@ -9,10 +9,19 @@ dealers and distributors. Built on the BOS kit with the IMS skin
 | Inside JBT | `/tools/imsdealer` (tool id `imsdealer`, opt-in: Admin → Tools → Visible on home → Live) |
 | Full screen | `/ims` (same app without JBT chrome; topbar **Full screen** / ⌘K from the tool, or open `/ims` directly). Width is Admin → Tools → IMS → Modules (`ims_layout.contentWidthPct`, default 90%). Left nav is collapsible. |
 | API | `/api/ims/*` |
-| Schema | `mysql/migrations/028_ims_core.sql` + `029`–`038` (all tables prefixed `ims_`) |
+| Schema | `mysql/migrations/028_ims_core.sql` + `029`–`040` (`ims_*` plus shared `jbt_parties` registry) |
 | Module ceiling | Admin → Tools → Justx IMS → **Modules** (per business profile). `NULL` `ims_modules` = all modules. Roles can only further restrict. |
 
 Deep links: `?m=<module>&open=<id>`, e.g. `/tools/imsdealer?m=purchase&open=<poId>`.
+
+## Party Registry (customers & suppliers)
+
+**IMS → Suppliers & Customers** is the canonical UI for the business profile’s
+shared party book. Storage is `jbt_parties` (migrations `039`–`040`);
+`ims_parties` is an updatable view over that table. Quotation V1 upserts
+customers on save (`partyId` on the quote JSON) and suggests from
+`/api/parties/suggest`. Justx BOS Customers & Vendors reads/writes the same
+registry (`vendor` = `supplier`). Provenance lives in `jbt_party_origins`.
 
 ## Tenancy and access
 

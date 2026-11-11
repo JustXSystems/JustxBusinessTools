@@ -7,8 +7,10 @@ export const CUSTOMER_SUGGEST_LIMIT = 12;
 export type SuggestedCustomer = QuoteCustomer & {
   /** Stable key for list rendering / dedupe. */
   key: string;
-  /** Most recent quotation id this customer was taken from. */
+  /** Most recent quotation id this customer was taken from (empty when from Party Registry). */
   sourceQuoteId: string;
+  /** Shared Party Registry id when known (IMS / BOS / Quotation SSOT). */
+  partyId?: string;
 };
 
 function digitsOnly(raw: string): string {
@@ -159,4 +161,35 @@ export function customerFromSuggestion(s: SuggestedCustomer): QuoteCustomer {
     phone: s.phone,
     email: s.email,
   };
+}
+
+/** Merge Party Registry hits ahead of quote-history suggestions (same identity collapses). */
+export function mergeCustomerSuggestions(
+  registry: SuggestedCustomer[],
+  fromQuotes: SuggestedCustomer[],
+  limit = CUSTOMER_SUGGEST_LIMIT,
+): SuggestedCustomer[] {
+  const out: SuggestedCustomer[] = [];
+  const seen = new Set<string>();
+  const remember = (s: SuggestedCustomer) => {
+    for (const k of customerIdentityKeys(s)) seen.add(k);
+    if (s.partyId) seen.add(`id:${s.partyId}`);
+  };
+  const isDupe = (s: SuggestedCustomer) => {
+    if (s.partyId && seen.has(`id:${s.partyId}`)) return true;
+    return customerIdentityKeys(s).some((k) => seen.has(k));
+  };
+  for (const s of registry) {
+    if (isDupe(s)) continue;
+    out.push(s);
+    remember(s);
+    if (out.length >= limit) return out;
+  }
+  for (const s of fromQuotes) {
+    if (isDupe(s)) continue;
+    out.push(s);
+    remember(s);
+    if (out.length >= limit) break;
+  }
+  return out;
 }

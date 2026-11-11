@@ -67,6 +67,15 @@ const clip = (v: string | null | undefined, max: number): string | null => {
 };
 
 /** Find a party by GSTIN, else by name + mobile (name alone when neither side has a mobile); create it otherwise. */
+async function syncBosProjectionSafe(conn: Queryable, tenantId: number, partyId: string): Promise<void> {
+  try {
+    const { syncBosPartyProjection } = await import("../parties/index.js");
+    await syncBosPartyProjection(conn, tenantId, partyId);
+  } catch {
+    /* registry / bos projection optional during mid-migration */
+  }
+}
+
 export async function upsertParty(conn: Queryable, actor: ImsActor, p: PartyUpsert): Promise<{ id: string; name: string; created: boolean }> {
   const name = clip(p.name, 200) ?? "Customer";
   const gstin = clip(p.gstin, 20)?.toUpperCase() ?? null;
@@ -104,6 +113,7 @@ export async function upsertParty(conn: Queryable, actor: ImsActor, p: PartyUpse
         contactPerson: clip(p.contactPerson, 120),
       },
     );
+    await syncBosProjectionSafe(conn, actor.tenantId, found.id);
     return { id: found.id, name: found.name, created: false };
   }
   const id = randomUUID();
@@ -127,6 +137,7 @@ export async function upsertParty(conn: Queryable, actor: ImsActor, p: PartyUpse
       userId: actor.userId,
     },
   );
+  await syncBosProjectionSafe(conn, actor.tenantId, id);
   return { id, name, created: true };
 }
 

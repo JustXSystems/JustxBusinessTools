@@ -25,6 +25,15 @@ import {
   type InvoiceStatus,
 } from "./logic.js";
 import { getSettings } from "./workspace.js";
+import {
+  loadRegistryParty,
+  partyToCustomerSnapshot,
+  syncBosPartyProjection,
+  toBosKind,
+  toRegistryKind,
+  upsertRegistryParty,
+} from "../parties/index.js";
+import { findMatchingParty } from "../parties/match.js";
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 const OWN_CLAIMS_SWITCH = "bos.expenses.own_claims";
@@ -88,53 +97,79 @@ const mapParty = (r: PartyRow) => ({
   createdAt: r.created_at,
 });
 
+/** Writes the shared Party Registry (and keeps the bos_parties projection in sync). */
 export async function createParty(
   deps: BosDeps,
   actor: BosActor,
   input: PartyInputT & { sourceTool?: string | null; sourceRef?: string | null },
   conn?: PoolConnection,
 ): Promise<string> {
-  const id = randomUUID();
-  await exec(
-    conn ?? deps.db,
-    `INSERT INTO bos_parties (id, tenant_id, kind, name, company, gstin, email, phone, address, city, state, notes, source_tool, source_ref, created_by)
-     VALUES (:id, :tenantId, :kind, :name, :company, :gstin, :email, :phone, :address, :city, :state, :notes, :sourceTool, :sourceRef, :userId)`,
-    {
-      id,
-      tenantId: actor.tenantId,
-      kind: input.kind,
-      name: input.name,
-      company: input.company ?? null,
-      gstin: input.gstin ? input.gstin.toUpperCase() : null,
-      email: input.email ?? null,
-      phone: input.phone ?? null,
-      address: input.address ?? null,
-      city: input.city ?? null,
-      state: input.state ?? null,
-      notes: input.notes ?? null,
-      sourceTool: input.sourceTool ?? null,
-      sourceRef: input.sourceRef ?? null,
-      userId: actor.userId,
-    },
-  );
-  return id;
+  const result = await upsertRegistryParty(conn ?? deps.db, actor.tenantId, {
+    kind: toRegistryKind(input.kind),
+    name: input.name,
+    company: input.company ?? null,
+    mobile: input.phone ?? null,
+    email: input.email ?? null,
+    gstin: input.gstin ?? null,
+    address: input.address ?? null,
+    city: input.city ?? null,
+    state: input.state ?? null,
+    notes: input.notes ?? null,
+    sourceTool: input.sourceTool ?? null,
+    sourceRef: input.sourceRef ?? null,
+    createdBy: actor.userId,
+  });
+  return result.party.id;
 }
 
-/** Existing party with the same phone (last 10 digits) or, failing that, the same name. */
+/** Existing registry party with the same phone (last 10 digits) or, failing that, the same name. */
 export async function findParty(deps: BosDeps, tenantId: number, probe: { name: string; phone?: string | null }, conn?: PoolConnection): Promise<string | null> {
+  const candidates = await rows<{ id: string; name: string; mobile: string | null; gstin: string | null; email: string | null; active: number }>(
+    conn ?? deps.db,
+    `SELECT id, name, mobile, gstin, email, active FROM jbt_parties
+     WHERE tenant_id = :tenantId AND active = 1 AND (LOWER(name) = LOWER(:name) OR mobile IS NOT NULL)
+     LIMIT 5000`,
+    { tenantId, name: probe.name },
+  );
+  const hit = findMatchingParty(
+    candidates.map((c) => ({ ...c, mobile: c.mobile })),
+    { name: probe.name, phone: probe.phone, mobile: probe.phone },
+  );
+  if (hit) return hit.id;
+  // Fallback for environments mid-migration still on bos_parties only.
   const key = phoneKey(probe.phone);
-  const candidates = await rows<{ id: string; name: string; phone: string | null }>(
+  const legacy = await rows<{ id: string; name: string; phone: string | null }>(
     conn ?? deps.db,
     `SELECT id, name, phone FROM bos_parties
      WHERE tenant_id = :tenantId AND archived_at IS NULL AND (LOWER(name) = LOWER(:name) OR phone IS NOT NULL)
      LIMIT 5000`,
     { tenantId, name: probe.name },
-  );
+  ).catch(() => [] as { id: string; name: string; phone: string | null }[]);
   if (key.length >= 10) {
-    const byPhone = candidates.find((c) => phoneKey(c.phone) === key);
+    const byPhone = legacy.find((c) => phoneKey(c.phone) === key);
     if (byPhone) return byPhone.id;
   }
-  return candidates.find((c) => c.name.toLowerCase() === probe.name.toLowerCase())?.id ?? null;
+  return legacy.find((c) => c.name.toLowerCase() === probe.name.toLowerCase())?.id ?? null;
+}
+
+function mapRegistryToBosParty(party: NonNullable<Awaited<ReturnType<typeof loadRegistryParty>>>) {
+  const snap = partyToCustomerSnapshot(party);
+  return {
+    id: party.id,
+    kind: toBosKind(party.kind),
+    name: party.name,
+    company: snap.company || null,
+    gstin: snap.gstin || null,
+    email: snap.email || null,
+    phone: snap.phone || null,
+    address: snap.address || null,
+    city: snap.city || null,
+    state: snap.state || null,
+    notes: party.notes,
+    sourceTool: null as string | null,
+    sourceRef: null as string | null,
+    createdAt: party.createdAt,
+  };
 }
 
 /* =====================================================================
@@ -482,20 +517,54 @@ export function registerFinance(router: Router, deps: BosDeps): void {
     const actor = actorOf(res);
     const kind = typeof req.query.kind === "string" ? req.query.kind : "";
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-    const list = await rows<PartyRow & { invoiced: string | number; balance: string | number }>(
+    const registryKind =
+      kind === "customer" ? "AND j.kind IN ('customer','both')" : kind === "vendor" ? "AND j.kind IN ('supplier','both')" : "";
+    const list = await rows<{
+      id: string;
+      kind: string;
+      name: string;
+      company: string | null;
+      gstin: string | null;
+      email: string | null;
+      mobile: string | null;
+      address: string | null;
+      city: string | null;
+      state: string | null;
+      notes: string | null;
+      created_at: string;
+      invoiced: string | number;
+      balance: string | number;
+    }>(
       deps.db,
-      `SELECT p.*,
-         COALESCE((SELECT SUM(i.grand_total) FROM bos_invoices i WHERE i.tenant_id = p.tenant_id AND i.party_id = p.id AND i.status NOT IN ('draft','void')), 0) AS invoiced,
-         COALESCE((SELECT SUM(i.grand_total - i.amount_paid) FROM bos_invoices i WHERE i.tenant_id = p.tenant_id AND i.party_id = p.id AND i.status IN ('sent','partial')), 0) AS balance
-       FROM bos_parties p
-       WHERE p.tenant_id = :tenantId AND p.archived_at IS NULL
-         ${kind === "customer" ? "AND p.kind IN ('customer','both')" : kind === "vendor" ? "AND p.kind IN ('vendor','both')" : ""}
-         ${q ? "AND (p.name LIKE :like OR p.company LIKE :like OR p.phone LIKE :like OR p.gstin LIKE :like)" : ""}
-       ORDER BY p.name ASC LIMIT ${PARTY_LIMIT + 1}`,
+      `SELECT j.id, j.kind, j.name, j.company, j.gstin, j.email, j.mobile, j.address, j.city, j.state, j.notes, j.created_at,
+         COALESCE((SELECT SUM(i.grand_total) FROM bos_invoices i WHERE i.tenant_id = j.tenant_id AND i.party_id = j.id AND i.status NOT IN ('draft','void')), 0) AS invoiced,
+         COALESCE((SELECT SUM(i.grand_total - i.amount_paid) FROM bos_invoices i WHERE i.tenant_id = j.tenant_id AND i.party_id = j.id AND i.status IN ('sent','partial')), 0) AS balance
+       FROM jbt_parties j
+       WHERE j.tenant_id = :tenantId AND j.active = 1
+         ${registryKind}
+         ${q ? "AND (j.name LIKE :like OR j.company LIKE :like OR j.mobile LIKE :like OR j.gstin LIKE :like)" : ""}
+       ORDER BY j.name ASC LIMIT ${PARTY_LIMIT + 1}`,
       { tenantId: actor.tenantId, like: `%${q}%` },
     );
     res.json({
-      parties: list.slice(0, PARTY_LIMIT).map((r) => ({ ...mapParty(r), invoiced: money(r.invoiced), balance: money(r.balance) })),
+      parties: list.slice(0, PARTY_LIMIT).map((r) => ({
+        id: r.id,
+        kind: toBosKind(toRegistryKind(r.kind)),
+        name: r.name,
+        company: r.company,
+        gstin: r.gstin,
+        email: r.email,
+        phone: r.mobile,
+        address: r.address,
+        city: r.city,
+        state: r.state,
+        notes: r.notes,
+        sourceTool: null,
+        sourceRef: null,
+        createdAt: r.created_at,
+        invoiced: money(r.invoiced),
+        balance: money(r.balance),
+      })),
       truncated: list.length > PARTY_LIMIT,
     });
   });
@@ -505,32 +574,50 @@ export function registerFinance(router: Router, deps: BosDeps): void {
     const input = parse(PartyInput, req.body);
     const id = await createParty(deps, actor, input);
     await recordEvent(deps, actor, { type: "party.create", entityType: "party", entityId: id, summary: `Added ${input.kind} ${input.name}`, ip: req.ip });
-    const row = await one<PartyRow>(deps.db, `SELECT * FROM bos_parties WHERE id = :id`, { id });
-    res.status(201).json({ party: mapParty(row!) });
+    const party = await loadRegistryParty(deps.db, actor.tenantId, id);
+    res.status(201).json({ party: mapRegistryToBosParty(party!) });
   });
 
   router.patch("/parties/:id", async (req, res) => {
     const actor = actorOf(res);
-    const existing = await one<PartyRow>(deps.db, `SELECT * FROM bos_parties WHERE id = :id AND tenant_id = :tenantId`, { id: req.params.id, tenantId: actor.tenantId });
+    const existing = await loadRegistryParty(deps.db, actor.tenantId, req.params.id);
     if (!existing) throw notFound("Customer or vendor");
     const input = parsePatch(PartyInput, req.body);
-    const merged = { ...mapParty(existing), ...Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) };
+    const next = {
+      kind: input.kind !== undefined ? toRegistryKind(input.kind) : existing.kind,
+      name: input.name ?? existing.name,
+      company: input.company !== undefined ? input.company : existing.company,
+      mobile: input.phone !== undefined ? input.phone : existing.mobile,
+      email: input.email !== undefined ? input.email : existing.email,
+      gstin: input.gstin !== undefined ? (input.gstin ? String(input.gstin).toUpperCase() : null) : existing.gstin,
+      address: input.address !== undefined ? input.address : existing.address,
+      city: input.city !== undefined ? input.city : existing.city,
+      state: input.state !== undefined ? input.state : existing.state,
+      notes: input.notes !== undefined ? input.notes : existing.notes,
+    };
     await exec(
       deps.db,
-      `UPDATE bos_parties SET kind = :kind, name = :name, company = :company, gstin = :gstin, email = :email, phone = :phone,
-         address = :address, city = :city, state = :state, notes = :notes WHERE id = :id AND tenant_id = :tenantId`,
-      { ...merged, gstin: merged.gstin ? String(merged.gstin).toUpperCase() : null, id: existing.id, tenantId: actor.tenantId },
+      `UPDATE jbt_parties SET kind = :kind, name = :name, company = :company, mobile = :mobile, email = :email,
+         gstin = :gstin, address = :address, city = :city, state = :state, notes = :notes, active = 1
+       WHERE tenant_id = :tenantId AND id = :id`,
+      { tenantId: actor.tenantId, id: existing.id, ...next },
     );
-    await recordEvent(deps, actor, { type: "party.update", entityType: "party", entityId: existing.id, summary: `Updated ${merged.name}`, ip: req.ip });
-    const row = await one<PartyRow>(deps.db, `SELECT * FROM bos_parties WHERE id = :id`, { id: existing.id });
-    res.json({ party: mapParty(row!) });
+    await syncBosPartyProjection(deps.db, actor.tenantId, existing.id);
+    await recordEvent(deps, actor, { type: "party.update", entityType: "party", entityId: existing.id, summary: `Updated ${next.name}`, ip: req.ip });
+    const party = await loadRegistryParty(deps.db, actor.tenantId, existing.id);
+    res.json({ party: mapRegistryToBosParty(party!) });
   });
 
   router.delete("/parties/:id", async (req, res) => {
     const actor = actorOf(res);
     if (!isManager(actor)) throw forbidden();
-    const r = await exec(deps.db, `UPDATE bos_parties SET archived_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`, { id: req.params.id, tenantId: actor.tenantId });
-    if (!r.affectedRows) throw notFound("Customer or vendor");
+    const existing = await loadRegistryParty(deps.db, actor.tenantId, req.params.id);
+    if (!existing) throw notFound("Customer or vendor");
+    await exec(deps.db, `UPDATE jbt_parties SET active = 0 WHERE id = :id AND tenant_id = :tenantId`, { id: req.params.id, tenantId: actor.tenantId });
+    await exec(deps.db, `UPDATE bos_parties SET archived_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`, {
+      id: req.params.id,
+      tenantId: actor.tenantId,
+    }).catch(() => undefined);
     await recordEvent(deps, actor, { type: "party.archive", entityType: "party", entityId: req.params.id, summary: "Archived a customer/vendor", ip: req.ip });
     res.status(204).end();
   });
