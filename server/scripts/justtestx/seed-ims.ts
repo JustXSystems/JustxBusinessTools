@@ -45,17 +45,18 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
     conn,
     `INSERT INTO ims_settings
       (tenant_id, business_name, business_type, gstin, state, state_code, address, phone, email,
-       fiscal_year_start, po_prefix, invoice_prefix, bill_prefix, return_prefix, check_prefix, ticket_prefix,
+       fiscal_year_start, po_prefix, invoice_prefix, bill_prefix, return_prefix, check_prefix, ticket_prefix, bom_paper_template,
        po_approval_limit, draft_po_purge_days, payment_terms_days, default_gst_rate, allow_negative_stock, excise_enabled,
        permissions, taxonomy, reminders, terms, updated_by)
      VALUES
       (:t, :businessName, :businessType, :gstin, :state, :stateCode, :address, :phone, :email,
-       :fiscalYearStart, :poPrefix, :invoicePrefix, :billPrefix, :returnPrefix, :checkPrefix, :ticketPrefix,
+       :fiscalYearStart, :poPrefix, :invoicePrefix, :billPrefix, :returnPrefix, :checkPrefix, :ticketPrefix, :bomPaperTemplate,
        :poApprovalLimit, :draftPoPurgeDays, :paymentTermsDays, :defaultGstRate, :allowNegativeStock, :exciseEnabled,
        :permissions, :taxonomy, :reminders, :terms, :userId)
      ON DUPLICATE KEY UPDATE
        business_name = VALUES(business_name), business_type = VALUES(business_type), taxonomy = VALUES(taxonomy),
-       reminders = VALUES(reminders), permissions = VALUES(permissions), terms = VALUES(terms)`,
+       reminders = VALUES(reminders), permissions = VALUES(permissions), terms = VALUES(terms),
+       bom_paper_template = VALUES(bom_paper_template)`,
     {
       t,
       ...IMS_SETTINGS,

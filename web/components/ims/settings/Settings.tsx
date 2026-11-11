@@ -43,6 +43,7 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
   "returnPrefix",
   "checkPrefix",
   "ticketPrefix",
+  "bomPaperTemplate",
   "poApprovalLimit",
   "draftPoPurgeDays",
   "paymentTermsDays",

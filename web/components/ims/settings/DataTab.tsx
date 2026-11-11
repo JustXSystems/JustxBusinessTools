@@ -84,6 +84,7 @@ const settingsSheet = (s: ImsSettings): SheetSpec => ({
     ["PO prefix", s.poPrefix],
     ["Invoice prefix", s.invoicePrefix],
     ["Bill prefix", s.billPrefix],
+    ["BOM paper template", s.bomPaperTemplate],
     ["PO approval limit", s.poApprovalLimit],
     ["Default payment terms (days)", s.paymentTermsDays],
     ["Default GST %", s.defaultGstRate],

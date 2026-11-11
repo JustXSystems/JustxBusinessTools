@@ -13,6 +13,90 @@
 .bos .ims-toggle-row-label { font-weight: 600; font-size: 13.5px; }
 .bos .ims-toggle-row-desc { font-size: 12.5px; color: var(--bos-text-muted); margin-top: 2px; }
 
+/* BOM paper template picker */
+.bos .ims-bom-tpl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+.bos .ims-bom-tpl-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: var(--bos-r-lg);
+  border: 1px solid var(--bos-border-soft);
+  background: var(--ims-tile, var(--bos-surface));
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.bos .ims-bom-tpl-card:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--bos-blue, #2563eb) 45%, var(--bos-border-soft));
+}
+.bos .ims-bom-tpl-card.is-selected {
+  border-color: var(--bos-blue, #2563eb);
+  box-shadow: 0 0 0 1px var(--bos-blue, #2563eb);
+  background: color-mix(in srgb, var(--bos-blue-100, #e0ecff) 40%, var(--bos-surface));
+}
+.bos .ims-bom-tpl-card:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+.bos .ims-bom-tpl-card-top {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bos .ims-bom-tpl-card-top strong {
+  font-size: 13.5px;
+  font-weight: 650;
+}
+.bos .ims-bom-tpl-card-top span {
+  font-size: 11.5px;
+  color: var(--bos-text-muted);
+}
+.bos .ims-bom-tpl-card p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--bos-text-muted);
+  line-height: 1.45;
+}
+.bos .ims-bom-tpl-card ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11.5px;
+  color: var(--bos-text-muted);
+  line-height: 1.45;
+}
+.bos .ims-bom-tpl-preview {
+  margin-top: 16px;
+}
+.bos .ims-bom-tpl-preview-label {
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bos-text-muted);
+  margin-bottom: 8px;
+}
+.bos .ims-bom-tpl-preview-frame {
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--bos-border-soft);
+  border-radius: var(--bos-r-lg);
+  background: var(--ims-well, var(--bos-surface-2));
+  padding: 12px;
+  scrollbar-gutter: stable;
+}
+.bos .ims-bom-tpl-preview-frame .bos-inv-paper {
+  transform: scale(0.92);
+  transform-origin: top center;
+  margin: 0 auto;
+}
+
 /* Document numbering */
 .bos .ims-prefix-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 .bos .ims-prefix { padding: 12px 14px; border: 1px solid var(--bos-border-soft); border-radius: var(--bos-r-lg); background: var(--ims-tile, var(--bos-surface)); }

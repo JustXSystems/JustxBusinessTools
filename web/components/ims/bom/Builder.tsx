@@ -250,7 +250,7 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
     ...state.data.business,
     logoUrl: state.data.business.logoUrl || session.brand?.logoUrl || null,
   };
-  const model = modelFromDoc(doc, business);
+  const model = modelFromDoc(doc, business, session.settings.bomPaperTemplate);
   const confirmed = doc.status === "confirmed";
   const stockable = (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0).length;
   const reloadAll = () => {
@@ -700,10 +700,12 @@ function BomEditorForm({
     notes,
     marginPct: Number(marginPct) || 0,
     taxPct: Number(taxPct) || 0,
+    template: settings.bomPaperTemplate,
     lines: lines
       .filter((l) => l.description.trim())
       .map((l) => ({
         section: l.section,
+        lineKind: l.lineKind,
         description: l.description,
         makeText: l.makeText ?? null,
         qty: Number(l.qty) || 0,

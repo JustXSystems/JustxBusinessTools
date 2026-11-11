@@ -34,6 +34,7 @@ export const IMS_SETTINGS = {
   returnPrefix: "RT",
   checkPrefix: "SC",
   ticketPrefix: "TK",
+  bomPaperTemplate: "classic",
   poApprovalLimit: 75_000,
   draftPoPurgeDays: 7,
   paymentTermsDays: 30,

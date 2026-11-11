@@ -1,9 +1,12 @@
 "use client";
 
 import { Alert, Field, FormGrid, Input, Select, Textarea } from "@/components/bos";
-import type { ImsSettingsMeta } from "@/lib/ims/api";
+import type { BomPaperTemplateId, ImsSettingsMeta } from "@/lib/ims/api";
+import { BOM_PAPER_TEMPLATE_META, normalizeBomPaperTemplate, sampleBomPaperModel } from "@/lib/ims/bom-paper";
 import { GST_RATES, inr } from "@/lib/ims/format";
 import { GST_STATES, MONTHS, PREFIX_FIELDS, docNoSample, fiscalYearLabel, gstinPlace } from "@/lib/ims/settings";
+import "../bom/bom.css";
+import { BomPaper } from "../bom/BomPaper";
 import { useIms } from "../core";
 import { SectionCard, ToggleRow, type TabProps } from "./parts";
 
@@ -123,9 +126,53 @@ export function BusinessTab({ draft, set, errors, readOnly, meta }: TabProps & {
 export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
   const { session } = useIms();
   const today = session.today;
+  const bomTemplate = normalizeBomPaperTemplate(draft.bomPaperTemplate);
+  const previewModel = {
+    ...sampleBomPaperModel(draft.businessName || session.brand?.name || "Your business"),
+    template: bomTemplate,
+  };
 
   return (
     <fieldset className="ims-set-fieldset" disabled={readOnly}>
+      <SectionCard
+        title="BOM paper template"
+        desc="Used for Bill of Materials live preview and print/PDF. One tenant default — change here to restyle every BOM sheet."
+      >
+        <div className="ims-bom-tpl-grid" role="radiogroup" aria-label="BOM paper template">
+          {BOM_PAPER_TEMPLATE_META.map((t) => {
+            const selected = bomTemplate === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={`ims-bom-tpl-card${selected ? " is-selected" : ""}`}
+                disabled={readOnly}
+                onClick={() => set("bomPaperTemplate", t.id as BomPaperTemplateId)}
+              >
+                <div className="ims-bom-tpl-card-top">
+                  <strong>{t.label}</strong>
+                  <span>{t.audience}</span>
+                </div>
+                <p>{t.tagline}</p>
+                <ul>
+                  {t.features.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+              </button>
+            );
+          })}
+        </div>
+        <div className="ims-bom-tpl-preview" aria-label="BOM template preview">
+          <div className="ims-bom-tpl-preview-label">Preview · {BOM_PAPER_TEMPLATE_META.find((t) => t.id === bomTemplate)?.label}</div>
+          <div className="ims-bom-tpl-preview-frame">
+            <BomPaper model={previewModel} />
+          </div>
+        </div>
+      </SectionCard>
+
       <SectionCard title="Document numbering" desc="Numbers restart every financial year. Letters, digits and dashes only, up to 12 characters.">
         <div className="ims-prefix-grid">
           {PREFIX_FIELDS.map((f) => (

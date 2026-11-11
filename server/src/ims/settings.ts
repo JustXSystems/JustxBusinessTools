@@ -20,6 +20,15 @@ import {
   type Taxonomy,
 } from "./logic.js";
 
+/** Tenant-wide BOM preview / print paper layout. */
+export const BOM_PAPER_TEMPLATES = ["classic", "tiered", "epc", "executive", "field"] as const;
+export type BomPaperTemplateId = (typeof BOM_PAPER_TEMPLATES)[number];
+
+export function normalizeBomPaperTemplate(v: unknown): BomPaperTemplateId {
+  const s = String(v ?? "").trim().toLowerCase();
+  return (BOM_PAPER_TEMPLATES as readonly string[]).includes(s) ? (s as BomPaperTemplateId) : "classic";
+}
+
 export type ImsSettings = {
   businessName: string;
   businessType: string;
@@ -36,6 +45,8 @@ export type ImsSettings = {
   returnPrefix: string;
   checkPrefix: string;
   ticketPrefix: string;
+  /** Default BOM paper for live preview + print/PDF. */
+  bomPaperTemplate: BomPaperTemplateId;
   poApprovalLimit: number;
   draftPoPurgeDays: number;
   paymentTermsDays: number;
@@ -66,6 +77,7 @@ type SettingsRow = {
   return_prefix: string;
   check_prefix: string;
   ticket_prefix: string;
+  bom_paper_template?: string | null;
   po_approval_limit: string | number;
   draft_po_purge_days: number;
   payment_terms_days: number;
@@ -94,6 +106,7 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   returnPrefix: r.return_prefix,
   checkPrefix: r.check_prefix,
   ticketPrefix: r.ticket_prefix,
+  bomPaperTemplate: normalizeBomPaperTemplate(r.bom_paper_template),
   poApprovalLimit: money(r.po_approval_limit),
   draftPoPurgeDays: Number(r.draft_po_purge_days) || 0,
   paymentTermsDays: Number(r.payment_terms_days) || 0,
@@ -150,6 +163,7 @@ const SettingsInput = z.object({
   returnPrefix: prefix.optional(),
   checkPrefix: prefix.optional(),
   ticketPrefix: prefix.optional(),
+  bomPaperTemplate: z.enum(BOM_PAPER_TEMPLATES).optional(),
   poApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
   draftPoPurgeDays: z.coerce.number().int().min(0).max(365).optional(),
   paymentTermsDays: z.coerce.number().int().min(0).max(365).optional(),
@@ -178,6 +192,7 @@ const COLUMN: Record<string, string> = {
   returnPrefix: "return_prefix",
   checkPrefix: "check_prefix",
   ticketPrefix: "ticket_prefix",
+  bomPaperTemplate: "bom_paper_template",
   poApprovalLimit: "po_approval_limit",
   draftPoPurgeDays: "draft_po_purge_days",
   paymentTermsDays: "payment_terms_days",
