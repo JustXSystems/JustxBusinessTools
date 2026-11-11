@@ -127,7 +127,7 @@ export function AppShell<K extends string>({
 
 /**
  * Logo + name for the nav header.
- * Prefer company `logoSrc` inside the brand-mark tile; fall back to letter `mark`.
+ * Customer/tenant `logoSrc` goes in the brand-mark tile; fall back to letter `mark`.
  */
 export function NavBrand({ name, logoSrc, mark }: { name: ReactNode; logoSrc?: string; mark?: string }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);

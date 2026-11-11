@@ -2,7 +2,7 @@
 
 import "./ims-app.css";
 
-import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ErrorInfo, type FocusEvent, type ReactNode } from "react";
 import {
   AppShell,
   Avatar,
@@ -10,6 +10,7 @@ import {
   Brand,
   Button,
   CommandPalette,
+  cx,
   Dialog,
   EmptyState,
   Footnote,
@@ -52,6 +53,31 @@ function writeNavCollapsed(collapsed: boolean) {
   } catch {
     /* ignore quota / private mode */
   }
+}
+
+/** Reveal the IMS topbar at scroll-top or while the pointer / focus is in the top hotzone / bar. */
+function useAutohideTopbar() {
+  const [atTop, setAtTop] = useState(true);
+  const [hover, setHover] = useState(false);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setAtTop(window.scrollY <= 8);
+    sync();
+    window.addEventListener("scroll", sync, { passive: true });
+    return () => window.removeEventListener("scroll", sync);
+  }, []);
+
+  return {
+    atTop,
+    revealed: atTop || hover || focused,
+    onEnter: () => setHover(true),
+    onLeave: () => setHover(false),
+    onFocusCapture: () => setFocused(true),
+    onBlurCapture: (e: FocusEvent<HTMLDivElement>) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+    },
+  };
 }
 
 type NavState = { module: ImsModuleKey; intent: { module: ImsModuleKey; value: string } | null; seq: number };
@@ -360,65 +386,79 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
 
   const actorName = session.actor.name ?? session.actor.email ?? "You";
   const businessName = session.settings.businessName || session.brand?.name || "Your business";
+  /** Customer logo only for the nav mark (+ documents). Topbar stays Justx product branding. */
   const companyLogoSrc = session.brand?.logoUrl ? publicAssetUrl(session.brand.logoUrl) : undefined;
-  /** Topbar + nav: company logo when set; Justx mark only as fallback. */
-  const chromeLogoSrc = companyLogoSrc || logoSrc;
+  const topbar = useAutohideTopbar();
   const Module = current.component;
   const openIntent = nav.intent?.module === current.key ? nav.intent.value : null;
 
   return (
     <ImsAppProvider value={ctx}>
       <div className="ims-app">
-        <Topbar sticky="desktop">
-          <Brand logoSrc={chromeLogoSrc} name={businessName} sub={`Justx IMS · ${mode === "tool" ? "in JBT" : "Dealer"}`} />
-          <div className="bos-topbar-actions">
-            <SearchInput
-              readOnly
-              placeholder="Search items, parties, invoices…"
-              aria-label="Search IMS"
-              shortcut="⌘K"
-              onClick={() => setSearchOpen(true)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") setSearchOpen(true);
-              }}
-            />
-            {askPage ? (
-              <Button size="sm" variant="secondary" icon="sparkle" className="ims-ask-btn" onClick={() => setAskOpen(true)} aria-label={`Ask AI about ${current.label}`}>
-                <span className="ims-topbar-label">Ask AI</span>
-              </Button>
-            ) : null}
-            <ThemeToggle theme={theme} onChange={setTheme} />
-            <span className="ims-bell">
-              <IconButton icon="bell" aria-label={`Notifications${notes.length ? ` (${notes.length})` : ""}`} onClick={() => setNotesOpen(true)} />
-              {notes.length ? <span className="ims-bell-dot">{notes.length > 9 ? "9+" : notes.length}</span> : null}
-            </span>
-            <span className="ims-role-pill" title="Your IMS role">
-              {session.access.roleLabel}
-            </span>
-            {mode === "tool" ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => openFullscreen(current.key, openIntent)}
-                title="Open IMS as a full-screen app"
-                aria-label="Full screen"
-              >
-                <span className="ims-topbar-label">Full screen</span> ↗
-              </Button>
-            ) : onSignOut ? (
-              <Button size="sm" variant="ghost" icon="login" onClick={onSignOut} aria-label="Sign out">
-                <span className="ims-topbar-label">Sign out</span>
-              </Button>
-            ) : null}
-            <Avatar size="md" tone="var(--bos-blue)">
-              <span title={actorName}>{initialsOf(actorName)}</span>
-            </Avatar>
-          </div>
-        </Topbar>
+        <div
+          className="ims-topbar-hotzone"
+          aria-hidden="true"
+          style={{ pointerEvents: topbar.revealed ? "none" : "auto" }}
+          onMouseEnter={topbar.onEnter}
+        />
+        <div
+          className={cx("ims-topbar-slot", topbar.atTop && "is-at-top", topbar.revealed && "is-revealed")}
+          onMouseEnter={topbar.onEnter}
+          onMouseLeave={topbar.onLeave}
+          onFocusCapture={topbar.onFocusCapture}
+          onBlurCapture={topbar.onBlurCapture}
+        >
+          <Topbar sticky="desktop">
+            <Brand logoSrc={logoSrc} name="Justx IMS" sub={mode === "tool" ? "in Justx Business Tools" : "Dealer"} />
+            <div className="bos-topbar-actions">
+              <SearchInput
+                readOnly
+                placeholder="Search items, parties, invoices…"
+                aria-label="Search IMS"
+                shortcut="⌘K"
+                onClick={() => setSearchOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") setSearchOpen(true);
+                }}
+              />
+              {askPage ? (
+                <Button size="sm" variant="secondary" icon="sparkle" className="ims-ask-btn" onClick={() => setAskOpen(true)} aria-label={`Ask AI about ${current.label}`}>
+                  <span className="ims-topbar-label">Ask AI</span>
+                </Button>
+              ) : null}
+              <ThemeToggle theme={theme} onChange={setTheme} />
+              <span className="ims-bell">
+                <IconButton icon="bell" aria-label={`Notifications${notes.length ? ` (${notes.length})` : ""}`} onClick={() => setNotesOpen(true)} />
+                {notes.length ? <span className="ims-bell-dot">{notes.length > 9 ? "9+" : notes.length}</span> : null}
+              </span>
+              <span className="ims-role-pill" title="Your IMS role">
+                {session.access.roleLabel}
+              </span>
+              {mode === "tool" ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => openFullscreen(current.key, openIntent)}
+                  title="Open IMS as a full-screen app"
+                  aria-label="Full screen"
+                >
+                  <span className="ims-topbar-label">Full screen</span> ↗
+                </Button>
+              ) : onSignOut ? (
+                <Button size="sm" variant="ghost" icon="login" onClick={onSignOut} aria-label="Sign out">
+                  <span className="ims-topbar-label">Sign out</span>
+                </Button>
+              ) : null}
+              <Avatar size="md" tone="var(--bos-blue)">
+                <span title={actorName}>{initialsOf(actorName)}</span>
+              </Avatar>
+            </div>
+          </Topbar>
+        </div>
 
         <div className="bos-wrap ims-wrap" style={{ paddingTop: 20 }}>
           <AppShell
-            brand={<NavBrand name={businessName} logoSrc={chromeLogoSrc} mark="I" />}
+            brand={<NavBrand name={businessName} logoSrc={companyLogoSrc} mark="I" />}
             items={modules.map((x) => ({ key: x.key, label: x.label, icon: x.icon, section: x.section, badge: navBadges.get(x.key) }))}
             active={current.key}
             onSelect={(k) => navigate(k)}

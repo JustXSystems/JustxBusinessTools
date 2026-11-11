@@ -1,8 +1,7 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
-import { publicAssetUrl } from "@/lib/base-path";
-import { inrExact, qtyText } from "@/lib/ims/format";
+import { Fragment } from "react";
+import { dateLabel, inrExact, qtyText, rupeesInWords } from "@/lib/ims/format";
 import type { BomBusiness, BomDoc, BomDocLine, BomTotals } from "@/lib/ims/bom";
 
 export type BomPaperModel = {
@@ -46,169 +45,154 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness): BomPaperModel 
   };
 }
 
-/** Printable commercial BOM sheet (not a GST tax invoice). */
+const BOM_STAMP: Partial<Record<string, { text: string; color: string }>> = {
+  draft: { text: "DRAFT", color: "#8A8FA3" },
+  cancelled: { text: "CANCELLED", color: "#8A8FA3" },
+};
+
+/** Printable commercial BOM sheet — same paper language as tax invoices (`DocumentPaper`). */
 export function BomPaper({ model }: { model: BomPaperModel }) {
   const b = model.business;
-  const [logoFailed, setLogoFailed] = useState(false);
-  useEffect(() => {
-    setLogoFailed(false);
-  }, [b.logoUrl]);
-  const logoSrc = !logoFailed && b.logoUrl ? publicAssetUrl(b.logoUrl) : "";
-  const sections: Array<{ name: string; lines: BomPaperModel["lines"]; start: number }> = [];
-  let idx = 0;
+  const status = (model.status || "").toLowerCase();
+  const stamp = BOM_STAMP[status] ?? null;
+  const title = status === "draft" ? "DRAFT BOM" : "BILL OF MATERIALS";
+  const subtotal = model.totals.materialsTotal + model.totals.marginAmount;
+
+  const sections: Array<{ name: string; lines: BomPaperModel["lines"] }> = [];
   for (const line of model.lines) {
     const last = sections[sections.length - 1];
     if (!last || last.name !== line.section) {
-      sections.push({ name: line.section, lines: [line], start: 0 });
+      sections.push({ name: line.section, lines: [line] });
     } else {
       last.lines = [...last.lines, line];
     }
   }
-  for (const s of sections) {
-    s.start = idx;
-    idx += s.lines.length;
-  }
 
-  const status = (model.status || "").toLowerCase();
-  const watermark = status === "draft" ? "DRAFT" : status === "cancelled" ? "CANCELLED" : null;
+  const meta: Array<{ label: string; value: string }> = [
+    { label: "Document no.", value: model.docNo || "Draft" },
+    { label: "Document date", value: model.docDate ? dateLabel(model.docDate) : "—" },
+    { label: "Package / capacity", value: model.capacityLabel || "—" },
+  ];
+  if (model.title) meta.push({ label: "Title", value: model.title });
+  if (model.preparedBy) meta.push({ label: "Prepared by", value: model.preparedBy });
 
   return (
-    <article className="ims-bom-paper bos-inv-paper" aria-label="Bill of materials">
-      {watermark ? <div className="ims-bom-paper-watermark" aria-hidden="true">{watermark}</div> : null}
-      <header className="ims-bom-paper-brand-block">
-        {logoSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element -- tenant logo from /api/files
-          <img
-            className="ims-bom-paper-logo"
-            src={logoSrc}
-            alt=""
-            onError={() => setLogoFailed(true)}
-          />
-        ) : null}
-        <div className="ims-bom-paper-brand">{b.name || "Your business"}</div>
-        <div className="ims-bom-paper-brand-meta">
-          {[b.address, b.state, b.gstin ? `GSTIN ${b.gstin}` : null, b.phone, b.email].filter(Boolean).join(" · ")}
+    <article className="bos-inv-paper" aria-label="Bill of materials" style={{ position: "static" }}>
+      <div className="bos-inv-paper-top">
+        <div>
+          <div className="bos-inv-paper-brand">{b.name || "Your business"}</div>
+          <div className="ims-paper-seller">
+            {[b.address, b.state, b.gstin ? `GSTIN ${b.gstin}` : null, b.phone, b.email].filter(Boolean).join("\n")}
+          </div>
         </div>
-      </header>
-
-      <div className="ims-bom-paper-title-row">
-        <div className="ims-bom-paper-title">BILL OF MATERIALS</div>
-        <div className="ims-bom-paper-capacity">
-          {model.capacityLabel ? (
-            <>
-              <span style={{ opacity: 0.7, fontWeight: 600 }}>Package / capacity: </span>
-              {model.capacityLabel}
-            </>
-          ) : (
-            <span style={{ opacity: 0.55 }}>Package / capacity</span>
-          )}
+        <div style={{ textAlign: "right" }}>
+          <div className="bos-inv-paper-title">{title}</div>
+          {stamp ? (
+            <span className="ims-paper-stamp" style={{ color: stamp.color }}>
+              {stamp.text}
+            </span>
+          ) : null}
         </div>
       </div>
 
-      <div className="ims-bom-paper-meta">
+      <div className="ims-paper-meta">
+        {meta.map((m) => (
+          <div key={m.label}>
+            <b>{m.label}</b>
+            {m.value}
+          </div>
+        ))}
+      </div>
+
+      <div className="bos-inv-paper-meta">
         <div>
-          <b>Customer</b>
-          {model.customerName || "—"}
+          <div className="bos-inv-paper-label">Customer</div>
+          <div className="bos-inv-paper-value">{model.customerName || "—"}</div>
         </div>
         <div>
-          <b>Location / site</b>
-          {model.location || "—"}
-        </div>
-        <div>
-          <b>Document</b>
-          {model.docNo || "Draft"}
-          {model.docDate ? ` · ${model.docDate}` : ""}
-        </div>
-        <div>
-          <b>Title</b>
-          {model.title || "—"}
+          <div className="bos-inv-paper-label">Site / location</div>
+          <div className="bos-inv-paper-value">{model.location || "—"}</div>
         </div>
       </div>
 
-      <table className="ims-bom-paper-table">
+      <table className="bos-inv-paper-table">
         <thead>
           <tr>
-            <th className="ctr" style={{ width: 40 }}>
-              #
-            </th>
-            <th>Item description</th>
-            <th style={{ width: "16%" }}>Make / brand</th>
-            <th className="ctr" style={{ width: 54 }}>
-              Qty
-            </th>
-            <th className="ctr" style={{ width: 54 }}>
-              Unit
-            </th>
-            <th className="num" style={{ width: 78 }}>
-              Rate
-            </th>
-            <th className="num" style={{ width: 84 }}>
-              Total
-            </th>
-            <th style={{ width: "12%" }}>Remarks</th>
+            <th>#</th>
+            <th>Item</th>
+            <th>Make</th>
+            <th>Qty</th>
+            <th>Rate</th>
+            <th>Amount</th>
           </tr>
         </thead>
         <tbody>
           {sections.length ? (
             sections.map((sec, sIdx) => (
               <Fragment key={`sec-${sIdx}-${sec.name}`}>
-                <tr className="ims-bom-section-row">
-                  <td className="ctr">{String.fromCharCode(64 + (sIdx + 1))}</td>
-                  <td colSpan={7}>{sec.name}</td>
-                </tr>
+                {sections.length > 1 ? (
+                  <tr className="ims-bom-section">
+                    <td colSpan={6}>{sec.name || `Section ${String.fromCharCode(65 + sIdx)}`}</td>
+                  </tr>
+                ) : null}
                 {sec.lines.map((l, i) => (
                   <tr key={`${sec.name}-${i}-${l.description}`}>
-                    <td className="ctr">{i + 1}</td>
-                    <td style={{ whiteSpace: "normal" }}>{l.description}</td>
+                    <td>{i + 1}</td>
+                    <td style={{ whiteSpace: "normal" }}>
+                      {l.description}
+                      {l.remarks ? <small>{l.remarks}</small> : null}
+                    </td>
                     <td style={{ whiteSpace: "normal" }}>{l.makeText || "—"}</td>
-                    <td className="ctr">{qtyText(l.qty)}</td>
-                    <td className="ctr">{l.unit}</td>
-                    <td className="num">{inrExact(l.rate)}</td>
-                    <td className="num">{inrExact(l.amount ?? l.qty * l.rate)}</td>
-                    <td style={{ whiteSpace: "normal" }}>{l.remarks || ""}</td>
+                    <td>{qtyText(l.qty, l.unit)}</td>
+                    <td>{inrExact(l.rate)}</td>
+                    <td>{inrExact(l.amount ?? l.qty * l.rate)}</td>
                   </tr>
                 ))}
               </Fragment>
             ))
           ) : (
             <tr>
-              <td colSpan={8} style={{ textAlign: "center", opacity: 0.6 }}>
-                No lines yet
+              <td colSpan={6} className="bos-inv-paper-empty">
+                No items
               </td>
             </tr>
           )}
         </tbody>
       </table>
 
-      <div className="ims-bom-paper-totals">
-        <div className="ims-bom-paper-totals-row is-accent">
+      <div className="bos-inv-totals">
+        <div className="bos-inv-totals-row">
           <span>Materials total</span>
           <span>{inrExact(model.totals.materialsTotal)}</span>
         </div>
-        <div className="ims-bom-paper-totals-row">
-          <span>Margin {model.marginPct ? `${model.marginPct}%` : ""}</span>
+        <div className="bos-inv-totals-row">
+          <span>Margin{model.marginPct ? ` (${model.marginPct}%)` : ""}</span>
           <span>{inrExact(model.totals.marginAmount)}</span>
         </div>
-        <div className="ims-bom-paper-totals-row">
+        <div className="bos-inv-totals-row">
           <span>Subtotal</span>
-          <span>{inrExact(model.totals.materialsTotal + model.totals.marginAmount)}</span>
+          <span>{inrExact(subtotal)}</span>
         </div>
-        <div className="ims-bom-paper-totals-row">
-          <span>Tax {model.taxPct ? `${model.taxPct}%` : ""}</span>
+        <div className="bos-inv-totals-row">
+          <span>Tax{model.taxPct ? ` (${model.taxPct}%)` : ""}</span>
           <span>{inrExact(model.totals.taxAmount)}</span>
         </div>
-        <div className="ims-bom-paper-totals-row is-accent">
-          <span>Grand total</span>
+        <div className="bos-inv-totals-row is-total">
+          <span>Total</span>
           <span>{inrExact(model.totals.grandTotal)}</span>
         </div>
       </div>
+      <div className="ims-paper-words">{rupeesInWords(model.totals.grandTotal)}</div>
 
-      {model.notes ? <div className="ims-bom-paper-notes">{model.notes}</div> : null}
-      {model.preparedBy ? (
-        <div className="ims-bom-paper-notes" style={{ textAlign: "right" }}>
-          Prepared by {model.preparedBy}
+      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
+
+      <div className="ims-paper-sign">
+        <div />
+        <div>
+          <div className="ims-paper-sign-line" />
+          {model.preparedBy ? `Prepared by ${model.preparedBy}` : `Authorised signatory · ${b.name || "Your business"}`}
         </div>
-      ) : null}
+      </div>
     </article>
   );
 }
