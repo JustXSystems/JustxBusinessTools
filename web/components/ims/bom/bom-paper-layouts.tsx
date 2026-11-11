@@ -22,23 +22,25 @@ function stampOf(status: string | null | undefined) {
   return BOM_STAMP[(status || "").toLowerCase()] ?? null;
 }
 
+/** Customer-facing document title — never the template name/type. */
+function bomDocTitle(model: BomPaperModel): string {
+  return (model.status || "").toLowerCase() === "draft" ? "DRAFT BOM" : "BILL OF MATERIALS";
+}
+
 function PaperShell({
   model,
-  title,
   tpl,
   children,
-  badge,
   hideDefaultTop,
 }: {
   model: BomPaperModel;
-  title: string;
   tpl: string;
-  badge?: ReactNode;
   hideDefaultTop?: boolean;
   children: ReactNode;
 }) {
   const b = model.business;
   const stamp = stampOf(model.status);
+  const title = bomDocTitle(model);
   return (
     <article
       className={`bos-inv-paper ims-bom-sheet ims-bom-sheet--${tpl}`}
@@ -55,7 +57,6 @@ function PaperShell({
           />
           <div className="ims-bom-sheet-titleblock">
             <div className="bos-inv-paper-title">{title}</div>
-            {badge}
             {stamp ? (
               <span className="ims-paper-stamp" style={{ color: stamp.color }}>
                 {stamp.text}
@@ -210,12 +211,10 @@ function EmptyRows({ cols }: { cols: number }) {
 /* ---------- Classic ---------- */
 
 export function ClassicBomPaper({ model }: { model: BomPaperModel }) {
-  const status = (model.status || "").toLowerCase();
-  const title = status === "draft" ? "DRAFT BOM" : "BILL OF MATERIALS";
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
 
   return (
-    <PaperShell model={model} title={title} tpl="classic" badge={<div className="ims-bom-paper-chip">Classic</div>}>
+    <PaperShell model={model} tpl="classic">
       <DocMeta model={model} />
       <PartyBlock model={model} />
       <table className="bos-inv-paper-table">
@@ -278,7 +277,7 @@ export function TieredBomPaper({ model }: { model: BomPaperModel }) {
   const c = bomCostComposition(model.totals);
 
   return (
-    <PaperShell model={model} title="BOM PROPOSAL" tpl="tiered" badge={<div className="ims-bom-paper-chip">Tiered</div>}>
+    <PaperShell model={model} tpl="tiered">
       <div className="ims-bom-hero">
         <div>
           <div className="ims-bom-hero-kicker">Package capacity</div>
@@ -377,7 +376,7 @@ export function TieredBomPaper({ model }: { model: BomPaperModel }) {
 export function EpcBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
   return (
-    <PaperShell model={model} title="DETAILED BILL OF MATERIALS" tpl="epc" badge={<div className="ims-bom-paper-chip">EPC</div>}>
+    <PaperShell model={model} tpl="epc">
       <div className="ims-bom-epc-strip">
         <div>
           <b>Capacity</b>
@@ -455,7 +454,7 @@ export function ExecutiveBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
   const c = bomCostComposition(model.totals);
   return (
-    <PaperShell model={model} title="EXECUTIVE BRIEF" tpl="executive" badge={<div className="ims-bom-paper-chip">Brief</div>}>
+    <PaperShell model={model} tpl="executive">
       <div className="ims-bom-exec-hero">
         <div>
           <div className="ims-bom-hero-kicker">Investment</div>
@@ -552,7 +551,7 @@ export function ExecutiveBomPaper({ model }: { model: BomPaperModel }) {
 export function FieldBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
   return (
-    <PaperShell model={model} title="FIELD INSTALL PACK" tpl="field" badge={<div className="ims-bom-paper-chip">No pricing</div>}>
+    <PaperShell model={model} tpl="field">
       <div className="ims-bom-field-banner">Materials checklist for site — rates and totals are hidden.</div>
       <DocMeta
         model={model}
@@ -627,7 +626,7 @@ export function AuroraBomPaper({ model }: { model: BomPaperModel }) {
   const stamp = stampOf(model.status);
 
   return (
-    <PaperShell model={model} title="AURORA BOM" tpl="aurora" hideDefaultTop>
+    <PaperShell model={model} tpl="aurora" hideDefaultTop>
       <header className="ims-bom-aurora-mast">
         <div className="ims-bom-aurora-brand">
           <PaperBrandHead
@@ -637,7 +636,7 @@ export function AuroraBomPaper({ model }: { model: BomPaperModel }) {
           />
         </div>
         <div className="ims-bom-aurora-signal">
-          <div className="ims-bom-aurora-eyebrow">Bill of materials</div>
+          <div className="ims-bom-aurora-eyebrow">{bomDocTitle(model)}</div>
           <div className="ims-bom-aurora-capacity">{model.capacityLabel || "Package"}</div>
           <div className="ims-bom-aurora-doc">
             {model.docNo || "Draft"} · {model.docDate ? dateLabel(model.docDate) : "—"}
@@ -737,7 +736,7 @@ export function LedgerBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
   let row = 0;
   return (
-    <PaperShell model={model} title="PRECISION LEDGER" tpl="ledger" badge={<div className="ims-bom-paper-chip">Ledger</div>}>
+    <PaperShell model={model} tpl="ledger">
       <div className="ims-bom-ledger-meta">
         <div>
           <b>REF</b> {model.docNo || "DRAFT"}
@@ -815,9 +814,9 @@ export function AtelierBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
   const c = bomCostComposition(model.totals);
   return (
-    <PaperShell model={model} title="ATELIER" tpl="atelier" badge={<div className="ims-bom-paper-chip">Atelier</div>}>
+    <PaperShell model={model} tpl="atelier">
       <div className="ims-bom-atelier-display">
-        <p className="ims-bom-atelier-eyebrow">Bill of materials</p>
+        <p className="ims-bom-atelier-eyebrow">{bomDocTitle(model)}</p>
         <h2>{model.title || "Materials schedule"}</h2>
         <p className="ims-bom-atelier-lede">
           {model.capacityLabel ? `${model.capacityLabel} · ` : ""}
@@ -920,7 +919,7 @@ export function PrismBomPaper({ model }: { model: BomPaperModel }) {
   const stamp = stampOf(model.status);
 
   return (
-    <PaperShell model={model} title="PRISM" tpl="prism" hideDefaultTop>
+    <PaperShell model={model} tpl="prism" hideDefaultTop>
       <div className="ims-bom-prism">
         <aside className="ims-bom-prism-rail">
           <PaperBrandHead
@@ -1031,7 +1030,7 @@ export function OrbitBomPaper({ model }: { model: BomPaperModel }) {
   const c = bomCostComposition(model.totals);
   const lineCount = model.lines.length;
   return (
-    <PaperShell model={model} title="ORBIT" tpl="orbit" badge={<div className="ims-bom-paper-chip">Cockpit</div>}>
+    <PaperShell model={model} tpl="orbit">
       <div className="ims-bom-orbit-kpis">
         <div>
           <b>Capacity</b>
@@ -1158,7 +1157,7 @@ export function ForgeBomPaper({ model }: { model: BomPaperModel }) {
   );
 
   return (
-    <PaperShell model={model} title="FORGE PROCUREMENT BOQ" tpl="forge" badge={<div className="ims-bom-paper-chip">Buy list</div>}>
+    <PaperShell model={model} tpl="forge">
       <div className="ims-bom-forge-banner">
         <div>
           <b>Job</b>
@@ -1210,7 +1209,7 @@ export function NovaBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
   const c = bomCostComposition(model.totals);
   return (
-    <PaperShell model={model} title="NOVA" tpl="nova" badge={<div className="ims-bom-paper-chip">Close</div>}>
+    <PaperShell model={model} tpl="nova">
       <div className="ims-bom-nova-hero">
         <div>
           <p className="ims-bom-nova-eyebrow">Your system investment</p>
@@ -1305,7 +1304,7 @@ export function FolioBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
   const c = bomCostComposition(model.totals);
   return (
-    <PaperShell model={model} title="FOLIO" tpl="folio" badge={<div className="ims-bom-paper-chip">Cards</div>}>
+    <PaperShell model={model} tpl="folio">
       <div className="ims-bom-folio-top">
         <div>
           <b>{model.title || "Bill of materials"}</b>
