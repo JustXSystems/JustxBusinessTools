@@ -1,11 +1,12 @@
 /**
  * BOM paper templates — tenant-wide layouts for live preview and print/PDF.
- * Maps only to fields already on BomDoc / BomDocLine (no extra schema).
+ * Maps BomDoc / BomDocLine (+ commercial proposal terms) into printable models.
  */
 import type { BomBusiness, BomDocLine, BomLineKind, BomTotals } from "./bom";
 import { BOM_LINE_KIND_LABEL } from "./bom";
 
 export const BOM_PAPER_TEMPLATES = [
+  "aether",
   "classic",
   "tiered",
   "epc",
@@ -47,6 +48,15 @@ export type BomPaperTemplateMeta = {
 };
 
 export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
+  {
+    id: "aether",
+    short: "Aether",
+    label: "Aether Proposal",
+    tagline: "Flagship materials proposal — investment hero, SKU/HSN schedule, commercial terms.",
+    audience: "Premium dealer & EPC proposals",
+    era: "futuristic",
+    features: ["Investment hero", "SKU · HSN", "Terms grid", "Section subtotals"],
+  },
   {
     id: "classic",
     short: "Classic",
@@ -168,7 +178,7 @@ export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
 
 export function normalizeBomPaperTemplate(v: unknown): BomPaperTemplateId {
   const s = String(v ?? "").trim().toLowerCase();
-  return (BOM_PAPER_TEMPLATES as readonly string[]).includes(s) ? (s as BomPaperTemplateId) : "classic";
+  return (BOM_PAPER_TEMPLATES as readonly string[]).includes(s) ? (s as BomPaperTemplateId) : "aether";
 }
 
 export function bomPaperTemplateMeta(id: BomPaperTemplateId | null | undefined): BomPaperTemplateMeta {
@@ -179,7 +189,11 @@ export function bomPaperTemplateMeta(id: BomPaperTemplateId | null | undefined):
 export type BomPaperLine = Pick<
   BomDocLine,
   "section" | "description" | "makeText" | "qty" | "unit" | "rate" | "amount" | "remarks"
-> & { lineKind?: BomLineKind | null };
+> & {
+  lineKind?: BomLineKind | null;
+  sku?: string | null;
+  hsn?: string | null;
+};
 
 export type BomPaperSection = {
   name: string;
@@ -245,6 +259,13 @@ export function lineKindCode(kind: BomLineKind | null | undefined): string {
   }
 }
 
+export function lineIdentityBits(line: Pick<BomPaperLine, "sku" | "hsn">): string[] {
+  const bits: string[] = [];
+  if (line.sku?.trim()) bits.push(line.sku.trim());
+  if (line.hsn?.trim()) bits.push(`HSN ${line.hsn.trim()}`);
+  return bits;
+}
+
 export type BomCostComposition = {
   materials: number;
   margin: number;
@@ -284,8 +305,14 @@ export function sampleBomPaperModel(businessName = "Your business"): {
   capacityLabel: string;
   customerName: string;
   location: string;
+  projectRef: string;
   preparedBy: string;
   notes: string;
+  revision: number;
+  validUntil: string;
+  paymentTerms: string;
+  deliveryTerms: string;
+  warrantyTerms: string;
   marginPct: number;
   taxPct: number;
   lines: BomPaperLine[];
@@ -297,6 +324,8 @@ export function sampleBomPaperModel(businessName = "Your business"): {
       lineKind: "stock",
       description: "Solar Modules Bifacial DCR 620Wp",
       makeText: "Waaree / Adani / Vikram",
+      sku: "MOD-620-DCR",
+      hsn: "8541",
       qty: 6,
       unit: "nos",
       rate: 12500,
@@ -308,6 +337,8 @@ export function sampleBomPaperModel(businessName = "Your business"): {
       lineKind: "stock",
       description: "On-Grid Inverter 3KW-1PH",
       makeText: "Solis / Sungrow",
+      sku: "INV-3K-1PH",
+      hsn: "8504",
       qty: 1,
       unit: "nos",
       rate: 28000,
@@ -319,6 +350,8 @@ export function sampleBomPaperModel(businessName = "Your business"): {
       lineKind: "stock",
       description: "DC Cable SC 4sqmm (Red & Black)",
       makeText: "Polycab",
+      sku: "CBL-DC-4",
+      hsn: "8544",
       qty: 60,
       unit: "mtr",
       rate: 45,
@@ -330,6 +363,8 @@ export function sampleBomPaperModel(businessName = "Your business"): {
       lineKind: "service",
       description: "Installation charges",
       makeText: "Third party",
+      sku: null,
+      hsn: null,
       qty: 1,
       unit: "job",
       rate: 9000,
@@ -341,6 +376,8 @@ export function sampleBomPaperModel(businessName = "Your business"): {
       lineKind: "overhead",
       description: "Transport & handling",
       makeText: "Own",
+      sku: null,
+      hsn: null,
       qty: 1,
       unit: "job",
       rate: 2500,
@@ -371,8 +408,14 @@ export function sampleBomPaperModel(businessName = "Your business"): {
     capacityLabel: "3KW 1PH",
     customerName: "Sample Customer",
     location: "Bengaluru",
+    projectRef: "SITE-BNG-042",
     preparedBy: "Sales desk",
     notes: "Subsidy scheme · Net metering as applicable.",
+    revision: 1,
+    validUntil: "2026-12-11",
+    paymentTerms: "40% advance · 60% on delivery",
+    deliveryTerms: "7–10 working days after advance",
+    warrantyTerms: "As per OEM · Workmanship 1 year",
     marginPct,
     taxPct,
     lines,

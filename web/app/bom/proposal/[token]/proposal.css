@@ -1,0 +1,95 @@
+.bom-proposal-public {
+  min-height: 100vh;
+  background:
+    radial-gradient(120% 80% at 10% -10%, rgba(15, 118, 110, 0.12), transparent 50%),
+    linear-gradient(180deg, #f4f7f8 0%, #eef2f4 100%);
+  padding: 28px 16px 72px;
+  color: #0f172a;
+}
+
+.bom-proposal-public-shell {
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.bom-proposal-public .bos-inv-paper {
+  position: static;
+  margin-bottom: 20px;
+}
+
+.bom-proposal-dock {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 22px 24px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.06);
+}
+
+.bom-proposal-dock h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.bom-proposal-dock label {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.bom-proposal-dock input,
+.bom-proposal-dock textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid #dbe3ea;
+  border-radius: 10px;
+  font: inherit;
+  color: #0f172a;
+  background: #fff;
+}
+
+.bom-proposal-dock-error {
+  color: #b91c1c;
+  margin: 0 0 10px;
+}
+
+.bom-proposal-dock-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bom-proposal-dock-actions button {
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  background: #0f172a;
+  color: #fff;
+}
+
+.bom-proposal-dock-actions button.is-ghost {
+  background: #fff;
+  color: #0f172a;
+  border: 1px solid #0f172a;
+}
+
+.bom-proposal-dock-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media print {
+  .bom-proposal-public {
+    background: #fff;
+    padding: 0;
+  }
+  .bom-proposal-dock {
+    display: none !important;
+  }
+}

@@ -16,13 +16,14 @@ describe("bom-paper templates", () => {
     expect(normalizeBomPaperTemplate("tiered")).toBe("tiered");
     expect(normalizeBomPaperTemplate("ORBIT")).toBe("orbit");
     expect(normalizeBomPaperTemplate("folio")).toBe("folio");
-    expect(normalizeBomPaperTemplate("nope")).toBe("classic");
-    expect(normalizeBomPaperTemplate(null)).toBe("classic");
+    expect(normalizeBomPaperTemplate("aether")).toBe("aether");
+    expect(normalizeBomPaperTemplate("nope")).toBe("aether");
+    expect(normalizeBomPaperTemplate(null)).toBe("aether");
   });
 
-  it("exposes thirteen marketplace layouts with compact meta", () => {
-    expect(BOM_PAPER_TEMPLATES).toHaveLength(13);
-    expect(BOM_PAPER_TEMPLATE_META).toHaveLength(13);
+  it("exposes fourteen marketplace layouts with compact meta", () => {
+    expect(BOM_PAPER_TEMPLATES).toHaveLength(14);
+    expect(BOM_PAPER_TEMPLATE_META).toHaveLength(14);
     expect(BOM_PAPER_ERA_FILTERS[0]!.id).toBe("all");
     for (const id of BOM_PAPER_TEMPLATES) {
       const meta = bomPaperTemplateMeta(id);
@@ -67,5 +68,14 @@ describe("bom-paper templates", () => {
     const materials = model.lines.reduce((s, l) => s + Number(l.amount || 0), 0);
     expect(model.totals.materialsTotal).toBe(materials);
     expect(model.totals.grandTotal).toBeGreaterThan(model.totals.materialsTotal);
+  });
+
+  it("sample model carries commercial proposal fields and line identity", () => {
+    const model = sampleBomPaperModel();
+    expect(model.projectRef).toBeTruthy();
+    expect(model.validUntil).toBeTruthy();
+    expect(model.paymentTerms).toBeTruthy();
+    expect(model.lines[0]!.sku).toBeTruthy();
+    expect(model.lines[0]!.hsn).toBeTruthy();
   });
 });

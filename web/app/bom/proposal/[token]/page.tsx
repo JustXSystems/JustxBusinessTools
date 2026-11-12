@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiUrl } from "@/lib/api-base";
+import { normalizeBomPaperTemplate, type BomPaperTemplateId } from "@/lib/ims/bom-paper";
+import { BomPaper, type BomPaperModel } from "@/components/ims/bom/BomPaper";
+import "@/components/bos/styles/bos.patterns.css";
+import "@/components/ims/bom/bom.css";
+import "./proposal.css";
 
 type PublicLine = {
   id: string;
@@ -10,10 +15,23 @@ type PublicLine = {
   description: string;
   makeText: string | null;
   sku: string | null;
+  hsn?: string | null;
   qty: number;
   unit: string;
   rate: number;
   amount: number;
+  remarks?: string | null;
+  lineKind?: string | null;
+};
+
+type PublicBusiness = {
+  name: string;
+  gstin?: string | null;
+  address?: string | null;
+  state?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  logoUrl?: string | null;
 };
 
 type PublicBom = {
@@ -24,7 +42,16 @@ type PublicBom = {
   title: string | null;
   customerName: string;
   location: string | null;
+  projectRef?: string | null;
+  revision?: number;
+  validUntil?: string | null;
+  paymentTerms?: string | null;
+  deliveryTerms?: string | null;
+  warrantyTerms?: string | null;
   notes: string | null;
+  preparedBy?: string | null;
+  marginPct?: number;
+  taxPct?: number;
   materialsTotal: number;
   marginAmount: number;
   taxAmount: number;
@@ -32,11 +59,70 @@ type PublicBom = {
   proposalStatus: string | null;
   proposalResponseNote: string | null;
   lines: PublicLine[];
-  businessName: string;
+  business?: PublicBusiness;
+  businessName?: string;
+  template?: string | null;
 };
 
-const inr = (n: number) =>
-  `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function toPaperModel(doc: PublicBom): BomPaperModel {
+  const business = doc.business ?? {
+    name: doc.businessName || "Your Company",
+    gstin: null,
+    address: null,
+    state: null,
+    phone: null,
+    email: null,
+    logoUrl: null,
+  };
+  return {
+    business: {
+      name: business.name,
+      gstin: business.gstin ?? null,
+      address: business.address ?? null,
+      state: business.state ?? null,
+      phone: business.phone ?? null,
+      email: business.email ?? null,
+      logoUrl: business.logoUrl ?? null,
+    },
+    docNo: doc.docNo,
+    docDate: doc.docDate,
+    status: doc.status,
+    title: doc.title || "Materials proposal",
+    capacityLabel: doc.capacityLabel || "",
+    customerName: doc.customerName || "",
+    location: doc.location || "",
+    projectRef: doc.projectRef ?? null,
+    preparedBy: doc.preparedBy ?? null,
+    notes: doc.notes,
+    revision: doc.revision ?? 1,
+    validUntil: doc.validUntil ?? null,
+    paymentTerms: doc.paymentTerms ?? null,
+    deliveryTerms: doc.deliveryTerms ?? null,
+    warrantyTerms: doc.warrantyTerms ?? null,
+    marginPct: Number(doc.marginPct) || 0,
+    taxPct: Number(doc.taxPct) || 0,
+    template: normalizeBomPaperTemplate(doc.template) as BomPaperTemplateId,
+    lines: (doc.lines ?? []).map((l) => ({
+      section: l.section,
+      lineKind: (l.lineKind as BomPaperModel["lines"][number]["lineKind"]) ?? "stock",
+      description: l.description,
+      makeText: l.makeText,
+      sku: l.sku,
+      hsn: l.hsn ?? null,
+      qty: l.qty,
+      unit: l.unit,
+      rate: l.rate,
+      amount: l.amount,
+      remarks: l.remarks ?? null,
+    })),
+    totals: {
+      materialsTotal: doc.materialsTotal,
+      marginAmount: doc.marginAmount,
+      taxAmount: doc.taxAmount,
+      grandTotal: doc.grandTotal,
+    },
+  };
+}
 
 export default function PublicBomProposalPage() {
   const params = useParams();
@@ -61,16 +147,6 @@ export default function PublicBomProposalPage() {
       })
       .catch((e: Error) => setError(e.message));
   }, [token]);
-
-  const sections = useMemo(() => {
-    const map = new Map<string, PublicLine[]>();
-    for (const line of doc?.lines ?? []) {
-      const list = map.get(line.section) ?? [];
-      list.push(line);
-      map.set(line.section, list);
-    }
-    return [...map.entries()];
-  }, [doc]);
 
   const canDecide = doc?.proposalStatus === "sent" || doc?.proposalStatus === "viewed";
 
@@ -102,146 +178,64 @@ export default function PublicBomProposalPage() {
 
   if (error && !doc) {
     return (
-      <main style={{ maxWidth: 720, margin: "48px auto", padding: 24, fontFamily: "Georgia, serif" }}>
-        <h1>Proposal unavailable</h1>
-        <p>{error}</p>
+      <main className="bom-proposal-public">
+        <div className="bom-proposal-public-shell">
+          <h1>Proposal unavailable</h1>
+          <p>{error}</p>
+        </div>
       </main>
     );
   }
 
   if (!doc) {
     return (
-      <main style={{ maxWidth: 720, margin: "48px auto", padding: 24, fontFamily: "Georgia, serif" }}>
-        <p>Loading proposal…</p>
+      <main className="bom-proposal-public">
+        <div className="bom-proposal-public-shell">
+          <p>Loading proposal…</p>
+        </div>
       </main>
     );
   }
 
+  const model = toPaperModel(doc);
+
   return (
-    <main style={{ maxWidth: 880, margin: "32px auto", padding: "24px 20px 64px", fontFamily: "Georgia, 'Times New Roman', serif", color: "#1a1a1a" }}>
-      <header style={{ borderBottom: "2px solid #1a1a1a", paddingBottom: 16, marginBottom: 24 }}>
-        <div style={{ fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.7 }}>{doc.businessName}</div>
-        <h1 style={{ margin: "8px 0 4px", fontSize: 32, fontWeight: 600 }}>{doc.title || "Materials proposal"}</h1>
-        <p style={{ margin: 0, fontSize: 15 }}>
-          {doc.docNo} · {doc.docDate}
-          {doc.capacityLabel ? ` · ${doc.capacityLabel}` : ""}
-        </p>
-        <p style={{ margin: "8px 0 0" }}>
-          For <strong>{doc.customerName || "Customer"}</strong>
-          {doc.location ? ` · ${doc.location}` : ""}
-        </p>
-      </header>
+    <main className="bom-proposal-public">
+      <div className="bom-proposal-public-shell bos">
+        <BomPaper model={model} />
 
-      {sections.map(([section, lines]) => (
-        <section key={section} style={{ marginBottom: 28 }}>
-          <h2 style={{ fontSize: 18, margin: "0 0 12px", borderBottom: "1px solid #ccc", paddingBottom: 6 }}>{section}</h2>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>
-                <th style={{ padding: "6px 4px" }}>Description</th>
-                <th style={{ padding: "6px 4px" }}>Qty</th>
-                <th style={{ padding: "6px 4px" }}>Rate</th>
-                <th style={{ padding: "6px 4px", textAlign: "right" }}>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((l) => (
-                <tr key={l.id} style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ padding: "8px 4px" }}>
-                    <div>{l.description}</div>
-                    {l.makeText || l.sku ? (
-                      <div style={{ fontSize: 12, opacity: 0.7 }}>
-                        {[l.makeText, l.sku].filter(Boolean).join(" · ")}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td style={{ padding: "8px 4px", whiteSpace: "nowrap" }}>
-                    {l.qty} {l.unit}
-                  </td>
-                  <td style={{ padding: "8px 4px", whiteSpace: "nowrap" }}>{inr(l.rate)}</td>
-                  <td style={{ padding: "8px 4px", textAlign: "right", whiteSpace: "nowrap" }}>{inr(l.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <section className="bom-proposal-dock no-print" aria-label="Your response">
+          <h2>Your response</h2>
+          {doc.proposalStatus === "accepted" || doc.proposalStatus === "rejected" ? (
+            <p>
+              This proposal was <strong>{doc.proposalStatus}</strong>
+              {doc.proposalResponseNote ? `: ${doc.proposalResponseNote}` : "."}
+            </p>
+          ) : canDecide ? (
+            <>
+              <label>
+                Your name
+                <input value={responderName} onChange={(e) => setResponderName(e.target.value)} />
+              </label>
+              <label>
+                Note (optional)
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
+              </label>
+              {error ? <p className="bom-proposal-dock-error">{error}</p> : null}
+              <div className="bom-proposal-dock-actions">
+                <button type="button" disabled={busy} onClick={() => void decide("accepted")}>
+                  Accept proposal
+                </button>
+                <button type="button" className="is-ghost" disabled={busy} onClick={() => void decide("rejected")}>
+                  Reject
+                </button>
+              </div>
+            </>
+          ) : (
+            <p>This proposal is no longer open for a response ({doc.proposalStatus || "closed"}).</p>
+          )}
         </section>
-      ))}
-
-      <aside style={{ marginTop: 8, padding: 16, background: "#f6f4ef", borderRadius: 4 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-          <span>Materials</span>
-          <strong>{inr(doc.materialsTotal)}</strong>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-          <span>Margin</span>
-          <strong>{inr(doc.marginAmount)}</strong>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-          <span>Tax</span>
-          <strong>{inr(doc.taxAmount)}</strong>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, marginTop: 8 }}>
-          <span>Grand total</span>
-          <strong>{inr(doc.grandTotal)}</strong>
-        </div>
-      </aside>
-
-      {doc.notes ? (
-        <p style={{ marginTop: 20, fontSize: 14, opacity: 0.85 }}>
-          <strong>Notes:</strong> {doc.notes}
-        </p>
-      ) : null}
-
-      <section style={{ marginTop: 36, paddingTop: 20, borderTop: "1px solid #ccc" }}>
-        <h2 style={{ fontSize: 20, marginTop: 0 }}>Your response</h2>
-        {doc.proposalStatus === "accepted" || doc.proposalStatus === "rejected" ? (
-          <p>
-            This proposal was <strong>{doc.proposalStatus}</strong>
-            {doc.proposalResponseNote ? `: ${doc.proposalResponseNote}` : "."}
-          </p>
-        ) : canDecide ? (
-          <>
-            <label style={{ display: "block", marginBottom: 12, fontSize: 14 }}>
-              Your name
-              <input
-                value={responderName}
-                onChange={(e) => setResponderName(e.target.value)}
-                style={{ display: "block", width: "100%", marginTop: 6, padding: "10px 12px", fontSize: 15 }}
-              />
-            </label>
-            <label style={{ display: "block", marginBottom: 16, fontSize: 14 }}>
-              Note (optional)
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={3}
-                style={{ display: "block", width: "100%", marginTop: 6, padding: "10px 12px", fontSize: 15 }}
-              />
-            </label>
-            {error ? <p style={{ color: "#a33" }}>{error}</p> : null}
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void decide("accepted")}
-                style={{ padding: "12px 20px", background: "#1a1a1a", color: "#fff", border: 0, cursor: "pointer", fontSize: 15 }}
-              >
-                Accept proposal
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void decide("rejected")}
-                style={{ padding: "12px 20px", background: "#fff", color: "#1a1a1a", border: "1px solid #1a1a1a", cursor: "pointer", fontSize: 15 }}
-              >
-                Reject
-              </button>
-            </div>
-          </>
-        ) : (
-          <p>This proposal is no longer open for a response ({doc.proposalStatus || "closed"}).</p>
-        )}
-      </section>
+      </div>
     </main>
   );
 }

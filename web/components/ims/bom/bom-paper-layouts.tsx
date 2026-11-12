@@ -6,8 +6,10 @@ import {
   bomCostComposition,
   groupBomSections,
   lineAmount,
+  lineIdentityBits,
   lineKindCode,
   lineKindLabel,
+  type BomPaperLine,
   type BomPaperSection,
 } from "@/lib/ims/bom-paper";
 import { PaperBrandHead, sellerDetail } from "../shared/DocumentPaper";
@@ -24,7 +26,10 @@ function stampOf(status: string | null | undefined) {
 
 /** Customer-facing document title — never the template name/type. */
 function bomDocTitle(model: BomPaperModel): string {
-  return (model.status || "").toLowerCase() === "draft" ? "DRAFT BOM" : "BILL OF MATERIALS";
+  const status = (model.status || "").toLowerCase();
+  if (status === "draft") return "DRAFT MATERIALS PROPOSAL";
+  if (status === "cancelled") return "CANCELLED PROPOSAL";
+  return "MATERIALS PROPOSAL";
 }
 
 function PaperShell({
@@ -73,7 +78,9 @@ function PaperShell({
 function DocMeta({ model, extra }: { model: BomPaperModel; extra?: ReadonlyArray<{ label: string; value: string }> }) {
   const meta: Array<{ label: string; value: string }> = [
     { label: "Document no.", value: model.docNo || "Draft" },
+    { label: "Revision", value: `R${Number(model.revision ?? 1)}` },
     { label: "Document date", value: model.docDate ? dateLabel(model.docDate) : "—" },
+    { label: "Valid until", value: model.validUntil ? dateLabel(model.validUntil) : "—" },
     { label: "Package / capacity", value: model.capacityLabel || "—" },
   ];
   if (model.title) meta.push({ label: "Title", value: model.title });
@@ -97,12 +104,53 @@ function PartyBlock({ model }: { model: BomPaperModel }) {
       <div>
         <div className="bos-inv-paper-label">Customer</div>
         <div className="bos-inv-paper-value">{model.customerName || "—"}</div>
+        {model.projectRef ? <div className="ims-bom-party-sub">Project {model.projectRef}</div> : null}
       </div>
       <div>
         <div className="bos-inv-paper-label">Site / location</div>
         <div className="bos-inv-paper-value">{model.location || "—"}</div>
       </div>
     </div>
+  );
+}
+
+function LineDesc({ line, showRemarks = true }: { line: BomPaperLine; showRemarks?: boolean }) {
+  const ids = lineIdentityBits(line);
+  return (
+    <>
+      <div className="ims-bom-line-desc">{line.description}</div>
+      {ids.length ? <small className="ims-bom-line-ids">{ids.join(" · ")}</small> : null}
+      {showRemarks && line.remarks ? <small className="ims-bom-line-remarks">{line.remarks}</small> : null}
+    </>
+  );
+}
+
+function TermsGrid({ model }: { model: BomPaperModel }) {
+  const terms: Array<{ label: string; value: string }> = [];
+  if (model.validUntil) terms.push({ label: "Validity", value: dateLabel(model.validUntil) });
+  if (model.paymentTerms?.trim()) terms.push({ label: "Payment", value: model.paymentTerms.trim() });
+  if (model.deliveryTerms?.trim()) terms.push({ label: "Delivery", value: model.deliveryTerms.trim() });
+  if (model.warrantyTerms?.trim()) terms.push({ label: "Warranty", value: model.warrantyTerms.trim() });
+  if (!terms.length) return null;
+  return (
+    <div className="ims-bom-terms" aria-label="Commercial terms">
+      {terms.map((t) => (
+        <div key={t.label}>
+          <b>{t.label}</b>
+          <span>{t.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FootMatter({ model, signLeft }: { model: BomPaperModel; signLeft?: string }) {
+  return (
+    <>
+      <TermsGrid model={model} />
+      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
+      <SignBlock model={model} left={signLeft} />
+    </>
   );
 }
 
@@ -241,8 +289,7 @@ export function ClassicBomPaper({ model }: { model: BomPaperModel }) {
                   <tr key={`${sec.name}-${i}-${l.description}`}>
                     <td>{i + 1}</td>
                     <td style={{ whiteSpace: "normal" }}>
-                      {l.description}
-                      {l.remarks ? <small>{l.remarks}</small> : null}
+                      <LineDesc line={l} />
                     </td>
                     <td style={{ whiteSpace: "normal" }}>{l.makeText || "—"}</td>
                     <td>{qtyText(l.qty, l.unit)}</td>
@@ -258,14 +305,7 @@ export function ClassicBomPaper({ model }: { model: BomPaperModel }) {
         </tbody>
       </table>
       <CommercialTotals model={model} />
-      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
-      <div className="ims-paper-sign">
-        <div />
-        <div>
-          <div className="ims-paper-sign-line" />
-          {model.preparedBy ? `Prepared by ${model.preparedBy}` : `Authorised signatory · ${model.business.name || "Your business"}`}
-        </div>
-      </div>
+      <FootMatter model={model} />
     </PaperShell>
   );
 }
@@ -320,8 +360,7 @@ export function TieredBomPaper({ model }: { model: BomPaperModel }) {
                   <tr key={`${sec.name}-${i}-${l.description}`}>
                     <td>{i + 1}</td>
                     <td style={{ whiteSpace: "normal" }}>
-                      {l.description}
-                      {l.remarks ? <small>{l.remarks}</small> : null}
+                      <LineDesc line={l} />
                     </td>
                     <td>
                       {lineKindLabel(l.lineKind) ? (
@@ -365,8 +404,7 @@ export function TieredBomPaper({ model }: { model: BomPaperModel }) {
         </div>
       </div>
       <div className="ims-paper-words">{rupeesInWords(c.grand)}</div>
-      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
-      <SignBlock model={model} />
+      <FootMatter model={model} />
     </PaperShell>
   );
 }
@@ -421,7 +459,7 @@ export function EpcBomPaper({ model }: { model: BomPaperModel }) {
                 {sec.lines.map((l, i) => (
                   <tr key={`${sec.name}-${i}-${l.description}`}>
                     <td>{i + 1}</td>
-                    <td style={{ whiteSpace: "normal" }}>{l.description}</td>
+                    <td style={{ whiteSpace: "normal" }}><LineDesc line={l} /></td>
                     <td style={{ whiteSpace: "normal" }}>{l.makeText || "—"}</td>
                     <td>{qtyText(l.qty)}</td>
                     <td>{l.unit || "—"}</td>
@@ -442,8 +480,7 @@ export function EpcBomPaper({ model }: { model: BomPaperModel }) {
         </tbody>
       </table>
       <CommercialTotals model={model} />
-      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
-      <SignBlock model={model} />
+      <FootMatter model={model} />
     </PaperShell>
   );
 }
@@ -516,7 +553,7 @@ export function ExecutiveBomPaper({ model }: { model: BomPaperModel }) {
                 {sec.lines.map((l, i) => (
                   <li key={`${sec.name}-${i}`}>
                     <span>
-                      {l.description}
+                      <LineDesc line={l} />
                       {l.makeText ? <small> · {l.makeText}</small> : null}
                     </span>
                     <span>
@@ -531,6 +568,7 @@ export function ExecutiveBomPaper({ model }: { model: BomPaperModel }) {
           <div className="bos-inv-paper-empty">No items</div>
         )}
       </div>
+      <TermsGrid model={model} />
       {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
       <div className="ims-bom-accept">
         <div>
@@ -587,7 +625,7 @@ export function FieldBomPaper({ model }: { model: BomPaperModel }) {
                     </td>
                     <td>{i + 1}</td>
                     <td style={{ whiteSpace: "normal" }}>
-                      {l.description}
+                      <LineDesc line={l} />
                       {lineKindLabel(l.lineKind) ? <small>{lineKindLabel(l.lineKind)}</small> : null}
                     </td>
                     <td style={{ whiteSpace: "normal" }}>{l.makeText || "—"}</td>
@@ -602,6 +640,7 @@ export function FieldBomPaper({ model }: { model: BomPaperModel }) {
           )}
         </tbody>
       </table>
+      <TermsGrid model={model} />
       {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
       <div className="ims-paper-sign">
         <div>
@@ -693,7 +732,7 @@ export function AuroraBomPaper({ model }: { model: BomPaperModel }) {
                 <tr key={`${sec.name}-${i}`}>
                   <td>{i + 1}</td>
                   <td style={{ whiteSpace: "normal" }}>
-                    {l.description}
+                    <LineDesc line={l} />
                     {lineKindLabel(l.lineKind) ? <small>{lineKindLabel(l.lineKind)}</small> : null}
                   </td>
                   <td style={{ whiteSpace: "normal" }}>{l.makeText || "—"}</td>
@@ -724,8 +763,7 @@ export function AuroraBomPaper({ model }: { model: BomPaperModel }) {
           <b>{inrExact(c.grand)}</b>
         </div>
       </div>
-      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
-      <SignBlock model={model} />
+      <FootMatter model={model} />
     </PaperShell>
   );
 }
@@ -781,7 +819,7 @@ export function LedgerBomPaper({ model }: { model: BomPaperModel }) {
                     <td className="ims-bom-ledger-idx">{String(row).padStart(3, "0")}</td>
                     <td>{sec.roman}</td>
                     <td style={{ whiteSpace: "normal" }}>
-                      {l.description}
+                      <LineDesc line={l} />
                       {l.remarks ? <small>{l.remarks}</small> : null}
                     </td>
                     <td>
@@ -802,8 +840,7 @@ export function LedgerBomPaper({ model }: { model: BomPaperModel }) {
         </tbody>
       </table>
       <CommercialTotals model={model} />
-      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
-      <SignBlock model={model} left="Verified" />
+      <FootMatter model={model} signLeft="Verified" />
     </PaperShell>
   );
 }
@@ -864,7 +901,7 @@ export function AtelierBomPaper({ model }: { model: BomPaperModel }) {
                 <tr key={`${sec.name}-${i}`}>
                   <td>{String(i + 1).padStart(2, "0")}</td>
                   <td style={{ whiteSpace: "normal" }}>
-                    {l.description}
+                    <LineDesc line={l} />
                     {l.remarks ? <small>{l.remarks}</small> : null}
                   </td>
                   <td style={{ whiteSpace: "normal" }}>{l.makeText || "—"}</td>
@@ -895,6 +932,7 @@ export function AtelierBomPaper({ model }: { model: BomPaperModel }) {
         </div>
       </div>
       <div className="ims-paper-words">{rupeesInWords(c.grand)}</div>
+      <TermsGrid model={model} />
       {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
       <div className="ims-bom-accept">
         <div>
@@ -980,7 +1018,7 @@ export function PrismBomPaper({ model }: { model: BomPaperModel }) {
                 {sec.lines.map((l, i) => (
                   <li key={`${sec.name}-${i}`}>
                     <div>
-                      <strong>{l.description}</strong>
+                      <LineDesc line={l} />
                       <small>
                         {l.makeText || "—"}
                         {lineKindLabel(l.lineKind) ? ` · ${lineKindLabel(l.lineKind)}` : ""}
@@ -1015,8 +1053,7 @@ export function PrismBomPaper({ model }: { model: BomPaperModel }) {
             </div>
           </div>
           <div className="ims-paper-words">{rupeesInWords(c.grand)}</div>
-          {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
-          <SignBlock model={model} />
+      <FootMatter model={model} />
         </div>
       </div>
     </PaperShell>
@@ -1075,7 +1112,7 @@ export function OrbitBomPaper({ model }: { model: BomPaperModel }) {
                   <td>{i + 1}</td>
                   <td style={{ whiteSpace: "normal" }}>
                     <strong className="ims-bom-orbit-sec">{sec.name}</strong>
-                    {l.description}
+                    <LineDesc line={l} />
                     {l.remarks ? <small>{l.remarks}</small> : null}
                   </td>
                   <td>
@@ -1097,8 +1134,7 @@ export function OrbitBomPaper({ model }: { model: BomPaperModel }) {
         </tbody>
       </table>
       <CommercialTotals model={model} />
-      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
-      <SignBlock model={model} />
+      <FootMatter model={model} />
     </PaperShell>
   );
 }
@@ -1135,7 +1171,7 @@ export function ForgeBomPaper({ model }: { model: BomPaperModel }) {
               <tr key={`${title}-${i}`}>
                 <td>{i + 1}</td>
                 <td style={{ whiteSpace: "normal" }}>
-                  {l.description}
+                  <LineDesc line={l} showRemarks={false} />
                   <small>
                     {l.section}
                     {l.remarks ? ` · ${l.remarks}` : ""}
@@ -1197,8 +1233,7 @@ export function ForgeBomPaper({ model }: { model: BomPaperModel }) {
         </div>
       </div>
       {sections.length ? <CompositionBars sections={sections} /> : null}
-      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
-      <SignBlock model={model} left="Procurement checked" />
+      <FootMatter model={model} signLeft="Procurement checked" />
     </PaperShell>
   );
 }
@@ -1266,7 +1301,7 @@ export function NovaBomPaper({ model }: { model: BomPaperModel }) {
             {sec.lines.map((l, i) => (
               <li key={`${sec.name}-${i}`}>
                 <span>
-                  {l.description}
+                  <LineDesc line={l} />
                   {l.makeText ? <small> · {l.makeText}</small> : null}
                 </span>
                 <span>
@@ -1277,6 +1312,7 @@ export function NovaBomPaper({ model }: { model: BomPaperModel }) {
           </ul>
         </section>
       ))}
+      <TermsGrid model={model} />
       {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
       <div className="ims-bom-nova-accept">
         <div>
@@ -1333,7 +1369,7 @@ export function FolioBomPaper({ model }: { model: BomPaperModel }) {
                     <span className={`ims-bom-kind ims-bom-kind--${l.lineKind}`}>{lineKindLabel(l.lineKind)}</span>
                   ) : null}
                 </header>
-                <h5>{l.description}</h5>
+                <h5><LineDesc line={l} showRemarks={false} /></h5>
                 <p>{l.makeText || "—"}</p>
                 {l.remarks ? <small>{l.remarks}</small> : null}
                 <footer>
@@ -1363,8 +1399,151 @@ export function FolioBomPaper({ model }: { model: BomPaperModel }) {
           <b>{inrExact(c.grand)}</b>
         </div>
       </div>
-      {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
-      <SignBlock model={model} />
+      <FootMatter model={model} />
     </PaperShell>
   );
 }
+
+/* ---------- Aether — flagship materials proposal ---------- */
+
+export function AetherBomPaper({ model }: { model: BomPaperModel }) {
+  const sections = groupBomSections(model.lines, model.totals.materialsTotal);
+  const c = bomCostComposition(model.totals);
+  const b = model.business;
+  const stamp = stampOf(model.status);
+  return (
+    <PaperShell model={model} tpl="aether" hideDefaultTop>
+      <header className="ims-bom-aether-mast">
+        <div className="ims-bom-aether-brand">
+          <PaperBrandHead
+            name={b.name || "Your business"}
+            logoUrl={b.logoUrl}
+            detail={sellerDetail({ address: b.address, state: b.state, gstin: b.gstin, phone: b.phone, email: b.email })}
+          />
+        </div>
+        <div className="ims-bom-aether-docblock">
+          <div className="ims-bom-aether-eyebrow">Commercial materials schedule</div>
+          <h1>{bomDocTitle(model)}</h1>
+          {model.title ? <p className="ims-bom-aether-title">{model.title}</p> : null}
+          {stamp ? (
+            <span className="ims-paper-stamp" style={{ color: stamp.color }}>
+              {stamp.text}
+            </span>
+          ) : null}
+          {model.capacityLabel ? <div className="ims-bom-aether-cap">{model.capacityLabel}</div> : null}
+        </div>
+      </header>
+
+      <div className="ims-bom-aether-ribbon" aria-label="Document meta">
+        <div>
+          <b>Doc</b>
+          <span>{model.docNo || "Draft"}</span>
+        </div>
+        <div>
+          <b>Rev</b>
+          <span>R{Number(model.revision ?? 1)}</span>
+        </div>
+        <div>
+          <b>Date</b>
+          <span>{model.docDate ? dateLabel(model.docDate) : "—"}</span>
+        </div>
+        <div>
+          <b>Valid until</b>
+          <span>{model.validUntil ? dateLabel(model.validUntil) : "—"}</span>
+        </div>
+        <div>
+          <b>Prepared</b>
+          <span>{model.preparedBy || "—"}</span>
+        </div>
+      </div>
+
+      <div className="ims-bom-aether-parties">
+        <div>
+          <div className="bos-inv-paper-label">From</div>
+          <div className="bos-inv-paper-value">{b.name || "Your business"}</div>
+          <div className="ims-bom-party-sub">{[b.gstin ? `GSTIN ${b.gstin}` : null, b.phone, b.email].filter(Boolean).join(" · ")}</div>
+        </div>
+        <div>
+          <div className="bos-inv-paper-label">For</div>
+          <div className="bos-inv-paper-value">{model.customerName || "—"}</div>
+          <div className="ims-bom-party-sub">
+            {[model.location || null, model.projectRef ? `Project ${model.projectRef}` : null].filter(Boolean).join(" · ") || "—"}
+          </div>
+        </div>
+      </div>
+
+      <div className="ims-bom-aether-hero" aria-label="Investment summary">
+        <div className="ims-bom-aether-hero-total">
+          <b>Investment</b>
+          <strong>{inrExact(c.grand)}</strong>
+          <em>{rupeesInWords(c.grand)}</em>
+        </div>
+        <div className="ims-bom-aether-hero-split">
+          <div>
+            <span>Materials</span>
+            <b>{inrExact(c.materials)}</b>
+          </div>
+          <div>
+            <span>Margin{model.marginPct ? ` ${model.marginPct}%` : ""}</span>
+            <b>{inrExact(c.margin)}</b>
+          </div>
+          <div>
+            <span>Tax{model.taxPct ? ` ${model.taxPct}%` : ""}</span>
+            <b>{inrExact(c.tax)}</b>
+          </div>
+        </div>
+        <CostRibbon model={model} />
+      </div>
+
+      {sections.map((sec) => (
+        <section key={`aether-${sec.index}`} className="ims-bom-aether-sec">
+          <header>
+            <div>
+              <span className="ims-bom-tier-mark">{sec.roman}</span>
+              <h4>{sec.name}</h4>
+            </div>
+            <em>
+              {sec.sharePct}% · {inrExact(sec.materials)}
+            </em>
+          </header>
+          <table className="bos-inv-paper-table ims-bom-aether-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Description</th>
+                <th>Make</th>
+                <th>Qty</th>
+                <th>Rate</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sec.lines.map((l, i) => (
+                <tr key={`${sec.name}-${i}`}>
+                  <td>{i + 1}</td>
+                  <td style={{ whiteSpace: "normal" }}>
+                    <LineDesc line={l} />
+                  </td>
+                  <td style={{ whiteSpace: "normal" }}>{l.makeText || "—"}</td>
+                  <td>{qtyText(l.qty, l.unit)}</td>
+                  <td>{inrExact(l.rate)}</td>
+                  <td>{inrExact(lineAmount(l))}</td>
+                </tr>
+              ))}
+              <tr className="ims-bom-aether-subtotal">
+                <td colSpan={5}>Section subtotal</td>
+                <td>{inrExact(sec.materials)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      ))}
+
+      {!sections.length ? <div className="bos-inv-paper-empty">No items</div> : null}
+
+      <CommercialTotals model={model} />
+      <FootMatter model={model} />
+    </PaperShell>
+  );
+}
+

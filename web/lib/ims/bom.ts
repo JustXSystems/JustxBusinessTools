@@ -116,6 +116,7 @@ export type BomDocLine = {
   itemId: string | null;
   itemName: string | null;
   itemSku: string | null;
+  itemHsn?: string | null;
   description: string;
   makeText: string | null;
   qty: number;
@@ -148,6 +149,7 @@ export type BomDoc = {
   title: string | null;
   customerName: string;
   location: string | null;
+  projectRef?: string | null;
   partyId: string | null;
   marginPct: number;
   taxPct: number;
@@ -157,6 +159,11 @@ export type BomDoc = {
   grandTotal: number;
   notes: string | null;
   preparedBy: string | null;
+  revision?: number;
+  validUntil?: string | null;
+  paymentTerms?: string | null;
+  deliveryTerms?: string | null;
+  warrantyTerms?: string | null;
   invoiceId: string | null;
   invoiceConvertMode: BomInvoiceConvertMode | null;
   invoiceConvertModes: ReadonlyArray<BomInvoiceConvertMode>;
@@ -196,11 +203,16 @@ export type BomDocInput = {
   title?: string | null;
   customerName?: string;
   location?: string | null;
+  projectRef?: string | null;
   partyId?: string | null;
   marginPct?: number;
   taxPct?: number;
   notes?: string | null;
   preparedBy?: string | null;
+  validUntil?: string | null;
+  paymentTerms?: string | null;
+  deliveryTerms?: string | null;
+  warrantyTerms?: string | null;
   /** Selected optional-line keys when creating from a package. */
   options?: string[] | Record<string, boolean>;
   variables?: Record<string, number>;
