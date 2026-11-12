@@ -12,7 +12,7 @@ import {
   type BomPaperLine,
   type BomPaperSection,
 } from "@/lib/ims/bom-paper";
-import { PaperBrandHead, sellerDetail } from "../shared/DocumentPaper";
+import { PaperBrandHead, sellerDetailInline } from "../shared/DocumentPaper";
 import type { BomPaperModel } from "./BomPaper";
 
 const BOM_STAMP: Partial<Record<string, { text: string; color: string }>> = {
@@ -27,7 +27,7 @@ function stampOf(status: string | null | undefined) {
 /** Customer-facing document title — never the template name/type. */
 function bomDocTitle(model: BomPaperModel): string {
   const status = (model.status || "").toLowerCase();
-  if (status === "draft") return "DRAFT MATERIALS PROPOSAL";
+  if (status === "draft") return "DRAFT PROPOSAL";
   if (status === "cancelled") return "CANCELLED PROPOSAL";
   return "MATERIALS PROPOSAL";
 }
@@ -58,7 +58,7 @@ function PaperShell({
           <PaperBrandHead
             name={b.name || "Your business"}
             logoUrl={b.logoUrl}
-            detail={sellerDetail({ address: b.address, state: b.state, gstin: b.gstin, phone: b.phone, email: b.email })}
+            detail={sellerDetailInline({ address: b.address, state: b.state, gstin: b.gstin, phone: b.phone, email: b.email })}
           />
           <div className="ims-bom-sheet-titleblock">
             <div className="bos-inv-paper-title">{title}</div>
@@ -77,21 +77,21 @@ function PaperShell({
 
 function DocMeta({ model, extra }: { model: BomPaperModel; extra?: ReadonlyArray<{ label: string; value: string }> }) {
   const meta: Array<{ label: string; value: string }> = [
-    { label: "Document no.", value: model.docNo || "Draft" },
-    { label: "Revision", value: `R${Number(model.revision ?? 1)}` },
-    { label: "Document date", value: model.docDate ? dateLabel(model.docDate) : "—" },
-    { label: "Valid until", value: model.validUntil ? dateLabel(model.validUntil) : "—" },
-    { label: "Package / capacity", value: model.capacityLabel || "—" },
+    { label: "Doc", value: model.docNo || "Draft" },
+    { label: "Rev", value: `R${Number(model.revision ?? 1)}` },
+    { label: "Date", value: model.docDate ? dateLabel(model.docDate) : "—" },
   ];
+  if (model.validUntil) meta.push({ label: "Valid", value: dateLabel(model.validUntil) });
+  if (model.capacityLabel) meta.push({ label: "Capacity", value: model.capacityLabel });
   if (model.title) meta.push({ label: "Title", value: model.title });
-  if (model.preparedBy) meta.push({ label: "Prepared by", value: model.preparedBy });
+  if (model.preparedBy) meta.push({ label: "Prepared", value: model.preparedBy });
   for (const e of extra ?? []) meta.push(e);
   return (
-    <div className="ims-paper-meta">
+    <div className="ims-paper-meta ims-bom-meta-compact">
       {meta.map((m) => (
         <div key={m.label}>
           <b>{m.label}</b>
-          {m.value}
+          <span>{m.value}</span>
         </div>
       ))}
     </div>
@@ -99,16 +99,15 @@ function DocMeta({ model, extra }: { model: BomPaperModel; extra?: ReadonlyArray
 }
 
 function PartyBlock({ model }: { model: BomPaperModel }) {
+  const siteLine = [model.location || null, model.projectRef ? `Project ${model.projectRef}` : null].filter(Boolean).join(" · ");
   return (
-    <div className="bos-inv-paper-meta ims-bom-party">
+    <div className="bos-inv-paper-meta ims-bom-party ims-bom-party-compact">
       <div>
         <div className="bos-inv-paper-label">Customer</div>
-        <div className="bos-inv-paper-value">{model.customerName || "—"}</div>
-        {model.projectRef ? <div className="ims-bom-party-sub">Project {model.projectRef}</div> : null}
-      </div>
-      <div>
-        <div className="bos-inv-paper-label">Site / location</div>
-        <div className="bos-inv-paper-value">{model.location || "—"}</div>
+        <div className="bos-inv-paper-value">
+          {model.customerName || "—"}
+          {siteLine ? <span className="ims-bom-party-inline"> · {siteLine}</span> : null}
+        </div>
       </div>
     </div>
   );
@@ -116,11 +115,14 @@ function PartyBlock({ model }: { model: BomPaperModel }) {
 
 function LineDesc({ line, showRemarks = true }: { line: BomPaperLine; showRemarks?: boolean }) {
   const ids = lineIdentityBits(line);
+  const tail = [
+    ...ids,
+    showRemarks && line.remarks ? line.remarks : null,
+  ].filter(Boolean);
   return (
     <>
-      <div className="ims-bom-line-desc">{line.description}</div>
-      {ids.length ? <small className="ims-bom-line-ids">{ids.join(" · ")}</small> : null}
-      {showRemarks && line.remarks ? <small className="ims-bom-line-remarks">{line.remarks}</small> : null}
+      <span className="ims-bom-line-desc">{line.description}</span>
+      {tail.length ? <small className="ims-bom-line-ids"> · {tail.join(" · ")}</small> : null}
     </>
   );
 }
@@ -133,7 +135,7 @@ function TermsGrid({ model }: { model: BomPaperModel }) {
   if (model.warrantyTerms?.trim()) terms.push({ label: "Warranty", value: model.warrantyTerms.trim() });
   if (!terms.length) return null;
   return (
-    <div className="ims-bom-terms" aria-label="Commercial terms">
+    <div className="ims-bom-terms ims-bom-terms-compact" aria-label="Commercial terms">
       {terms.map((t) => (
         <div key={t.label}>
           <b>{t.label}</b>
@@ -671,7 +673,7 @@ export function AuroraBomPaper({ model }: { model: BomPaperModel }) {
           <PaperBrandHead
             name={b.name || "Your business"}
             logoUrl={b.logoUrl}
-            detail={sellerDetail({ address: b.address, state: b.state, gstin: b.gstin, phone: b.phone, email: b.email })}
+            detail={sellerDetailInline({ address: b.address, state: b.state, gstin: b.gstin, phone: b.phone, email: b.email })}
           />
         </div>
         <div className="ims-bom-aurora-signal">
@@ -963,7 +965,7 @@ export function PrismBomPaper({ model }: { model: BomPaperModel }) {
           <PaperBrandHead
             name={b.name || "Your business"}
             logoUrl={b.logoUrl}
-            detail={sellerDetail({ address: b.address, state: b.state, gstin: b.gstin, phone: b.phone, email: b.email })}
+            detail={sellerDetailInline({ address: b.address, state: b.state, gstin: b.gstin, phone: b.phone, email: b.email })}
           />
           <div className="ims-bom-prism-badge" aria-label="Capacity">
             <span>Capacity</span>
@@ -1411,74 +1413,54 @@ export function AetherBomPaper({ model }: { model: BomPaperModel }) {
   const c = bomCostComposition(model.totals);
   const b = model.business;
   const stamp = stampOf(model.status);
+  const sellerLine = sellerDetailInline({
+    address: b.address,
+    state: b.state,
+    gstin: b.gstin,
+    phone: b.phone,
+    email: b.email,
+  });
+  const forLine = [
+    model.customerName || "—",
+    model.location || null,
+    model.projectRef ? `Project ${model.projectRef}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const metaBits = [
+    model.docNo || "Draft",
+    `R${Number(model.revision ?? 1)}`,
+    model.docDate ? dateLabel(model.docDate) : null,
+    model.validUntil ? `Valid ${dateLabel(model.validUntil)}` : null,
+    model.preparedBy ? `By ${model.preparedBy}` : null,
+  ].filter(Boolean);
+  const titleBits = [model.title || null, model.capacityLabel || null].filter(Boolean).join(" · ");
+
   return (
     <PaperShell model={model} tpl="aether" hideDefaultTop>
-      <header className="ims-bom-aether-mast">
-        <div className="ims-bom-aether-brand">
-          <PaperBrandHead
-            name={b.name || "Your business"}
-            logoUrl={b.logoUrl}
-            detail={sellerDetail({ address: b.address, state: b.state, gstin: b.gstin, phone: b.phone, email: b.email })}
-          />
-        </div>
-        <div className="ims-bom-aether-docblock">
-          <div className="ims-bom-aether-eyebrow">Commercial materials schedule</div>
-          <h1>{bomDocTitle(model)}</h1>
-          {model.title ? <p className="ims-bom-aether-title">{model.title}</p> : null}
-          {stamp ? (
-            <span className="ims-paper-stamp" style={{ color: stamp.color }}>
-              {stamp.text}
-            </span>
-          ) : null}
-          {model.capacityLabel ? <div className="ims-bom-aether-cap">{model.capacityLabel}</div> : null}
-        </div>
-      </header>
-
-      <div className="ims-bom-aether-ribbon" aria-label="Document meta">
-        <div>
-          <b>Doc</b>
-          <span>{model.docNo || "Draft"}</span>
-        </div>
-        <div>
-          <b>Rev</b>
-          <span>R{Number(model.revision ?? 1)}</span>
-        </div>
-        <div>
-          <b>Date</b>
-          <span>{model.docDate ? dateLabel(model.docDate) : "—"}</span>
-        </div>
-        <div>
-          <b>Valid until</b>
-          <span>{model.validUntil ? dateLabel(model.validUntil) : "—"}</span>
-        </div>
-        <div>
-          <b>Prepared</b>
-          <span>{model.preparedBy || "—"}</span>
-        </div>
-      </div>
-
-      <div className="ims-bom-aether-parties">
-        <div>
-          <div className="bos-inv-paper-label">From</div>
-          <div className="bos-inv-paper-value">{b.name || "Your business"}</div>
-          <div className="ims-bom-party-sub">{[b.gstin ? `GSTIN ${b.gstin}` : null, b.phone, b.email].filter(Boolean).join(" · ")}</div>
-        </div>
-        <div>
-          <div className="bos-inv-paper-label">For</div>
-          <div className="bos-inv-paper-value">{model.customerName || "—"}</div>
-          <div className="ims-bom-party-sub">
-            {[model.location || null, model.projectRef ? `Project ${model.projectRef}` : null].filter(Boolean).join(" · ") || "—"}
+      <header className="ims-bom-aether-head">
+        <div className="ims-bom-aether-head-row">
+          <PaperBrandHead name={b.name || "Your business"} logoUrl={b.logoUrl} detail={sellerLine || null} />
+          <div className="ims-bom-aether-docblock">
+            <div className="ims-bom-aether-eyebrow">
+              Materials proposal
+              {stamp ? <span className="ims-paper-stamp" style={{ color: stamp.color }}> · {stamp.text}</span> : null}
+            </div>
+            <h1>{bomDocTitle(model)}</h1>
+            {titleBits ? <p className="ims-bom-aether-title">{titleBits}</p> : null}
           </div>
         </div>
-      </div>
 
-      <div className="ims-bom-aether-hero" aria-label="Investment summary">
-        <div className="ims-bom-aether-hero-total">
-          <b>Investment</b>
-          <strong>{inrExact(c.grand)}</strong>
-          <em>{rupeesInWords(c.grand)}</em>
+        <div className="ims-bom-aether-meta-line" aria-label="Document meta">
+          {metaBits.join(" · ")}
         </div>
-        <div className="ims-bom-aether-hero-split">
+
+        <div className="ims-bom-aether-for-line">
+          <b>For</b>
+          <span>{forLine}</span>
+        </div>
+
+        <div className="ims-bom-aether-totals-bar" aria-label="Investment summary">
           <div>
             <span>Materials</span>
             <b>{inrExact(c.materials)}</b>
@@ -1491,9 +1473,12 @@ export function AetherBomPaper({ model }: { model: BomPaperModel }) {
             <span>Tax{model.taxPct ? ` ${model.taxPct}%` : ""}</span>
             <b>{inrExact(c.tax)}</b>
           </div>
+          <div className="is-total">
+            <span>Grand total</span>
+            <b>{inrExact(c.grand)}</b>
+          </div>
         </div>
-        <CostRibbon model={model} />
-      </div>
+      </header>
 
       {sections.map((sec) => (
         <section key={`aether-${sec.index}`} className="ims-bom-aether-sec">
