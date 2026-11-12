@@ -53,8 +53,10 @@ export default function PublicBomProposalPage() {
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || "Proposal not found");
-        setDoc(data.doc as PublicBom);
-        const name = String((data.doc as PublicBom)?.customerName ?? "").trim();
+        const proposal = (data.proposal ?? data.doc) as PublicBom | undefined;
+        if (!proposal) throw new Error("Proposal not found");
+        setDoc(proposal);
+        const name = String(proposal.customerName ?? "").trim();
         if (name) setResponderName((prev) => prev || name);
       })
       .catch((e: Error) => setError(e.message));
@@ -88,7 +90,9 @@ export default function PublicBomProposalPage() {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "Could not save your response");
-      setDoc(data.doc as PublicBom);
+      const proposal = (data.proposal ?? data.doc) as PublicBom | undefined;
+      if (!proposal) throw new Error("Could not save your response");
+      setDoc(proposal);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
