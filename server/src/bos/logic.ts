@@ -203,9 +203,36 @@ export function monthsBetween(fromISO: string, toISO: string): string[] {
   return out;
 }
 
-export function formatDocNo(prefix: string, period: string, seq: number, pad = 4): string {
-  const p = String(prefix || "DOC").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 12) || "DOC";
-  return `${p}/${period}/${String(seq).padStart(pad, "0")}`;
+/** Company code from business name — same rule as Quotation V1 quotePrefix. */
+export function companyCodeFromName(name: string): string {
+  return String(name || "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase()
+    .slice(0, 3) || "JBT";
+}
+
+/** Calendar year/month period for monthly sequences (`2026-11`). */
+export function yearMonthPeriod(iso: string): string {
+  const s = String(iso || "").trim();
+  if (/^\d{4}-\d{2}/.test(s)) return s.slice(0, 7);
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Commercial document number matching Quotation V1 style:
+ * `<CompanyCode>-<DOC_TYPE>-<YYYY>/<MM>-<XXXX>`
+ */
+export function formatDocNo(companyCodeOrName: string, docType: string, dateIso: string, seq: number, pad = 4): string {
+  const code = companyCodeFromName(companyCodeOrName);
+  const type = String(docType || "DOC")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8) || "DOC";
+  const ym = yearMonthPeriod(dateIso);
+  const yyyy = ym.slice(0, 4);
+  const mm = ym.slice(5, 7);
+  return `${code}-${type}-${yyyy}/${mm}-${String(Math.max(0, Math.trunc(seq))).padStart(pad, "0")}`;
 }
 
 /* ---------- HR ---------- */

@@ -514,7 +514,7 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
   if (!row.customer_name.trim()) throw badRequest("Pick a customer before issuing");
   const invoiceDate = isoOf(row.invoice_date);
   await assertDayOpen(conn, actor.tenantId, invoiceDate);
-  const invoiceNo = await nextDocNo(conn, actor.tenantId, "invoice", settings.invoicePrefix, invoiceDate, settings.fiscalYearStart);
+  const invoiceNo = await nextDocNo(conn, actor.tenantId, "invoice", settings.invoicePrefix, invoiceDate, settings.businessName);
 
   // BOM explode invoices: refuse a second OUT and keep stock_issued_at in sync. Lump-sum never owns the BOM stock flag.
   const bomStockItems = row.source_tool === "ims_bom" && row.source_ref ? [...new Set(lines.filter((l) => l.itemId && l.qty > 0).map((l) => l.itemId!))] : [];

@@ -603,8 +603,8 @@ export function registerAccounting(router: Router, deps: BosDeps): void {
     const total = lineTotals(lines.map((l) => ({ accountId: l.accountId, debit: l.debit, credit: l.credit }))).debit;
     const id = randomUUID();
     const journalNo = await tx(deps.db, async (conn) => {
-      const fy = fiscalYearLabel(input.date, settings.fiscalYearStart);
-      const no = formatDocNo("JV", fy, await nextSequence(conn, t, "journal", fy));
+      const ym = input.date.slice(0, 7);
+      const no = formatDocNo(settings.companyName, "JV", input.date, await nextSequence(conn, t, "journal", ym));
       await exec(conn, `INSERT INTO bos_journals (id, tenant_id, journal_no, entry_date, narration, total, created_by) VALUES (:id, :t, :no, :date, :narration, :total, :userId)`, {
         id,
         t,

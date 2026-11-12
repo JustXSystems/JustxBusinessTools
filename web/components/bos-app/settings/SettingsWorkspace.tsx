@@ -88,7 +88,7 @@ function CompanySettings() {
 
 function InvoicingSettings() {
   return (
-    <SettingsSection title="Invoicing & terms" note="Numbers continue per financial year, e.g. INV/26-27/0001.">
+    <SettingsSection title="Invoicing & terms" note="Numbers follow Quotation V1 style, e.g. JUS-INV-2026/11-0001 (CompanyCode-DOCTYPE-YYYY/MM-XXXX).">
       {(d, set, disabled) => (
         <FormGrid>
           <Field label="Invoice prefix">{({ id }) => <Input id={id} disabled={disabled} value={d.invoicePrefix} maxLength={12} pattern="[A-Za-z0-9-]+" onChange={(e) => set("invoicePrefix", e.target.value)} />}</Field>

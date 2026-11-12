@@ -52,9 +52,10 @@ describe("dates", () => {
     expect(fiscalYearLabel("2026-06-01", 1)).toBe("2026");
   });
 
-  it("formats document numbers", () => {
-    expect(formatDocNo("po", "26-27", 7)).toBe("PO/26-27/0007");
-    expect(formatDocNo("", "26-27", 12)).toBe("DOC/26-27/0012");
+  it("formats document numbers like Quotation V1", () => {
+    expect(formatDocNo("Zigma Technologies", "BOM", "2026-11-12", 7)).toBe("ZIG-BOM-2026/11-0007");
+    expect(formatDocNo("po", "INV", "2026-03-01", 12)).toBe("PO-INV-2026/03-0012");
+    expect(formatDocNo("", "po", "2026-11-12", 1)).toBe("JBT-PO-2026/11-0001");
   });
 
   it("resolves period presets", () => {

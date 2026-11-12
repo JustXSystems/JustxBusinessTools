@@ -6,7 +6,7 @@ import { actorOf, featureOn, isoDate, optText, parse, parsePatch, recordEvent, t
 import { exec, json, money, nextSequence, one, rows, tx } from "./db.js";
 import { addInvoicePayment, createInvoice, LineInput, type InvoiceInputT } from "./finance.js";
 import { BosError, forbidden, isManager, notFound, type BosActor } from "./host.js";
-import { addDaysISO, computeInvoiceTotals, fiscalYearLabel, formatDocNo, isIntraState, todayISO, type BosLine, type BosLineInput } from "./logic.js";
+import { addDaysISO, computeInvoiceTotals, formatDocNo, isIntraState, todayISO, type BosLine, type BosLineInput } from "./logic.js";
 import {
   CHALLAN_REASONS,
   challanBlock,
@@ -268,8 +268,13 @@ async function insertDoc(
   sourceId: string | null,
 ): Promise<{ id: string; docNo: string; grandTotal: number }> {
   const { settings, intra, totals } = await priced(deps, actor.tenantId, d.placeOfSupply, d.lines);
-  const fy = fiscalYearLabel(d.docDate, settings.fiscalYearStart);
-  const docNo = formatDocNo(DOC_PREFIX[kind], fy, await nextSequence(conn, actor.tenantId, SEQ_KEY[kind], fy));
+  const ym = d.docDate.slice(0, 7);
+  const docNo = formatDocNo(
+    settings.companyName,
+    DOC_PREFIX[kind],
+    d.docDate,
+    await nextSequence(conn, actor.tenantId, SEQ_KEY[kind], ym),
+  );
   const id = randomUUID();
   await exec(
     conn,

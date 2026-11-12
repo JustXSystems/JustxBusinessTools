@@ -142,8 +142,23 @@ export function fiscalYearLabel(isoDate: string, startMonth = 4): string {
   return `${two(start)}-${two(start + 1)}`;
 }
 
-export function formatDocNo(prefix: string, period: string, seq: number, pad = 4): string {
-  return `${prefix}/${period}/${String(seq).padStart(pad, "0")}`;
+export function companyCodeFromName(name: string): string {
+  return String(name || "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase()
+    .slice(0, 3) || "JBT";
+}
+
+/** `<CompanyCode>-<DOC_TYPE>-<YYYY>/<MM>-<XXXX>` */
+export function formatDocNo(companyCodeOrName: string, docType: string, dateIso: string, seq: number, pad = 4): string {
+  const code = companyCodeFromName(companyCodeOrName);
+  const type = String(docType || "DOC")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8) || "DOC";
+  const yyyy = String(dateIso || "").slice(0, 4) || "2026";
+  const mm = String(dateIso || "").slice(5, 7) || "01";
+  return `${code}-${type}-${yyyy}/${mm}-${String(seq).padStart(pad, "0")}`;
 }
 
 export function fingerprint(...parts: Array<string | number>): string {

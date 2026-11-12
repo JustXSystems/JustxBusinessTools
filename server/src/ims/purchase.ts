@@ -563,7 +563,7 @@ export function registerPurchase(router: Router, deps: ImsDeps): void {
     const settings = await getSettings(deps, actor.tenantId);
     const built = await buildPo(deps, actor, input, settings);
     const id = randomUUID();
-    const poNo = await nextDocNo(deps.db, actor.tenantId, "po", settings.poPrefix, built.orderDate, settings.fiscalYearStart);
+    const poNo = await nextDocNo(deps.db, actor.tenantId, "po", settings.poPrefix, built.orderDate, settings.businessName);
     const outcome = input.action === "draft" ? null : submitOutcome(built.totals.grandTotal, settings);
     const status: PoStatus = !outcome ? "draft" : outcome.status === "approved" && input.action === "send" ? "sent" : outcome.status;
     await exec(
@@ -750,7 +750,7 @@ export function registerPurchase(router: Router, deps: ImsDeps): void {
       settings,
     );
     const id = randomUUID();
-    const poNo = await nextDocNo(deps.db, actor.tenantId, "po", settings.poPrefix, built.orderDate, settings.fiscalYearStart);
+    const poNo = await nextDocNo(deps.db, actor.tenantId, "po", settings.poPrefix, built.orderDate, settings.businessName);
     await exec(
       deps.db,
       `INSERT INTO ims_purchase_orders
@@ -896,7 +896,7 @@ async function createReceiptBill(
   const terms = supplierTerms?.payment_terms_days ?? po.paymentTermsDays;
   const dueDate = dueDateFor(billDate, terms == null ? null : Number(terms), settings.paymentTermsDays);
   const id = randomUUID();
-  const billNo = await nextDocNo(conn, actor.tenantId, "bill", settings.billPrefix, billDate, settings.fiscalYearStart);
+  const billNo = await nextDocNo(conn, actor.tenantId, "bill", settings.billPrefix, billDate, settings.businessName);
   await exec(
     conn,
     `INSERT INTO ims_bills

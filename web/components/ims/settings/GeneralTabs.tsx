@@ -220,7 +220,7 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
         </div>
       </SectionCard>
 
-      <SectionCard title="Document numbering" desc="Numbers restart every financial year. Letters, digits and dashes only, up to 12 characters.">
+      <SectionCard title="Document numbering" desc="Format matches Quotation V1: CompanyCode-DOCTYPE-YYYY/MM-XXXX. Sequence restarts each calendar month. DOC TYPE uses letters, digits and dashes only (up to 12).">
         <div className="ims-prefix-grid">
           {PREFIX_FIELDS.map((f) => (
             <div key={f.key} className="ims-prefix">
@@ -230,7 +230,7 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
                 )}
               </Field>
               <div className="ims-prefix-sample" aria-live="polite">
-                Next: <b>{docNoSample(draft[f.key], today, draft.fiscalYearStart)}</b>
+                Next: <b>{docNoSample(draft[f.key], today, draft.businessName)}</b>
               </div>
             </div>
           ))}

@@ -170,8 +170,8 @@ describe("dates and numbering", () => {
   });
 
   it("formats document numbers", () => {
-    expect(formatDocNo("inv", "26-27", 7)).toBe("INV/26-27/0007");
-    expect(formatDocNo("", "26-27", 12345)).toBe("DOC/26-27/12345");
+    expect(formatDocNo("Justxsystems", "INV", "2026-11-12", 7)).toBe("JUS-INV-2026/11-0007");
+    expect(formatDocNo("", "JV", "2026-03-01", 12345)).toBe("JBT-JV-2026/03-12345");
   });
 
   it("returns today in the business timezone", () => {

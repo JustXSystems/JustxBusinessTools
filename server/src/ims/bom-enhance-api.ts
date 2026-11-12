@@ -1083,7 +1083,7 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
       );
       const poLines = totals.lines.map((l) => ({ ...l, receivedQty: l.receivedQty ?? 0 }));
       const poId = randomUUID();
-      const poNo = await nextDocNo(deps.db, actor.tenantId, "po", settings.poPrefix, orderDate, settings.fiscalYearStart);
+      const poNo = await nextDocNo(deps.db, actor.tenantId, "po", settings.poPrefix, orderDate, settings.businessName);
       await exec(
         deps.db,
         `INSERT INTO ims_purchase_orders
