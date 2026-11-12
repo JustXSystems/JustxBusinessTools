@@ -364,6 +364,81 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
                 Draft POs (shortfall)
               </Button>
             ) : null}
+            {confirmed && availability.data?.hasShortfall ? (
+              <Button
+                variant="ghost"
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  const out = await run("alts", () => bom.suggestAlternates(doc.id), { success: "Checked alternates" });
+                  if (!out) return;
+                  const lines = out.suggestions ?? [];
+                  if (!lines.length) {
+                    window.alert("No alternate suggestions for current shortfalls.");
+                    return;
+                  }
+                  const msg = lines
+                    .map((s) => `${s.description}: ${s.suggested?.name ?? "none"} (need ${s.need}, on hand ${s.onHand})`)
+                    .join("\n");
+                  window.alert(`Alternate suggestions:\n${msg}`);
+                }}
+              >
+                Suggest alternates
+              </Button>
+            ) : null}
+            {confirmed ? (
+              <>
+                <Button
+                  variant="ghost"
+                  disabled={Boolean(busy)}
+                  onClick={async () => {
+                    const out = await run("pick", () => bom.pickList(doc.id), { success: "Pick list ready" });
+                    if (!out?.lines?.length) {
+                      window.alert("Nothing left to pick.");
+                      return;
+                    }
+                    window.alert(
+                      out.lines
+                        .map((l) => `${l.description}: pick ${l.remainingQty} ${l.unit} (on hand ${l.onHand})${l.serialNotes ? ` · ${l.serialNotes}` : ""}`)
+                        .join("\n"),
+                    );
+                  }}
+                >
+                  Pick list
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={Boolean(busy)}
+                  onClick={async () => {
+                    if (!window.confirm("Freeze as-built sold vs issued quantities?")) return;
+                    const out = await run("as-built", () => bom.asBuilt(doc.id), { success: "As-built frozen" });
+                    if (out?.variance?.length) {
+                      window.alert(
+                        out.variance
+                          .map((v) => `${v.description}: sold ${v.soldQty}, issued ${v.issuedQty}, var ${v.variance}`)
+                          .join("\n"),
+                      );
+                    }
+                    reloadAll();
+                  }}
+                >
+                  Freeze as-built
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={Boolean(busy)}
+                  onClick={async () => {
+                    const out = await run("service-kit", () => bom.serviceKit(doc.id), { success: "Service kit" });
+                    window.alert(
+                      out?.lines?.length
+                        ? out.lines.map((l) => `${l.description} · ${l.qty} ${l.unit}`).join("\n")
+                        : "No service/spare lines on this BOM.",
+                    );
+                  }}
+                >
+                  Service kit
+                </Button>
+              </>
+            ) : null}
             {confirmed && !doc.invoiceId && !doc.stockIssuedAt ? (
               <Button
                 variant="ghost"

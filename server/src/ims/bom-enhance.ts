@@ -210,6 +210,274 @@ export function lineIncludedByOptions(
   return set.has(optionKey);
 }
 
+/** Accept `string[]` or `{ key: boolean }` and return a canonical `{ key: true|false }` map. */
+export function normalizeOptionSelection(input: unknown): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  if (Array.isArray(input)) {
+    for (const k of input) {
+      const key = String(k ?? "").trim();
+      if (key) out[key] = true;
+    }
+    return out;
+  }
+  if (input && typeof input === "object") {
+    for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+      const key = k.trim();
+      if (!key) continue;
+      out[key] = v === true || v === 1 || v === "1" || v === "true";
+    }
+  }
+  return out;
+}
+
+/** Keys whose value is truthy in an `options_json` style map. */
+export function selectedOptionKeys(options: unknown): string[] {
+  return Object.entries(normalizeOptionSelection(options))
+    .filter(([, on]) => on)
+    .map(([k]) => k);
+}
+
+/* ---------- Alternates (#38) ---------- */
+
+type StockLookup = ReadonlyMap<string, number> | Readonly<Record<string, number>>;
+
+function stockOf(lookup: StockLookup, itemId: string): number {
+  const v = lookup instanceof Map ? lookup.get(itemId) : (lookup as Record<string, number>)[itemId];
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+/** First alternate (in listed order, excluding the primary) whose on-hand covers `needQty`, else null. */
+export function pickAlternateWhenShort(
+  primaryItemId: string | null | undefined,
+  alternateIds: ReadonlyArray<string> | null | undefined,
+  stockByItemId: StockLookup,
+  needQty: number,
+): string | null {
+  if (!alternateIds?.length || !(needQty > 0)) return null;
+  for (const id of alternateIds) {
+    if (!id || id === primaryItemId) continue;
+    if (stockOf(stockByItemId, id) >= needQty) return id;
+  }
+  return null;
+}
+
+export type AlternateSuggestLine = {
+  id: string;
+  lineKind: string;
+  itemId: string | null;
+  description: string;
+  qty: number;
+  issuedQty?: number;
+  alternateItemIds?: ReadonlyArray<string> | null;
+};
+
+export type AlternateSuggestion = {
+  lineId: string;
+  description: string;
+  primaryItemId: string;
+  need: number;
+  onHand: number;
+  shortfall: number;
+  /** First alternate that fully covers this line's remaining qty (or null). */
+  suggestedItemId: string | null;
+  candidates: Array<{ itemId: string; onHand: number; covers: boolean }>;
+};
+
+/**
+ * For stock lines whose primary item is short (aggregated across lines, on remaining qty),
+ * propose alternates from each line's `alternateItemIds`.
+ */
+export function suggestAlternatesForShortfall(
+  lines: ReadonlyArray<AlternateSuggestLine>,
+  stockByItemId: StockLookup,
+): AlternateSuggestion[] {
+  const remaining = (l: AlternateSuggestLine) => remainingIssueQty(l.qty, l.issuedQty ?? 0);
+  const needByItem = new Map<string, number>();
+  for (const l of lines) {
+    if (l.lineKind !== "stock" || !l.itemId) continue;
+    const rem = remaining(l);
+    if (!(rem > 0)) continue;
+    needByItem.set(l.itemId, round3((needByItem.get(l.itemId) ?? 0) + rem));
+  }
+  const out: AlternateSuggestion[] = [];
+  for (const l of lines) {
+    if (l.lineKind !== "stock" || !l.itemId || !l.alternateItemIds?.length) continue;
+    const rem = remaining(l);
+    if (!(rem > 0)) continue;
+    const onHand = round3(stockOf(stockByItemId, l.itemId));
+    const need = needByItem.get(l.itemId) ?? rem;
+    const shortfall = round3(Math.max(0, need - onHand));
+    if (!(shortfall > 0)) continue;
+    out.push({
+      lineId: l.id,
+      description: l.description,
+      primaryItemId: l.itemId,
+      need,
+      onHand,
+      shortfall,
+      suggestedItemId: pickAlternateWhenShort(l.itemId, l.alternateItemIds, stockByItemId, rem),
+      candidates: l.alternateItemIds
+        .filter((a) => a && a !== l.itemId)
+        .map((a) => ({ itemId: a, onHand: round3(stockOf(stockByItemId, a)), covers: stockOf(stockByItemId, a) >= rem })),
+    });
+  }
+  return out;
+}
+
+/**
+ * After swapping `oldItemId` → `newItemId`, keep alternates reversible: drop the new item and
+ * append the old one (deduped, order preserved).
+ */
+export function rotateAlternates(
+  alternates: ReadonlyArray<string>,
+  oldItemId: string | null,
+  newItemId: string,
+): string[] {
+  const next = alternates.filter((a) => a && a !== newItemId);
+  if (oldItemId && oldItemId !== newItemId && !next.includes(oldItemId)) next.push(oldItemId);
+  return next;
+}
+
+/* ---------- Nested package explode (#41) / options (#42) ---------- */
+
+export type PackageLineLike = {
+  id?: string;
+  section: string;
+  sortNo?: number;
+  lineKind: string;
+  itemId: string | null;
+  description: string;
+  makeText?: string | null;
+  qty: number;
+  unit: string;
+  scaleByCapacity?: boolean;
+  defaultRate?: number;
+  remarks?: string | null;
+  active?: boolean;
+  qtyFormula?: string | null;
+  childPackageId?: string | null;
+  optionalFlag?: boolean;
+  optionKey?: string | null;
+  alternateItemIds?: ReadonlyArray<string> | null;
+  serviceSpare?: boolean;
+  scrapPct?: number | null;
+  costRate?: number | null;
+};
+
+export type ExplodedLine = {
+  section: string;
+  sortNo: number;
+  lineKind: string;
+  itemId: string | null;
+  description: string;
+  makeText: string | null;
+  qty: number;
+  unit: string;
+  scaleByCapacity: boolean;
+  rate: number;
+  remarks: string | null;
+  qtyFormula: string | null;
+  optionalFlag: boolean;
+  optionKey: string | null;
+  alternateItemIds: string[];
+  serviceSpare: boolean;
+  scrapPct: number;
+  costRate: number | null;
+  sourcePackageId: string;
+  sourcePackageLineId: string | null;
+  depth: number;
+};
+
+export type ExplodeOptions = {
+  capacityLabel?: string | null;
+  selectedOptions?: ReadonlySet<string> | ReadonlyArray<string>;
+  variables?: Record<string, number>;
+  /** Max nesting depth (root = 0). Default 8. */
+  depthLimit?: number;
+};
+
+/**
+ * Recursively flatten a package into leaf lines.
+ * - Lines with `childPackageId` are phantom: they are replaced by the child package's lines,
+ *   multiplied by the child line's qty (formula, else raw qty — never capacity-scaled, to avoid double scaling).
+ * - Optional lines are dropped unless their `optionKey` is selected.
+ * - Leaf qty = `evalQtyFormula(qtyFormula, vars)` when set, else qty × capacity when `scaleByCapacity`, else qty;
+ *   then × the product of ancestor child-line quantities.
+ * - Throws on cycles (A → … → A), on exceeding `depthLimit`, on unknown child packages and bad formulas.
+ */
+export async function explodeNestedPackageLines(
+  getPackageLines: (packageId: string) => Promise<ReadonlyArray<PackageLineLike> | null | undefined>,
+  rootId: string,
+  opts: ExplodeOptions = {},
+): Promise<ExplodedLine[]> {
+  const depthLimit = Math.max(0, opts.depthLimit ?? 8);
+  const selected = new Set(opts.selectedOptions ?? []);
+  const vars = { ...defaultVariablesFromCapacity(opts.capacityLabel), ...(opts.variables ?? {}) };
+  const capacity = parseCapacityNumberLocal(opts.capacityLabel);
+  const out: ExplodedLine[] = [];
+
+  const baseQty = (l: PackageLineLike, scaleByCapacity: boolean): number => {
+    if (l.qtyFormula && String(l.qtyFormula).trim()) {
+      try {
+        const v = evalQtyFormula(l.qtyFormula, vars);
+        if (v != null) return v;
+      } catch (e) {
+        throw new Error(`Line "${l.description}": ${e instanceof Error ? e.message : "invalid formula"}`);
+      }
+    }
+    if (scaleByCapacity && capacity != null) return round3(l.qty * capacity);
+    return round3(l.qty);
+  };
+
+  const walk = async (packageId: string, depth: number, multiplier: number, path: string[]): Promise<void> => {
+    if (path.includes(packageId)) {
+      throw new Error(`Package cycle detected: ${[...path, packageId].join(" → ")}`);
+    }
+    if (depth > depthLimit) {
+      throw new Error(`Nested package depth limit (${depthLimit}) exceeded`);
+    }
+    const lines = await getPackageLines(packageId);
+    if (!lines) throw new Error(`Package ${packageId} not found`);
+    const nextPath = [...path, packageId];
+    for (const l of lines) {
+      if (l.active === false) continue;
+      if (!lineIncludedByOptions(Boolean(l.optionalFlag), l.optionKey, selected)) continue;
+      if (l.childPackageId) {
+        const childQty = baseQty(l, false);
+        if (!(childQty > 0)) continue;
+        await walk(l.childPackageId, depth + 1, round3(multiplier * childQty), nextPath);
+        continue;
+      }
+      out.push({
+        section: l.section,
+        sortNo: 0,
+        lineKind: l.lineKind,
+        itemId: l.itemId ?? null,
+        description: l.description,
+        makeText: l.makeText ?? null,
+        qty: round3(baseQty(l, Boolean(l.scaleByCapacity)) * multiplier),
+        unit: l.unit,
+        scaleByCapacity: Boolean(l.scaleByCapacity),
+        rate: round2(l.defaultRate ?? 0),
+        remarks: l.remarks ?? null,
+        qtyFormula: l.qtyFormula ?? null,
+        optionalFlag: Boolean(l.optionalFlag),
+        optionKey: l.optionKey ?? null,
+        alternateItemIds: [...(l.alternateItemIds ?? [])],
+        serviceSpare: Boolean(l.serviceSpare),
+        scrapPct: Number(l.scrapPct) || 0,
+        costRate: l.costRate ?? null,
+        sourcePackageId: packageId,
+        sourcePackageLineId: l.id ?? null,
+        depth,
+      });
+    }
+  };
+
+  await walk(rootId, 0, 1, []);
+  return out.map((l, i) => ({ ...l, sortNo: i }));
+}
+
 /* ---------- Diff ---------- */
 
 export type DiffLine = {
@@ -356,6 +624,29 @@ export function applyRateCardRates<T extends BomRateMatchTarget & { rate: number
 
 export function remainingIssueQty(soldQty: number, issuedQty: number): number {
   return round3(Math.max(0, soldQty - issuedQty));
+}
+
+export const SERIAL_NOTES_MAX = 500;
+
+/** Append a new serial/batch note to existing ones (deduped, `; `-separated). Blank additions are ignored. */
+export function mergeSerialNotes(existing: string | null | undefined, addition: string | null | undefined): string | null {
+  const add = String(addition ?? "").trim();
+  const cur = String(existing ?? "").trim();
+  if (!add) return cur || null;
+  if (!cur) return add;
+  if (cur.split(/;\s*/).includes(add)) return cur;
+  return `${cur}; ${add}`;
+}
+
+/**
+ * True when stock was issued in full by the legacy all-at-once flow (stock_issued_at set but no
+ * line has issued_qty recorded). New full issues also record issued_qty, so this only matches old data.
+ */
+export function isLegacyFullIssue(
+  stockIssuedAt: string | null | undefined,
+  lines: ReadonlyArray<{ issuedQty?: number }>,
+): boolean {
+  return Boolean(stockIssuedAt) && lines.every((l) => !(Number(l.issuedQty) > 0));
 }
 
 export function applyPartialIssue(

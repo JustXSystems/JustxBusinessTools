@@ -9,11 +9,20 @@ import {
   diffKeyOf,
   evalQtyFormula,
   evaluateConfirmGates,
+  explodeNestedPackageLines,
+  isLegacyFullIssue,
   lineIncludedByOptions,
   matchRateCardToBomLines,
+  mergeSerialNotes,
+  normalizeOptionSelection,
+  pickAlternateWhenShort,
   proposalWhatsAppUrl,
   remainingIssueQty,
+  rotateAlternates,
+  selectedOptionKeys,
+  suggestAlternatesForShortfall,
   wouldCreatePackageCycle,
+  type PackageLineLike,
 } from "./bom-enhance.js";
 
 describe("evaluateConfirmGates", () => {
@@ -200,5 +209,226 @@ describe("matchRateCardToBomLines", () => {
     );
     expect(updated[0]).toMatchObject({ id: "l1", rate: 100, costRate: 60 });
     expect(updated[1]).toMatchObject({ id: "l2", rate: 9, costRate: 9 });
+  });
+});
+
+describe("pickAlternateWhenShort", () => {
+  const stock = new Map([["a1", 2], ["a2", 10], ["a3", 50]]);
+
+  it("returns the first alternate with enough stock", () => {
+    expect(pickAlternateWhenShort("p", ["a1", "a2", "a3"], stock, 5)).toBe("a2");
+  });
+
+  it("returns null when none cover the need, skipping the primary", () => {
+    expect(pickAlternateWhenShort("a3", ["a1", "a3"], stock, 5)).toBeNull();
+    expect(pickAlternateWhenShort("p", [], stock, 1)).toBeNull();
+    expect(pickAlternateWhenShort("p", ["zzz"], stock, 1)).toBeNull();
+  });
+
+  it("accepts a plain record", () => {
+    expect(pickAlternateWhenShort("p", ["a1"], { a1: 3 }, 3)).toBe("a1");
+  });
+});
+
+describe("suggestAlternatesForShortfall", () => {
+  const line = (over: Record<string, unknown>) => ({
+    id: "l1",
+    lineKind: "stock",
+    itemId: "p",
+    description: "Panel",
+    qty: 10,
+    issuedQty: 0,
+    alternateItemIds: ["a1", "a2"],
+    ...over,
+  });
+
+  it("suggests an alternate for short primaries only", () => {
+    const out = suggestAlternatesForShortfall([line({})], new Map([["p", 4], ["a1", 3], ["a2", 20]]));
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ lineId: "l1", need: 10, onHand: 4, shortfall: 6, suggestedItemId: "a2" });
+    expect(out[0]!.candidates).toEqual([
+      { itemId: "a1", onHand: 3, covers: false },
+      { itemId: "a2", onHand: 20, covers: true },
+    ]);
+    expect(suggestAlternatesForShortfall([line({})], new Map([["p", 50]]))).toEqual([]);
+  });
+
+  it("uses remaining qty and aggregates need across lines of the same item", () => {
+    const out = suggestAlternatesForShortfall(
+      [line({ id: "l1", qty: 6, issuedQty: 2 }), line({ id: "l2", qty: 6, alternateItemIds: [] })],
+      new Map([["p", 8], ["a1", 4]]),
+    );
+    // need = 4 + 6 = 10 vs on-hand 8 → short by 2; l2 has no alternates
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ lineId: "l1", need: 10, shortfall: 2, suggestedItemId: "a1" });
+  });
+
+  it("ignores fully issued and non-stock lines", () => {
+    expect(suggestAlternatesForShortfall([line({ issuedQty: 10 }), line({ id: "l2", lineKind: "service" })], new Map())).toEqual([]);
+  });
+});
+
+describe("rotateAlternates", () => {
+  it("moves the old item into the alternates list", () => {
+    expect(rotateAlternates(["a1", "a2"], "p", "a1")).toEqual(["a2", "p"]);
+    expect(rotateAlternates(["a1"], null, "a1")).toEqual([]);
+    expect(rotateAlternates(["a1", "p"], "p", "a1")).toEqual(["p"]);
+  });
+});
+
+describe("option selection helpers", () => {
+  it("normalizes arrays and records", () => {
+    expect(normalizeOptionSelection(["a", " b ", ""])).toEqual({ a: true, b: true });
+    expect(normalizeOptionSelection({ a: true, b: false, c: "true" })).toEqual({ a: true, b: false, c: true });
+    expect(normalizeOptionSelection(null)).toEqual({});
+  });
+
+  it("lists only truthy keys", () => {
+    expect(selectedOptionKeys({ a: true, b: false })).toEqual(["a"]);
+    expect(selectedOptionKeys(["x", "y"])).toEqual(["x", "y"]);
+  });
+});
+
+describe("explodeNestedPackageLines", () => {
+  const base = (over: Partial<PackageLineLike>): PackageLineLike => ({
+    section: "Main",
+    lineKind: "stock",
+    itemId: null,
+    description: "Line",
+    qty: 1,
+    unit: "nos",
+    defaultRate: 10,
+    ...over,
+  });
+
+  const makeLoader = (graph: Record<string, PackageLineLike[]>) => async (id: string) => graph[id] ?? null;
+
+  it("flattens child packages (phantom) and multiplies by the child qty", async () => {
+    const lines = await explodeNestedPackageLines(
+      makeLoader({
+        root: [base({ id: "r1", description: "Frame" }), base({ id: "r2", description: "Kit", childPackageId: "kit", qty: 3 })],
+        kit: [base({ id: "k1", description: "Bolt", qty: 4, defaultRate: 2 })],
+      }),
+      "root",
+      {},
+    );
+    expect(lines.map((l) => [l.description, l.qty, l.depth, l.sourcePackageId])).toEqual([
+      ["Frame", 1, 0, "root"],
+      ["Bolt", 12, 1, "kit"],
+    ]);
+    expect(lines.map((l) => l.sortNo)).toEqual([0, 1]);
+    expect(lines[1]).toMatchObject({ rate: 2, sourcePackageLineId: "k1" });
+  });
+
+  it("scales by capacity and evaluates formulas", async () => {
+    const lines = await explodeNestedPackageLines(
+      makeLoader({
+        root: [
+          base({ description: "Scaled", qty: 2, scaleByCapacity: true }),
+          base({ description: "Panels", qty: 1, qtyFormula: "ceil(capacityKw * 1000 / panelWp)" }),
+          base({ description: "Plain", qty: 5 }),
+        ],
+      }),
+      "root",
+      { capacityLabel: "3KW", variables: { panelWp: 550 } },
+    );
+    expect(lines.map((l) => l.qty)).toEqual([6, 6, 5]);
+  });
+
+  it("does not capacity-scale the child reference line itself", async () => {
+    const lines = await explodeNestedPackageLines(
+      makeLoader({
+        root: [base({ childPackageId: "c", qty: 2, scaleByCapacity: true })],
+        c: [base({ description: "Leaf", qty: 1, scaleByCapacity: true })],
+      }),
+      "root",
+      { capacityLabel: "5KW" },
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.qty).toBe(10);
+  });
+
+  it("includes optional lines only when selected (also inside children)", async () => {
+    const graph = {
+      root: [
+        base({ description: "Always" }),
+        base({ description: "Battery", optionalFlag: true, optionKey: "battery" }),
+        base({ description: "Child", childPackageId: "c" }),
+      ],
+      c: [base({ description: "Child option", optionalFlag: true, optionKey: "battery" })],
+    };
+    const off = await explodeNestedPackageLines(makeLoader(graph), "root", {});
+    expect(off.map((l) => l.description)).toEqual(["Always"]);
+    const on = await explodeNestedPackageLines(makeLoader(graph), "root", { selectedOptions: ["battery"] });
+    expect(on.map((l) => l.description)).toEqual(["Always", "Battery", "Child option"]);
+    expect(on[1]).toMatchObject({ optionalFlag: true, optionKey: "battery" });
+  });
+
+  it("skips inactive lines", async () => {
+    const lines = await explodeNestedPackageLines(makeLoader({ root: [base({ active: false }), base({ description: "Keep" })] }), "root");
+    expect(lines.map((l) => l.description)).toEqual(["Keep"]);
+  });
+
+  it("detects cycles, missing packages and depth overflow", async () => {
+    await expect(
+      explodeNestedPackageLines(makeLoader({ a: [base({ childPackageId: "b" })], b: [base({ childPackageId: "a" })] }), "a"),
+    ).rejects.toThrow(/cycle/i);
+    await expect(explodeNestedPackageLines(makeLoader({ a: [base({ childPackageId: "a" })] }), "a")).rejects.toThrow(/cycle/i);
+    await expect(explodeNestedPackageLines(makeLoader({ a: [base({ childPackageId: "gone" })] }), "a")).rejects.toThrow(/not found/i);
+    await expect(
+      explodeNestedPackageLines(
+        makeLoader({ a: [base({ childPackageId: "b" })], b: [base({ childPackageId: "c" })], c: [base({})] }),
+        "a",
+        { depthLimit: 1 },
+      ),
+    ).rejects.toThrow(/depth/i);
+  });
+
+  it("allows the same child twice (diamond) without flagging a cycle", async () => {
+    const lines = await explodeNestedPackageLines(
+      makeLoader({
+        root: [base({ childPackageId: "c", description: "one" }), base({ childPackageId: "c", description: "two", qty: 2 })],
+        c: [base({ description: "Leaf" })],
+      }),
+      "root",
+    );
+    expect(lines.map((l) => l.qty)).toEqual([1, 2]);
+  });
+
+  it("reports the offending line for bad formulas", async () => {
+    await expect(
+      explodeNestedPackageLines(makeLoader({ root: [base({ description: "Oops", qtyFormula: "unknownVar * 2" })] }), "root"),
+    ).rejects.toThrow(/Oops/);
+  });
+});
+
+describe("serial notes + issue state", () => {
+  it("merges serial notes without duplicates", () => {
+    expect(mergeSerialNotes(null, "SN1")).toBe("SN1");
+    expect(mergeSerialNotes("SN1", "SN2")).toBe("SN1; SN2");
+    expect(mergeSerialNotes("SN1; SN2", "SN2")).toBe("SN1; SN2");
+    expect(mergeSerialNotes("SN1", "  ")).toBe("SN1");
+    expect(mergeSerialNotes(null, null)).toBeNull();
+  });
+
+  it("detects legacy full issue (no per-line issued qty)", () => {
+    expect(isLegacyFullIssue("2026-01-01", [{ issuedQty: 0 }, {}])).toBe(true);
+    expect(isLegacyFullIssue("2026-01-01", [{ issuedQty: 0 }, { issuedQty: 2 }])).toBe(false);
+    expect(isLegacyFullIssue(null, [{ issuedQty: 0 }])).toBe(false);
+  });
+
+  it("applyPartialIssue clamps to remaining and ignores empty requests", () => {
+    const out = applyPartialIssue(
+      [
+        { id: "a", qty: 10, issuedQty: 4 },
+        { id: "b", qty: 5, issuedQty: 5 },
+      ],
+      [
+        { lineId: "a", qty: 100 },
+        { lineId: "b", qty: 1 },
+        { lineId: "zzz", qty: 1 },
+      ],
+    );
+    expect(out).toEqual([{ lineId: "a", qty: 6, nextIssuedQty: 10 }]);
   });
 });

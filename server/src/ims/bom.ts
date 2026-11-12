@@ -8,6 +8,7 @@ import { exec, isoOf, likeOf, money, one, rows, tsOf, tx, type Queryable } from 
 import { badRequest, conflict, forbidden, notFound } from "./host.js";
 import { round2, round3, todayISO, type ImsLineInput } from "./logic.js";
 import { confirmBomDoc, reopenBomDoc, registerBomEnhance } from "./bom-enhance-api.js";
+import { explodeNestedPackageLines, isLegacyFullIssue, normalizeOptionSelection, selectedOptionKeys } from "./bom-enhance.js";
 import { createLinkedInvoice } from "./sales.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo, postMovement } from "./stock.js";
@@ -137,6 +138,16 @@ function parseJsonObject(v: unknown): Record<string, unknown> | null {
     }
   }
   return null;
+}
+
+/** Keep only finite numeric entries of a JSON variables map. */
+function numericOnly(v: Record<string, unknown> | null | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, val] of Object.entries(v ?? {})) {
+    const n = typeof val === "number" ? val : typeof val === "string" && val.trim() ? Number(val) : NaN;
+    if (Number.isFinite(n)) out[k] = n;
+  }
+  return out;
 }
 
 export function mapPkgLine(r: PkgLineRow) {
@@ -469,6 +480,18 @@ const docLineInput = z.object({
   scaleByCapacity: z.boolean().optional(),
   rate: z.coerce.number().min(0).max(1e12).default(0),
   remarks: optText(500),
+  // 043 extras (all optional; carried from packages / preserved on re-save)
+  qtyFormula: optText(240),
+  childPackageId: z.string().uuid().nullable().optional(),
+  optionalFlag: z.boolean().optional(),
+  optionKey: optText(64),
+  alternateItemIds: z.array(z.string().uuid()).max(20).optional(),
+  serviceSpare: z.boolean().optional(),
+  scrapPct: z.coerce.number().min(0).max(999).optional(),
+  costRate: z.coerce.number().min(0).max(1e12).nullable().optional(),
+  issuedQty: z.coerce.number().min(0).max(1e9).optional(),
+  serialNotes: optText(500),
+  sourcePackageLineId: z.string().uuid().nullable().optional(),
 });
 
 const docInput = z.object({
@@ -483,6 +506,9 @@ const docInput = z.object({
   taxPct: pctZ.default(0),
   notes: optText(4000),
   preparedBy: optText(120),
+  /** Selected optional-line keys (`string[]` or `{ key: boolean }`) used when exploding a package. */
+  options: z.union([z.record(z.string().trim().min(1).max(64), z.boolean()), z.array(z.string().trim().min(1).max(64)).max(200)]).optional(),
+  variables: z.record(z.string(), z.coerce.number()).optional(),
   lines: z.array(docLineInput).max(500).optional(),
 });
 
@@ -577,9 +603,13 @@ async function replaceDocLines(
     await exec(
       db,
       `INSERT INTO ims_bom_doc_lines
-        (id, tenant_id, doc_id, section, sort_no, line_kind, item_id, description, make_text, qty, unit, scale_by_capacity, rate, amount, remarks)
+        (id, tenant_id, doc_id, section, sort_no, line_kind, item_id, description, make_text, qty, unit, scale_by_capacity, rate, amount, remarks,
+         qty_formula, child_package_id, optional_flag, option_key, alternate_item_ids_json, service_spare, scrap_pct, cost_rate,
+         issued_qty, serial_notes, source_package_line_id)
        VALUES
-        (:id, :tenantId, :docId, :section, :sortNo, :lineKind, :itemId, :description, :makeText, :qty, :unit, :scaleByCapacity, :rate, :amount, :remarks)`,
+        (:id, :tenantId, :docId, :section, :sortNo, :lineKind, :itemId, :description, :makeText, :qty, :unit, :scaleByCapacity, :rate, :amount, :remarks,
+         :qtyFormula, :childPackageId, :optionalFlag, :optionKey, CAST(:alternates AS JSON), :serviceSpare, :scrapPct, :costRate,
+         :issuedQty, :serialNotes, :sourcePackageLineId)`,
       {
         id: l.id ?? randomUUID(),
         tenantId,
@@ -596,6 +626,17 @@ async function replaceDocLines(
         rate: l.rate,
         amount: l.amount,
         remarks: l.remarks ?? null,
+        qtyFormula: l.qtyFormula ?? null,
+        childPackageId: l.childPackageId ?? null,
+        optionalFlag: l.optionalFlag ? 1 : 0,
+        optionKey: l.optionKey ?? null,
+        alternates: JSON.stringify(l.alternateItemIds ?? []),
+        serviceSpare: l.serviceSpare ? 1 : 0,
+        scrapPct: round3(l.scrapPct ?? 0),
+        costRate: l.costRate == null ? null : round2(l.costRate),
+        issuedQty: round3(l.issuedQty ?? 0),
+        serialNotes: l.serialNotes ?? null,
+        sourcePackageLineId: l.sourcePackageLineId ?? null,
       },
     );
   }
@@ -1002,27 +1043,53 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     let taxPct = body.taxPct;
     let capacityLabel = body.capacityLabel ?? null;
     let title = body.title ?? null;
+    let docOptions: Record<string, boolean> | null = body.options !== undefined ? normalizeOptionSelection(body.options) : null;
+    let docVariables: Record<string, number> | null = body.variables ?? null;
 
     if (body.packageId) {
       const pkg = await loadPackage(deps.db, actor.tenantId, body.packageId);
       if (!pkg || !pkg.active) throw notFound("Package not found or inactive");
       packageName = pkg.name;
       if (!capacityLabel && pkg.capacityLabel) capacityLabel = pkg.capacityLabel;
+      // Selected options / variables: request body wins, else the package defaults. Stored on the doc for the next explode.
+      docOptions = normalizeOptionSelection(body.options !== undefined ? body.options : (pkg.options ?? {}));
+      docVariables = body.variables ?? numericOnly(pkg.variables);
       if (!body.lines?.length) {
-        lines = (pkg.lines ?? [])
-          .filter((l) => l.active)
-          .map((l) => ({
+        // Flatten nested packages, drop unselected optional lines, evaluate qty formulas / capacity scaling.
+        const pkgCache = new Map<string, BomPackage | null>([[pkg.id, pkg]]);
+        const getLines = async (pid: string) => {
+          if (!pkgCache.has(pid)) pkgCache.set(pid, await loadPackage(deps.db, actor.tenantId, pid));
+          return pkgCache.get(pid)?.lines ?? null;
+        };
+        try {
+          const exploded = await explodeNestedPackageLines(getLines, pkg.id, {
+            capacityLabel,
+            selectedOptions: selectedOptionKeys(docOptions),
+            variables: docVariables,
+          });
+          lines = exploded.map((l) => ({
             section: l.section,
-            lineKind: l.lineKind,
+            lineKind: l.lineKind as (typeof lines)[number]["lineKind"],
             itemId: l.itemId,
             description: l.description,
             makeText: l.makeText,
-            qty: qtyForCapacity(l.qty, l.scaleByCapacity, capacityLabel),
+            qty: l.qty,
             unit: l.unit,
             scaleByCapacity: l.scaleByCapacity,
-            rate: l.defaultRate,
+            rate: l.rate,
             remarks: l.remarks,
+            qtyFormula: l.qtyFormula,
+            optionalFlag: l.optionalFlag,
+            optionKey: l.optionKey,
+            alternateItemIds: l.alternateItemIds,
+            serviceSpare: l.serviceSpare,
+            scrapPct: l.scrapPct,
+            costRate: l.costRate,
+            sourcePackageLineId: l.sourcePackageLineId,
           }));
+        } catch (e) {
+          throw conflict(e instanceof Error ? e.message : "Could not expand package");
+        }
       }
       if (raw.marginPct === undefined || raw.marginPct === null || raw.marginPct === "") marginPct = pkg.defaultMarginPct;
       if (raw.taxPct === undefined || raw.taxPct === null || raw.taxPct === "") taxPct = pkg.defaultTaxPct;
@@ -1076,6 +1143,19 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         },
       );
       const lineTotals = await replaceDocLines(conn, actor.tenantId, id, lines);
+      if (docOptions || docVariables) {
+        await exec(
+          conn,
+          `UPDATE ims_bom_docs SET options_json = CAST(:options AS JSON), variables_json = CAST(:variables AS JSON)
+           WHERE tenant_id = :tenantId AND id = :id`,
+          {
+            tenantId: actor.tenantId,
+            id,
+            options: docOptions ? JSON.stringify(docOptions) : null,
+            variables: docVariables ? JSON.stringify(docVariables) : null,
+          },
+        );
+      }
       const full = computeBomTotals(lines.map((l) => ({ qty: l.qty, rate: l.rate })), marginPct, taxPct);
       if (lineTotals.materialsTotal !== full.materialsTotal) {
         /* amounts already stored per line; refresh header totals */
@@ -1524,6 +1604,13 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         { tenantId: actor.tenantId, id, n: byItem.size },
       );
       if (!claimed.affectedRows) throw conflict("Stock was already issued for this BOM");
+      // Record per-line issued qty so partial-issue / reverse / as-built stay consistent with a full issue.
+      await exec(
+        conn,
+        `UPDATE ims_bom_doc_lines SET issued_qty = qty
+         WHERE tenant_id = :tenantId AND doc_id = :id AND line_kind = 'stock' AND item_id IS NOT NULL AND qty > 0`,
+        { tenantId: actor.tenantId, id },
+      );
       return out;
     });
 
@@ -1561,11 +1648,6 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const stockLines = (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
     if (!stockLines.length) throw conflict("No stock-linked lines to reverse");
 
-    const byItem = new Map<string, number>();
-    for (const l of stockLines) {
-      byItem.set(l.itemId!, round3((byItem.get(l.itemId!) ?? 0) + l.qty));
-    }
-
     const settings = await getSettings(deps, actor.tenantId);
     const date = body.date ?? todayISO();
     const posted = await tx(deps.db, async (conn) => {
@@ -1589,6 +1671,17 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           throw conflict("Stock was posted by the linked explode invoice. Cancel that invoice to return materials.");
         }
       }
+
+      // Return what was actually issued: per-line issued_qty (full or partial issue), or full qty for legacy full issues.
+      const fresh = await loadDoc(conn, actor.tenantId, id);
+      const freshStock = (fresh?.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
+      const legacyFull = isLegacyFullIssue(locked.stock_issued_at, freshStock);
+      const byItem = new Map<string, number>();
+      for (const l of freshStock) {
+        const qty = legacyFull ? l.qty : (l.issuedQty ?? 0);
+        if (qty > 0) byItem.set(l.itemId!, round3((byItem.get(l.itemId!) ?? 0) + qty));
+      }
+      if (!byItem.size) throw conflict("No BOM stock issue to reverse");
 
       const out = [];
       for (const [itemId, qty] of byItem) {
@@ -1620,6 +1713,11 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         { tenantId: actor.tenantId, id },
       );
       if (!cleared.affectedRows) throw conflict("No BOM stock issue to reverse");
+      await exec(
+        conn,
+        `UPDATE ims_bom_doc_lines SET issued_qty = 0, serial_notes = NULL WHERE tenant_id = :tenantId AND doc_id = :id`,
+        { tenantId: actor.tenantId, id },
+      );
       return out;
     });
 
