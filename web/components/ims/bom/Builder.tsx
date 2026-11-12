@@ -842,6 +842,11 @@ function BomEditorForm({
   const [taxPct, setTaxPct] = useState(String(initial?.taxPct ?? seeded?.defaultTaxPct ?? 0));
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [preparedBy, setPreparedBy] = useState(initial?.preparedBy ?? session.actor.name ?? "");
+  const [projectRef, setProjectRef] = useState(initial?.projectRef ?? "");
+  const [validUntil, setValidUntil] = useState(initial?.validUntil ?? "");
+  const [paymentTerms, setPaymentTerms] = useState(initial?.paymentTerms ?? "");
+  const [deliveryTerms, setDeliveryTerms] = useState(initial?.deliveryTerms ?? "");
+  const [warrantyTerms, setWarrantyTerms] = useState(initial?.warrantyTerms ?? "");
   const [partyId, setPartyId] = useState<string | null>(initial?.partyId ?? null);
   const [pickFor, setPickFor] = useState<string | null>(null);
   const [lines, setLines] = useState<EditorLine[]>(() => {
@@ -913,12 +918,18 @@ function BomEditorForm({
     docNo: initial?.docNo ?? "Draft",
     docDate,
     status: initial?.status ?? "draft",
-    title: title || "Bill of materials",
+    title: title || "Materials proposal",
     capacityLabel,
     customerName,
     location,
+    projectRef,
     preparedBy,
     notes,
+    revision: initial?.revision ?? 1,
+    validUntil: validUntil || null,
+    paymentTerms: paymentTerms || null,
+    deliveryTerms: deliveryTerms || null,
+    warrantyTerms: warrantyTerms || null,
     marginPct: Number(marginPct) || 0,
     taxPct: Number(taxPct) || 0,
     template: settings.bomPaperTemplate,
@@ -987,11 +998,16 @@ function BomEditorForm({
     title: title.trim() || null,
     customerName: customerName.trim(),
     location: location.trim() || null,
+    projectRef: projectRef.trim() || null,
     partyId,
     marginPct: Number(marginPct) || 0,
     taxPct: Number(taxPct) || 0,
     notes: notes.trim() || null,
     preparedBy: preparedBy.trim() || null,
+    validUntil: validUntil.trim() || null,
+    paymentTerms: paymentTerms.trim() || null,
+    deliveryTerms: deliveryTerms.trim() || null,
+    warrantyTerms: warrantyTerms.trim() || null,
     lines: lines
       .filter((l) => l.description.trim())
       .map((l, i) => ({
@@ -1224,11 +1240,26 @@ function BomEditorForm({
               <Field label="Prepared by">
                 {({ id }) => <Input id={id} value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)} />}
               </Field>
+              <Field label="Project ref">
+                {({ id }) => <Input id={id} value={projectRef} onChange={(e) => setProjectRef(e.target.value)} placeholder="Site / job / PO ref" />}
+              </Field>
+              <Field label="Valid until">
+                {({ id }) => <Input id={id} type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />}
+              </Field>
               <Field label="Margin %">
                 {({ id }) => <Input id={id} value={marginPct} onChange={(e) => setMarginPct(e.target.value)} inputMode="decimal" />}
               </Field>
               <Field label="Tax %">
                 {({ id }) => <Input id={id} value={taxPct} onChange={(e) => setTaxPct(e.target.value)} inputMode="decimal" />}
+              </Field>
+              <Field label="Payment terms">
+                {({ id }) => <Input id={id} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="e.g. 40% advance · 60% delivery" />}
+              </Field>
+              <Field label="Delivery terms">
+                {({ id }) => <Input id={id} value={deliveryTerms} onChange={(e) => setDeliveryTerms(e.target.value)} placeholder="e.g. 7–10 working days" />}
+              </Field>
+              <Field label="Warranty terms">
+                {({ id }) => <Input id={id} value={warrantyTerms} onChange={(e) => setWarrantyTerms(e.target.value)} placeholder="OEM + workmanship" />}
               </Field>
             </FormGrid>
             <div style={{ marginTop: 12 }}>

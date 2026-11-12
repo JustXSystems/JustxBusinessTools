@@ -118,6 +118,7 @@ export type ReminderTemplate = { key: string; label: string; channel: "whatsapp"
 export type ReminderSettings = { autoEnabled: boolean; rules: Record<ReminderRuleKey, boolean>; channels: Array<"whatsapp" | "sms" | "email">; templates: ReminderTemplate[] };
 
 export type BomPaperTemplateId =
+  | "aether"
   | "classic"
   | "tiered"
   | "epc"

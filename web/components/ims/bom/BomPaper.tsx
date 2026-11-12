@@ -8,6 +8,7 @@ import {
   type BomPaperTemplateId,
 } from "@/lib/ims/bom-paper";
 import {
+  AetherBomPaper,
   AtelierBomPaper,
   AuroraBomPaper,
   ClassicBomPaper,
@@ -32,8 +33,14 @@ export type BomPaperModel = {
   capacityLabel: string;
   customerName: string;
   location: string;
+  projectRef?: string | null;
   preparedBy?: string | null;
   notes?: string | null;
+  revision?: number | null;
+  validUntil?: string | null;
+  paymentTerms?: string | null;
+  deliveryTerms?: string | null;
+  warrantyTerms?: string | null;
   marginPct: number;
   taxPct: number;
   lines: ReadonlyArray<BomPaperLine>;
@@ -48,12 +55,18 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness, template?: BomP
     docNo: doc.docNo,
     docDate: doc.docDate,
     status: doc.status,
-    title: doc.title || doc.packageName || "Bill of materials",
+    title: doc.title || doc.packageName || "Materials proposal",
     capacityLabel: doc.capacityLabel || "",
     customerName: doc.customerName || "",
     location: doc.location || "",
+    projectRef: doc.projectRef ?? null,
     preparedBy: doc.preparedBy,
     notes: doc.notes,
+    revision: doc.revision ?? 1,
+    validUntil: doc.validUntil ?? null,
+    paymentTerms: doc.paymentTerms ?? null,
+    deliveryTerms: doc.deliveryTerms ?? null,
+    warrantyTerms: doc.warrantyTerms ?? null,
     marginPct: doc.marginPct,
     taxPct: doc.taxPct,
     lines: (doc.lines ?? []).map((l) => ({
@@ -61,6 +74,8 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness, template?: BomP
       lineKind: l.lineKind,
       description: l.description,
       makeText: l.makeText,
+      sku: l.itemSku,
+      hsn: l.itemHsn ?? null,
       qty: l.qty,
       unit: l.unit,
       rate: l.rate,
@@ -81,6 +96,8 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness, template?: BomP
 export function BomPaper({ model }: { model: BomPaperModel }) {
   const template = normalizeBomPaperTemplate(model.template);
   switch (template) {
+    case "aether":
+      return <AetherBomPaper model={model} />;
     case "tiered":
       return <TieredBomPaper model={model} />;
     case "epc":

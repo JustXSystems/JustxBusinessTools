@@ -22,6 +22,7 @@ import {
 
 /** Tenant-wide BOM preview / print paper layout. */
 export const BOM_PAPER_TEMPLATES = [
+  "aether",
   "classic",
   "tiered",
   "epc",
@@ -40,7 +41,7 @@ export type BomPaperTemplateId = (typeof BOM_PAPER_TEMPLATES)[number];
 
 export function normalizeBomPaperTemplate(v: unknown): BomPaperTemplateId {
   const s = String(v ?? "").trim().toLowerCase();
-  return (BOM_PAPER_TEMPLATES as readonly string[]).includes(s) ? (s as BomPaperTemplateId) : "classic";
+  return (BOM_PAPER_TEMPLATES as readonly string[]).includes(s) ? (s as BomPaperTemplateId) : "aether";
 }
 
 export type ImsSettings = {

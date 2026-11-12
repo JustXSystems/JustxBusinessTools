@@ -110,6 +110,7 @@ type DocLineRow = {
   remarks: string | null;
   item_name?: string | null;
   item_sku?: string | null;
+  item_hsn?: string | null;
 };
 
 function parseJsonArray(v: unknown): string[] {
@@ -244,6 +245,7 @@ export function mapDocLine(r: DocLineRow) {
     itemId: r.item_id,
     itemName: r.item_name ?? null,
     itemSku: r.item_sku ?? null,
+    itemHsn: r.item_hsn ?? null,
     description: r.description,
     makeText: r.make_text,
     qty: round3(money(r.qty)),
@@ -285,6 +287,11 @@ export function mapDoc(r: DocRow, lines?: BomDocLine[]) {
     pdf_generated_at?: string | null;
     as_built_at?: string | null;
     as_built_json?: unknown;
+    project_ref?: string | null;
+    valid_until?: string | null;
+    payment_terms?: string | null;
+    delivery_terms?: string | null;
+    warranty_terms?: string | null;
   };
   return {
     id: r.id,
@@ -297,6 +304,7 @@ export function mapDoc(r: DocRow, lines?: BomDocLine[]) {
     title: r.title,
     customerName: r.customer_name,
     location: r.location,
+    projectRef: ext.project_ref ?? null,
     partyId: r.party_id,
     marginPct: round3(money(r.margin_pct)),
     taxPct: round3(money(r.tax_pct)),
@@ -307,6 +315,10 @@ export function mapDoc(r: DocRow, lines?: BomDocLine[]) {
     materialsCost: round2(money(ext.materials_cost ?? 0)),
     notes: r.notes,
     preparedBy: r.prepared_by,
+    validUntil: ext.valid_until ? isoOf(ext.valid_until) : null,
+    paymentTerms: ext.payment_terms ?? null,
+    deliveryTerms: ext.delivery_terms ?? null,
+    warrantyTerms: ext.warranty_terms ?? null,
     invoiceId: r.invoice_id,
     /** Set when converting to invoice. Both modes are supported. */
     invoiceConvertMode: convertModeOf(r.invoice_convert_mode),
@@ -514,6 +526,11 @@ const docInput = z.object({
   taxPct: pctZ.default(0),
   notes: optText(4000),
   preparedBy: optText(120),
+  projectRef: optText(120),
+  validUntil: isoDate.nullable().optional(),
+  paymentTerms: optText(240),
+  deliveryTerms: optText(240),
+  warrantyTerms: optText(240),
   /** Selected optional-line keys (`string[]` or `{ key: boolean }`) used when exploding a package. */
   options: z.union([z.record(z.string().trim().min(1).max(64), z.boolean()), z.array(z.string().trim().min(1).max(64)).max(200)]).optional(),
   variables: z.record(z.string(), z.coerce.number()).optional(),
@@ -542,7 +559,7 @@ export async function loadPackage(db: Queryable, tenantId: number, id: string): 
 export async function loadDocLines(db: Queryable, tenantId: number, docId: string): Promise<BomDocLine[]> {
   const list = await rows<DocLineRow>(
     db,
-    `SELECT l.*, i.name AS item_name, i.sku AS item_sku
+    `SELECT l.*, i.name AS item_name, i.sku AS item_sku, i.hsn AS item_hsn
      FROM ims_bom_doc_lines l
      LEFT JOIN ims_items i ON i.tenant_id = l.tenant_id AND i.id = l.item_id
      WHERE l.tenant_id = :tenantId AND l.doc_id = :docId
@@ -1120,12 +1137,12 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         conn,
         `INSERT INTO ims_bom_docs
           (id, tenant_id, package_id, package_name, doc_no, status, doc_date, capacity_label, title,
-           customer_name, location, party_id, margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total,
-           notes, prepared_by, created_by, created_by_name)
+           customer_name, location, project_ref, party_id, margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total,
+           notes, prepared_by, valid_until, payment_terms, delivery_terms, warranty_terms, created_by, created_by_name)
          VALUES
           (:id, :tenantId, :packageId, :packageName, :docNo, 'draft', :docDate, :capacityLabel, :title,
-           :customerName, :location, :partyId, :marginPct, :taxPct, :materialsTotal, :marginAmount, :taxAmount, :grandTotal,
-           :notes, :preparedBy, :createdBy, :createdByName)`,
+           :customerName, :location, :projectRef, :partyId, :marginPct, :taxPct, :materialsTotal, :marginAmount, :taxAmount, :grandTotal,
+           :notes, :preparedBy, :validUntil, :paymentTerms, :deliveryTerms, :warrantyTerms, :createdBy, :createdByName)`,
         {
           id,
           tenantId: actor.tenantId,
@@ -1137,6 +1154,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           title,
           customerName: body.customerName || "",
           location: body.location ?? null,
+          projectRef: body.projectRef ?? null,
           partyId: body.partyId ?? null,
           marginPct,
           taxPct,
@@ -1146,6 +1164,10 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           grandTotal: totals.grandTotal,
           notes: body.notes ?? null,
           preparedBy: body.preparedBy ?? actor.name ?? actor.email ?? null,
+          validUntil: body.validUntil ?? null,
+          paymentTerms: body.paymentTerms ?? null,
+          deliveryTerms: body.deliveryTerms ?? null,
+          warrantyTerms: body.warrantyTerms ?? null,
           createdBy: actor.userId,
           createdByName: actor.name ?? actor.email ?? null,
         },
@@ -1200,10 +1222,11 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         conn,
         `UPDATE ims_bom_docs SET
           package_id = :packageId, doc_date = :docDate, capacity_label = :capacityLabel, title = :title,
-          customer_name = :customerName, location = :location, party_id = :partyId,
+          customer_name = :customerName, location = :location, project_ref = :projectRef, party_id = :partyId,
           margin_pct = :marginPct, tax_pct = :taxPct,
           materials_total = :materialsTotal, margin_amount = :marginAmount, tax_amount = :taxAmount, grand_total = :grandTotal,
-          notes = :notes, prepared_by = :preparedBy
+          notes = :notes, prepared_by = :preparedBy,
+          valid_until = :validUntil, payment_terms = :paymentTerms, delivery_terms = :deliveryTerms, warranty_terms = :warrantyTerms
          WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`,
         {
           id,
@@ -1214,6 +1237,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           title: body.title ?? null,
           customerName: body.customerName || "",
           location: body.location ?? null,
+          projectRef: body.projectRef ?? null,
           partyId: body.partyId ?? null,
           marginPct: body.marginPct,
           taxPct: body.taxPct,
@@ -1223,6 +1247,10 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           grandTotal: totals.grandTotal,
           notes: body.notes ?? null,
           preparedBy: body.preparedBy ?? existing.preparedBy,
+          validUntil: body.validUntil ?? null,
+          paymentTerms: body.paymentTerms ?? null,
+          deliveryTerms: body.deliveryTerms ?? null,
+          warrantyTerms: body.warrantyTerms ?? null,
         },
       );
       await replaceDocLines(conn, actor.tenantId, id, lines);
