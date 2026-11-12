@@ -7,6 +7,8 @@ import { actorOf, isoDate, optText, parse, parsePatch, qint, qstr, recordEvent, 
 import { exec, isoOf, likeOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
 import { badRequest, conflict, forbidden, notFound } from "./host.js";
 import { round2, round3, todayISO, type ImsLineInput } from "./logic.js";
+import { confirmBomDoc, reopenBomDoc, registerBomEnhance } from "./bom-enhance-api.js";
+import { explodeNestedPackageLines, isLegacyFullIssue, normalizeOptionSelection, selectedOptionKeys } from "./bom-enhance.js";
 import { createLinkedInvoice } from "./sales.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo, postMovement } from "./stock.js";
@@ -110,7 +112,55 @@ type DocLineRow = {
   item_sku?: string | null;
 };
 
+function parseJsonArray(v: unknown): string[] {
+  if (v == null) return [];
+  if (Array.isArray(v)) return v.map(String);
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function parseJsonObject(v: unknown): Record<string, unknown> | null {
+  if (v == null) return null;
+  if (typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Keep only finite numeric entries of a JSON variables map. */
+function numericOnly(v: Record<string, unknown> | null | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, val] of Object.entries(v ?? {})) {
+    const n = typeof val === "number" ? val : typeof val === "string" && val.trim() ? Number(val) : NaN;
+    if (Number.isFinite(n)) out[k] = n;
+  }
+  return out;
+}
+
 export function mapPkgLine(r: PkgLineRow) {
+  const ext = r as PkgLineRow & {
+    qty_formula?: string | null;
+    child_package_id?: string | null;
+    optional_flag?: number;
+    option_key?: string | null;
+    alternate_item_ids_json?: unknown;
+    service_spare?: number;
+    scrap_pct?: string;
+    cost_rate?: string | null;
+  };
   return {
     id: r.id,
     packageId: r.package_id,
@@ -128,11 +178,26 @@ export function mapPkgLine(r: PkgLineRow) {
     defaultRate: round2(money(r.default_rate)),
     remarks: r.remarks,
     active: Boolean(r.active),
+    qtyFormula: ext.qty_formula ?? null,
+    childPackageId: ext.child_package_id ?? null,
+    optionalFlag: Boolean(ext.optional_flag),
+    optionKey: ext.option_key ?? null,
+    alternateItemIds: parseJsonArray(ext.alternate_item_ids_json),
+    serviceSpare: Boolean(ext.service_spare),
+    scrapPct: round3(money(ext.scrap_pct ?? 0)),
+    costRate: ext.cost_rate == null ? null : round2(money(ext.cost_rate)),
   };
 }
 export type BomPackageLine = ReturnType<typeof mapPkgLine>;
 
 export function mapPackage(r: PkgRow, lines?: BomPackageLine[]) {
+  const ext = r as PkgRow & {
+    revision?: number;
+    effective_from?: string | null;
+    effective_to?: string | null;
+    variables_json?: unknown;
+    options_json?: unknown;
+  };
   return {
     id: r.id,
     code: r.code,
@@ -142,6 +207,11 @@ export function mapPackage(r: PkgRow, lines?: BomPackageLine[]) {
     defaultMarginPct: round3(money(r.default_margin_pct)),
     defaultTaxPct: round3(money(r.default_tax_pct)),
     active: Boolean(r.active),
+    revision: Number(ext.revision ?? 1),
+    effectiveFrom: ext.effective_from ? isoOf(ext.effective_from) : null,
+    effectiveTo: ext.effective_to ? isoOf(ext.effective_to) : null,
+    variables: parseJsonObject(ext.variables_json),
+    options: parseJsonObject(ext.options_json),
     lineCount: r.line_count == null ? lines?.length ?? 0 : Number(r.line_count),
     createdByName: r.created_by_name,
     createdAt: tsOf(r.created_at),
@@ -152,6 +222,19 @@ export function mapPackage(r: PkgRow, lines?: BomPackageLine[]) {
 export type BomPackage = ReturnType<typeof mapPackage>;
 
 export function mapDocLine(r: DocLineRow) {
+  const ext = r as DocLineRow & {
+    qty_formula?: string | null;
+    child_package_id?: string | null;
+    optional_flag?: number;
+    option_key?: string | null;
+    alternate_item_ids_json?: unknown;
+    service_spare?: number;
+    scrap_pct?: string;
+    cost_rate?: string | null;
+    issued_qty?: string;
+    serial_notes?: string | null;
+    source_package_line_id?: string | null;
+  };
   return {
     id: r.id,
     docId: r.doc_id,
@@ -169,11 +252,40 @@ export function mapDocLine(r: DocLineRow) {
     rate: round2(money(r.rate)),
     amount: round2(money(r.amount)),
     remarks: r.remarks,
+    qtyFormula: ext.qty_formula ?? null,
+    childPackageId: ext.child_package_id ?? null,
+    optionalFlag: Boolean(ext.optional_flag),
+    optionKey: ext.option_key ?? null,
+    alternateItemIds: parseJsonArray(ext.alternate_item_ids_json),
+    serviceSpare: Boolean(ext.service_spare),
+    scrapPct: round3(money(ext.scrap_pct ?? 0)),
+    costRate: ext.cost_rate == null ? null : round2(money(ext.cost_rate)),
+    issuedQty: round3(money(ext.issued_qty ?? 0)),
+    serialNotes: ext.serial_notes ?? null,
+    sourcePackageLineId: ext.source_package_line_id ?? null,
   };
 }
 export type BomDocLine = ReturnType<typeof mapDocLine>;
 
 export function mapDoc(r: DocRow, lines?: BomDocLine[]) {
+  const ext = r as DocRow & {
+    materials_cost?: string;
+    revision?: number;
+    parent_doc_id?: string | null;
+    variables_json?: unknown;
+    options_json?: unknown;
+    proposal_token?: string | null;
+    proposal_status?: string | null;
+    proposal_sent_at?: string | null;
+    proposal_responded_at?: string | null;
+    proposal_response_note?: string | null;
+    rate_card_id?: string | null;
+    pdf_artifact_id?: string | null;
+    pdf_sha256?: string | null;
+    pdf_generated_at?: string | null;
+    as_built_at?: string | null;
+    as_built_json?: unknown;
+  };
   return {
     id: r.id,
     packageId: r.package_id,
@@ -192,6 +304,7 @@ export function mapDoc(r: DocRow, lines?: BomDocLine[]) {
     marginAmount: round2(money(r.margin_amount)),
     taxAmount: round2(money(r.tax_amount)),
     grandTotal: round2(money(r.grand_total)),
+    materialsCost: round2(money(ext.materials_cost ?? 0)),
     notes: r.notes,
     preparedBy: r.prepared_by,
     invoiceId: r.invoice_id,
@@ -200,6 +313,21 @@ export function mapDoc(r: DocRow, lines?: BomDocLine[]) {
     invoiceConvertModes: BOM_INVOICE_CONVERT_MODES,
     stockIssuedAt: tsOf(r.stock_issued_at),
     stockIssueCount: Number(r.stock_issue_count ?? 0),
+    revision: Number(ext.revision ?? 1),
+    parentDocId: ext.parent_doc_id ?? null,
+    variables: parseJsonObject(ext.variables_json),
+    options: parseJsonObject(ext.options_json),
+    proposalToken: ext.proposal_token ?? null,
+    proposalStatus: ext.proposal_status ?? null,
+    proposalSentAt: tsOf(ext.proposal_sent_at ?? null),
+    proposalRespondedAt: tsOf(ext.proposal_responded_at ?? null),
+    proposalResponseNote: ext.proposal_response_note ?? null,
+    rateCardId: ext.rate_card_id ?? null,
+    pdfArtifactId: ext.pdf_artifact_id ?? null,
+    pdfSha256: ext.pdf_sha256 ?? null,
+    pdfGeneratedAt: tsOf(ext.pdf_generated_at ?? null),
+    asBuiltAt: tsOf(ext.as_built_at ?? null),
+    asBuilt: parseJsonObject(ext.as_built_json),
     createdByName: r.created_by_name,
     createdAt: tsOf(r.created_at),
     updatedAt: tsOf(r.updated_at),
@@ -326,6 +454,14 @@ const pkgLineInput = z.object({
   defaultRate: z.coerce.number().min(0).max(1e12).default(0),
   remarks: optText(500),
   active: z.boolean().optional(),
+  qtyFormula: optText(240),
+  childPackageId: z.string().uuid().nullable().optional(),
+  optionalFlag: z.boolean().optional(),
+  optionKey: optText(64),
+  alternateItemIds: z.array(z.string().uuid()).max(20).optional(),
+  serviceSpare: z.boolean().optional(),
+  scrapPct: z.coerce.number().min(0).max(999).optional(),
+  costRate: z.coerce.number().min(0).max(1e12).nullable().optional(),
 });
 
 const packageInput = z.object({
@@ -352,6 +488,18 @@ const docLineInput = z.object({
   scaleByCapacity: z.boolean().optional(),
   rate: z.coerce.number().min(0).max(1e12).default(0),
   remarks: optText(500),
+  // 043 extras (all optional; carried from packages / preserved on re-save)
+  qtyFormula: optText(240),
+  childPackageId: z.string().uuid().nullable().optional(),
+  optionalFlag: z.boolean().optional(),
+  optionKey: optText(64),
+  alternateItemIds: z.array(z.string().uuid()).max(20).optional(),
+  serviceSpare: z.boolean().optional(),
+  scrapPct: z.coerce.number().min(0).max(999).optional(),
+  costRate: z.coerce.number().min(0).max(1e12).nullable().optional(),
+  issuedQty: z.coerce.number().min(0).max(1e9).optional(),
+  serialNotes: optText(500),
+  sourcePackageLineId: z.string().uuid().nullable().optional(),
 });
 
 const docInput = z.object({
@@ -366,10 +514,13 @@ const docInput = z.object({
   taxPct: pctZ.default(0),
   notes: optText(4000),
   preparedBy: optText(120),
+  /** Selected optional-line keys (`string[]` or `{ key: boolean }`) used when exploding a package. */
+  options: z.union([z.record(z.string().trim().min(1).max(64), z.boolean()), z.array(z.string().trim().min(1).max(64)).max(200)]).optional(),
+  variables: z.record(z.string(), z.coerce.number()).optional(),
   lines: z.array(docLineInput).max(500).optional(),
 });
 
-async function loadPkgLines(db: Queryable, tenantId: number, packageId: string): Promise<BomPackageLine[]> {
+export async function loadPkgLines(db: Queryable, tenantId: number, packageId: string): Promise<BomPackageLine[]> {
   const list = await rows<PkgLineRow>(
     db,
     `SELECT l.*, i.name AS item_name, i.sku AS item_sku, i.unit AS item_unit, i.selling_price
@@ -382,13 +533,13 @@ async function loadPkgLines(db: Queryable, tenantId: number, packageId: string):
   return list.map(mapPkgLine);
 }
 
-async function loadPackage(db: Queryable, tenantId: number, id: string): Promise<BomPackage | null> {
+export async function loadPackage(db: Queryable, tenantId: number, id: string): Promise<BomPackage | null> {
   const r = await one<PkgRow>(db, `SELECT * FROM ims_bom_packages WHERE tenant_id = :tenantId AND id = :id LIMIT 1`, { tenantId, id });
   if (!r) return null;
   return mapPackage(r, await loadPkgLines(db, tenantId, id));
 }
 
-async function loadDocLines(db: Queryable, tenantId: number, docId: string): Promise<BomDocLine[]> {
+export async function loadDocLines(db: Queryable, tenantId: number, docId: string): Promise<BomDocLine[]> {
   const list = await rows<DocLineRow>(
     db,
     `SELECT l.*, i.name AS item_name, i.sku AS item_sku
@@ -401,7 +552,7 @@ async function loadDocLines(db: Queryable, tenantId: number, docId: string): Pro
   return list.map(mapDocLine);
 }
 
-async function loadDoc(db: Queryable, tenantId: number, id: string): Promise<BomDoc | null> {
+export async function loadDoc(db: Queryable, tenantId: number, id: string): Promise<BomDoc | null> {
   const r = await one<DocRow>(db, `SELECT * FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1`, { tenantId, id });
   if (!r) return null;
   return mapDoc(r, await loadDocLines(db, tenantId, id));
@@ -460,9 +611,13 @@ async function replaceDocLines(
     await exec(
       db,
       `INSERT INTO ims_bom_doc_lines
-        (id, tenant_id, doc_id, section, sort_no, line_kind, item_id, description, make_text, qty, unit, scale_by_capacity, rate, amount, remarks)
+        (id, tenant_id, doc_id, section, sort_no, line_kind, item_id, description, make_text, qty, unit, scale_by_capacity, rate, amount, remarks,
+         qty_formula, child_package_id, optional_flag, option_key, alternate_item_ids_json, service_spare, scrap_pct, cost_rate,
+         issued_qty, serial_notes, source_package_line_id)
        VALUES
-        (:id, :tenantId, :docId, :section, :sortNo, :lineKind, :itemId, :description, :makeText, :qty, :unit, :scaleByCapacity, :rate, :amount, :remarks)`,
+        (:id, :tenantId, :docId, :section, :sortNo, :lineKind, :itemId, :description, :makeText, :qty, :unit, :scaleByCapacity, :rate, :amount, :remarks,
+         :qtyFormula, :childPackageId, :optionalFlag, :optionKey, CAST(:alternates AS JSON), :serviceSpare, :scrapPct, :costRate,
+         :issuedQty, :serialNotes, :sourcePackageLineId)`,
       {
         id: l.id ?? randomUUID(),
         tenantId,
@@ -479,6 +634,17 @@ async function replaceDocLines(
         rate: l.rate,
         amount: l.amount,
         remarks: l.remarks ?? null,
+        qtyFormula: l.qtyFormula ?? null,
+        childPackageId: l.childPackageId ?? null,
+        optionalFlag: l.optionalFlag ? 1 : 0,
+        optionKey: l.optionKey ?? null,
+        alternates: JSON.stringify(l.alternateItemIds ?? []),
+        serviceSpare: l.serviceSpare ? 1 : 0,
+        scrapPct: round3(l.scrapPct ?? 0),
+        costRate: l.costRate == null ? null : round2(l.costRate),
+        issuedQty: round3(l.issuedQty ?? 0),
+        serialNotes: l.serialNotes ?? null,
+        sourcePackageLineId: l.sourcePackageLineId ?? null,
       },
     );
   }
@@ -885,27 +1051,53 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     let taxPct = body.taxPct;
     let capacityLabel = body.capacityLabel ?? null;
     let title = body.title ?? null;
+    let docOptions: Record<string, boolean> | null = body.options !== undefined ? normalizeOptionSelection(body.options) : null;
+    let docVariables: Record<string, number> | null = body.variables ?? null;
 
     if (body.packageId) {
       const pkg = await loadPackage(deps.db, actor.tenantId, body.packageId);
       if (!pkg || !pkg.active) throw notFound("Package not found or inactive");
       packageName = pkg.name;
       if (!capacityLabel && pkg.capacityLabel) capacityLabel = pkg.capacityLabel;
+      // Selected options / variables: request body wins, else the package defaults. Stored on the doc for the next explode.
+      docOptions = normalizeOptionSelection(body.options !== undefined ? body.options : (pkg.options ?? {}));
+      docVariables = body.variables ?? numericOnly(pkg.variables);
       if (!body.lines?.length) {
-        lines = (pkg.lines ?? [])
-          .filter((l) => l.active)
-          .map((l) => ({
+        // Flatten nested packages, drop unselected optional lines, evaluate qty formulas / capacity scaling.
+        const pkgCache = new Map<string, BomPackage | null>([[pkg.id, pkg]]);
+        const getLines = async (pid: string) => {
+          if (!pkgCache.has(pid)) pkgCache.set(pid, await loadPackage(deps.db, actor.tenantId, pid));
+          return pkgCache.get(pid)?.lines ?? null;
+        };
+        try {
+          const exploded = await explodeNestedPackageLines(getLines, pkg.id, {
+            capacityLabel,
+            selectedOptions: selectedOptionKeys(docOptions),
+            variables: docVariables,
+          });
+          lines = exploded.map((l) => ({
             section: l.section,
-            lineKind: l.lineKind,
+            lineKind: l.lineKind as (typeof lines)[number]["lineKind"],
             itemId: l.itemId,
             description: l.description,
             makeText: l.makeText,
-            qty: qtyForCapacity(l.qty, l.scaleByCapacity, capacityLabel),
+            qty: l.qty,
             unit: l.unit,
             scaleByCapacity: l.scaleByCapacity,
-            rate: l.defaultRate,
+            rate: l.rate,
             remarks: l.remarks,
+            qtyFormula: l.qtyFormula,
+            optionalFlag: l.optionalFlag,
+            optionKey: l.optionKey,
+            alternateItemIds: l.alternateItemIds,
+            serviceSpare: l.serviceSpare,
+            scrapPct: l.scrapPct,
+            costRate: l.costRate,
+            sourcePackageLineId: l.sourcePackageLineId,
           }));
+        } catch (e) {
+          throw conflict(e instanceof Error ? e.message : "Could not expand package");
+        }
       }
       if (raw.marginPct === undefined || raw.marginPct === null || raw.marginPct === "") marginPct = pkg.defaultMarginPct;
       if (raw.taxPct === undefined || raw.taxPct === null || raw.taxPct === "") taxPct = pkg.defaultTaxPct;
@@ -959,6 +1151,19 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         },
       );
       const lineTotals = await replaceDocLines(conn, actor.tenantId, id, lines);
+      if (docOptions || docVariables) {
+        await exec(
+          conn,
+          `UPDATE ims_bom_docs SET options_json = CAST(:options AS JSON), variables_json = CAST(:variables AS JSON)
+           WHERE tenant_id = :tenantId AND id = :id`,
+          {
+            tenantId: actor.tenantId,
+            id,
+            options: docOptions ? JSON.stringify(docOptions) : null,
+            variables: docVariables ? JSON.stringify(docVariables) : null,
+          },
+        );
+      }
       const full = computeBomTotals(lines.map((l) => ({ qty: l.qty, rate: l.rate })), marginPct, taxPct);
       if (lineTotals.materialsTotal !== full.materialsTotal) {
         /* amounts already stored per line; refresh header totals */
@@ -1030,14 +1235,26 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     requirePerm(res, "bom");
     const actor = actorOf(res);
     const id = String(req.params.id);
+    const body = parse(z.object({ acknowledgeWarnings: z.boolean().optional() }).default({}), req.body ?? {});
     const existing = await loadDoc(deps.db, actor.tenantId, id);
     if (!existing) throw notFound("BOM document not found");
     if (existing.status !== "draft") throw conflict("Only drafts can be confirmed");
-    if (!existing.customerName.trim()) throw conflict("Customer name is required before confirming");
-    if (!existing.lines?.length) throw conflict("Add at least one line before confirming");
-    await exec(deps.db, `UPDATE ims_bom_docs SET status = 'confirmed' WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id });
-    await recordEvent(deps, actor, { type: "bom.doc.confirmed", entityType: "bom_doc", entityId: id, summary: `Confirmed ${existing.docNo}`, payload: { docNo: existing.docNo } });
-    res.json({ doc: await loadDoc(deps.db, actor.tenantId, id) });
+    try {
+      const result = await confirmBomDoc(
+        deps,
+        { tenantId: actor.tenantId, userId: actor.userId ?? null, name: actor.name ?? null },
+        existing,
+        Boolean(body.acknowledgeWarnings),
+      );
+      res.json({ doc: await loadDoc(deps.db, actor.tenantId, id), gates: result.gates });
+    } catch (e) {
+      const gates = (e as { gates?: unknown }).gates;
+      if (gates) {
+        res.status(409).json({ error: e instanceof Error ? e.message : "Confirm blocked", gates });
+        return;
+      }
+      throw e;
+    }
   });
 
   router.post("/bom/docs/:id/reopen", async (req, res) => {
@@ -1049,8 +1266,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     if (existing.status !== "confirmed") throw conflict("Only confirmed BOMs can be reopened");
     if (existing.invoiceId) throw conflict("This BOM is linked to an invoice and can't be reopened");
     if (existing.stockIssuedAt) throw conflict("Materials were already issued from this BOM — it can't be reopened");
-    await exec(deps.db, `UPDATE ims_bom_docs SET status = 'draft' WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id });
-    await recordEvent(deps, actor, { type: "bom.doc.reopened", entityType: "bom_doc", entityId: id, summary: `Reopened ${existing.docNo}`, payload: { docNo: existing.docNo } });
+    await reopenBomDoc(deps, { tenantId: actor.tenantId, userId: actor.userId ?? null, name: actor.name ?? null }, existing);
     res.json({ doc: await loadDoc(deps.db, actor.tenantId, id) });
   });
 
@@ -1396,6 +1612,13 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         { tenantId: actor.tenantId, id, n: byItem.size },
       );
       if (!claimed.affectedRows) throw conflict("Stock was already issued for this BOM");
+      // Record per-line issued qty so partial-issue / reverse / as-built stay consistent with a full issue.
+      await exec(
+        conn,
+        `UPDATE ims_bom_doc_lines SET issued_qty = qty
+         WHERE tenant_id = :tenantId AND doc_id = :id AND line_kind = 'stock' AND item_id IS NOT NULL AND qty > 0`,
+        { tenantId: actor.tenantId, id },
+      );
       return out;
     });
 
@@ -1433,11 +1656,6 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const stockLines = (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
     if (!stockLines.length) throw conflict("No stock-linked lines to reverse");
 
-    const byItem = new Map<string, number>();
-    for (const l of stockLines) {
-      byItem.set(l.itemId!, round3((byItem.get(l.itemId!) ?? 0) + l.qty));
-    }
-
     const settings = await getSettings(deps, actor.tenantId);
     const date = body.date ?? todayISO();
     const posted = await tx(deps.db, async (conn) => {
@@ -1461,6 +1679,17 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           throw conflict("Stock was posted by the linked explode invoice. Cancel that invoice to return materials.");
         }
       }
+
+      // Return what was actually issued: per-line issued_qty (full or partial issue), or full qty for legacy full issues.
+      const fresh = await loadDoc(conn, actor.tenantId, id);
+      const freshStock = (fresh?.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
+      const legacyFull = isLegacyFullIssue(locked.stock_issued_at, freshStock);
+      const byItem = new Map<string, number>();
+      for (const l of freshStock) {
+        const qty = legacyFull ? l.qty : (l.issuedQty ?? 0);
+        if (qty > 0) byItem.set(l.itemId!, round3((byItem.get(l.itemId!) ?? 0) + qty));
+      }
+      if (!byItem.size) throw conflict("No BOM stock issue to reverse");
 
       const out = [];
       for (const [itemId, qty] of byItem) {
@@ -1492,6 +1721,11 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         { tenantId: actor.tenantId, id },
       );
       if (!cleared.affectedRows) throw conflict("No BOM stock issue to reverse");
+      await exec(
+        conn,
+        `UPDATE ims_bom_doc_lines SET issued_qty = 0, serial_notes = NULL WHERE tenant_id = :tenantId AND doc_id = :id`,
+        { tenantId: actor.tenantId, id },
+      );
       return out;
     });
 
@@ -1505,4 +1739,6 @@ export function registerBom(router: Router, deps: ImsDeps): void {
 
     res.json({ doc: await loadDoc(deps.db, actor.tenantId, id), movements: posted });
   });
+
+  registerBomEnhance(router, deps, { loadDoc, loadPackage });
 }

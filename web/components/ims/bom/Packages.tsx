@@ -33,6 +33,13 @@ const blankLine = (section = "Main Items"): BomPackageLineInput & { key: string 
   defaultRate: 0,
   scaleByCapacity: false,
   remarks: "",
+  qtyFormula: "",
+  childPackageId: null,
+  optionalFlag: false,
+  optionKey: "",
+  alternateItemIds: [],
+  serviceSpare: false,
+  scrapPct: 0,
 });
 
 export default function BomPackagesScreen() {
@@ -192,6 +199,8 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
   const [taxPct, setTaxPct] = useState(String(initial?.defaultTaxPct ?? 0));
   const [active, setActive] = useState(initial?.active ?? true);
   const [pickFor, setPickFor] = useState<string | null>(null);
+  const [altPickFor, setAltPickFor] = useState<string | null>(null);
+  const packageChoices = useImsData(() => bom.packages({ active: true, limit: 200 }), []);
   const [lines, setLines] = useState<Array<BomPackageLineInput & { key: string }>>(
     () =>
       initial?.lines?.map((l) => ({
@@ -208,6 +217,14 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
         defaultRate: l.defaultRate,
         remarks: l.remarks ?? "",
         active: l.active,
+        qtyFormula: l.qtyFormula ?? "",
+        childPackageId: l.childPackageId ?? null,
+        optionalFlag: Boolean(l.optionalFlag),
+        optionKey: l.optionKey ?? "",
+        alternateItemIds: l.alternateItemIds ?? [],
+        serviceSpare: Boolean(l.serviceSpare),
+        scrapPct: l.scrapPct ?? 0,
+        costRate: l.costRate ?? null,
       })) ?? [blankLine("Main Items"), blankLine("Accessories & Services")],
   );
 
@@ -248,6 +265,14 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
         defaultRate: Number(l.defaultRate) || 0,
         remarks: l.remarks?.trim() || null,
         active: l.active !== false,
+        qtyFormula: l.qtyFormula?.trim() || null,
+        childPackageId: l.childPackageId || null,
+        optionalFlag: Boolean(l.optionalFlag),
+        optionKey: l.optionKey?.trim() || null,
+        alternateItemIds: (l.alternateItemIds ?? []).filter(Boolean),
+        serviceSpare: Boolean(l.serviceSpare),
+        scrapPct: Number(l.scrapPct) || 0,
+        costRate: l.costRate == null ? null : Number(l.costRate) || 0,
       })),
     };
     const out = initial
@@ -477,6 +502,63 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
                       />
                       Scale with capacity
                     </label>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(l.serviceSpare)}
+                        onChange={(e) => updateLine(l.key, { serviceSpare: e.target.checked })}
+                      />
+                      Service / spare
+                    </label>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(l.optionalFlag)}
+                        onChange={(e) => updateLine(l.key, { optionalFlag: e.target.checked })}
+                      />
+                      Optional
+                    </label>
+                  </div>
+                  <div className="ims-bom-line-meta" style={{ flexWrap: "wrap" }}>
+                    <Input
+                      value={l.qtyFormula ?? ""}
+                      onChange={(e) => updateLine(l.key, { qtyFormula: e.target.value })}
+                      placeholder="Qty formula e.g. ceil(capacityKw*1000/panelWp)"
+                      style={{ minWidth: 220, flex: 1 }}
+                    />
+                    <Input
+                      value={l.optionKey ?? ""}
+                      onChange={(e) => updateLine(l.key, { optionKey: e.target.value })}
+                      placeholder="Option key"
+                      style={{ width: 120 }}
+                    />
+                    <div style={{ minWidth: 160 }}>
+                      <Select
+                        value={l.childPackageId ?? ""}
+                        onChange={(e) => updateLine(l.key, { childPackageId: e.target.value || null })}
+                      >
+                        <option value="">No nested package</option>
+                        {(packageChoices.data?.packages ?? [])
+                          .filter((p) => p.id !== initial?.id)
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.code ? `${p.code} · ` : ""}
+                              {p.name}
+                            </option>
+                          ))}
+                      </Select>
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => setAltPickFor(l.key)}>
+                      Add alternate
+                    </Button>
+                    {(l.alternateItemIds ?? []).length ? (
+                      <Badge tone="blue">{(l.alternateItemIds ?? []).length} alternate(s)</Badge>
+                    ) : null}
+                    {(l.alternateItemIds ?? []).length ? (
+                      <Button size="sm" variant="ghost" onClick={() => updateLine(l.key, { alternateItemIds: [] })}>
+                        Clear alts
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -504,6 +586,18 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
         createHint={pickFor ? lines.find((l) => l.key === pickFor)?.description : undefined}
         onPick={(item) => {
           if (pickFor) linkItem(pickFor, item);
+        }}
+      />
+      <ItemPickerDialog
+        open={Boolean(altPickFor)}
+        onClose={() => setAltPickFor(null)}
+        title="Add alternate item"
+        onPick={(item) => {
+          if (!altPickFor) return;
+          const line = lines.find((l) => l.key === altPickFor);
+          const next = [...new Set([...(line?.alternateItemIds ?? []), item.id])];
+          updateLine(altPickFor, { alternateItemIds: next });
+          setAltPickFor(null);
         }}
       />
     </Stack>

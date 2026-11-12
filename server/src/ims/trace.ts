@@ -3,7 +3,7 @@ import { AUDIT_RULES, daysBetween, isValidGstin, round2, type ImsLine } from "./
 
 /* ---------- Document trail: follows one record through order → stock → bill / invoice → payment → bank → GST → Tally ---------- */
 
-export const TRACE_TYPES = ["invoice", "bill", "po", "payment", "expense"] as const;
+export const TRACE_TYPES = ["invoice", "bill", "po", "payment", "expense", "bom"] as const;
 export type TraceType = (typeof TRACE_TYPES)[number];
 export type TraceState = "ok" | "warn" | "bad" | "na";
 export type TraceLink = { type: string; id: string };
@@ -402,7 +402,94 @@ async function tallyState(db: Queryable, tenantId: number, entity: "sales" | "pu
   return { enabled: Boolean(cfg?.enabled), lastOkAt: lastOk ? tsOf(lastOk.created_at) : null, lastStatus: last?.status ?? null };
 }
 
-const EVENT_TYPES: Record<TraceType, string[]> = { invoice: ["invoice"], bill: ["bill"], po: ["po", "purchase_order"], payment: ["payment"], expense: ["expense"] };
+const EVENT_TYPES: Record<TraceType, string[]> = {
+  invoice: ["invoice"],
+  bill: ["bill"],
+  po: ["po", "purchase_order"],
+  payment: ["payment"],
+  expense: ["expense"],
+  bom: ["bom_doc", "bom"],
+};
+
+export type BomTraceFacts = {
+  id: string;
+  no: string;
+  status: string;
+  date: string;
+  customer: string;
+  total: number;
+  materialsCost: number;
+  revision: number;
+  invoice: { id: string; no: string; status: string } | null;
+  stockIssuedAt: string | null;
+  stockIssueCount: number;
+  proposalStatus: string | null;
+  pos: Array<{ id: string; no: string; status: string }>;
+  changedAt: string | null;
+};
+
+export function bomTrace(f: BomTraceFacts): Omit<Trace, "events"> {
+  const steps: TraceStep[] = [
+    {
+      label: "BOM",
+      title: f.no,
+      detail: `${f.date} · ${inr(f.total)} · ${f.customer} · rev ${f.revision}`,
+      state: f.status === "cancelled" ? "na" : f.status === "confirmed" ? "ok" : "warn",
+    },
+  ];
+  if (f.proposalStatus) {
+    steps.push({
+      label: "Proposal",
+      title: f.proposalStatus,
+      detail: "Customer-facing share link",
+      state: f.proposalStatus === "accepted" ? "ok" : f.proposalStatus === "rejected" || f.proposalStatus === "revoked" ? "warn" : "na",
+    });
+  }
+  steps.push(
+    f.invoice
+      ? { label: "Invoice", title: f.invoice.no, detail: f.invoice.status, state: f.invoice.status === "issued" ? "ok" : "warn", link: { type: "invoice", id: f.invoice.id } }
+      : { label: "Invoice", title: "Not converted", detail: "Create a GST invoice from the BOM when ready", state: "na" },
+  );
+  steps.push(
+    f.stockIssuedAt
+      ? { label: "Stock issue", title: `${plural(f.stockIssueCount, "line")} issued`, detail: f.stockIssuedAt.slice(0, 16).replace("T", " "), state: "ok" }
+      : { label: "Stock issue", title: "Not issued", detail: "Issue materials from the confirmed BOM", state: f.status === "confirmed" ? "warn" : "na" },
+  );
+  if (f.pos.length) {
+    steps.push({
+      label: "Purchase",
+      title: `${plural(f.pos.length, "PO")} from shortfall`,
+      detail: f.pos.map((p) => p.no).join(", "),
+      state: "ok",
+      link: { type: "po", id: f.pos[0]!.id },
+    });
+  } else {
+    steps.push({ label: "Purchase", title: "No linked POs", detail: "Draft POs from availability shortfall when needed", state: "na" });
+  }
+  if (f.materialsCost > 0) {
+    steps.push({
+      label: "Cost",
+      title: inr(f.materialsCost),
+      detail: `Catalogue purchase cost vs sell ${inr(f.total)}`,
+      state: "ok",
+    });
+  }
+  return {
+    type: "bom",
+    id: f.id,
+    title: f.no,
+    subtitle: `${f.customer} · ${f.status}`,
+    details: [
+      ["Date", f.date],
+      ["Customer", f.customer],
+      ["Status", f.status],
+      ["Revision", String(f.revision)],
+      ["Grand total", inr(f.total)],
+      ["Materials cost", inr(f.materialsCost)],
+    ],
+    steps,
+  };
+}
 
 async function events(db: Queryable, tenantId: number, type: TraceType, id: string): Promise<Trace["events"]> {
   const list = await rows<{ created_at: string; actor_name: string | null; summary: string }>(
@@ -589,6 +676,58 @@ export async function loadTrace(db: Queryable, tenantId: number, type: TraceType
       date: isoOf(r.paid_on),
       doc: r.doc_id && (r.doc_type === "invoice" || r.doc_type === "bill") ? { type: r.doc_type, id: r.doc_id, no: r.doc_no } : null,
       bank: await bankHits(db, tenantId, "payment", [id]),
+    });
+  } else if (type === "bom") {
+    const r = await one<{
+      id: string;
+      doc_no: string;
+      status: string;
+      doc_date: string;
+      customer_name: string;
+      grand_total: string;
+      materials_cost: string | null;
+      revision: number | null;
+      invoice_id: string | null;
+      stock_issued_at: string | null;
+      stock_issue_count: number;
+      proposal_status: string | null;
+      updated_at: string;
+    }>(
+      db,
+      `SELECT id, doc_no, status, doc_date, customer_name, grand_total, materials_cost, revision, invoice_id, stock_issued_at, stock_issue_count, proposal_status, updated_at
+       FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id`,
+      { tenantId, id },
+    );
+    if (!r) return null;
+    const [inv, pos] = await Promise.all([
+      r.invoice_id
+        ? one<{ id: string; invoice_no: string; status: string }>(
+            db,
+            `SELECT id, invoice_no, status FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id`,
+            { tenantId, id: r.invoice_id },
+          )
+        : null,
+      rows<{ id: string; po_no: string; status: string }>(
+        db,
+        `SELECT id, po_no, status FROM ims_purchase_orders WHERE tenant_id = :tenantId AND bom_doc_id = :id ORDER BY created_at DESC LIMIT 10`,
+        { tenantId, id },
+      ).catch(() => [] as Array<{ id: string; po_no: string; status: string }>),
+    ]);
+    base = bomTrace({
+      id,
+      no: r.doc_no,
+      status: r.status,
+      date: isoOf(r.doc_date),
+      customer: r.customer_name,
+      total: money(r.grand_total),
+      materialsCost: money(r.materials_cost),
+      revision: Number(r.revision ?? 1),
+      invoice: inv ? { id: inv.id, no: inv.invoice_no, status: inv.status } : null,
+      stockIssuedAt: r.stock_issued_at ? tsOf(r.stock_issued_at) : null,
+      stockIssueCount: Number(r.stock_issue_count ?? 0),
+      proposalStatus: r.proposal_status,
+      pos: pos.map((p) => ({ id: p.id, no: p.po_no, status: p.status })),
+      changedAt: tsOf(r.updated_at),
     });
   } else {
     const r = await one<{ id: string; expense_date: string; category: string; description: string | null; vendor: string | null; amount: string; gst_amount: string; pay_method: string; reference: string | null; created_by_name: string | null }>(

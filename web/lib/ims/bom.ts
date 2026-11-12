@@ -46,6 +46,14 @@ export type BomPackageLine = {
   defaultRate: number;
   remarks: string | null;
   active: boolean;
+  qtyFormula?: string | null;
+  childPackageId?: string | null;
+  optionalFlag?: boolean;
+  optionKey?: string | null;
+  alternateItemIds?: string[];
+  serviceSpare?: boolean;
+  scrapPct?: number;
+  costRate?: number | null;
 };
 
 export type BomPackage = {
@@ -78,6 +86,14 @@ export type BomPackageLineInput = {
   defaultRate?: number;
   remarks?: string | null;
   active?: boolean;
+  qtyFormula?: string | null;
+  childPackageId?: string | null;
+  optionalFlag?: boolean;
+  optionKey?: string | null;
+  alternateItemIds?: string[];
+  serviceSpare?: boolean;
+  scrapPct?: number;
+  costRate?: number | null;
 };
 
 export type BomPackageInput = {
@@ -108,6 +124,17 @@ export type BomDocLine = {
   rate: number;
   amount: number;
   remarks: string | null;
+  qtyFormula?: string | null;
+  childPackageId?: string | null;
+  optionalFlag?: boolean;
+  optionKey?: string | null;
+  alternateItemIds?: string[];
+  serviceSpare?: boolean;
+  scrapPct?: number;
+  costRate?: number | null;
+  issuedQty?: number;
+  serialNotes?: string | null;
+  sourcePackageLineId?: string | null;
 };
 
 export type BomDoc = {
@@ -135,6 +162,8 @@ export type BomDoc = {
   invoiceConvertModes: ReadonlyArray<BomInvoiceConvertMode>;
   stockIssuedAt: string | null;
   stockIssueCount: number;
+  variables?: Record<string, unknown> | null;
+  options?: Record<string, unknown> | null;
   createdByName: string | null;
   createdAt: string | null;
   updatedAt: string | null;
@@ -154,6 +183,10 @@ export type BomDocLineInput = {
   scaleByCapacity?: boolean;
   rate?: number;
   remarks?: string | null;
+  alternateItemIds?: string[];
+  serviceSpare?: boolean;
+  optionalFlag?: boolean;
+  optionKey?: string | null;
 };
 
 export type BomDocInput = {
@@ -168,7 +201,119 @@ export type BomDocInput = {
   taxPct?: number;
   notes?: string | null;
   preparedBy?: string | null;
+  /** Selected optional-line keys when creating from a package. */
+  options?: string[] | Record<string, boolean>;
+  variables?: Record<string, number>;
   lines?: BomDocLineInput[];
+};
+
+export type BomExplodedLine = {
+  section: string;
+  sortNo: number;
+  lineKind: BomLineKind;
+  itemId: string | null;
+  description: string;
+  makeText: string | null;
+  qty: number;
+  unit: string;
+  scaleByCapacity: boolean;
+  rate: number;
+  remarks: string | null;
+  qtyFormula: string | null;
+  optionalFlag: boolean;
+  optionKey: string | null;
+  alternateItemIds: string[];
+  serviceSpare: boolean;
+  scrapPct: number;
+  costRate: number | null;
+  sourcePackageId: string;
+  sourcePackageLineId: string | null;
+  depth: number;
+};
+
+export type BomAlternateItem = {
+  id: string;
+  name: string;
+  sku: string | null;
+  unit: string;
+  sellingPrice: number;
+  currentStock: number;
+  active: boolean;
+};
+
+export type BomAlternateSuggestion = {
+  lineId: string;
+  description: string;
+  primaryItemId: string;
+  need: number;
+  onHand: number;
+  shortfall: number;
+  suggestedItemId: string | null;
+  suggested: BomAlternateItem | null;
+  candidates: Array<{ itemId: string; onHand: number; covers: boolean; item: BomAlternateItem | null }>;
+};
+
+export type BomPickListLine = {
+  lineId: string;
+  section: string;
+  sortNo: number;
+  itemId: string | null;
+  sku: string | null;
+  description: string;
+  unit: string;
+  qty: number;
+  issuedQty: number;
+  remainingQty: number;
+  onHand: number | null;
+  serialNotes: string | null;
+  linked: boolean;
+};
+
+export type BomDiffEntry =
+  | { kind: "added"; right: BomDiffLine }
+  | { kind: "removed"; left: BomDiffLine }
+  | { kind: "changed"; left: BomDiffLine; right: BomDiffLine; fields: string[] }
+  | { kind: "same"; left: BomDiffLine; right: BomDiffLine };
+
+export type BomDiffLine = { key: string; description: string; section: string; qty: number; rate: number; unit: string };
+
+export type BomRateCardLine = {
+  id?: string;
+  itemId?: string | null;
+  sku?: string | null;
+  description?: string | null;
+  unit?: string;
+  rate: number;
+  costRate?: number | null;
+  sortNo?: number;
+  active?: boolean;
+};
+
+export type BomRateCard = {
+  id: string;
+  code: string | null;
+  name: string;
+  currency: string;
+  validFrom: string | null;
+  validTo: string | null;
+  active: boolean;
+  notes: string | null;
+  lineCount?: number;
+  lines?: BomRateCardLine[];
+  createdByName?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type BomRateCardInput = {
+  code?: string | null;
+  name: string;
+  currency?: string;
+  validFrom?: string | null;
+  validTo?: string | null;
+  active?: boolean;
+  notes?: string | null;
+  lines?: BomRateCardLine[];
 };
 
 export type BomBusiness = {
@@ -311,10 +456,100 @@ export const bom = {
     }>(`/bom/docs/${id}`),
   createDoc: (body: BomDocInput) => post<{ doc: BomDoc }>("/bom/docs", body),
   saveDoc: (id: string, body: BomDocInput) => put<{ doc: BomDoc }>(`/bom/docs/${id}`, body),
-  confirmDoc: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/confirm`),
+  confirmDoc: (id: string, body?: { acknowledgeWarnings?: boolean }) =>
+    post<{ doc: BomDoc; gates?: unknown }>(`/bom/docs/${id}/confirm`, body ?? {}),
   reopenDoc: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/reopen`),
   cancelDoc: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/cancel`),
   deleteDoc: (id: string) => del(`/bom/docs/${id}`),
+  docGates: (id: string) =>
+    get<{
+      gates: {
+        ok: boolean;
+        errors: Array<{ code: string; severity: string; message: string }>;
+        warnings: Array<{ code: string; severity: string; message: string }>;
+      };
+    }>(`/bom/docs/${id}/gates`),
+  docCost: (id: string) =>
+    get<{
+      materialsCost: number;
+      materialsSell: number;
+      marginAmount: number;
+      marginPctOfSell: number;
+      lines: Array<{ id: string; description: string; sell: number; cost: number; margin: number; marginPct: number }>;
+    }>(`/bom/docs/${id}/cost`),
+  revisions: (entityType: "package" | "doc", entityId: string) =>
+    get<{ revisions: Array<{ id: string; revision: number; createdByName: string | null; createdAt: string | null }> }>("/bom/revisions", {
+      entityType,
+      entityId,
+    }),
+  createProposal: (id: string) =>
+    post<{ token: string; proposalPath: string; proposalUrl: string; whatsappUrl: string; doc: BomDoc }>(`/bom/docs/${id}/proposal`),
+  revokeProposal: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/proposal/revoke`),
+  createPosFromShortfall: (id: string) =>
+    post<{ orders: Array<{ id: string; poNo: string; supplierName: string; status: string; grandTotal?: number }> }>(`/bom/docs/${id}/create-pos`),
+  rateCards: () =>
+    get<{
+      rateCards: BomRateCard[];
+    }>("/bom/rate-cards"),
+  rateCard: (id: string) => get<{ rateCard: BomRateCard }>(`/bom/rate-cards/${id}`),
+  createRateCard: (body: BomRateCardInput) => post<{ rateCard: BomRateCard }>("/bom/rate-cards", body),
+  saveRateCard: (id: string, body: BomRateCardInput) => put<{ rateCard: BomRateCard }>(`/bom/rate-cards/${id}`, body),
+  deleteRateCard: (id: string) => del<{ rateCard: BomRateCard }>(`/bom/rate-cards/${id}`),
+  applyRateCard: (docId: string, rateCardId: string) =>
+    post<{ doc: BomDoc; matched: number }>(`/bom/docs/${docId}/apply-rate-card`, { rateCardId }),
+  uploadPdf: (id: string, pdfBase64: string) => post<{ sha256: string; artifactId: string; doc: BomDoc }>(`/bom/docs/${id}/pdf`, { pdfBase64 }),
+  downloadPdf: (id: string) => get<{ sha256: string; pdfBase64: string }>(`/bom/docs/${id}/pdf`),
+  asBuilt: (id: string) =>
+    post<{
+      variance: Array<{ lineId: string; description: string; soldQty: number; issuedQty: number; unit: string; variance: number }>;
+      doc: BomDoc;
+    }>(`/bom/docs/${id}/as-built`),
+  serviceKit: (id: string) => get<{ lines: BomDocLine[]; count: number }>(`/bom/docs/${id}/service-kit`),
+  formulaPresets: () => get<{ presets: Record<string, { label: string; variables: Record<string, number>; sampleFormula: string }> }>("/bom/formula-presets"),
+  evalFormula: (body: { formula: string; variables?: Record<string, number>; capacityLabel?: string | null }) =>
+    post<{ qty: number | null; variables: Record<string, number> }>("/bom/formula/eval", body),
+  diff: (body: { leftDocId?: string; rightDocId?: string; leftPackageId?: string; rightPackageId?: string }) =>
+    post<{ diff: BomDiffEntry[] }>("/bom/diff", body),
+  suggestAlternates: (id: string) =>
+    post<{ suggestions: BomAlternateSuggestion[]; count: number }>(`/bom/docs/${id}/suggest-alternates`),
+  swapAlternate: (id: string, body: { lineId: string; itemId: string }) =>
+    post<{ doc: BomDoc }>(`/bom/docs/${id}/swap-alternate`, body),
+  explodePackage: (
+    packageId: string,
+    body?: { docId?: string; capacityLabel?: string | null; options?: string[] | Record<string, boolean>; variables?: Record<string, number>; depthLimit?: number },
+  ) =>
+    post<{
+      packageId: string;
+      capacityLabel: string | null;
+      selectedOptions: string[];
+      variables: Record<string, number>;
+      lines: BomExplodedLine[];
+      count: number;
+    }>(`/bom/packages/${packageId}/explode`, body ?? {}),
+  setOptions: (id: string, options: string[] | Record<string, boolean>) =>
+    post<{
+      options: Record<string, boolean>;
+      selectedOptions: string[];
+      optionalLines: Array<{ id: string; description: string; optionKey: string | null; included: boolean }>;
+      doc: BomDoc;
+    }>(`/bom/docs/${id}/set-options`, { options }),
+  issueStockPartial: (id: string, body: { lines: Array<{ lineId: string; qty: number; serialNotes?: string | null }>; date?: string }) =>
+    post<{
+      doc: BomDoc;
+      movements: Array<{ id: string; itemId: string; itemName: string; qty: number }>;
+      issued: Array<{ lineId: string; qty: number; nextIssuedQty: number }>;
+      fullyIssued: boolean;
+    }>(`/bom/docs/${id}/issue-stock-partial`, body),
+  pickList: (id: string) =>
+    get<{
+      docId: string;
+      docNo: string;
+      customerName: string;
+      capacityLabel: string | null;
+      generatedAt: string;
+      lines: BomPickListLine[];
+      count: number;
+    }>(`/bom/docs/${id}/pick-list`),
   createInvoice: (
     id: string,
     body: { mode: BomInvoiceConvertMode; issue?: boolean; gstRate?: number; invoiceDate?: string },

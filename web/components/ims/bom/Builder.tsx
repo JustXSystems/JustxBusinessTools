@@ -218,6 +218,92 @@ function BomList({ onNew, onOpen }: { onNew: (packageId: string | null) => void;
   );
 }
 
+function PartialIssueForm({
+  doc,
+  busy,
+  onDone,
+  run,
+}: {
+  doc: BomDoc;
+  busy: boolean;
+  onDone: () => void;
+  run: ReturnType<typeof useImsAction>["run"];
+}) {
+  const stockLines = useMemo(
+    () =>
+      (doc.lines ?? [])
+        .filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0)
+        .map((l) => {
+          const issued = Number(l.issuedQty ?? 0);
+          const remaining = Math.max(0, Number(l.qty) - issued);
+          return { line: l, remaining, issued };
+        })
+        .filter((x) => x.remaining > 0),
+    [doc.lines],
+  );
+  const [qtyById, setQtyById] = useState<Record<string, string>>({});
+  const [serialById, setSerialById] = useState<Record<string, string>>({});
+
+  if (!stockLines.length) return null;
+
+  return (
+    <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+      <div style={{ fontSize: 13, fontWeight: 600 }}>Partial issue</div>
+      {stockLines.map(({ line, remaining, issued }) => (
+        <div key={line.id} style={{ display: "grid", gap: 4, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
+          <div style={{ fontSize: 13 }}>
+            {line.description}{" "}
+            <span style={{ opacity: 0.65 }}>
+              · remaining {remaining} {line.unit}
+              {issued > 0 ? ` (issued ${issued})` : ""}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Input
+              value={qtyById[line.id] ?? String(remaining)}
+              onChange={(e) => setQtyById((prev) => ({ ...prev, [line.id]: e.target.value }))}
+              placeholder="Qty"
+              style={{ width: 100 }}
+            />
+            <Input
+              value={serialById[line.id] ?? ""}
+              onChange={(e) => setSerialById((prev) => ({ ...prev, [line.id]: e.target.value }))}
+              placeholder="Serial / lot notes"
+              style={{ flex: 1, minWidth: 160 }}
+            />
+          </div>
+        </div>
+      ))}
+      <Button
+        size="sm"
+        disabled={busy}
+        onClick={async () => {
+          const lines = stockLines
+            .map(({ line, remaining }) => {
+              const qty = Number(qtyById[line.id] ?? remaining) || 0;
+              return {
+                lineId: line.id,
+                qty: Math.min(Math.max(0, qty), remaining),
+                serialNotes: serialById[line.id]?.trim() || null,
+              };
+            })
+            .filter((l) => l.qty > 0);
+          if (!lines.length) {
+            window.alert("Enter at least one quantity to issue.");
+            return;
+          }
+          const out = await run("partial-stock", () => bom.issueStockPartial(doc.id, { lines }), {
+            success: "Partial stock issued",
+          });
+          if (out) onDone();
+        }}
+      >
+        Issue selected qty
+      </Button>
+    </div>
+  );
+}
+
 function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onEdit: () => void }) {
   const { can, navigate, session } = useIms();
   const { run, busy } = useImsAction();
@@ -279,7 +365,23 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
                 <Button
                   disabled={Boolean(busy)}
                   onClick={async () => {
-                    const out = await run("confirm", () => bom.confirmDoc(doc.id), { success: "BOM confirmed" });
+                    const out = await run(
+                      "confirm",
+                      async () => {
+                        const { gates } = await bom.docGates(doc.id);
+                        if (gates.errors.length) {
+                          throw new Error(gates.errors.map((e) => e.message).join(" · "));
+                        }
+                        if (gates.warnings.length) {
+                          const ok = window.confirm(
+                            `Warnings before confirm:\n\n${gates.warnings.map((w) => `• ${w.message}`).join("\n")}\n\nConfirm anyway?`,
+                          );
+                          if (!ok) return null;
+                        }
+                        return bom.confirmDoc(doc.id, { acknowledgeWarnings: true });
+                      },
+                      { success: "BOM confirmed" },
+                    );
                     if (out) reloadAll();
                   }}
                 >
@@ -308,6 +410,121 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
             >
               Export Excel
             </Button>
+            {confirmed ? (
+              <Button
+                variant="ghost"
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  const out = await run("proposal", () => bom.createProposal(doc.id), { success: "Proposal link ready" });
+                  if (!out) return;
+                  const url = `${window.location.origin}/bom/proposal/${out.token}`;
+                  const wa = `https://wa.me/?text=${encodeURIComponent(`Please review our materials proposal: ${url}`)}`;
+                  window.prompt("Share this proposal link (copied to clipboard if supported):", url);
+                  try {
+                    await navigator.clipboard.writeText(url);
+                  } catch {
+                    /* ignore */
+                  }
+                  if (window.confirm("Open WhatsApp share?")) window.open(wa, "_blank", "noopener,noreferrer");
+                  reloadAll();
+                }}
+              >
+                Share proposal
+              </Button>
+            ) : null}
+            {confirmed && availability.data?.hasShortfall && can("po") ? (
+              <Button
+                variant="ghost"
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  if (!window.confirm("Draft purchase orders for shortfall items, grouped by preferred supplier?")) return;
+                  const out = await run("create-pos", () => bom.createPosFromShortfall(doc.id), {
+                    success: "Draft POs created from shortfall",
+                  });
+                  if (out?.orders?.length) {
+                    window.alert(`Created ${out.orders.length} draft PO(s):\n${out.orders.map((o) => `${o.poNo} · ${o.supplierName}`).join("\n")}`);
+                  }
+                  reloadAll();
+                }}
+              >
+                Draft POs (shortfall)
+              </Button>
+            ) : null}
+            {confirmed && availability.data?.hasShortfall ? (
+              <Button
+                variant="ghost"
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  const out = await run("alts", () => bom.suggestAlternates(doc.id), { success: "Checked alternates" });
+                  if (!out) return;
+                  const lines = out.suggestions ?? [];
+                  if (!lines.length) {
+                    window.alert("No alternate suggestions for current shortfalls.");
+                    return;
+                  }
+                  const msg = lines
+                    .map((s) => `${s.description}: ${s.suggested?.name ?? "none"} (need ${s.need}, on hand ${s.onHand})`)
+                    .join("\n");
+                  window.alert(`Alternate suggestions:\n${msg}`);
+                }}
+              >
+                Suggest alternates
+              </Button>
+            ) : null}
+            {confirmed ? (
+              <>
+                <Button
+                  variant="ghost"
+                  disabled={Boolean(busy)}
+                  onClick={async () => {
+                    const out = await run("pick", () => bom.pickList(doc.id), { success: "Pick list ready" });
+                    if (!out?.lines?.length) {
+                      window.alert("Nothing left to pick.");
+                      return;
+                    }
+                    window.alert(
+                      out.lines
+                        .map((l) => `${l.description}: pick ${l.remainingQty} ${l.unit} (on hand ${l.onHand})${l.serialNotes ? ` · ${l.serialNotes}` : ""}`)
+                        .join("\n"),
+                    );
+                  }}
+                >
+                  Pick list
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={Boolean(busy)}
+                  onClick={async () => {
+                    if (!window.confirm("Freeze as-built sold vs issued quantities?")) return;
+                    const out = await run("as-built", () => bom.asBuilt(doc.id), { success: "As-built frozen" });
+                    if (out?.variance?.length) {
+                      window.alert(
+                        out.variance
+                          .map((v) => `${v.description}: sold ${v.soldQty}, issued ${v.issuedQty}, var ${v.variance}`)
+                          .join("\n"),
+                      );
+                    }
+                    reloadAll();
+                  }}
+                >
+                  Freeze as-built
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={Boolean(busy)}
+                  onClick={async () => {
+                    const out = await run("service-kit", () => bom.serviceKit(doc.id), { success: "Service kit" });
+                    window.alert(
+                      out?.lines?.length
+                        ? out.lines.map((l) => `${l.description} · ${l.qty} ${l.unit}`).join("\n")
+                        : "No service/spare lines on this BOM.",
+                    );
+                  }}
+                >
+                  Service kit
+                </Button>
+              </>
+            ) : null}
             {confirmed && !doc.invoiceId && !doc.stockIssuedAt ? (
               <Button
                 variant="ghost"
@@ -520,8 +737,9 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
                           if (out) reloadAll();
                         }}
                       >
-                        Issue stock
+                        Issue all stock
                       </Button>
+                      <PartialIssueForm doc={doc} busy={Boolean(busy)} onDone={reloadAll} run={run} />
                     </>
                   )
                 ) : (
@@ -846,6 +1064,60 @@ function BomEditorForm({
             <Button variant="ghost" onClick={print}>
               Print / PDF
             </Button>
+            {initial ? (
+              <Button
+                variant="ghost"
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  const cards = await bom.rateCards();
+                  const list = cards.rateCards ?? [];
+                  if (!list.length) {
+                    window.alert("No rate cards yet. Create one under BOM Rate Cards.");
+                    return;
+                  }
+                  const choice = window.prompt(
+                    `Apply rate card by number:\n${list.map((c, i) => `${i + 1}. ${c.name}`).join("\n")}`,
+                    "1",
+                  );
+                  const idx = Number(choice) - 1;
+                  if (!Number.isFinite(idx) || idx < 0 || idx >= list.length) return;
+                  const card = list[idx]!;
+                  const out = await run(
+                    "apply-rate",
+                    async () => {
+                      await bom.saveDoc(initial.id, payload());
+                      return bom.applyRateCard(initial.id, card.id);
+                    },
+                    { success: `Applied ${card.name}` },
+                  );
+                  if (out?.doc?.lines) {
+                    setLines(
+                      out.doc.lines.map((l) => ({
+                        key: l.id,
+                        id: l.id,
+                        section: l.section,
+                        lineKind: l.lineKind,
+                        itemId: l.itemId,
+                        description: l.description,
+                        makeText: l.makeText ?? "",
+                        qty: l.qty,
+                        baseQty: inferBaseQty(l.qty, l.scaleByCapacity, capacityLabel),
+                        unit: l.unit,
+                        rate: l.rate,
+                        scaleByCapacity: l.scaleByCapacity,
+                        remarks: l.remarks ?? "",
+                        serviceSpare: Boolean(l.serviceSpare),
+                        alternateItemIds: l.alternateItemIds ?? [],
+                        optionalFlag: Boolean(l.optionalFlag),
+                        optionKey: l.optionKey ?? "",
+                      })),
+                    );
+                  }
+                }}
+              >
+                Apply rate card
+              </Button>
+            ) : null}
             <Button
               variant="ghost"
               disabled={Boolean(busy)}

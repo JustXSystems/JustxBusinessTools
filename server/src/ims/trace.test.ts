@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normInvoiceNo, reconcileGstr2b, type BookBill } from "./gstr2b.js";
-import { billTrace, invoiceTrace, poTrace, type InvoiceFacts } from "./trace.js";
+import { billTrace, bomTrace, invoiceTrace, poTrace, type InvoiceFacts } from "./trace.js";
 
 const tally = { enabled: true, lastOkAt: "2026-10-10T10:00:00.000Z", lastStatus: "success" };
 
@@ -156,5 +156,30 @@ describe("GSTR-2B reconciliation", () => {
     expect(r.rows[0].status).toBe("mismatch");
     expect(r.rows[0].note).toMatch(/not available/);
     expect(r.summary.itcPortal).toBe(0);
+  });
+});
+
+describe("bomTrace", () => {
+  it("shows confirm → invoice → stock steps", () => {
+    const t = bomTrace({
+      id: "b1",
+      no: "BOM/26-27/0001",
+      status: "confirmed",
+      date: "2026-11-12",
+      customer: "Acme",
+      total: 1180,
+      materialsCost: 700,
+      revision: 2,
+      invoice: { id: "i1", no: "INV/1", status: "issued" },
+      stockIssuedAt: "2026-11-12T10:00:00.000Z",
+      stockIssueCount: 3,
+      proposalStatus: "sent",
+      pos: [{ id: "p1", no: "PO/1", status: "draft" }],
+      changedAt: "2026-11-12T10:00:00.000Z",
+    });
+    expect(t.type).toBe("bom");
+    expect(t.steps.find((s) => s.label === "Invoice")?.state).toBe("ok");
+    expect(t.steps.find((s) => s.label === "Stock issue")?.state).toBe("ok");
+    expect(t.steps.find((s) => s.label === "Purchase")?.state).toBe("ok");
   });
 });
