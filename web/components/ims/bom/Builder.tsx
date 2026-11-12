@@ -279,7 +279,23 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
                 <Button
                   disabled={Boolean(busy)}
                   onClick={async () => {
-                    const out = await run("confirm", () => bom.confirmDoc(doc.id), { success: "BOM confirmed" });
+                    const out = await run(
+                      "confirm",
+                      async () => {
+                        const { gates } = await bom.docGates(doc.id);
+                        if (gates.errors.length) {
+                          throw new Error(gates.errors.map((e) => e.message).join(" · "));
+                        }
+                        if (gates.warnings.length) {
+                          const ok = window.confirm(
+                            `Warnings before confirm:\n\n${gates.warnings.map((w) => `• ${w.message}`).join("\n")}\n\nConfirm anyway?`,
+                          );
+                          if (!ok) return null;
+                        }
+                        return bom.confirmDoc(doc.id, { acknowledgeWarnings: true });
+                      },
+                      { success: "BOM confirmed" },
+                    );
                     if (out) reloadAll();
                   }}
                 >

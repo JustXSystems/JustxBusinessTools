@@ -311,10 +311,48 @@ export const bom = {
     }>(`/bom/docs/${id}`),
   createDoc: (body: BomDocInput) => post<{ doc: BomDoc }>("/bom/docs", body),
   saveDoc: (id: string, body: BomDocInput) => put<{ doc: BomDoc }>(`/bom/docs/${id}`, body),
-  confirmDoc: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/confirm`),
+  confirmDoc: (id: string, body?: { acknowledgeWarnings?: boolean }) =>
+    post<{ doc: BomDoc; gates?: unknown }>(`/bom/docs/${id}/confirm`, body ?? {}),
   reopenDoc: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/reopen`),
   cancelDoc: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/cancel`),
   deleteDoc: (id: string) => del(`/bom/docs/${id}`),
+  docGates: (id: string) =>
+    get<{
+      gates: {
+        ok: boolean;
+        errors: Array<{ code: string; severity: string; message: string }>;
+        warnings: Array<{ code: string; severity: string; message: string }>;
+      };
+    }>(`/bom/docs/${id}/gates`),
+  docCost: (id: string) =>
+    get<{
+      materialsCost: number;
+      materialsSell: number;
+      marginAmount: number;
+      marginPctOfSell: number;
+      lines: Array<{ id: string; description: string; sell: number; cost: number; margin: number; marginPct: number }>;
+    }>(`/bom/docs/${id}/cost`),
+  revisions: (entityType: "package" | "doc", entityId: string) =>
+    get<{ revisions: Array<{ id: string; revision: number; createdByName: string | null; createdAt: string | null }> }>("/bom/revisions", {
+      entityType,
+      entityId,
+    }),
+  createProposal: (id: string) =>
+    post<{ token: string; proposalPath: string; proposalUrl: string; whatsappUrl: string; doc: BomDoc }>(`/bom/docs/${id}/proposal`),
+  revokeProposal: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/proposal/revoke`),
+  uploadPdf: (id: string, pdfBase64: string) => post<{ sha256: string; artifactId: string; doc: BomDoc }>(`/bom/docs/${id}/pdf`, { pdfBase64 }),
+  downloadPdf: (id: string) => get<{ sha256: string; pdfBase64: string }>(`/bom/docs/${id}/pdf`),
+  asBuilt: (id: string) =>
+    post<{
+      variance: Array<{ lineId: string; description: string; soldQty: number; issuedQty: number; unit: string; variance: number }>;
+      doc: BomDoc;
+    }>(`/bom/docs/${id}/as-built`),
+  serviceKit: (id: string) => get<{ lines: BomDocLine[]; count: number }>(`/bom/docs/${id}/service-kit`),
+  formulaPresets: () => get<{ presets: Record<string, { label: string; variables: Record<string, number>; sampleFormula: string }> }>("/bom/formula-presets"),
+  evalFormula: (body: { formula: string; variables?: Record<string, number>; capacityLabel?: string | null }) =>
+    post<{ qty: number | null; variables: Record<string, number> }>("/bom/formula/eval", body),
+  diff: (body: { leftDocId?: string; rightDocId?: string; leftPackageId?: string; rightPackageId?: string }) =>
+    post<{ diff: unknown[] }>("/bom/diff", body),
   createInvoice: (
     id: string,
     body: { mode: BomInvoiceConvertMode; issue?: boolean; gstRate?: number; invoiceDate?: string },

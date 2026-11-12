@@ -8,13 +8,16 @@ export class ImsApiError extends Error {
   status: number;
   code?: string;
   details?: string[];
+  /** Raw JSON body from failed responses (e.g. BOM confirm gates). */
+  data?: Record<string, unknown>;
 
-  constructor(status: number, message: string, code?: string, details?: string[]) {
+  constructor(status: number, message: string, code?: string, details?: string[], data?: Record<string, unknown>) {
     super(message);
     this.name = "ImsApiError";
     this.status = status;
     this.code = code;
     this.details = details;
+    this.data = data;
   }
 
   get schemaPending(): boolean {
@@ -46,7 +49,7 @@ export async function imsApi<T>(path: string, init?: { method?: string; body?: u
   if (!res.ok) {
     const details = Array.isArray(data.details) ? (data.details as string[]) : undefined;
     const message = details?.length ? details.join(" · ") : typeof data.error === "string" ? data.error : `Request failed (${res.status})`;
-    throw new ImsApiError(res.status, message, typeof data.code === "string" ? data.code : undefined, details);
+    throw new ImsApiError(res.status, message, typeof data.code === "string" ? data.code : undefined, details, data);
   }
   return data as T;
 }
