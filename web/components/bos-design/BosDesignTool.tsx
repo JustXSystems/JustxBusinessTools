@@ -59,7 +59,7 @@ function Workbench() {
   return (
     <>
       <Topbar sticky="desktop">
-        <Brand logoSrc={logoSrc} name="Justx BOS" sub="Design System · v1" />
+        <Brand logoSrc={logoSrc} name="Justxsystems BOS" sub="Design System · v1" />
         <div className="bos-topbar-actions">
           <SearchInput
             readOnly
@@ -93,11 +93,11 @@ function Workbench() {
         </div>
 
         <Footnote>
-          Justx BOS™ (Business Operating System) · Designed &amp; Developed by{" "}
+          Justxsystems BOS™ (Business Operating System) · Designed &amp; Developed by{" "}
           <a href="https://justxsystems.com/" target="_blank" rel="noopener noreferrer">
-            Justx Systems
+            Justxsystems
           </a>{" "}
-          · © 2026 Justx Systems. All Rights Reserved.
+          · © 2026 Justxsystems. All Rights Reserved.
         </Footnote>
       </div>
 
@@ -109,7 +109,7 @@ function Workbench() {
 /** Matches the horizontal padding of the JBT `.page-shell` the tool renders in. */
 const HOST_GUTTER = { "--bos-bleed": "20px" } as CSSProperties;
 
-/** "Justx BOS Design" JBT tool: the living reference for the BOS design system. */
+/** "Justxsystems BOS Design" JBT tool: the living reference for the BOS design system. */
 export default function BosDesignTool() {
   return (
     <BosRoot canvas className="bos-bleed" style={HOST_GUTTER}>

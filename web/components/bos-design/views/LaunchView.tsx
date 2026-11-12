@@ -59,8 +59,8 @@ function LoginCard({ onSignIn }: { onSignIn: () => void }) {
         onSignIn();
       }}
     >
-      <h2 className="bos-login-title">Welcome to Justx Systems</h2>
-      <p className="bos-login-sub">Sign in to your Justx BOS workspace.</p>
+      <h2 className="bos-login-title">Welcome to Justxsystems</h2>
+      <p className="bos-login-sub">Sign in to your Justxsystems BOS workspace.</p>
       <Segmented
         block
         role="tabs"
@@ -177,7 +177,7 @@ function MyProfile() {
 function HomeModuleView({ module, onOpenHrm, goHome }: { module: HomeModule; onOpenHrm?: () => void; goHome: () => void }) {
   const label = HOME_NAV.find((n) => n.key === module)?.label ?? "";
   if (module === "myprofile") return <MyProfile />;
-  const crumbs = <Breadcrumbs items={[{ label: "Justx BOS", onClick: goHome }, { label }]} />;
+  const crumbs = <Breadcrumbs items={[{ label: "Justxsystems BOS", onClick: goHome }, { label }]} />;
   if (module === "dashboard") {
     return (
       <>
@@ -251,8 +251,8 @@ export function LaunchView({ logoSrc, onOpenHrm }: { logoSrc: string; onOpenHrm?
       {stage === "splash" ? (
         <div className="bos-launch-stage">
           {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset under the app base path */}
-          <img className="bos-splash-logo" src={logoSrc} alt="Justx" />
-          <div className="bos-splash-welcome">Welcome to Justx</div>
+          <img className="bos-splash-logo" src={logoSrc} alt="Justxsystems" />
+          <div className="bos-splash-welcome">Welcome to Justxsystems</div>
           <div className="bos-splash-sub">Setting up your workspace…</div>
           <Button variant="primary" className="bos-splash-cta" onClick={() => setStage("login")}>
             Login

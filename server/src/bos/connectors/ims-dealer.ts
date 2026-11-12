@@ -61,7 +61,7 @@ function toRecord(r: InvoiceRow): ConnectorRecord {
     },
     lines,
     placeOfSupply: r.place_of_supply ?? r.p_state,
-    notes: `From Justx IMS invoice ${r.invoice_no}`,
+    notes: `From Justxsystems IMS invoice ${r.invoice_no}`,
     updatedAt: r.updated_at,
   };
 }
@@ -86,11 +86,11 @@ async function listInvoices(db: Pool, tenantId: number, ref?: string): Promise<C
   }
 }
 
-/** Justx IMS — Dealer → BOS: issued sales invoices (customers sync automatically; invoices on demand so books aren't doubled). */
+/** Justxsystems IMS — Dealer → BOS: issued sales invoices (customers sync automatically; invoices on demand so books aren't doubled). */
 export function imsDealerConnector(db: Pool): BosConnector {
   return {
     id: TOOL_ID,
-    label: "Justx IMS — Dealer",
+    label: "Justxsystems IMS — Dealer",
     icon: "📦",
     description: "Issued IMS sales invoices with their GST lines; every billed customer joins your BOS customer book.",
     href: "/tools/imsdealer",

@@ -1,4 +1,4 @@
--- Justx Party Registry — single source of truth for customers & suppliers
+-- Justxsystems Party Registry — single source of truth for customers & suppliers
 -- per business profile (tenant_id = business_profiles.id).
 --
 -- Canonical UI: IMS → Suppliers & Customers.

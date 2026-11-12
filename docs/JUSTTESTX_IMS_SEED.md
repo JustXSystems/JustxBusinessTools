@@ -78,7 +78,7 @@ Expect **SCORE: 100/100** (stock vs last movement, GST totals, status mix, ≥2-
 That message means the **active branch’s org** does not have `imsdealer` Live in `tool_catalog`.
 
 1. Confirm the branch switcher shows **JustTestX** (not your main company).
-2. Prefer the UI (while on JustTestX): **Admin → Tools → Justx IMS — Dealer → Visible on home → Live → Save placement**.
+2. Prefer the UI (while on JustTestX): **Admin → Tools → Justxsystems IMS — Dealer → Visible on home → Live → Save placement**.
 3. Or, on the VPS (**bash**, not PowerShell), after this repo revision is deployed:
 
 ```bash
@@ -104,7 +104,7 @@ WHERE business_name = 'JustTestX';
 SQL
 ```
 
-Then in the UI (JustTestX branch): if the tool still isn’t on home, **Admin → Tools → Justx IMS — Dealer → Visible on home → Live → Save placement**.
+Then in the UI (JustTestX branch): if the tool still isn’t on home, **Admin → Tools → Justxsystems IMS — Dealer → Visible on home → Live → Save placement**.
 
 4. If JustTestX IMS data was never loaded on this database, deploy the JustTestX IMS scripts, run migrations, then seed (see above).
 

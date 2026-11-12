@@ -679,7 +679,7 @@ function CertificatePaper({ certificate: c, program, onBack }: { certificate: Bo
               Trainer
             </div>
           </div>
-          <div className="bos-payslip-note">Generated with Justx BOS.</div>
+          <div className="bos-payslip-note">Generated with Justxsystems BOS.</div>
         </article>
       </div>
     </>

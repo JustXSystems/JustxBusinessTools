@@ -502,7 +502,7 @@ function PosTab({ data }: { data: IntegrationsOverview }) {
 
       <Card interactive={false}>
         <Stack gap={10}>
-          <ToolHead glyph="⇄" title="Integration endpoint" sub="For Justx-built connectors and your developer. Requests must be signed in as an IMS user with the Tally & POS or Sales invoices permission." />
+          <ToolHead glyph="⇄" title="Integration endpoint" sub="For Justxsystems-built connectors and your developer. Requests must be signed in as an IMS user with the Tally & POS or Sales invoices permission." />
           <pre className="ims-sys-code">{`POST ${endpoint}
 {
   "billNo": "B-1042",

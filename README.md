@@ -22,8 +22,8 @@ Multi-tenant business tools for quotations, site surveys, and more — by **Just
 | **Any-device email (M365 / Graph)** | [`docs/MICROSOFT_GRAPH_EMAIL.md`](docs/MICROSOFT_GRAPH_EMAIL.md) |
 | **Env template** | [`.env.example`](.env.example) → `server/.env` |
 | **Mobile (Capacitor)** | [`docs/MOBILE.md`](docs/MOBILE.md) |
-| **UI/UX standard** (Justx BOS design system) | [`docs/BOS_DESIGN_SYSTEM.md`](docs/BOS_DESIGN_SYSTEM.md) |
-| **Justx BOS app** (Finance, HR, Projects — `/tools/bos` + `/bos`) | [`docs/BOS_APP.md`](docs/BOS_APP.md) |
+| **UI/UX standard** (Justxsystems BOS design system) | [`docs/BOS_DESIGN_SYSTEM.md`](docs/BOS_DESIGN_SYSTEM.md) |
+| **Justxsystems BOS app** (Finance, HR, Projects — `/tools/bos` + `/bos`) | [`docs/BOS_APP.md`](docs/BOS_APP.md) |
 | **JustTestX BOS seed** (disposable 1-year prod QA tenant) | [`docs/JUSTTESTX_BOS_SEED.md`](docs/JUSTTESTX_BOS_SEED.md) |
 | **JustTestX IMS seed** (disposable ≥2-year IMS Dealer QA tenant) | [`docs/JUSTTESTX_IMS_SEED.md`](docs/JUSTTESTX_IMS_SEED.md) |
 | Desktop UNC sync | [`desktop-sync-agent/README.md`](desktop-sync-agent/README.md) |

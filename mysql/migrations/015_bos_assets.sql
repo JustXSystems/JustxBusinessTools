@@ -1,4 +1,4 @@
--- Justx BOS assets: fixed-asset register, custody, transfers, maintenance, disposal and depreciation.
+-- Justxsystems BOS assets: fixed-asset register, custody, transfers, maintenance, disposal and depreciation.
 -- Additive only (new bos_* tables). Depreciation is calculated on read; nothing is posted to other tables.
 
 -- method: slm (a fixed % of cost a year) | wdv (a % of the opening book value a year) | none.

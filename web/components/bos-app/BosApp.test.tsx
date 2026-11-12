@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { BosApp } from "./BosApp";
 
 const settings = {
-  companyName: "Justx Systems",
+  companyName: "Justxsystems",
   gstin: "29ABCDE1234F1Z5",
   state: "Karnataka",
   stateCode: "29",
@@ -1170,13 +1170,13 @@ describe("BosApp", () => {
   it("explains a pending migration instead of failing", async () => {
     overrides["GET /session"] = { status: 503, body: { error: "BOS tables are not installed yet", code: "BOS_SCHEMA_PENDING" } };
     render(<BosApp mode="tool" />);
-    expect(await screen.findByText("Justx BOS is being set up", undefined, WAIT)).toBeTruthy();
+    expect(await screen.findByText("Justxsystems BOS is being set up", undefined, WAIT)).toBeTruthy();
   }, TEST_TIMEOUT);
 
   it("tells users of an org that hasn't enabled BOS how to turn it on", async () => {
-    overrides["GET /session"] = { status: 403, body: { error: "Justx BOS isn't enabled for this organization yet.", code: "BOS_NOT_ENABLED" } };
+    overrides["GET /session"] = { status: 403, body: { error: "Justxsystems BOS isn't enabled for this organization yet.", code: "BOS_NOT_ENABLED" } };
     render(<BosApp mode="tool" />);
-    expect(await screen.findByText("Justx BOS isn't enabled yet", undefined, WAIT)).toBeTruthy();
+    expect(await screen.findByText("Justxsystems BOS isn't enabled yet", undefined, WAIT)).toBeTruthy();
     expect(screen.getByText(/Admin → Tools/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   }, TEST_TIMEOUT);

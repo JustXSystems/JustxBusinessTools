@@ -1,4 +1,4 @@
--- Justx BOS accounting: chart of accounts, opening balances and manual journals.
+-- Justxsystems BOS accounting: chart of accounts, opening balances and manual journals.
 -- Additive only (new bos_* tables). Postings from invoices, bills, claims, payroll, bank lines and assets
 -- are derived on read; nothing is written to those tables.
 

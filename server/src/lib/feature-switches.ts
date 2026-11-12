@@ -9,13 +9,13 @@ export const FEATURE_SWITCHES = [
     key: "bos.handoff.quotationv1",
     tool: "bos",
     label: "Send to BOS from Quotation V1",
-    description: "Adds a “Send to BOS” button to saved quotations that creates a draft GST invoice (and the customer) in Justx BOS.",
+    description: "Adds a “Send to BOS” button to saved quotations that creates a draft GST invoice (and the customer) in Justxsystems BOS.",
   },
   {
     key: "bos.handoff.sitesurveyv1",
     tool: "bos",
     label: "Send to BOS from Site Survey V1",
-    description: "Adds a “Send to BOS” button to saved site surveys that opens a project lead (and the customer) in Justx BOS.",
+    description: "Adds a “Send to BOS” button to saved site surveys that opens a project lead (and the customer) in Justxsystems BOS.",
   },
   {
     key: "bos.sales.pos",

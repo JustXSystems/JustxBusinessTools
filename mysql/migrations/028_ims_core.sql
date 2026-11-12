@@ -1,4 +1,4 @@
--- Justx IMS-Dealer: inventory, purchasing, sales, receivables/payables, field ops, audit and integrations
+-- Justxsystems IMS-Dealer: inventory, purchasing, sales, receivables/payables, field ops, audit and integrations
 -- for distributors and dealers. Its own schema (every table is ims_*), partitioned by tenant_id = business profile.
 -- It never writes another tool's tables. Cross-tool links go through ims_links (imports into IMS) and the
 -- BOS connector (BOS reads ims_invoices). Additive only.

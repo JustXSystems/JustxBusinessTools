@@ -1,4 +1,4 @@
--- Justx IMS: onsite visits, ping dates, task due times and the saved-report approval flow.
+-- Justxsystems IMS: onsite visits, ping dates, task due times and the saved-report approval flow.
 
 -- One onsite visit: open while checked_out_at is NULL. visit_date is the business-timezone day of check-in.
 -- outcome: completed | follow_up | order_received | payment_collected | customer_unavailable | rescheduled | other.

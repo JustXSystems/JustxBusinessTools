@@ -58,7 +58,7 @@ export const jbtHost: BosHost = {
     }
   },
 
-  /** Admin → Tools → Justx BOS → Switches. Unregistered keys and read errors count as off. */
+  /** Admin → Tools → Justxsystems BOS → Switches. Unregistered keys and read errors count as off. */
   async feature(_actor, key): Promise<boolean> {
     const ctx = getRequestContext();
     if (!ctx || !isFeatureSwitchKey(key)) return false;

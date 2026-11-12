@@ -56,7 +56,7 @@ for (const s of [
   "useBosData",
   "useImsData",
   "Couldn't load this section",
-  "Justx IMS",
+  "Justxsystems IMS",
   "Loading CSS chunk",
   "CommandPalette",
   "AppShell",

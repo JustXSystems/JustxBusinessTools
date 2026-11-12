@@ -1,5 +1,5 @@
 /**
- * Justx BOS design tokens — single source of truth for documentation surfaces
+ * Justxsystems BOS design tokens — single source of truth for documentation surfaces
  * (swatches, token reference) and for TypeScript unions used by the kit.
  * Every value here must also exist in `styles/bos.tokens.css`; the
  * `tokens.test.ts` suite fails the build when the two drift apart.
@@ -137,7 +137,7 @@ export function tokensByGroup(group: BosTokenGroup): BosColorToken[] {
 export const BOS_TOKEN_GROUPS: BosTokenGroup[] = ["neutrals", "blue", "emerald", "amber", "coral", "pastels"];
 
 /**
- * Visual skins for the kit. `bos` is the calm default; `ims` is the Justx IMS
+ * Visual skins for the kit. `bos` is the calm default; `ims` is the Justxsystems IMS
  * look (gradient actions, frosted glass, 24px rounding) from
  * `styles/bos.skin-ims.css`. Skins only re-map tokens and restyle classes —
  * component APIs never change, so any kit-based tool can adopt either skin.
@@ -145,8 +145,8 @@ export const BOS_TOKEN_GROUPS: BosTokenGroup[] = ["neutrals", "blue", "emerald",
 export type BosSkin = "bos" | "ims";
 
 export const BOS_SKINS: { id: BosSkin; label: string; description: string }[] = [
-  { id: "bos", label: "Justx BOS", description: "Calm neutrals, IBM Plex, mono data" },
-  { id: "ims", label: "Justx IMS", description: "Blue→cyan gradients, frosted glass, Inter, 24px rounding" },
+  { id: "bos", label: "Justxsystems BOS", description: "Calm neutrals, IBM Plex, mono data" },
+  { id: "ims", label: "Justxsystems IMS", description: "Blue→cyan gradients, frosted glass, Inter, 24px rounding" },
 ];
 
 export function isBosSkin(value: unknown): value is BosSkin {

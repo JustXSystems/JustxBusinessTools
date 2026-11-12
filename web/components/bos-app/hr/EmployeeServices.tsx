@@ -456,7 +456,7 @@ function LetterView({ detail, letter: l, onBack }: { detail: ServiceDetail; lett
             </div>
             <div />
           </div>
-          <div className="bos-payslip-note">Generated with Justx BOS.</div>
+          <div className="bos-payslip-note">Generated with Justxsystems BOS.</div>
         </article>
       </div>
     </>

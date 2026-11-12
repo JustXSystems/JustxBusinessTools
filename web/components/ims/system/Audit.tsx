@@ -2960,7 +2960,7 @@ function AccessTab() {
           <ol className="ims-sys-steps">
             <li>
               <b>1</b>
-              <span>Add the CA to your Justx business as a team member (they sign in with their own account — never share passwords).</span>
+              <span>Add the CA to your Justxsystems business as a team member (they sign in with their own account — never share passwords).</span>
             </li>
             <li>
               <b>2</b>

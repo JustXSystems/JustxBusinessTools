@@ -2,7 +2,7 @@ import type { SVGProps } from "react";
 
 /**
  * Stroke icon set used by the BOS kit (24px grid, 2px stroke, currentColor).
- * Paths mirror the glyphs in the Justx BOS reference design.
+ * Paths mirror the glyphs in the Justxsystems BOS reference design.
  */
 const PATHS = {
   bell: (

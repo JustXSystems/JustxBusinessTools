@@ -36,7 +36,7 @@ export function HrAccess() {
       <div>
         <DataTable caption="Who can do what in HR" columns={COLUMNS} rows={ACCESS} rowKey={(a) => a.role} compact />
         <p className="bos-text-faint" style={{ fontSize: 12, marginTop: 8 }}>
-          Roles come from your Justx Business Tools team (Admin → Team). Change someone&apos;s role there and BOS follows.
+          Roles come from your Justxsystems Business Tools team (Admin → Team). Change someone&apos;s role there and BOS follows.
         </p>
       </div>
       <WidgetCard title="🗂️ Masters" dot="lavender" style={{ maxWidth: 760 }}>

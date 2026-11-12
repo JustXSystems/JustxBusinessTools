@@ -193,7 +193,7 @@ export function SettingsWorkspace() {
       active={nav.active}
       onSelect={nav.onSelect}
       navSeq={nav.navSeq}
-      brandName={session.brand?.name || session.settings.companyName || "Justx BOS"}
+      brandName={session.brand?.name || session.settings.companyName || "Justxsystems BOS"}
       logoSrc={logoSrc}
       onSearch={openPalette}
       label="Settings"

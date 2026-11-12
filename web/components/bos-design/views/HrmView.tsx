@@ -607,7 +607,7 @@ export function HrmView({ logoSrc, onSearch }: { logoSrc?: string; onSearch?: ()
     <ModuleWorkspace
       aria-label="HR Management modules"
       modules={HR_MODULES}
-      brandName="Justx Systems"
+      brandName="Justxsystems"
       logoSrc={logoSrc}
       onSearch={onSearch}
       onModuleChange={() => setEmployeeKey(null)}

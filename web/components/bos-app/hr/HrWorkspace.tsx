@@ -41,7 +41,7 @@ export function HrWorkspace() {
       active={nav.active}
       onSelect={nav.onSelect}
       navSeq={nav.navSeq}
-      brandName={session.brand?.name || session.settings.companyName || "Justx HRM"}
+      brandName={session.brand?.name || session.settings.companyName || "Justxsystems HRM"}
       logoSrc={logoSrc}
       onSearch={openPalette}
       label="HR modules"

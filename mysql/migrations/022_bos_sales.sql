@@ -1,4 +1,4 @@
--- Justx BOS sales billing (Finance → Sales Billing): the product & service catalog, and quotations, sales orders
+-- Justxsystems BOS sales billing (Finance → Sales Billing): the product & service catalog, and quotations, sales orders
 -- and delivery challans that convert into the existing GST invoices. Additive only (new bos_* tables).
 -- POS counter bills are ordinary bos_invoices (source_tool = 'pos') with a payment; they need no table of their own.
 

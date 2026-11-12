@@ -30,9 +30,11 @@ describe("theme presets", () => {
     expect(dark).toMatchObject({ scheme: "dark", pack: "ims" });
   });
 
-  it("resolves legacy JustX* preset aliases", () => {
+  it("resolves legacy JustX* / Justx* preset aliases", () => {
     expect(findThemePresetTokens("JustXSystems Electric")?.accent).toBeTruthy();
     expect(findThemePresetTokens("JustX BOS (Light)")?.pack).toBe("bos");
+    expect(findThemePresetTokens("Justx BOS (Light)")?.pack).toBe("bos");
+    expect(findThemePresetTokens("Justx IMS (Dark)")?.pack).toBe("ims");
   });
 
   it("matches the server preset list name-for-name and token-for-token", async () => {

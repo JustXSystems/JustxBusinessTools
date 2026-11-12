@@ -2,7 +2,7 @@ import type { ConnectorTarget } from "./api";
 
 export const BOS_TOOL_ID = "bos";
 
-/** BOS is enabled for an org once its catalog row is Live (Admin → Tools → Justx BOS). */
+/** BOS is enabled for an org once its catalog row is Live (Admin → Tools → Justxsystems BOS). */
 export function isBosLive(catalog: ReadonlyArray<{ id: string; available: boolean }> | null | undefined): boolean {
   return Boolean(catalog?.some((c) => c.id === BOS_TOOL_ID && c.available === true));
 }

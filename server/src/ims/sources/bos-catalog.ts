@@ -2,11 +2,11 @@ import type { Pool } from "mysql2/promise";
 import { money, rows } from "../db.js";
 import type { CatalogItem, CatalogParty, ImsCatalogSource } from "./types.js";
 
-/** Justx BOS → IMS: the BOS product & service catalog and customer / vendor book (read-only). */
+/** Justxsystems BOS → IMS: the BOS product & service catalog and customer / vendor book (read-only). */
 export function bosCatalogSource(db: Pool): ImsCatalogSource {
   return {
     id: "bos",
-    label: "Justx BOS",
+    label: "Justxsystems BOS",
     icon: "🏢",
     description: "Pull your BOS products into the IMS item master. Customers & vendors already share the Party Registry with IMS — use this only if a BOS projection row is missing.",
     href: "/tools/bos",

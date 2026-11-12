@@ -47,7 +47,7 @@ export function FinanceView({ onSearch, onCreateInvoice }: { onSearch?: () => vo
     <ModuleWorkspace
       aria-label="Finance & Accounts modules"
       modules={FINANCE_MODULES}
-      brandName="Justx Systems"
+      brandName="Justxsystems"
       accent="emerald"
       onSearch={onSearch}
       renderCustom={(id, api) => {

@@ -150,7 +150,7 @@ export function InvoiceView() {
         <div className="bos-inv-paper-top">
           <div>
             <div className="bos-inv-paper-brand">{form.from || "Your Company"}</div>
-            <div className="bos-inv-paper-powered">Powered by Justx BOS</div>
+            <div className="bos-inv-paper-powered">Powered by Justxsystems BOS</div>
           </div>
           <div className="bos-inv-paper-title">INVOICE</div>
         </div>

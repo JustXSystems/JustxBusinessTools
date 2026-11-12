@@ -301,7 +301,7 @@ export function ProductsTab({ posEnabled }: { posEnabled: boolean }) {
           <Stack gap={12}>
             {canManage && !posEnabled ? (
               <Alert tone="blue" title="POS counter billing is off">
-                An administrator can turn it on in Admin → Tools → Justx BOS → Switches. Counter bills are issued as paid GST invoices.
+                An administrator can turn it on in Admin → Tools → Justxsystems BOS → Switches. Counter bills are issued as paid GST invoices.
               </Alert>
             ) : null}
             <ModuleToolbar>

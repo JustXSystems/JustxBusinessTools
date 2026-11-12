@@ -1,4 +1,4 @@
--- Justx BOS travel requests (HR → Expenses & Assets). Additive only (one new bos_* table).
+-- Justxsystems BOS travel requests (HR → Expenses & Assets). Additive only (one new bos_* table).
 -- Asset assignment and expense claims on the same screen reuse bos_assets and bos_expenses unchanged.
 
 -- request_no: TRV-0001… per tenant. mode: flight | train | bus | car | other.

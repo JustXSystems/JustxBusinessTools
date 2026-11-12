@@ -31,7 +31,7 @@ export type CreateBosRouterOptions = {
 };
 
 /**
- * Justx BOS API as a self-contained Express router.
+ * Justxsystems BOS API as a self-contained Express router.
  *
  *   app.use("/api/bos", createBosRouter({ db, host, connectors }))
  *
@@ -46,11 +46,11 @@ export function createBosRouter({ db, host, connectors = [] }: CreateBosRouterOp
     try {
       const actor = await host.actor(req);
       if (!actor) {
-        res.status(401).json({ error: "Sign in to use Justx BOS" });
+        res.status(401).json({ error: "Sign in to use Justxsystems BOS" });
         return;
       }
       if (host.enabled && !(await host.enabled(actor))) {
-        res.status(403).json({ error: "Justx BOS isn't enabled for this organization yet. An administrator can turn it on in Admin → Tools.", code: "BOS_NOT_ENABLED" });
+        res.status(403).json({ error: "Justxsystems BOS isn't enabled for this organization yet. An administrator can turn it on in Admin → Tools.", code: "BOS_NOT_ENABLED" });
         return;
       }
       res.locals.bosActor = actor;
@@ -101,7 +101,7 @@ export function createBosRouter({ db, host, connectors = [] }: CreateBosRouterOp
     }
     const code = (err as { code?: string }).code;
     if (code === "ER_NO_SUCH_TABLE") {
-      res.status(503).json({ error: "Justx BOS is still being set up — the database migration hasn't run yet. Restart the API to apply it.", code: "BOS_SCHEMA_PENDING" });
+      res.status(503).json({ error: "Justxsystems BOS is still being set up — the database migration hasn't run yet. Restart the API to apply it.", code: "BOS_SCHEMA_PENDING" });
       return;
     }
     if (code === "ER_DUP_ENTRY") {

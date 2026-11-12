@@ -1,4 +1,4 @@
--- Justx BOS payroll: per-tenant payroll settings, employee salary structures, monthly runs and payslips.
+-- Justxsystems BOS payroll: per-tenant payroll settings, employee salary structures, monthly runs and payslips.
 -- Same rules as 010: bos_ prefix, scoped by tenant_id, no foreign keys into JBT tables. Purely additive.
 -- Payslips snapshot the employee and every figure, so history survives later edits to structures or records.
 

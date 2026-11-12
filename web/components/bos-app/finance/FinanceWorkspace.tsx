@@ -58,7 +58,7 @@ export function FinanceWorkspace() {
       onSelect={nav.onSelect}
       navSeq={nav.navSeq}
       accent="emerald"
-      brandName={session.brand?.name || session.settings.companyName || "Justx Finance"}
+      brandName={session.brand?.name || session.settings.companyName || "Justxsystems Finance"}
       logoSrc={logoSrc}
       onSearch={openPalette}
       label="Finance modules"

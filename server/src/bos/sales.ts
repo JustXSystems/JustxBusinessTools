@@ -358,7 +358,7 @@ async function saveItem(run: () => Promise<unknown>, sku: string | null | undefi
 
 const posEnabled = (deps: BosDeps, actor: BosActor) => featureOn(deps, actor, POS_SWITCH);
 
-const POS_OFF = "POS counter billing is turned off. An administrator can turn it on in Admin → Tools → Justx BOS → Switches.";
+const POS_OFF = "POS counter billing is turned off. An administrator can turn it on in Admin → Tools → Justxsystems BOS → Switches.";
 
 type PosRow = { id: string; invoice_no: string; party_name: string; grand_total: string | number; status: string; created_at: string; method: string | null };
 

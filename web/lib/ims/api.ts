@@ -1,5 +1,5 @@
 /**
- * Typed client for the Justx IMS-Dealer API (`/api/ims/*`). Area clients
+ * Typed client for the Justxsystems IMS-Dealer API (`/api/ims/*`). Area clients
  * (`purchase.ts`, `finance.ts`…) build on the request helpers exported here.
  */
 import { apiUrl } from "@/lib/api-base";
@@ -21,7 +21,7 @@ export class ImsApiError extends Error {
     return this.code === "IMS_SCHEMA_PENDING";
   }
 
-  /** IMS isn't Live for the caller's org yet (Admin → Tools → Justx IMS — Dealer). */
+  /** IMS isn't Live for the caller's org yet (Admin → Tools → Justxsystems IMS — Dealer). */
   get notEnabled(): boolean {
     return this.code === "IMS_NOT_ENABLED";
   }

@@ -48,7 +48,7 @@ export function ConnectModule() {
 
   return (
     <Stack>
-      <PageHeader title="Connected Tools" sub="Bring quotations, products and contacts from your other Justx tools into IMS — every import is linked, so nothing is brought in twice." />
+      <PageHeader title="Connected Tools" sub="Bring quotations, products and contacts from your other Justxsystems tools into IMS — every import is linked, so nothing is brought in twice." />
       <SubTabs
         label="Connected tools"
         value={tab}
@@ -85,7 +85,7 @@ function ToolsTab({ data, onOpen }: { data: ConnectOverview; onOpen: (p: Panel) 
       {none ? (
         <Card interactive={false}>
           <EmptyState glyph="⧉" title="No connected tools yet">
-            Quotation V1 and Justx BOS appear here once they&apos;re enabled for your organisation.
+            Quotation V1 and Justxsystems BOS appear here once they&apos;re enabled for your organisation.
           </EmptyState>
         </Card>
       ) : null}
@@ -641,7 +641,7 @@ function LinksTab({ tools }: { tools: ReadonlyArray<{ id: string; label: string 
           )}
         </Loaded>
         <p className="ims-sys-mini" style={{ margin: 0 }}>
-          The reverse direction works too: IMS invoices are available in Justx BOS → Connected tools.
+          The reverse direction works too: IMS invoices are available in Justxsystems BOS → Connected tools.
         </p>
       </Stack>
     </Card>

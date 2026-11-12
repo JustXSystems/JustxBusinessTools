@@ -73,7 +73,7 @@ function GeminiSetup({ cfg, onChange, onDone }: { cfg: GeminiConfig | null; onCh
   return (
     <div className="ims-ai-setup">
       <p className="ims-ai-muted">
-        Built-in answers work without any setup. To ask anything in your own words, connect a free Google Gemini key. The key is stored only in this browser — it is never sent to Justx — and your question goes from this browser straight to Google with a short summary of the data you can already see.
+        Built-in answers work without any setup. To ask anything in your own words, connect a free Google Gemini key. The key is stored only in this browser — it is never sent to Justxsystems — and your question goes from this browser straight to Google with a short summary of the data you can already see.
       </p>
       {cfg ? (
         <div className="ims-between" style={{ gap: 10, flexWrap: "wrap" }}>

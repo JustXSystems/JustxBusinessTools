@@ -388,9 +388,9 @@ const FAQ: ReadonlyArray<FaqEntry> = [
   { area: "Integrations", module: "integrations", q: "How do I connect Tally?", a: ["In Tally, enable the XML server (F1 Help → Settings → Connectivity, port 9000). In Tally & POS, enter the host, port and exact company name and press Test connection, then Sync now. If your Tally PC isn't reachable from the internet, download the XML and import it in Tally instead — it always works."] },
   { area: "Integrations", module: "integrations", q: "Tally rejected some vouchers. Why?", a: ["Usually a ledger or stock item doesn't exist in Tally yet, or the company isn't open. Sync masters first (or import the masters XML), then vouchers. The sync log shows Tally's exact error for each batch."] },
   { area: "Integrations", module: "integrations", q: "How does the POS integration work?", a: ["Connect your POS in Tally & POS. Each bill it sends reduces stock and becomes a paid invoice (or credit invoice) in IMS. The same bill number is never booked twice. Use 'Simulate a POS sale' to see the flow end to end."] },
-  { area: "Integrations", module: "connect", q: "What are Connected Tools?", a: ["Other Justx tools in your organisation. Customers & suppliers are shared for this business profile — IMS Suppliers & Customers is the master book; Quotation V1 and Justx BOS read and write the same parties. Connected Tools still import approved quotations as draft invoices and BOS products as IMS items. Issued IMS invoices are available in Justx BOS → Connected tools."] },
+  { area: "Integrations", module: "connect", q: "What are Connected Tools?", a: ["Other Justxsystems tools in your organisation. Customers & suppliers are shared for this business profile — IMS Suppliers & Customers is the master book; Quotation V1 and Justxsystems BOS read and write the same parties. Connected Tools still import approved quotations as draft invoices and BOS products as IMS items. Issued IMS invoices are available in Justxsystems BOS → Connected tools."] },
   { area: "Purchasing", module: "parties", q: "Where do Quotation / BOS customers live?", a: ["In Suppliers & Customers — the single Party Registry for this business profile. Saving a quotation upserts the customer here; BOS Customers & Vendors is the same book (vendor = supplier). Edit once in IMS and every tool sees it."] },
-  { area: "Help", module: "helpdesk", q: "Who answers my tickets?", a: ["Tickets go to your organisation's owners and anyone with the Settings permission. For product problems they can't solve, contact Justx support using the card below."] },
+  { area: "Help", module: "helpdesk", q: "Who answers my tickets?", a: ["Tickets go to your organisation's owners and anyone with the Settings permission. For product problems they can't solve, contact Justxsystems support using the card below."] },
 ];
 
 function Faq() {
@@ -452,7 +452,7 @@ function ContactCard() {
       <div className="ims-sys-contact">
         <ToolHead
           glyph="🛟"
-          title="Contact Justx support"
+          title="Contact Justxsystems support"
           sub={`For product problems, billing or feature requests. Quote your business code JBT-${String(session.tenantId).padStart(4, "0")} and the ticket number if you have one.`}
         />
         <a className="bos-btn bos-btn-primary" href={SUPPORT_URL} target="_blank" rel="noopener noreferrer">

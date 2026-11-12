@@ -1,4 +1,4 @@
--- Justx BOS banking: bank & cash accounts, statement lines and their reconciliation.
+-- Justxsystems BOS banking: bank & cash accounts, statement lines and their reconciliation.
 -- Additive only (new bos_* tables). Account numbers are not stored, only the last four digits.
 
 CREATE TABLE IF NOT EXISTS bos_bank_accounts (

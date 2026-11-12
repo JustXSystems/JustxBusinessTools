@@ -16,15 +16,15 @@ function Gate({ children }: { children: ReactNode }) {
     <BosRoot skin="ims" canvas className="ims-standalone">
       <main className="ims-gate">
         {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset under the app base path */}
-        <img className="ims-gate-logo" src={publicAssetUrl(IMS_LOGO)} alt="Justx" />
+        <img className="ims-gate-logo" src={publicAssetUrl(IMS_LOGO)} alt="Justxsystems" />
         {children}
-        <Footnote>Justx IMS — Dealer · © 2026 Justx Systems. All Rights Reserved.</Footnote>
+        <Footnote>Justxsystems IMS — Dealer · © 2026 Justxsystems. All Rights Reserved.</Footnote>
       </main>
     </BosRoot>
   );
 }
 
-/** `/ims` — Justx IMS-Dealer as a full-screen app. Sign-in is the shared JBT login; access is enforced by `/api/ims`. */
+/** `/ims` — Justxsystems IMS-Dealer as a full-screen app. Sign-in is the shared JBT login; access is enforced by `/api/ims`. */
 export function ImsStandalone() {
   const { user, loading, refresh } = useAuth();
 
@@ -51,10 +51,10 @@ export function ImsStandalone() {
       <Gate>
         <div className="ims-gate-card">
           <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 600 }}>
-            Welcome to Justx IMS
+            Welcome to Justxsystems IMS
           </h2>
           <p className="bos-text-muted" style={{ margin: "0 0 18px" }}>
-            Inventory, purchasing, GST sales and collections for dealers. Sign in with your Justx Business Tools account.
+            Inventory, purchasing, GST sales and collections for dealers. Sign in with your Justxsystems Business Tools account.
           </p>
           <a className="bos-btn bos-btn-primary bos-btn-block" href={withBasePath("/login?next=/ims")}>
             Sign in

@@ -1,4 +1,4 @@
--- Justx BOS employee services (HR → Employee Services): helpdesk tickets, certificate and letter requests,
+-- Justxsystems BOS employee services (HR → Employee Services): helpdesk tickets, certificate and letter requests,
 -- ID card and kit requests, with a comment thread. Additive only (new bos_* tables).
 
 -- request_no: SRV-0001… per tenant. type: helpdesk | certificate | id_card | kit | other.

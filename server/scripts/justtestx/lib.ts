@@ -285,7 +285,7 @@ export async function wipeImsTenant(db: Db, tenantId: number): Promise<number> {
   return total;
 }
 
-/** Mark Justx IMS — Dealer Live for the org (same effect as Admin → Tools → Visible on home → Live). */
+/** Mark Justxsystems IMS — Dealer Live for the org (same effect as Admin → Tools → Visible on home → Live). */
 export async function enableImsDealer(
   conn: PoolConnection,
   orgId: number,

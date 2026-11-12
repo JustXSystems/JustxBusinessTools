@@ -1,4 +1,4 @@
--- Justx IMS-Dealer: purchase-order extras (additive).
+-- Justxsystems IMS-Dealer: purchase-order extras (additive).
 -- delivery_address and payment_terms_days print on the PO and drive the bill due date on receipt.
 -- intra_state + the CGST / SGST / IGST split freeze the GST treatment chosen when the PO was raised.
 ALTER TABLE ims_purchase_orders

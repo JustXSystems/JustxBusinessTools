@@ -198,7 +198,7 @@ function ConnectorRecords({ tool }: { tool: string }) {
         ];
         return (
           <Stack>
-            <Alert tone="blue" title={`${connector.icon} ${connector.label} → Justx BOS`}>
+            <Alert tone="blue" title={`${connector.icon} ${connector.label} → Justxsystems BOS`}>
               {connector.description} Imports are idempotent — a record is never duplicated, and the original document in {connector.label} is never modified.
             </Alert>
             <ModuleToolbar>
@@ -256,7 +256,7 @@ export function ConnectWorkspace() {
       active={nav.active}
       onSelect={nav.onSelect}
       navSeq={nav.navSeq}
-      brandName={session.brand?.name || session.settings.companyName || "Justx BOS"}
+      brandName={session.brand?.name || session.settings.companyName || "Justxsystems BOS"}
       logoSrc={logoSrc}
       onSearch={openPalette}
       label="Connected tools"

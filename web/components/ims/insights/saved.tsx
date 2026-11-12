@@ -609,7 +609,7 @@ function composeBody(saved: SavedReport, report: ReportResult, filters: string[]
     `${report.rows.length.toLocaleString("en-IN")} rows — full detail in the attached ${file}.`,
     ...(saved.approvedByName ? [`Approved by ${saved.approvedByName}.`] : []),
     "",
-    `— ${sender ?? "Sent"} via Justx IMS`,
+    `— ${sender ?? "Sent"} via Justxsystems IMS`,
   ];
   return lines.join("\n");
 }
@@ -687,7 +687,7 @@ function SendDialog({ open, onClose, saved, meta }: { open: boolean; onClose: ()
     >
       <div className="bos-stack" style={{ gap: 14 }}>
         <Alert tone="amber" title="Automatic emailing isn't configured">
-          Justx IMS doesn&apos;t send email on its own yet. Download the file, open the pre-filled email in your mail app, attach the file and send — then mark it as sent here.
+          Justxsystems IMS doesn&apos;t send email on its own yet. Download the file, open the pre-filled email in your mail app, attach the file and send — then mark it as sent here.
         </Alert>
         <Field label="To" error={toError || undefined} hint="Comma-separated email addresses">
           {({ id, describedBy, invalid }) => <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} value={to} onChange={(e) => setTo(e.target.value)} placeholder="ca@firm.in" />}

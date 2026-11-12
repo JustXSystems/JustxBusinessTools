@@ -768,7 +768,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const ctx = getRequestContext();
     const features = ctx ? await getOrgFeatureSwitches(ctx.organizationId) : null;
     if (!features?.["ims.bom.sample_templates"]) {
-      throw forbidden("Sample BOM templates are turned off. An admin can enable them in Admin → Tools → Justx IMS — Dealer → Switches.");
+      throw forbidden("Sample BOM templates are turned off. An admin can enable them in Admin → Tools → Justxsystems IMS — Dealer → Switches.");
     }
     const actor = actorOf(res);
     const created: BomPackage[] = [];

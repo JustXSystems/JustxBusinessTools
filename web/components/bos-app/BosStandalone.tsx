@@ -119,8 +119,8 @@ function LoginCard({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
 
   return (
     <form className="bos-login-card" onSubmit={method === "password" ? submitPassword : submitOtp}>
-      <h2 className="bos-login-title">Welcome to Justx BOS</h2>
-      <p className="bos-login-sub">Sign in with your Justx Business Tools account.</p>
+      <h2 className="bos-login-title">Welcome to Justxsystems BOS</h2>
+      <p className="bos-login-sub">Sign in with your Justxsystems Business Tools account.</p>
       {methods.phoneOtp ? (
         <Segmented
           block
@@ -196,7 +196,7 @@ function Gate({ children }: { children: ReactNode }) {
       <main className="bos-app-gate">
         {children}
         <div className="bos-app-gate-foot">
-          <Footnote>Justx BOS™ (Business Operating System) · © 2026 Justx Systems. All Rights Reserved.</Footnote>
+          <Footnote>Justxsystems BOS™ (Business Operating System) · © 2026 Justxsystems. All Rights Reserved.</Footnote>
         </div>
       </main>
     </BosRoot>
@@ -207,8 +207,8 @@ function Splash({ logoSrc, sub, onLogin }: { logoSrc: string; sub: string; onLog
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset under the app base path */}
-      <img className="bos-splash-logo" src={logoSrc} alt="Justx" />
-      <div className="bos-splash-welcome">Welcome to Justx</div>
+      <img className="bos-splash-logo" src={logoSrc} alt="Justxsystems" />
+      <div className="bos-splash-welcome">Welcome to Justxsystems</div>
       <div className="bos-splash-sub">{sub}</div>
       {onLogin ? (
         <Button variant="primary" className="bos-splash-cta" onClick={onLogin}>
@@ -219,7 +219,7 @@ function Splash({ logoSrc, sub, onLogin }: { logoSrc: string; sub: string; onLog
   );
 }
 
-/** `/bos` — Justx BOS as a full-screen application, signed in with JBT accounts. */
+/** `/bos` — Justxsystems BOS as a full-screen application, signed in with JBT accounts. */
 export function BosStandalone() {
   const { user, loading, refresh } = useAuth();
   const { config, refresh: refreshConfig } = usePlatformConfig();
@@ -268,13 +268,13 @@ export function BosStandalone() {
     return (
       <Gate>
         <div className="bos-login-card">
-          <h2 className="bos-login-title">Justx BOS isn&apos;t enabled yet</h2>
+          <h2 className="bos-login-title">Justxsystems BOS isn&apos;t enabled yet</h2>
           <p className="bos-login-sub">
-            An administrator can turn it on in Admin → Tools (Justx BOS → Visible on home → Live, then Save placement). It then opens here and inside Justx Business Tools.
+            An administrator can turn it on in Admin → Tools (Justxsystems BOS → Visible on home → Live, then Save placement). It then opens here and inside Justxsystems Business Tools.
           </p>
           <div className="bos-row" style={{ gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
             <a className="bos-btn bos-btn-primary" href={withBasePath("/")}>
-              Open Justx Business Tools
+              Open Justxsystems Business Tools
             </a>
             <Button onClick={() => void signOut()}>Sign out</Button>
           </div>

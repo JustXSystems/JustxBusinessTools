@@ -1,8 +1,8 @@
-# Justx BOS Design System
+# Justxsystems BOS Design System
 
-The company-standard UI/UX system, implemented from `Justxsystems_BOS_Design.html` as a reusable React kit plus a live reference tool (**Justx BOS Design**, `/tools/bosdesign`).
+The company-standard UI/UX system, implemented from `Justxsystems_BOS_Design.html` as a reusable React kit plus a live reference tool (**Justxsystems BOS Design**, `/tools/bosdesign`).
 
-The working application built on this system, **Justx BOS** (`/tools/bos` and `/bos`), is documented in [BOS_APP.md](BOS_APP.md).
+The working application built on this system, **Justxsystems BOS** (`/tools/bos` and `/bos`), is documented in [BOS_APP.md](BOS_APP.md).
 
 | Layer | Location | Purpose |
 |------|----------|---------|
@@ -23,7 +23,7 @@ The working application built on this system, **Justx BOS** (`/tools/bos` and `/
 
 ### Enabling the tool for an org
 
-Admin → Tools → find **Justx BOS Design** → mark it available. It then appears under *Utilities* for that org (independent of saved home selections). The URL `/tools/bosdesign` always works for direct access.
+Admin → Tools → find **Justxsystems BOS Design** → mark it available. It then appears under *Utilities* for that org (independent of saved home selections). The URL `/tools/bosdesign` always works for direct access.
 
 ## Adopting BOS in a screen or tool
 
@@ -112,7 +112,7 @@ const MODULES: ModuleSpec[] = [
 
 <ModuleWorkspace
   modules={MODULES}
-  brandName="Justx BOS"
+  brandName="Justxsystems BOS"
   renderCustom={(id, api) => (id === "sales-toolbar" ? <MyToolbar onOpen={() => api.navigate("sales")} /> : null)}
 />;
 ```

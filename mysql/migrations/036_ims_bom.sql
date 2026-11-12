@@ -1,4 +1,4 @@
--- Justx IMS: Bill of Materials — reusable package templates and customer BOM documents.
+-- Justxsystems IMS: Bill of Materials — reusable package templates and customer BOM documents.
 -- Industry-agnostic (kits, project packages, assemblies). Additive only.
 -- invoice_id / invoice_convert_mode are filled by create-invoice; stock columns added in 037.
 

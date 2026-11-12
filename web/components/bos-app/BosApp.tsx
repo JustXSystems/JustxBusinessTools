@@ -77,7 +77,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mod
   const { show } = useToast();
   const [session, setSession] = useState(initial);
   const companyLogo = session.brand?.logoUrl ? publicAssetUrl(session.brand.logoUrl) : null;
-  /** Nav / chrome: company logo when set, else Justx product mark. */
+  /** Nav / chrome: company logo when set, else Justxsystems product mark. */
   const logoSrc = companyLogo || productLogo;
   const [nav, setNav] = useState<NavState>(navFromUrl);
   const [version, setVersion] = useState(0);
@@ -179,17 +179,17 @@ function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mod
     { id: "theme", section: "Quick actions", label: `Switch to ${theme === "dark" ? "light" : "dark"} mode`, icon: "◐", onSelect: toggleTheme },
     mode === "tool"
       ? { id: "fullscreen", section: "Quick actions", label: "Open BOS as a full-screen app", icon: "⤢", onSelect: () => window.open(withBasePath("/bos"), "_blank", "noopener") }
-      : { id: "jbt", section: "Quick actions", label: "Open Justx Business Tools", icon: "⤺", onSelect: () => window.location.assign(withBasePath("/")) },
+      : { id: "jbt", section: "Quick actions", label: "Open Justxsystems Business Tools", icon: "⤺", onSelect: () => window.location.assign(withBasePath("/")) },
     ...(onSignOut ? [{ id: "signout", section: "Quick actions", label: "Sign out", icon: "⎋", onSelect: onSignOut }] : []),
   ];
 
   const actorName = session.actor.name ?? session.actor.email ?? "You";
-  const companyName = session.brand?.name || session.settings.companyName || "Justx BOS";
+  const companyName = session.brand?.name || session.settings.companyName || "Justxsystems BOS";
 
   return (
     <BosAppProvider value={ctx}>
       <Topbar sticky="desktop">
-        <Brand logoSrc={logoSrc} name={companyName} sub={`Justx BOS · ${mode === "tool" ? "in JBT" : "Business OS"}`} />
+        <Brand logoSrc={logoSrc} name={companyName} sub={`Justxsystems BOS · ${mode === "tool" ? "in JBT" : "Business OS"}`} />
         <div className="bos-topbar-actions">
           <SearchInput
             readOnly
@@ -235,11 +235,11 @@ function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mod
         </div>
 
         <Footnote>
-          Justx BOS™ (Business Operating System) · Designed &amp; Developed by{" "}
+          Justxsystems BOS™ (Business Operating System) · Designed &amp; Developed by{" "}
           <a href="https://justxsystems.com/" target="_blank" rel="noopener noreferrer">
-            Justx Systems
+            Justxsystems
           </a>{" "}
-          · © 2026 Justx Systems. All Rights Reserved.
+          · © 2026 Justxsystems. All Rights Reserved.
         </Footnote>
       </div>
 
@@ -273,7 +273,7 @@ function SessionGate({ mode, onSignOut }: { mode: BosAppMode; onSignOut?: () => 
           <ErrorBlock error={state.error} onRetry={() => setAttempt((a) => a + 1)} />
         )
       ) : (
-        <div aria-busy="true" aria-label="Loading Justx BOS" className="bos-stack" style={{ "--bos-gap": "14px" } as CSSProperties}>
+        <div aria-busy="true" aria-label="Loading Justxsystems BOS" className="bos-stack" style={{ "--bos-gap": "14px" } as CSSProperties}>
           <Skeleton width="38%" height={14} />
           <Skeleton height={44} />
           <Skeleton height={220} />
@@ -287,7 +287,7 @@ function SessionGate({ mode, onSignOut }: { mode: BosAppMode; onSignOut?: () => 
 const HOST_GUTTER = { "--bos-bleed": "20px" } as CSSProperties;
 
 /**
- * Justx BOS — one app, two entry points: the JBT tool (`/tools/bos`) and the
+ * Justxsystems BOS — one app, two entry points: the JBT tool (`/tools/bos`) and the
  * full-screen standalone app (`/bos`). Same code, same `bos_*` data.
  */
 export function BosApp({ mode, onSignOut }: { mode: BosAppMode; onSignOut?: () => void }) {

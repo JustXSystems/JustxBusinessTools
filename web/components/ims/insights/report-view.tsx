@@ -317,7 +317,7 @@ export function ReportPaper({ report, business, filters, preparedBy }: { report:
       ) : null}
       {report.notes.length ? <div className="bos-inv-notes">{report.notes.join("\n")}</div> : null}
       <div className="ims-paper-sign">
-        <div className="ims-paper-sub">Generated {new Date(report.generatedAt).toLocaleString("en-IN")} · Justx IMS</div>
+        <div className="ims-paper-sub">Generated {new Date(report.generatedAt).toLocaleString("en-IN")} · Justxsystems IMS</div>
         <div>
           <div className="ims-paper-sign-line" />
           Prepared by {preparedBy ?? "—"}

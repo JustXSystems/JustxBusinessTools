@@ -157,6 +157,10 @@ const THEME_PRESET_ALIASES: Record<string, string> = {
   "JustX BOS (Dark)": "Justxsystems BOS (Dark)",
   "JustX IMS (Light)": "Justxsystems IMS (Light)",
   "JustX IMS (Dark)": "Justxsystems IMS (Dark)",
+  "Justx BOS (Light)": "Justxsystems BOS (Light)",
+  "Justx BOS (Dark)": "Justxsystems BOS (Dark)",
+  "Justx IMS (Light)": "Justxsystems IMS (Light)",
+  "Justx IMS (Dark)": "Justxsystems IMS (Dark)",
 };
 
 export function findPresetTokens(name: string): ThemeTokensRecord | null {

@@ -149,8 +149,8 @@ export function NavBrand({ name, logoSrc, mark }: { name: ReactNode; logoSrc?: s
   );
 }
 
-/** "Employee Management (Directory & profiles)" ……… "Justx BOS" */
-export function ModuleHeader({ title, sub, brand = "Justx BOS" }: { title: ReactNode; sub?: ReactNode; brand?: ReactNode }) {
+/** "Employee Management (Directory & profiles)" ……… "Justxsystems BOS" */
+export function ModuleHeader({ title, sub, brand = "Justxsystems BOS" }: { title: ReactNode; sub?: ReactNode; brand?: ReactNode }) {
   return (
     <div className="bos-module-head">
       <div>

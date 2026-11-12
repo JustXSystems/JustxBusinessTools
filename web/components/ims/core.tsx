@@ -144,15 +144,15 @@ export function LoadingBlock({ rows = 2 }: { rows?: number }) {
 export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   if (error instanceof ImsApiError && error.schemaPending) {
     return (
-      <Alert tone="amber" title="Justx IMS is being set up">
+      <Alert tone="amber" title="Justxsystems IMS is being set up">
         The IMS database tables haven&apos;t been created yet. Restart the API once so migration <span className="bos-code">028_ims_core.sql</span> runs, then reload.
       </Alert>
     );
   }
   if (error instanceof ImsApiError && error.notEnabled) {
     return (
-      <Alert tone="blue" title="Justx IMS — Dealer isn't enabled yet">
-        An administrator can turn it on in Admin → Tools (Justx IMS — Dealer → Visible on home → Live, then Save placement).
+      <Alert tone="blue" title="Justxsystems IMS — Dealer isn't enabled yet">
+        An administrator can turn it on in Admin → Tools (Justxsystems IMS — Dealer → Visible on home → Live, then Save placement).
       </Alert>
     );
   }

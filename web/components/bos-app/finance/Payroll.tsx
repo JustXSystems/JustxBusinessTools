@@ -604,7 +604,7 @@ export function PayslipPaper({ slip }: { slip: BosPayslip }) {
         </div>
       ) : null}
       {slip.adjustments.note ? <div className="bos-payslip-note">Note: {slip.adjustments.note}</div> : null}
-      <div className="bos-payslip-note">This is a computer-generated payslip and does not need a signature. · Powered by Justx BOS</div>
+      <div className="bos-payslip-note">This is a computer-generated payslip and does not need a signature. · Powered by Justxsystems BOS</div>
     </article>
   );
 }

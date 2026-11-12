@@ -1,6 +1,6 @@
 # JustTestX — disposable BOS test tenant
 
-Complete, one-year Business Operating System scenario for **JustTestX** (an IT services company shaped like Justx Systems). Use it on production to exercise every BOS screen, then wipe it when testing is done.
+Complete, one-year Business Operating System scenario for **JustTestX** (an IT services company shaped like Justxsystems). Use it on production to exercise every BOS screen, then wipe it when testing is done.
 
 ## What gets created
 
@@ -60,7 +60,7 @@ Overrides:
 
 1. Sign in at https://justxsystems.com/jbt/
 2. Switch active branch to **JustTestX**
-3. Open **Justx BOS** (`/tools/bos` or `/bos`)
+3. Open **Justxsystems BOS** (`/tools/bos` or `/bos`)
 4. Walk Finance, HR, Projects, Connected tools, Settings — every module should have realistic rows
 
 ## Wipe / delete when done

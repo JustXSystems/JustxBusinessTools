@@ -382,7 +382,7 @@ function GstWorkspace() {
       )}
 
       <Alert tone="blue" title="Prepared from your IMS records — not a filing">
-        Figures come from issued invoices, supplier bills, received purchase orders and customer returns in Justx IMS. Always reconcile with your CA and the GSTN portal (GSTR-2B for ITC) before filing.
+        Figures come from issued invoices, supplier bills, received purchase orders and customer returns in Justxsystems IMS. Always reconcile with your CA and the GSTN portal (GSTR-2B for ITC) before filing.
       </Alert>
 
       {paper ? (
@@ -899,7 +899,7 @@ function GstPaper({
       {tab === "items" && items ? <PaperTable title={`Items needing attention (${items.summary.flagged} of ${items.summary.total})`} columns={ITEM_COLS} rows={itemRows(items.items)} /> : null}
 
       {summary?.warnings.length && tab !== "items" && tab !== "hsn" ? <div className="bos-inv-notes">{summary.warnings.join("\n")}</div> : null}
-      <div className="bos-inv-notes">Prepared from Justx IMS records for review. Not a GST filing — reconcile with your CA and the GSTN portal before filing.</div>
+      <div className="bos-inv-notes">Prepared from Justxsystems IMS records for review. Not a GST filing — reconcile with your CA and the GSTN portal before filing.</div>
       <div className="ims-paper-sign">
         <div className="ims-paper-sub">Generated {new Date().toLocaleString("en-IN")}</div>
         <div>

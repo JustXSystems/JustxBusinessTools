@@ -1,5 +1,5 @@
 /**
- * Typed client for the Justx BOS API (`/api/bos/*`). Shared by the JBT tool
+ * Typed client for the Justxsystems BOS API (`/api/bos/*`). Shared by the JBT tool
  * (`/tools/bos`), the standalone app (`/bos`) and any JBT tool that wants to
  * hand a record to BOS (`sendToBos`).
  */
@@ -22,7 +22,7 @@ export class BosApiError extends Error {
     return this.code === "BOS_SCHEMA_PENDING";
   }
 
-  /** BOS isn't Live for the caller's org yet (Admin → Tools → Justx BOS). */
+  /** BOS isn't Live for the caller's org yet (Admin → Tools → Justxsystems BOS). */
   get notEnabled(): boolean {
     return this.code === "BOS_NOT_ENABLED";
   }

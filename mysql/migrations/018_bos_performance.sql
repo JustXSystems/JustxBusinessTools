@@ -1,4 +1,4 @@
--- Justx BOS performance & learning: training catalog and enrollments, certifications, KRAs, promotions,
+-- Justxsystems BOS performance & learning: training catalog and enrollments, certifications, KRAs, promotions,
 -- performance improvement plans and recognition. Additive only (new bos_* tables). An employee record changes
 -- only when a manager approves a promotion and chooses to apply it.
 

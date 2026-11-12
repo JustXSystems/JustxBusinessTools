@@ -1,5 +1,5 @@
 /**
- * JustTestX narrative: a Bengaluru IT services company (mirrors Justx Systems shape).
+ * JustTestX narrative: a Bengaluru IT services company (mirrors Justxsystems shape).
  * Data window = rolling 1 year ending today (Asia/Kolkata).
  */
 import {

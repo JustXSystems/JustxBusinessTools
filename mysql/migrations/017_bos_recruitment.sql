@@ -1,4 +1,4 @@
--- Justx BOS recruitment & onboarding: openings, candidates through the hiring pipeline, offers and the joiner checklist.
+-- Justxsystems BOS recruitment & onboarding: openings, candidates through the hiring pipeline, offers and the joiner checklist.
 -- Additive only (new bos_* tables). An employee record is created only when a manager asks for it.
 
 -- status: draft | open | on_hold | closed. openings is the number of people to hire for the role.

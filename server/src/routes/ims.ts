@@ -5,7 +5,7 @@ import { jbtImsHost } from "../ims/hosts/jbt.js";
 import { bosCatalogSource } from "../ims/sources/bos-catalog.js";
 
 /**
- * Justx IMS-Dealer plugged into JBT: JBT sessions & notifications, approved Quotation V1
+ * Justxsystems IMS-Dealer plugged into JBT: JBT sessions & notifications, approved Quotation V1
  * quotes as sales-invoice sources, and the BOS catalog / party book as master-data source.
  */
 const imsRouter = createImsRouter({

@@ -372,7 +372,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
           keywords: "standalone fullscreen expand",
           onSelect: () => openFullscreen(current.key, nav.intent?.module === current.key ? nav.intent.value : null),
         }
-      : { id: "jbt", section: "Preferences", label: "Open Justx Business Tools", icon: "⤺", onSelect: () => window.location.assign(withBasePath("/")) },
+      : { id: "jbt", section: "Preferences", label: "Open Justxsystems Business Tools", icon: "⤺", onSelect: () => window.location.assign(withBasePath("/")) },
     {
       id: "nav-collapse",
       section: "Preferences",
@@ -386,7 +386,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
 
   const actorName = session.actor.name ?? session.actor.email ?? "You";
   const businessName = session.settings.businessName || session.brand?.name || "Your business";
-  /** Customer logo only for the nav mark (+ documents). Topbar stays Justx product branding. */
+  /** Customer logo only for the nav mark (+ documents). Topbar stays Justxsystems product branding. */
   const companyLogoSrc = session.brand?.logoUrl ? publicAssetUrl(session.brand.logoUrl) : undefined;
   const topbar = useAutohideTopbar();
   const Module = current.component;
@@ -409,7 +409,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
           onBlurCapture={topbar.onBlurCapture}
         >
           <Topbar sticky="desktop">
-            <Brand logoSrc={logoSrc} name="Justx IMS" sub={mode === "tool" ? "in Justx Business Tools" : "Dealer"} />
+            <Brand logoSrc={logoSrc} name="Justxsystems IMS" sub={mode === "tool" ? "in Justxsystems Business Tools" : "Dealer"} />
             <div className="bos-topbar-actions">
               <SearchInput
                 readOnly
@@ -481,11 +481,11 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
 
           <div className="ims-foot">
             <Footnote>
-              Justx IMS™ — Dealer · part of{" "}
+              Justxsystems IMS™ — Dealer · part of{" "}
               <a href={withBasePath("/")} target={mode === "tool" ? undefined : "_blank"} rel="noopener noreferrer">
-                Justx Business Tools
+                Justxsystems Business Tools
               </a>{" "}
-              · © 2026 Justx Systems. All Rights Reserved.
+              · © 2026 Justxsystems. All Rights Reserved.
             </Footnote>
           </div>
         </div>
@@ -533,7 +533,7 @@ function SessionGate({ mode, onSignOut }: { mode: ImsAppMode; onSignOut?: () => 
           <ErrorBlock error={state.error} onRetry={() => setAttempt((a) => a + 1)} />
         )
       ) : (
-        <div aria-busy="true" aria-label="Loading Justx IMS" className="bos-stack" style={{ "--bos-gap": "14px" } as CSSProperties}>
+        <div aria-busy="true" aria-label="Loading Justxsystems IMS" className="bos-stack" style={{ "--bos-gap": "14px" } as CSSProperties}>
           <Skeleton width="38%" height={14} />
           <Skeleton height={44} />
           <Skeleton height={220} />
@@ -574,7 +574,7 @@ class ShellBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 /**
- * Justx IMS — Dealer. Always renders with the IMS skin (glass, gradients, Inter),
+ * Justxsystems IMS — Dealer. Always renders with the IMS skin (glass, gradients, Inter),
  * whatever theme pack the org uses, and follows the host's light / dark scheme.
  */
 export function ImsApp({ mode, onSignOut }: { mode: ImsAppMode; onSignOut?: () => void }) {

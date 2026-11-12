@@ -186,15 +186,15 @@ export function ManagersOnly({ children }: { children: ReactNode }) {
 export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   if (error instanceof BosApiError && error.schemaPending) {
     return (
-      <Alert tone="amber" title="Justx BOS is being set up">
+      <Alert tone="amber" title="Justxsystems BOS is being set up">
         The BOS database tables haven&apos;t been created yet. Restart the API once so migration <span className="bos-code">010_bos_core.sql</span> runs, then reload.
       </Alert>
     );
   }
   if (error instanceof BosApiError && error.notEnabled) {
     return (
-      <Alert tone="blue" title="Justx BOS isn't enabled yet">
-        An administrator can turn it on in Admin → Tools (Justx BOS → Visible on home → Live, then Save placement).
+      <Alert tone="blue" title="Justxsystems BOS isn't enabled yet">
+        An administrator can turn it on in Admin → Tools (Justxsystems BOS → Visible on home → Live, then Save placement).
       </Alert>
     );
   }
@@ -349,7 +349,7 @@ export function LiveWorkspace({
       footer={<TimePill />}
       aria-label={label}
     >
-      <ModuleHeader title={current.title} sub={current.sub} brand={current.render ? "Justx BOS" : <Badge tone="blue" auto>COMING NEXT</Badge>} />
+      <ModuleHeader title={current.title} sub={current.sub} brand={current.render ? "Justxsystems BOS" : <Badge tone="blue" auto>COMING NEXT</Badge>} />
       <div key={`${current.key}:${navSeq}`} className={current.compact ? "bos-compact bos-fade-in" : "bos-fade-in"}>
         {current.render ? <Suspense fallback={<LoadingBlock />}>{current.render()}</Suspense> : current.preview ? <PreviewModule spec={current.preview} /> : null}
       </div>

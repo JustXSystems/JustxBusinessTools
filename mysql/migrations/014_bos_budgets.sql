@@ -1,4 +1,4 @@
--- Justx BOS budgeting: one budget per financial year and basis, with a monthly plan per head.
+-- Justxsystems BOS budgeting: one budget per financial year and basis, with a monthly plan per head.
 -- Additive only (new bos_* tables). Actual spend is read from bills, expenses and payroll; nothing is copied.
 
 -- basis: category (heads are spend categories plus payroll) | department (heads are departments plus company-wide).

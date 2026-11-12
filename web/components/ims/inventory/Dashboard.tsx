@@ -85,7 +85,7 @@ function Onboarding({ can, navigate }: { can: (p: ImsPermission) => boolean; nav
   const steps = [
     can("items") ? { ic: "📦", title: "Add your first item", sub: "Name, price, GST and opening stock", go: () => navigate("items", "new") } : null,
     can("items") ? { ic: "📄", title: "Import from Excel", sub: "Bring your whole catalogue in one go", go: () => navigate("items", "import") } : null,
-    { ic: "⧉", title: "Import from BOS", sub: "Reuse products from Justx BOS / Quotations", go: () => navigate("connect") },
+    { ic: "⧉", title: "Import from BOS", sub: "Reuse products from Justxsystems BOS / Quotations", go: () => navigate("connect") },
     can("suppliers") ? { ic: "🚚", title: "Add suppliers", sub: "Needed for purchase orders and restock", go: () => navigate("parties", "new") } : null,
   ].filter((s): s is NonNullable<typeof s> => s !== null);
   return (

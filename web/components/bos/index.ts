@@ -1,5 +1,5 @@
 /**
- * Justx BOS Design System — public surface.
+ * Justxsystems BOS Design System — public surface.
  *
  * Wrap any surface in <BosRoot> to opt in; everything is scoped under `.bos`
  * so existing JBT screens are unaffected. See docs/BOS_DESIGN_SYSTEM.md.

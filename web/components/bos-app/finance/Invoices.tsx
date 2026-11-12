@@ -89,7 +89,7 @@ export function InvoicePaper({ settings, doc }: { settings: BosSettings; doc: Pa
         <div>
           <div className="bos-inv-paper-brand">{settings.companyName || "Your Company"}</div>
           {seller ? <div className="bos-inv-paper-seller">{seller}</div> : null}
-          <div className="bos-inv-paper-powered">Powered by Justx BOS</div>
+          <div className="bos-inv-paper-powered">Powered by Justxsystems BOS</div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div className="bos-inv-paper-title">{doc.title ?? (settings.gstin ? "TAX INVOICE" : "INVOICE")}</div>

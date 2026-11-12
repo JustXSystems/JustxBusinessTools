@@ -275,7 +275,7 @@ function HomeDashboard({ goHome }: { goHome: () => void }) {
 
   return (
     <>
-      <Breadcrumbs items={[{ label: "Justx BOS", onClick: goHome }, { label: "Dashboard" }]} />
+      <Breadcrumbs items={[{ label: "Justxsystems BOS", onClick: goHome }, { label: "Dashboard" }]} />
       <div className="bos-greeting">
         {greetingFor()}, {first} 👋
       </div>
@@ -328,7 +328,7 @@ export function HomeWorkspace() {
   return (
     <AppShell
       aria-label="Workspace navigation"
-      brand={<NavBrand name={session.brand?.name || session.settings.companyName || "Justx BOS"} logoSrc={logoSrc} />}
+      brand={<NavBrand name={session.brand?.name || session.settings.companyName || "Justxsystems BOS"} logoSrc={logoSrc} />}
       onSearch={openPalette}
       footer={<TimePill />}
       items={NAV.map((n) => ({ key: n.key, label: n.label, section: n.section, icon: <BosIcon name={n.icon} /> }))}

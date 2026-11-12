@@ -1,6 +1,6 @@
-# Justx BOS — Business Operating System
+# Justxsystems BOS — Business Operating System
 
-A working business application (Finance, HR, Projects) built on the [BOS design system](BOS_DESIGN_SYSTEM.md). The UI follows the **Justx BOS Design** reference tool (`/tools/bosdesign`) screen for screen. The difference is that every live screen reads and writes real data.
+A working business application (Finance, HR, Projects) built on the [BOS design system](BOS_DESIGN_SYSTEM.md). The UI follows the **Justxsystems BOS Design** reference tool (`/tools/bosdesign`) screen for screen. The difference is that every live screen reads and writes real data.
 
 One codebase, two entry points, same data:
 
@@ -336,7 +336,7 @@ Quotation V1 and Site Survey V1 can show a **Send to BOS** button. These tools a
 | `bos.handoff.quotationv1` | Quotation editor actions, next to Email | Customer + draft GST invoice |
 | `bos.handoff.sitesurveyv1` | Submitted survey screen, next to Email | Customer + project lead |
 
-- **Turn on:** Admin → Tools → **Justx BOS** → Placement → *Switches*. Changes reach open screens within a minute (config refresh).
+- **Turn on:** Admin → Tools → **Justxsystems BOS** → Placement → *Switches*. Changes reach open screens within a minute (config refresh).
 - **Shown only when** the switch is on, BOS is Live for the org, and the record has been saved. Drafts, rejected quotations and unsaved edits show a disabled button with the reason. If BOS can't be reached, the button stays hidden and the host tool is unaffected.
 - **Once sent**, the button becomes **Open in BOS** and deep-links to the invoice or project. Imports go through the same idempotent connector, so a record is never created twice.
 - **Storage:** `org_feature_switches` (migration 011), keyed by org and switch. No row means off. `GET /api/admin/features` lists the switches and `PUT /api/admin/features/:key {enabled}` sets one (admins only, audited, bumps `config_version`). `/api/config/effective` exposes them as `features`, and the web reads them with `useFeatureSwitch(key)`.
@@ -361,9 +361,9 @@ The BOS API reads these through the optional `BosHost.feature(actor, key)` hook,
 BOS is **opt-in and hidden by default**. Existing customers see nothing until an admin enables it.
 
 1. Restart the API once after deploying. Migration 010 is applied on start.
-2. Go to Admin → Tools → **Justx BOS** → Placement, set **Visible on home** to **Live**, then **Save placement**. The catalog row is seeded with `available = 0`.
+2. Go to Admin → Tools → **Justxsystems BOS** → Placement, set **Visible on home** to **Live**, then **Save placement**. The catalog row is seeded with `available = 0`.
 3. Users then find it under *Utilities* (`/tools/bos`), and `/bos` opens the full-screen app.
-4. Optional, when the team is ready: turn on automatic sync (BOS Settings → Integrations), the Send to BOS switches, POS counter billing, private expense claims and own-only deletes (Admin → Tools → Justx BOS → Switches).
+4. Optional, when the team is ready: turn on automatic sync (BOS Settings → Integrations), the Send to BOS switches, POS counter billing, private expense claims and own-only deletes (Admin → Tools → Justxsystems BOS → Switches).
 
 `/bos` checks the same catalog flag. A signed-in user whose org hasn't enabled BOS sees a "not enabled yet" screen; platform admins always have access.
 

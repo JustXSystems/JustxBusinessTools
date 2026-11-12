@@ -192,7 +192,7 @@ export function ProjectsWorkspace() {
       active={nav.active}
       onSelect={nav.onSelect}
       navSeq={nav.navSeq}
-      brandName={session.brand?.name || session.settings.companyName || "Justx Projects"}
+      brandName={session.brand?.name || session.settings.companyName || "Justxsystems Projects"}
       logoSrc={logoSrc}
       onSearch={openPalette}
       label="Project modules"

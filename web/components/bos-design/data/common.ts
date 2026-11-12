@@ -39,7 +39,7 @@ export const SAMPLE_CALENDAR_EVENTS: BosCalendarEvent[] = [
 export const SAMPLE_TODAY = new Date(2026, 6, 27);
 
 export const INVOICE_DEFAULTS = {
-  from: "Justx Systems",
+  from: "Justxsystems",
   to: "Meridian Solar EPC",
   number: "INV-2026-0442",
   taxRate: "18",

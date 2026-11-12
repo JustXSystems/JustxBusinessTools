@@ -22,7 +22,7 @@ This policy explains the leave available to employees of {company} and how to us
 • Loss of pay (LOP) leave when no balance is left, with your manager's approval.
 
 3. Applying for leave
-Apply in Justx BOS as early as you can — at least 3 working days ahead for planned leave. For sickness, apply on the day or as soon as you are able to.
+Apply in Justxsystems BOS as early as you can — at least 3 working days ahead for planned leave. For sickness, apply on the day or as soon as you are able to.
 
 4. Approval
 Your manager or HR approves or declines each request. Leave isn't confirmed until it's approved.
@@ -121,7 +121,7 @@ Anyone found to have harassed will face action under the service rules, up to te
     mandatory: false,
     summary: "How to request work travel, what's covered, and how to claim expenses.",
     body: `1. Before you travel
-Raise a travel request in Justx BOS (HR → Expenses & Assets) with the purpose, dates and estimated cost. Travel needs approval before you book.
+Raise a travel request in Justxsystems BOS (HR → Expenses & Assets) with the purpose, dates and estimated cost. Travel needs approval before you book.
 
 2. What's covered
 • Travel by the agreed mode (bus, train, flight or car).

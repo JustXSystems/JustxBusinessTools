@@ -1,4 +1,4 @@
-# Justx IMS theme
+# Justxsystems IMS theme
 
 The IMS theme is the visual language of the IMS Distributor template
 (blue → cyan gradient actions, frosted-glass surfaces on a periwinkle canvas,

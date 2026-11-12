@@ -56,7 +56,7 @@ export type BosRootProps = {
 };
 
 /**
- * Opt-in boundary for the Justx BOS design system. Everything inside gets the
+ * Opt-in boundary for the Justxsystems BOS design system. Everything inside gets the
  * BOS tokens + classes; nothing outside is affected.
  */
 export function BosRoot({

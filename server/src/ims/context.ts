@@ -27,13 +27,13 @@ export type ImsAccess = {
 
 export function actorOf(res: Response): ImsActor {
   const actor = res.locals.imsActor as ImsActor | undefined;
-  if (!actor) throw new ImsError(401, "Sign in to use Justx IMS");
+  if (!actor) throw new ImsError(401, "Sign in to use Justxsystems IMS");
   return actor;
 }
 
 export function accessOf(res: Response): ImsAccess {
   const access = res.locals.imsAccess as ImsAccess | undefined;
-  if (!access) throw new ImsError(401, "Sign in to use Justx IMS");
+  if (!access) throw new ImsError(401, "Sign in to use Justxsystems IMS");
   return access;
 }
 

@@ -1,4 +1,4 @@
--- Justx BOS project tasks and milestones (Projects → Tasks). Additive only (new bos_* tables).
+-- Justxsystems BOS project tasks and milestones (Projects → Tasks). Additive only (new bos_* tables).
 
 -- status: open | done. done_on is the day it was marked done.
 CREATE TABLE IF NOT EXISTS bos_project_milestones (

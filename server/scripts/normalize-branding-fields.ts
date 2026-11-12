@@ -1,6 +1,6 @@
 /**
  * One-shot: ensure platform_config.branding has canonical Justxsystems fields
- * after the case-sensitive JustX* → Justxsystems rename.
+ * after the case-sensitive JustX* / Justx* → Justxsystems rename.
  */
 import "dotenv/config";
 import {

@@ -5,7 +5,7 @@ import { quotationV1Connector } from "../bos/connectors/quotation-v1.js";
 import { siteSurveyV1Connector } from "../bos/connectors/site-survey-v1.js";
 import { imsDealerConnector } from "../bos/connectors/ims-dealer.js";
 
-/** Justx BOS plugged into JBT: JBT sessions & notifications, Quotation V1 + Site Survey V1 connectors. */
+/** Justxsystems BOS plugged into JBT: JBT sessions & notifications, Quotation V1 + Site Survey V1 connectors. */
 const bosRouter = createBosRouter({
   db: pool,
   host: jbtHost,

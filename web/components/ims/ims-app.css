@@ -1,5 +1,5 @@
 /*
- * Justx IMS-Dealer app layouts — only what the BOS kit doesn't already provide.
+ * Justxsystems IMS-Dealer app layouts — only what the BOS kit doesn't already provide.
  * Scoped under `.bos`; colours come from kit tokens so the IMS skin (and dark mode) apply.
  * Fallbacks keep the layouts readable under the plain BOS skin.
  */
@@ -26,7 +26,7 @@
 .bos .ims-page-sub { margin: 6px 0 0; font-size: 13.5px; color: var(--bos-text-muted); max-width: 720px; }
 .bos .ims-page-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-/* Topbar — Justx product chrome; autohide while scrolled for max workspace */
+/* Topbar — Justxsystems product chrome; autohide while scrolled for max workspace */
 .bos .ims-topbar-label { margin-left: 4px; }
 .bos .ims-topbar-hotzone {
   position: fixed;

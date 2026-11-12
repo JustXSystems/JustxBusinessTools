@@ -1,4 +1,4 @@
--- Justx BOS (Business Operating System) core schema.
+-- Justxsystems BOS (Business Operating System) core schema.
 -- Self-contained: every table is prefixed bos_ and scoped by tenant_id (the JBT business profile id).
 -- There are no foreign keys into JBT tables, so the schema can be lifted into its own database
 -- and run by a standalone BOS host. Purely additive: nothing existing is altered.

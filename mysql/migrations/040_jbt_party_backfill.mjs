@@ -1,5 +1,5 @@
 /**
- * Backfill Justx Party Registry from IMS, BOS, and Quotation V1, then make
+ * Backfill Justxsystems Party Registry from IMS, BOS, and Quotation V1, then make
  * `ims_parties` an updatable view over `jbt_parties` so existing IMS SQL keeps working.
  *
  * Matching order: GSTIN → phone (last 10) → exact name (case-insensitive).

@@ -1,5 +1,5 @@
 /**
- * Turn Justx IMS — Dealer Live for JustTestX (no data wipe).
+ * Turn Justxsystems IMS — Dealer Live for JustTestX (no data wipe).
  *
  *   JUSTTESTX_CONFIRM=YES npm run db:enable:justtestx:ims -w server
  */
@@ -9,7 +9,7 @@ import { COMPANY, enableImsDealer, findJustTestXProfile, q, requireConfirm, with
 import { OWNER_NAME } from "./ims-scenario.js";
 
 async function main() {
-  requireConfirm("enable Justx IMS — Dealer (Live) for JustTestX");
+  requireConfirm("enable Justxsystems IMS — Dealer (Live) for JustTestX");
 
   const found = await findJustTestXProfile();
   if (!found) {

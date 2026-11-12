@@ -18,7 +18,7 @@ export type BosDeps = {
 
 export function actorOf(res: Response): BosActor {
   const actor = res.locals.bosActor as BosActor | undefined;
-  if (!actor) throw new BosError(401, "Sign in to use Justx BOS");
+  if (!actor) throw new BosError(401, "Sign in to use Justxsystems BOS");
   return actor;
 }
 

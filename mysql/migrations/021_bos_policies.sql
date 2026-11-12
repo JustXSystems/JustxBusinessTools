@@ -1,4 +1,4 @@
--- Justx BOS HR policies & compliance (HR → Policies & Compliance): the policy library with versioned
+-- Justxsystems BOS HR policies & compliance (HR → Policies & Compliance): the policy library with versioned
 -- acknowledgements, the statutory compliance calendar, and the agreements register. Additive only (new bos_* tables).
 
 -- category: hr | compliance | finance | it | safety | other. status: draft | published | archived.

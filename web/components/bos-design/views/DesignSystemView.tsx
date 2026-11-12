@@ -246,9 +246,9 @@ function NavigationDemo({ logoSrc }: { logoSrc: string }) {
   ];
   const label = items.find((i) => i.key === active)?.label ?? "";
   return (
-    <AppShell size="fixed" brand={<NavBrand name="Justx BOS" logoSrc={logoSrc} />} items={items} active={active} onSelect={setActive} onSearch={() => undefined} aria-label="Demo navigation">
+    <AppShell size="fixed" brand={<NavBrand name="Justxsystems BOS" logoSrc={logoSrc} />} items={items} active={active} onSelect={setActive} onSearch={() => undefined} aria-label="Demo navigation">
       <div className="bos-row-between" style={{ marginBottom: 16 }}>
-        <Breadcrumbs items={[{ label: "Justx BOS", onClick: () => setActive("dashboard") }, { label }]} />
+        <Breadcrumbs items={[{ label: "Justxsystems BOS", onClick: () => setActive("dashboard") }, { label }]} />
         <div className="bos-row" style={{ gap: 10 }}>
           <TimePill />
           <IconButton icon="bell" dot aria-label="Notifications" />
@@ -275,20 +275,20 @@ export function DesignSystemView({ logoSrc, onOpenLaunch }: { logoSrc: string; o
   return (
     <>
       <Hero
-        eyebrow="Justx BOS · Soft System"
+        eyebrow="Justxsystems BOS · Soft System"
         title="Calm, soft, and effortless."
-        lede="The Justx BOS design system: soft shadows instead of glass or emboss, low-saturation accents, generous rounding, and gentle 150–250ms motion everywhere. Every component below is a live React component from @/components/bos — toggle Light/Dark in the top bar to see the same calm philosophy carried into dark mode."
+        lede="The Justxsystems BOS design system: soft shadows instead of glass or emboss, low-saturation accents, generous rounding, and gentle 150–250ms motion everywhere. Every component below is a live React component from @/components/bos — toggle Light/Dark in the top bar to see the same calm philosophy carried into dark mode."
       />
 
-      <Section id="brand" num="00 — Brand" title="Same mark, new light" description="The Justx Systems glyph on white — it needs to hold up without the dark canvas and glow it was designed against.">
+      <Section id="brand" num="00 — Brand" title="Same mark, new light" description="The Justxsystems glyph on white — it needs to hold up without the dark canvas and glow it was designed against.">
         <Card className="bos-brand-card">
           {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset under the app base path */}
-          <img src={logoSrc} alt="Justx BOS" />
+          <img src={logoSrc} alt="Justxsystems BOS" />
           <div className="bos-text-h2" style={{ fontSize: 16 }}>
-            Justx BOS
+            Justxsystems BOS
           </div>
           <div className="bos-overline" style={{ marginTop: 2 }}>
-            Powered by Justx Systems
+            Powered by Justxsystems
           </div>
         </Card>
       </Section>
@@ -562,7 +562,7 @@ export function DesignSystemView({ logoSrc, onOpenLaunch }: { logoSrc: string; o
         id="login"
         num="10 — Login & Onboarding"
         title="Splash → sign in → home, one flow"
-        description="Single column throughout: logo scale-in, “Welcome to Justx,” the tenant sign-in, then a home dashboard with the signed-in user's profile front and center."
+        description="Single column throughout: logo scale-in, “Welcome to Justxsystems,” the tenant sign-in, then a home dashboard with the signed-in user's profile front and center."
       >
         <Button variant="primary" icon="login" onClick={onOpenLaunch}>
           Open the Launch &amp; Login workspace

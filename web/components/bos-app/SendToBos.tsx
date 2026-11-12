@@ -22,7 +22,7 @@ type Lookup = { key: string; linkedId: string | null; failed: boolean };
 
 /**
  * "Send to BOS" for another JBT tool. Renders nothing unless an admin has turned on the tool's
- * switch and Justx BOS is Live for the org; once sent, it becomes "Open in BOS".
+ * switch and Justxsystems BOS is Live for the org; once sent, it becomes "Open in BOS".
  */
 export function SendToBos({ tool, recordId, status, saved, className, onFlash }: Props) {
   const spec = HANDOFF[tool];
@@ -51,7 +51,7 @@ export function SendToBos({ tool, recordId, status, saved, className, onFlash }:
   const linkedId = lookup.linkedId;
   if (linkedId) {
     return (
-      <button type="button" className={className} title={`Open the ${spec.creates} in Justx BOS`} onClick={() => router.push(spec.openHref(linkedId))}>
+      <button type="button" className={className} title={`Open the ${spec.creates} in Justxsystems BOS`} onClick={() => router.push(spec.openHref(linkedId))}>
         Open in BOS ↗
       </button>
     );
@@ -76,7 +76,7 @@ export function SendToBos({ tool, recordId, status, saved, className, onFlash }:
   }
 
   return (
-    <button type="button" className={className} disabled={busy || blocked !== null} title={blocked ?? `Create a ${spec.creates} (and the customer) in Justx BOS`} onClick={() => void send()}>
+    <button type="button" className={className} disabled={busy || blocked !== null} title={blocked ?? `Create a ${spec.creates} (and the customer) in Justxsystems BOS`} onClick={() => void send()}>
       {busy ? "Sending…" : "Send to BOS"}
     </button>
   );

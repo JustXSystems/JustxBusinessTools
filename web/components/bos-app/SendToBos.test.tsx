@@ -73,7 +73,7 @@ describe("SendToBos", () => {
     expect(calls).toEqual([]);
   });
 
-  it("stays hidden until Justx BOS itself is Live", async () => {
+  it("stays hidden until Justxsystems BOS itself is Live", async () => {
     config.catalog = [{ id: "bos", available: false }];
     renderButton();
     await flush();

@@ -1,4 +1,4 @@
--- Justx BOS: indexes for invoice queries by date (the invoice list order, this month's totals, reports and the
+-- Justxsystems BOS: indexes for invoice queries by date (the invoice list order, this month's totals, reports and the
 -- POS counter's bills for today). Index-only: no data changes, and the runner skips an index that already exists.
 -- InnoDB builds secondary indexes online (ALGORITHM=INPLACE, LOCK=NONE), so the table stays readable and writable.
 

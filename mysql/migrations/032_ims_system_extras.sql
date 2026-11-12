@@ -1,4 +1,4 @@
--- Justx IMS-Dealer: system, compliance & interop extras (excise register details, auditor assignments and
+-- Justxsystems IMS-Dealer: system, compliance & interop extras (excise register details, auditor assignments and
 -- verdicts on auto-detected issues, document attachments, bank import batches). Additive only: every column is
 -- nullable or defaulted, and the runner skips a column or index that already exists.
 

@@ -1,4 +1,4 @@
--- Justx IMS — sales & finance extras (additive).
+-- Justxsystems IMS — sales & finance extras (additive).
 
 -- Invoices: round-off preference, per-invoice auto reminders, dispute reason and lifecycle stamps.
 ALTER TABLE ims_invoices ADD COLUMN round_to_rupee TINYINT(1) NOT NULL DEFAULT 0;

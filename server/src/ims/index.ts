@@ -36,7 +36,7 @@ export type CreateImsRouterOptions = {
 };
 
 /**
- * Justx IMS-Dealer API as a self-contained Express router.
+ * Justxsystems IMS-Dealer API as a self-contained Express router.
  *
  *   app.use("/api/ims", createImsRouter({ db, host, sources, catalogs }))
  *
@@ -52,12 +52,12 @@ export function createImsRouter({ db, host, sources = [], catalogs = [] }: Creat
     try {
       const actor = await host.actor(req);
       if (!actor) {
-        res.status(401).json({ error: "Sign in to use Justx IMS" });
+        res.status(401).json({ error: "Sign in to use Justxsystems IMS" });
         return;
       }
       if (host.enabled && !(await host.enabled(actor))) {
         res.status(403).json({
-          error: "Justx IMS — Dealer isn't enabled for this organization yet. An administrator can turn it on in Admin → Tools.",
+          error: "Justxsystems IMS — Dealer isn't enabled for this organization yet. An administrator can turn it on in Admin → Tools.",
           code: "IMS_NOT_ENABLED",
         });
         return;
@@ -75,7 +75,7 @@ export function createImsRouter({ db, host, sources = [], catalogs = [] }: Creat
     const enabled = res.locals.imsEnabledModules as string[] | null | undefined;
     if (!pathAllowedForModules(req.path, enabled)) {
       res.status(403).json({
-        error: "This IMS module isn't enabled for this business profile. Ask a platform admin to turn it on under Admin → Tools → Justx IMS → Modules.",
+        error: "This IMS module isn't enabled for this business profile. Ask a platform admin to turn it on under Admin → Tools → Justxsystems IMS → Modules.",
         code: "IMS_MODULE_DISABLED",
       });
       return;
@@ -126,7 +126,7 @@ export function createImsRouter({ db, host, sources = [], catalogs = [] }: Creat
     const code = (err as { code?: string }).code;
     if (code === "ER_NO_SUCH_TABLE") {
       res.status(503).json({
-        error: "Justx IMS is still being set up — the database migration hasn't run yet. Restart the API to apply it.",
+        error: "Justxsystems IMS is still being set up — the database migration hasn't run yet. Restart the API to apply it.",
         code: "IMS_SCHEMA_PENDING",
       });
       return;
