@@ -340,6 +340,15 @@ export const bom = {
   createProposal: (id: string) =>
     post<{ token: string; proposalPath: string; proposalUrl: string; whatsappUrl: string; doc: BomDoc }>(`/bom/docs/${id}/proposal`),
   revokeProposal: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/proposal/revoke`),
+  createPosFromShortfall: (id: string) =>
+    post<{ orders: Array<{ id: string; poNo: string; supplierName: string; status: string; grandTotal?: number }> }>(`/bom/docs/${id}/create-pos`),
+  rateCards: () =>
+    get<{
+      rateCards: Array<{ id: string; code: string | null; name: string; active: boolean; validFrom: string | null; validTo: string | null }>;
+    }>("/bom/rate-cards"),
+  rateCard: (id: string) => get<{ rateCard: { id: string; name: string; lines: unknown[] } }>(`/bom/rate-cards/${id}`),
+  applyRateCard: (docId: string, rateCardId: string) =>
+    post<{ doc: BomDoc; matched: number }>(`/bom/docs/${docId}/apply-rate-card`, { rateCardId }),
   uploadPdf: (id: string, pdfBase64: string) => post<{ sha256: string; artifactId: string; doc: BomDoc }>(`/bom/docs/${id}/pdf`, { pdfBase64 }),
   downloadPdf: (id: string) => get<{ sha256: string; pdfBase64: string }>(`/bom/docs/${id}/pdf`),
   asBuilt: (id: string) =>

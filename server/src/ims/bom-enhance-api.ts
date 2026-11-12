@@ -7,6 +7,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   applyPartialIssue,
+  applyRateCardRates,
   computeAsBuiltVariance,
   computeCostRollup,
   defaultVariablesFromCapacity,
@@ -15,12 +16,17 @@ import {
   evalQtyFormula,
   evaluateConfirmGates,
   FORMULA_PRESETS,
+  matchRateCardToBomLines,
   proposalWhatsAppUrl,
   type GateLine,
 } from "./bom-enhance.js";
-import { actorOf, optText, parse, recordEvent, requirePerm, type ImsDeps } from "./context.js";
-import { exec, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
+import { actorName, actorOf, optText, parse, recordEvent, requirePerm, type ImsDeps } from "./context.js";
+import { exec, isoOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
 import { badRequest, conflict, notFound } from "./host.js";
+import { computeTotals, formatINR, isIntraStateSupply, round2, round3, todayISO } from "./logic.js";
+import { loadParty } from "./parties.js";
+import { getSettings } from "./settings.js";
+import { nextDocNo } from "./stock.js";
 
 export type BomEnhanceDoc = {
   id: string;
@@ -29,7 +35,9 @@ export type BomEnhanceDoc = {
   customerName: string;
   capacityLabel: string | null;
   marginPct: number;
+  taxPct?: number;
   revision?: number;
+  rateCardId?: string | null;
   lines?: BomEnhanceDocLine[];
 };
 
@@ -39,10 +47,12 @@ export type BomEnhanceDocLine = {
   sortNo: number;
   lineKind: string;
   itemId: string | null;
+  itemSku?: string | null;
   description: string;
   qty: number;
   unit: string;
   rate: number;
+  amount?: number;
   scaleByCapacity: boolean;
   costRate?: number | null;
   scrapPct?: number;
@@ -533,6 +543,592 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
     if (!pkg) throw notFound("Package not found");
     const lines = (pkg.lines ?? []).filter((l) => l.serviceSpare || l.lineKind === "service");
     res.json({ lines, count: lines.length });
+  });
+
+  /* ---------- Rate cards ---------- */
+
+  const rateCardLineInput = z.object({
+    id: z.string().uuid().optional(),
+    itemId: z.string().uuid().nullable().optional(),
+    sku: optText(80),
+    description: optText(500),
+    unit: z.string().trim().min(1).max(24).default("nos"),
+    rate: z.coerce.number().min(0).max(1e12),
+    costRate: z.coerce.number().min(0).max(1e12).nullable().optional(),
+    sortNo: z.coerce.number().int().min(0).max(99999).optional(),
+    active: z.boolean().optional(),
+  });
+
+  const rateCardInput = z.object({
+    code: optText(40),
+    name: z.string().trim().min(1).max(200),
+    currency: z.string().trim().min(1).max(8).default("INR"),
+    validFrom: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    validTo: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    active: z.boolean().optional(),
+    notes: optText(4000),
+    lines: z.array(rateCardLineInput).max(2000).default([]),
+  });
+
+  type RateCardRow = {
+    id: string;
+    code: string | null;
+    name: string;
+    currency: string;
+    valid_from: string | null;
+    valid_to: string | null;
+    active: number;
+    notes: string | null;
+    created_by_name: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+
+  type RateCardLineRow = {
+    id: string;
+    rate_card_id: string;
+    item_id: string | null;
+    sku: string | null;
+    description: string | null;
+    unit: string;
+    rate: string;
+    cost_rate: string | null;
+    sort_no: number;
+    active: number;
+  };
+
+  const mapRateCardLine = (r: RateCardLineRow) => ({
+    id: r.id,
+    rateCardId: r.rate_card_id,
+    itemId: r.item_id,
+    sku: r.sku,
+    description: r.description,
+    unit: r.unit,
+    rate: round2(money(r.rate)),
+    costRate: r.cost_rate == null ? null : round2(money(r.cost_rate)),
+    sortNo: Number(r.sort_no),
+    active: Boolean(r.active),
+  });
+
+  const mapRateCard = (r: RateCardRow, lines?: ReturnType<typeof mapRateCardLine>[]) => ({
+    id: r.id,
+    code: r.code,
+    name: r.name,
+    currency: r.currency,
+    validFrom: r.valid_from ? isoOf(r.valid_from) : null,
+    validTo: r.valid_to ? isoOf(r.valid_to) : null,
+    active: Boolean(r.active),
+    notes: r.notes,
+    createdByName: r.created_by_name,
+    createdAt: tsOf(r.created_at),
+    updatedAt: tsOf(r.updated_at),
+    lines: lines ?? undefined,
+    lineCount: lines?.length,
+  });
+
+  async function loadRateCardLines(db: Queryable, tenantId: number, rateCardId: string) {
+    const list = await rows<RateCardLineRow>(
+      db,
+      `SELECT * FROM ims_bom_rate_card_lines
+       WHERE tenant_id = :tenantId AND rate_card_id = :rateCardId
+       ORDER BY sort_no ASC, created_at ASC`,
+      { tenantId, rateCardId },
+    );
+    return list.map(mapRateCardLine);
+  }
+
+  async function loadRateCard(db: Queryable, tenantId: number, id: string) {
+    const r = await one<RateCardRow>(
+      db,
+      `SELECT * FROM ims_bom_rate_cards WHERE tenant_id = :tenantId AND id = :id LIMIT 1`,
+      { tenantId, id },
+    );
+    if (!r) return null;
+    return mapRateCard(r, await loadRateCardLines(db, tenantId, id));
+  }
+
+  async function replaceRateCardLines(
+    db: Queryable,
+    tenantId: number,
+    rateCardId: string,
+    lines: z.infer<typeof rateCardLineInput>[],
+  ) {
+    await exec(db, `DELETE FROM ims_bom_rate_card_lines WHERE tenant_id = :tenantId AND rate_card_id = :rateCardId`, {
+      tenantId,
+      rateCardId,
+    });
+    let sort = 0;
+    for (const l of lines) {
+      await exec(
+        db,
+        `INSERT INTO ims_bom_rate_card_lines
+          (id, tenant_id, rate_card_id, item_id, sku, description, unit, rate, cost_rate, sort_no, active)
+         VALUES
+          (:id, :tenantId, :rateCardId, :itemId, :sku, :description, :unit, :rate, :costRate, :sortNo, :active)`,
+        {
+          id: l.id ?? randomUUID(),
+          tenantId,
+          rateCardId,
+          itemId: l.itemId ?? null,
+          sku: l.sku ?? null,
+          description: l.description ?? null,
+          unit: l.unit,
+          rate: round2(l.rate),
+          costRate: l.costRate == null ? null : round2(l.costRate),
+          sortNo: l.sortNo ?? sort,
+          active: l.active === false ? 0 : 1,
+        },
+      );
+      sort += 1;
+    }
+  }
+
+  router.get("/bom/rate-cards", async (_req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const list = await rows<RateCardRow & { line_count: number }>(
+      deps.db,
+      `SELECT c.*,
+          (SELECT COUNT(*) FROM ims_bom_rate_card_lines l WHERE l.tenant_id = c.tenant_id AND l.rate_card_id = c.id) AS line_count
+       FROM ims_bom_rate_cards c
+       WHERE c.tenant_id = :tenantId AND c.active = 1
+       ORDER BY c.name ASC, c.created_at DESC`,
+      { tenantId: actor.tenantId },
+    );
+    res.json({
+      rateCards: list.map((r) => ({
+        ...mapRateCard(r),
+        lineCount: Number(r.line_count ?? 0),
+      })),
+    });
+  });
+
+  router.get("/bom/rate-cards/:id", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const card = await loadRateCard(deps.db, actor.tenantId, String(req.params.id));
+    if (!card) throw notFound("Rate card");
+    res.json({ rateCard: card });
+  });
+
+  router.post("/bom/rate-cards", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const input = parse(rateCardInput, req.body);
+    const id = randomUUID();
+    await tx(deps.db, async (conn) => {
+      await exec(
+        conn,
+        `INSERT INTO ims_bom_rate_cards
+          (id, tenant_id, code, name, currency, valid_from, valid_to, active, notes, created_by, created_by_name)
+         VALUES
+          (:id, :tenantId, :code, :name, :currency, :validFrom, :validTo, :active, :notes, :createdBy, :createdByName)`,
+        {
+          id,
+          tenantId: actor.tenantId,
+          code: input.code ?? null,
+          name: input.name,
+          currency: input.currency,
+          validFrom: input.validFrom ?? null,
+          validTo: input.validTo ?? null,
+          active: input.active === false ? 0 : 1,
+          notes: input.notes ?? null,
+          createdBy: actor.userId,
+          createdByName: actorName(actor),
+        },
+      );
+      await replaceRateCardLines(conn, actor.tenantId, id, input.lines);
+    });
+    await recordEvent(deps, actor, {
+      type: "bom.rate_card.created",
+      entityType: "bom_rate_card",
+      entityId: id,
+      summary: `Created rate card ${input.name}`,
+      payload: { name: input.name, lines: input.lines.length },
+    });
+    res.status(201).json({ rateCard: await loadRateCard(deps.db, actor.tenantId, id) });
+  });
+
+  router.put("/bom/rate-cards/:id", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const id = String(req.params.id);
+    const existing = await loadRateCard(deps.db, actor.tenantId, id);
+    if (!existing) throw notFound("Rate card");
+    const input = parse(rateCardInput, req.body);
+    await tx(deps.db, async (conn) => {
+      const updated = await exec(
+        conn,
+        `UPDATE ims_bom_rate_cards SET
+           code = :code, name = :name, currency = :currency, valid_from = :validFrom, valid_to = :validTo,
+           active = :active, notes = :notes
+         WHERE tenant_id = :tenantId AND id = :id`,
+        {
+          id,
+          tenantId: actor.tenantId,
+          code: input.code ?? null,
+          name: input.name,
+          currency: input.currency,
+          validFrom: input.validFrom ?? null,
+          validTo: input.validTo ?? null,
+          active: input.active === false ? 0 : 1,
+          notes: input.notes ?? null,
+        },
+      );
+      if (!updated.affectedRows) throw conflict("Rate card changed — reload and try again");
+      await replaceRateCardLines(conn, actor.tenantId, id, input.lines);
+    });
+    await recordEvent(deps, actor, {
+      type: "bom.rate_card.updated",
+      entityType: "bom_rate_card",
+      entityId: id,
+      summary: `Updated rate card ${input.name}`,
+      payload: { name: input.name, lines: input.lines.length },
+    });
+    res.json({ rateCard: await loadRateCard(deps.db, actor.tenantId, id) });
+  });
+
+  router.delete("/bom/rate-cards/:id", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const id = String(req.params.id);
+    const existing = await loadRateCard(deps.db, actor.tenantId, id);
+    if (!existing) throw notFound("Rate card");
+    await exec(
+      deps.db,
+      `UPDATE ims_bom_rate_cards SET active = 0 WHERE tenant_id = :tenantId AND id = :id`,
+      { tenantId: actor.tenantId, id },
+    );
+    await recordEvent(deps, actor, {
+      type: "bom.rate_card.deactivated",
+      entityType: "bom_rate_card",
+      entityId: id,
+      summary: `Deactivated rate card ${existing.name}`,
+      payload: { name: existing.name },
+    });
+    res.json({ rateCard: await loadRateCard(deps.db, actor.tenantId, id) });
+  });
+
+  router.post("/bom/docs/:id/apply-rate-card", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const id = String(req.params.id);
+    const body = parse(z.object({ rateCardId: z.string().uuid() }), req.body);
+    const doc = await loaders.loadDoc(deps.db, actor.tenantId, id);
+    if (!doc) throw notFound("BOM document not found");
+    if (doc.status !== "draft") throw conflict("Only draft BOMs can apply a rate card");
+    const card = await loadRateCard(deps.db, actor.tenantId, body.rateCardId);
+    if (!card || !card.active) throw notFound("Rate card");
+    const lines = doc.lines ?? [];
+    const matches = matchRateCardToBomLines(
+      lines.map((l) => ({ id: l.id, itemId: l.itemId, itemSku: l.itemSku ?? null })),
+      (card.lines ?? []).filter((l) => l.active).map((l) => ({
+        itemId: l.itemId,
+        sku: l.sku,
+        rate: l.rate,
+        costRate: l.costRate,
+      })),
+    );
+    const updatedLines = applyRateCardRates(
+      lines.map((l) => ({ ...l, costRate: l.costRate ?? null })),
+      (card.lines ?? []).filter((l) => l.active).map((l) => ({
+        itemId: l.itemId,
+        sku: l.sku,
+        rate: l.rate,
+        costRate: l.costRate,
+      })),
+    );
+    const matchById = new Map(matches.map((m) => [m.lineId, m]));
+    await tx(deps.db, async (conn) => {
+      for (const line of updatedLines) {
+        const m = matchById.get(line.id);
+        if (!m) continue;
+        const amount = round2(round3(line.qty) * round2(m.rate));
+        await exec(
+          conn,
+          `UPDATE ims_bom_doc_lines
+           SET rate = :rate, amount = :amount, cost_rate = COALESCE(:costRate, cost_rate)
+           WHERE tenant_id = :tenantId AND doc_id = :docId AND id = :lineId`,
+          {
+            tenantId: actor.tenantId,
+            docId: id,
+            lineId: line.id,
+            rate: m.rate,
+            amount,
+            costRate: m.costRate,
+          },
+        );
+      }
+      const materialsTotal = round2(updatedLines.reduce((s, l) => s + round2(round3(l.qty) * round2(l.rate)), 0));
+      const marginPct = Number(doc.marginPct) || 0;
+      const taxPct = Number(doc.taxPct) || 0;
+      const marginAmount = round2(materialsTotal * marginPct / 100);
+      const taxAmount = round2((materialsTotal + marginAmount) * taxPct / 100);
+      const grandTotal = round2(materialsTotal + marginAmount + taxAmount);
+      await exec(
+        conn,
+        `UPDATE ims_bom_docs SET
+           rate_card_id = :rateCardId,
+           materials_total = :materialsTotal,
+           margin_amount = :marginAmount,
+           tax_amount = :taxAmount,
+           grand_total = :grandTotal
+         WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`,
+        {
+          tenantId: actor.tenantId,
+          id,
+          rateCardId: body.rateCardId,
+          materialsTotal,
+          marginAmount,
+          taxAmount,
+          grandTotal,
+        },
+      );
+    });
+    await recordEvent(deps, actor, {
+      type: "bom.doc.rate_card_applied",
+      entityType: "bom_doc",
+      entityId: id,
+      summary: `Applied rate card ${card.name} to ${doc.docNo}`,
+      payload: { rateCardId: body.rateCardId, matched: matches.length },
+    });
+    res.json({
+      matched: matches.length,
+      matches,
+      doc: await loaders.loadDoc(deps.db, actor.tenantId, id),
+    });
+  });
+
+  /* ---------- BOM → PO from shortfall ---------- */
+
+  router.post("/bom/docs/:id/create-pos", async (req, res) => {
+    requirePerm(res, "bom");
+    requirePerm(res, "po");
+    const actor = actorOf(res);
+    const id = String(req.params.id);
+    const doc = await loaders.loadDoc(deps.db, actor.tenantId, id);
+    if (!doc) throw notFound("BOM document not found");
+    if (doc.status !== "confirmed") throw conflict("Confirm the BOM before creating purchase orders");
+
+    // Duplicate shortfall aggregation (avoid importing computeBomAvailability from bom.js → cycle).
+    const need = new Map<string, { qty: number; name: string; unit: string }>();
+    for (const l of doc.lines ?? []) {
+      if (l.lineKind !== "stock" || !l.itemId || !(l.qty > 0)) continue;
+      const cur = need.get(l.itemId) ?? { qty: 0, name: l.description, unit: l.unit || "nos" };
+      cur.qty = round3(cur.qty + l.qty);
+      need.set(l.itemId, cur);
+    }
+    if (!need.size) {
+      res.json({ orders: [] });
+      return;
+    }
+    const ids = [...need.keys()];
+    const stockParams: Record<string, unknown> = { tenantId: actor.tenantId };
+    const stockIn = ids.map((itemId, i) => {
+      stockParams[`i${i}`] = itemId;
+      return `:i${i}`;
+    });
+    const stockRows = await rows<{ id: string; name: string; unit: string; current_stock: string }>(
+      deps.db,
+      `SELECT id, name, unit, current_stock FROM ims_items WHERE tenant_id = :tenantId AND id IN (${stockIn.join(",")})`,
+      stockParams,
+    );
+    const have = new Map(stockRows.map((r) => [r.id, r]));
+    const shortfalls = ids
+      .map((itemId) => {
+        const n = need.get(itemId)!;
+        const item = have.get(itemId);
+        const onHand = item ? round3(money(item.current_stock)) : 0;
+        const shortfall = round3(Math.max(0, n.qty - onHand));
+        return { itemId, shortfall };
+      })
+      .filter((x) => x.shortfall > 0);
+    if (!shortfalls.length) {
+      res.json({ orders: [] });
+      return;
+    }
+
+    const shortfallIds = shortfalls.map((s) => s.itemId);
+    const itemParams: Record<string, unknown> = { tenantId: actor.tenantId };
+    const itemIn = shortfallIds.map((itemId, i) => {
+      itemParams[`i${i}`] = itemId;
+      return `:i${i}`;
+    });
+    const items = await rows<{
+      id: string;
+      name: string;
+      sku: string | null;
+      hsn: string | null;
+      unit: string;
+      purchase_price: string;
+      supplier_id: string | null;
+      gst_rate: string;
+    }>(
+      deps.db,
+      `SELECT id, name, sku, hsn, unit, purchase_price, supplier_id, gst_rate
+       FROM ims_items WHERE tenant_id = :tenantId AND id IN (${itemIn.join(",")})`,
+      itemParams,
+    );
+    const shortfallByItem = new Map(shortfalls.map((s) => [s.itemId, s.shortfall]));
+    type GroupLine = {
+      itemId: string;
+      name: string;
+      sku: string | null;
+      hsn: string | null;
+      unit: string;
+      qty: number;
+      rate: number;
+      gstRate: number;
+    };
+    const groups = new Map<string, { supplierId: string | null; supplierName: string; lines: GroupLine[] }>();
+    for (const it of items) {
+      const qty = shortfallByItem.get(it.id) ?? 0;
+      if (!(qty > 0)) continue;
+      const key = it.supplier_id ?? "unassigned";
+      let g = groups.get(key);
+      if (!g) {
+        g = {
+          supplierId: it.supplier_id,
+          supplierName: it.supplier_id ? "" : "Supplier TBD",
+          lines: [],
+        };
+        groups.set(key, g);
+      }
+      g.lines.push({
+        itemId: it.id,
+        name: it.name,
+        sku: it.sku,
+        hsn: it.hsn,
+        unit: it.unit || "nos",
+        qty,
+        rate: round2(money(it.purchase_price)),
+        gstRate: round2(money(it.gst_rate)),
+      });
+    }
+
+    const settings = await getSettings(deps, actor.tenantId);
+    const orderDate = todayISO();
+    const orders: Array<Record<string, unknown>> = [];
+
+    for (const g of groups.values()) {
+      if (!g.lines.length) continue;
+      let supplierName = g.supplierName;
+      let supplierSnap: Record<string, unknown> = { name: supplierName || "Supplier TBD" };
+      if (g.supplierId) {
+        const party = await loadParty(deps.db, actor.tenantId, g.supplierId);
+        if (party) {
+          supplierName = party.name;
+          supplierSnap = {
+            name: party.name,
+            contactPerson: party.contactPerson,
+            mobile: party.mobile,
+            email: party.email,
+            gstin: party.gstin,
+            address: party.address,
+            city: party.city,
+            state: party.state,
+            stateCode: party.stateCode,
+          };
+        } else if (!supplierName) {
+          supplierName = "Supplier TBD";
+        }
+      }
+      const businessSnap = {
+        name: settings.businessName,
+        gstin: settings.gstin,
+        address: settings.address,
+        state: settings.state,
+        stateCode: settings.stateCode,
+        phone: settings.phone,
+        email: settings.email,
+      };
+      const intraState = isIntraStateSupply(
+        { state: settings.state, stateCode: settings.stateCode },
+        { state: (supplierSnap.state as string | null | undefined) ?? null, stateCode: (supplierSnap.stateCode as string | null | undefined) ?? null },
+      );
+      const totals = computeTotals(
+        g.lines.map((l) => ({
+          itemId: l.itemId,
+          name: l.name,
+          sku: l.sku,
+          hsn: l.hsn,
+          unit: l.unit,
+          qty: l.qty,
+          rate: l.rate,
+          discountPct: 0,
+          gstRate: l.gstRate,
+          receivedQty: 0,
+        })),
+        intraState,
+      );
+      const poLines = totals.lines.map((l) => ({ ...l, receivedQty: l.receivedQty ?? 0 }));
+      const poId = randomUUID();
+      const poNo = await nextDocNo(deps.db, actor.tenantId, "po", settings.poPrefix, orderDate, settings.fiscalYearStart);
+      await exec(
+        deps.db,
+        `INSERT INTO ims_purchase_orders
+           (id, tenant_id, po_no, status, supplier_id, supplier_name, supplier_snapshot, business_snapshot, order_date, expected_date, delivery_address,
+            payment_terms_days, intra_state, \`lines\`, subtotal, discount_total, tax_total, cgst, sgst, igst, grand_total, terms, notes, approval_note,
+            submitted_at, decided_at, sent_at, sent_via, created_by, created_by_name, bom_doc_id)
+         VALUES
+           (:id, :tenantId, :poNo, 'draft', :supplierId, :supplierName, :supplierSnapshot, :businessSnapshot, :orderDate, NULL, :deliveryAddress,
+            :paymentTermsDays, :intraState, :lines, :subtotal, :discountTotal, :taxTotal, :cgst, :sgst, :igst, :grandTotal, :terms, :notes, NULL,
+            NULL, NULL, NULL, NULL, :userId, :userName, :bomDocId)`,
+        {
+          id: poId,
+          tenantId: actor.tenantId,
+          poNo,
+          supplierId: g.supplierId,
+          supplierName: supplierName || "Supplier TBD",
+          supplierSnapshot: JSON.stringify(supplierSnap),
+          businessSnapshot: JSON.stringify(businessSnap),
+          orderDate,
+          deliveryAddress: settings.address || null,
+          paymentTermsDays: settings.paymentTermsDays,
+          intraState: intraState ? 1 : 0,
+          lines: JSON.stringify(poLines),
+          subtotal: totals.subtotal,
+          discountTotal: totals.discountTotal,
+          taxTotal: totals.taxTotal,
+          cgst: totals.cgst,
+          sgst: totals.sgst,
+          igst: totals.igst,
+          grandTotal: totals.grandTotal,
+          terms: settings.terms,
+          notes: `Created from BOM ${doc.docNo} shortfall`,
+          userId: actor.userId,
+          userName: actorName(actor),
+          bomDocId: id,
+        },
+      );
+      await recordEvent(deps, actor, {
+        type: "po.created",
+        entityType: "po",
+        entityId: poId,
+        summary: `Drafted ${poNo} from BOM ${doc.docNo} · ${formatINR(totals.grandTotal)}`,
+        payload: { status: "draft", grandTotal: totals.grandTotal, bomDocId: id },
+      });
+      orders.push({
+        id: poId,
+        poNo,
+        status: "draft",
+        supplierId: g.supplierId,
+        supplierName: supplierName || "Supplier TBD",
+        bomDocId: id,
+        lineCount: poLines.length,
+        grandTotal: totals.grandTotal,
+        lines: poLines,
+      });
+    }
+
+    await recordEvent(deps, actor, {
+      type: "bom.doc.pos_created",
+      entityType: "bom_doc",
+      entityId: id,
+      summary: `Created ${orders.length} draft PO(s) from ${doc.docNo} shortfall`,
+      payload: { orderIds: orders.map((o) => o.id), count: orders.length },
+    });
+    res.status(201).json({ orders });
   });
 
   // Keep applyPartialIssue referenced for upcoming partial-issue route wiring.

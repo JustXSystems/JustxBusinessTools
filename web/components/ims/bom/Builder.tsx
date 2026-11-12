@@ -324,6 +324,46 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
             >
               Export Excel
             </Button>
+            {confirmed ? (
+              <Button
+                variant="ghost"
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  const out = await run("proposal", () => bom.createProposal(doc.id), { success: "Proposal link ready" });
+                  if (!out) return;
+                  const url = `${window.location.origin}/bom/proposal/${out.token}`;
+                  const wa = `https://wa.me/?text=${encodeURIComponent(`Please review our materials proposal: ${url}`)}`;
+                  window.prompt("Share this proposal link (copied to clipboard if supported):", url);
+                  try {
+                    await navigator.clipboard.writeText(url);
+                  } catch {
+                    /* ignore */
+                  }
+                  if (window.confirm("Open WhatsApp share?")) window.open(wa, "_blank", "noopener,noreferrer");
+                  reloadAll();
+                }}
+              >
+                Share proposal
+              </Button>
+            ) : null}
+            {confirmed && availability.data?.hasShortfall && can("po") ? (
+              <Button
+                variant="ghost"
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  if (!window.confirm("Draft purchase orders for shortfall items, grouped by preferred supplier?")) return;
+                  const out = await run("create-pos", () => bom.createPosFromShortfall(doc.id), {
+                    success: "Draft POs created from shortfall",
+                  });
+                  if (out?.orders?.length) {
+                    window.alert(`Created ${out.orders.length} draft PO(s):\n${out.orders.map((o) => `${o.poNo} · ${o.supplierName}`).join("\n")}`);
+                  }
+                  reloadAll();
+                }}
+              >
+                Draft POs (shortfall)
+              </Button>
+            ) : null}
             {confirmed && !doc.invoiceId && !doc.stockIssuedAt ? (
               <Button
                 variant="ghost"

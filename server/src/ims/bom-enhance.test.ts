@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyPartialIssue,
+  applyRateCardRates,
   computeAsBuiltVariance,
   computeCostRollup,
   defaultVariablesFromCapacity,
@@ -9,6 +10,7 @@ import {
   evalQtyFormula,
   evaluateConfirmGates,
   lineIncludedByOptions,
+  matchRateCardToBomLines,
   proposalWhatsAppUrl,
   remainingIssueQty,
   wouldCreatePackageCycle,
@@ -155,5 +157,48 @@ describe("proposalWhatsAppUrl", () => {
     const url = proposalWhatsAppUrl("https://example.com/p/abc", "Riya");
     expect(url.startsWith("https://wa.me/?text=")).toBe(true);
     expect(decodeURIComponent(url.split("text=")[1]!)).toContain("Riya");
+  });
+});
+
+describe("matchRateCardToBomLines", () => {
+  const rateLines = [
+    { itemId: "item-a", sku: "SKU-A", rate: 100, costRate: 60 },
+    { itemId: null, sku: "sku-b", rate: 50, costRate: 30 },
+    { itemId: "item-c", sku: "SKU-C", rate: 200, costRate: null },
+  ];
+
+  it("matches by itemId first, then sku", () => {
+    const matches = matchRateCardToBomLines(
+      [
+        { id: "l1", itemId: "item-a", itemSku: "OTHER" },
+        { id: "l2", itemId: null, itemSku: "SKU-B" },
+        { id: "l3", itemId: "missing", itemSku: null },
+      ],
+      rateLines,
+    );
+    expect(matches).toEqual([
+      { lineId: "l1", rate: 100, costRate: 60, matchedBy: "itemId" },
+      { lineId: "l2", rate: 50, costRate: 30, matchedBy: "sku" },
+    ]);
+  });
+
+  it("prefers itemId over sku when both could match", () => {
+    const matches = matchRateCardToBomLines(
+      [{ id: "l1", itemId: "item-c", itemSku: "sku-b" }],
+      rateLines,
+    );
+    expect(matches).toEqual([{ lineId: "l1", rate: 200, costRate: null, matchedBy: "itemId" }]);
+  });
+
+  it("applyRateCardRates updates rate and costRate on matched lines only", () => {
+    const updated = applyRateCardRates(
+      [
+        { id: "l1", itemId: "item-a", itemSku: null, rate: 1, costRate: 1 },
+        { id: "l2", itemId: null, itemSku: "nope", rate: 9, costRate: 9 },
+      ],
+      rateLines,
+    );
+    expect(updated[0]).toMatchObject({ id: "l1", rate: 100, costRate: 60 });
+    expect(updated[1]).toMatchObject({ id: "l2", rate: 9, costRate: 9 });
   });
 });

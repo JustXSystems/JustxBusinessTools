@@ -278,6 +278,80 @@ export function isProposalStatus(v: string | null | undefined): v is "sent" | "v
   return v === "sent" || v === "viewed" || v === "accepted" || v === "rejected" || v === "revoked";
 }
 
+/* ---------- Rate card matching ---------- */
+
+export type RateCardMatchSource = {
+  itemId: string | null;
+  sku: string | null;
+  rate: number;
+  costRate?: number | null;
+};
+
+export type BomRateMatchTarget = {
+  id: string;
+  itemId: string | null;
+  itemSku?: string | null;
+  sku?: string | null;
+};
+
+export type RateCardLineMatch = {
+  lineId: string;
+  rate: number;
+  costRate: number | null;
+  matchedBy: "itemId" | "sku";
+};
+
+/** Match rate-card lines onto BOM lines: prefer itemId, then sku (case-insensitive). */
+export function matchRateCardToBomLines(
+  bomLines: ReadonlyArray<BomRateMatchTarget>,
+  rateLines: ReadonlyArray<RateCardMatchSource>,
+): RateCardLineMatch[] {
+  const byItem = new Map<string, RateCardMatchSource>();
+  const bySku = new Map<string, RateCardMatchSource>();
+  for (const rl of rateLines) {
+    if (rl.itemId) byItem.set(rl.itemId, rl);
+    const sku = rl.sku?.trim().toLowerCase();
+    if (sku) bySku.set(sku, rl);
+  }
+  const out: RateCardLineMatch[] = [];
+  for (const bl of bomLines) {
+    let match: RateCardMatchSource | undefined;
+    let matchedBy: "itemId" | "sku" | undefined;
+    if (bl.itemId && byItem.has(bl.itemId)) {
+      match = byItem.get(bl.itemId);
+      matchedBy = "itemId";
+    } else {
+      const sku = (bl.itemSku ?? bl.sku)?.trim().toLowerCase();
+      if (sku && bySku.has(sku)) {
+        match = bySku.get(sku);
+        matchedBy = "sku";
+      }
+    }
+    if (match && matchedBy) {
+      out.push({
+        lineId: bl.id,
+        rate: round2(match.rate),
+        costRate: match.costRate == null ? null : round2(match.costRate),
+        matchedBy,
+      });
+    }
+  }
+  return out;
+}
+
+/** Apply matched rate-card rates onto BOM lines (pure; does not mutate input). */
+export function applyRateCardRates<T extends BomRateMatchTarget & { rate: number; costRate?: number | null }>(
+  bomLines: ReadonlyArray<T>,
+  rateLines: ReadonlyArray<RateCardMatchSource>,
+): T[] {
+  const matched = new Map(matchRateCardToBomLines(bomLines, rateLines).map((m) => [m.lineId, m]));
+  return bomLines.map((l) => {
+    const m = matched.get(l.id);
+    if (!m) return { ...l };
+    return { ...l, rate: m.rate, costRate: m.costRate };
+  });
+}
+
 /* ---------- Partial issue ---------- */
 
 export function remainingIssueQty(soldQty: number, issuedQty: number): number {
