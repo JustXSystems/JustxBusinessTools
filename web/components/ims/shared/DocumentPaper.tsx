@@ -50,6 +50,11 @@ export function sellerDetail(p: Pick<PaperParty, "address" | "state" | "gstin" |
   return [p.address, p.state, p.gstin ? `GSTIN ${p.gstin}` : null, p.phone, p.email].filter(Boolean).join("\n");
 }
 
+/** Single-line seller contact for compact BOM / proposal headers. */
+export function sellerDetailInline(p: Pick<PaperParty, "address" | "state" | "gstin" | "phone" | "email">): string {
+  return [p.address, p.state, p.gstin ? `GSTIN ${p.gstin}` : null, p.phone, p.email].filter(Boolean).join(" · ");
+}
+
 /**
  * Printable GST document (purchase order, tax invoice, bill, credit note) on the kit's
  * `.bos-inv-paper`, so `usePrint()` prints exactly this sheet.
