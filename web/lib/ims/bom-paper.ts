@@ -401,7 +401,7 @@ export function sampleBomPaperModel(businessName = "Your business"): {
       email: "hello@example.com",
       logoUrl: null,
     },
-    docNo: "BOM/26-27/0001",
+    docNo: "ZIG-BOM-2026/11-0001",
     docDate: "2026-11-11",
     status: "confirmed",
     title: "Residential on-grid package",

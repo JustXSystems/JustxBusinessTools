@@ -142,7 +142,7 @@ export function registerSupport(router: Router, deps: ImsDeps): void {
     const settings = await getSettings(deps, actor.tenantId);
     const id = randomUUID();
     const ticketNo = await tx(deps.db, async (conn) => {
-      const no = await nextDocNo(conn, actor.tenantId, "ticket", settings.ticketPrefix, todayISO(), settings.fiscalYearStart);
+      const no = await nextDocNo(conn, actor.tenantId, "ticket", settings.ticketPrefix, todayISO(), settings.businessName);
       await exec(
         conn,
         `INSERT INTO ims_tickets (id, tenant_id, ticket_no, subject, category, priority, status, description, thread, raised_by, raised_by_name)

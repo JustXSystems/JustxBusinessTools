@@ -1048,7 +1048,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       note: null,
     }));
     const id = randomUUID();
-    const checkNo = await nextDocNo(deps.db, actor.tenantId, "check", settings.checkPrefix, todayISO(), settings.fiscalYearStart);
+    const checkNo = await nextDocNo(deps.db, actor.tenantId, "check", settings.checkPrefix, todayISO(), settings.businessName);
     await exec(
       deps.db,
       `INSERT INTO ims_stock_checks (id, tenant_id, check_no, title, status, scope, \`lines\`, notes, counted_by, counted_by_name)
@@ -1276,7 +1276,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     const date = input.date ?? todayISO();
     const id = randomUUID();
     const result = await tx(deps.db, async (conn) => {
-      const returnNo = await nextDocNo(conn, actor.tenantId, "return", settings.returnPrefix, date, settings.fiscalYearStart);
+      const returnNo = await nextDocNo(conn, actor.tenantId, "return", settings.returnPrefix, date, settings.businessName);
       const lines: ReturnLine[] = [];
       for (const l of input.lines) {
         const item = await one<{ name: string; unit: string; purchase_price: string; selling_price: string }>(conn, `SELECT name, unit, purchase_price, selling_price FROM ims_items WHERE tenant_id = :tenantId AND id = :id`, {

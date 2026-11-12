@@ -11,7 +11,6 @@ import {
   computeInvoiceTotals,
   daysBetween,
   displayStatus,
-  fiscalYearLabel,
   formatDocNo,
   isIntraState,
   outstanding,
@@ -285,10 +284,10 @@ export async function createInvoice(
   const settings = await getSettings(deps, actor.tenantId);
   const intra = isIntraState(settings.state, input.placeOfSupply);
   const totals = computeInvoiceTotals(input.lines as BosLineInput[], intra);
-  const fy = fiscalYearLabel(input.issueDate, settings.fiscalYearStart);
+  const ym = input.issueDate.slice(0, 7);
   const db = conn ?? deps.db;
-  const seq = await nextSequence(db, actor.tenantId, "invoice", fy);
-  const invoiceNo = formatDocNo(settings.invoicePrefix, fy, seq);
+  const seq = await nextSequence(db, actor.tenantId, "invoice", ym);
+  const invoiceNo = formatDocNo(settings.companyName, settings.invoicePrefix, input.issueDate, seq);
   const id = randomUUID();
   await exec(
     db,

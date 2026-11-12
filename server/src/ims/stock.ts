@@ -2,7 +2,7 @@ import type { PoolConnection } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { exec, money, nextSequence, one, type Queryable } from "./db.js";
 import { ImsError, notFound, type ImsActor } from "./host.js";
-import { fiscalYearLabel, formatDocNo, movementEffect, round2, round3, todayISO, type MovementType } from "./logic.js";
+import { formatDocNo, movementEffect, round2, round3, todayISO, type MovementType } from "./logic.js";
 
 export type MovementInput = {
   itemId: string;
@@ -114,9 +114,19 @@ export async function postMovement(conn: PoolConnection, actor: ImsActor, input:
   return { id, itemId: item.id, itemName: item.name, type: input.type, qty, delta: effect.saleable, before, after, value };
 }
 
-/** Next document number, e.g. `PO/26-27/0007`, numbered per fiscal year. */
-export async function nextDocNo(db: Queryable, tenantId: number, key: string, prefix: string, date: string, fyStartMonth: number): Promise<string> {
-  const period = fiscalYearLabel(date, fyStartMonth);
+/**
+ * Next document number in Quotation V1 style:
+ * `<CompanyCode>-<DOC_TYPE>-<YYYY>/<MM>-<XXXX>`, sequenced per calendar month.
+ */
+export async function nextDocNo(
+  db: Queryable,
+  tenantId: number,
+  key: string,
+  docType: string,
+  date: string,
+  companyCodeOrName: string,
+): Promise<string> {
+  const period = date.slice(0, 7);
   const seq = await nextSequence(db, tenantId, key, period);
-  return formatDocNo(prefix, period, seq);
+  return formatDocNo(companyCodeOrName, docType, date, seq);
 }

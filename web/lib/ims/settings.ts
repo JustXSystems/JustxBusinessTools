@@ -105,10 +105,21 @@ export function fiscalYearLabel(iso: string, startMonth = 4): string {
   return startMonth === 1 ? String(start) : `${two(start)}-${two(start + 1)}`;
 }
 
-/** What the next document number will look like, e.g. `PO/26-27/0001`. */
-export function docNoSample(prefix: string, today: string, fyStart: number, seq = 1): string {
-  const p = String(prefix || "DOC").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 12) || "DOC";
-  return `${p}/${fiscalYearLabel(today, fyStart)}/${String(seq).padStart(4, "0")}`;
+/** Company code from business name — same rule as Quotation V1. */
+export function companyCodeFromName(name: string): string {
+  return String(name || "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase()
+    .slice(0, 3) || "JBT";
+}
+
+/** What the next document number will look like, e.g. `ZIG-PO-2026/11-0001`. */
+export function docNoSample(docType: string, today: string, companyName: string, seq = 1): string {
+  const code = companyCodeFromName(companyName);
+  const type = String(docType || "DOC").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "DOC";
+  const yyyy = String(today || "").slice(0, 4) || String(new Date().getFullYear());
+  const mm = String(today || "").slice(5, 7) || "01";
+  return `${code}-${type}-${yyyy}/${mm}-${String(seq).padStart(4, "0")}`;
 }
 
 export const PREFIX_RE = /^[A-Za-z0-9-]{1,12}$/;

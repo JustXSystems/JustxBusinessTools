@@ -250,12 +250,12 @@ export type BuiltInvoice = {
 /** Monthly retainers + milestone / one-off invoices across the year. */
 export function buildInvoices(): BuiltInvoice[] {
   const out: BuiltInvoice[] = [];
-  let seqByFy = new Map<string, number>();
+  let seqByMonth = new Map<string, number>();
   const nextNo = (date: string) => {
-    const fy = fiscalYearLabel(date);
-    const n = (seqByFy.get(fy) ?? 0) + 1;
-    seqByFy.set(fy, n);
-    return { fy, no: formatDocNo(BOS_SETTINGS.invoicePrefix, fy, n), seq: n };
+    const ym = date.slice(0, 7);
+    const n = (seqByMonth.get(ym) ?? 0) + 1;
+    seqByMonth.set(ym, n);
+    return { fy: ym, no: formatDocNo(BOS_SETTINGS.companyName, BOS_SETTINGS.invoicePrefix, date, n), seq: n };
   };
 
   const push = (inv: Omit<BuiltInvoice, "id" | "no"> & { key: string }) => {
@@ -1031,11 +1031,10 @@ export function buildSalesDocs(invoices: BuiltInvoice[]) {
     const party = PARTIES.find((p) => p.key === d.partyKey)!;
     const totals = computeInvoiceTotals(d.lines, intra(party.state));
     const prefix = d.kind === "quotation" ? "QT" : d.kind === "order" ? "SO" : "DC";
-    const fy = fiscalYearLabel(d.docDate);
     return {
       ...d,
       id: tid(`sales:${d.key}`),
-      docNo: formatDocNo(prefix, fy, i + 1),
+      docNo: formatDocNo(BOS_SETTINGS.companyName, prefix, d.docDate, i + 1),
       party,
       totals,
       intra: intra(party.state),

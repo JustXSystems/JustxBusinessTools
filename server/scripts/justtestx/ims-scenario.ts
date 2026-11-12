@@ -234,11 +234,27 @@ export function buildImsWorld(userId: number): BuiltImsWorld {
   const seqMax = new Map<string, number>();
 
   const bumpSeq = (key: string, date: string) => {
-    const period = fiscalYearLabel(date, 4);
+    const period = date.slice(0, 7);
     const k = `${key}|${period}`;
     const n = (seqMax.get(k) ?? 0) + 1;
     seqMax.set(k, n);
-    return { period, n, no: formatDocNo(key === "po" ? "PO" : key === "invoice" ? "SI" : key === "bill" ? "PB" : key === "return" ? "RT" : key === "check" ? "SC" : key === "ticket" ? "TK" : key === "payrun" ? "RUN" : "DOC", period, n) };
+    const docType =
+      key === "po"
+        ? "PO"
+        : key === "invoice"
+          ? "SI"
+          : key === "bill"
+            ? "PB"
+            : key === "return"
+              ? "RT"
+              : key === "check"
+                ? "SC"
+                : key === "ticket"
+                  ? "TK"
+                  : key === "payrun"
+                    ? "RUN"
+                    : "DOC";
+    return { period, n, no: formatDocNo(IMS_SETTINGS.businessName, docType, date, n) };
   };
 
   let movSeq = 0;

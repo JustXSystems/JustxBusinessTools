@@ -346,7 +346,7 @@ export function registerPayables(router: Router, deps: ImsDeps): void {
     const approved = input.approveNow && can(res, "approvals");
     const id = randomUUID();
     const billNo = await tx(deps.db, async (conn) => {
-      const no = await nextDocNo(conn, actor.tenantId, "bill", v.settings.billPrefix, input.billDate, v.settings.fiscalYearStart);
+      const no = await nextDocNo(conn, actor.tenantId, "bill", v.settings.billPrefix, input.billDate, v.settings.businessName);
       await exec(
         conn,
         `INSERT INTO ims_bills (id, tenant_id, bill_no, supplier_bill_no, status, supplier_id, supplier_name, bill_date, due_date, \`lines\`, subtotal, tax_total, grand_total,
@@ -627,7 +627,7 @@ export function registerPayables(router: Router, deps: ImsDeps): void {
         .filter((b) => b.balance > 0.005);
       if (!payable.length) throw badRequest("Every selected bill is already paid");
       const total = round2(payable.reduce((s, b) => s + b.balance, 0));
-      const runNo = await nextDocNo(conn, actor.tenantId, "payrun", "RUN", input.runDate, settings.fiscalYearStart);
+      const runNo = await nextDocNo(conn, actor.tenantId, "payrun", "RUN", input.runDate, settings.businessName);
       await exec(
         conn,
         `INSERT INTO ims_payment_runs (id, tenant_id, run_no, status, run_date, method, reference, bill_ids, bill_count, total, notes, paid_at, created_by, created_by_name)
