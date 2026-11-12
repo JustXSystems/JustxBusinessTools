@@ -145,7 +145,9 @@ router.get("/:token", async (req, res) => {
     loadPublicLines(row.tenant_id, row.id),
     businessNameForTenant(row.tenant_id),
   ]);
-  res.json({ proposal: mapPublicDoc(row, lines, businessName) });
+  const mapped = mapPublicDoc(row, lines, businessName);
+  // `doc` kept for older web bundles that read data.doc instead of data.proposal.
+  res.json({ proposal: mapped, doc: mapped });
 });
 
 const decideBody = z.object({
@@ -213,7 +215,8 @@ router.post("/:token/decide", async (req, res) => {
     loadPublicLines(refreshed.tenant_id, refreshed.id),
     businessNameForTenant(refreshed.tenant_id),
   ]);
-  res.json({ proposal: mapPublicDoc(refreshed, lines, businessName) });
+  const mapped = mapPublicDoc(refreshed, lines, businessName);
+  res.json({ proposal: mapped, doc: mapped });
 });
 
 export default router;
