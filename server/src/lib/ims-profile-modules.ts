@@ -24,6 +24,8 @@ export const IMS_MODULE_CATALOG: ReadonlyArray<{
   { key: "approvals", label: "Approvals", section: "Purchasing" },
   { key: "sales", label: "Invoices & Billing", section: "Sales & Finance" },
   { key: "bomPackages", label: "BOM Packages", section: "Sales & Finance" },
+  { key: "bomRateCards", label: "BOM Rate Cards", section: "Sales & Finance" },
+  { key: "bomCompare", label: "Compare BOMs", section: "Sales & Finance" },
   { key: "bom", label: "BILL OF MATERIALS - BOM", section: "Sales & Finance" },
   { key: "receivables", label: "Accounts Receivable", section: "Sales & Finance" },
   { key: "payables", label: "Accounts Payable", section: "Sales & Finance" },

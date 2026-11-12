@@ -454,6 +454,14 @@ const pkgLineInput = z.object({
   defaultRate: z.coerce.number().min(0).max(1e12).default(0),
   remarks: optText(500),
   active: z.boolean().optional(),
+  qtyFormula: optText(240),
+  childPackageId: z.string().uuid().nullable().optional(),
+  optionalFlag: z.boolean().optional(),
+  optionKey: optText(64),
+  alternateItemIds: z.array(z.string().uuid()).max(20).optional(),
+  serviceSpare: z.boolean().optional(),
+  scrapPct: z.coerce.number().min(0).max(999).optional(),
+  costRate: z.coerce.number().min(0).max(1e12).nullable().optional(),
 });
 
 const packageInput = z.object({

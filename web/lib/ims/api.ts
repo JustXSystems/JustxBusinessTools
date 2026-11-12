@@ -187,6 +187,8 @@ export type ImsModuleKey =
   | "sales"
   | "bom"
   | "bomPackages"
+  | "bomRateCards"
+  | "bomCompare"
   | "receivables"
   | "payables"
   | "ledger"

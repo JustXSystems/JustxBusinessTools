@@ -46,6 +46,14 @@ export type BomPackageLine = {
   defaultRate: number;
   remarks: string | null;
   active: boolean;
+  qtyFormula?: string | null;
+  childPackageId?: string | null;
+  optionalFlag?: boolean;
+  optionKey?: string | null;
+  alternateItemIds?: string[];
+  serviceSpare?: boolean;
+  scrapPct?: number;
+  costRate?: number | null;
 };
 
 export type BomPackage = {
@@ -78,6 +86,14 @@ export type BomPackageLineInput = {
   defaultRate?: number;
   remarks?: string | null;
   active?: boolean;
+  qtyFormula?: string | null;
+  childPackageId?: string | null;
+  optionalFlag?: boolean;
+  optionKey?: string | null;
+  alternateItemIds?: string[];
+  serviceSpare?: boolean;
+  scrapPct?: number;
+  costRate?: number | null;
 };
 
 export type BomPackageInput = {
@@ -261,6 +277,45 @@ export type BomDiffEntry =
 
 export type BomDiffLine = { key: string; description: string; section: string; qty: number; rate: number; unit: string };
 
+export type BomRateCardLine = {
+  id?: string;
+  itemId?: string | null;
+  sku?: string | null;
+  description?: string | null;
+  unit?: string;
+  rate: number;
+  costRate?: number | null;
+  sortNo?: number;
+  active?: boolean;
+};
+
+export type BomRateCard = {
+  id: string;
+  code: string | null;
+  name: string;
+  currency: string;
+  validFrom: string | null;
+  validTo: string | null;
+  active: boolean;
+  notes: string | null;
+  lineCount?: number;
+  lines?: BomRateCardLine[];
+  createdByName?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type BomRateCardInput = {
+  code?: string | null;
+  name: string;
+  currency?: string;
+  validFrom?: string | null;
+  validTo?: string | null;
+  active?: boolean;
+  notes?: string | null;
+  lines?: BomRateCardLine[];
+};
+
 export type BomBusiness = {
   name: string | null;
   gstin: string | null;
@@ -434,9 +489,12 @@ export const bom = {
     post<{ orders: Array<{ id: string; poNo: string; supplierName: string; status: string; grandTotal?: number }> }>(`/bom/docs/${id}/create-pos`),
   rateCards: () =>
     get<{
-      rateCards: Array<{ id: string; code: string | null; name: string; active: boolean; validFrom: string | null; validTo: string | null }>;
+      rateCards: BomRateCard[];
     }>("/bom/rate-cards"),
-  rateCard: (id: string) => get<{ rateCard: { id: string; name: string; lines: unknown[] } }>(`/bom/rate-cards/${id}`),
+  rateCard: (id: string) => get<{ rateCard: BomRateCard }>(`/bom/rate-cards/${id}`),
+  createRateCard: (body: BomRateCardInput) => post<{ rateCard: BomRateCard }>("/bom/rate-cards", body),
+  saveRateCard: (id: string, body: BomRateCardInput) => put<{ rateCard: BomRateCard }>(`/bom/rate-cards/${id}`, body),
+  deleteRateCard: (id: string) => del<{ rateCard: BomRateCard }>(`/bom/rate-cards/${id}`),
   applyRateCard: (docId: string, rateCardId: string) =>
     post<{ doc: BomDoc; matched: number }>(`/bom/docs/${docId}/apply-rate-card`, { rateCardId }),
   uploadPdf: (id: string, pdfBase64: string) => post<{ sha256: string; artifactId: string; doc: BomDoc }>(`/bom/docs/${id}/pdf`, { pdfBase64 }),
