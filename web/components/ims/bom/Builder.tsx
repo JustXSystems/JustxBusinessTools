@@ -26,6 +26,7 @@ import type { ImsItem } from "@/lib/ims/api";
 import { inr, inrExact } from "@/lib/ims/format";
 import { formatCatalogEnsureSummary, exportBomExcel } from "@/lib/ims/bom-excel";
 import { ensureBomPackageCatalog, ensureStockLinesForSave } from "@/lib/ims/ensure-catalog";
+import { withBasePath } from "@/lib/base-path";
 import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
 import { ItemPickerDialog, PartySelect } from "../shared/pickers";
 import { BomPaper, modelFromDoc, type BomPaperModel } from "./BomPaper";
@@ -417,7 +418,9 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
                 onClick={async () => {
                   const out = await run("proposal", () => bom.createProposal(doc.id), { success: "Proposal link ready" });
                   if (!out) return;
-                  const url = `${window.location.origin}/bom/proposal/${out.token}`;
+                  // Production hosts under NEXT_PUBLIC_BASE_PATH (e.g. /jbt), same as /q/{token} quotes.
+                  const path = withBasePath(`/bom/proposal/${out.token}`);
+                  const url = `${window.location.origin}${path}`;
                   const wa = `https://wa.me/?text=${encodeURIComponent(`Please review our materials proposal: ${url}`)}`;
                   window.prompt("Share this proposal link (copied to clipboard if supported):", url);
                   try {

@@ -437,7 +437,10 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
       { tenantId: actor.tenantId, id, token },
     );
     const origin = String(req.headers.origin || "").replace(/\/$/, "");
-    const proposalPath = `/bom/proposal/${token}`;
+    // Match web withBasePath (/jbt on production justxsystems.com).
+    const baseRaw = (process.env.WEB_BASE_PATH ?? process.env.NEXT_PUBLIC_BASE_PATH ?? "").trim();
+    const basePath = !baseRaw || baseRaw === "/" ? "" : `/${baseRaw.replace(/^\/+|\/+$/g, "")}`;
+    const proposalPath = `${basePath}/bom/proposal/${token}`;
     const proposalUrl = origin ? `${origin}${proposalPath}` : proposalPath;
     await recordEvent(deps, actor, {
       type: "bom.doc.proposal_sent",

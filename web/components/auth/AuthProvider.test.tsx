@@ -6,7 +6,7 @@ import { isGuestAllowedPath, isPublicPath } from "./AuthProvider";
 
 describe("isPublicPath", () => {
   it("keeps the existing public pages public", () => {
-    for (const p of ["/login", "/login/reset", "/register", "/status", "/q/abc123"]) expect(isPublicPath(p)).toBe(true);
+    for (const p of ["/login", "/login/reset", "/register", "/status", "/q/abc123", "/bom/proposal/abc123"]) expect(isPublicPath(p)).toBe(true);
   });
 
   it("lets the standalone BOS app render its own sign-in", () => {
