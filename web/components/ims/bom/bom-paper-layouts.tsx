@@ -17,19 +17,17 @@ import type { BomPaperModel } from "./BomPaper";
 
 const BOM_STAMP: Partial<Record<string, { text: string; color: string }>> = {
   draft: { text: "DRAFT", color: "#8A8FA3" },
-  cancelled: { text: "CANCELLED", color: "#8A8FA3" },
+  confirmed: { text: "CONFIRMED", color: "#0f766e" },
+  cancelled: { text: "CANCELLED", color: "#b42318" },
 };
 
 function stampOf(status: string | null | undefined) {
   return BOM_STAMP[(status || "").toLowerCase()] ?? null;
 }
 
-/** Customer-facing document title — never the template name/type. */
-function bomDocTitle(model: BomPaperModel): string {
-  const status = (model.status || "").toLowerCase();
-  if (status === "draft") return "DRAFT PROPOSAL";
-  if (status === "cancelled") return "CANCELLED PROPOSAL";
-  return "MATERIALS PROPOSAL";
+/** Customer-facing document title — status is shown separately via stamp/pill. */
+function bomDocTitle(_model?: BomPaperModel): string {
+  return "BILL OF MATERIALS";
 }
 
 function PaperShell({
@@ -1442,11 +1440,12 @@ export function AetherBomPaper({ model }: { model: BomPaperModel }) {
         <div className="ims-bom-aether-head-row">
           <PaperBrandHead name={b.name || "Your business"} logoUrl={b.logoUrl} detail={sellerLine || null} />
           <div className="ims-bom-aether-docblock">
-            <div className="ims-bom-aether-eyebrow">
-              Materials proposal
-              {stamp ? <span className="ims-paper-stamp" style={{ color: stamp.color }}> · {stamp.text}</span> : null}
-            </div>
             <h1>{bomDocTitle(model)}</h1>
+            {stamp ? (
+              <span className="ims-paper-stamp ims-bom-status-pill" style={{ color: stamp.color }}>
+                {stamp.text}
+              </span>
+            ) : null}
             {titleBits ? <p className="ims-bom-aether-title">{titleBits}</p> : null}
           </div>
         </div>

@@ -413,19 +413,25 @@ body.is-bom-resizing {
   align-items: start;
 }
 .bos .ims-bom-aether-docblock { text-align: right; }
-.bos .ims-bom-aether-eyebrow {
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--bom-accent);
-  font-weight: 650;
-}
 .bos .ims-bom-aether-docblock h1 {
-  margin: 2px 0 0;
+  margin: 0;
   font-size: 16px;
   letter-spacing: -0.02em;
   color: var(--bom-ink);
   line-height: 1.2;
+}
+.bos .ims-bom-status-pill,
+.bos .ims-bom-sheet-titleblock .ims-paper-stamp {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.4;
 }
 .bos .ims-bom-aether-title {
   margin: 2px 0 0;
