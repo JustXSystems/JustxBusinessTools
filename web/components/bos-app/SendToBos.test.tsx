@@ -117,14 +117,14 @@ describe("SendToBos", () => {
     expect(onFlash).toHaveBeenCalledWith("Sent to BOS — draft invoice INV/26-27/0009 created.");
     expect(calls.filter((c) => c.startsWith("POST"))).toEqual(["POST /connect/quotationv1/q1/import"]);
     fireEvent.click(open);
-    expect(push).toHaveBeenCalledWith("/tools/bos?ws=finance&m=invoices&open=i9");
+    expect(push).toHaveBeenCalledWith("/bos?ws=finance&m=invoices&open=i9");
   });
 
   it("shows Open in BOS straight away for a record BOS already has", async () => {
     replies["GET /links"] = { status: 200, body: { links: { party: "p1", invoice: "i3" } } };
     renderButton();
     fireEvent.click(await screen.findByRole("button", { name: /Open in BOS/ }));
-    expect(push).toHaveBeenCalledWith("/tools/bos?ws=finance&m=invoices&open=i3");
+    expect(push).toHaveBeenCalledWith("/bos?ws=finance&m=invoices&open=i3");
   });
 
   it("reports a refused import through the host tool's flash", async () => {

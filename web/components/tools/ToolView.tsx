@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { DOCUMENT_CONFIGS } from "@/config/tools.config";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { DocumentTool } from "@/components/documents/DocumentTool";
@@ -13,6 +13,8 @@ import { SiteSurveyV1 } from "@/components/site-survey-v1/SiteSurveyV1";
 import { TrackerTool } from "@/components/tools/TrackerTool";
 import { resolveToolDefinition } from "@/lib/dynamic-tools";
 import { ToolPageHero } from "@/components/shell/ToolPageHero";
+import { withBasePath } from "@/lib/base-path";
+import { resolveToolLaunch, toStandaloneHref } from "@/lib/tool-launch";
 
 const QrGeneratorTool = dynamic(
   () => import("@/components/utilities/QrGeneratorTool").then((m) => m.QrGeneratorTool),
@@ -67,10 +69,27 @@ const ImsDealerTool = dynamic(
   },
 );
 
+/** When admin chooses standalone launch, bounce `/tools/bos|imsdealer` into the full-screen app (no JBT chrome). */
+function StandaloneRedirect({ toolId }: { toolId: string }) {
+  useEffect(() => {
+    const target = toStandaloneHref(toolId, window.location.search);
+    if (!target) return;
+    window.location.replace(withBasePath(target));
+  }, [toolId]);
+  return (
+    <div className="empty-state">
+      <div className="es-icon">⤢</div>
+      <div className="es-title">Opening full-screen app…</div>
+    </div>
+  );
+}
+
 export function ToolView({ toolId }: { toolId: string }) {
   const { config, loading } = usePlatformConfig();
   const platformTools = config?.tools ?? [];
   const tool = resolveToolDefinition(toolId, platformTools);
+  const catalogRow = config?.catalog?.find((c) => c.id === toolId);
+  const launch = resolveToolLaunch(toolId, catalogRow);
 
   if (loading && !tool) {
     return (
@@ -89,6 +108,10 @@ export function ToolView({ toolId }: { toolId: string }) {
         <Link href="/" className="btn btn-secondary btn-sm">Back to home</Link>
       </div>
     );
+  }
+
+  if (launch.mode === "standalone") {
+    return <StandaloneRedirect toolId={toolId} />;
   }
 
   if (tool.type === "tracker") {

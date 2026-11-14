@@ -22,7 +22,7 @@ describe("HANDOFF", () => {
   it("maps each tool to its admin switch, BOS target and deep link", () => {
     expect(HANDOFF.quotationv1).toMatchObject({ switchKey: "bos.handoff.quotationv1", target: "invoice" });
     expect(HANDOFF.sitesurveyv1).toMatchObject({ switchKey: "bos.handoff.sitesurveyv1", target: "project" });
-    expect(HANDOFF.quotationv1.openHref("inv 1")).toBe("/tools/bos?ws=finance&m=invoices&open=inv%201");
-    expect(HANDOFF.sitesurveyv1.openHref("pr1")).toBe("/tools/bos?ws=projects&m=board&open=pr1");
+    expect(HANDOFF.quotationv1.openHref("inv 1")).toBe("/bos?ws=finance&m=invoices&open=inv%201");
+    expect(HANDOFF.sitesurveyv1.openHref("pr1")).toBe("/bos?ws=projects&m=board&open=pr1");
   });
 });

@@ -489,7 +489,7 @@ export function registerConnect(router: Router, deps: ImsDeps): void {
     res.json({
       sources,
       catalogs,
-      outbound: [{ id: "bos", label: "Justxsystems BOS", icon: "🏢", href: "/tools/bos", description: "Issued IMS invoices appear in BOS → Connected tools, where they become BOS customers and GST invoices.", available: Number(issued?.n ?? 0), value: round2(money(issued?.value)) }],
+      outbound: [{ id: "bos", label: "Justxsystems BOS", icon: "🏢", href: "/bos", description: "Issued IMS invoices appear in BOS → Connected tools, where they become BOS customers and GST invoices.", available: Number(issued?.n ?? 0), value: round2(money(issued?.value)) }],
       recent: recent.map((e) => ({ id: Number(e.id), actorName: e.actor_name, summary: e.summary, createdAt: tsOf(e.created_at) })),
       can: { importDocuments: can(res, "sales"), importItems: can(res, "items"), importParties: can(res, "suppliers") },
     });

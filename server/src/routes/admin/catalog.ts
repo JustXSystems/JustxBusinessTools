@@ -4,7 +4,9 @@ import { logAudit } from "../../lib/audit.js";
 import { jsonVal } from "../../lib/admin/approvals.js";
 import { getActiveOrgId } from "../../lib/request-context.js";
 import { publishToolDefinition, listToolDefinitions } from "../../lib/config/effective.js";
-import { appendToolToOrgHomeSelections } from "../../lib/home-tools.js";
+import { appendToolToOrgHomeSelections, ensureOpenStandaloneColumn } from "../../lib/home-tools.js";
+
+const STANDALONE_DEFAULT_TOOLS = new Set(["bos", "imsdealer"]);
 
 const DEFAULT_TOOLS = [
   ["quotation", "Sales & Business"],
@@ -111,10 +113,11 @@ async function ensureCatalog(orgId: number): Promise<void> {
 router.get("/", async (_req, res) => {
   const orgId = getActiveOrgId();
   await ensureCatalog(orgId);
+  await ensureOpenStandaloneColumn();
   const defs = await listToolDefinitions();
   const defMap = new Map(defs.map((d) => [d.id, d]));
   const [rows] = await pool.query(
-    `SELECT tool_id, group_name, sort_order, available, formula, field_overrides
+    `SELECT tool_id, group_name, sort_order, available, open_standalone, formula, field_overrides
      FROM tool_catalog WHERE organization_id = :orgId ORDER BY sort_order, tool_id`,
     { orgId },
   );
@@ -122,11 +125,15 @@ router.get("/", async (_req, res) => {
     const r = row as Record<string, unknown>;
     const id = String(r.tool_id);
     const def = defMap.get(id);
+    const rawStandalone = r.open_standalone;
+    const openStandalone =
+      rawStandalone == null ? STANDALONE_DEFAULT_TOOLS.has(id) : Boolean(Number(rawStandalone));
     return {
       id,
       groupName: String(r.group_name),
       sortOrder: Number(r.sort_order),
       available: Boolean(r.available),
+      openStandalone,
       formula: (r.formula as string | null) ?? null,
       fieldOverrides: jsonVal(r.field_overrides),
       toolType: def?.toolType ?? "tracker",
@@ -196,13 +203,17 @@ router.put("/:toolId", async (req, res) => {
   if (req.body?.definition && typeof req.body.definition === "object") {
     await publishToolDefinition(toolId, req.body.definition as Record<string, unknown>);
   }
+  await ensureOpenStandaloneColumn();
+  const openStandalone =
+    req.body?.openStandalone == null ? null : Number(Boolean(req.body.openStandalone));
   await pool.query(
-    `INSERT INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available, formula, field_overrides)
-     VALUES (:orgId, :toolId, COALESCE(:groupName, 'General'), COALESCE(:sortOrder, 0), COALESCE(:available, 1), :formula, :overrides)
+    `INSERT INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available, open_standalone, formula, field_overrides)
+     VALUES (:orgId, :toolId, COALESCE(:groupName, 'General'), COALESCE(:sortOrder, 0), COALESCE(:available, 1), COALESCE(:openStandalone, :defaultStandalone), :formula, :overrides)
      ON DUPLICATE KEY UPDATE
        group_name = COALESCE(:groupName, group_name),
        sort_order = COALESCE(:sortOrder, sort_order),
        available = COALESCE(:available, available),
+       open_standalone = COALESCE(:openStandalone, open_standalone),
        formula = COALESCE(:formula, formula),
        field_overrides = COALESCE(:overrides, field_overrides)`,
     {
@@ -211,6 +222,8 @@ router.put("/:toolId", async (req, res) => {
       groupName: req.body?.groupName ?? null,
       sortOrder: req.body?.sortOrder ?? null,
       available: req.body?.available == null ? null : Number(Boolean(req.body.available)),
+      openStandalone,
+      defaultStandalone: STANDALONE_DEFAULT_TOOLS.has(toolId) ? 1 : 0,
       formula: req.body?.formula ?? null,
       overrides: req.body?.fieldOverrides ? JSON.stringify(req.body.fieldOverrides) : null,
     },

@@ -93,7 +93,7 @@ export function imsDealerConnector(db: Pool): BosConnector {
     label: "Justxsystems IMS — Dealer",
     icon: "📦",
     description: "Issued IMS sales invoices with their GST lines; every billed customer joins your BOS customer book.",
-    href: "/tools/imsdealer",
+    href: "/ims",
     targets: ["party", "invoice"],
     autoTargets: () => ["party"],
     list: (tenantId) => listInvoices(db, tenantId),

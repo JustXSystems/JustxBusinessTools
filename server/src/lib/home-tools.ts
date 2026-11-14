@@ -81,22 +81,57 @@ export type OrgCatalogTool = {
   groupName: string;
   sortOrder: number;
   available: boolean;
+  /** When true, home opens the full-screen app (`/bos`, `/ims`) in a new window. */
+  openStandalone: boolean;
 };
 
+const STANDALONE_DEFAULT_TOOLS = new Set(["bos", "imsdealer"]);
+
+let openStandaloneReady: Promise<void> | null = null;
+
+/** Migration 048 — safe to call before the column exists. */
+export async function ensureOpenStandaloneColumn(): Promise<void> {
+  if (!openStandaloneReady) {
+    openStandaloneReady = (async () => {
+      try {
+        await pool.query(
+          `ALTER TABLE tool_catalog ADD COLUMN open_standalone TINYINT(1) NOT NULL DEFAULT 0 AFTER available`,
+        );
+        await pool.query(
+          `UPDATE tool_catalog SET open_standalone = 1 WHERE tool_id IN ('bos', 'imsdealer')`,
+        );
+      } catch (err) {
+        const e = err as { code?: string; errno?: number };
+        if (e.code !== "ER_DUP_FIELDNAME" && e.errno !== 1060) throw err;
+      }
+    })().catch((err) => {
+      openStandaloneReady = null;
+      throw err;
+    });
+  }
+  await openStandaloneReady;
+}
+
 export async function listOrgCatalog(orgId: number): Promise<OrgCatalogTool[]> {
+  await ensureOpenStandaloneColumn();
   const [rows] = await pool.query(
-    `SELECT tool_id, group_name, sort_order, available
+    `SELECT tool_id, group_name, sort_order, available, open_standalone
      FROM tool_catalog WHERE organization_id = :orgId
      ORDER BY sort_order, tool_id`,
     { orgId },
   );
   return (Array.isArray(rows) ? rows : []).map((row) => {
     const r = row as Record<string, unknown>;
+    const id = String(r.tool_id);
+    const raw = r.open_standalone;
+    const openStandalone =
+      raw == null ? STANDALONE_DEFAULT_TOOLS.has(id) : Boolean(Number(raw));
     return {
-      id: String(r.tool_id),
+      id,
       groupName: String(r.group_name ?? "General"),
       sortOrder: Number(r.sort_order ?? 0),
       available: Boolean(r.available),
+      openStandalone,
     };
   });
 }

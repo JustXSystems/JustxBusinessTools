@@ -9,7 +9,7 @@ export function bosCatalogSource(db: Pool): ImsCatalogSource {
     label: "Justxsystems BOS",
     icon: "🏢",
     description: "Pull your BOS products into the IMS item master. Customers & vendors already share the Party Registry with IMS — use this only if a BOS projection row is missing.",
-    href: "/tools/bos",
+    href: "/bos",
     async items(tenantId) {
       try {
         const list = await rows<{ id: string; name: string; sku: string | null; hsn: string | null; unit: string | null; rate: string; tax_rate: string; kind: string }>(

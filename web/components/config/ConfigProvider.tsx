@@ -54,6 +54,8 @@ export type PlatformCatalogTool = {
   groupName: string;
   sortOrder: number;
   available: boolean;
+  /** Open full-screen `/bos` or `/ims` in a new window (Admin → Tools → Placement). */
+  openStandalone?: boolean;
 };
 
 export type EffectiveConfig = {
