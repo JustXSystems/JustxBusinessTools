@@ -93,19 +93,30 @@ export const jbtImsHost: ImsHost = {
     try {
       const [rows] = await pool.query(
         `SELECT business_name, gstin, state, state_code, address_line1, address_line2, email, phone,
-                logo_data_url, document_accent_color
+                logo_data_url, document_accent_color,
+                bank_name, bank_branch, bank_account, bank_ifsc, bank_upi
          FROM business_profiles WHERE id = :id LIMIT 1`,
         params,
       );
       r = (Array.isArray(rows) ? rows[0] : null) as Record<string, string | null> | null;
     } catch {
-      const [rows] = await pool.query(
-        `SELECT business_name, gstin, state, state_code, address_line1, address_line2, email, phone,
-                logo_data_url
-         FROM business_profiles WHERE id = :id LIMIT 1`,
-        params,
-      );
-      r = (Array.isArray(rows) ? rows[0] : null) as Record<string, string | null> | null;
+      try {
+        const [rows] = await pool.query(
+          `SELECT business_name, gstin, state, state_code, address_line1, address_line2, email, phone,
+                  logo_data_url, document_accent_color
+           FROM business_profiles WHERE id = :id LIMIT 1`,
+          params,
+        );
+        r = (Array.isArray(rows) ? rows[0] : null) as Record<string, string | null> | null;
+      } catch {
+        const [rows] = await pool.query(
+          `SELECT business_name, gstin, state, state_code, address_line1, address_line2, email, phone,
+                  logo_data_url
+           FROM business_profiles WHERE id = :id LIMIT 1`,
+          params,
+        );
+        r = (Array.isArray(rows) ? rows[0] : null) as Record<string, string | null> | null;
+      }
     }
     const address = [r?.address_line1, r?.address_line2].filter(Boolean).join(", ");
     return {
@@ -118,6 +129,11 @@ export const jbtImsHost: ImsHost = {
       phone: r?.phone ?? null,
       logoUrl: r?.logo_data_url ? withBrowserFileAccessToken(r.logo_data_url) : null,
       accent: r?.document_accent_color ?? null,
+      bankName: r?.bank_name ?? null,
+      bankBranch: r?.bank_branch ?? null,
+      bankAccount: r?.bank_account ?? null,
+      bankIfsc: r?.bank_ifsc ?? null,
+      bankUpi: r?.bank_upi ?? null,
     };
   },
 

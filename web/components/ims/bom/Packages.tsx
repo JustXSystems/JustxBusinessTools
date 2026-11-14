@@ -158,7 +158,7 @@ function PackageList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string
             </>
           }
         >
-          Create a template once, or import Excel — then generate customer BOMs from BILL OF MATERIALS - BOM.
+          Create a template once, or import Excel — then generate customer BOMs from BILL OF MATERIALS - BOM. Sample seed adds general, solar, EPC, manufacturing, services and procurement packs.
         </EmptyState>
       ) : null}
       {packages.length ? (

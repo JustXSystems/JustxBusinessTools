@@ -138,6 +138,14 @@ export type BomDocLine = {
   sourcePackageLineId?: string | null;
 };
 
+export type BomDocPaperOverride = {
+  purpose?: string | null;
+  industryPack?: string | null;
+  tone?: string | null;
+  density?: string | null;
+  hideMargin?: boolean | null;
+};
+
 export type BomDoc = {
   id: string;
   packageId: string | null;
@@ -164,6 +172,9 @@ export type BomDoc = {
   paymentTerms?: string | null;
   deliveryTerms?: string | null;
   warrantyTerms?: string | null;
+  scopeOfSupply?: string | null;
+  exclusions?: string | null;
+  paper?: BomDocPaperOverride | null;
   invoiceId: string | null;
   invoiceConvertMode: BomInvoiceConvertMode | null;
   invoiceConvertModes: ReadonlyArray<BomInvoiceConvertMode>;
@@ -213,6 +224,9 @@ export type BomDocInput = {
   paymentTerms?: string | null;
   deliveryTerms?: string | null;
   warrantyTerms?: string | null;
+  scopeOfSupply?: string | null;
+  exclusions?: string | null;
+  paper?: BomDocPaperOverride | null;
   /** Selected optional-line keys when creating from a package. */
   options?: string[] | Record<string, boolean>;
   variables?: Record<string, number>;
@@ -337,6 +351,12 @@ export type BomBusiness = {
   email: string | null;
   /** Business profile company logo (tokenized file URL). */
   logoUrl?: string | null;
+  accent?: string | null;
+  bankName?: string | null;
+  bankBranch?: string | null;
+  bankAccount?: string | null;
+  bankIfsc?: string | null;
+  bankUpi?: string | null;
 };
 
 export type BomTotals = {

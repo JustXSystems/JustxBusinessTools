@@ -32,6 +32,9 @@ type BomDocPublicRow = {
   payment_terms: string | null;
   delivery_terms: string | null;
   warranty_terms: string | null;
+  scope_of_supply?: string | null;
+  exclusions?: string | null;
+  paper_json?: unknown;
   proposal_token: string | null;
   proposal_status: string | null;
   proposal_sent_at: string | null;
@@ -63,54 +66,109 @@ type PublicBusiness = {
   phone: string | null;
   email: string | null;
   logoUrl: string | null;
+  bankName?: string | null;
+  bankBranch?: string | null;
+  bankAccount?: string | null;
+  bankIfsc?: string | null;
+  bankUpi?: string | null;
 };
 
 async function loadByToken(token: string): Promise<BomDocPublicRow | null> {
-  return one<BomDocPublicRow>(
-    pool,
-    `SELECT id, tenant_id, doc_no, status, doc_date, capacity_label, title, customer_name, location, project_ref,
-            margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total, notes, prepared_by,
-            revision, valid_until, payment_terms, delivery_terms, warranty_terms,
-            proposal_token, proposal_status, proposal_sent_at, proposal_responded_at, proposal_response_note
-     FROM ims_bom_docs
-     WHERE proposal_token = :token
-       AND proposal_status IS NOT NULL
-       AND proposal_status <> 'revoked'
-     LIMIT 1`,
-    { token },
-  );
+  try {
+    return await one<BomDocPublicRow>(
+      pool,
+      `SELECT id, tenant_id, doc_no, status, doc_date, capacity_label, title, customer_name, location, project_ref,
+              margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total, notes, prepared_by,
+              revision, valid_until, payment_terms, delivery_terms, warranty_terms,
+              scope_of_supply, exclusions, paper_json,
+              proposal_token, proposal_status, proposal_sent_at, proposal_responded_at, proposal_response_note
+       FROM ims_bom_docs
+       WHERE proposal_token = :token
+         AND proposal_status IS NOT NULL
+         AND proposal_status <> 'revoked'
+       LIMIT 1`,
+      { token },
+    );
+  } catch {
+    return one<BomDocPublicRow>(
+      pool,
+      `SELECT id, tenant_id, doc_no, status, doc_date, capacity_label, title, customer_name, location, project_ref,
+              margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total, notes, prepared_by,
+              revision, valid_until, payment_terms, delivery_terms, warranty_terms,
+              proposal_token, proposal_status, proposal_sent_at, proposal_responded_at, proposal_response_note
+       FROM ims_bom_docs
+       WHERE proposal_token = :token
+         AND proposal_status IS NOT NULL
+         AND proposal_status <> 'revoked'
+       LIMIT 1`,
+      { token },
+    );
+  }
 }
 
 async function loadPublicLines(tenantId: number, docId: string) {
   const list = await rows<BomLinePublicRow>(
     pool,
     `SELECT l.id, l.section, l.sort_no, l.line_kind, l.description, l.make_text, l.qty, l.unit, l.rate, l.amount, l.remarks,
+            l.optional_flag, l.option_key, l.alternate_item_ids_json,
             i.sku AS item_sku, i.hsn AS item_hsn
      FROM ims_bom_doc_lines l
      LEFT JOIN ims_items i ON i.tenant_id = l.tenant_id AND i.id = l.item_id
      WHERE l.tenant_id = :tenantId AND l.doc_id = :docId
      ORDER BY l.sort_no ASC, l.created_at ASC`,
     { tenantId, docId },
+  ).catch(async () =>
+    rows<BomLinePublicRow & { optional_flag?: number; option_key?: string | null; alternate_item_ids_json?: unknown }>(
+      pool,
+      `SELECT l.id, l.section, l.sort_no, l.line_kind, l.description, l.make_text, l.qty, l.unit, l.rate, l.amount, l.remarks,
+              i.sku AS item_sku, i.hsn AS item_hsn
+       FROM ims_bom_doc_lines l
+       LEFT JOIN ims_items i ON i.tenant_id = l.tenant_id AND i.id = l.item_id
+       WHERE l.tenant_id = :tenantId AND l.doc_id = :docId
+       ORDER BY l.sort_no ASC, l.created_at ASC`,
+      { tenantId, docId },
+    ),
   );
-  return list.map((l) => ({
-    id: l.id,
-    section: l.section,
-    sortNo: Number(l.sort_no),
-    lineKind: l.line_kind,
-    description: l.description,
-    makeText: l.make_text,
-    sku: l.item_sku,
-    hsn: l.item_hsn,
-    qty: round3(money(l.qty)),
-    unit: l.unit,
-    rate: round2(money(l.rate)),
-    amount: round2(money(l.amount)),
-    remarks: l.remarks,
-  }));
+  return list.map((l) => {
+    const ext = l as BomLinePublicRow & {
+      optional_flag?: number;
+      option_key?: string | null;
+      alternate_item_ids_json?: unknown;
+    };
+    let alternateCount = 0;
+    const rawAlts = ext.alternate_item_ids_json;
+    if (Array.isArray(rawAlts)) alternateCount = rawAlts.length;
+    else if (typeof rawAlts === "string") {
+      try {
+        const parsed = JSON.parse(rawAlts);
+        if (Array.isArray(parsed)) alternateCount = parsed.length;
+      } catch {
+        alternateCount = 0;
+      }
+    }
+    return {
+      id: l.id,
+      section: l.section,
+      sortNo: Number(l.sort_no),
+      lineKind: l.line_kind,
+      description: l.description,
+      makeText: l.make_text,
+      sku: l.item_sku,
+      hsn: l.item_hsn,
+      qty: round3(money(l.qty)),
+      unit: l.unit,
+      rate: round2(money(l.rate)),
+      amount: round2(money(l.amount)),
+      remarks: l.remarks,
+      optionalFlag: Boolean(ext.optional_flag),
+      optionKey: ext.option_key ?? null,
+      alternateCount,
+    };
+  });
 }
 
 async function businessForTenant(tenantId: number): Promise<PublicBusiness> {
-  const row = await one<{
+  type BrandRow = {
     business_name: string | null;
     gstin: string | null;
     state: string | null;
@@ -119,12 +177,29 @@ async function businessForTenant(tenantId: number): Promise<PublicBusiness> {
     phone: string | null;
     email: string | null;
     logo_data_url: string | null;
-  }>(
-    pool,
-    `SELECT business_name, gstin, state, address_line1, address_line2, phone, email, logo_data_url
-     FROM business_profiles WHERE id = :id LIMIT 1`,
-    { id: tenantId },
-  );
+    bank_name?: string | null;
+    bank_branch?: string | null;
+    bank_account?: string | null;
+    bank_ifsc?: string | null;
+    bank_upi?: string | null;
+  };
+  let row: BrandRow | null = null;
+  try {
+    row = await one<BrandRow>(
+      pool,
+      `SELECT business_name, gstin, state, address_line1, address_line2, phone, email, logo_data_url,
+              bank_name, bank_branch, bank_account, bank_ifsc, bank_upi
+       FROM business_profiles WHERE id = :id LIMIT 1`,
+      { id: tenantId },
+    );
+  } catch {
+    row = await one<BrandRow>(
+      pool,
+      `SELECT business_name, gstin, state, address_line1, address_line2, phone, email, logo_data_url
+       FROM business_profiles WHERE id = :id LIMIT 1`,
+      { id: tenantId },
+    );
+  }
   const address = [row?.address_line1, row?.address_line2].filter(Boolean).join(", ") || null;
   return {
     name: row?.business_name?.trim() || "Your Company",
@@ -134,24 +209,80 @@ async function businessForTenant(tenantId: number): Promise<PublicBusiness> {
     phone: row?.phone ?? null,
     email: row?.email ?? null,
     logoUrl: row?.logo_data_url ? withBrowserFileAccessToken(row.logo_data_url) : null,
+    bankName: row?.bank_name ?? null,
+    bankBranch: row?.bank_branch ?? null,
+    bankAccount: row?.bank_account ?? null,
+    bankIfsc: row?.bank_ifsc ?? null,
+    bankUpi: row?.bank_upi ?? null,
   };
 }
 
-async function paperTemplateForTenant(tenantId: number): Promise<string> {
-  const row = await one<{ bom_paper_template: string | null }>(
-    pool,
-    `SELECT bom_paper_template FROM ims_settings WHERE tenant_id = :tenantId LIMIT 1`,
-    { tenantId },
-  );
-  return normalizeBomPaperTemplate(row?.bom_paper_template);
+type PublicPaperOptions = {
+  template: string;
+  industryPack: string;
+  tone: string;
+  density: string;
+  hideMargin: boolean;
+};
+
+async function paperOptionsForTenant(tenantId: number): Promise<PublicPaperOptions> {
+  try {
+    const row = await one<{
+      bom_paper_template: string | null;
+      bom_industry_pack: string | null;
+      bom_paper_tone: string | null;
+      bom_paper_density: string | null;
+      bom_hide_margin: number | boolean | null;
+    }>(
+      pool,
+      `SELECT bom_paper_template, bom_industry_pack, bom_paper_tone, bom_paper_density, bom_hide_margin
+       FROM ims_settings WHERE tenant_id = :tenantId LIMIT 1`,
+      { tenantId },
+    );
+    return {
+      template: normalizeBomPaperTemplate(row?.bom_paper_template),
+      industryPack: row?.bom_industry_pack ?? "general",
+      tone: row?.bom_paper_tone ?? "neutral",
+      density: row?.bom_paper_density ?? "comfort",
+      hideMargin: Boolean(row?.bom_hide_margin),
+    };
+  } catch {
+    const row = await one<{ bom_paper_template: string | null }>(
+      pool,
+      `SELECT bom_paper_template FROM ims_settings WHERE tenant_id = :tenantId LIMIT 1`,
+      { tenantId },
+    );
+    return {
+      template: normalizeBomPaperTemplate(row?.bom_paper_template),
+      industryPack: "general",
+      tone: "neutral",
+      density: "comfort",
+      hideMargin: false,
+    };
+  }
+}
+
+function parsePaperJson(raw: unknown): Record<string, unknown> | null {
+  if (!raw) return null;
+  if (typeof raw === "object") return raw as Record<string, unknown>;
+  if (typeof raw === "string") {
+    try {
+      const v = JSON.parse(raw);
+      return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function mapPublicDoc(
   row: BomDocPublicRow,
   lines: Awaited<ReturnType<typeof loadPublicLines>>,
   business: PublicBusiness,
-  template: string,
+  paper: PublicPaperOptions,
 ) {
+  const docPaper = parsePaperJson(row.paper_json);
   const mapped = {
     docNo: row.doc_no,
     status: row.status,
@@ -166,6 +297,8 @@ function mapPublicDoc(
     paymentTerms: row.payment_terms,
     deliveryTerms: row.delivery_terms,
     warrantyTerms: row.warranty_terms,
+    scopeOfSupply: row.scope_of_supply ?? null,
+    exclusions: row.exclusions ?? null,
     notes: row.notes,
     preparedBy: row.prepared_by,
     marginPct: round3(money(row.margin_pct)),
@@ -180,7 +313,11 @@ function mapPublicDoc(
     proposalResponseNote: row.proposal_response_note,
     lines,
     business,
-    template,
+    template: normalizeBomPaperTemplate(docPaper?.purpose ?? paper.template),
+    industryPack: String(docPaper?.industryPack ?? paper.industryPack),
+    tone: String(docPaper?.tone ?? paper.tone),
+    density: String(docPaper?.density ?? paper.density),
+    hideMargin: typeof docPaper?.hideMargin === "boolean" ? docPaper.hideMargin : paper.hideMargin,
     /** @deprecated prefer business.name — kept for older clients */
     businessName: business.name,
   };
@@ -188,12 +325,12 @@ function mapPublicDoc(
 }
 
 async function loadPublicPayload(tokenRow: BomDocPublicRow) {
-  const [lines, business, template] = await Promise.all([
+  const [lines, business, paper] = await Promise.all([
     loadPublicLines(tokenRow.tenant_id, tokenRow.id),
     businessForTenant(tokenRow.tenant_id),
-    paperTemplateForTenant(tokenRow.tenant_id),
+    paperOptionsForTenant(tokenRow.tenant_id),
   ]);
-  return mapPublicDoc(tokenRow, lines, business, template);
+  return mapPublicDoc(tokenRow, lines, business, paper);
 }
 
 router.get("/:token", async (req, res) => {

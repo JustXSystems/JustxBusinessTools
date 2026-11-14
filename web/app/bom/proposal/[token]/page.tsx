@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiUrl } from "@/lib/api-base";
-import { normalizeBomPaperTemplate, type BomPaperTemplateId } from "@/lib/ims/bom-paper";
+import {
+  normalizeBomIndustryPack,
+  normalizeBomPaperDensity,
+  normalizeBomPaperTemplate,
+  normalizeBomPaperTone,
+  type BomPaperTemplateId,
+} from "@/lib/ims/bom-paper";
 import { BomPaper, type BomPaperModel } from "@/components/ims/bom/BomPaper";
 import "@/components/bos/styles/bos.patterns.css";
 import "@/components/ims/bom/bom.css";
@@ -22,6 +28,9 @@ type PublicLine = {
   amount: number;
   remarks?: string | null;
   lineKind?: string | null;
+  optionalFlag?: boolean | null;
+  optionKey?: string | null;
+  alternateCount?: number | null;
 };
 
 type PublicBusiness = {
@@ -32,6 +41,11 @@ type PublicBusiness = {
   phone?: string | null;
   email?: string | null;
   logoUrl?: string | null;
+  bankName?: string | null;
+  bankBranch?: string | null;
+  bankAccount?: string | null;
+  bankIfsc?: string | null;
+  bankUpi?: string | null;
 };
 
 type PublicBom = {
@@ -48,6 +62,8 @@ type PublicBom = {
   paymentTerms?: string | null;
   deliveryTerms?: string | null;
   warrantyTerms?: string | null;
+  scopeOfSupply?: string | null;
+  exclusions?: string | null;
   notes: string | null;
   preparedBy?: string | null;
   marginPct?: number;
@@ -62,6 +78,10 @@ type PublicBom = {
   business?: PublicBusiness;
   businessName?: string;
   template?: string | null;
+  industryPack?: string | null;
+  tone?: string | null;
+  density?: string | null;
+  hideMargin?: boolean | null;
 };
 
 function toPaperModel(doc: PublicBom): BomPaperModel {
@@ -83,6 +103,11 @@ function toPaperModel(doc: PublicBom): BomPaperModel {
       phone: business.phone ?? null,
       email: business.email ?? null,
       logoUrl: business.logoUrl ?? null,
+      bankName: business.bankName ?? null,
+      bankBranch: business.bankBranch ?? null,
+      bankAccount: business.bankAccount ?? null,
+      bankIfsc: business.bankIfsc ?? null,
+      bankUpi: business.bankUpi ?? null,
     },
     docNo: doc.docNo,
     docDate: doc.docDate,
@@ -99,9 +124,15 @@ function toPaperModel(doc: PublicBom): BomPaperModel {
     paymentTerms: doc.paymentTerms ?? null,
     deliveryTerms: doc.deliveryTerms ?? null,
     warrantyTerms: doc.warrantyTerms ?? null,
+    scopeOfSupply: doc.scopeOfSupply ?? null,
+    exclusions: doc.exclusions ?? null,
     marginPct: Number(doc.marginPct) || 0,
     taxPct: Number(doc.taxPct) || 0,
     template: normalizeBomPaperTemplate(doc.template) as BomPaperTemplateId,
+    industryPack: normalizeBomIndustryPack(doc.industryPack),
+    tone: normalizeBomPaperTone(doc.tone),
+    density: normalizeBomPaperDensity(doc.density),
+    hideMargin: Boolean(doc.hideMargin),
     lines: (doc.lines ?? []).map((l) => ({
       section: l.section,
       lineKind: (l.lineKind as BomPaperModel["lines"][number]["lineKind"]) ?? "stock",
@@ -114,6 +145,9 @@ function toPaperModel(doc: PublicBom): BomPaperModel {
       rate: l.rate,
       amount: l.amount,
       remarks: l.remarks ?? null,
+      optionalFlag: Boolean(l.optionalFlag),
+      optionKey: l.optionKey ?? null,
+      alternateCount: Number(l.alternateCount) || 0,
     })),
     totals: {
       materialsTotal: doc.materialsTotal,

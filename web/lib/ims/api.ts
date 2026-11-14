@@ -118,12 +118,15 @@ export type ReminderTemplate = { key: string; label: string; channel: "whatsapp"
 export type ReminderSettings = { autoEnabled: boolean; rules: Record<ReminderRuleKey, boolean>; channels: Array<"whatsapp" | "sms" | "email">; templates: ReminderTemplate[] };
 
 export type BomPaperTemplateId =
+  | "proposal"
+  | "executive"
+  | "technical"
+  | "field"
+  | "share"
   | "aether"
   | "classic"
   | "tiered"
   | "epc"
-  | "executive"
-  | "field"
   | "aurora"
   | "ledger"
   | "atelier"
@@ -132,6 +135,17 @@ export type BomPaperTemplateId =
   | "forge"
   | "nova"
   | "folio";
+
+export type BomIndustryPackId =
+  | "general"
+  | "epc"
+  | "solar"
+  | "manufacturing"
+  | "services"
+  | "procurement";
+
+export type BomPaperTone = "neutral" | "bold" | "editorial";
+export type BomPaperDensity = "compact" | "comfort";
 
 export type ImsSettings = {
   businessName: string;
@@ -149,8 +163,12 @@ export type ImsSettings = {
   returnPrefix: string;
   checkPrefix: string;
   ticketPrefix: string;
-  /** Default BOM paper for live preview + print/PDF. */
+  /** Default BOM document purpose for live preview + print/PDF. */
   bomPaperTemplate: BomPaperTemplateId;
+  bomIndustryPack: BomIndustryPackId;
+  bomPaperTone: BomPaperTone;
+  bomPaperDensity: BomPaperDensity;
+  bomHideMargin: boolean;
   poApprovalLimit: number;
   draftPoPurgeDays: number;
   paymentTermsDays: number;

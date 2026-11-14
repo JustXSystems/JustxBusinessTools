@@ -42,6 +42,11 @@ export type ImsBrand = {
   phone: string | null;
   logoUrl: string | null;
   accent: string | null;
+  bankName?: string | null;
+  bankBranch?: string | null;
+  bankAccount?: string | null;
+  bankIfsc?: string | null;
+  bankUpi?: string | null;
 };
 
 /** A team member as the host knows them (for assignment pickers and the team screen). */

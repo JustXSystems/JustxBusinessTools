@@ -7,6 +7,28 @@
   color: #0f172a;
 }
 
+@media (max-width: 640px) {
+  .bom-proposal-public {
+    padding: 12px 10px 96px;
+  }
+  .bom-proposal-public .bos-inv-paper {
+    padding: 16px 14px 22px !important;
+    border-radius: 12px;
+  }
+  .bom-proposal-dock {
+    position: sticky;
+    bottom: 8px;
+    z-index: 5;
+    padding: 14px 14px 16px;
+    border-radius: 14px;
+    box-shadow: 0 10px 36px rgba(15, 23, 42, 0.14);
+  }
+  .bom-proposal-dock-actions button {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+}
+
 .bom-proposal-public-shell {
   max-width: 920px;
   margin: 0 auto;
