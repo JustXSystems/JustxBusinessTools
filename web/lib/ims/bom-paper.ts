@@ -277,21 +277,23 @@ export function bomPackFromBusinessType(businessType: string | null | undefined)
   }
 }
 
-export function scheduleColumnsFor(
-  purpose: BomPaperPurpose,
-  pack: BomIndustryPackId,
-): ReadonlyArray<BomScheduleColumn> {
-  const meta = bomIndustryPackMeta(pack);
-  if (purpose === "field") return meta.fieldColumns;
-  if (purpose === "executive") {
-    // Compact: drop sku/hsn noise for decision briefs
-    return meta.columns.filter((c) => c !== "sku" && c !== "hsn");
-  }
-  if (purpose === "share") {
-    return meta.columns.filter((c) => c !== "hsn");
-  }
-  return meta.columns;
-}
+/** Columns users can toggle in Settings (order is display order). */
+export const BOM_CONFIGURABLE_COLUMNS: ReadonlyArray<BomScheduleColumn> = [
+  "index",
+  "item",
+  "sku",
+  "hsn",
+  "make",
+  "kind",
+  "qty",
+  "unit",
+  "rate",
+  "amount",
+  "remarks",
+];
+
+/** Always kept on commercial / field schedules. */
+export const BOM_REQUIRED_COLUMNS: ReadonlyArray<BomScheduleColumn> = ["item", "qty"];
 
 export const BOM_COLUMN_LABEL: Record<BomScheduleColumn, string> = {
   check: "✓",
@@ -307,6 +309,61 @@ export const BOM_COLUMN_LABEL: Record<BomScheduleColumn, string> = {
   amount: "Amount",
   remarks: "Remarks",
 };
+
+function packDefaultColumns(purpose: BomPaperPurpose, pack: BomIndustryPackId): ReadonlyArray<BomScheduleColumn> {
+  const meta = bomIndustryPackMeta(pack);
+  if (purpose === "field") return meta.fieldColumns;
+  if (purpose === "executive") return meta.columns.filter((c) => c !== "sku" && c !== "hsn");
+  if (purpose === "share") return meta.columns.filter((c) => c !== "hsn");
+  return meta.columns;
+}
+
+/** Parse saved column preference; empty/invalid → fallback (usually pack defaults). */
+export function normalizeBomScheduleColumns(
+  v: unknown,
+  fallback: ReadonlyArray<BomScheduleColumn> = ["index", "item", "make", "qty", "unit", "rate", "amount"],
+): BomScheduleColumn[] {
+  const allowed = new Set<string>(BOM_CONFIGURABLE_COLUMNS);
+  let raw: unknown[] = [];
+  if (Array.isArray(v)) raw = v;
+  else if (typeof v === "string" && v.trim()) {
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) raw = parsed;
+    } catch {
+      raw = [];
+    }
+  }
+  if (!raw.length) return [...fallback].filter((c) => c !== "check");
+  const picked = new Set<BomScheduleColumn>();
+  for (const x of raw) {
+    const id = String(x ?? "")
+      .trim()
+      .toLowerCase();
+    if (allowed.has(id)) picked.add(id as BomScheduleColumn);
+  }
+  for (const req of BOM_REQUIRED_COLUMNS) picked.add(req);
+  return BOM_CONFIGURABLE_COLUMNS.filter((c) => picked.has(c));
+}
+
+/**
+ * Resolve schedule columns for preview/PDF.
+ * `override` (settings or per-doc) wins when present; field purpose never shows rate/amount.
+ */
+export function scheduleColumnsFor(
+  purpose: BomPaperPurpose,
+  pack: BomIndustryPackId,
+  override?: ReadonlyArray<BomScheduleColumn> | null,
+): ReadonlyArray<BomScheduleColumn> {
+  const packCols = packDefaultColumns(purpose, pack);
+  const hasOverride = Array.isArray(override) && override.length > 0;
+  const base = hasOverride ? normalizeBomScheduleColumns(override, packCols) : [...packCols];
+  if (purpose === "field") {
+    const noPrice = base.filter((c) => c !== "rate" && c !== "amount" && c !== "check");
+    return ["check", ...noPrice];
+  }
+  return base.filter((c) => c !== "check");
+}
 
 /* ---------- Tone & density ---------- */
 
@@ -345,14 +402,22 @@ export function withBomPaperSettingsDefaults<T extends Record<string, unknown>>(
   bomPaperTone: BomPaperTone;
   bomPaperDensity: BomPaperDensity;
   bomHideMargin: boolean;
+  bomScheduleColumns: BomScheduleColumn[] | null;
 } {
+  const pack = normalizeBomIndustryPack(settings.bomIndustryPack);
+  const purpose = normalizeBomPaperPurpose(settings.bomPaperTemplate);
+  const rawCols = settings.bomScheduleColumns;
+  const hasCols = Array.isArray(rawCols) && rawCols.length > 0;
   return {
     ...settings,
-    bomPaperTemplate: normalizeBomPaperPurpose(settings.bomPaperTemplate),
-    bomIndustryPack: normalizeBomIndustryPack(settings.bomIndustryPack),
+    bomPaperTemplate: purpose,
+    bomIndustryPack: pack,
     bomPaperTone: normalizeBomPaperTone(settings.bomPaperTone),
     bomPaperDensity: normalizeBomPaperDensity(settings.bomPaperDensity),
     bomHideMargin: Boolean(settings.bomHideMargin),
+    bomScheduleColumns: hasCols
+      ? normalizeBomScheduleColumns(rawCols, scheduleColumnsFor(purpose, pack))
+      : null,
   };
 }
 

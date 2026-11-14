@@ -20,6 +20,7 @@ import {
   normalizeBomIndustryPack,
   normalizeBomPaperPurpose,
   normalizeBomPaperTemplate,
+  normalizeBomScheduleColumns,
   sampleBomPaperModel,
   scheduleColumnsFor,
   withBomPaperSettingsDefaults,
@@ -63,6 +64,14 @@ describe("bom-paper purposes", () => {
     expect(normalizeBomIndustryPack("nope")).toBe("general");
     expect(scheduleColumnsFor("field", "epc")).not.toContain("rate");
     expect(scheduleColumnsFor("technical", "epc")).toContain("remarks");
+    const custom = scheduleColumnsFor("proposal", "general", ["item", "sku", "qty", "amount"]);
+    expect(custom).toEqual(["item", "sku", "qty", "amount"]);
+    expect(normalizeBomScheduleColumns(["qty", "make"], ["item", "qty"])).toEqual(["item", "make", "qty"]);
+    expect(scheduleColumnsFor("field", "solar", ["item", "qty", "rate", "amount"])).toEqual([
+      "check",
+      "item",
+      "qty",
+    ]);
   });
 
   it("groups lines into roman sections with share percentages", () => {

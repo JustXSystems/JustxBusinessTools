@@ -13,6 +13,7 @@ import {
   type BomPaperPurpose,
   type BomPaperTemplateId,
   type BomPaperTone,
+  type BomScheduleColumn,
 } from "@/lib/ims/bom-paper";
 import {
   ExecutiveBomPaper,
@@ -54,6 +55,8 @@ export type BomPaperModel = {
   density?: BomPaperDensity | null;
   /** When true, customer PDF folds margin into supply total. */
   hideMargin?: boolean | null;
+  /** Tenant/doc schedule column preference (null = pack defaults). */
+  scheduleColumns?: ReadonlyArray<BomScheduleColumn> | null;
 };
 
 export type BomPaperOptions = {
@@ -63,6 +66,7 @@ export type BomPaperOptions = {
   density?: BomPaperDensity | null;
   hideMargin?: boolean | null;
   customerState?: string | null;
+  scheduleColumns?: ReadonlyArray<BomScheduleColumn> | null;
 };
 
 export function modelFromDoc(doc: BomDoc, business: BomBusiness, options?: BomPaperOptions | BomPaperTemplateId | null): BomPaperModel {
@@ -120,20 +124,32 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness, options?: BomPa
     tone: opts.tone ?? (doc.paper?.tone as BomPaperTone | undefined) ?? null,
     density: opts.density ?? (doc.paper?.density as BomPaperDensity | undefined) ?? null,
     hideMargin: opts.hideMargin ?? doc.paper?.hideMargin ?? null,
+    scheduleColumns:
+      opts.scheduleColumns ??
+      (Array.isArray(doc.paper?.columns) ? (doc.paper!.columns as BomScheduleColumn[]) : null),
   };
 }
 
 /** Merge tenant defaults with optional per-doc paper override. */
 export function mergePaperOptions(
   tenant: BomPaperOptions,
-  docPaper?: { purpose?: string | null; industryPack?: string | null; tone?: string | null; density?: string | null; hideMargin?: boolean | null } | null,
+  docPaper?: {
+    purpose?: string | null;
+    industryPack?: string | null;
+    tone?: string | null;
+    density?: string | null;
+    hideMargin?: boolean | null;
+    columns?: ReadonlyArray<string> | null;
+  } | null,
 ): BomPaperOptions {
+  const docCols = Array.isArray(docPaper?.columns) ? (docPaper!.columns as BomScheduleColumn[]) : null;
   return {
     template: (docPaper?.purpose as BomPaperTemplateId | undefined) || tenant.template,
     industryPack: (docPaper?.industryPack as BomIndustryPackId | undefined) || tenant.industryPack,
     tone: (docPaper?.tone as BomPaperTone | undefined) || tenant.tone,
     density: (docPaper?.density as BomPaperDensity | undefined) || tenant.density,
     hideMargin: docPaper?.hideMargin ?? tenant.hideMargin,
+    scheduleColumns: docCols?.length ? docCols : tenant.scheduleColumns,
   };
 }
 

@@ -144,6 +144,8 @@ export type BomDocPaperOverride = {
   tone?: string | null;
   density?: string | null;
   hideMargin?: boolean | null;
+  /** Optional per-doc schedule column override. */
+  columns?: string[] | null;
 };
 
 export type BomDoc = {

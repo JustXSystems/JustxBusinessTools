@@ -89,6 +89,50 @@ export function normalizeBomPaperDensity(v: unknown): BomPaperDensity {
   return (BOM_PAPER_DENSITIES as readonly string[]).includes(s) ? (s as BomPaperDensity) : "comfort";
 }
 
+const BOM_SCHEDULE_COLUMN_IDS = [
+  "index",
+  "item",
+  "sku",
+  "hsn",
+  "make",
+  "kind",
+  "qty",
+  "unit",
+  "rate",
+  "amount",
+  "remarks",
+] as const;
+export type BomScheduleColumnId = (typeof BOM_SCHEDULE_COLUMN_IDS)[number];
+
+/** Parse tenant schedule-column preference; empty → null (pack defaults). */
+export function normalizeBomScheduleColumnsSetting(v: unknown): BomScheduleColumnId[] | null {
+  const allowed = new Set<string>(BOM_SCHEDULE_COLUMN_IDS);
+  let raw: unknown[] = [];
+  if (Array.isArray(v)) raw = v;
+  else if (typeof v === "string" && v.trim()) {
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) raw = parsed;
+    } catch {
+      raw = [];
+    }
+  } else if (v && typeof v === "object" && !Array.isArray(v)) {
+    return null;
+  }
+  if (!raw.length) return null;
+  const picked = new Set<BomScheduleColumnId>();
+  for (const x of raw) {
+    const id = String(x ?? "")
+      .trim()
+      .toLowerCase();
+    if (allowed.has(id)) picked.add(id as BomScheduleColumnId);
+  }
+  picked.add("item");
+  picked.add("qty");
+  const out = BOM_SCHEDULE_COLUMN_IDS.filter((c) => picked.has(c));
+  return out.length ? out : null;
+}
+
 export type ImsSettings = {
   businessName: string;
   businessType: string;
@@ -111,6 +155,8 @@ export type ImsSettings = {
   bomPaperTone: BomPaperTone;
   bomPaperDensity: BomPaperDensity;
   bomHideMargin: boolean;
+  /** Null = use industry-pack column defaults. */
+  bomScheduleColumns: BomScheduleColumnId[] | null;
   poApprovalLimit: number;
   draftPoPurgeDays: number;
   paymentTermsDays: number;
@@ -146,6 +192,7 @@ type SettingsRow = {
   bom_paper_tone?: string | null;
   bom_paper_density?: string | null;
   bom_hide_margin?: number | boolean | null;
+  bom_schedule_columns_json?: unknown;
   po_approval_limit: string | number;
   draft_po_purge_days: number;
   payment_terms_days: number;
@@ -179,6 +226,7 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   bomPaperTone: normalizeBomPaperTone(r.bom_paper_tone),
   bomPaperDensity: normalizeBomPaperDensity(r.bom_paper_density),
   bomHideMargin: Boolean(r.bom_hide_margin),
+  bomScheduleColumns: normalizeBomScheduleColumnsSetting(r.bom_schedule_columns_json),
   poApprovalLimit: money(r.po_approval_limit),
   draftPoPurgeDays: Number(r.draft_po_purge_days) || 0,
   paymentTermsDays: Number(r.payment_terms_days) || 0,
@@ -240,6 +288,7 @@ const SettingsInput = z.object({
   bomPaperTone: z.enum(BOM_PAPER_TONES).optional(),
   bomPaperDensity: z.enum(BOM_PAPER_DENSITIES).optional(),
   bomHideMargin: z.boolean().optional(),
+  bomScheduleColumns: z.array(z.enum(BOM_SCHEDULE_COLUMN_IDS)).max(16).nullable().optional(),
   poApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
   draftPoPurgeDays: z.coerce.number().int().min(0).max(365).optional(),
   paymentTermsDays: z.coerce.number().int().min(0).max(365).optional(),
@@ -273,6 +322,7 @@ const COLUMN: Record<string, string> = {
   bomPaperTone: "bom_paper_tone",
   bomPaperDensity: "bom_paper_density",
   bomHideMargin: "bom_hide_margin",
+  bomScheduleColumns: "bom_schedule_columns_json",
   poApprovalLimit: "po_approval_limit",
   draftPoPurgeDays: "draft_po_purge_days",
   paymentTermsDays: "payment_terms_days",
@@ -300,7 +350,10 @@ export async function updateSettings(deps: ImsDeps, actor: ImsActor, body: unkno
     else if (key === "bomIndustryPack") v = normalizeBomIndustryPack(value);
     else if (key === "bomPaperTone") v = normalizeBomPaperTone(value);
     else if (key === "bomPaperDensity") v = normalizeBomPaperDensity(value);
-    else if (typeof value === "boolean") v = value ? 1 : 0;
+    else if (key === "bomScheduleColumns") {
+      const cols = normalizeBomScheduleColumnsSetting(value);
+      v = cols ? JSON.stringify(cols) : null;
+    } else if (typeof value === "boolean") v = value ? 1 : 0;
     else if (typeof value === "string" && key.endsWith("Prefix")) v = value.toUpperCase();
     sets.push(`${COLUMN[key]} = :${key}`);
     params[key] = v;

@@ -88,6 +88,7 @@ const settingsSheet = (s: ImsSettings): SheetSpec => ({
     ["BOM industry pack", s.bomIndustryPack],
     ["BOM paper tone", s.bomPaperTone],
     ["BOM hide margin", s.bomHideMargin ? "Yes" : "No"],
+    ["BOM schedule columns", s.bomScheduleColumns?.length ? s.bomScheduleColumns.join(", ") : "Pack defaults"],
     ["PO approval limit", s.poApprovalLimit],
     ["Default payment terms (days)", s.paymentTermsDays],
     ["Default GST %", s.defaultGstRate],

@@ -235,6 +235,7 @@ type PublicPaperOptions = {
   tone: string;
   density: string;
   hideMargin: boolean;
+  scheduleColumns: string[] | null;
 };
 
 async function paperOptionsForTenant(tenantId: number): Promise<PublicPaperOptions> {
@@ -245,18 +246,32 @@ async function paperOptionsForTenant(tenantId: number): Promise<PublicPaperOptio
       bom_paper_tone: string | null;
       bom_paper_density: string | null;
       bom_hide_margin: number | boolean | null;
+      bom_schedule_columns_json?: unknown;
     }>(
       pool,
-      `SELECT bom_paper_template, bom_industry_pack, bom_paper_tone, bom_paper_density, bom_hide_margin
+      `SELECT bom_paper_template, bom_industry_pack, bom_paper_tone, bom_paper_density, bom_hide_margin,
+              bom_schedule_columns_json
        FROM ims_settings WHERE tenant_id = :tenantId LIMIT 1`,
       { tenantId },
     );
+    let scheduleColumns: string[] | null = null;
+    const rawCols = row?.bom_schedule_columns_json;
+    if (Array.isArray(rawCols)) scheduleColumns = rawCols.map(String);
+    else if (typeof rawCols === "string" && rawCols.trim()) {
+      try {
+        const parsed = JSON.parse(rawCols);
+        if (Array.isArray(parsed)) scheduleColumns = parsed.map(String);
+      } catch {
+        scheduleColumns = null;
+      }
+    }
     return {
       template: normalizeBomPaperTemplate(row?.bom_paper_template),
       industryPack: row?.bom_industry_pack ?? "general",
       tone: row?.bom_paper_tone ?? "neutral",
       density: row?.bom_paper_density ?? "comfort",
       hideMargin: Boolean(row?.bom_hide_margin),
+      scheduleColumns,
     };
   } catch {
     const row = await one<{ bom_paper_template: string | null }>(
@@ -270,6 +285,7 @@ async function paperOptionsForTenant(tenantId: number): Promise<PublicPaperOptio
       tone: "neutral",
       density: "comfort",
       hideMargin: false,
+      scheduleColumns: null,
     };
   }
 }
@@ -332,6 +348,9 @@ function mapPublicDoc(
     tone: String(docPaper?.tone ?? paper.tone),
     density: String(docPaper?.density ?? paper.density),
     hideMargin: typeof docPaper?.hideMargin === "boolean" ? docPaper.hideMargin : paper.hideMargin,
+    scheduleColumns: Array.isArray(docPaper?.columns)
+      ? (docPaper!.columns as unknown[]).map(String)
+      : paper.scheduleColumns,
     /** @deprecated prefer business.name — kept for older clients */
     businessName: business.name,
   };

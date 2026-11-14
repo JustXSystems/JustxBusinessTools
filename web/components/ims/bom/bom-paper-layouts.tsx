@@ -435,7 +435,7 @@ function ScheduleTable({
 }) {
   const purpose = normalizeBomPaperPurpose(model.template);
   const pack = normalizeBomIndustryPack(model.industryPack);
-  const cols = scheduleColumnsFor(purpose, pack);
+  const cols = scheduleColumnsFor(purpose, pack, model.scheduleColumns);
   const hideMargin = Boolean(model.hideMargin) && purpose !== "field";
   const fieldMode = purpose === "field";
   const marginFactor = bomCustomerMarginFactor(model.totals.materialsTotal, model.totals.marginAmount);
@@ -719,7 +719,11 @@ export function ExecutiveBomPaper({ model }: { model: BomPaperModel }) {
               <ul className="ims-bom-exec-lines">
                 {sec.lines.map((l, i) => {
                   const priced = bomCustomerLinePricing(l, marginFactor, hideMargin);
-                  const cols = scheduleColumnsFor("executive", normalizeBomIndustryPack(model.industryPack));
+                  const cols = scheduleColumnsFor(
+                    "executive",
+                    normalizeBomIndustryPack(model.industryPack),
+                    model.scheduleColumns,
+                  );
                   const bits: string[] = [];
                   if (cols.includes("sku") && l.sku?.trim()) bits.push(l.sku.trim());
                   if (cols.includes("kind") && lineKindLabel(l.lineKind)) bits.push(lineKindLabel(l.lineKind)!);
@@ -826,7 +830,7 @@ export function ShareBomPaper({ model }: { model: BomPaperModel }) {
   const hideMargin = Boolean(model.hideMargin);
   const c = bomCustomerComposition(model.totals, hideMargin);
   const marginFactor = bomCustomerMarginFactor(model.totals.materialsTotal, model.totals.marginAmount);
-  const cols = scheduleColumnsFor("share", normalizeBomIndustryPack(model.industryPack));
+  const cols = scheduleColumnsFor("share", normalizeBomIndustryPack(model.industryPack), model.scheduleColumns);
   return (
     <PaperShell model={model} purpose="share">
       <DocMeta model={model} />
