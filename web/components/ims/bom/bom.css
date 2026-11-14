@@ -453,6 +453,11 @@ body.is-bom-resizing {
   gap: 10px !important;
   align-items: flex-start;
 }
+.bos .ims-bom-sheet .bos-inv-paper-top > :first-child,
+.bos .ims-bom-sheet-top > :first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
 .bos .ims-bom-sheet .ims-paper-logo {
   max-height: 36px;
   max-width: 120px;
@@ -469,9 +474,15 @@ body.is-bom-resizing {
   white-space: normal;
   color: var(--bom-muted);
 }
-.bos .ims-bom-sheet .bos-inv-paper-title {
-  font-size: 15px;
+.bos .ims-bom-sheet .bos-inv-paper-title,
+.bos .ims-bom-sheet-titleblock .bos-inv-paper-title,
+.bos .ims-bom-aether-docblock h1 {
+  white-space: nowrap;
+  overflow: visible;
+  word-break: keep-all;
+  font-size: 14px;
   line-height: 1.2;
+  letter-spacing: 0.02em;
 }
 .bos .ims-bom-meta-compact {
   display: flex !important;
@@ -564,17 +575,17 @@ body.is-bom-resizing {
 }
 .bos .ims-bom-aether-head-row {
   display: grid;
-  grid-template-columns: 1.35fr 0.85fr;
+  grid-template-columns: minmax(0, 1fr) max-content;
   gap: 12px;
   align-items: start;
 }
-.bos .ims-bom-aether-docblock { text-align: right; }
+.bos .ims-bom-aether-docblock {
+  text-align: right;
+  min-width: max-content;
+}
 .bos .ims-bom-aether-docblock h1 {
   margin: 0;
-  font-size: 16px;
-  letter-spacing: -0.02em;
   color: var(--bom-ink);
-  line-height: 1.2;
 }
 .bos .ims-bom-status-pill,
 .bos .ims-bom-sheet-titleblock .ims-paper-stamp {
@@ -688,7 +699,12 @@ body.is-bom-resizing {
   border-top: 1px solid var(--bom-line);
 }
 
-.bos .ims-bom-sheet-titleblock { text-align: right; }
+.bos .ims-bom-sheet-titleblock {
+  text-align: right;
+  flex: 0 0 auto;
+  max-width: none;
+  min-width: max-content;
+}
 .bos .ims-bom-paper-chip {
   display: inline-block;
   margin-top: 6px;
@@ -1715,7 +1731,6 @@ body.is-bom-resizing {
   .bos .ims-bom-nova-steps,
   .bos .ims-bom-folio-grid,
   .bos .ims-bom-folio-foot,
-  .bos .ims-bom-aether-head-row,
   .bos .ims-bom-aether-totals-bar,
   .bos .ims-bom-terms,
   .bos .ims-bom-terms-compact {
@@ -1848,6 +1863,14 @@ body.is-bom-resizing {
   .bos .ims-bom-schedule-wrap {
     overflow: visible;
   }
+  .bos .ims-bom-sheet .bos-inv-paper-title,
+  .bos .ims-bom-sheet-titleblock .bos-inv-paper-title,
+  .bos .ims-bom-aether-docblock h1 {
+    white-space: nowrap !important;
+  }
+  .bos .ims-bom-aether-head-row {
+    grid-template-columns: minmax(0, 1fr) max-content !important;
+  }
   .bos .ims-bom-aurora-panel,
   .bos .ims-bom-prism-rail {
     backdrop-filter: none;
@@ -1865,10 +1888,5 @@ body.is-bom-resizing {
     background: #0b1220 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-  }
-  .bos .ims-bom-sheet .bos-inv-paper-title,
-  .bos .ims-bom-sheet-titleblock .bos-inv-paper-title,
-  .bos .ims-bom-aether-docblock h1 {
-    white-space: nowrap !important;
   }
 }
