@@ -687,42 +687,132 @@ async function replaceDocLines(
 }
 
 /** Industry-neutral starter templates (not tied to any one vertical). */
-function samplePackages() {
-  const small = {
+type SamplePkgLine = {
+  section: string;
+  lineKind: "stock" | "service" | "overhead" | "scaled";
+  description: string;
+  makeText: string;
+  qty: number;
+  unit: string;
+  defaultRate: number;
+  scaleByCapacity?: boolean;
+};
+
+type SamplePkg = {
+  code: string;
+  name: string;
+  capacityLabel: string;
+  description: string;
+  defaultMarginPct: number;
+  defaultTaxPct: number;
+  lines: SamplePkgLine[];
+};
+
+function samplePackages(): SamplePkg[] {
+  const generalS: SamplePkg = {
     code: "PKG-S",
-    name: "Sample package — Small",
+    name: "Sample — General commerce (S)",
     capacityLabel: "Size S",
-    description: "Starter template. Replace lines with your own catalogue items, services and rates.",
+    description: "Dealer / trader starter. Replace lines with your catalogue items, services and rates.",
     defaultMarginPct: 10,
     defaultTaxPct: 18,
     lines: [
-      { section: "Main Items", lineKind: "stock" as const, description: "Primary component / finished good", makeText: "Brand A / Brand B", qty: 1, unit: "nos", defaultRate: 0 },
-      { section: "Main Items", lineKind: "stock" as const, description: "Secondary component", makeText: "Reputed make", qty: 2, unit: "nos", defaultRate: 0 },
-      { section: "Main Items", lineKind: "stock" as const, description: "Cable / consumable (length)", makeText: "Reputed make", qty: 50, unit: "mtr", defaultRate: 0 },
-      { section: "Accessories & Services", lineKind: "stock" as const, description: "Fasteners / fittings pack", makeText: "Reputed make", qty: 1, unit: "pack", defaultRate: 0 },
-      { section: "Accessories & Services", lineKind: "service" as const, description: "Installation / labour", makeText: "In-house / third party", qty: 1, unit: "job", defaultRate: 0 },
-      { section: "Accessories & Services", lineKind: "overhead" as const, description: "Transport & handling", makeText: "Own", qty: 1, unit: "job", defaultRate: 0 },
-      { section: "Accessories & Services", lineKind: "scaled" as const, description: "Capacity-scaled allowance", makeText: "Own", qty: 1, unit: "unit", scaleByCapacity: true, defaultRate: 0 },
+      { section: "Main Items", lineKind: "stock", description: "Primary component / finished good", makeText: "Brand A / Brand B", qty: 1, unit: "nos", defaultRate: 0 },
+      { section: "Main Items", lineKind: "stock", description: "Secondary component", makeText: "Reputed make", qty: 2, unit: "nos", defaultRate: 0 },
+      { section: "Main Items", lineKind: "stock", description: "Cable / consumable (length)", makeText: "Reputed make", qty: 50, unit: "mtr", defaultRate: 0 },
+      { section: "Accessories & Services", lineKind: "stock", description: "Fasteners / fittings pack", makeText: "Reputed make", qty: 1, unit: "pack", defaultRate: 0 },
+      { section: "Accessories & Services", lineKind: "service", description: "Installation / labour", makeText: "In-house / third party", qty: 1, unit: "job", defaultRate: 0 },
+      { section: "Accessories & Services", lineKind: "overhead", description: "Transport & handling", makeText: "Own", qty: 1, unit: "job", defaultRate: 0 },
     ],
   };
-  const large = {
-    ...small,
+  const generalL: SamplePkg = {
+    ...generalS,
     code: "PKG-L",
-    name: "Sample package — Large",
+    name: "Sample — General commerce (L)",
     capacityLabel: "Size L",
-    lines: small.lines.map((l) => ({ ...l, qty: l.unit === "mtr" ? 120 : l.qty === 1 && l.lineKind === "stock" && l.description.startsWith("Primary") ? 1 : l.qty * (l.lineKind === "stock" && l.unit === "nos" && l.description.startsWith("Secondary") ? 2 : 1) })),
+    lines: [
+      { section: "Main Items", lineKind: "stock", description: "Primary component / finished good", makeText: "Brand A / Brand B", qty: 1, unit: "nos", defaultRate: 0 },
+      { section: "Main Items", lineKind: "stock", description: "Secondary component", makeText: "Reputed make", qty: 4, unit: "nos", defaultRate: 0 },
+      { section: "Main Items", lineKind: "stock", description: "Cable / consumable (length)", makeText: "Reputed make", qty: 120, unit: "mtr", defaultRate: 0 },
+      { section: "Accessories & Services", lineKind: "stock", description: "Fasteners / fittings pack", makeText: "Reputed make", qty: 2, unit: "pack", defaultRate: 0 },
+      { section: "Accessories & Services", lineKind: "service", description: "Installation / labour", makeText: "In-house / third party", qty: 1, unit: "job", defaultRate: 0 },
+      { section: "Accessories & Services", lineKind: "overhead", description: "Transport & handling", makeText: "Own", qty: 1, unit: "job", defaultRate: 0 },
+    ],
   };
-  // Fix large secondary qty explicitly
-  large.lines = [
-    { section: "Main Items", lineKind: "stock" as const, description: "Primary component / finished good", makeText: "Brand A / Brand B", qty: 1, unit: "nos", defaultRate: 0 },
-    { section: "Main Items", lineKind: "stock" as const, description: "Secondary component", makeText: "Reputed make", qty: 4, unit: "nos", defaultRate: 0 },
-    { section: "Main Items", lineKind: "stock" as const, description: "Cable / consumable (length)", makeText: "Reputed make", qty: 120, unit: "mtr", defaultRate: 0 },
-    { section: "Accessories & Services", lineKind: "stock" as const, description: "Fasteners / fittings pack", makeText: "Reputed make", qty: 2, unit: "pack", defaultRate: 0 },
-    { section: "Accessories & Services", lineKind: "service" as const, description: "Installation / labour", makeText: "In-house / third party", qty: 1, unit: "job", defaultRate: 0 },
-    { section: "Accessories & Services", lineKind: "overhead" as const, description: "Transport & handling", makeText: "Own", qty: 1, unit: "job", defaultRate: 0 },
-    { section: "Accessories & Services", lineKind: "scaled" as const, description: "Capacity-scaled allowance", makeText: "Own", qty: 1, unit: "unit", scaleByCapacity: true, defaultRate: 0 },
-  ];
-  return [small, large];
+  const solar: SamplePkg = {
+    code: "PKG-SOLAR-3K",
+    name: "Sample — Solar 3KW on-grid",
+    capacityLabel: "3KW 1PH",
+    description: "Energy pack with capacity-scaled lines. Swap modules/inverter makes to your preferred OEMs.",
+    defaultMarginPct: 12,
+    defaultTaxPct: 18,
+    lines: [
+      { section: "Main Items", lineKind: "stock", description: "Solar modules bifacial", makeText: "Waaree / Adani / Vikram", qty: 6, unit: "nos", defaultRate: 0, scaleByCapacity: true },
+      { section: "Main Items", lineKind: "stock", description: "On-grid inverter", makeText: "Solis / Sungrow", qty: 1, unit: "nos", defaultRate: 0 },
+      { section: "Accessories & Services", lineKind: "stock", description: "DC cable 4 sqmm", makeText: "Polycab", qty: 60, unit: "mtr", defaultRate: 0 },
+      { section: "Accessories & Services", lineKind: "service", description: "Installation & commissioning", makeText: "Third party", qty: 1, unit: "job", defaultRate: 0 },
+      { section: "Accessories & Services", lineKind: "overhead", description: "Transport & handling", makeText: "Own", qty: 1, unit: "job", defaultRate: 0 },
+    ],
+  };
+  const epc: SamplePkg = {
+    code: "PKG-EPC-BOQ",
+    name: "Sample — EPC project BOQ",
+    capacityLabel: "Site scope",
+    description: "Technical schedule with supply / install / civil sections for project bids.",
+    defaultMarginPct: 8,
+    defaultTaxPct: 18,
+    lines: [
+      { section: "Supply", lineKind: "stock", description: "Main equipment supply", makeText: "Approved make", qty: 1, unit: "lot", defaultRate: 0 },
+      { section: "Supply", lineKind: "stock", description: "Cabling & accessories", makeText: "Reputed make", qty: 1, unit: "lot", defaultRate: 0 },
+      { section: "Installation", lineKind: "service", description: "Erection & commissioning", makeText: "Own / EPC", qty: 1, unit: "job", defaultRate: 0 },
+      { section: "Civil & Misc", lineKind: "service", description: "Foundation / civil works", makeText: "Local contractor", qty: 1, unit: "job", defaultRate: 0 },
+      { section: "Civil & Misc", lineKind: "overhead", description: "Site mobilisation", makeText: "Own", qty: 1, unit: "job", defaultRate: 0 },
+    ],
+  };
+  const mfg: SamplePkg = {
+    code: "PKG-MFG-ASM",
+    name: "Sample — Manufacturing assembly",
+    capacityLabel: "Batch / rev A",
+    description: "Part-centric BOM with raw materials, components and overheads.",
+    defaultMarginPct: 15,
+    defaultTaxPct: 18,
+    lines: [
+      { section: "Raw materials", lineKind: "stock", description: "Primary raw material", makeText: "Mill / OEM", qty: 100, unit: "kg", defaultRate: 0 },
+      { section: "Components", lineKind: "stock", description: "Bought-out component", makeText: "Vendor", qty: 20, unit: "nos", defaultRate: 0 },
+      { section: "Components", lineKind: "stock", description: "Fastener kit", makeText: "Unbrako / local", qty: 1, unit: "kit", defaultRate: 0 },
+      { section: "Overheads", lineKind: "overhead", description: "Shop consumables", makeText: "Various", qty: 1, unit: "lot", defaultRate: 0 },
+      { section: "Overheads", lineKind: "service", description: "Assembly labour", makeText: "In-house", qty: 8, unit: "hr", defaultRate: 0 },
+    ],
+  };
+  const services: SamplePkg = {
+    code: "PKG-SVC-FIT",
+    name: "Sample — Services / fit-out",
+    capacityLabel: "Engagement",
+    description: "Materials + labour split for fit-out and service engagements.",
+    defaultMarginPct: 18,
+    defaultTaxPct: 18,
+    lines: [
+      { section: "Materials", lineKind: "stock", description: "Finish material supply", makeText: "Approved brand", qty: 40, unit: "sqm", defaultRate: 0 },
+      { section: "Labour", lineKind: "service", description: "Installation labour", makeText: "In-house", qty: 3, unit: "day", defaultRate: 0 },
+      { section: "Labour", lineKind: "service", description: "Supervision", makeText: "In-house", qty: 1, unit: "day", defaultRate: 0 },
+      { section: "Other", lineKind: "overhead", description: "Scaffolding / hire", makeText: "Vendor", qty: 1, unit: "job", defaultRate: 0 },
+    ],
+  };
+  const buy: SamplePkg = {
+    code: "PKG-BUY-LIST",
+    name: "Sample — Procurement buy list",
+    capacityLabel: "RFQ ref",
+    description: "Stock-first sourcing list — treat Make as preferred supplier.",
+    defaultMarginPct: 5,
+    defaultTaxPct: 18,
+    lines: [
+      { section: "Buy list", lineKind: "stock", description: "Stock item A", makeText: "Preferred supplier", qty: 10, unit: "nos", defaultRate: 0 },
+      { section: "Buy list", lineKind: "stock", description: "Stock item B", makeText: "Alternate supplier", qty: 25, unit: "nos", defaultRate: 0 },
+      { section: "Buy list", lineKind: "stock", description: "Bulk consumable", makeText: "Local", qty: 100, unit: "mtr", defaultRate: 0 },
+      { section: "Services", lineKind: "service", description: "Inspection / QA", makeText: "Third party", qty: 1, unit: "job", defaultRate: 0 },
+    ],
+  };
+  return [generalS, generalL, solar, epc, mfg, services, buy];
 }
 
 export function registerBom(router: Router, deps: ImsDeps): void {

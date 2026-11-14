@@ -32,12 +32,15 @@ import { ItemPickerDialog, PartySelect } from "../shared/pickers";
 import {
   BOM_COLUMN_LABEL,
   BOM_INDUSTRY_PACK_META,
+  BOM_PAPER_DENSITIES,
   BOM_PAPER_PURPOSE_META,
   bomIndustryPackMeta,
   normalizeBomIndustryPack,
+  normalizeBomPaperDensity,
   normalizeBomPaperPurpose,
   scheduleColumnsFor,
   type BomIndustryPackId,
+  type BomPaperDensity,
   type BomPaperPurpose,
 } from "@/lib/ims/bom-paper";
 import { BomPaper, mergePaperOptions, modelFromDoc, type BomPaperModel } from "./BomPaper";
@@ -864,6 +867,9 @@ function BomEditorForm({
   const [docPack, setDocPack] = useState<BomIndustryPackId>(
     normalizeBomIndustryPack(initial?.paper?.industryPack ?? settings.bomIndustryPack),
   );
+  const [docDensity, setDocDensity] = useState<BomPaperDensity>(
+    normalizeBomPaperDensity(initial?.paper?.density ?? settings.bomPaperDensity),
+  );
 
   const seeded = fromPackage;
   const [customerName, setCustomerName] = useState(initial?.customerName ?? "");
@@ -978,7 +984,7 @@ function BomEditorForm({
     template: docPurpose,
     industryPack: docPack,
     tone: settings.bomPaperTone ?? "neutral",
-    density: settings.bomPaperDensity ?? "comfort",
+    density: docDensity,
     hideMargin: customerPreview,
     lines: lines
       .filter((l) => l.description.trim())
@@ -1063,6 +1069,7 @@ function BomEditorForm({
     paper: {
       purpose: docPurpose,
       industryPack: docPack,
+      density: docDensity,
       hideMargin: customerPreview,
     },
     lines: lines
@@ -1341,6 +1348,17 @@ function BomEditorForm({
                     {BOM_INDUSTRY_PACK_META.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label="Print density">
+                {({ id }) => (
+                  <Select id={id} value={docDensity} onChange={(e) => setDocDensity(normalizeBomPaperDensity(e.target.value))}>
+                    {BOM_PAPER_DENSITIES.map((d) => (
+                      <option key={d} value={d}>
+                        {d[0]!.toUpperCase() + d.slice(1)}
                       </option>
                     ))}
                   </Select>

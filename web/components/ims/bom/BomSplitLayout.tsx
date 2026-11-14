@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 const STORAGE_KEY = "ims.bom.split.composePct";
+const MOBILE_TAB_KEY = "ims.bom.split.mobileTab";
 const DEFAULT_COMPOSE_PCT = 50;
 const MIN_COMPOSE_PCT = 28;
 const MAX_COMPOSE_PCT = 72;
+const MOBILE_MQ = "(max-width: 1100px)";
 
 function clampPct(raw: unknown): number {
   const n = typeof raw === "number" ? raw : Number(raw);
@@ -32,7 +34,16 @@ function writeStoredPct(pct: number) {
   }
 }
 
-/** Compose + PDF preview split. Default 50/50; drag the rail to resize (persisted). */
+function readMobileTab(): "compose" | "preview" {
+  try {
+    if (typeof window === "undefined") return "compose";
+    return window.localStorage.getItem(MOBILE_TAB_KEY) === "preview" ? "preview" : "compose";
+  } catch {
+    return "compose";
+  }
+}
+
+/** Compose + PDF preview split. Default 50/50; drag the rail to resize (persisted). On narrow screens, tab between compose and preview. */
 export function BomSplitLayout({
   compose,
   preview,
@@ -45,10 +56,27 @@ export function BomSplitLayout({
   const rootRef = useRef<HTMLDivElement>(null);
   const [composePct, setComposePct] = useState(DEFAULT_COMPOSE_PCT);
   const [dragging, setDragging] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"compose" | "preview">("compose");
   const dragRef = useRef(false);
 
   useEffect(() => {
     setComposePct(readStoredPct());
+    setMobileTab(readMobileTab());
+    const mq = window.matchMedia(MOBILE_MQ);
+    const apply = () => setMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  const setTab = useCallback((tab: "compose" | "preview") => {
+    setMobileTab(tab);
+    try {
+      window.localStorage.setItem(MOBILE_TAB_KEY, tab);
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const applyClientX = useCallback((clientX: number) => {
@@ -91,59 +119,89 @@ export function BomSplitLayout({
   return (
     <div
       ref={rootRef}
-      className={`ims-bom-layout${confirm ? " ims-bom-layout--confirm" : ""}${dragging ? " is-resizing" : ""}`}
+      className={`ims-bom-layout${confirm ? " ims-bom-layout--confirm" : ""}${dragging ? " is-resizing" : ""}${mobile ? " is-mobile" : ""}`}
+      data-mobile-tab={mobile ? mobileTab : undefined}
       style={{ ["--ims-bom-compose-pct" as string]: `${composePct}%` }}
     >
-      <div className="ims-bom-compose">{compose}</div>
-      <div
-        className={`ims-bom-split-handle${dragging ? " is-active" : ""}`}
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize compose and preview panels"
-        aria-valuemin={MIN_COMPOSE_PCT}
-        aria-valuemax={MAX_COMPOSE_PCT}
-        aria-valuenow={composePct}
-        aria-valuetext={`Compose ${composePct}%, preview ${previewPct}%`}
-        tabIndex={0}
-        onPointerDown={(e) => {
-          if (e.button !== 0) return;
-          e.preventDefault();
-          dragRef.current = true;
-          setDragging(true);
-          document.body.classList.add("is-bom-resizing");
-          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-          applyClientX(e.clientX);
-        }}
-        onDoubleClick={(e) => {
-          e.preventDefault();
-          setComposePct(DEFAULT_COMPOSE_PCT);
-          writeStoredPct(DEFAULT_COMPOSE_PCT);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowLeft") {
+      {mobile ? (
+        <div className="ims-bom-mobile-tabs" role="tablist" aria-label="BOM editor panels">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileTab === "compose"}
+            className={`ims-bom-mobile-tab${mobileTab === "compose" ? " is-active" : ""}`}
+            onClick={() => setTab("compose")}
+          >
+            Compose
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileTab === "preview"}
+            className={`ims-bom-mobile-tab${mobileTab === "preview" ? " is-active" : ""}`}
+            onClick={() => setTab("preview")}
+          >
+            Preview
+          </button>
+        </div>
+      ) : null}
+
+      <div className="ims-bom-compose" hidden={mobile && mobileTab !== "compose"}>
+        {compose}
+      </div>
+      {!mobile ? (
+        <div
+          className={`ims-bom-split-handle${dragging ? " is-active" : ""}`}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize compose and preview panels"
+          aria-valuemin={MIN_COMPOSE_PCT}
+          aria-valuemax={MAX_COMPOSE_PCT}
+          aria-valuenow={composePct}
+          aria-valuetext={`Compose ${composePct}%, preview ${previewPct}%`}
+          tabIndex={0}
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
             e.preventDefault();
-            setComposePct((p) => {
-              const next = clampPct(p - 2);
-              writeStoredPct(next);
-              return next;
-            });
-          } else if (e.key === "ArrowRight") {
-            e.preventDefault();
-            setComposePct((p) => {
-              const next = clampPct(p + 2);
-              writeStoredPct(next);
-              return next;
-            });
-          } else if (e.key === "Home" || e.key === "Enter") {
+            dragRef.current = true;
+            setDragging(true);
+            document.body.classList.add("is-bom-resizing");
+            (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+            applyClientX(e.clientX);
+          }}
+          onDoubleClick={(e) => {
             e.preventDefault();
             setComposePct(DEFAULT_COMPOSE_PCT);
             writeStoredPct(DEFAULT_COMPOSE_PCT);
-          }
-        }}
-      >
-        <span className="ims-bom-split-grip" aria-hidden="true" />
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              setComposePct((p) => {
+                const next = clampPct(p - 2);
+                writeStoredPct(next);
+                return next;
+              });
+            } else if (e.key === "ArrowRight") {
+              e.preventDefault();
+              setComposePct((p) => {
+                const next = clampPct(p + 2);
+                writeStoredPct(next);
+                return next;
+              });
+            } else if (e.key === "Home" || e.key === "Enter") {
+              e.preventDefault();
+              setComposePct(DEFAULT_COMPOSE_PCT);
+              writeStoredPct(DEFAULT_COMPOSE_PCT);
+            }
+          }}
+        >
+          <span className="ims-bom-split-grip" aria-hidden="true" />
+        </div>
+      ) : null}
+      <div className="ims-bom-preview-wrap" hidden={mobile && mobileTab !== "preview"}>
+        {preview}
       </div>
-      <div className="ims-bom-preview-wrap">{preview}</div>
     </div>
   );
 }
