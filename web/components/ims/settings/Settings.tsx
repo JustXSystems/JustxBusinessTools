@@ -4,6 +4,7 @@ import "./settings.css";
 import { useState } from "react";
 import { Alert, Button, useToast } from "@/components/bos";
 import type { ImsSettings, ImsSettingsMeta } from "@/lib/ims/api";
+import { withBomPaperSettingsDefaults } from "@/lib/ims/bom-paper";
 import { PREFIX_FIELDS, PREFIX_RE, diffSettings, isValidGstin, settingsApi, unknownPlaceholders, type SettingsPatch } from "@/lib/ims/settings";
 import { Loaded, PageHeader, Stack, SubTabs, useIms, useImsAction, useImsData } from "../core";
 import { CatalogTab, PermissionsTab } from "./AccessTabs";
@@ -114,8 +115,8 @@ function SettingsEditor({ meta, initialTab }: { meta: ImsSettingsMeta; initialTa
   const { show } = useToast();
   const readOnly = !can("settings");
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [base, setBase] = useState<ImsSettings>(meta.settings);
-  const [draft, setDraft] = useState<ImsSettings>(meta.settings);
+  const [base, setBase] = useState<ImsSettings>(() => withBomPaperSettingsDefaults(meta.settings) as ImsSettings);
+  const [draft, setDraft] = useState<ImsSettings>(() => withBomPaperSettingsDefaults(meta.settings) as ImsSettings);
   const [showErrors, setShowErrors] = useState(false);
 
   const patch = diffSettings(base, draft, SAVE_KEYS);
@@ -136,10 +137,11 @@ function SettingsEditor({ meta, initialTab }: { meta: ImsSettingsMeta; initialTa
     }
     const out = await run("save", () => settingsApi.save(patch), { success: "Settings saved", description: `${changed} change${changed === 1 ? "" : "s"}` });
     if (!out) return;
-    setBase(out.settings);
-    setDraft(out.settings);
+    const next = withBomPaperSettingsDefaults(out.settings) as ImsSettings;
+    setBase(next);
+    setDraft(next);
     setShowErrors(false);
-    setSettings(out.settings);
+    setSettings(next);
   };
 
   const discard = () => {

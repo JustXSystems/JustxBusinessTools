@@ -311,6 +311,36 @@ export function normalizeBomPaperDensity(v: unknown): BomPaperDensity {
   return (BOM_PAPER_DENSITIES as readonly string[]).includes(s) ? (s as BomPaperDensity) : "comfort";
 }
 
+/** Days from `fromIso` (YYYY-MM-DD) until validUntil; null if missing/invalid. */
+export function bomValidityDaysRemaining(validUntil: string | null | undefined, fromIso?: string | null): number | null {
+  const until = String(validUntil ?? "").trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(until)) return null;
+  const from = String(fromIso ?? "").trim().slice(0, 10);
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(from) ? new Date(`${from}T00:00:00`) : new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(`${until}T00:00:00`);
+  if (Number.isNaN(end.getTime())) return null;
+  return Math.round((end.getTime() - start.getTime()) / 86_400_000);
+}
+
+/** Fill missing BOM paper settings so older API payloads still render. */
+export function withBomPaperSettingsDefaults<T extends Record<string, unknown>>(settings: T): T & {
+  bomPaperTemplate: BomPaperPurpose;
+  bomIndustryPack: BomIndustryPackId;
+  bomPaperTone: BomPaperTone;
+  bomPaperDensity: BomPaperDensity;
+  bomHideMargin: boolean;
+} {
+  return {
+    ...settings,
+    bomPaperTemplate: normalizeBomPaperPurpose(settings.bomPaperTemplate),
+    bomIndustryPack: normalizeBomIndustryPack(settings.bomIndustryPack),
+    bomPaperTone: normalizeBomPaperTone(settings.bomPaperTone),
+    bomPaperDensity: normalizeBomPaperDensity(settings.bomPaperDensity),
+    bomHideMargin: Boolean(settings.bomHideMargin),
+  };
+}
+
 /* ---------- Line / section helpers ---------- */
 
 export type BomPaperLine = Pick<

@@ -7,6 +7,7 @@ import {
   bomCustomerComposition,
   bomIndustryPackMeta,
   bomTaxBreakup,
+  bomValidityDaysRemaining,
   groupBomSections,
   lineAmount,
   lineIdentityBits,
@@ -125,7 +126,12 @@ function DocMeta({ model, extra }: { model: BomPaperModel; extra?: ReadonlyArray
     { label: "Rev", value: `R${Number(model.revision ?? 1)}` },
     { label: "Date", value: model.docDate ? dateLabel(model.docDate) : "—" },
   ];
-  if (model.validUntil) meta.push({ label: "Valid", value: dateLabel(model.validUntil) });
+  if (model.validUntil) {
+    const days = bomValidityDaysRemaining(model.validUntil, model.docDate);
+    const dayNote =
+      days == null ? "" : days < 0 ? " · expired" : days === 0 ? " · expires today" : ` · ${days} day${days === 1 ? "" : "s"} left`;
+    meta.push({ label: "Valid", value: `${dateLabel(model.validUntil)}${dayNote}` });
+  }
   if (model.capacityLabel) meta.push({ label: sizeLabel(model), value: model.capacityLabel });
   if (model.title) meta.push({ label: "Title", value: model.title });
   if (model.preparedBy) meta.push({ label: "Prepared", value: model.preparedBy });
@@ -536,11 +542,17 @@ export function ProposalBomPaper({ model }: { model: BomPaperModel }) {
   ]
     .filter(Boolean)
     .join(" · ");
+  const validDays = bomValidityDaysRemaining(model.validUntil, model.docDate);
+  const validBit = model.validUntil
+    ? `Valid ${dateLabel(model.validUntil)}${
+        validDays == null ? "" : validDays < 0 ? " · expired" : validDays === 0 ? " · today" : ` · ${validDays}d left`
+      }`
+    : null;
   const metaBits = [
     model.docNo || "Draft",
     `R${Number(model.revision ?? 1)}`,
     model.docDate ? dateLabel(model.docDate) : null,
-    model.validUntil ? `Valid ${dateLabel(model.validUntil)}` : null,
+    validBit,
     model.preparedBy ? `By ${model.preparedBy}` : null,
   ].filter(Boolean);
   const titleBits = [model.title || null, model.capacityLabel || null].filter(Boolean).join(" · ");
@@ -774,12 +786,12 @@ export function ShareBomPaper({ model }: { model: BomPaperModel }) {
         )}
       </div>
       <div className="ims-bom-folio-foot">
-        <div>
+        <div className="is-total">
           <span>Total</span>
           <b>{inrExact(c.grand)}</b>
         </div>
-        <div className="ims-paper-words">{rupeesInWords(c.grand)}</div>
       </div>
+      <div className="ims-paper-words">{rupeesInWords(c.grand)}</div>
       <FootMatter model={model} />
     </PaperShell>
   );

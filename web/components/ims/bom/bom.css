@@ -1633,6 +1633,7 @@ body.is-bom-resizing {
   padding: 10px 12px;
   background: #fff;
 }
+.bos .ims-bom-folio-card-top,
 .bos .ims-bom-folio-card > header {
   display: flex;
   justify-content: space-between;
@@ -1640,39 +1641,32 @@ body.is-bom-resizing {
   gap: 8px;
   margin-bottom: 6px;
 }
+.bos .ims-bom-folio-card-top .ims-bom-folio-sec,
 .bos .ims-bom-folio-card > header > span:first-child {
   font-family: var(--bos-font-mono, ui-monospace, monospace);
   font-size: 10px;
   color: var(--bom-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
-.bos .ims-bom-folio-card h5 {
-  margin: 0;
+.bos .ims-bom-folio-desc {
   font-size: 12.5px;
   font-weight: 650;
   line-height: 1.35;
+  color: var(--bom-ink);
 }
-.bos .ims-bom-folio-card p {
-  margin: 4px 0 0;
-  font-size: 11.5px;
-  color: var(--bom-muted);
-}
-.bos .ims-bom-folio-card small {
-  display: block;
-  margin-top: 4px;
-  font-size: 10.5px;
-  color: var(--bom-faint);
-}
-.bos .ims-bom-folio-card footer {
+.bos .ims-bom-folio-meta {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 8px;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid #f1f5f9;
   font-size: 12px;
 }
-.bos .ims-bom-folio-card footer span { color: var(--bom-muted); }
-.bos .ims-bom-folio-card footer b { font-variant-numeric: tabular-nums; }
+.bos .ims-bom-folio-meta span { color: var(--bom-muted); }
+.bos .ims-bom-folio-meta b { font-variant-numeric: tabular-nums; color: var(--bom-ink); }
 .bos .ims-bom-folio-foot {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

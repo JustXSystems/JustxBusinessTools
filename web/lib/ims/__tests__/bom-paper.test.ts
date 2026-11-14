@@ -8,6 +8,7 @@ import {
   bomIndustryPackMeta,
   bomPaperPurposeMeta,
   bomTaxBreakup,
+  bomValidityDaysRemaining,
   groupBomSections,
   lineKindCode,
   normalizeBomIndustryPack,
@@ -15,6 +16,7 @@ import {
   normalizeBomPaperTemplate,
   sampleBomPaperModel,
   scheduleColumnsFor,
+  withBomPaperSettingsDefaults,
 } from "../bom-paper";
 
 describe("bom-paper purposes", () => {
@@ -127,5 +129,16 @@ describe("bom-paper purposes", () => {
     expect(bomIndustryPackMeta("epc").defaultSections).toEqual(["Supply", "Installation", "Civil & Misc"]);
     expect(bomIndustryPackMeta("manufacturing").defaultSections[0]).toBe("Raw materials");
     expect(bomIndustryPackMeta("services").defaultSections).toContain("Labour");
+  });
+
+  it("computes validity days remaining and fills paper setting defaults", () => {
+    expect(bomValidityDaysRemaining("2026-11-20", "2026-11-14")).toBe(6);
+    expect(bomValidityDaysRemaining("2026-11-14", "2026-11-14")).toBe(0);
+    expect(bomValidityDaysRemaining("2026-11-10", "2026-11-14")).toBe(-4);
+    expect(bomValidityDaysRemaining(null)).toBeNull();
+    const filled = withBomPaperSettingsDefaults({});
+    expect(filled.bomPaperTemplate).toBe("proposal");
+    expect(filled.bomIndustryPack).toBe("general");
+    expect(filled.bomHideMargin).toBe(false);
   });
 });
