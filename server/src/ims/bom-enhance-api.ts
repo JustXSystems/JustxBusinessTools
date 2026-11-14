@@ -472,7 +472,7 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
   });
 
   router.post("/bom/diff", async (req, res) => {
-    requirePerm(res, "bom");
+    requireAnyPerm(res, ["bom", "bomPackages"]);
     const actor = actorOf(res);
     const body = parse(
       z.object({
@@ -483,6 +483,8 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
       }),
       req.body,
     );
+    const comparingDocs = Boolean(body.leftDocId || body.rightDocId);
+    if (comparingDocs) requirePerm(res, "bom");
     const loadLines = async (docId?: string, packageId?: string) => {
       if (docId) {
         const d = await loaders.loadDoc(deps.db, actor.tenantId, docId);
@@ -704,7 +706,7 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
   }
 
   router.get("/bom/rate-cards", async (_req, res) => {
-    requirePerm(res, "bom");
+    requireAnyPerm(res, ["bom", "bomPackages"]);
     const actor = actorOf(res);
     const list = await rows<RateCardRow & { line_count: number }>(
       deps.db,
@@ -724,7 +726,7 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
   });
 
   router.get("/bom/rate-cards/:id", async (req, res) => {
-    requirePerm(res, "bom");
+    requireAnyPerm(res, ["bom", "bomPackages"]);
     const actor = actorOf(res);
     const card = await loadRateCard(deps.db, actor.tenantId, String(req.params.id));
     if (!card) throw notFound("Rate card");
@@ -732,7 +734,7 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
   });
 
   router.post("/bom/rate-cards", async (req, res) => {
-    requirePerm(res, "bom");
+    requireAnyPerm(res, ["bom", "bomPackages"]);
     const actor = actorOf(res);
     const input = parse(rateCardInput, req.body);
     const id = randomUUID();
@@ -770,7 +772,7 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
   });
 
   router.put("/bom/rate-cards/:id", async (req, res) => {
-    requirePerm(res, "bom");
+    requireAnyPerm(res, ["bom", "bomPackages"]);
     const actor = actorOf(res);
     const id = String(req.params.id);
     const existing = await loadRateCard(deps.db, actor.tenantId, id);
@@ -809,7 +811,7 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
   });
 
   router.delete("/bom/rate-cards/:id", async (req, res) => {
-    requirePerm(res, "bom");
+    requireAnyPerm(res, ["bom", "bomPackages"]);
     const actor = actorOf(res);
     const id = String(req.params.id);
     const existing = await loadRateCard(deps.db, actor.tenantId, id);

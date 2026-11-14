@@ -83,6 +83,8 @@ export function useImsAction() {
       setBusy(key);
       try {
         const out = await fn();
+        /** `null` = caller cancelled mid-flight (e.g. warning confirm) — no toast/refresh. */
+        if (out === null) return undefined;
         if (opts.success) show({ tone: opts.tone ?? "emerald", title: opts.success, description: opts.description });
         if (opts.refresh !== false) invalidate();
         return out;

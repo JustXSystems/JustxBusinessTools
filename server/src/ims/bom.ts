@@ -3,10 +3,10 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getOrgFeatureSwitches } from "../lib/feature-switches.js";
 import { getRequestContext } from "../lib/request-context.js";
-import { actorOf, isOwner, isoDate, optText, parse, parsePatch, qint, qstr, recordEvent, requireAnyPerm, requirePerm, type ImsDeps } from "./context.js";
+import { actorOf, can, isOwner, isoDate, optText, parse, parsePatch, qint, qstr, recordEvent, requireAnyPerm, requirePerm, type ImsDeps } from "./context.js";
 import { exec, isoOf, likeOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
 import { badRequest, conflict, forbidden, notFound } from "./host.js";
-import { round2, round3, todayISO, type ImsLineInput } from "./logic.js";
+import { periodRange, round2, round3, todayISO, type ImsLineInput } from "./logic.js";
 import { confirmBomDoc, reopenBomDoc, registerBomEnhance } from "./bom-enhance-api.js";
 import { explodeNestedPackageLines, isLegacyFullIssue, normalizeOptionSelection, selectedOptionKeys } from "./bom-enhance.js";
 import { createLinkedInvoice } from "./sales.js";
@@ -367,6 +367,25 @@ export function computeBomTotals(lines: ReadonlyArray<{ qty: number; rate: numbe
   const afterMargin = round2(materialsTotal + marginAmount);
   const taxAmount = round2(afterMargin * (Number(taxPct) || 0) / 100);
   return { materialsTotal, marginAmount, taxAmount, grandTotal: round2(afterMargin + taxAmount) };
+}
+
+export type BomHealth = { score: number; flags: string[] };
+
+/** Lightweight health for list rows — no line payloads required beyond unmatched stock count. */
+export function computeBomHealth(
+  doc: Pick<BomDoc, "status" | "customerName" | "partyId" | "grandTotal" | "invoiceId" | "stockIssuedAt" | "packageName">,
+  unmatchedStock = 0,
+): BomHealth {
+  const flags: string[] = [];
+  if (!String(doc.customerName || "").trim()) flags.push("No customer");
+  if (!doc.partyId) flags.push("No party link");
+  if (!(doc.grandTotal > 0) && doc.status !== "cancelled") flags.push("Zero total");
+  if (unmatchedStock > 0) flags.push(`${unmatchedStock} unlinked stock`);
+  if (doc.status === "confirmed" && !doc.invoiceId) flags.push("Not invoiced");
+  if (doc.status === "confirmed" && !doc.stockIssuedAt) flags.push("Stock pending");
+  if (doc.status === "draft" && !doc.packageName) flags.push("Blank template");
+  const score = Math.max(0, Math.min(100, 100 - flags.length * 16));
+  return { score, flags };
 }
 
 /** First numeric token in a capacity label (“3KW”, “Size 5”, “10.5 kW”). */
@@ -1103,11 +1122,18 @@ export function registerBom(router: Router, deps: ImsDeps): void {
   router.get("/bom/docs", async (req, res) => {
     requirePerm(res, "bom");
     const actor = actorOf(res);
+    const settings = await getSettings(deps, actor.tenantId);
     const q = qstr(req.query.q, 80);
     const status = qstr(req.query.status, 16);
     const invoice = qstr(req.query.invoice, 16); // linked | none
     const stock = qstr(req.query.stock, 16); // issued | pending
-    const limit = qint(req.query.limit, 50, 1, 200);
+    const period = qstr(req.query.period, 16) || "all";
+    const sort = qstr(req.query.sort, 16) || "recent";
+    const minTotalRaw = qstr(req.query.minTotal, 24);
+    const maxTotalRaw = qstr(req.query.maxTotal, 24);
+    const minTotal = minTotalRaw ? Number(minTotalRaw) : NaN;
+    const maxTotal = maxTotalRaw ? Number(maxTotalRaw) : NaN;
+    const limit = qint(req.query.limit, 25, 1, 200);
     const offset = qint(req.query.offset, 0, 0, 100000);
     /** Shared filters only — avoid unused named placeholders on count/tally queries. */
     const filterParams: Record<string, unknown> = { tenantId: actor.tenantId };
@@ -1116,8 +1142,25 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     else if (invoice === "none") where += ` AND invoice_id IS NULL`;
     if (stock === "issued") where += ` AND stock_issued_at IS NOT NULL`;
     else if (stock === "pending") where += ` AND stock_issued_at IS NULL AND status = 'confirmed'`;
+    if (period && period !== "all") {
+      const range = periodRange(period, todayISO(), settings.fiscalYearStart, {
+        from: qstr(req.query.from, 10),
+        to: qstr(req.query.to, 10),
+      });
+      where += ` AND doc_date BETWEEN :from AND :to`;
+      filterParams.from = range.from;
+      filterParams.to = range.to;
+    }
+    if (Number.isFinite(minTotal)) {
+      where += ` AND grand_total >= :minTotal`;
+      filterParams.minTotal = round2(minTotal);
+    }
+    if (Number.isFinite(maxTotal)) {
+      where += ` AND grand_total <= :maxTotal`;
+      filterParams.maxTotal = round2(maxTotal);
+    }
     if (q) {
-      where += ` AND (doc_no LIKE :q OR customer_name LIKE :q OR IFNULL(location,'') LIKE :q OR IFNULL(title,'') LIKE :q OR IFNULL(capacity_label,'') LIKE :q OR IFNULL(package_name,'') LIKE :q OR IFNULL(project_ref,'') LIKE :q)`;
+      where += ` AND (doc_no LIKE :q OR customer_name LIKE :q OR IFNULL(location,'') LIKE :q OR IFNULL(title,'') LIKE :q OR IFNULL(capacity_label,'') LIKE :q OR IFNULL(package_name,'') LIKE :q OR IFNULL(project_ref,'') LIKE :q OR IFNULL(prepared_by,'') LIKE :q)`;
       filterParams.q = likeOf(q);
     }
     /** Status filter applies to the row list only — tab counts stay for the same search/invoice/stock view. */
@@ -1127,11 +1170,23 @@ export function registerBom(router: Router, deps: ImsDeps): void {
       listWhere += ` AND status = :status`;
       statusParams.status = status;
     }
+    const orderBy =
+      sort === "date"
+        ? "doc_date DESC, doc_no DESC"
+        : sort === "docNo"
+          ? "doc_no ASC"
+          : sort === "customer"
+            ? "customer_name ASC, doc_date DESC"
+            : sort === "amount"
+              ? "grand_total DESC, doc_no ASC"
+              : sort === "status"
+                ? "status ASC, doc_date DESC"
+                : "updated_at DESC, created_at DESC";
     const listParams: Record<string, unknown> = { ...statusParams, limit, offset };
     const [list, countRow, tally] = await Promise.all([
       rows<DocRow>(
         deps.db,
-        `SELECT * FROM ims_bom_docs WHERE ${listWhere} ORDER BY doc_date DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+        `SELECT * FROM ims_bom_docs WHERE ${listWhere} ORDER BY ${orderBy} LIMIT ${limit} OFFSET ${offset}`,
         listParams,
       ),
       one<{ n: number }>(deps.db, `SELECT COUNT(*) AS n FROM ims_bom_docs WHERE ${listWhere}`, statusParams),
@@ -1157,9 +1212,31 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         filterParams,
       ),
     ]);
+    const mapped = list.map((r) => mapDoc(r));
+    const unmatched = new Map<string, number>();
+    if (mapped.length) {
+      const ids = mapped.map((d) => d.id);
+      const placeholders = ids.map((_, i) => `:id${i}`).join(", ");
+      const unmatchedParams: Record<string, unknown> = { tenantId: actor.tenantId };
+      ids.forEach((id, i) => {
+        unmatchedParams[`id${i}`] = id;
+      });
+      const unmatchedRows = await rows<{ doc_id: string; n: number }>(
+        deps.db,
+        `SELECT doc_id, COUNT(*) AS n FROM ims_bom_doc_lines
+         WHERE tenant_id = :tenantId AND doc_id IN (${placeholders})
+           AND line_kind = 'stock' AND (item_id IS NULL OR item_id = '')
+         GROUP BY doc_id`,
+        unmatchedParams,
+      );
+      for (const row of unmatchedRows) unmatched.set(row.doc_id, Number(row.n));
+    }
     res.json({
-      docs: list.map((r) => mapDoc(r)),
+      docs: mapped.map((d) => ({ ...d, health: computeBomHealth(d, unmatched.get(d.id) ?? 0) })),
       total: Number(countRow?.n ?? 0),
+      limit,
+      offset,
+      sort,
       counts: {
         all: Number(tally?.all_n ?? 0),
         draft: Number(tally?.draft_n ?? 0),
@@ -1431,6 +1508,10 @@ export function registerBom(router: Router, deps: ImsDeps): void {
   router.post("/bom/docs/:id/confirm", async (req, res) => {
     requirePerm(res, "bom");
     const actor = actorOf(res);
+    const settings = await getSettings(deps, actor.tenantId);
+    if (settings.bomConfirmNeedsApproval && !isOwner(res) && !can(res, "approvals")) {
+      throw forbidden("Confirming a BOM needs Approvals permission. Ask an owner or manager.");
+    }
     const id = String(req.params.id);
     const body = parse(z.object({ acknowledgeWarnings: z.boolean().optional() }).default({}), req.body ?? {});
     const existing = await loadDoc(deps.db, actor.tenantId, id);
@@ -1504,6 +1585,114 @@ export function registerBom(router: Router, deps: ImsDeps): void {
       payload: { docNo: existing.docNo, status: existing.status, byOwner: isOwner(res) },
     });
     res.status(204).end();
+  });
+
+  router.post("/bom/docs/:id/duplicate", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const src = await loadDoc(deps.db, actor.tenantId, String(req.params.id));
+    if (!src) throw notFound("BOM document not found");
+    const lines = src.lines ?? [];
+    if (!lines.length) throw conflict("This BOM has no lines to copy");
+    const settings = await getSettings(deps, actor.tenantId);
+    const docDate = todayISO();
+    const id = randomUUID();
+    const totals = computeBomTotals(
+      lines.map((l) => ({ qty: l.qty, rate: l.rate })),
+      src.marginPct,
+      src.taxPct,
+    );
+    await tx(deps.db, async (conn) => {
+      const docNo = await nextDocNo(conn, actor.tenantId, "bom", "BOM", docDate, settings.businessName);
+      await exec(
+        conn,
+        `INSERT INTO ims_bom_docs
+          (id, tenant_id, package_id, package_name, doc_no, status, doc_date, capacity_label, title,
+           customer_name, location, project_ref, party_id, margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total,
+           notes, prepared_by, valid_until, payment_terms, delivery_terms, warranty_terms,
+           scope_of_supply, exclusions, paper_json, options_json, variables_json, created_by, created_by_name)
+         VALUES
+          (:id, :tenantId, :packageId, :packageName, :docNo, 'draft', :docDate, :capacityLabel, :title,
+           :customerName, :location, :projectRef, :partyId, :marginPct, :taxPct, :materialsTotal, :marginAmount, :taxAmount, :grandTotal,
+           :notes, :preparedBy, :validUntil, :paymentTerms, :deliveryTerms, :warrantyTerms,
+           :scopeOfSupply, :exclusions, CAST(:paper AS JSON), CAST(:options AS JSON), CAST(:variables AS JSON), :createdBy, :createdByName)`,
+        {
+          id,
+          tenantId: actor.tenantId,
+          packageId: src.packageId,
+          packageName: src.packageName,
+          docNo,
+          docDate,
+          capacityLabel: src.capacityLabel,
+          title: src.title ? `${src.title} (copy)`.slice(0, 200) : null,
+          customerName: src.customerName,
+          location: src.location,
+          projectRef: src.projectRef ?? null,
+          partyId: src.partyId,
+          marginPct: src.marginPct,
+          taxPct: src.taxPct,
+          materialsTotal: totals.materialsTotal,
+          marginAmount: totals.marginAmount,
+          taxAmount: totals.taxAmount,
+          grandTotal: totals.grandTotal,
+          notes: src.notes,
+          preparedBy: actor.name ?? actor.email ?? src.preparedBy,
+          validUntil: src.validUntil ?? null,
+          paymentTerms: src.paymentTerms ?? null,
+          deliveryTerms: src.deliveryTerms ?? null,
+          warrantyTerms: src.warrantyTerms ?? null,
+          scopeOfSupply: src.scopeOfSupply ?? null,
+          exclusions: src.exclusions ?? null,
+          paper: src.paper ? JSON.stringify(src.paper) : null,
+          options: src.options ? JSON.stringify(src.options) : null,
+          variables: src.variables ? JSON.stringify(src.variables) : null,
+          createdBy: actor.userId,
+          createdByName: actor.name ?? actor.email ?? null,
+        },
+      );
+      await replaceDocLines(
+        conn,
+        actor.tenantId,
+        id,
+        lines.map((l) => ({
+          section: l.section,
+          lineKind: l.lineKind,
+          itemId: l.itemId,
+          description: l.description,
+          makeText: l.makeText,
+          qty: l.qty,
+          unit: l.unit,
+          scaleByCapacity: l.scaleByCapacity,
+          rate: l.rate,
+          remarks: l.remarks,
+          qtyFormula: l.qtyFormula ?? null,
+          childPackageId: l.childPackageId ?? null,
+          optionalFlag: l.optionalFlag ?? false,
+          optionKey: l.optionKey ?? null,
+          alternateItemIds: l.alternateItemIds ?? [],
+          serviceSpare: l.serviceSpare ?? false,
+          scrapPct: l.scrapPct ?? 0,
+          costRate: l.costRate ?? null,
+          issuedQty: 0,
+          serialNotes: null,
+          sourcePackageLineId: l.sourcePackageLineId ?? null,
+        })),
+      );
+      await exec(
+        conn,
+        `UPDATE ims_bom_docs SET materials_total = :materialsTotal, margin_amount = :marginAmount, tax_amount = :taxAmount, grand_total = :grandTotal
+         WHERE tenant_id = :tenantId AND id = :id`,
+        { tenantId: actor.tenantId, id, ...totals },
+      );
+    });
+    await recordEvent(deps, actor, {
+      type: "bom.doc.duplicated",
+      entityType: "bom_doc",
+      entityId: id,
+      summary: `Duplicated ${src.docNo} → new draft`,
+      payload: { fromId: src.id, fromDocNo: src.docNo },
+    });
+    res.status(201).json({ doc: await loadDoc(deps.db, actor.tenantId, id) });
   });
 
   /* ---------- P3: invoice convert + stock issue ---------- */

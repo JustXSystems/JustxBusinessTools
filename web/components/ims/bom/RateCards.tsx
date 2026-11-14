@@ -24,7 +24,7 @@ const blankLine = (): EditorLine => ({
 export default function BomRateCardsScreen() {
   const [view, setView] = useState<View>({ mode: "list" });
   return (
-    <RequirePerm perm="bom" what="BOM rate cards">
+    <RequirePerm perm={["bom", "bomPackages"]} what="BOM rate cards">
       {view.mode === "edit" ? (
         <RateCardEditor id={view.id} onBack={() => setView({ mode: "list" })} />
       ) : (

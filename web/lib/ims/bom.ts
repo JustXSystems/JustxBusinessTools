@@ -148,6 +148,8 @@ export type BomDocPaperOverride = {
   columns?: string[] | null;
 };
 
+export type BomHealth = { score: number; flags: string[] };
+
 export type BomDoc = {
   id: string;
   packageId: string | null;
@@ -167,6 +169,8 @@ export type BomDoc = {
   marginAmount: number;
   taxAmount: number;
   grandTotal: number;
+  /** Present on list responses. */
+  health?: BomHealth;
   notes: string | null;
   preparedBy: string | null;
   revision?: number;
@@ -472,12 +476,21 @@ export const bom = {
     status?: string;
     invoice?: "linked" | "none" | "all";
     stock?: "issued" | "pending" | "all";
+    period?: string;
+    from?: string;
+    to?: string;
+    sort?: string;
+    minTotal?: number;
+    maxTotal?: number;
     limit?: number;
     offset?: number;
   }) =>
     get<{
       docs: BomDoc[];
       total: number;
+      limit?: number;
+      offset?: number;
+      sort?: string;
       counts?: {
         all: number;
         draft: number;
@@ -493,6 +506,12 @@ export const bom = {
       status: params?.status,
       invoice: params?.invoice && params.invoice !== "all" ? params.invoice : undefined,
       stock: params?.stock && params.stock !== "all" ? params.stock : undefined,
+      period: params?.period && params.period !== "all" ? params.period : undefined,
+      from: params?.from,
+      to: params?.to,
+      sort: params?.sort,
+      minTotal: params?.minTotal,
+      maxTotal: params?.maxTotal,
       limit: params?.limit,
       offset: params?.offset,
     }),
@@ -509,6 +528,7 @@ export const bom = {
   reopenDoc: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/reopen`),
   cancelDoc: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/cancel`),
   deleteDoc: (id: string) => del(`/bom/docs/${id}`),
+  duplicateDoc: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/duplicate`),
   docGates: (id: string) =>
     get<{
       gates: {

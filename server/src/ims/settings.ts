@@ -155,6 +155,8 @@ export type ImsSettings = {
   bomPaperTone: BomPaperTone;
   bomPaperDensity: BomPaperDensity;
   bomHideMargin: boolean;
+  /** When true, confirming a BOM requires the Approvals permission (owners always can). */
+  bomConfirmNeedsApproval: boolean;
   /** Null = use industry-pack column defaults. */
   bomScheduleColumns: BomScheduleColumnId[] | null;
   poApprovalLimit: number;
@@ -192,6 +194,7 @@ type SettingsRow = {
   bom_paper_tone?: string | null;
   bom_paper_density?: string | null;
   bom_hide_margin?: number | boolean | null;
+  bom_confirm_needs_approval?: number | boolean | null;
   bom_schedule_columns_json?: unknown;
   po_approval_limit: string | number;
   draft_po_purge_days: number;
@@ -226,6 +229,7 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   bomPaperTone: normalizeBomPaperTone(r.bom_paper_tone),
   bomPaperDensity: normalizeBomPaperDensity(r.bom_paper_density),
   bomHideMargin: Boolean(r.bom_hide_margin),
+  bomConfirmNeedsApproval: Boolean(r.bom_confirm_needs_approval),
   bomScheduleColumns: normalizeBomScheduleColumnsSetting(r.bom_schedule_columns_json),
   poApprovalLimit: money(r.po_approval_limit),
   draftPoPurgeDays: Number(r.draft_po_purge_days) || 0,
@@ -288,6 +292,7 @@ const SettingsInput = z.object({
   bomPaperTone: z.enum(BOM_PAPER_TONES).optional(),
   bomPaperDensity: z.enum(BOM_PAPER_DENSITIES).optional(),
   bomHideMargin: z.boolean().optional(),
+  bomConfirmNeedsApproval: z.boolean().optional(),
   bomScheduleColumns: z.array(z.enum(BOM_SCHEDULE_COLUMN_IDS)).max(16).nullable().optional(),
   poApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
   draftPoPurgeDays: z.coerce.number().int().min(0).max(365).optional(),
@@ -322,6 +327,7 @@ const COLUMN: Record<string, string> = {
   bomPaperTone: "bom_paper_tone",
   bomPaperDensity: "bom_paper_density",
   bomHideMargin: "bom_hide_margin",
+  bomConfirmNeedsApproval: "bom_confirm_needs_approval",
   bomScheduleColumns: "bom_schedule_columns_json",
   poApprovalLimit: "po_approval_limit",
   draftPoPurgeDays: "draft_po_purge_days",
