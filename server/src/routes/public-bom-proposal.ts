@@ -110,28 +110,61 @@ async function loadPublicLines(tenantId: number, docId: string) {
   const list = await rows<BomLinePublicRow>(
     pool,
     `SELECT l.id, l.section, l.sort_no, l.line_kind, l.description, l.make_text, l.qty, l.unit, l.rate, l.amount, l.remarks,
+            l.optional_flag, l.option_key, l.alternate_item_ids_json,
             i.sku AS item_sku, i.hsn AS item_hsn
      FROM ims_bom_doc_lines l
      LEFT JOIN ims_items i ON i.tenant_id = l.tenant_id AND i.id = l.item_id
      WHERE l.tenant_id = :tenantId AND l.doc_id = :docId
      ORDER BY l.sort_no ASC, l.created_at ASC`,
     { tenantId, docId },
+  ).catch(async () =>
+    rows<BomLinePublicRow & { optional_flag?: number; option_key?: string | null; alternate_item_ids_json?: unknown }>(
+      pool,
+      `SELECT l.id, l.section, l.sort_no, l.line_kind, l.description, l.make_text, l.qty, l.unit, l.rate, l.amount, l.remarks,
+              i.sku AS item_sku, i.hsn AS item_hsn
+       FROM ims_bom_doc_lines l
+       LEFT JOIN ims_items i ON i.tenant_id = l.tenant_id AND i.id = l.item_id
+       WHERE l.tenant_id = :tenantId AND l.doc_id = :docId
+       ORDER BY l.sort_no ASC, l.created_at ASC`,
+      { tenantId, docId },
+    ),
   );
-  return list.map((l) => ({
-    id: l.id,
-    section: l.section,
-    sortNo: Number(l.sort_no),
-    lineKind: l.line_kind,
-    description: l.description,
-    makeText: l.make_text,
-    sku: l.item_sku,
-    hsn: l.item_hsn,
-    qty: round3(money(l.qty)),
-    unit: l.unit,
-    rate: round2(money(l.rate)),
-    amount: round2(money(l.amount)),
-    remarks: l.remarks,
-  }));
+  return list.map((l) => {
+    const ext = l as BomLinePublicRow & {
+      optional_flag?: number;
+      option_key?: string | null;
+      alternate_item_ids_json?: unknown;
+    };
+    let alternateCount = 0;
+    const rawAlts = ext.alternate_item_ids_json;
+    if (Array.isArray(rawAlts)) alternateCount = rawAlts.length;
+    else if (typeof rawAlts === "string") {
+      try {
+        const parsed = JSON.parse(rawAlts);
+        if (Array.isArray(parsed)) alternateCount = parsed.length;
+      } catch {
+        alternateCount = 0;
+      }
+    }
+    return {
+      id: l.id,
+      section: l.section,
+      sortNo: Number(l.sort_no),
+      lineKind: l.line_kind,
+      description: l.description,
+      makeText: l.make_text,
+      sku: l.item_sku,
+      hsn: l.item_hsn,
+      qty: round3(money(l.qty)),
+      unit: l.unit,
+      rate: round2(money(l.rate)),
+      amount: round2(money(l.amount)),
+      remarks: l.remarks,
+      optionalFlag: Boolean(ext.optional_flag),
+      optionKey: ext.option_key ?? null,
+      alternateCount,
+    };
+  });
 }
 
 async function businessForTenant(tenantId: number): Promise<PublicBusiness> {

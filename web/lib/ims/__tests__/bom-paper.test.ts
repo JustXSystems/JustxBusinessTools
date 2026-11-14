@@ -116,4 +116,10 @@ describe("bom-paper purposes", () => {
     expect(model.lines[0]!.hsn).toBeTruthy();
     expect(model.industryPack).toBe("solar");
   });
+
+  it("exposes pack size labels for builder field copy", () => {
+    expect(bomIndustryPackMeta("solar").sizeLabel).toBe("Capacity");
+    expect(bomIndustryPackMeta("general").sizeLabel).toBe("Package");
+    expect(bomIndustryPackMeta("epc").sizeLabel).toBe("Scope");
+  });
 });

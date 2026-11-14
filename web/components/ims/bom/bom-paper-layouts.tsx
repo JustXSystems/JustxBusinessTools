@@ -65,6 +65,9 @@ function PaperShell({
   const b = model.business;
   const stamp = stampOf(model.status);
   const accent = model.business.accent?.trim();
+  const printMeta = [model.docNo || "Draft", `R${Number(model.revision ?? 1)}`, model.business.name || null]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <article
       className={paperClass(model, purpose)}
@@ -76,6 +79,10 @@ function PaperShell({
         ...(accent ? ({ ["--bom-accent"]: accent } as CSSProperties) : null),
       }}
     >
+      <div className="ims-bom-print-running" aria-hidden>
+        <span>{printMeta}</span>
+        <span>BILL OF MATERIALS</span>
+      </div>
       {!hideDefaultTop ? (
         <div className="bos-inv-paper-top ims-bom-sheet-top">
           <PaperBrandHead
@@ -100,6 +107,10 @@ function PaperShell({
         </div>
       ) : null}
       {children}
+      <footer className="ims-bom-print-foot" aria-hidden>
+        <span>{printMeta}</span>
+        <span className="ims-bom-print-pages" />
+      </footer>
     </article>
   );
 }
@@ -148,12 +159,30 @@ function PartyBlock({ model }: { model: BomPaperModel }) {
   );
 }
 
+function LineOptionMarks({ line }: { line: BomPaperLine }) {
+  const marks: string[] = [];
+  if (line.optionalFlag) marks.push(line.optionKey?.trim() ? `Option ${line.optionKey.trim()}` : "Optional");
+  else if (line.optionKey?.trim()) marks.push(`Option ${line.optionKey.trim()}`);
+  if (Number(line.alternateCount) > 0) marks.push(`${line.alternateCount} alt${Number(line.alternateCount) === 1 ? "" : "s"}`);
+  if (!marks.length) return null;
+  return (
+    <span className="ims-bom-line-opts">
+      {marks.map((m) => (
+        <span key={m} className="ims-bom-opt-chip">
+          {m}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function LineDesc({ line, showRemarks = true }: { line: BomPaperLine; showRemarks?: boolean }) {
   const ids = lineIdentityBits(line);
   const tail = [...ids, showRemarks && line.remarks ? line.remarks : null].filter(Boolean);
   return (
     <>
       <span className="ims-bom-line-desc">{line.description}</span>
+      <LineOptionMarks line={line} />
       {tail.length ? <small className="ims-bom-line-ids"> · {tail.join(" · ")}</small> : null}
     </>
   );
@@ -394,6 +423,7 @@ function ScheduleTable({
   const displayCols = qtyOnly ? cols : cols;
 
   return (
+    <div className="ims-bom-schedule-wrap">
     <table className="bos-inv-paper-table ims-bom-schedule">
       <thead>
         <tr>
@@ -439,6 +469,7 @@ function ScheduleTable({
         )}
       </tbody>
     </table>
+    </div>
   );
 }
 

@@ -314,7 +314,8 @@ body.is-bom-resizing {
   .ims-bom-compose,
   .ims-bom-section-bar,
   .ims-bom-line-editor,
-  .ims-bom-split-handle {
+  .ims-bom-split-handle,
+  .ims-bom-preview-toolbar {
     display: none !important;
   }
   .ims-bom-layout {
@@ -1668,7 +1669,107 @@ body.is-bom-resizing {
   .bos .ims-bom-nova-total { text-align: left; }
 }
 
+.bos .ims-bom-print-running,
+.bos .ims-bom-print-foot {
+  display: none;
+}
+
+.bos .ims-bom-schedule-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bos .ims-bom-line-opts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.bos .ims-bom-opt-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--bom-line);
+  background: var(--bom-soft);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bom-muted);
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  .bos .ims-bom-aether-head-row {
+    grid-template-columns: 1fr;
+  }
+  .bos .ims-bom-aether-docblock {
+    text-align: left;
+    min-width: 0;
+  }
+  .bos .ims-bom-aether-totals-bar,
+  .bos .ims-bom-terms,
+  .bos .ims-bom-terms-compact,
+  .bos .ims-bom-epc-strip,
+  .bos .ims-bom-exec-stats,
+  .bos .ims-bom-folio-foot {
+    grid-template-columns: 1fr 1fr;
+  }
+  .bos .ims-bom-folio-grid {
+    grid-template-columns: 1fr;
+  }
+  .bos .ims-bom-sheet-titleblock {
+    min-width: 0;
+  }
+  .ims-bom-preview-wrap {
+    padding-left: 0;
+    position: static;
+  }
+}
+
 @media print {
+  @page {
+    margin: 14mm 12mm 16mm;
+  }
+  /* Page numbers where the engine supports margin boxes (Firefox / print engines). */
+  @page {
+    @bottom-left {
+      content: "BILL OF MATERIALS";
+      font-size: 8pt;
+      color: #64748b;
+    }
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 8pt;
+      color: #64748b;
+    }
+  }
+
+  .bos .ims-bom-print-running {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 9px;
+    color: #64748b;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 4px;
+    margin-bottom: 10px;
+  }
+  .bos .ims-bom-print-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 6px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 9px;
+    color: #64748b;
+  }
+  .bos .ims-bom-schedule-wrap {
+    overflow: visible;
+  }
   .bos .ims-bom-aurora-panel,
   .bos .ims-bom-prism-rail {
     backdrop-filter: none;
@@ -1686,5 +1787,10 @@ body.is-bom-resizing {
     background: #0b1220 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+  .bos .ims-bom-sheet .bos-inv-paper-title,
+  .bos .ims-bom-sheet-titleblock .bos-inv-paper-title,
+  .bos .ims-bom-aether-docblock h1 {
+    white-space: nowrap !important;
   }
 }

@@ -100,6 +100,9 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness, options?: BomPa
       rate: l.rate,
       amount: l.amount,
       remarks: l.remarks,
+      optionalFlag: Boolean(l.optionalFlag),
+      optionKey: l.optionKey ?? null,
+      alternateCount: Array.isArray(l.alternateItemIds) ? l.alternateItemIds.length : 0,
     })),
     totals: {
       materialsTotal: doc.materialsTotal,

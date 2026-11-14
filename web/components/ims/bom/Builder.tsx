@@ -30,10 +30,13 @@ import { withBasePath } from "@/lib/base-path";
 import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
 import { ItemPickerDialog, PartySelect } from "../shared/pickers";
 import {
+  BOM_COLUMN_LABEL,
   BOM_INDUSTRY_PACK_META,
   BOM_PAPER_PURPOSE_META,
+  bomIndustryPackMeta,
   normalizeBomIndustryPack,
   normalizeBomPaperPurpose,
+  scheduleColumnsFor,
   type BomIndustryPackId,
   type BomPaperPurpose,
 } from "@/lib/ims/bom-paper";
@@ -989,6 +992,9 @@ function BomEditorForm({
         rate: Number(l.rate) || 0,
         amount: Math.round(((Number(l.qty) || 0) * (Number(l.rate) || 0) + Number.EPSILON) * 100) / 100,
         remarks: l.remarks ?? null,
+        optionalFlag: Boolean(l.optionalFlag),
+        optionKey: l.optionKey ?? null,
+        alternateCount: Array.isArray(l.alternateItemIds) ? l.alternateItemIds.length : 0,
       })),
     totals,
   };
@@ -1275,13 +1281,19 @@ function BomEditorForm({
               <Field label="Title">
                 {({ id }) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Package title" />}
               </Field>
-              <Field label="Capacity / size" hint="Lines marked “Scale with capacity” multiply by the first number (e.g. 3KW → ×3).">
+              <Field
+                label={bomIndustryPackMeta(docPack).sizeLabel}
+                hint={`Industry pack columns: ${scheduleColumnsFor(docPurpose, docPack)
+                  .filter((c) => c !== "check" && c !== "index")
+                  .map((c) => BOM_COLUMN_LABEL[c])
+                  .join(" · ")}. Scale-marked lines multiply by the first number in this field.`}
+              >
                 {({ id }) => (
                   <Input
                     id={id}
                     value={capacityLabel}
                     onChange={(e) => applyCapacityScale(e.target.value)}
-                    placeholder="e.g. 3KW / Size S"
+                    placeholder={docPack === "solar" ? "e.g. 3KW 1PH" : "e.g. Standard / Size S"}
                   />
                 )}
               </Field>

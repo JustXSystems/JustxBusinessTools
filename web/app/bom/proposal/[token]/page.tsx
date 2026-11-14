@@ -28,6 +28,9 @@ type PublicLine = {
   amount: number;
   remarks?: string | null;
   lineKind?: string | null;
+  optionalFlag?: boolean | null;
+  optionKey?: string | null;
+  alternateCount?: number | null;
 };
 
 type PublicBusiness = {
@@ -142,6 +145,9 @@ function toPaperModel(doc: PublicBom): BomPaperModel {
       rate: l.rate,
       amount: l.amount,
       remarks: l.remarks ?? null,
+      optionalFlag: Boolean(l.optionalFlag),
+      optionKey: l.optionKey ?? null,
+      alternateCount: Number(l.alternateCount) || 0,
     })),
     totals: {
       materialsTotal: doc.materialsTotal,

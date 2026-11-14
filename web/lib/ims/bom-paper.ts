@@ -320,6 +320,10 @@ export type BomPaperLine = Pick<
   lineKind?: BomLineKind | null;
   sku?: string | null;
   hsn?: string | null;
+  optionalFlag?: boolean | null;
+  optionKey?: string | null;
+  /** Count of linked alternate SKUs (shown as “N alts”). */
+  alternateCount?: number | null;
 };
 
 export type BomPaperSection = {
