@@ -36,7 +36,7 @@ const HOST_ROLES = new Set<ImsHostRole>(["owner", "admin", "staff", "viewer", "l
 /** IMS-Dealer running inside JBT: JBT sessions, business profile = tenant, JBT audit trail and notification inbox. */
 export const jbtImsHost: ImsHost = {
   id: "jbt",
-  appHref: `/tools/${IMS_TOOL_ID}`,
+  appHref: "/ims",
 
   async actor(_req: Request): Promise<ImsActor | null> {
     const ctx = getRequestContext();

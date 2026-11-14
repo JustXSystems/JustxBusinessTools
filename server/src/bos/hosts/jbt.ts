@@ -33,7 +33,7 @@ async function userInfo(userId: number): Promise<{ name: string | null; email: s
 /** BOS running inside JBT: JBT sessions, branch = tenant, JBT audit trail and notification inbox. */
 export const jbtHost: BosHost = {
   id: "jbt",
-  appHref: "/tools/bos",
+  appHref: "/bos",
 
   async actor(_req: Request): Promise<BosActor | null> {
     const ctx = getRequestContext();

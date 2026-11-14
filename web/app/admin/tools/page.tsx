@@ -26,6 +26,7 @@ type CatalogRow = {
   groupName: string;
   sortOrder: number;
   available: boolean;
+  openStandalone?: boolean;
   toolType: string;
 };
 
@@ -93,6 +94,7 @@ export default function AdminToolsPage() {
   const [saving, setSaving] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [available, setAvailable] = useState(true);
+  const [openStandalone, setOpenStandalone] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newId, setNewId] = useState("");
   const [newTitle, setNewTitle] = useState("");
@@ -244,6 +246,10 @@ export default function AdminToolsPage() {
     if (!selectedId) setSelectedId(selected.id);
     setGroupName(selected.catalog?.groupName || selected.groupName);
     setAvailable(selected.catalog?.available ?? true);
+    setOpenStandalone(
+      selected.catalog?.openStandalone ??
+        (selected.id === "bos" || selected.id === "imsdealer"),
+    );
     if (tab === "modules" && selected.id !== "imsdealer") {
       setTab("placement");
       syncUrl(selected.id, "placement");
@@ -633,8 +639,10 @@ export default function AdminToolsPage() {
                   toolId={selected.id}
                   groupName={groupName}
                   available={available}
+                  openStandalone={openStandalone}
                   onGroupName={setGroupName}
                   onAvailable={setAvailable}
+                  onOpenStandalone={setOpenStandalone}
                   onSaved={async (msg) => {
                     setMessage(msg);
                     await reload();

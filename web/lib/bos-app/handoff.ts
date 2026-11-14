@@ -23,13 +23,13 @@ export const HANDOFF: Record<HandoffTool, HandoffSpec> = {
     switchKey: "bos.handoff.quotationv1",
     target: "invoice",
     creates: "draft invoice",
-    openHref: (id) => `/tools/bos?ws=finance&m=invoices&open=${encodeURIComponent(id)}`,
+    openHref: (id) => `/bos?ws=finance&m=invoices&open=${encodeURIComponent(id)}`,
   },
   sitesurveyv1: {
     switchKey: "bos.handoff.sitesurveyv1",
     target: "project",
     creates: "project lead",
-    openHref: (id) => `/tools/bos?ws=projects&m=board&open=${encodeURIComponent(id)}`,
+    openHref: (id) => `/bos?ws=projects&m=board&open=${encodeURIComponent(id)}`,
   },
 };
 
