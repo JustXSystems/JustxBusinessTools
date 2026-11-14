@@ -928,14 +928,31 @@ function BomEditorForm({
           remarks: l.remarks ?? "",
         }));
     }
-    return [blankLine("Main Items"), blankLine("Accessories & Services")];
+    const packSections = bomIndustryPackMeta(
+      normalizeBomIndustryPack(initial?.paper?.industryPack ?? settings.bomIndustryPack),
+    ).defaultSections;
+    return packSections.map((section) => blankLine(section));
   });
 
   const sections = useMemo(() => {
     const names: string[] = [];
     for (const l of lines) if (!names.includes(l.section)) names.push(l.section);
-    return names.length ? names : ["Main Items"];
-  }, [lines]);
+    return names.length ? names : [...bomIndustryPackMeta(docPack).defaultSections];
+  }, [lines, docPack]);
+
+  /** When pack changes and the sheet is still empty placeholders, rebuild section shells. */
+  useEffect(() => {
+    if (initial?.lines?.length || seeded?.lines?.length) return;
+    setLines((prev) => {
+      const allBlank = prev.every((l) => !l.description.trim() && !l.itemId);
+      if (!allBlank) return prev;
+      const wanted = [...bomIndustryPackMeta(docPack).defaultSections];
+      const current: string[] = [];
+      for (const l of prev) if (!current.includes(l.section)) current.push(l.section);
+      if (wanted.length === current.length && wanted.every((s, i) => s === current[i])) return prev;
+      return wanted.map((section) => blankLine(section));
+    });
+  }, [docPack, initial?.lines?.length, seeded?.lines?.length]);
 
   const totals = useMemo(
     () => computeBomTotals(
@@ -1445,7 +1462,7 @@ function BomEditorForm({
                             checked={Boolean(l.scaleByCapacity)}
                             onChange={(e) => updateLine(l.key, { scaleByCapacity: e.target.checked })}
                           />
-                          Scale with capacity
+                          Scale with {bomIndustryPackMeta(docPack).sizeLabel.toLowerCase()}
                         </label>
                       </div>
                     </div>
@@ -1453,7 +1470,7 @@ function BomEditorForm({
               </div>
             </Card>
           ))}
-          <div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Button
               size="sm"
               variant="ghost"
@@ -1463,6 +1480,18 @@ function BomEditorForm({
               }}
             >
               Add section
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const wanted = [...bomIndustryPackMeta(docPack).defaultSections];
+                const missing = wanted.filter((s) => !sections.includes(s));
+                if (!missing.length) return;
+                setLines((prev) => [...prev, ...missing.map((section) => blankLine(section))]);
+              }}
+            >
+              Add pack sections
             </Button>
           </div>
           </>

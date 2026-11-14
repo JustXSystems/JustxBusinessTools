@@ -122,4 +122,10 @@ describe("bom-paper purposes", () => {
     expect(bomIndustryPackMeta("general").sizeLabel).toBe("Package");
     expect(bomIndustryPackMeta("epc").sizeLabel).toBe("Scope");
   });
+
+  it("gives each industry pack default section shells", () => {
+    expect(bomIndustryPackMeta("epc").defaultSections).toEqual(["Supply", "Installation", "Civil & Misc"]);
+    expect(bomIndustryPackMeta("manufacturing").defaultSections[0]).toBe("Raw materials");
+    expect(bomIndustryPackMeta("services").defaultSections).toContain("Labour");
+  });
 });

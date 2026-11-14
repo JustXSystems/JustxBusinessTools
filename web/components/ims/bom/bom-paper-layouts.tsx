@@ -572,6 +572,12 @@ export function ProposalBomPaper({ model }: { model: BomPaperModel }) {
               : ""}
           </span>
         </div>
+        {model.title || model.scopeOfSupply?.trim() ? (
+          <div className="ims-bom-cover-lede" aria-label="Proposal summary">
+            {model.title ? <h2>{model.title}</h2> : null}
+            {model.scopeOfSupply?.trim() ? <p>{model.scopeOfSupply.trim()}</p> : null}
+          </div>
+        ) : null}
         <InvestmentBar model={model} />
       </header>
       <ScheduleTable model={model} sections={sections} showSectionTotals />
