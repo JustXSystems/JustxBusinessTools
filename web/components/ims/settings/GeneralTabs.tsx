@@ -1,15 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { Alert, Field, FormGrid, Input, Select, Textarea } from "@/components/bos";
-import type { BomPaperTemplateId, ImsSettingsMeta } from "@/lib/ims/api";
+import type {
+  BomIndustryPackId,
+  BomPaperDensity,
+  BomPaperTemplateId,
+  BomPaperTone,
+  ImsSettingsMeta,
+} from "@/lib/ims/api";
 import {
-  BOM_PAPER_ERA_FILTERS,
-  BOM_PAPER_TEMPLATE_META,
-  bomPaperTemplateMeta,
-  normalizeBomPaperTemplate,
+  BOM_INDUSTRY_PACK_META,
+  BOM_PAPER_DENSITIES,
+  BOM_PAPER_PURPOSE_META,
+  BOM_PAPER_TONES,
+  bomIndustryPackMeta,
+  bomPaperPurposeMeta,
+  normalizeBomIndustryPack,
+  normalizeBomPaperDensity,
+  normalizeBomPaperPurpose,
+  normalizeBomPaperTone,
   sampleBomPaperModel,
-  type BomPaperEra,
 } from "@/lib/ims/bom-paper";
 import { GST_RATES, inr } from "@/lib/ims/format";
 import { GST_STATES, MONTHS, PREFIX_FIELDS, docNoSample, fiscalYearLabel, gstinPlace } from "@/lib/ims/settings";
@@ -134,45 +144,31 @@ export function BusinessTab({ draft, set, errors, readOnly, meta }: TabProps & {
 export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
   const { session } = useIms();
   const today = session.today;
-  const [eraFilter, setEraFilter] = useState<"all" | BomPaperEra>("all");
-  const bomTemplate = normalizeBomPaperTemplate(draft.bomPaperTemplate);
-  const selectedMeta = bomPaperTemplateMeta(bomTemplate);
-  const visibleTemplates = useMemo(
-    () => (eraFilter === "all" ? BOM_PAPER_TEMPLATE_META : BOM_PAPER_TEMPLATE_META.filter((t) => t.era === eraFilter)),
-    [eraFilter],
-  );
+  const purpose = normalizeBomPaperPurpose(draft.bomPaperTemplate);
+  const pack = normalizeBomIndustryPack(draft.bomIndustryPack);
+  const tone = normalizeBomPaperTone(draft.bomPaperTone);
+  const density = normalizeBomPaperDensity(draft.bomPaperDensity);
+  const hideMargin = Boolean(draft.bomHideMargin);
+  const purposeMeta = bomPaperPurposeMeta(purpose);
+  const packMeta = bomIndustryPackMeta(pack);
   const previewModel = {
-    ...sampleBomPaperModel(draft.businessName || session.brand?.name || "Your business"),
-    template: bomTemplate,
+    ...sampleBomPaperModel(draft.businessName || session.brand?.name || "Your business", pack),
+    template: purpose,
+    industryPack: pack,
+    tone,
+    density,
+    hideMargin,
   };
 
   return (
     <fieldset className="ims-set-fieldset" disabled={readOnly}>
       <SectionCard
-        title="BOM paper template"
-        desc={`${BOM_PAPER_TEMPLATE_META.length} layouts for preview and print/PDF. Pick a compact card — details and live preview appear below.`}
+        title="BOM document purpose"
+        desc="Five document jobs for preview and print/PDF — pick purpose, industry pack, and tone. Legacy skins migrate automatically."
       >
-        <div className="ims-bom-tpl-filters" role="tablist" aria-label="Filter BOM templates">
-          {BOM_PAPER_ERA_FILTERS.map((f) => {
-            const active = eraFilter === f.id;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                className={`ims-bom-tpl-filter${active ? " is-active" : ""}`}
-                onClick={() => setEraFilter(f.id)}
-              >
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="ims-bom-tpl-mini-grid" role="radiogroup" aria-label="BOM paper template">
-          {visibleTemplates.map((t) => {
-            const selected = bomTemplate === t.id;
+        <div className="ims-bom-tpl-mini-grid" role="radiogroup" aria-label="BOM document purpose">
+          {BOM_PAPER_PURPOSE_META.map((t) => {
+            const selected = purpose === t.id;
             return (
               <button
                 key={t.id}
@@ -199,21 +195,82 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
         <div className="ims-bom-tpl-inspect" aria-live="polite">
           <div className="ims-bom-tpl-inspect-main">
             <div className="ims-bom-tpl-inspect-title">
-              <strong>{selectedMeta.label}</strong>
-              <span className="ims-bom-tpl-era">{selectedMeta.era}</span>
+              <strong>{purposeMeta.label}</strong>
+              <span className="ims-bom-tpl-era">{packMeta.short}</span>
             </div>
-            <p>{selectedMeta.tagline}</p>
-            <div className="ims-bom-tpl-audience">{selectedMeta.audience}</div>
+            <p>{purposeMeta.tagline}</p>
+            <div className="ims-bom-tpl-audience">{purposeMeta.audience}</div>
           </div>
           <ul className="ims-bom-tpl-inspect-feats">
-            {selectedMeta.features.map((f) => (
+            {purposeMeta.features.map((f) => (
               <li key={f}>{f}</li>
             ))}
           </ul>
         </div>
 
+        <FormGrid>
+          <Field label="Industry pack" hint={packMeta.tagline}>
+            {({ id, describedBy }) => (
+              <Select
+                id={id}
+                aria-describedby={describedBy}
+                value={pack}
+                onChange={(e) => set("bomIndustryPack", e.target.value as BomIndustryPackId)}
+              >
+                {BOM_INDUSTRY_PACK_META.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label="Tone" hint="Visual voice of the paper">
+            {({ id, describedBy }) => (
+              <Select
+                id={id}
+                aria-describedby={describedBy}
+                value={tone}
+                onChange={(e) => set("bomPaperTone", e.target.value as BomPaperTone)}
+              >
+                {BOM_PAPER_TONES.map((t) => (
+                  <option key={t} value={t}>
+                    {t[0]!.toUpperCase() + t.slice(1)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label="Density" hint="Table padding for print">
+            {({ id, describedBy }) => (
+              <Select
+                id={id}
+                aria-describedby={describedBy}
+                value={density}
+                onChange={(e) => set("bomPaperDensity", e.target.value as BomPaperDensity)}
+              >
+                {BOM_PAPER_DENSITIES.map((d) => (
+                  <option key={d} value={d}>
+                    {d[0]!.toUpperCase() + d.slice(1)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </FormGrid>
+
+        <ToggleRow
+          label="Hide margin on customer PDF"
+          desc="Fold margin into supply total — internal cost stays in the builder"
+          checked={hideMargin}
+          onChange={(v) => set("bomHideMargin", v)}
+          disabled={readOnly}
+        />
+
         <div className="ims-bom-tpl-preview" aria-label="BOM template preview">
-          <div className="ims-bom-tpl-preview-label">Live preview · {selectedMeta.label}</div>
+          <div className="ims-bom-tpl-preview-label">
+            Live preview · {purposeMeta.label} · {packMeta.label}
+          </div>
           <div className="ims-bom-tpl-preview-frame">
             <BomPaper model={previewModel} />
           </div>

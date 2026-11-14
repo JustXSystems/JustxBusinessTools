@@ -8,6 +8,51 @@
   min-width: 0;
 }
 
+.ims-bom-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.ims-bom-preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+/* Tone & density — brand voice without new skins */
+.bos .ims-bom-sheet.ims-bom-tone--bold {
+  --bom-ink: #0b1220;
+  --bom-line: #cbd5e1;
+}
+.bos .ims-bom-sheet.ims-bom-tone--bold .bos-inv-paper-title,
+.bos .ims-bom-sheet.ims-bom-tone--bold .ims-bom-aether-docblock h1 {
+  letter-spacing: 0.06em;
+  font-weight: 800;
+}
+.bos .ims-bom-sheet.ims-bom-tone--editorial {
+  --bom-ink: #1c1917;
+  --bom-muted: #78716c;
+  --bom-line: #e7e5e4;
+  --bom-soft: #fafaf9;
+}
+.bos .ims-bom-sheet.ims-bom-tone--editorial .bos-inv-paper-title,
+.bos .ims-bom-sheet.ims-bom-tone--editorial .ims-bom-aether-docblock h1 {
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  letter-spacing: 0.01em;
+  font-weight: 600;
+}
+.bos .ims-bom-sheet.ims-bom-density--compact .bos-inv-paper-table th,
+.bos .ims-bom-sheet.ims-bom-density--compact .bos-inv-paper-table td {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+  font-size: 10.5px;
+}
+.bos .ims-bom-sheet.ims-bom-density--compact.bos-inv-paper {
+  padding: 16px 18px 22px;
+}
+
 .ims-bom-layout.is-resizing {
   user-select: none;
   cursor: col-resize;

@@ -337,7 +337,13 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
     ...state.data.business,
     logoUrl: state.data.business.logoUrl || session.brand?.logoUrl || null,
   };
-  const model = modelFromDoc(doc, business, session.settings.bomPaperTemplate);
+  const model = modelFromDoc(doc, business, {
+    template: session.settings.bomPaperTemplate,
+    industryPack: session.settings.bomIndustryPack ?? "general",
+    tone: session.settings.bomPaperTone ?? "neutral",
+    density: session.settings.bomPaperDensity ?? "comfort",
+    hideMargin: session.settings.bomHideMargin ?? false,
+  });
   const confirmed = doc.status === "confirmed";
   const stockable = (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0).length;
   const reloadAll = () => {
@@ -831,6 +837,7 @@ function BomEditorForm({
   const { run, busy } = useImsAction();
   const print = usePrint();
   const settings = session.settings;
+  const [customerPreview, setCustomerPreview] = useState(Boolean(settings.bomHideMargin));
 
   const seeded = fromPackage;
   const [customerName, setCustomerName] = useState(initial?.customerName ?? "");
@@ -933,6 +940,10 @@ function BomEditorForm({
     marginPct: Number(marginPct) || 0,
     taxPct: Number(taxPct) || 0,
     template: settings.bomPaperTemplate,
+    industryPack: settings.bomIndustryPack ?? "general",
+    tone: settings.bomPaperTone ?? "neutral",
+    density: settings.bomPaperDensity ?? "comfort",
+    hideMargin: customerPreview,
     lines: lines
       .filter((l) => l.description.trim())
       .map((l) => ({
@@ -1342,7 +1353,19 @@ function BomEditorForm({
           </div>
           </>
         }
-        preview={<BomPaper model={paperModel} />}
+        preview={
+          <div className="ims-bom-preview-wrap">
+            <div className="ims-bom-preview-toolbar" role="group" aria-label="Preview mode">
+              <FilterChip active={!customerPreview} onClick={() => setCustomerPreview(false)}>
+                Internal cost
+              </FilterChip>
+              <FilterChip active={customerPreview} onClick={() => setCustomerPreview(true)}>
+                Customer PDF
+              </FilterChip>
+            </div>
+            <BomPaper model={paperModel} />
+          </div>
+        }
       />
 
       <ItemPickerDialog

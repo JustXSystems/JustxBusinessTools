@@ -1,17 +1,24 @@
 /**
- * BOM paper templates — tenant-wide layouts for live preview and print/PDF.
- * Maps BomDoc / BomDocLine (+ commercial proposal terms) into printable models.
+ * BOM paper — purpose-driven layouts, industry packs, and printable models.
+ * Legacy aesthetic template ids still normalize to a document purpose.
  */
 import type { BomBusiness, BomDocLine, BomLineKind, BomTotals } from "./bom";
 import { BOM_LINE_KIND_LABEL } from "./bom";
 
-export const BOM_PAPER_TEMPLATES = [
+/* ---------- Document purposes (canonical template ids) ---------- */
+
+export const BOM_PAPER_PURPOSES = ["proposal", "executive", "technical", "field", "share"] as const;
+export type BomPaperPurpose = (typeof BOM_PAPER_PURPOSES)[number];
+
+/** @deprecated Prefer BomPaperPurpose — kept as alias for API / settings types. */
+export type BomPaperTemplateId = BomPaperPurpose | BomPaperLegacyTemplateId;
+
+/** Historic aesthetic skins — accepted on read, stored as purpose going forward. */
+export const BOM_PAPER_LEGACY_TEMPLATES = [
   "aether",
   "classic",
   "tiered",
   "epc",
-  "executive",
-  "field",
   "aurora",
   "ledger",
   "atelier",
@@ -21,170 +28,290 @@ export const BOM_PAPER_TEMPLATES = [
   "nova",
   "folio",
 ] as const;
+export type BomPaperLegacyTemplateId = (typeof BOM_PAPER_LEGACY_TEMPLATES)[number];
 
-export type BomPaperTemplateId = (typeof BOM_PAPER_TEMPLATES)[number];
+/** All values the settings column / zod enum may accept. */
+export const BOM_PAPER_TEMPLATES = [...BOM_PAPER_PURPOSES, ...BOM_PAPER_LEGACY_TEMPLATES] as const;
 
-export type BomPaperEra = "timeless" | "commercial" | "technical" | "executive" | "field" | "futuristic";
+const PURPOSE_ALIAS: Record<string, BomPaperPurpose> = {
+  proposal: "proposal",
+  executive: "executive",
+  technical: "technical",
+  field: "field",
+  share: "share",
+  aether: "proposal",
+  classic: "proposal",
+  tiered: "proposal",
+  aurora: "proposal",
+  atelier: "proposal",
+  prism: "proposal",
+  nova: "proposal",
+  orbit: "executive",
+  epc: "technical",
+  ledger: "technical",
+  forge: "technical",
+  folio: "share",
+};
 
-export const BOM_PAPER_ERA_FILTERS: ReadonlyArray<{ id: "all" | BomPaperEra; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "futuristic", label: "Futuristic" },
-  { id: "commercial", label: "Commercial" },
-  { id: "technical", label: "Technical" },
-  { id: "executive", label: "Executive" },
-  { id: "field", label: "Field" },
-  { id: "timeless", label: "Classic" },
-];
-
-export type BomPaperTemplateMeta = {
-  id: BomPaperTemplateId;
-  /** Compact picker label */
+export type BomPaperPurposeMeta = {
+  id: BomPaperPurpose;
   short: string;
   label: string;
   tagline: string;
   audience: string;
-  era: BomPaperEra;
   features: ReadonlyArray<string>;
 };
 
-export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = [
+export const BOM_PAPER_PURPOSE_META: ReadonlyArray<BomPaperPurposeMeta> = [
   {
-    id: "aether",
-    short: "Aether",
-    label: "Aether Proposal",
-    tagline: "Flagship materials proposal — investment hero, SKU/HSN schedule, commercial terms.",
-    audience: "Premium dealer & EPC proposals",
-    era: "futuristic",
-    features: ["Investment hero", "SKU · HSN", "Terms grid", "Section subtotals"],
-  },
-  {
-    id: "classic",
-    short: "Classic",
-    label: "Classic Dealer",
-    tagline: "Refined dealer sheet — clear sections, make, rates, margin & tax.",
-    audience: "Day-to-day customer BOM",
-    era: "timeless",
-    features: ["Accent rail", "Section bands", "Make · rate · amount", "Signatory"],
-  },
-  {
-    id: "tiered",
-    short: "Tiered",
-    label: "Tiered Proposal",
-    tagline: "Marketplace tiers with roll-ups, kind cues and a cost waterfall.",
-    audience: "Sales proposals & C&I bids",
-    era: "commercial",
-    features: ["Tier marks", "Section subtotals", "Kind tags", "Cost waterfall"],
-  },
-  {
-    id: "epc",
-    short: "EPC",
-    label: "EPC Technical",
-    tagline: "Dense EPC / GeM-style schedule with units, remarks and section totals.",
-    audience: "Technical packs & tenders",
-    era: "technical",
-    features: ["Roman sections", "Units column", "Remarks", "Capacity strip"],
+    id: "proposal",
+    short: "Proposal",
+    label: "Customer proposal",
+    tagline: "Sell sheet — clear schedule, investment summary, commercial terms.",
+    audience: "Dealers, distributors, project sales",
+    features: ["Investment bar", "Section schedule", "SKU · HSN", "Terms + sign-off"],
   },
   {
     id: "executive",
     short: "Executive",
-    label: "Executive Brief",
-    tagline: "Board-ready economics first — investment hero, then compact lines.",
-    audience: "Owners & decision makers",
-    era: "executive",
-    features: ["Investment hero", "KPI mosaic", "Section cards", "Acceptance"],
+    label: "Executive brief",
+    tagline: "Economics first — KPIs and compact lines for decision makers.",
+    audience: "Owners & approvers",
+    features: ["Investment hero", "Cost ribbon", "Section roll-ups", "Acceptance"],
+  },
+  {
+    id: "technical",
+    short: "Technical",
+    label: "Technical BOQ",
+    tagline: "Dense schedule with units, remarks and section totals for tenders.",
+    audience: "EPC, estimators, procurement",
+    features: ["Roman sections", "Units column", "Remarks", "Section totals"],
   },
   {
     id: "field",
     short: "Field",
-    label: "Field Pack",
-    tagline: "Install-crew checklist — quantities only, no commercial rates.",
+    label: "Field pack",
+    tagline: "Install checklist — quantities only, no commercial rates.",
     audience: "Site teams & technicians",
-    era: "field",
     features: ["No pricing", "Check boxes", "Make & remarks", "Site handoff"],
   },
   {
-    id: "aurora",
-    short: "Aurora",
-    label: "Aurora",
-    tagline: "Futuristic masthead, soft panels and a living cost composition.",
-    audience: "Modern EPC & premium residential",
-    era: "futuristic",
-    features: ["Signal masthead", "Glass panels", "Composition bars", "Dual sign-off"],
-  },
-  {
-    id: "ledger",
-    short: "Ledger",
-    label: "Precision Ledger",
-    tagline: "Engineering ledger — index rail, mono figures, hairline precision.",
-    audience: "Engineers & estimators",
-    era: "technical",
-    features: ["Index rail", "Mono amounts", "Kind codes", "Tight grid"],
-  },
-  {
-    id: "atelier",
-    short: "Atelier",
-    label: "Atelier",
-    tagline: "Editorial proposal — generous space, display title, quiet luxury.",
-    audience: "Boutique & brand-forward sellers",
-    era: "commercial",
-    features: ["Display title", "Quiet tables", "Section chapters", "Acceptance folio"],
-  },
-  {
-    id: "prism",
-    short: "Prism",
-    label: "Prism Split",
-    tagline: "Split identity rail + schedule — capacity badge and layered totals.",
-    audience: "Premium quotes & digital-first print",
-    era: "futuristic",
-    features: ["Identity rail", "Capacity badge", "Layered totals", "Compact lines"],
-  },
-  {
-    id: "orbit",
-    short: "Orbit",
-    label: "Orbit Cockpit",
-    tagline: "2026 digital-proposal feel — KPI chips, density map, transparent schedule.",
-    audience: "Digital-first EPC sales",
-    era: "futuristic",
-    features: ["KPI cockpit", "Density map", "Transparent rows", "Live total"],
-  },
-  {
-    id: "forge",
-    short: "Forge",
-    label: "Forge Procurement",
-    tagline: "Marketplace / BOQ handoff — stock-first, make as supplier, qty locked.",
-    audience: "Procurement & sourcing desks",
-    era: "technical",
-    features: ["Stock-first", "Supplier make", "Qty lock", "Buy list"],
-  },
-  {
-    id: "nova",
-    short: "Nova",
-    label: "Nova Close",
-    tagline: "Investment narrative for close — capacity, outlay steps, accept strip.",
-    audience: "Homeowner & C&I closing packs",
-    era: "commercial",
-    features: ["Outlay steps", "Capacity focus", "Close strip", "Clean lines"],
-  },
-  {
-    id: "folio",
-    short: "Folio",
-    label: "Folio Cards",
-    tagline: "Mobile-era dossier — one card per line, scannable on phone or print.",
-    audience: "Field + customer WhatsApp share",
-    era: "futuristic",
+    id: "share",
+    short: "Share",
+    label: "Share cards",
+    tagline: "Phone-friendly line cards for WhatsApp and public proposal links.",
+    audience: "Customers on mobile",
     features: ["Line cards", "Scan-friendly", "Kind chips", "Compact total"],
   },
 ];
 
-export function normalizeBomPaperTemplate(v: unknown): BomPaperTemplateId {
+/** @deprecated Use BOM_PAPER_PURPOSE_META */
+export type BomPaperTemplateMeta = BomPaperPurposeMeta & { era?: string };
+/** @deprecated */
+export type BomPaperEra = BomPaperPurpose | "all";
+/** @deprecated */
+export const BOM_PAPER_ERA_FILTERS: ReadonlyArray<{ id: "all" | BomPaperPurpose; label: string }> = [
+  { id: "all", label: "All" },
+  ...BOM_PAPER_PURPOSE_META.map((p) => ({ id: p.id, label: p.short })),
+];
+/** @deprecated */
+export const BOM_PAPER_TEMPLATE_META: ReadonlyArray<BomPaperTemplateMeta> = BOM_PAPER_PURPOSE_META.map((p) => ({
+  ...p,
+  era: p.id,
+}));
+
+export function normalizeBomPaperPurpose(v: unknown): BomPaperPurpose {
   const s = String(v ?? "").trim().toLowerCase();
-  return (BOM_PAPER_TEMPLATES as readonly string[]).includes(s) ? (s as BomPaperTemplateId) : "aether";
+  return PURPOSE_ALIAS[s] ?? "proposal";
 }
 
-export function bomPaperTemplateMeta(id: BomPaperTemplateId | null | undefined): BomPaperTemplateMeta {
-  const n = normalizeBomPaperTemplate(id);
-  return BOM_PAPER_TEMPLATE_META.find((t) => t.id === n) ?? BOM_PAPER_TEMPLATE_META[0]!;
+/** Normalizes legacy skins and purpose ids to a canonical purpose. */
+export function normalizeBomPaperTemplate(v: unknown): BomPaperPurpose {
+  return normalizeBomPaperPurpose(v);
 }
+
+export function bomPaperPurposeMeta(id: BomPaperPurpose | null | undefined): BomPaperPurposeMeta {
+  const n = normalizeBomPaperPurpose(id);
+  return BOM_PAPER_PURPOSE_META.find((t) => t.id === n) ?? BOM_PAPER_PURPOSE_META[0]!;
+}
+
+/** @deprecated Use bomPaperPurposeMeta */
+export function bomPaperTemplateMeta(id: BomPaperTemplateId | null | undefined): BomPaperTemplateMeta {
+  return bomPaperPurposeMeta(normalizeBomPaperPurpose(id));
+}
+
+/* ---------- Industry packs ---------- */
+
+export const BOM_INDUSTRY_PACKS = ["general", "epc", "solar", "manufacturing", "services", "procurement"] as const;
+export type BomIndustryPackId = (typeof BOM_INDUSTRY_PACKS)[number];
+
+export type BomScheduleColumn =
+  | "check"
+  | "index"
+  | "item"
+  | "sku"
+  | "hsn"
+  | "make"
+  | "kind"
+  | "qty"
+  | "unit"
+  | "rate"
+  | "amount"
+  | "remarks";
+
+export type BomIndustryPackMeta = {
+  id: BomIndustryPackId;
+  short: string;
+  label: string;
+  tagline: string;
+  /** Replaces solar-centric "Capacity" wording. */
+  sizeLabel: string;
+  defaultSections: ReadonlyArray<string>;
+  /** Columns for commercial purposes (proposal / executive / technical / share). */
+  columns: ReadonlyArray<BomScheduleColumn>;
+  /** Columns for field purpose (never includes rate/amount). */
+  fieldColumns: ReadonlyArray<BomScheduleColumn>;
+};
+
+export const BOM_INDUSTRY_PACK_META: ReadonlyArray<BomIndustryPackMeta> = [
+  {
+    id: "general",
+    short: "General",
+    label: "General commerce",
+    tagline: "Item · make · qty · rate — fits dealers, traders and retail.",
+    sizeLabel: "Package",
+    defaultSections: ["Main Items", "Accessories & Services"],
+    columns: ["index", "item", "make", "qty", "unit", "rate", "amount"],
+    fieldColumns: ["check", "index", "item", "make", "qty", "remarks"],
+  },
+  {
+    id: "epc",
+    short: "EPC",
+    label: "EPC / projects",
+    tagline: "BOQ-style schedule with units, remarks and section discipline.",
+    sizeLabel: "Scope",
+    defaultSections: ["Supply", "Installation", "Civil & Misc"],
+    columns: ["index", "item", "make", "qty", "unit", "rate", "amount", "remarks"],
+    fieldColumns: ["check", "index", "item", "make", "qty", "unit", "remarks"],
+  },
+  {
+    id: "solar",
+    short: "Solar",
+    label: "Solar / energy",
+    tagline: "Capacity-aware packs with SKU/HSN for modules and BOS.",
+    sizeLabel: "Capacity",
+    defaultSections: ["Main Items", "Accessories & Services"],
+    columns: ["index", "item", "sku", "hsn", "make", "qty", "unit", "rate", "amount"],
+    fieldColumns: ["check", "index", "item", "make", "qty", "remarks"],
+  },
+  {
+    id: "manufacturing",
+    short: "Mfg",
+    label: "Manufacturing",
+    tagline: "Part-centric schedule — SKU first, kind cues, tight units.",
+    sizeLabel: "Batch / rev",
+    defaultSections: ["Raw materials", "Components", "Overheads"],
+    columns: ["index", "sku", "item", "kind", "qty", "unit", "rate", "amount"],
+    fieldColumns: ["check", "index", "sku", "item", "qty", "unit", "remarks"],
+  },
+  {
+    id: "services",
+    short: "Services",
+    label: "Services / fit-out",
+    tagline: "Labour vs material kinds with warranty-friendly remarks.",
+    sizeLabel: "Engagement",
+    defaultSections: ["Materials", "Labour", "Other"],
+    columns: ["index", "item", "kind", "make", "qty", "unit", "rate", "amount"],
+    fieldColumns: ["check", "index", "item", "kind", "qty", "remarks"],
+  },
+  {
+    id: "procurement",
+    short: "Buy",
+    label: "Procurement",
+    tagline: "Stock-first buy list — supplier as make, qty locked for sourcing.",
+    sizeLabel: "RFQ ref",
+    defaultSections: ["Buy list", "Services"],
+    columns: ["index", "sku", "item", "make", "qty", "unit", "rate", "amount"],
+    fieldColumns: ["check", "index", "sku", "item", "make", "qty", "unit"],
+  },
+];
+
+export function normalizeBomIndustryPack(v: unknown): BomIndustryPackId {
+  const s = String(v ?? "").trim().toLowerCase();
+  return (BOM_INDUSTRY_PACKS as readonly string[]).includes(s) ? (s as BomIndustryPackId) : "general";
+}
+
+export function bomIndustryPackMeta(id: BomIndustryPackId | null | undefined): BomIndustryPackMeta {
+  const n = normalizeBomIndustryPack(id);
+  return BOM_INDUSTRY_PACK_META.find((p) => p.id === n) ?? BOM_INDUSTRY_PACK_META[0]!;
+}
+
+export function bomPackFromBusinessType(businessType: string | null | undefined): BomIndustryPackId {
+  switch (String(businessType ?? "").toLowerCase()) {
+    case "manufacturer":
+      return "manufacturing";
+    case "distributor":
+    case "wholesaler":
+      return "procurement";
+    case "dealer":
+    case "retailer":
+    case "trader":
+      return "general";
+    default:
+      return "general";
+  }
+}
+
+export function scheduleColumnsFor(
+  purpose: BomPaperPurpose,
+  pack: BomIndustryPackId,
+): ReadonlyArray<BomScheduleColumn> {
+  const meta = bomIndustryPackMeta(pack);
+  if (purpose === "field") return meta.fieldColumns;
+  if (purpose === "executive") {
+    // Compact: drop sku/hsn noise for decision briefs
+    return meta.columns.filter((c) => c !== "sku" && c !== "hsn");
+  }
+  if (purpose === "share") {
+    return meta.columns.filter((c) => c !== "hsn");
+  }
+  return meta.columns;
+}
+
+export const BOM_COLUMN_LABEL: Record<BomScheduleColumn, string> = {
+  check: "✓",
+  index: "#",
+  item: "Item",
+  sku: "SKU",
+  hsn: "HSN",
+  make: "Make",
+  kind: "Kind",
+  qty: "Qty",
+  unit: "Unit",
+  rate: "Rate",
+  amount: "Amount",
+  remarks: "Remarks",
+};
+
+/* ---------- Tone & density ---------- */
+
+export const BOM_PAPER_TONES = ["neutral", "bold", "editorial"] as const;
+export type BomPaperTone = (typeof BOM_PAPER_TONES)[number];
+
+export function normalizeBomPaperTone(v: unknown): BomPaperTone {
+  const s = String(v ?? "").trim().toLowerCase();
+  return (BOM_PAPER_TONES as readonly string[]).includes(s) ? (s as BomPaperTone) : "neutral";
+}
+
+export const BOM_PAPER_DENSITIES = ["compact", "comfort"] as const;
+export type BomPaperDensity = (typeof BOM_PAPER_DENSITIES)[number];
+
+export function normalizeBomPaperDensity(v: unknown): BomPaperDensity {
+  const s = String(v ?? "").trim().toLowerCase();
+  return (BOM_PAPER_DENSITIES as readonly string[]).includes(s) ? (s as BomPaperDensity) : "comfort";
+}
+
+/* ---------- Line / section helpers ---------- */
 
 export type BomPaperLine = Pick<
   BomDocLine,
@@ -295,8 +422,24 @@ export function bomCostComposition(totals: BomTotals): BomCostComposition {
   };
 }
 
-/** Demo model for Settings picker previews — uses only real BOM fields. */
-export function sampleBomPaperModel(businessName = "Your business"): {
+/** Customer-facing totals when margin is hidden — fold margin into sell rates conceptually. */
+export function bomCustomerComposition(totals: BomTotals, hideMargin: boolean): BomCostComposition {
+  const c = bomCostComposition(totals);
+  if (!hideMargin) return c;
+  return {
+    ...c,
+    materials: c.subtotal,
+    margin: 0,
+    materialsPct: Math.round((c.subtotal / (c.grand || 1)) * 1000) / 10,
+    marginPctOfGrand: 0,
+  };
+}
+
+/** Demo model for Settings picker previews — pack-aware sample lines. */
+export function sampleBomPaperModel(
+  businessName = "Your business",
+  pack: BomIndustryPackId = "general",
+): {
   business: BomBusiness;
   docNo: string;
   docDate: string;
@@ -317,77 +460,207 @@ export function sampleBomPaperModel(businessName = "Your business"): {
   taxPct: number;
   lines: BomPaperLine[];
   totals: BomTotals;
+  industryPack: BomIndustryPackId;
 } {
-  const lines: BomPaperLine[] = [
-    {
-      section: "Main Items",
-      lineKind: "stock",
-      description: "Solar Modules Bifacial DCR 620Wp",
-      makeText: "Waaree / Adani / Vikram",
-      sku: "MOD-620-DCR",
-      hsn: "8541",
-      qty: 6,
-      unit: "nos",
-      rate: 12500,
-      amount: 75000,
-      remarks: "ALMM listed",
-    },
-    {
-      section: "Main Items",
-      lineKind: "stock",
-      description: "On-Grid Inverter 3KW-1PH",
-      makeText: "Solis / Sungrow",
-      sku: "INV-3K-1PH",
-      hsn: "8504",
-      qty: 1,
-      unit: "nos",
-      rate: 28000,
-      amount: 28000,
-      remarks: null,
-    },
-    {
-      section: "Accessories & Services",
-      lineKind: "stock",
-      description: "DC Cable SC 4sqmm (Red & Black)",
-      makeText: "Polycab",
-      sku: "CBL-DC-4",
-      hsn: "8544",
-      qty: 60,
-      unit: "mtr",
-      rate: 45,
-      amount: 2700,
-      remarks: null,
-    },
-    {
-      section: "Accessories & Services",
-      lineKind: "service",
-      description: "Installation charges",
-      makeText: "Third party",
-      sku: null,
-      hsn: null,
-      qty: 1,
-      unit: "job",
-      rate: 9000,
-      amount: 9000,
-      remarks: "Includes commissioning",
-    },
-    {
-      section: "Accessories & Services",
-      lineKind: "overhead",
-      description: "Transport & handling",
-      makeText: "Own",
-      sku: null,
-      hsn: null,
-      qty: 1,
-      unit: "job",
-      rate: 2500,
-      amount: 2500,
-      remarks: null,
-    },
-  ];
-  const materialsTotal = 117200;
+  const packMeta = bomIndustryPackMeta(pack);
+  const lines: BomPaperLine[] =
+    pack === "solar"
+      ? [
+          {
+            section: packMeta.defaultSections[0]!,
+            lineKind: "stock",
+            description: "Solar Modules Bifacial DCR 620Wp",
+            makeText: "Waaree / Adani / Vikram",
+            sku: "MOD-620-DCR",
+            hsn: "8541",
+            qty: 6,
+            unit: "nos",
+            rate: 12500,
+            amount: 75000,
+            remarks: "ALMM listed",
+          },
+          {
+            section: packMeta.defaultSections[0]!,
+            lineKind: "stock",
+            description: "On-Grid Inverter 3KW-1PH",
+            makeText: "Solis / Sungrow",
+            sku: "INV-3K-1PH",
+            hsn: "8504",
+            qty: 1,
+            unit: "nos",
+            rate: 28000,
+            amount: 28000,
+            remarks: null,
+          },
+          {
+            section: packMeta.defaultSections[1]!,
+            lineKind: "service",
+            description: "Installation charges",
+            makeText: "Third party",
+            sku: null,
+            hsn: null,
+            qty: 1,
+            unit: "job",
+            rate: 9000,
+            amount: 9000,
+            remarks: "Includes commissioning",
+          },
+          {
+            section: packMeta.defaultSections[1]!,
+            lineKind: "overhead",
+            description: "Transport & handling",
+            makeText: "Own",
+            sku: null,
+            hsn: null,
+            qty: 1,
+            unit: "job",
+            rate: 2500,
+            amount: 2500,
+            remarks: null,
+          },
+        ]
+      : pack === "manufacturing"
+        ? [
+            {
+              section: packMeta.defaultSections[0]!,
+              lineKind: "stock",
+              description: "Aluminium extrusion 40×40",
+              makeText: "Hindalco",
+              sku: "ALU-4040",
+              hsn: "7604",
+              qty: 120,
+              unit: "mtr",
+              rate: 85,
+              amount: 10200,
+              remarks: null,
+            },
+            {
+              section: packMeta.defaultSections[1]!,
+              lineKind: "stock",
+              description: "Fastener kit M6",
+              makeText: "Unbrako",
+              sku: "FST-M6",
+              hsn: "7318",
+              qty: 200,
+              unit: "nos",
+              rate: 4.5,
+              amount: 900,
+              remarks: null,
+            },
+            {
+              section: packMeta.defaultSections[2]!,
+              lineKind: "overhead",
+              description: "Shop consumables",
+              makeText: "Various",
+              sku: null,
+              hsn: null,
+              qty: 1,
+              unit: "lot",
+              rate: 1500,
+              amount: 1500,
+              remarks: null,
+            },
+          ]
+        : pack === "services"
+          ? [
+              {
+                section: packMeta.defaultSections[0]!,
+                lineKind: "stock",
+                description: "Acoustic wall panels",
+                makeText: "Armstrong",
+                sku: "ACP-24",
+                hsn: "4418",
+                qty: 45,
+                unit: "sqm",
+                rate: 1200,
+                amount: 54000,
+                remarks: null,
+              },
+              {
+                section: packMeta.defaultSections[1]!,
+                lineKind: "service",
+                description: "Installation labour",
+                makeText: "In-house",
+                sku: null,
+                hsn: null,
+                qty: 3,
+                unit: "day",
+                rate: 4500,
+                amount: 13500,
+                remarks: "2 technicians",
+              },
+              {
+                section: packMeta.defaultSections[2]!,
+                lineKind: "overhead",
+                description: "Scaffolding hire",
+                makeText: "Vendor",
+                sku: null,
+                hsn: null,
+                qty: 1,
+                unit: "job",
+                rate: 3200,
+                amount: 3200,
+                remarks: null,
+              },
+            ]
+          : [
+              {
+                section: packMeta.defaultSections[0]!,
+                lineKind: "stock",
+                description: "Primary supply item",
+                makeText: "OEM / Approved make",
+                sku: "SKU-1001",
+                hsn: "8504",
+                qty: 10,
+                unit: "nos",
+                rate: 4500,
+                amount: 45000,
+                remarks: null,
+              },
+              {
+                section: packMeta.defaultSections[0]!,
+                lineKind: "stock",
+                description: "Secondary component",
+                makeText: "Local",
+                sku: "SKU-1002",
+                hsn: "8536",
+                qty: 25,
+                unit: "nos",
+                rate: 320,
+                amount: 8000,
+                remarks: null,
+              },
+              {
+                section: packMeta.defaultSections[1] ?? "Services",
+                lineKind: "service",
+                description: "Installation / commissioning",
+                makeText: "Own crew",
+                sku: null,
+                hsn: null,
+                qty: 1,
+                unit: "job",
+                rate: 7500,
+                amount: 7500,
+                remarks: "Includes handover",
+              },
+              {
+                section: packMeta.defaultSections[1] ?? "Services",
+                lineKind: "overhead",
+                description: "Freight & packing",
+                makeText: "Courier",
+                sku: null,
+                hsn: null,
+                qty: 1,
+                unit: "job",
+                rate: 1800,
+                amount: 1800,
+                remarks: null,
+              },
+            ];
+
+  const materialsTotal = round2(lines.reduce((s, l) => s + Number(l.amount || 0), 0));
   const marginPct = 15;
-  const taxPct = 8.9;
+  const taxPct = 18;
   const marginAmount = Math.round(materialsTotal * marginPct) / 100;
   const after = materialsTotal + marginAmount;
   const taxAmount = Math.round(after * taxPct) / 100;
@@ -404,13 +677,13 @@ export function sampleBomPaperModel(businessName = "Your business"): {
     docNo: "ZIG-BOM-2026/11-0001",
     docDate: "2026-11-11",
     status: "confirmed",
-    title: "Residential on-grid package",
-    capacityLabel: "3KW 1PH",
+    title: `${packMeta.label} proposal`,
+    capacityLabel: pack === "solar" ? "3KW 1PH" : packMeta.sizeLabel === "Capacity" ? "—" : "Standard",
     customerName: "Sample Customer",
     location: "Bengaluru",
     projectRef: "SITE-BNG-042",
     preparedBy: "Sales desk",
-    notes: "Subsidy scheme · Net metering as applicable.",
+    notes: "Prices valid as per terms. Scope exclusions apply unless listed.",
     revision: 1,
     validUntil: "2026-12-11",
     paymentTerms: "40% advance · 60% on delivery",
@@ -425,5 +698,6 @@ export function sampleBomPaperModel(businessName = "Your business"): {
       taxAmount,
       grandTotal: after + taxAmount,
     },
+    industryPack: pack,
   };
 }

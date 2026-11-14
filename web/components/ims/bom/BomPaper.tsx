@@ -2,26 +2,24 @@
 
 import type { BomBusiness, BomDoc, BomTotals } from "@/lib/ims/bom";
 import {
-  bomPaperTemplateMeta,
-  normalizeBomPaperTemplate,
+  bomPaperPurposeMeta,
+  normalizeBomIndustryPack,
+  normalizeBomPaperDensity,
+  normalizeBomPaperPurpose,
+  normalizeBomPaperTone,
+  type BomIndustryPackId,
+  type BomPaperDensity,
   type BomPaperLine,
+  type BomPaperPurpose,
   type BomPaperTemplateId,
+  type BomPaperTone,
 } from "@/lib/ims/bom-paper";
 import {
-  AetherBomPaper,
-  AtelierBomPaper,
-  AuroraBomPaper,
-  ClassicBomPaper,
-  EpcBomPaper,
   ExecutiveBomPaper,
   FieldBomPaper,
-  FolioBomPaper,
-  ForgeBomPaper,
-  LedgerBomPaper,
-  NovaBomPaper,
-  OrbitBomPaper,
-  PrismBomPaper,
-  TieredBomPaper,
+  ProposalBomPaper,
+  ShareBomPaper,
+  TechnicalBomPaper,
 } from "./bom-paper-layouts";
 
 export type BomPaperModel = {
@@ -45,11 +43,28 @@ export type BomPaperModel = {
   taxPct: number;
   lines: ReadonlyArray<BomPaperLine>;
   totals: BomTotals;
-  /** Tenant default from Settings → Documents. */
+  /** Document purpose (legacy skin ids still accepted). */
   template?: BomPaperTemplateId | null;
+  industryPack?: BomIndustryPackId | null;
+  tone?: BomPaperTone | null;
+  density?: BomPaperDensity | null;
+  /** When true, customer PDF folds margin into supply total. */
+  hideMargin?: boolean | null;
 };
 
-export function modelFromDoc(doc: BomDoc, business: BomBusiness, template?: BomPaperTemplateId | null): BomPaperModel {
+export type BomPaperOptions = {
+  template?: BomPaperTemplateId | null;
+  industryPack?: BomIndustryPackId | null;
+  tone?: BomPaperTone | null;
+  density?: BomPaperDensity | null;
+  hideMargin?: boolean | null;
+};
+
+export function modelFromDoc(doc: BomDoc, business: BomBusiness, options?: BomPaperOptions | BomPaperTemplateId | null): BomPaperModel {
+  const opts: BomPaperOptions =
+    typeof options === "string" || options == null
+      ? { template: options as BomPaperTemplateId | null | undefined }
+      : options;
   return {
     business,
     docNo: doc.docNo,
@@ -88,46 +103,48 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness, template?: BomP
       taxAmount: doc.taxAmount,
       grandTotal: doc.grandTotal,
     },
-    template,
+    template: opts.template,
+    industryPack: opts.industryPack,
+    tone: opts.tone,
+    density: opts.density,
+    hideMargin: opts.hideMargin,
   };
 }
 
-/** Printable commercial BOM sheet — layout chosen in IMS Settings → Documents. */
+/** Printable commercial BOM sheet — purpose chosen in IMS Settings → Documents. */
 export function BomPaper({ model }: { model: BomPaperModel }) {
-  const template = normalizeBomPaperTemplate(model.template);
-  switch (template) {
-    case "aether":
-      return <AetherBomPaper model={model} />;
-    case "tiered":
-      return <TieredBomPaper model={model} />;
-    case "epc":
-      return <EpcBomPaper model={model} />;
+  const purpose = normalizeBomPaperPurpose(model.template);
+  switch (purpose) {
     case "executive":
       return <ExecutiveBomPaper model={model} />;
+    case "technical":
+      return <TechnicalBomPaper model={model} />;
     case "field":
       return <FieldBomPaper model={model} />;
-    case "aurora":
-      return <AuroraBomPaper model={model} />;
-    case "ledger":
-      return <LedgerBomPaper model={model} />;
-    case "atelier":
-      return <AtelierBomPaper model={model} />;
-    case "prism":
-      return <PrismBomPaper model={model} />;
-    case "orbit":
-      return <OrbitBomPaper model={model} />;
-    case "forge":
-      return <ForgeBomPaper model={model} />;
-    case "nova":
-      return <NovaBomPaper model={model} />;
-    case "folio":
-      return <FolioBomPaper model={model} />;
-    case "classic":
+    case "share":
+      return <ShareBomPaper model={model} />;
+    case "proposal":
     default:
-      return <ClassicBomPaper model={model} />;
+      return <ProposalBomPaper model={model} />;
   }
 }
 
 export function BomPaperTemplateLabel({ id }: { id: BomPaperTemplateId | null | undefined }) {
-  return <>{bomPaperTemplateMeta(id).label}</>;
+  return <>{bomPaperPurposeMeta(normalizeBomPaperPurpose(id)).label}</>;
+}
+
+export function resolvePaperOptions(partial: BomPaperOptions): {
+  purpose: BomPaperPurpose;
+  industryPack: BomIndustryPackId;
+  tone: BomPaperTone;
+  density: BomPaperDensity;
+  hideMargin: boolean;
+} {
+  return {
+    purpose: normalizeBomPaperPurpose(partial.template),
+    industryPack: normalizeBomIndustryPack(partial.industryPack),
+    tone: normalizeBomPaperTone(partial.tone),
+    density: normalizeBomPaperDensity(partial.density),
+    hideMargin: Boolean(partial.hideMargin),
+  };
 }

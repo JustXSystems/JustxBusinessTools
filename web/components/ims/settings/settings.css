@@ -107,36 +107,16 @@
     linear-gradient(#e2e8f0, #e2e8f0) 0 5px / 88% 1px no-repeat,
     linear-gradient(#e2e8f0, #e2e8f0) 0 9px / 72% 1px no-repeat;
 }
-.bos .ims-bom-tpl-swatch--classic .ims-bom-tpl-swatch-rail { background: #1d4ed8; }
-.bos .ims-bom-tpl-swatch--tiered { background: linear-gradient(135deg, #ecfdf5, #fff 50%, #f8fafc); }
-.bos .ims-bom-tpl-swatch--tiered .ims-bom-tpl-swatch-rail { background: #0f766e; }
-.bos .ims-bom-tpl-swatch--epc .ims-bom-tpl-swatch-rail { background: #334155; }
+.bos .ims-bom-tpl-swatch--proposal { background: linear-gradient(135deg, #eff6ff, #fff 55%, #f8fafc); }
+.bos .ims-bom-tpl-swatch--proposal .ims-bom-tpl-swatch-rail { background: #1d4ed8; }
 .bos .ims-bom-tpl-swatch--executive { background: radial-gradient(120% 120% at 0% 0%, #f8fafc, #fff 55%, #eef2f7); }
 .bos .ims-bom-tpl-swatch--executive .ims-bom-tpl-swatch-block.is-b { background: #0f172a; border-color: #0f172a; }
+.bos .ims-bom-tpl-swatch--technical .ims-bom-tpl-swatch-rail { background: #334155; }
 .bos .ims-bom-tpl-swatch--field { background: linear-gradient(135deg, #fffbeb, #fff); }
 .bos .ims-bom-tpl-swatch--field .ims-bom-tpl-swatch-rail { background: #b45309; }
-.bos .ims-bom-tpl-swatch--aurora { background: linear-gradient(125deg, #ecfeff, #fff 45%, #f0f9ff); }
-.bos .ims-bom-tpl-swatch--aurora .ims-bom-tpl-swatch-rail { width: 0; }
-.bos .ims-bom-tpl-swatch--aurora .ims-bom-tpl-swatch-block.is-b { background: #0f172a; border-color: #0f172a; }
-.bos .ims-bom-tpl-swatch--ledger { background: repeating-linear-gradient(-45deg, #fff, #fff 5px, #f0fdfa 5px, #f0fdfa 10px); }
-.bos .ims-bom-tpl-swatch--ledger .ims-bom-tpl-swatch-rail { background: #115e59; }
-.bos .ims-bom-tpl-swatch--atelier .ims-bom-tpl-swatch-block.is-a { width: 58%; height: 18px; }
-.bos .ims-bom-tpl-swatch--atelier .ims-bom-tpl-swatch-block.is-b { display: none; }
-.bos .ims-bom-tpl-swatch--prism { background: linear-gradient(90deg, #f0f9ff 34%, #fff 34%); }
-.bos .ims-bom-tpl-swatch--prism .ims-bom-tpl-swatch-rail { width: 34%; background: #f0f9ff; border-right: 1px solid #e2e8f0; }
-.bos .ims-bom-tpl-swatch--prism .ims-bom-tpl-swatch-block.is-a { left: 42%; }
-.bos .ims-bom-tpl-swatch--orbit { background: linear-gradient(160deg, #e0f2fe, #fff 50%, #f8fafc); }
-.bos .ims-bom-tpl-swatch--orbit .ims-bom-tpl-swatch-rail { background: #0284c7; }
-.bos .ims-bom-tpl-swatch--orbit .ims-bom-tpl-swatch-block.is-a,
-.bos .ims-bom-tpl-swatch--orbit .ims-bom-tpl-swatch-block.is-b { border-radius: 999px; height: 10px; top: 10px; }
-.bos .ims-bom-tpl-swatch--forge { background: linear-gradient(135deg, #f1f5f9, #fff); }
-.bos .ims-bom-tpl-swatch--forge .ims-bom-tpl-swatch-rail { background: #475569; width: 8px; }
-.bos .ims-bom-tpl-swatch--nova { background: linear-gradient(135deg, #ecfccb, #fff 48%, #f0fdf4); }
-.bos .ims-bom-tpl-swatch--nova .ims-bom-tpl-swatch-rail { background: #65a30d; }
-.bos .ims-bom-tpl-swatch--nova .ims-bom-tpl-swatch-block.is-b { background: #14532d; border-color: #14532d; }
-.bos .ims-bom-tpl-swatch--folio { background: linear-gradient(135deg, #f8fafc, #e2e8f0); }
-.bos .ims-bom-tpl-swatch--folio .ims-bom-tpl-swatch-block.is-a { width: 36%; left: 8px; }
-.bos .ims-bom-tpl-swatch--folio .ims-bom-tpl-swatch-block.is-b { width: 36%; right: 8px; }
+.bos .ims-bom-tpl-swatch--share { background: linear-gradient(135deg, #f8fafc, #e2e8f0); }
+.bos .ims-bom-tpl-swatch--share .ims-bom-tpl-swatch-block.is-a { width: 36%; left: 8px; }
+.bos .ims-bom-tpl-swatch--share .ims-bom-tpl-swatch-block.is-b { width: 36%; right: 8px; }
 .bos .ims-bom-tpl-inspect {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(140px, 0.6fr);

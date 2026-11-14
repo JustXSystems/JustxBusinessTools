@@ -20,14 +20,15 @@ import {
   type Taxonomy,
 } from "./logic.js";
 
-/** Tenant-wide BOM preview / print paper layout. */
-export const BOM_PAPER_TEMPLATES = [
+/** Canonical BOM document purposes (+ legacy aesthetic ids accepted on read). */
+export const BOM_PAPER_PURPOSES = ["proposal", "executive", "technical", "field", "share"] as const;
+export type BomPaperPurpose = (typeof BOM_PAPER_PURPOSES)[number];
+
+export const BOM_PAPER_LEGACY_TEMPLATES = [
   "aether",
   "classic",
   "tiered",
   "epc",
-  "executive",
-  "field",
   "aurora",
   "ledger",
   "atelier",
@@ -37,11 +38,55 @@ export const BOM_PAPER_TEMPLATES = [
   "nova",
   "folio",
 ] as const;
-export type BomPaperTemplateId = (typeof BOM_PAPER_TEMPLATES)[number];
 
-export function normalizeBomPaperTemplate(v: unknown): BomPaperTemplateId {
+export const BOM_PAPER_TEMPLATES = [...BOM_PAPER_PURPOSES, ...BOM_PAPER_LEGACY_TEMPLATES] as const;
+export type BomPaperTemplateId = BomPaperPurpose;
+
+const PURPOSE_ALIAS: Record<string, BomPaperPurpose> = {
+  proposal: "proposal",
+  executive: "executive",
+  technical: "technical",
+  field: "field",
+  share: "share",
+  aether: "proposal",
+  classic: "proposal",
+  tiered: "proposal",
+  aurora: "proposal",
+  atelier: "proposal",
+  prism: "proposal",
+  nova: "proposal",
+  orbit: "executive",
+  epc: "technical",
+  ledger: "technical",
+  forge: "technical",
+  folio: "share",
+};
+
+export function normalizeBomPaperTemplate(v: unknown): BomPaperPurpose {
   const s = String(v ?? "").trim().toLowerCase();
-  return (BOM_PAPER_TEMPLATES as readonly string[]).includes(s) ? (s as BomPaperTemplateId) : "aether";
+  return PURPOSE_ALIAS[s] ?? "proposal";
+}
+
+export const BOM_INDUSTRY_PACKS = ["general", "epc", "solar", "manufacturing", "services", "procurement"] as const;
+export type BomIndustryPackId = (typeof BOM_INDUSTRY_PACKS)[number];
+
+export function normalizeBomIndustryPack(v: unknown): BomIndustryPackId {
+  const s = String(v ?? "").trim().toLowerCase();
+  return (BOM_INDUSTRY_PACKS as readonly string[]).includes(s) ? (s as BomIndustryPackId) : "general";
+}
+
+export const BOM_PAPER_TONES = ["neutral", "bold", "editorial"] as const;
+export type BomPaperTone = (typeof BOM_PAPER_TONES)[number];
+export function normalizeBomPaperTone(v: unknown): BomPaperTone {
+  const s = String(v ?? "").trim().toLowerCase();
+  return (BOM_PAPER_TONES as readonly string[]).includes(s) ? (s as BomPaperTone) : "neutral";
+}
+
+export const BOM_PAPER_DENSITIES = ["compact", "comfort"] as const;
+export type BomPaperDensity = (typeof BOM_PAPER_DENSITIES)[number];
+export function normalizeBomPaperDensity(v: unknown): BomPaperDensity {
+  const s = String(v ?? "").trim().toLowerCase();
+  return (BOM_PAPER_DENSITIES as readonly string[]).includes(s) ? (s as BomPaperDensity) : "comfort";
 }
 
 export type ImsSettings = {
@@ -60,8 +105,12 @@ export type ImsSettings = {
   returnPrefix: string;
   checkPrefix: string;
   ticketPrefix: string;
-  /** Default BOM paper for live preview + print/PDF. */
+  /** Default BOM document purpose for live preview + print/PDF. */
   bomPaperTemplate: BomPaperTemplateId;
+  bomIndustryPack: BomIndustryPackId;
+  bomPaperTone: BomPaperTone;
+  bomPaperDensity: BomPaperDensity;
+  bomHideMargin: boolean;
   poApprovalLimit: number;
   draftPoPurgeDays: number;
   paymentTermsDays: number;
@@ -93,6 +142,10 @@ type SettingsRow = {
   check_prefix: string;
   ticket_prefix: string;
   bom_paper_template?: string | null;
+  bom_industry_pack?: string | null;
+  bom_paper_tone?: string | null;
+  bom_paper_density?: string | null;
+  bom_hide_margin?: number | boolean | null;
   po_approval_limit: string | number;
   draft_po_purge_days: number;
   payment_terms_days: number;
@@ -122,6 +175,10 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   checkPrefix: r.check_prefix,
   ticketPrefix: r.ticket_prefix,
   bomPaperTemplate: normalizeBomPaperTemplate(r.bom_paper_template),
+  bomIndustryPack: normalizeBomIndustryPack(r.bom_industry_pack),
+  bomPaperTone: normalizeBomPaperTone(r.bom_paper_tone),
+  bomPaperDensity: normalizeBomPaperDensity(r.bom_paper_density),
+  bomHideMargin: Boolean(r.bom_hide_margin),
   poApprovalLimit: money(r.po_approval_limit),
   draftPoPurgeDays: Number(r.draft_po_purge_days) || 0,
   paymentTermsDays: Number(r.payment_terms_days) || 0,
@@ -179,6 +236,10 @@ const SettingsInput = z.object({
   checkPrefix: prefix.optional(),
   ticketPrefix: prefix.optional(),
   bomPaperTemplate: z.enum(BOM_PAPER_TEMPLATES).optional(),
+  bomIndustryPack: z.enum(BOM_INDUSTRY_PACKS).optional(),
+  bomPaperTone: z.enum(BOM_PAPER_TONES).optional(),
+  bomPaperDensity: z.enum(BOM_PAPER_DENSITIES).optional(),
+  bomHideMargin: z.boolean().optional(),
   poApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
   draftPoPurgeDays: z.coerce.number().int().min(0).max(365).optional(),
   paymentTermsDays: z.coerce.number().int().min(0).max(365).optional(),
@@ -208,6 +269,10 @@ const COLUMN: Record<string, string> = {
   checkPrefix: "check_prefix",
   ticketPrefix: "ticket_prefix",
   bomPaperTemplate: "bom_paper_template",
+  bomIndustryPack: "bom_industry_pack",
+  bomPaperTone: "bom_paper_tone",
+  bomPaperDensity: "bom_paper_density",
+  bomHideMargin: "bom_hide_margin",
   poApprovalLimit: "po_approval_limit",
   draftPoPurgeDays: "draft_po_purge_days",
   paymentTermsDays: "payment_terms_days",
@@ -231,6 +296,10 @@ export async function updateSettings(deps: ImsDeps, actor: ImsActor, body: unkno
     if (key === "permissions") v = JSON.stringify(normalizePermissions(value));
     else if (key === "taxonomy") v = JSON.stringify(normalizeTaxonomy(value));
     else if (key === "reminders") v = JSON.stringify(normalizeReminders(value));
+    else if (key === "bomPaperTemplate") v = normalizeBomPaperTemplate(value);
+    else if (key === "bomIndustryPack") v = normalizeBomIndustryPack(value);
+    else if (key === "bomPaperTone") v = normalizeBomPaperTone(value);
+    else if (key === "bomPaperDensity") v = normalizeBomPaperDensity(value);
     else if (typeof value === "boolean") v = value ? 1 : 0;
     else if (typeof value === "string" && key.endsWith("Prefix")) v = value.toUpperCase();
     sets.push(`${COLUMN[key]} = :${key}`);

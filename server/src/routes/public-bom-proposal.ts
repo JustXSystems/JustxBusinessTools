@@ -137,20 +137,56 @@ async function businessForTenant(tenantId: number): Promise<PublicBusiness> {
   };
 }
 
-async function paperTemplateForTenant(tenantId: number): Promise<string> {
-  const row = await one<{ bom_paper_template: string | null }>(
-    pool,
-    `SELECT bom_paper_template FROM ims_settings WHERE tenant_id = :tenantId LIMIT 1`,
-    { tenantId },
-  );
-  return normalizeBomPaperTemplate(row?.bom_paper_template);
+type PublicPaperOptions = {
+  template: string;
+  industryPack: string;
+  tone: string;
+  density: string;
+  hideMargin: boolean;
+};
+
+async function paperOptionsForTenant(tenantId: number): Promise<PublicPaperOptions> {
+  try {
+    const row = await one<{
+      bom_paper_template: string | null;
+      bom_industry_pack: string | null;
+      bom_paper_tone: string | null;
+      bom_paper_density: string | null;
+      bom_hide_margin: number | boolean | null;
+    }>(
+      pool,
+      `SELECT bom_paper_template, bom_industry_pack, bom_paper_tone, bom_paper_density, bom_hide_margin
+       FROM ims_settings WHERE tenant_id = :tenantId LIMIT 1`,
+      { tenantId },
+    );
+    return {
+      template: normalizeBomPaperTemplate(row?.bom_paper_template),
+      industryPack: row?.bom_industry_pack ?? "general",
+      tone: row?.bom_paper_tone ?? "neutral",
+      density: row?.bom_paper_density ?? "comfort",
+      hideMargin: Boolean(row?.bom_hide_margin),
+    };
+  } catch {
+    const row = await one<{ bom_paper_template: string | null }>(
+      pool,
+      `SELECT bom_paper_template FROM ims_settings WHERE tenant_id = :tenantId LIMIT 1`,
+      { tenantId },
+    );
+    return {
+      template: normalizeBomPaperTemplate(row?.bom_paper_template),
+      industryPack: "general",
+      tone: "neutral",
+      density: "comfort",
+      hideMargin: false,
+    };
+  }
 }
 
 function mapPublicDoc(
   row: BomDocPublicRow,
   lines: Awaited<ReturnType<typeof loadPublicLines>>,
   business: PublicBusiness,
-  template: string,
+  paper: PublicPaperOptions,
 ) {
   const mapped = {
     docNo: row.doc_no,
@@ -180,7 +216,11 @@ function mapPublicDoc(
     proposalResponseNote: row.proposal_response_note,
     lines,
     business,
-    template,
+    template: paper.template,
+    industryPack: paper.industryPack,
+    tone: paper.tone,
+    density: paper.density,
+    hideMargin: paper.hideMargin,
     /** @deprecated prefer business.name — kept for older clients */
     businessName: business.name,
   };
@@ -188,12 +228,12 @@ function mapPublicDoc(
 }
 
 async function loadPublicPayload(tokenRow: BomDocPublicRow) {
-  const [lines, business, template] = await Promise.all([
+  const [lines, business, paper] = await Promise.all([
     loadPublicLines(tokenRow.tenant_id, tokenRow.id),
     businessForTenant(tokenRow.tenant_id),
-    paperTemplateForTenant(tokenRow.tenant_id),
+    paperOptionsForTenant(tokenRow.tenant_id),
   ]);
-  return mapPublicDoc(tokenRow, lines, business, template);
+  return mapPublicDoc(tokenRow, lines, business, paper);
 }
 
 router.get("/:token", async (req, res) => {

@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiUrl } from "@/lib/api-base";
-import { normalizeBomPaperTemplate, type BomPaperTemplateId } from "@/lib/ims/bom-paper";
+import {
+  normalizeBomIndustryPack,
+  normalizeBomPaperDensity,
+  normalizeBomPaperTemplate,
+  normalizeBomPaperTone,
+  type BomPaperTemplateId,
+} from "@/lib/ims/bom-paper";
 import { BomPaper, type BomPaperModel } from "@/components/ims/bom/BomPaper";
 import "@/components/bos/styles/bos.patterns.css";
 import "@/components/ims/bom/bom.css";
@@ -62,6 +68,10 @@ type PublicBom = {
   business?: PublicBusiness;
   businessName?: string;
   template?: string | null;
+  industryPack?: string | null;
+  tone?: string | null;
+  density?: string | null;
+  hideMargin?: boolean | null;
 };
 
 function toPaperModel(doc: PublicBom): BomPaperModel {
@@ -102,6 +112,10 @@ function toPaperModel(doc: PublicBom): BomPaperModel {
     marginPct: Number(doc.marginPct) || 0,
     taxPct: Number(doc.taxPct) || 0,
     template: normalizeBomPaperTemplate(doc.template) as BomPaperTemplateId,
+    industryPack: normalizeBomIndustryPack(doc.industryPack),
+    tone: normalizeBomPaperTone(doc.tone),
+    density: normalizeBomPaperDensity(doc.density),
+    hideMargin: Boolean(doc.hideMargin),
     lines: (doc.lines ?? []).map((l) => ({
       section: l.section,
       lineKind: (l.lineKind as BomPaperModel["lines"][number]["lineKind"]) ?? "stock",
