@@ -475,7 +475,20 @@ export const bom = {
     limit?: number;
     offset?: number;
   }) =>
-    get<{ docs: BomDoc[]; total: number; invoiceConvertModes: BomInvoiceConvertMode[] }>("/bom/docs", {
+    get<{
+      docs: BomDoc[];
+      total: number;
+      counts?: {
+        all: number;
+        draft: number;
+        confirmed: number;
+        cancelled: number;
+        stockPending: number;
+        invoiced: number;
+        pipelineValue: number;
+      };
+      invoiceConvertModes: BomInvoiceConvertMode[];
+    }>("/bom/docs", {
       q: params?.q,
       status: params?.status,
       invoice: params?.invoice && params.invoice !== "all" ? params.invoice : undefined,

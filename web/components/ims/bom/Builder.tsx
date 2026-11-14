@@ -2,7 +2,7 @@
 
 import "./bom.css";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Badge, Button, Card, EmptyState, Field, FilterChip, FormGrid, Input, Select, Textarea } from "@/components/bos";
+import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, FilterChip, FormGrid, Grid, Input, KpiCard, SearchInput, Segmented, Select, Textarea, type BosColumn } from "@/components/bos";
 import {
   BOM_DOC_STATUS_LABEL,
   BOM_INVOICE_CONVERT_LABEL,
@@ -23,12 +23,12 @@ import {
   type BomPackage,
 } from "@/lib/ims/bom";
 import type { ImsItem } from "@/lib/ims/api";
-import { inr, inrExact } from "@/lib/ims/format";
+import { dateLabel, downloadCsv, inr, inrCompact, inrExact, type BadgeView } from "@/lib/ims/format";
 import { formatCatalogEnsureSummary, exportBomExcel } from "@/lib/ims/bom-excel";
 import { ensureBomPackageCatalog, ensureStockLinesForSave } from "@/lib/ims/ensure-catalog";
 import { purchase } from "@/lib/ims/purchase";
 import { withBasePath } from "@/lib/base-path";
-import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
+import { ErrorBlock, Loaded, LoadingBlock, PageHeader, RequirePerm, Stack, StatusBadge, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
 import { ItemPickerDialog, PartySelect } from "../shared/pickers";
 import {
   BOM_COLUMN_LABEL,
@@ -53,6 +53,51 @@ type View =
   | { mode: "view"; id: string };
 
 type EditorLine = BomDocLineInput & { key: string; baseQty: number; issuedQty?: number };
+type BomListSort = "recent" | "date" | "docNo" | "customer" | "amount" | "status";
+
+const BOM_STATUS_BADGE: Record<BomDocStatus, BadgeView> = {
+  draft: { text: "DRAFT", tone: "amber" },
+  confirmed: { text: "CONFIRMED", tone: "emerald" },
+  cancelled: { text: "CANCELLED", tone: "coral" },
+};
+
+const BOM_LIST_SORT_LABEL: Record<BomListSort, string> = {
+  recent: "Recently updated",
+  date: "Document date",
+  docNo: "Doc number",
+  customer: "Customer",
+  amount: "Amount (high → low)",
+  status: "Status",
+};
+
+/** Drafts: anyone with BOM access. Confirmed/cancelled: owners only, and never when invoice or stock is linked. */
+function canDeleteBomDoc(doc: Pick<BomDoc, "status" | "invoiceId" | "stockIssuedAt">, isOwner: boolean): boolean {
+  if (doc.invoiceId || doc.stockIssuedAt) return false;
+  if (doc.status === "draft") return true;
+  return isOwner;
+}
+
+function sortBomDocs(docs: ReadonlyArray<BomDoc>, sort: BomListSort): BomDoc[] {
+  const out = [...docs];
+  const by: Record<BomListSort, (a: BomDoc, b: BomDoc) => number> = {
+    recent: (a, b) => String(b.updatedAt ?? b.createdAt ?? "").localeCompare(String(a.updatedAt ?? a.createdAt ?? "")),
+    date: (a, b) => b.docDate.localeCompare(a.docDate) || a.docNo.localeCompare(b.docNo),
+    docNo: (a, b) => a.docNo.localeCompare(b.docNo),
+    customer: (a, b) => (a.customerName || "").localeCompare(b.customerName || "") || b.docDate.localeCompare(a.docDate),
+    amount: (a, b) => b.grandTotal - a.grandTotal || a.docNo.localeCompare(b.docNo),
+    status: (a, b) => a.status.localeCompare(b.status) || b.docDate.localeCompare(a.docDate),
+  };
+  return out.sort(by[sort]);
+}
+
+function BomSortHeader({ label, active, onClick, align }: { label: string; active: boolean; onClick: () => void; align?: "left" | "right" }) {
+  return (
+    <button type="button" className={`ims-bom-sort-th${active ? " is-active" : ""}${align === "right" ? " is-num" : ""}`} onClick={onClick} aria-pressed={active}>
+      {label}
+      <span aria-hidden="true">{active ? " ▾" : ""}</span>
+    </button>
+  );
+}
 
 const blankLine = (section = "Main Items"): EditorLine => ({
   key: Math.random().toString(36).slice(2),
@@ -101,139 +146,352 @@ export default function BomBuilderScreen() {
 }
 
 function BomList({ onNew, onOpen }: { onNew: (packageId: string | null) => void; onOpen: (id: string) => void }) {
+  const { session } = useIms();
+  const isOwner = session.access.role === "owner";
+  const { run, busy } = useImsAction();
   const [q, setQ] = useState("");
   const [qDebounced, setQDebounced] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState<"all" | BomDocStatus>("all");
   const [invoice, setInvoice] = useState<"all" | "linked" | "none">("all");
   const [stock, setStock] = useState<"all" | "issued" | "pending">("all");
+  const [sort, setSort] = useState<BomListSort>("recent");
   const [pkgId, setPkgId] = useState("");
+
   useEffect(() => {
     const t = window.setTimeout(() => setQDebounced(q.trim()), 250);
     return () => window.clearTimeout(t);
   }, [q]);
+
   const docsState = useImsData(
-    () => bom.docs({ q: qDebounced, status, invoice, stock, limit: 100 }),
+    () => bom.docs({ q: qDebounced || undefined, status, invoice, stock, limit: 200 }),
     [qDebounced, status, invoice, stock],
   );
   const pkgsState = useImsData(() => bom.packages({ limit: 100 }), []);
-  const docs = docsState.data?.docs ?? [];
   const packages = pkgsState.data?.packages ?? [];
-  const filtered = status !== "all" || invoice !== "all" || stock !== "all" || Boolean(qDebounced);
+  const filtersOn = status !== "all" || invoice !== "all" || stock !== "all" || Boolean(qDebounced);
+
+  const clearFilters = () => {
+    setQ("");
+    setQDebounced("");
+    setStatus("all");
+    setInvoice("all");
+    setStock("all");
+  };
+
+  const deleteDoc = async (d: BomDoc) => {
+    const kind = d.status === "draft" ? "draft" : d.status;
+    if (!window.confirm(`Delete ${kind} ${d.docNo}? This cannot be undone.`)) return;
+    await run(
+      `del-${d.id}`,
+      async () => {
+        await bom.deleteDoc(d.id);
+        return true;
+      },
+      { success: `${d.docNo} deleted` },
+    );
+  };
 
   return (
-    <Stack>
+    <Stack gap={16}>
       <PageHeader
         title="Create / Maintain"
-        sub="Compose a customer bill of materials from a package template — live preview, save and print."
-        actions={<Button onClick={() => onNew(pkgId || null)}>New BOM</Button>}
+        sub="Search, sort and open customer BOMs — compose from a package, confirm, invoice and issue stock."
+        actions={
+          <div className="ims-bom-list-create">
+            <Select size="sm" value={pkgId} onChange={(e) => setPkgId(e.target.value)} aria-label="Package template for new BOM" style={{ maxWidth: 220 }}>
+              <option value="">Blank document</option>
+              {packages.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.capacityLabel ? ` (${p.capacityLabel})` : ""}
+                </option>
+              ))}
+            </Select>
+            <Button variant="primary" icon="plus" onClick={() => onNew(pkgId || null)}>
+              New BOM
+            </Button>
+          </div>
+        }
       />
 
-      <Card>
-        <FormGrid>
-          <Field label="Search">
-            {({ id }) => <Input id={id} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Doc no, customer, location…" />}
-          </Field>
-          <Field label="Start from package">
-            {({ id }) => (
-              <Select id={id} value={pkgId} onChange={(e) => setPkgId(e.target.value)}>
-                <option value="">Blank document</option>
-                {packages.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.capacityLabel ? ` (${p.capacityLabel})` : ""}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-        </FormGrid>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-          {(["all", "draft", "confirmed", "cancelled"] as const).map((s) => (
-            <FilterChip key={s} active={status === s} onClick={() => setStatus(s)}>
-              {s === "all" ? "All status" : BOM_DOC_STATUS_LABEL[s]}
-            </FilterChip>
-          ))}
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-          <FilterChip active={invoice === "all"} onClick={() => setInvoice("all")}>
-            Any invoice
-          </FilterChip>
-          <FilterChip active={invoice === "none"} onClick={() => setInvoice("none")}>
-            No invoice
-          </FilterChip>
-          <FilterChip active={invoice === "linked"} onClick={() => setInvoice("linked")}>
-            Invoiced
-          </FilterChip>
-          <FilterChip active={stock === "all"} onClick={() => setStock("all")}>
-            Any stock
-          </FilterChip>
-          <FilterChip active={stock === "pending"} onClick={() => setStock("pending")}>
-            Stock pending
-          </FilterChip>
-          <FilterChip active={stock === "issued"} onClick={() => setStock("issued")}>
-            Stock issued
-          </FilterChip>
-        </div>
-      </Card>
+      <Loaded state={docsState}>
+        {(data) => {
+          const counts = data.counts ?? {
+            all: data.total,
+            draft: 0,
+            confirmed: 0,
+            cancelled: 0,
+            stockPending: 0,
+            invoiced: 0,
+            pipelineValue: 0,
+          };
+          const rows = sortBomDocs(data.docs, sort);
+          const sortHeader = (key: BomListSort, label: string, align?: "left" | "right") => (
+            <BomSortHeader label={label} active={sort === key} align={align} onClick={() => setSort(key)} />
+          );
+          const columns: BosColumn<BomDoc>[] = [
+            {
+              key: "doc",
+              header: sortHeader("date", "Document"),
+              width: "22%",
+              cell: (d) => (
+                <span className="ims-cell-stack">
+                  <span className="ims-strong">{d.docNo}</span>
+                  <small>{dateLabel(d.docDate)}</small>
+                </span>
+              ),
+            },
+            {
+              key: "customer",
+              header: sortHeader("customer", "Customer"),
+              cell: (d) => (
+                <span className="ims-cell-stack">
+                  <span className="ims-strong" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {d.customerName || "Untitled customer"}
+                  </span>
+                  <small>{[d.location, d.projectRef, d.capacityLabel || d.title].filter(Boolean).join(" · ") || "—"}</small>
+                </span>
+              ),
+            },
+            {
+              key: "package",
+              header: "Package",
+              cell: (d) => d.packageName || <span className="ims-faint">Blank</span>,
+            },
+            {
+              key: "total",
+              header: sortHeader("amount", "Total", "right"),
+              align: "right",
+              mono: true,
+              cell: (d) => inrExact(d.grandTotal),
+            },
+            {
+              key: "flow",
+              header: "Progress",
+              cell: (d) => (
+                <span className="ims-bom-list-flow">
+                  {d.invoiceId ? (
+                    <Badge tone="blue" title={d.invoiceConvertMode ? BOM_INVOICE_CONVERT_LABEL[d.invoiceConvertMode] : undefined}>
+                      Invoiced
+                    </Badge>
+                  ) : d.status === "confirmed" ? (
+                    <Badge tone="amber">No invoice</Badge>
+                  ) : null}
+                  {d.stockIssuedAt ? (
+                    <Badge tone="emerald">Stock out</Badge>
+                  ) : d.status === "confirmed" ? (
+                    <Badge tone="amber">Needs stock</Badge>
+                  ) : null}
+                  {!d.invoiceId && !d.stockIssuedAt && d.status !== "confirmed" ? <span className="ims-faint">—</span> : null}
+                </span>
+              ),
+            },
+            {
+              key: "status",
+              header: sortHeader("status", "Status"),
+              cell: (d) => <StatusBadge view={BOM_STATUS_BADGE[d.status as BomDocStatus] ?? BOM_STATUS_BADGE.draft} />,
+            },
+            {
+              key: "actions",
+              header: "",
+              align: "right",
+              width: 88,
+              cell: (d) =>
+                canDeleteBomDoc(d, isOwner) ? (
+                  <span className="ims-row" style={{ justifyContent: "flex-end" }} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} role="presentation">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={Boolean(busy)}
+                      aria-label={`Delete ${d.docNo}`}
+                      title={d.status === "draft" ? "Delete draft" : "Delete (owner)"}
+                      onClick={() => void deleteDoc(d)}
+                    >
+                      Delete
+                    </Button>
+                  </span>
+                ) : null,
+            },
+          ];
 
-      {docsState.error ? <ErrorBlock error={docsState.error} onRetry={docsState.reload} /> : null}
-      {!docsState.data && !docsState.error ? <LoadingBlock /> : null}
-      {docsState.data && docs.length === 0 ? (
-        <EmptyState
-          title={filtered ? "No BOMs match these filters" : "No BOM documents yet"}
-          actions={
-            filtered ? (
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setQ("");
-                  setStatus("all");
-                  setInvoice("all");
-                  setStock("all");
-                }}
-              >
-                Clear filters
-              </Button>
-            ) : (
-              <Button onClick={() => onNew(pkgId || null)}>Create first BOM</Button>
-            )
-          }
-        >
-          {filtered
-            ? stock === "pending"
-              ? "No confirmed BOMs are waiting on stock for this view."
-              : "Try another status, invoice or stock chip."
-            : "Pick a package template above (or start blank), then fill customer and lines."}
-        </EmptyState>
-      ) : null}
+          return (
+            <Stack gap={16}>
+              <Grid cols={4} min={140}>
+                <KpiCard
+                  interactive={false}
+                  label="In pipeline"
+                  value={inrCompact(counts.pipelineValue)}
+                  chip={{ color: "lavender", glyph: "☰" }}
+                  delta={`${counts.all} document${counts.all === 1 ? "" : "s"} in view`}
+                  deltaTone="muted"
+                />
+                <button type="button" className="ims-bom-kpi-hit" onClick={() => setStatus("draft")} aria-label="Show draft BOMs">
+                  <KpiCard
+                    interactive={false}
+                    label="Drafts"
+                    value={counts.draft}
+                    chip={{ color: "amber", glyph: "✎" }}
+                    delta={status === "draft" ? "Filtered" : "Click to filter"}
+                    deltaTone="muted"
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="ims-bom-kpi-hit"
+                  onClick={() => {
+                    setStatus("all");
+                    setStock("pending");
+                    setInvoice("all");
+                  }}
+                  aria-label="Show BOMs waiting on stock"
+                >
+                  <KpiCard
+                    interactive={false}
+                    label="Stock pending"
+                    value={counts.stockPending}
+                    valueTone={counts.stockPending > 0 ? "amber" : undefined}
+                    chip={{ color: "rose", glyph: "⬆" }}
+                    delta={stock === "pending" ? "Filtered" : counts.stockPending ? "Click to filter" : "All clear"}
+                    deltaTone={counts.stockPending ? "down" : "up"}
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="ims-bom-kpi-hit"
+                  onClick={() => {
+                    setInvoice("linked");
+                    setStock("all");
+                  }}
+                  aria-label="Show invoiced BOMs"
+                >
+                  <KpiCard
+                    interactive={false}
+                    label="Invoiced"
+                    value={counts.invoiced}
+                    chip={{ color: "blue", glyph: "🧾" }}
+                    delta={invoice === "linked" ? "Filtered" : "Click to filter"}
+                    deltaTone="muted"
+                  />
+                </button>
+              </Grid>
 
-      {docs.map((d) => (
-        <Card key={d.id} interactive onClick={() => onOpen(d.id)}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontWeight: 700 }}>
-                {d.docNo} · {d.customerName || "Untitled customer"}
-              </div>
-              <div style={{ opacity: 0.7, fontSize: 13, marginTop: 4 }}>
-                {[d.capacityLabel || d.title, d.location, d.docDate, inr(d.grandTotal)].filter(Boolean).join(" · ")}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                {d.invoiceId ? (
-                  <Badge tone="blue">
-                    Invoice{d.invoiceConvertMode ? ` · ${BOM_INVOICE_CONVERT_LABEL[d.invoiceConvertMode]}` : ""}
-                  </Badge>
-                ) : d.status === "confirmed" ? (
-                  <Badge tone="amber">No invoice</Badge>
-                ) : null}
-                {d.stockIssuedAt ? <Badge tone="emerald">Stock out</Badge> : d.status === "confirmed" ? <Badge tone="amber">Needs stock</Badge> : null}
-              </div>
-            </div>
-            <Badge tone={d.status === "confirmed" ? "emerald" : d.status === "cancelled" ? "coral" : "amber"}>
-              {BOM_DOC_STATUS_LABEL[d.status as BomDocStatus] ?? d.status}
-            </Badge>
-          </div>
-        </Card>
-      ))}
+              <Card interactive={false} className="ims-bom-list-card">
+                <div className="ims-toolbar">
+                  <SearchInput
+                    wrapperClassName="ims-grow"
+                    placeholder="Search doc no, customer, location, package, project…"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    aria-label="Search BOMs"
+                  />
+                  <Select size="sm" value={sort} onChange={(e) => setSort(e.target.value as BomListSort)} aria-label="Sort by" style={{ width: "auto" }}>
+                    {(Object.keys(BOM_LIST_SORT_LABEL) as BomListSort[]).map((k) => (
+                      <option key={k} value={k}>
+                        Sort · {BOM_LIST_SORT_LABEL[k]}
+                      </option>
+                    ))}
+                  </Select>
+                  <Button
+                    size="sm"
+                    icon="download"
+                    disabled={!rows.length}
+                    onClick={() =>
+                      downloadCsv(`bom-docs`, rows, [
+                        { header: "Doc no", value: (d) => d.docNo },
+                        { header: "Date", value: (d) => d.docDate },
+                        { header: "Customer", value: (d) => d.customerName },
+                        { header: "Location", value: (d) => d.location ?? "" },
+                        { header: "Package", value: (d) => d.packageName ?? "" },
+                        { header: "Status", value: (d) => BOM_DOC_STATUS_LABEL[d.status as BomDocStatus] ?? d.status },
+                        { header: "Total", value: (d) => d.grandTotal },
+                        { header: "Invoice", value: (d) => (d.invoiceId ? "Yes" : "No") },
+                        { header: "Stock", value: (d) => (d.stockIssuedAt ? "Issued" : "—") },
+                      ])
+                    }
+                  >
+                    Export
+                  </Button>
+                </div>
+
+                <div className="ims-toolbar" style={{ marginTop: 8 }}>
+                  <Segmented
+                    size="sm"
+                    scroll
+                    role="tabs"
+                    aria-label="BOM status"
+                    value={status}
+                    onChange={setStatus}
+                    options={[
+                      { value: "all" as const, label: `All · ${counts.all}` },
+                      { value: "draft" as const, label: `Draft · ${counts.draft}` },
+                      { value: "confirmed" as const, label: `Confirmed · ${counts.confirmed}` },
+                      { value: "cancelled" as const, label: `Cancelled · ${counts.cancelled}` },
+                    ]}
+                  />
+                </div>
+
+                <div className="ims-bom-list-chips">
+                  <FilterChip active={invoice === "all"} onClick={() => setInvoice("all")}>
+                    Any invoice
+                  </FilterChip>
+                  <FilterChip active={invoice === "none"} onClick={() => setInvoice("none")}>
+                    No invoice
+                  </FilterChip>
+                  <FilterChip active={invoice === "linked"} onClick={() => setInvoice("linked")}>
+                    Invoiced
+                  </FilterChip>
+                  <FilterChip active={stock === "all"} onClick={() => setStock("all")}>
+                    Any stock
+                  </FilterChip>
+                  <FilterChip active={stock === "pending"} onClick={() => setStock("pending")}>
+                    Stock pending
+                  </FilterChip>
+                  <FilterChip active={stock === "issued"} onClick={() => setStock("issued")}>
+                    Stock issued
+                  </FilterChip>
+                  {filtersOn ? (
+                    <Button size="sm" variant="ghost" onClick={clearFilters}>
+                      Clear
+                    </Button>
+                  ) : null}
+                </div>
+
+                <DataTable
+                  caption="Bill of materials"
+                  columns={columns}
+                  rows={rows}
+                  rowKey={(d) => d.id}
+                  onRowClick={(d) => onOpen(d.id)}
+                  chevron
+                  empty={
+                    <EmptyState
+                      glyph="☰"
+                      title={filtersOn ? "No BOMs match these filters" : "No BOM documents yet"}
+                      actions={
+                        filtersOn ? (
+                          <Button variant="ghost" onClick={clearFilters}>
+                            Clear filters
+                          </Button>
+                        ) : (
+                          <Button variant="primary" icon="plus" onClick={() => onNew(pkgId || null)}>
+                            Create first BOM
+                          </Button>
+                        )
+                      }
+                    >
+                      {filtersOn
+                        ? stock === "pending"
+                          ? "No confirmed BOMs are waiting on stock for this view."
+                          : "Try another status, invoice or stock filter."
+                        : "Choose a package template next to New BOM (or leave blank), then compose lines."}
+                    </EmptyState>
+                  }
+                />
+              </Card>
+            </Stack>
+          );
+        }}
+      </Loaded>
     </Stack>
   );
 }
@@ -326,6 +584,7 @@ function PartialIssueForm({
 
 function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onEdit: () => void }) {
   const { can, navigate, session } = useIms();
+  const isOwner = session.access.role === "owner";
   const { run, busy } = useImsAction();
   const print = usePrint();
   const state = useImsData(() => bom.doc(id), [id]);
@@ -438,21 +697,29 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
                 >
                   Confirm
                 </Button>
-                <Button
-                  variant="ghost"
-                  disabled={Boolean(busy)}
-                  onClick={async () => {
-                    if (!window.confirm(`Delete draft ${doc.docNo}? This cannot be undone.`)) return;
-                    const out = await run("delete", async () => {
+              </>
+            ) : null}
+            {canDeleteBomDoc(doc, isOwner) ? (
+              <Button
+                variant="ghost"
+                disabled={Boolean(busy)}
+                title={doc.status === "draft" ? "Delete draft" : "Delete (owner)"}
+                onClick={async () => {
+                  const kind = doc.status === "draft" ? "draft" : doc.status;
+                  if (!window.confirm(`Delete ${kind} ${doc.docNo}? This cannot be undone.`)) return;
+                  const out = await run(
+                    "delete",
+                    async () => {
                       await bom.deleteDoc(doc.id);
                       return true;
-                    }, { success: "Draft BOM deleted" });
-                    if (out) onBack();
-                  }}
-                >
-                  Delete
-                </Button>
-              </>
+                    },
+                    { success: `${doc.docNo} deleted` },
+                  );
+                  if (out) onBack();
+                }}
+              >
+                Delete
+              </Button>
             ) : null}
             <Button
               variant="ghost"
