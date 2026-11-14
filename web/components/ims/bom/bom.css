@@ -1771,6 +1771,70 @@ body.is-bom-resizing {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Configurable columns — keep alignment stable regardless of which cols are on. */
+.bos .ims-bom-sheet .ims-bom-schedule th,
+.bos .ims-bom-sheet .ims-bom-schedule td {
+  text-align: left;
+  vertical-align: top;
+}
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--index,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--index,
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--qty,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--qty,
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--rate,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--rate,
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--amount,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--amount {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--check,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--check,
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--kind,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--kind,
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--unit,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--unit {
+  text-align: center;
+  white-space: nowrap;
+}
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--sku,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--sku,
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--hsn,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--hsn {
+  white-space: nowrap;
+  font-family: var(--bos-font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+}
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--item,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--item {
+  width: 34%;
+  min-width: 7.5rem;
+  white-space: normal !important;
+}
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--make,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--make,
+.bos .ims-bom-sheet .ims-bom-schedule th.ims-bom-col--remarks,
+.bos .ims-bom-sheet .ims-bom-schedule td.ims-bom-col--remarks {
+  white-space: normal !important;
+  max-width: 9rem;
+}
+.bos .ims-bom-sheet .ims-bom-schedule--cols-2 th.ims-bom-col--item,
+.bos .ims-bom-sheet .ims-bom-schedule--cols-2 td.ims-bom-col--item,
+.bos .ims-bom-sheet .ims-bom-schedule--cols-3 th.ims-bom-col--item,
+.bos .ims-bom-sheet .ims-bom-schedule--cols-3 td.ims-bom-col--item {
+  width: 70%;
+}
+.bos .ims-bom-sheet .ims-bom-schedule--cols-4 th.ims-bom-col--item,
+.bos .ims-bom-sheet .ims-bom-schedule--cols-4 td.ims-bom-col--item {
+  width: 48%;
+}
+.bos .ims-bom-check-col {
+  width: 1.6rem;
+  padding-left: 0 !important;
+  padding-right: 4px !important;
+}
+
 .bos .ims-bom-cover-lede {
   margin: 8px 0 10px;
   padding: 8px 0 2px;

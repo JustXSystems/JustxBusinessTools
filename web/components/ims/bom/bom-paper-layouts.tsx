@@ -422,6 +422,10 @@ function cellValue(
   }
 }
 
+function colClass(col: BomScheduleColumn) {
+  return `ims-bom-col ims-bom-col--${col}${col === "check" ? " ims-bom-check-col" : ""}`;
+}
+
 function ScheduleTable({
   model,
   sections,
@@ -440,17 +444,19 @@ function ScheduleTable({
   const fieldMode = purpose === "field";
   const marginFactor = bomCustomerMarginFactor(model.totals.materialsTotal, model.totals.marginAmount);
   const displayCols = cols;
+  const amountIdx = displayCols.indexOf("amount");
+  const qtyWithUnit = !displayCols.includes("unit");
 
   return (
     <div className="ims-bom-schedule-wrap">
-    <table className="bos-inv-paper-table ims-bom-schedule">
+    <table className={`bos-inv-paper-table ims-bom-schedule ims-bom-schedule--cols-${displayCols.length}`}>
       <thead>
         <tr>
           {displayCols.map((c) => (
-            <th key={c} className={c === "check" ? "ims-bom-check-col" : undefined}>
+            <th key={c} className={colClass(c)}>
               {c === "qty" && fieldMode
                 ? "To issue"
-                : c === "qty" && !displayCols.includes("unit")
+                : c === "qty" && qtyWithUnit
                   ? "Qty"
                   : BOM_COLUMN_LABEL[c]}
             </th>
@@ -475,18 +481,23 @@ function ScheduleTable({
               {sec.lines.map((l, i) => (
                 <tr key={`${sec.name}-${i}-${l.description}`}>
                   {displayCols.map((c) => (
-                    <td key={c} className={c === "check" ? "ims-bom-check-col" : undefined}>
-                      {c === "qty" && !displayCols.includes("unit")
+                    <td key={c} className={colClass(c)}>
+                      {c === "qty" && qtyWithUnit
                         ? qtyText(fieldMode ? bomFieldRemainingQty(l) : l.qty, l.unit)
                         : cellValue(c, l, i, hideMargin, marginFactor, fieldMode)}
                     </td>
                   ))}
                 </tr>
               ))}
-              {showSectionTotals && !fieldMode ? (
+              {showSectionTotals && !fieldMode && amountIdx >= 0 ? (
                 <tr className="ims-bom-epc-sec-total">
-                  <td colSpan={Math.max(1, displayCols.length - 1)}>Section total — {sec.name}</td>
-                  <td>{inrExact(secTotal)}</td>
+                  {amountIdx > 0 ? (
+                    <td colSpan={amountIdx}>Section total — {sec.name}</td>
+                  ) : null}
+                  <td className={colClass("amount")}>{inrExact(secTotal)}</td>
+                  {amountIdx < displayCols.length - 1 ? (
+                    <td colSpan={displayCols.length - amountIdx - 1} />
+                  ) : null}
                 </tr>
               ) : null}
             </Fragment>
@@ -841,9 +852,17 @@ export function ShareBomPaper({ model }: { model: BomPaperModel }) {
             sec.lines.map((l, i) => {
               const priced = bomCustomerLinePricing(l, marginFactor, hideMargin);
               const showKind = cols.includes("kind") && lineKindLabel(l.lineKind);
-              const showSku = cols.includes("sku") && l.sku?.trim();
+              const showSku = cols.includes("sku") && Boolean(l.sku?.trim());
               const showMake = cols.includes("make");
               const showAmount = cols.includes("amount");
+              const showRate = cols.includes("rate") && !showAmount;
+              const metaLeft = showMake ? l.makeText || "—" : showSku ? l.sku! : sec.name;
+              const metaMid = qtyText(l.qty, l.unit);
+              const metaRight = showAmount
+                ? inrExact(priced.amount)
+                : showRate
+                  ? inrExact(priced.rate)
+                  : qtyText(l.qty, l.unit);
               return (
               <div key={`${sec.name}-${i}`} className="ims-bom-folio-card">
                 <div className="ims-bom-folio-card-top">
@@ -854,12 +873,12 @@ export function ShareBomPaper({ model }: { model: BomPaperModel }) {
                 </div>
                 <div className="ims-bom-folio-desc">
                   <LineDesc line={l} />
-                  {showSku ? <small className="ims-bom-folio-sku">{l.sku}</small> : null}
+                  {showSku && showMake ? <small className="ims-bom-folio-sku">{l.sku}</small> : null}
                 </div>
                 <div className="ims-bom-folio-meta">
-                  <span>{showMake ? l.makeText || "—" : qtyText(l.qty, l.unit)}</span>
-                  <span>{showMake ? qtyText(l.qty, l.unit) : showSku ? l.sku : "—"}</span>
-                  {showAmount ? <b>{inrExact(priced.amount)}</b> : <b>{qtyText(l.qty, l.unit)}</b>}
+                  <span>{metaLeft}</span>
+                  <span>{metaMid}</span>
+                  <b>{metaRight}</b>
                 </div>
               </div>
               );

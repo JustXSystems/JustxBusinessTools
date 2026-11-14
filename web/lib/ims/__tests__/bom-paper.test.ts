@@ -72,6 +72,33 @@ describe("bom-paper purposes", () => {
       "item",
       "qty",
     ]);
+
+    // Every configurable column alone still keeps required item+qty and stable order.
+    for (const col of ["index", "sku", "hsn", "make", "kind", "unit", "rate", "amount", "remarks"] as const) {
+      const cols = normalizeBomScheduleColumns([col], ["item", "qty"]);
+      expect(cols[0]).toBe(col === "index" ? "index" : "item");
+      expect(cols).toContain("item");
+      expect(cols).toContain("qty");
+      expect(cols).toContain(col);
+      expect(cols.indexOf("item")).toBeLessThan(cols.indexOf("qty"));
+    }
+
+    // Turning amount off must not invent pricing columns; field still strips them.
+    expect(scheduleColumnsFor("technical", "epc", ["item", "make", "qty", "unit", "remarks"])).toEqual([
+      "item",
+      "make",
+      "qty",
+      "unit",
+      "remarks",
+    ]);
+    expect(scheduleColumnsFor("proposal", "solar", ["item", "sku", "hsn", "qty", "rate", "amount"])).toEqual([
+      "item",
+      "sku",
+      "hsn",
+      "qty",
+      "rate",
+      "amount",
+    ]);
   });
 
   it("groups lines into roman sections with share percentages", () => {
