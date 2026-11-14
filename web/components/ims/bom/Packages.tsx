@@ -84,7 +84,7 @@ function PackageList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string
   return (
     <Stack>
       <PageHeader
-        title="BOM packages"
+        title="Packages"
         sub="Reusable materials templates. Excel import syncs every stock line into Inventory Items (link or create)."
         actions={
           <>
@@ -158,7 +158,7 @@ function PackageList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string
             </>
           }
         >
-          Create a template once, or import Excel — then generate customer BOMs from BILL OF MATERIALS - BOM. Sample seed adds general, solar, EPC, manufacturing, services and procurement packs.
+          Create a template once, or import Excel — then generate customer BOMs from Create / Maintain. Sample seed adds general, solar, EPC, manufacturing, services and procurement packs.
         </EmptyState>
       ) : null}
       {packages.length ? (

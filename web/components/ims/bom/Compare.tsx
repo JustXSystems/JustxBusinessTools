@@ -48,7 +48,7 @@ function CompareBody() {
   return (
     <Stack>
       <PageHeader
-        title="Compare BOMs"
+        title="Compare"
         sub="Side-by-side line diff for packages or customer BOMs (qty, rate, unit, section, description)."
         actions={
           <Button onClick={() => void runDiff()} disabled={Boolean(busy) || !leftId || !rightId || leftId === rightId}>

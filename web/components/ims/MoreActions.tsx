@@ -7,11 +7,21 @@ import { FAV_KEY, RECENT_KEY, useStoredList } from "@/lib/ims/recent";
 import { PageHeader, Stack, useIms } from "./core";
 import { visibleModules, type ImsModuleDef, type ImsSection } from "./modules";
 
-const SECTIONS: ReadonlyArray<ImsSection> = ["Inventory", "Purchasing", "Sales & Finance", "Operations", "Insights", "Auditing", "System"];
+const SECTIONS: ReadonlyArray<ImsSection> = [
+  "Inventory",
+  "Purchasing",
+  "Bill of Materials",
+  "Sales & Finance",
+  "Operations",
+  "Insights",
+  "Auditing",
+  "System",
+];
 
 const SECTION_TINT: Record<ImsSection, string> = {
   Inventory: "var(--bos-emerald-100, #E5F6EE)",
   Purchasing: "var(--bos-blue-100, #ECEEFE)",
+  "Bill of Materials": "var(--bos-ims-lavender-100, #F1F3FC)",
   "Sales & Finance": "var(--bos-ims-cyan-100, #E6F8FD)",
   Operations: "var(--bos-amber-100, #FBF0DD)",
   Insights: "var(--bos-ims-lavender-100, #F1F3FC)",

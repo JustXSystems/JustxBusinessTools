@@ -28,7 +28,7 @@ export const sourceBadge = (inv: Pick<ImsInvoice, "sourceTool">) => {
   if (inv.sourceTool === "pos") return <Badge tag="mint">POS</Badge>;
   if (inv.sourceTool === "ims_bom")
     return (
-      <Badge tag="lavender" title="Created from BILL OF MATERIALS - BOM">
+      <Badge tag="lavender" title="Created from Bill of Materials">
         From BOM
       </Badge>
     );

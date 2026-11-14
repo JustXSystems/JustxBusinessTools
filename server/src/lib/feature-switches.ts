@@ -39,7 +39,7 @@ export const FEATURE_SWITCHES = [
     key: "ims.bom.sample_templates",
     tool: "imsdealer",
     label: "BOM sample package templates",
-    description: "Shows “Add sample templates” on BOM Packages so staff can seed Small/Large starter kits. Leave off once you use real packages or Excel import.",
+    description: "Shows “Add sample templates” on Packages (Bill of Materials) so staff can seed Small/Large starter kits. Leave off once you use real packages or Excel import.",
   },
 ] as const;
 

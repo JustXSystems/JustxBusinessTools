@@ -123,7 +123,7 @@ function BomList({ onNew, onOpen }: { onNew: (packageId: string | null) => void;
   return (
     <Stack>
       <PageHeader
-        title="BILL OF MATERIALS - BOM"
+        title="Create / Maintain"
         sub="Compose a customer bill of materials from a package template — live preview, save and print."
         actions={<Button onClick={() => onNew(pkgId || null)}>New BOM</Button>}
       />
@@ -1227,7 +1227,7 @@ function BomEditorForm({
                   const cards = await bom.rateCards();
                   const list = cards.rateCards ?? [];
                   if (!list.length) {
-                    window.alert("No rate cards yet. Create one under BOM Rate Cards.");
+                    window.alert("No rate cards yet. Create one under Rate Cards.");
                     return;
                   }
                   const choice = window.prompt(
