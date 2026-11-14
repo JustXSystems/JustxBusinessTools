@@ -19,6 +19,7 @@ type BomDocPublicRow = {
   customer_name: string;
   location: string | null;
   project_ref: string | null;
+  party_id?: string | null;
   margin_pct: string;
   tax_pct: string;
   materials_total: string;
@@ -77,7 +78,7 @@ async function loadByToken(token: string): Promise<BomDocPublicRow | null> {
   try {
     return await one<BomDocPublicRow>(
       pool,
-      `SELECT id, tenant_id, doc_no, status, doc_date, capacity_label, title, customer_name, location, project_ref,
+      `SELECT id, tenant_id, doc_no, status, doc_date, capacity_label, title, customer_name, location, project_ref, party_id,
               margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total, notes, prepared_by,
               revision, valid_until, payment_terms, delivery_terms, warranty_terms,
               scope_of_supply, exclusions, paper_json,
@@ -92,7 +93,7 @@ async function loadByToken(token: string): Promise<BomDocPublicRow | null> {
   } catch {
     return one<BomDocPublicRow>(
       pool,
-      `SELECT id, tenant_id, doc_no, status, doc_date, capacity_label, title, customer_name, location, project_ref,
+      `SELECT id, tenant_id, doc_no, status, doc_date, capacity_label, title, customer_name, location, project_ref, party_id,
               margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total, notes, prepared_by,
               revision, valid_until, payment_terms, delivery_terms, warranty_terms,
               proposal_token, proposal_status, proposal_sent_at, proposal_responded_at, proposal_response_note
@@ -104,6 +105,17 @@ async function loadByToken(token: string): Promise<BomDocPublicRow | null> {
       { token },
     );
   }
+}
+
+async function customerStateForDoc(tenantId: number, partyId: string | null | undefined): Promise<string | null> {
+  if (!partyId) return null;
+  const row = await one<{ state: string | null }>(
+    pool,
+    `SELECT state FROM ims_parties WHERE tenant_id = :tenantId AND id = :id LIMIT 1`,
+    { tenantId, id: partyId },
+  ).catch(() => null);
+  const s = String(row?.state ?? "").trim();
+  return s || null;
 }
 
 async function loadPublicLines(tenantId: number, docId: string) {
@@ -281,6 +293,7 @@ function mapPublicDoc(
   lines: Awaited<ReturnType<typeof loadPublicLines>>,
   business: PublicBusiness,
   paper: PublicPaperOptions,
+  customerState: string | null,
 ) {
   const docPaper = parsePaperJson(row.paper_json);
   const mapped = {
@@ -291,6 +304,7 @@ function mapPublicDoc(
     title: row.title,
     customerName: row.customer_name,
     location: row.location,
+    customerState,
     projectRef: row.project_ref,
     revision: Number(row.revision ?? 1),
     validUntil: row.valid_until ? String(row.valid_until).slice(0, 10) : null,
@@ -325,12 +339,13 @@ function mapPublicDoc(
 }
 
 async function loadPublicPayload(tokenRow: BomDocPublicRow) {
-  const [lines, business, paper] = await Promise.all([
+  const [lines, business, paper, customerState] = await Promise.all([
     loadPublicLines(tokenRow.tenant_id, tokenRow.id),
     businessForTenant(tokenRow.tenant_id),
     paperOptionsForTenant(tokenRow.tenant_id),
+    customerStateForDoc(tokenRow.tenant_id, tokenRow.party_id),
   ]);
-  return mapPublicDoc(tokenRow, lines, business, paper);
+  return mapPublicDoc(tokenRow, lines, business, paper, customerState);
 }
 
 router.get("/:token", async (req, res) => {

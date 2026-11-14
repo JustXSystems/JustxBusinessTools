@@ -5,11 +5,15 @@ import { dateLabel, inrExact, qtyText, rupeesInWords } from "@/lib/ims/format";
 import {
   BOM_COLUMN_LABEL,
   bomCustomerComposition,
+  bomCustomerLinePricing,
+  bomCustomerMarginFactor,
+  bomFieldRemainingQty,
   bomIndustryPackMeta,
+  bomOptionAppendix,
+  bomPlaceOfSupply,
   bomTaxBreakup,
   bomValidityDaysRemaining,
   groupBomSections,
-  lineAmount,
   lineIdentityBits,
   lineKindLabel,
   normalizeBomIndustryPack,
@@ -241,10 +245,14 @@ function FootMatter({ model, signLeft }: { model: BomPaperModel; signLeft?: stri
   );
 }
 
+function taxBreakupFor(model: BomPaperModel, taxAmount: number) {
+  return bomTaxBreakup(taxAmount, model.taxPct, model.business.state, bomPlaceOfSupply(model.customerState));
+}
+
 function CommercialTotals({ model }: { model: BomPaperModel }) {
   const hideMargin = Boolean(model.hideMargin);
   const c = bomCustomerComposition(model.totals, hideMargin);
-  const tax = bomTaxBreakup(c.tax, model.taxPct, model.business.state, model.location);
+  const tax = taxBreakupFor(model, c.tax);
   return (
     <>
       <div className="bos-inv-totals">
@@ -365,7 +373,15 @@ function EmptyRows({ cols }: { cols: number }) {
   );
 }
 
-function cellValue(col: BomScheduleColumn, line: BomPaperLine, index: number, hideMargin: boolean) {
+function cellValue(
+  col: BomScheduleColumn,
+  line: BomPaperLine,
+  index: number,
+  hideMargin: boolean,
+  marginFactor: number,
+  fieldMode: boolean,
+) {
+  const priced = bomCustomerLinePricing(line, marginFactor, hideMargin);
   switch (col) {
     case "check":
       return <span className="ims-bom-checkbox" aria-hidden />;
@@ -389,20 +405,16 @@ function cellValue(col: BomScheduleColumn, line: BomPaperLine, index: number, hi
       ) : (
         "—"
       );
-    case "qty":
-      return qtyText(line.qty, undefined);
+    case "qty": {
+      const q = fieldMode ? bomFieldRemainingQty(line) : line.qty;
+      return qtyText(q, undefined);
+    }
     case "unit":
       return line.unit || "—";
     case "rate":
-      return hideMargin ? "—" : inrExact(line.rate);
-    case "amount": {
-      if (hideMargin) {
-        // Fold document margin into displayed line amount proportionally is complex;
-        // show line amount as materials; totals already fold margin at roll-up.
-        return inrExact(lineAmount(line));
-      }
-      return inrExact(lineAmount(line));
-    }
+      return inrExact(priced.rate);
+    case "amount":
+      return inrExact(priced.amount);
     case "remarks":
       return <span style={{ whiteSpace: "normal" }}>{line.remarks || "—"}</span>;
     default:
@@ -425,8 +437,9 @@ function ScheduleTable({
   const pack = normalizeBomIndustryPack(model.industryPack);
   const cols = scheduleColumnsFor(purpose, pack);
   const hideMargin = Boolean(model.hideMargin) && purpose !== "field";
-  const qtyOnly = purpose === "field";
-  const displayCols = qtyOnly ? cols : cols;
+  const fieldMode = purpose === "field";
+  const marginFactor = bomCustomerMarginFactor(model.totals.materialsTotal, model.totals.marginAmount);
+  const displayCols = cols;
 
   return (
     <div className="ims-bom-schedule-wrap">
@@ -435,14 +448,22 @@ function ScheduleTable({
         <tr>
           {displayCols.map((c) => (
             <th key={c} className={c === "check" ? "ims-bom-check-col" : undefined}>
-              {c === "qty" && !displayCols.includes("unit") ? "Qty" : BOM_COLUMN_LABEL[c]}
+              {c === "qty" && fieldMode
+                ? "To issue"
+                : c === "qty" && !displayCols.includes("unit")
+                  ? "Qty"
+                  : BOM_COLUMN_LABEL[c]}
             </th>
           ))}
         </tr>
       </thead>
       <tbody>
         {sections.length ? (
-          sections.map((sec) => (
+          sections.map((sec) => {
+            const secTotal = hideMargin
+              ? sec.lines.reduce((s, l) => s + bomCustomerLinePricing(l, marginFactor, true).amount, 0)
+              : sec.materials;
+            return (
             <Fragment key={`sec-${sec.index}-${sec.name}`}>
               {sections.length > 1 ? (
                 <tr className={`ims-bom-section${romanSections ? " ims-bom-section--roman" : ""}`}>
@@ -456,20 +477,21 @@ function ScheduleTable({
                   {displayCols.map((c) => (
                     <td key={c} className={c === "check" ? "ims-bom-check-col" : undefined}>
                       {c === "qty" && !displayCols.includes("unit")
-                        ? qtyText(l.qty, l.unit)
-                        : cellValue(c, l, i, hideMargin)}
+                        ? qtyText(fieldMode ? bomFieldRemainingQty(l) : l.qty, l.unit)
+                        : cellValue(c, l, i, hideMargin, marginFactor, fieldMode)}
                     </td>
                   ))}
                 </tr>
               ))}
-              {showSectionTotals && !qtyOnly ? (
+              {showSectionTotals && !fieldMode ? (
                 <tr className="ims-bom-epc-sec-total">
                   <td colSpan={Math.max(1, displayCols.length - 1)}>Section total — {sec.name}</td>
-                  <td>{inrExact(sec.materials)}</td>
+                  <td>{inrExact(secTotal)}</td>
                 </tr>
               ) : null}
             </Fragment>
-          ))
+            );
+          })
         ) : (
           <EmptyRows cols={displayCols.length} />
         )}
@@ -479,10 +501,38 @@ function ScheduleTable({
   );
 }
 
+function OptionsAppendix({ model }: { model: BomPaperModel }) {
+  const rows = bomOptionAppendix(model.lines);
+  if (!rows.length) return null;
+  return (
+    <div className="ims-bom-options-appendix" aria-label="Options and alternates">
+      <b>Options &amp; alternates</b>
+      <ul>
+        {rows.map((r, i) => (
+          <li key={`${r.section}-${r.description}-${i}`}>
+            <span>
+              {r.description}
+              {r.makeText ? <small> · {r.makeText}</small> : null}
+            </span>
+            <span className="ims-bom-options-appendix-meta">
+              {r.optional ? "Optional" : null}
+              {r.optionKey ? `${r.optional ? " · " : ""}Option ${r.optionKey}` : null}
+              {r.alternateCount > 0
+                ? `${r.optional || r.optionKey ? " · " : ""}${r.alternateCount} alt${r.alternateCount === 1 ? "" : "s"}`
+                : null}
+              {` · ${qtyText(r.qty, r.unit)}`}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function InvestmentBar({ model }: { model: BomPaperModel }) {
   const hideMargin = Boolean(model.hideMargin);
   const c = bomCustomerComposition(model.totals, hideMargin);
-  const tax = bomTaxBreakup(c.tax, model.taxPct, model.business.state, model.location);
+  const tax = taxBreakupFor(model, c.tax);
   const pack = bomIndustryPackMeta(model.industryPack);
   return (
     <div className="ims-bom-aether-totals-bar" aria-label="Investment summary">
@@ -593,6 +643,7 @@ export function ProposalBomPaper({ model }: { model: BomPaperModel }) {
         <InvestmentBar model={model} />
       </header>
       <ScheduleTable model={model} sections={sections} showSectionTotals />
+      <OptionsAppendix model={model} />
       <div className="ims-paper-words">{rupeesInWords(bomCustomerComposition(model.totals, Boolean(model.hideMargin)).grand)}</div>
       <FootMatter model={model} />
     </PaperShell>
@@ -605,6 +656,7 @@ export function ExecutiveBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
   const hideMargin = Boolean(model.hideMargin);
   const c = bomCustomerComposition(model.totals, hideMargin);
+  const marginFactor = bomCustomerMarginFactor(model.totals.materialsTotal, model.totals.marginAmount);
   return (
     <PaperShell model={model} purpose="executive">
       <div className="ims-bom-exec-hero">
@@ -650,7 +702,11 @@ export function ExecutiveBomPaper({ model }: { model: BomPaperModel }) {
       <PartyBlock model={model} />
       <div className="ims-bom-exec-sections">
         {sections.length ? (
-          sections.map((sec) => (
+          sections.map((sec) => {
+            const secTotal = hideMargin
+              ? sec.lines.reduce((s, l) => s + bomCustomerLinePricing(l, marginFactor, true).amount, 0)
+              : sec.materials;
+            return (
             <div key={`exec-${sec.index}`} className="ims-bom-exec-sec">
               <div className="ims-bom-exec-sec-head">
                 <div>
@@ -660,27 +716,37 @@ export function ExecutiveBomPaper({ model }: { model: BomPaperModel }) {
                     {sec.lines.length} lines · {sec.sharePct}%
                   </span>
                 </div>
-                <b>{inrExact(sec.materials)}</b>
+                <b>{inrExact(secTotal)}</b>
               </div>
               <ul className="ims-bom-exec-lines">
-                {sec.lines.map((l, i) => (
+                {sec.lines.map((l, i) => {
+                  const priced = bomCustomerLinePricing(l, marginFactor, hideMargin);
+                  const cols = scheduleColumnsFor("executive", normalizeBomIndustryPack(model.industryPack));
+                  const bits: string[] = [];
+                  if (cols.includes("sku") && l.sku?.trim()) bits.push(l.sku.trim());
+                  if (cols.includes("kind") && lineKindLabel(l.lineKind)) bits.push(lineKindLabel(l.lineKind)!);
+                  if (cols.includes("make") && l.makeText) bits.push(l.makeText);
+                  return (
                   <li key={`${sec.name}-${i}`}>
                     <span>
                       <LineDesc line={l} />
-                      {l.makeText ? <small> · {l.makeText}</small> : null}
+                      {bits.length ? <small> · {bits.join(" · ")}</small> : null}
                     </span>
                     <span>
-                      {qtyText(l.qty, l.unit)} · {inrExact(lineAmount(l))}
+                      {qtyText(l.qty, l.unit)} · {inrExact(priced.amount)}
                     </span>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </div>
-          ))
+            );
+          })
         ) : (
           <div className="bos-inv-paper-empty">No items</div>
         )}
       </div>
+      <OptionsAppendix model={model} />
       <FootMatter model={model} signLeft="Accepted by customer" />
     </PaperShell>
   );
@@ -712,6 +778,7 @@ export function TechnicalBomPaper({ model }: { model: BomPaperModel }) {
       </div>
       <PartyBlock model={model} />
       <ScheduleTable model={model} sections={sections} showSectionTotals romanSections />
+      <OptionsAppendix model={model} />
       <CommercialTotals model={model} />
       <FootMatter model={model} />
     </PaperShell>
@@ -722,9 +789,14 @@ export function TechnicalBomPaper({ model }: { model: BomPaperModel }) {
 
 export function FieldBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
+  const hasPartial = model.lines.some((l) => (Number(l.issuedQty) || 0) > 0);
   return (
     <PaperShell model={model} purpose="field">
-      <div className="ims-bom-field-banner">Materials checklist for site — rates and totals are hidden.</div>
+      <div className="ims-bom-field-banner">
+        {hasPartial
+          ? "Site checklist — quantities show remaining to issue. Rates and totals are hidden."
+          : "Materials checklist for site — rates and totals are hidden."}
+      </div>
       <DocMeta
         model={model}
         extra={[
@@ -755,6 +827,8 @@ export function ShareBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
   const hideMargin = Boolean(model.hideMargin);
   const c = bomCustomerComposition(model.totals, hideMargin);
+  const marginFactor = bomCustomerMarginFactor(model.totals.materialsTotal, model.totals.marginAmount);
+  const cols = scheduleColumnsFor("share", normalizeBomIndustryPack(model.industryPack));
   return (
     <PaperShell model={model} purpose="share">
       <DocMeta model={model} />
@@ -762,24 +836,32 @@ export function ShareBomPaper({ model }: { model: BomPaperModel }) {
       <div className="ims-bom-folio-grid">
         {sections.length ? (
           sections.flatMap((sec) =>
-            sec.lines.map((l, i) => (
+            sec.lines.map((l, i) => {
+              const priced = bomCustomerLinePricing(l, marginFactor, hideMargin);
+              const showKind = cols.includes("kind") && lineKindLabel(l.lineKind);
+              const showSku = cols.includes("sku") && l.sku?.trim();
+              const showMake = cols.includes("make");
+              const showAmount = cols.includes("amount");
+              return (
               <div key={`${sec.name}-${i}`} className="ims-bom-folio-card">
                 <div className="ims-bom-folio-card-top">
                   <span className="ims-bom-folio-sec">{sec.name}</span>
-                  {lineKindLabel(l.lineKind) ? (
+                  {showKind ? (
                     <span className={`ims-bom-kind ims-bom-kind--${l.lineKind}`}>{lineKindLabel(l.lineKind)}</span>
                   ) : null}
                 </div>
                 <div className="ims-bom-folio-desc">
                   <LineDesc line={l} />
+                  {showSku ? <small className="ims-bom-folio-sku">{l.sku}</small> : null}
                 </div>
                 <div className="ims-bom-folio-meta">
-                  <span>{l.makeText || "—"}</span>
-                  <span>{qtyText(l.qty, l.unit)}</span>
-                  <b>{inrExact(lineAmount(l))}</b>
+                  <span>{showMake ? l.makeText || "—" : qtyText(l.qty, l.unit)}</span>
+                  <span>{showMake ? qtyText(l.qty, l.unit) : showSku ? l.sku : "—"}</span>
+                  {showAmount ? <b>{inrExact(priced.amount)}</b> : <b>{qtyText(l.qty, l.unit)}</b>}
                 </div>
               </div>
-            )),
+              );
+            }),
           )
         ) : (
           <div className="bos-inv-paper-empty">No items</div>
@@ -792,6 +874,7 @@ export function ShareBomPaper({ model }: { model: BomPaperModel }) {
         </div>
       </div>
       <div className="ims-paper-words">{rupeesInWords(c.grand)}</div>
+      <OptionsAppendix model={model} />
       <FootMatter model={model} />
     </PaperShell>
   );

@@ -1794,6 +1794,72 @@ body.is-bom-resizing {
   line-height: 1.4;
 }
 
+/* Industry pack accent rails (letterhead / schedule cue) */
+.bos .ims-bom-sheet.ims-bom-pack--solar {
+  --bom-pack-accent: #0d9488;
+}
+.bos .ims-bom-sheet.ims-bom-pack--epc {
+  --bom-pack-accent: #1d4ed8;
+}
+.bos .ims-bom-sheet.ims-bom-pack--manufacturing {
+  --bom-pack-accent: #b45309;
+}
+.bos .ims-bom-sheet.ims-bom-pack--services {
+  --bom-pack-accent: #7c3aed;
+}
+.bos .ims-bom-sheet.ims-bom-pack--procurement {
+  --bom-pack-accent: #0f766e;
+}
+.bos .ims-bom-sheet.ims-bom-pack--general {
+  --bom-pack-accent: #334155;
+}
+.bos .ims-bom-sheet[class*="ims-bom-pack--"] .ims-bom-aether-head,
+.bos .ims-bom-sheet[class*="ims-bom-pack--"] .ims-bom-epc-strip {
+  border-left: 3px solid var(--bom-pack-accent, var(--bom-ink));
+  padding-left: 10px;
+}
+
+.bos .ims-bom-options-appendix {
+  margin: 12px 0 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--bom-line);
+  border-radius: 8px;
+  background: var(--bom-soft);
+}
+.bos .ims-bom-options-appendix > b {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bom-faint);
+  margin-bottom: 6px;
+}
+.bos .ims-bom-options-appendix ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.bos .ims-bom-options-appendix li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: var(--bom-ink);
+}
+.bos .ims-bom-options-appendix-meta {
+  color: var(--bom-muted);
+  font-size: 10px;
+}
+.bos .ims-bom-folio-sku {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--bom-muted);
+}
+
 @media (max-width: 640px) {
   .bos .ims-bom-aether-head-row {
     grid-template-columns: 1fr;

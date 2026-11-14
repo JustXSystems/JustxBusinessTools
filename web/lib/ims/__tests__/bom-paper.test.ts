@@ -5,8 +5,14 @@ import {
   BOM_PAPER_PURPOSES,
   bomCostComposition,
   bomCustomerComposition,
+  bomCustomerLinePricing,
+  bomCustomerMarginFactor,
+  bomFieldRemainingQty,
   bomIndustryPackMeta,
+  bomOptionAppendix,
+  bomPackFromBusinessType,
   bomPaperPurposeMeta,
+  bomPlaceOfSupply,
   bomTaxBreakup,
   bomValidityDaysRemaining,
   groupBomSections,
@@ -92,6 +98,39 @@ describe("bom-paper purposes", () => {
     expect(inter.intraState).toBe(false);
     expect(inter.igst).toBe(1800);
     expect(inter.cgst).toBe(0);
+    expect(bomPlaceOfSupply("Karnataka")).toBe("Karnataka");
+    expect(bomPlaceOfSupply("  ")).toBeNull();
+    expect(bomPlaceOfSupply(null)).toBeNull();
+  });
+
+  it("distributes margin into customer line sell rates when hideMargin", () => {
+    const factor = bomCustomerMarginFactor(1000, 150);
+    expect(factor).toBeCloseTo(1.15, 5);
+    const priced = bomCustomerLinePricing({ qty: 2, rate: 500, amount: 1000 }, factor, true);
+    expect(priced.amount).toBe(1150);
+    expect(priced.rate).toBe(575);
+    const raw = bomCustomerLinePricing({ qty: 2, rate: 500, amount: 1000 }, factor, false);
+    expect(raw.amount).toBe(1000);
+    expect(raw.rate).toBe(500);
+  });
+
+  it("maps business types to industry packs and builds option appendix", () => {
+    expect(bomPackFromBusinessType("manufacturer")).toBe("manufacturing");
+    expect(bomPackFromBusinessType("distributor")).toBe("procurement");
+    expect(bomPackFromBusinessType("epc")).toBe("epc");
+    expect(bomPackFromBusinessType("solar")).toBe("solar");
+    const epc = sampleBomPaperModel("Biz", "epc");
+    expect(epc.lines.length).toBeGreaterThan(2);
+    expect(epc.customerState).toBe("Karnataka");
+    const appendix = bomOptionAppendix(epc.lines);
+    expect(appendix.length).toBeGreaterThan(0);
+    expect(appendix.some((r) => r.optional || r.alternateCount > 0)).toBe(true);
+  });
+
+  it("computes field remaining qty after partial issue", () => {
+    expect(bomFieldRemainingQty({ qty: 10, issuedQty: 3 })).toBe(7);
+    expect(bomFieldRemainingQty({ qty: 5, issuedQty: 9 })).toBe(0);
+    expect(bomFieldRemainingQty({ qty: 4, issuedQty: null })).toBe(4);
   });
 
   it("maps line kinds to compact ledger codes", () => {
