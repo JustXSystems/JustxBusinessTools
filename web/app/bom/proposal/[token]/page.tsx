@@ -8,6 +8,7 @@ import {
   normalizeBomPaperDensity,
   normalizeBomPaperTemplate,
   normalizeBomPaperTone,
+  normalizeBomScheduleColumns,
   type BomPaperTemplateId,
 } from "@/lib/ims/bom-paper";
 import { BomPaper, type BomPaperModel } from "@/components/ims/bom/BomPaper";
@@ -136,7 +137,9 @@ function toPaperModel(doc: PublicBom): BomPaperModel {
     tone: normalizeBomPaperTone(doc.tone),
     density: normalizeBomPaperDensity(doc.density),
     hideMargin: Boolean(doc.hideMargin),
-    scheduleColumns: Array.isArray(doc.scheduleColumns) ? doc.scheduleColumns : null,
+    scheduleColumns: Array.isArray(doc.scheduleColumns)
+      ? normalizeBomScheduleColumns(doc.scheduleColumns)
+      : null,
     lines: (doc.lines ?? []).map((l) => ({
       section: l.section,
       lineKind: (l.lineKind as BomPaperModel["lines"][number]["lineKind"]) ?? "stock",
