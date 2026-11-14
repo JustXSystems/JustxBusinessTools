@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getOrgFeatureSwitches } from "../lib/feature-switches.js";
 import { getRequestContext } from "../lib/request-context.js";
-import { actorOf, isoDate, optText, parse, parsePatch, qint, qstr, recordEvent, requireAnyPerm, requirePerm, type ImsDeps } from "./context.js";
+import { actorOf, isOwner, isoDate, optText, parse, parsePatch, qint, qstr, recordEvent, requireAnyPerm, requirePerm, type ImsDeps } from "./context.js";
 import { exec, isoOf, likeOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
 import { badRequest, conflict, forbidden, notFound } from "./host.js";
 import { round2, round3, todayISO, type ImsLineInput } from "./logic.js";
@@ -1109,29 +1109,68 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const stock = qstr(req.query.stock, 16); // issued | pending
     const limit = qint(req.query.limit, 50, 1, 200);
     const offset = qint(req.query.offset, 0, 0, 100000);
-    const params: Record<string, unknown> = { tenantId: actor.tenantId, limit, offset };
+    /** Shared filters only — avoid unused named placeholders on count/tally queries. */
+    const filterParams: Record<string, unknown> = { tenantId: actor.tenantId };
     let where = `tenant_id = :tenantId`;
-    if (status && status !== "all") {
-      where += ` AND status = :status`;
-      params.status = status;
-    }
     if (invoice === "linked") where += ` AND invoice_id IS NOT NULL`;
     else if (invoice === "none") where += ` AND invoice_id IS NULL`;
     if (stock === "issued") where += ` AND stock_issued_at IS NOT NULL`;
     else if (stock === "pending") where += ` AND stock_issued_at IS NULL AND status = 'confirmed'`;
     if (q) {
-      where += ` AND (doc_no LIKE :q OR customer_name LIKE :q OR IFNULL(location,'') LIKE :q OR IFNULL(title,'') LIKE :q OR IFNULL(capacity_label,'') LIKE :q)`;
-      params.q = likeOf(q);
+      where += ` AND (doc_no LIKE :q OR customer_name LIKE :q OR IFNULL(location,'') LIKE :q OR IFNULL(title,'') LIKE :q OR IFNULL(capacity_label,'') LIKE :q OR IFNULL(package_name,'') LIKE :q OR IFNULL(project_ref,'') LIKE :q)`;
+      filterParams.q = likeOf(q);
     }
-    const [list, countRow] = await Promise.all([
+    /** Status filter applies to the row list only — tab counts stay for the same search/invoice/stock view. */
+    let listWhere = where;
+    const statusParams: Record<string, unknown> = { ...filterParams };
+    if (status && status !== "all") {
+      listWhere += ` AND status = :status`;
+      statusParams.status = status;
+    }
+    const listParams: Record<string, unknown> = { ...statusParams, limit, offset };
+    const [list, countRow, tally] = await Promise.all([
       rows<DocRow>(
         deps.db,
-        `SELECT * FROM ims_bom_docs WHERE ${where} ORDER BY doc_date DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`,
-        params,
+        `SELECT * FROM ims_bom_docs WHERE ${listWhere} ORDER BY doc_date DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+        listParams,
       ),
-      one<{ n: number }>(deps.db, `SELECT COUNT(*) AS n FROM ims_bom_docs WHERE ${where}`, params),
+      one<{ n: number }>(deps.db, `SELECT COUNT(*) AS n FROM ims_bom_docs WHERE ${listWhere}`, statusParams),
+      one<{
+        all_n: number;
+        draft_n: number;
+        confirmed_n: number;
+        cancelled_n: number;
+        stock_pending_n: number;
+        invoiced_n: number;
+        pipeline_value: string | number;
+      }>(
+        deps.db,
+        `SELECT
+           COUNT(*) AS all_n,
+           COALESCE(SUM(status = 'draft'), 0) AS draft_n,
+           COALESCE(SUM(status = 'confirmed'), 0) AS confirmed_n,
+           COALESCE(SUM(status = 'cancelled'), 0) AS cancelled_n,
+           COALESCE(SUM(status = 'confirmed' AND stock_issued_at IS NULL), 0) AS stock_pending_n,
+           COALESCE(SUM(invoice_id IS NOT NULL), 0) AS invoiced_n,
+           COALESCE(SUM(CASE WHEN status <> 'cancelled' THEN grand_total ELSE 0 END), 0) AS pipeline_value
+         FROM ims_bom_docs WHERE ${where}`,
+        filterParams,
+      ),
     ]);
-    res.json({ docs: list.map((r) => mapDoc(r)), total: Number(countRow?.n ?? 0), invoiceConvertModes: BOM_INVOICE_CONVERT_MODES });
+    res.json({
+      docs: list.map((r) => mapDoc(r)),
+      total: Number(countRow?.n ?? 0),
+      counts: {
+        all: Number(tally?.all_n ?? 0),
+        draft: Number(tally?.draft_n ?? 0),
+        confirmed: Number(tally?.confirmed_n ?? 0),
+        cancelled: Number(tally?.cancelled_n ?? 0),
+        stockPending: Number(tally?.stock_pending_n ?? 0),
+        invoiced: Number(tally?.invoiced_n ?? 0),
+        pipelineValue: Number(tally?.pipeline_value ?? 0),
+      },
+      invoiceConvertModes: BOM_INVOICE_CONVERT_MODES,
+    });
   });
 
   router.get("/bom/docs/:id", async (req, res) => {
@@ -1448,12 +1487,22 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const id = String(req.params.id);
     const existing = await loadDoc(deps.db, actor.tenantId, id);
     if (!existing) throw notFound("BOM document not found");
-    if (existing.status !== "draft") throw conflict("Only draft BOMs can be deleted");
+    if (existing.invoiceId) throw conflict("This BOM is linked to an invoice — open Sales and handle that invoice first.");
+    if (existing.stockIssuedAt) throw conflict("Materials were issued from this BOM — reverse stock before deleting.");
+    if (existing.status !== "draft" && !isOwner(res)) {
+      throw forbidden("Only an owner can delete a confirmed or cancelled BOM.");
+    }
     await tx(deps.db, async (conn) => {
       await exec(conn, `DELETE FROM ims_bom_doc_lines WHERE tenant_id = :tenantId AND doc_id = :id`, { tenantId: actor.tenantId, id });
       await exec(conn, `DELETE FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id });
     });
-    await recordEvent(deps, actor, { type: "bom.doc.deleted", entityType: "bom_doc", entityId: id, summary: `Deleted ${existing.docNo}`, payload: { docNo: existing.docNo } });
+    await recordEvent(deps, actor, {
+      type: "bom.doc.deleted",
+      entityType: "bom_doc",
+      entityId: id,
+      summary: `Deleted ${existing.docNo}`,
+      payload: { docNo: existing.docNo, status: existing.status, byOwner: isOwner(res) },
+    });
     res.status(204).end();
   });
 
