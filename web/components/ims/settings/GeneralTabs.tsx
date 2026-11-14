@@ -14,6 +14,7 @@ import {
   BOM_PAPER_PURPOSE_META,
   BOM_PAPER_TONES,
   bomIndustryPackMeta,
+  bomPackFromBusinessType,
   bomPaperPurposeMeta,
   normalizeBomIndustryPack,
   normalizeBomPaperDensity,
@@ -50,8 +51,13 @@ export function BusinessTab({ draft, set, errors, readOnly, meta }: TabProps & {
                 aria-describedby={describedBy}
                 value={draft.businessType}
                 onChange={(e) => {
-                  set("businessType", e.target.value);
-                  if (EXCISE_TYPES.has(e.target.value)) set("exciseEnabled", true);
+                  const next = e.target.value;
+                  set("businessType", next);
+                  if (EXCISE_TYPES.has(next)) set("exciseEnabled", true);
+                  // Suggest industry pack from business type when still on general default.
+                  if (!draft.bomIndustryPack || draft.bomIndustryPack === "general") {
+                    set("bomIndustryPack", bomPackFromBusinessType(next));
+                  }
                 }}
               >
                 {meta.businessTypes.map((b) => (
@@ -152,13 +158,15 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
   const hideMargin = Boolean(draft.bomHideMargin);
   const purposeMeta = bomPaperPurposeMeta(purpose);
   const packMeta = bomIndustryPackMeta(pack);
+  const sample = sampleBomPaperModel(draft.businessName || session.brand?.name || "Your business", pack);
   const previewModel = {
-    ...withCommercialSample(sampleBomPaperModel(draft.businessName || session.brand?.name || "Your business", pack)),
+    ...withCommercialSample(sample),
     template: purpose,
     industryPack: pack,
     tone,
     density,
     hideMargin,
+    customerState: sample.customerState || draft.state || null,
   };
 
   return (

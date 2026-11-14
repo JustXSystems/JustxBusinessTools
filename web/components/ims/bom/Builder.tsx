@@ -26,6 +26,7 @@ import type { ImsItem } from "@/lib/ims/api";
 import { inr, inrExact } from "@/lib/ims/format";
 import { formatCatalogEnsureSummary, exportBomExcel } from "@/lib/ims/bom-excel";
 import { ensureBomPackageCatalog, ensureStockLinesForSave } from "@/lib/ims/ensure-catalog";
+import { purchase } from "@/lib/ims/purchase";
 import { withBasePath } from "@/lib/base-path";
 import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
 import { ItemPickerDialog, PartySelect } from "../shared/pickers";
@@ -51,7 +52,7 @@ type View =
   | { mode: "edit"; id: string | null; packageId?: string | null }
   | { mode: "view"; id: string };
 
-type EditorLine = BomDocLineInput & { key: string; baseQty: number };
+type EditorLine = BomDocLineInput & { key: string; baseQty: number; issuedQty?: number };
 
 const blankLine = (section = "Main Items"): EditorLine => ({
   key: Math.random().toString(36).slice(2),
@@ -65,6 +66,10 @@ const blankLine = (section = "Main Items"): EditorLine => ({
   rate: 0,
   scaleByCapacity: false,
   remarks: "",
+  optionalFlag: false,
+  optionKey: "",
+  alternateItemIds: [],
+  issuedQty: 0,
 });
 
 export default function BomBuilderScreen() {
@@ -327,7 +332,27 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
   const availability = useImsData(() => bom.availability(id), [id, state.data?.doc?.stockIssuedAt, state.data?.doc?.updatedAt]);
   const [convertMode, setConvertMode] = useState<BomInvoiceConvertMode>("lump_sum");
   const [issueOnCreate, setIssueOnCreate] = useState(false);
+  const [customerState, setCustomerState] = useState<string | null>(null);
   const doc = state.data?.doc;
+  const partyId = doc?.partyId ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    if (!partyId) {
+      setCustomerState(null);
+      return;
+    }
+    purchase
+      .party(partyId)
+      .then((detail) => {
+        if (!cancelled) setCustomerState(detail.party?.state ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomerState(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [partyId]);
   const stockShortfalls = useMemo(
     () => (availability.data?.items ?? []).filter((i) => i.shortfall > 0),
     [availability.data],
@@ -351,20 +376,17 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
     ...state.data.business,
     logoUrl: state.data.business.logoUrl || session.brand?.logoUrl || null,
   };
-  const model = modelFromDoc(
-    doc,
-    business,
-    mergePaperOptions(
-      {
-        template: session.settings.bomPaperTemplate,
-        industryPack: session.settings.bomIndustryPack ?? "general",
-        tone: session.settings.bomPaperTone ?? "neutral",
-        density: session.settings.bomPaperDensity ?? "comfort",
-        hideMargin: session.settings.bomHideMargin ?? false,
-      },
-      doc.paper,
-    ),
+  const paperOpts = mergePaperOptions(
+    {
+      template: session.settings.bomPaperTemplate,
+      industryPack: session.settings.bomIndustryPack ?? "general",
+      tone: session.settings.bomPaperTone ?? "neutral",
+      density: session.settings.bomPaperDensity ?? "comfort",
+      hideMargin: session.settings.bomHideMargin ?? false,
+    },
+    doc.paper,
   );
+  const model = modelFromDoc(doc, business, { ...paperOpts, customerState });
   const confirmed = doc.status === "confirmed";
   const stockable = (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0).length;
   const reloadAll = () => {
@@ -889,6 +911,20 @@ function BomEditorForm({
   const [deliveryTerms, setDeliveryTerms] = useState(initial?.deliveryTerms ?? "");
   const [warrantyTerms, setWarrantyTerms] = useState(initial?.warrantyTerms ?? "");
   const [partyId, setPartyId] = useState<string | null>(initial?.partyId ?? null);
+  const [customerState, setCustomerState] = useState<string>("");
+  useEffect(() => {
+    let cancelled = false;
+    if (!initial?.partyId) return;
+    purchase
+      .party(initial.partyId)
+      .then((detail) => {
+        if (!cancelled && detail.party?.state) setCustomerState(detail.party.state);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [initial?.partyId]);
   const [pickFor, setPickFor] = useState<string | null>(null);
   const [lines, setLines] = useState<EditorLine[]>(() => {
     if (initial?.lines?.length) {
@@ -907,6 +943,10 @@ function BomEditorForm({
         rate: l.rate,
         scaleByCapacity: l.scaleByCapacity,
         remarks: l.remarks ?? "",
+        optionalFlag: Boolean(l.optionalFlag),
+        optionKey: l.optionKey ?? "",
+        alternateItemIds: l.alternateItemIds ?? [],
+        issuedQty: Number(l.issuedQty) || 0,
       }));
     }
     if (seeded?.lines?.length) {
@@ -926,6 +966,9 @@ function BomEditorForm({
           rate: l.defaultRate,
           scaleByCapacity: l.scaleByCapacity,
           remarks: l.remarks ?? "",
+          optionalFlag: Boolean(l.optionalFlag),
+          optionKey: l.optionKey ?? "",
+          alternateItemIds: l.alternateItemIds ?? [],
         }));
     }
     const packSections = bomIndustryPackMeta(
@@ -986,6 +1029,7 @@ function BomEditorForm({
     capacityLabel,
     customerName,
     location,
+    customerState: customerState || null,
     projectRef,
     preparedBy,
     notes,
@@ -1018,6 +1062,7 @@ function BomEditorForm({
         optionalFlag: Boolean(l.optionalFlag),
         optionKey: l.optionKey ?? null,
         alternateCount: Array.isArray(l.alternateItemIds) ? l.alternateItemIds.length : 0,
+        issuedQty: Number(l.issuedQty) || 0,
       })),
     totals,
   };
@@ -1104,6 +1149,10 @@ function BomEditorForm({
         scaleByCapacity: Boolean(l.scaleByCapacity),
         rate: Number(l.rate) || 0,
         remarks: l.remarks?.trim() || null,
+        optionalFlag: Boolean(l.optionalFlag),
+        optionKey: l.optionKey?.trim() || null,
+        alternateItemIds: Array.isArray(l.alternateItemIds) ? l.alternateItemIds : [],
+        issuedQty: Number(l.issuedQty) || 0,
       })),
   });
 
@@ -1118,7 +1167,7 @@ function BomEditorForm({
       setLines((prev) =>
         prev.map((l) => {
           const s = synced.find((x) => x.key === l.key);
-          return s ? { ...l, ...s, baseQty: l.baseQty } : l;
+          return s ? { ...l, ...s, baseQty: l.baseQty, issuedQty: l.issuedQty } : l;
         }),
       );
     }
@@ -1136,6 +1185,10 @@ function BomEditorForm({
       scaleByCapacity: Boolean(l.scaleByCapacity),
       rate: Number(l.rate) || 0,
       remarks: l.remarks?.trim() || null,
+      optionalFlag: Boolean(l.optionalFlag),
+      optionKey: l.optionKey?.trim() || null,
+      alternateItemIds: Array.isArray(l.alternateItemIds) ? l.alternateItemIds : [],
+      issuedQty: Number(l.issuedQty) || 0,
     }));
     if (!body.lines.length) return;
     const syncNote =
@@ -1295,12 +1348,24 @@ function BomEditorForm({
                       setPartyId(v.id);
                       setCustomerName(v.name);
                       if (v.party?.city && !location.trim()) setLocation(v.party.city);
+                      if (v.party?.state) setCustomerState(v.party.state);
+                      else if (!v.id) setCustomerState("");
                     }}
                   />
                 )}
               </Field>
-              <Field label="Location / site">
+              <Field label="Location / site" hint="Site or city — not used for GST place of supply">
                 {({ id }) => <Input id={id} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Site / city / plant" />}
+              </Field>
+              <Field label="Customer state (GST)" hint="Billing state for CGST/SGST vs IGST">
+                {({ id }) => (
+                  <Input
+                    id={id}
+                    value={customerState}
+                    onChange={(e) => setCustomerState(e.target.value)}
+                    placeholder="e.g. Karnataka"
+                  />
+                )}
               </Field>
               <Field label="Title">
                 {({ id }) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Package title" />}
@@ -1464,6 +1529,29 @@ function BomEditorForm({
                           />
                           Scale with {bomIndustryPackMeta(docPack).sizeLabel.toLowerCase()}
                         </label>
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(l.optionalFlag)}
+                            onChange={(e) => updateLine(l.key, { optionalFlag: e.target.checked })}
+                          />
+                          Optional
+                        </label>
+                        <Input
+                          value={l.optionKey ?? ""}
+                          onChange={(e) => updateLine(l.key, { optionKey: e.target.value })}
+                          placeholder="Option key"
+                          style={{ maxWidth: 110 }}
+                        />
+                        <Input
+                          value={l.remarks ?? ""}
+                          onChange={(e) => updateLine(l.key, { remarks: e.target.value })}
+                          placeholder="Remarks"
+                          style={{ maxWidth: 180 }}
+                        />
+                        {Array.isArray(l.alternateItemIds) && l.alternateItemIds.length > 0 ? (
+                          <Badge tone="neutral">{l.alternateItemIds.length} alt{l.alternateItemIds.length === 1 ? "" : "s"}</Badge>
+                        ) : null}
                       </div>
                     </div>
                   ))}

@@ -249,10 +249,25 @@ export function bomIndustryPackMeta(id: BomIndustryPackId | null | undefined): B
 export function bomPackFromBusinessType(businessType: string | null | undefined): BomIndustryPackId {
   switch (String(businessType ?? "").toLowerCase()) {
     case "manufacturer":
+    case "manufacturing":
       return "manufacturing";
     case "distributor":
     case "wholesaler":
+    case "procurement":
       return "procurement";
+    case "epc":
+    case "contractor":
+    case "projects":
+      return "epc";
+    case "solar":
+    case "energy":
+    case "renewable":
+      return "solar";
+    case "services":
+    case "service":
+    case "fitout":
+    case "fit-out":
+      return "services";
     case "dealer":
     case "retailer":
     case "trader":
@@ -354,6 +369,8 @@ export type BomPaperLine = Pick<
   optionKey?: string | null;
   /** Count of linked alternate SKUs (shown as “N alts”). */
   alternateCount?: number | null;
+  /** Qty already issued to site (field pack uses remaining = qty − issued). */
+  issuedQty?: number | null;
 };
 
 export type BomPaperSection = {
@@ -469,6 +486,81 @@ export function bomCustomerComposition(totals: BomTotals, hideMargin: boolean): 
   };
 }
 
+/** Factor that lifts materials line amounts to include document margin. */
+export function bomCustomerMarginFactor(materialsTotal: number, marginAmount: number): number {
+  const materials = Math.max(0, Number(materialsTotal) || 0);
+  const margin = Math.max(0, Number(marginAmount) || 0);
+  if (materials <= 0) return 1;
+  return (materials + margin) / materials;
+}
+
+/**
+ * Customer PDF line sell prices — when hideMargin, distribute margin into rate/amount
+ * so line figures reconcile with the folded supply total.
+ */
+export function bomCustomerLinePricing(
+  line: Pick<BomPaperLine, "qty" | "rate" | "amount">,
+  factor: number,
+  hideMargin: boolean,
+): { rate: number; amount: number } {
+  const amount = lineAmount(line);
+  if (!hideMargin || factor === 1) {
+    return { rate: Number(line.rate) || 0, amount };
+  }
+  const qty = Number(line.qty) || 0;
+  const sellAmount = round2(amount * factor);
+  const sellRate = qty > 0 ? round2(sellAmount / qty) : round2((Number(line.rate) || 0) * factor);
+  return { rate: sellRate, amount: sellAmount };
+}
+
+/** Remaining qty for field checklists (never negative). */
+export function bomFieldRemainingQty(line: Pick<BomPaperLine, "qty" | "issuedQty">): number {
+  const qty = Number(line.qty) || 0;
+  const issued = Math.max(0, Number(line.issuedQty) || 0);
+  return Math.max(0, round2(qty - issued));
+}
+
+export type BomOptionAppendixRow = {
+  description: string;
+  section: string;
+  makeText: string | null;
+  optionKey: string | null;
+  optional: boolean;
+  alternateCount: number;
+  qty: number;
+  unit: string;
+};
+
+/** Lines that carry commercial option / alternate metadata for a proposal appendix. */
+export function bomOptionAppendix(lines: ReadonlyArray<BomPaperLine>): BomOptionAppendixRow[] {
+  return lines
+    .filter(
+      (l) =>
+        Boolean(l.optionalFlag) ||
+        Boolean(String(l.optionKey ?? "").trim()) ||
+        (Number(l.alternateCount) || 0) > 0,
+    )
+    .map((l) => ({
+      description: l.description,
+      section: l.section || "Main Items",
+      makeText: l.makeText ?? null,
+      optionKey: String(l.optionKey ?? "").trim() || null,
+      optional: Boolean(l.optionalFlag),
+      alternateCount: Number(l.alternateCount) || 0,
+      qty: Number(l.qty) || 0,
+      unit: l.unit || "",
+    }));
+}
+
+/**
+ * Place of supply for GST breakup — customer billing state only.
+ * Site/city `location` is never used (cities are not GST states).
+ */
+export function bomPlaceOfSupply(customerState?: string | null): string | null {
+  const s = String(customerState ?? "").trim();
+  return s || null;
+}
+
 export type BomTaxBreakup = {
   intraState: boolean;
   taxTotal: number;
@@ -478,7 +570,15 @@ export type BomTaxBreakup = {
   halfPct: number;
 };
 
-/** Split BOM tax into CGST/SGST or IGST from seller vs site state. */
+function normalizeStateToken(v: string | null | undefined): string {
+  return String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/** Split BOM tax into CGST/SGST or IGST from seller vs customer place of supply. */
 export function bomTaxBreakup(
   taxAmount: number,
   taxPct: number,
@@ -486,8 +586,9 @@ export function bomTaxBreakup(
   placeOfSupply?: string | null,
 ): BomTaxBreakup {
   const taxTotal = round2(taxAmount);
-  const a = String(sellerState ?? "").trim().toLowerCase();
-  const b = String(placeOfSupply ?? "").trim().toLowerCase();
+  const a = normalizeStateToken(sellerState);
+  const b = normalizeStateToken(placeOfSupply);
+  // Unknown PoS → treat as intra (conservative default matching invoice helper).
   const intraState = !a || !b || a === b;
   const cgst = intraState ? round2(taxTotal / 2) : 0;
   const sgst = intraState ? round2(taxTotal - cgst) : 0;
@@ -508,7 +609,10 @@ export function sampleBomPaperModel(
   title: string;
   capacityLabel: string;
   customerName: string;
+  /** Site / city (not GST place of supply). */
   location: string;
+  /** Customer billing state for CGST/SGST vs IGST. */
+  customerState: string;
   projectRef: string;
   preparedBy: string;
   notes: string;
@@ -664,60 +768,164 @@ export function sampleBomPaperModel(
                 remarks: null,
               },
             ]
-          : [
-              {
-                section: packMeta.defaultSections[0]!,
-                lineKind: "stock",
-                description: "Primary supply item",
-                makeText: "OEM / Approved make",
-                sku: "SKU-1001",
-                hsn: "8504",
-                qty: 10,
-                unit: "nos",
-                rate: 4500,
-                amount: 45000,
-                remarks: null,
-              },
-              {
-                section: packMeta.defaultSections[0]!,
-                lineKind: "stock",
-                description: "Secondary component",
-                makeText: "Local",
-                sku: "SKU-1002",
-                hsn: "8536",
-                qty: 25,
-                unit: "nos",
-                rate: 320,
-                amount: 8000,
-                remarks: null,
-              },
-              {
-                section: packMeta.defaultSections[1] ?? "Services",
-                lineKind: "service",
-                description: "Installation / commissioning",
-                makeText: "Own crew",
-                sku: null,
-                hsn: null,
-                qty: 1,
-                unit: "job",
-                rate: 7500,
-                amount: 7500,
-                remarks: "Includes handover",
-              },
-              {
-                section: packMeta.defaultSections[1] ?? "Services",
-                lineKind: "overhead",
-                description: "Freight & packing",
-                makeText: "Courier",
-                sku: null,
-                hsn: null,
-                qty: 1,
-                unit: "job",
-                rate: 1800,
-                amount: 1800,
-                remarks: null,
-              },
-            ];
+          : pack === "epc"
+            ? [
+                {
+                  section: packMeta.defaultSections[0]!,
+                  lineKind: "stock",
+                  description: "LT panel 415V — form 4b",
+                  makeText: "Schneider / L&T",
+                  sku: "PNL-LT-415",
+                  hsn: "8537",
+                  qty: 1,
+                  unit: "set",
+                  rate: 185000,
+                  amount: 185000,
+                  remarks: "Factory tested",
+                  optionalFlag: false,
+                  optionKey: null,
+                  alternateCount: 2,
+                },
+                {
+                  section: packMeta.defaultSections[0]!,
+                  lineKind: "stock",
+                  description: "XLPE cable 3.5C × 240 sqmm",
+                  makeText: "Polycab / KEI",
+                  sku: "CBL-240-35",
+                  hsn: "8544",
+                  qty: 180,
+                  unit: "mtr",
+                  rate: 980,
+                  amount: 176400,
+                  remarks: "Incl. terminations",
+                },
+                {
+                  section: packMeta.defaultSections[1]!,
+                  lineKind: "service",
+                  description: "Erection & commissioning",
+                  makeText: "Own crew",
+                  sku: null,
+                  hsn: null,
+                  qty: 1,
+                  unit: "lot",
+                  rate: 45000,
+                  amount: 45000,
+                  remarks: "As per BOQ notes",
+                  optionalFlag: true,
+                  optionKey: "EC-A",
+                  alternateCount: 0,
+                },
+                {
+                  section: packMeta.defaultSections[2]!,
+                  lineKind: "service",
+                  description: "Civil foundation for panels",
+                  makeText: "Local civil",
+                  sku: null,
+                  hsn: null,
+                  qty: 1,
+                  unit: "lot",
+                  rate: 28000,
+                  amount: 28000,
+                  remarks: "Exclude excavation beyond 1.2m",
+                },
+              ]
+            : pack === "procurement"
+              ? [
+                  {
+                    section: packMeta.defaultSections[0]!,
+                    lineKind: "stock",
+                    description: "Servo motor 1.5kW",
+                    makeText: "Yaskawa",
+                    sku: "SRV-1K5",
+                    hsn: "8501",
+                    qty: 4,
+                    unit: "nos",
+                    rate: 22000,
+                    amount: 88000,
+                    remarks: "Lead 3 weeks",
+                    alternateCount: 1,
+                  },
+                  {
+                    section: packMeta.defaultSections[0]!,
+                    lineKind: "stock",
+                    description: "Proximity sensor M18 PNP",
+                    makeText: "Omron / Autonics",
+                    sku: "SNS-M18",
+                    hsn: "8536",
+                    qty: 20,
+                    unit: "nos",
+                    rate: 850,
+                    amount: 17000,
+                    remarks: "MOQ 10",
+                  },
+                  {
+                    section: packMeta.defaultSections[1]!,
+                    lineKind: "service",
+                    description: "Inbound QC & kitting",
+                    makeText: "Store",
+                    sku: null,
+                    hsn: null,
+                    qty: 1,
+                    unit: "job",
+                    rate: 3500,
+                    amount: 3500,
+                    remarks: null,
+                  },
+                ]
+              : [
+                  {
+                    section: packMeta.defaultSections[0]!,
+                    lineKind: "stock",
+                    description: "Primary supply item",
+                    makeText: "OEM / Approved make",
+                    sku: "SKU-1001",
+                    hsn: "8504",
+                    qty: 10,
+                    unit: "nos",
+                    rate: 4500,
+                    amount: 45000,
+                    remarks: null,
+                  },
+                  {
+                    section: packMeta.defaultSections[0]!,
+                    lineKind: "stock",
+                    description: "Secondary component",
+                    makeText: "Local",
+                    sku: "SKU-1002",
+                    hsn: "8536",
+                    qty: 25,
+                    unit: "nos",
+                    rate: 320,
+                    amount: 8000,
+                    remarks: null,
+                  },
+                  {
+                    section: packMeta.defaultSections[1] ?? "Services",
+                    lineKind: "service",
+                    description: "Installation / commissioning",
+                    makeText: "Own crew",
+                    sku: null,
+                    hsn: null,
+                    qty: 1,
+                    unit: "job",
+                    rate: 7500,
+                    amount: 7500,
+                    remarks: "Includes handover",
+                  },
+                  {
+                    section: packMeta.defaultSections[1] ?? "Services",
+                    lineKind: "overhead",
+                    description: "Freight & packing",
+                    makeText: "Courier",
+                    sku: null,
+                    hsn: null,
+                    qty: 1,
+                    unit: "job",
+                    rate: 1800,
+                    amount: 1800,
+                    remarks: null,
+                  },
+                ];
 
   const materialsTotal = round2(lines.reduce((s, l) => s + Number(l.amount || 0), 0));
   const marginPct = 15;
@@ -742,6 +950,7 @@ export function sampleBomPaperModel(
     capacityLabel: pack === "solar" ? "3KW 1PH" : packMeta.sizeLabel === "Capacity" ? "—" : "Standard",
     customerName: "Sample Customer",
     location: "Bengaluru",
+    customerState: "Karnataka",
     projectRef: "SITE-BNG-042",
     preparedBy: "Sales desk",
     notes: "Prices valid as per terms. Scope exclusions apply unless listed.",

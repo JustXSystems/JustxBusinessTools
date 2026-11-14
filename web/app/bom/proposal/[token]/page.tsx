@@ -56,6 +56,7 @@ type PublicBom = {
   title: string | null;
   customerName: string;
   location: string | null;
+  customerState?: string | null;
   projectRef?: string | null;
   revision?: number;
   validUntil?: string | null;
@@ -116,6 +117,7 @@ function toPaperModel(doc: PublicBom): BomPaperModel {
     capacityLabel: doc.capacityLabel || "",
     customerName: doc.customerName || "",
     location: doc.location || "",
+    customerState: doc.customerState ?? null,
     projectRef: doc.projectRef ?? null,
     preparedBy: doc.preparedBy ?? null,
     notes: doc.notes,

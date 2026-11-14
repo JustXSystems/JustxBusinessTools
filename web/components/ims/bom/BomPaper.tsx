@@ -31,6 +31,8 @@ export type BomPaperModel = {
   capacityLabel: string;
   customerName: string;
   location: string;
+  /** Customer billing state for GST place of supply (not site city). */
+  customerState?: string | null;
   projectRef?: string | null;
   preparedBy?: string | null;
   notes?: string | null;
@@ -60,6 +62,7 @@ export type BomPaperOptions = {
   tone?: BomPaperTone | null;
   density?: BomPaperDensity | null;
   hideMargin?: boolean | null;
+  customerState?: string | null;
 };
 
 export function modelFromDoc(doc: BomDoc, business: BomBusiness, options?: BomPaperOptions | BomPaperTemplateId | null): BomPaperModel {
@@ -76,6 +79,7 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness, options?: BomPa
     capacityLabel: doc.capacityLabel || "",
     customerName: doc.customerName || "",
     location: doc.location || "",
+    customerState: opts.customerState ?? null,
     projectRef: doc.projectRef ?? null,
     preparedBy: doc.preparedBy,
     notes: doc.notes,
@@ -103,6 +107,7 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness, options?: BomPa
       optionalFlag: Boolean(l.optionalFlag),
       optionKey: l.optionKey ?? null,
       alternateCount: Array.isArray(l.alternateItemIds) ? l.alternateItemIds.length : 0,
+      issuedQty: Number(l.issuedQty) || 0,
     })),
     totals: {
       materialsTotal: doc.materialsTotal,

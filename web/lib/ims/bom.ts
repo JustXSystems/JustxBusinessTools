@@ -205,6 +205,7 @@ export type BomDocLineInput = {
   serviceSpare?: boolean;
   optionalFlag?: boolean;
   optionKey?: string | null;
+  issuedQty?: number;
 };
 
 export type BomDocInput = {
