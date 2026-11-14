@@ -12,7 +12,15 @@ import StockOutScreen from "./inventory/StockOut";
  * React.lazy / webpack `default` remapping cannot leave a non-callable type.
  */
 
-export type ImsSection = "Inventory" | "Purchasing" | "Sales & Finance" | "Operations" | "Insights" | "Auditing" | "System";
+export type ImsSection =
+  | "Inventory"
+  | "Purchasing"
+  | "Bill of Materials"
+  | "Sales & Finance"
+  | "Operations"
+  | "Insights"
+  | "Auditing"
+  | "System";
 
 export type ImsModuleDef = {
   key: ImsModuleKey;
@@ -58,12 +66,14 @@ export const IMS_MODULES: ReadonlyArray<ImsModuleDef> = [
   { key: "purchase", label: "Purchase Orders", icon: "🛒", section: "Purchasing", desc: "Create, send and receive purchase orders", keywords: "po order copy buy", anyOf: ["po", "approvals"], component: screen("purchase", () => import("./purchase/PurchaseOrders")) },
   { key: "approvals", label: "Approvals", icon: "🛡", section: "Purchasing", desc: "POs, bills and stock checks awaiting sign-off", keywords: "approve reject pending", anyOf: ["approvals"], component: screen("approvals", () => import("./purchase/Approvals")) },
 
+  /* Bill of Materials — own group so Sales & Finance stays billing/ledger focused */
+  { key: "bom", label: "Create / Maintain", icon: "☰", section: "Bill of Materials", desc: "Compose customer BOMs, live preview and print", keywords: "bom bill of materials package quote materials builder create maintain", anyOf: ["bom"], component: screen("bom", () => import("./bom/Builder")) },
+  { key: "bomPackages", label: "Packages", icon: "⧉", section: "Bill of Materials", desc: "Reusable templates for kits and projects (owners / admins)", keywords: "bom package template kit assembly recipe", anyOf: ["bomPackages"], component: screen("bomPackages", () => import("./bom/Packages")) },
+  { key: "bomRateCards", label: "Rate Cards", icon: "₨", section: "Bill of Materials", desc: "Price books for package and customer BOM lines", keywords: "bom rate card price book sell cost", anyOf: ["bom", "bomPackages"], component: screen("bomRateCards", () => import("./bom/RateCards")) },
+  { key: "bomCompare", label: "Compare", icon: "⇄", section: "Bill of Materials", desc: "Diff packages or customer BOMs line by line", keywords: "bom compare diff package variant", anyOf: ["bom", "bomPackages"], component: screen("bomCompare", () => import("./bom/Compare")) },
+
   /* Sales & finance */
   { key: "sales", label: "Invoices & Billing", icon: "🧾", section: "Sales & Finance", desc: "GST invoices, bills and POS counter", keywords: "invoice bill pos sale gst", anyOf: ["sales"], component: screen("sales", () => import("./finance/Sales")) },
-  { key: "bomPackages", label: "BOM Packages", icon: "⧉", section: "Sales & Finance", desc: "Reusable bill-of-materials templates for kits and projects (owners / admins)", keywords: "bom package template kit assembly recipe", anyOf: ["bomPackages"], component: screen("bomPackages", () => import("./bom/Packages")) },
-  { key: "bomRateCards", label: "BOM Rate Cards", icon: "₨", section: "Sales & Finance", desc: "Price books for package and customer BOM lines", keywords: "bom rate card price book sell cost", anyOf: ["bom", "bomPackages"], component: screen("bomRateCards", () => import("./bom/RateCards")) },
-  { key: "bomCompare", label: "Compare BOMs", icon: "⇄", section: "Sales & Finance", desc: "Diff packages or customer BOMs line by line", keywords: "bom compare diff package variant", anyOf: ["bom", "bomPackages"], component: screen("bomCompare", () => import("./bom/Compare")) },
-  { key: "bom", label: "BILL OF MATERIALS - BOM", icon: "☰", section: "Sales & Finance", desc: "Customer bill of materials — compose, live preview and print", keywords: "bom bill of materials package quote materials builder", anyOf: ["bom"], component: screen("bom", () => import("./bom/Builder")) },
   { key: "receivables", label: "Accounts Receivable", icon: "💰", section: "Sales & Finance", desc: "Collections, aging, reminders and promises", keywords: "ar collection outstanding dues reminder", anyOf: ["receivables"], component: screen("receivables", () => import("./finance/Receivables")) },
   { key: "payables", label: "Accounts Payable", icon: "📤", section: "Sales & Finance", desc: "Supplier bills, approvals and payment runs", keywords: "ap vendor bill payment", anyOf: ["payables", "approvals"], component: screen("payables", () => import("./finance/Payables")) },
   { key: "ledger", label: "Credit / Debit Ledger", icon: "📒", section: "Sales & Finance", desc: "Party ledgers and running balances", keywords: "khata ledger statement credit debit", anyOf: ["receivables", "payables", "reports"], component: screen("ledger", () => import("./finance/Ledger")) },

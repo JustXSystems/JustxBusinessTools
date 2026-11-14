@@ -42,7 +42,7 @@ function RateCardList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: strin
   return (
     <Stack>
       <PageHeader
-        title="BOM rate cards"
+        title="Rate Cards"
         sub="Price books for kit lines. Apply a card to a draft customer BOM to set sell rates."
         actions={<Button onClick={onNew}>New rate card</Button>}
       />
