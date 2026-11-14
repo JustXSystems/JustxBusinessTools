@@ -408,11 +408,21 @@ body.is-bom-resizing {
   position: relative;
 }
 
+.bos .ims-bom-sheet--proposal {
+  --bom-accent: #1d4ed8;
+  --bom-accent-soft: #eff6ff;
+}
+.bos .ims-bom-sheet--technical {
+  --bom-accent: #334155;
+  --bom-accent-soft: #f1f5f9;
+}
+.bos .ims-bom-sheet--share {
+  --bom-accent: #0f172a;
+  --bom-accent-soft: #f8fafc;
+}
 .bos .ims-bom-sheet--classic {
   --bom-accent: #1d4ed8;
   --bom-accent-soft: #eff6ff;
-  box-shadow: inset 4px 0 0 var(--bom-accent);
-  padding-left: 18px;
 }
 
 .bos .ims-bom-sheet--tiered { --bom-accent: #0f766e; --bom-accent-soft: #ecfdf5; }
