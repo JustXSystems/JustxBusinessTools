@@ -301,6 +301,14 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
           disabled={readOnly}
         />
 
+        <ToggleRow
+          label="Confirm needs Approvals"
+          desc="Only owners and roles with Approvals can confirm a BOM — staff can still draft and edit"
+          checked={Boolean(draft.bomConfirmNeedsApproval)}
+          onChange={(v) => set("bomConfirmNeedsApproval", v)}
+          disabled={readOnly}
+        />
+
         <div className="ims-bom-col-config" aria-label="Schedule columns">
           <div className="ims-bom-col-config-head">
             <div>

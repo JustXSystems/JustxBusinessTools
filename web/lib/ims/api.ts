@@ -181,6 +181,8 @@ export type ImsSettings = {
   bomPaperTone: BomPaperTone;
   bomPaperDensity: BomPaperDensity;
   bomHideMargin: boolean;
+  /** When true, confirming a BOM requires Approvals permission (owners always can). */
+  bomConfirmNeedsApproval?: boolean;
   /** Null/omitted = industry-pack column defaults. */
   bomScheduleColumns?: BomScheduleColumnId[] | null;
   poApprovalLimit: number;

@@ -419,7 +419,7 @@ export const IMS_PERMISSIONS = [
   { key: "items", label: "Add / edit items" },
   { key: "suppliers", label: "Suppliers & customers" },
   { key: "po", label: "Purchase orders" },
-  { key: "approvals", label: "Approvals (PO, bills, stock checks)" },
+  { key: "approvals", label: "Approvals (PO, bills, stock checks, BOM confirm)" },
   { key: "sales", label: "Sales invoices" },
   { key: "bom", label: "Bill of materials (BOM)" },
   { key: "bomPackages", label: "BOM package templates" },
