@@ -25,7 +25,7 @@ import {
   type BomPaperSection,
   type BomScheduleColumn,
 } from "@/lib/ims/bom-paper";
-import { PaperBrandHead, sellerDetailInline } from "../shared/DocumentPaper";
+import { PaperBrandHead, sellerDetailCompact } from "../shared/DocumentPaper";
 import type { BomPaperModel } from "./BomPaper";
 
 const BOM_STAMP: Partial<Record<string, { text: string; color: string }>> = {
@@ -93,7 +93,7 @@ function PaperShell({
           <PaperBrandHead
             name={b.name || "Your business"}
             logoUrl={b.logoUrl}
-            detail={sellerDetailInline({
+            detail={sellerDetailCompact({
               address: b.address,
               state: b.state,
               gstin: b.gstin,
@@ -583,15 +583,13 @@ export function ProposalBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
   const b = model.business;
   const stamp = stampOf(model.status);
-  const sellerLine = [
-    b.address,
-    b.state,
-    b.gstin ? `GSTIN ${b.gstin}` : null,
-    b.phone,
-    b.email,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const sellerLine = sellerDetailCompact({
+    address: b.address,
+    state: b.state,
+    gstin: b.gstin,
+    phone: b.phone,
+    email: b.email,
+  });
   const validDays = bomValidityDaysRemaining(model.validUntil, model.docDate);
   const validBit = model.validUntil
     ? `Valid ${dateLabel(model.validUntil)}${

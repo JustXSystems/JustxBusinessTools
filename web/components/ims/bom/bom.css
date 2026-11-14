@@ -471,8 +471,15 @@ body.is-bom-resizing {
   margin-top: 2px;
   font-size: 10.5px;
   line-height: 1.35;
-  white-space: normal;
   color: var(--bom-muted);
+  /* Address + contact: at most two lines so the schedule starts higher. */
+  white-space: pre-line;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  max-height: calc(1.35em * 2);
+  word-break: break-word;
 }
 .bos .ims-bom-sheet .bos-inv-paper-title,
 .bos .ims-bom-sheet-titleblock .bos-inv-paper-title,
@@ -521,6 +528,12 @@ body.is-bom-resizing {
 .bos .ims-bom-party-compact .bos-inv-paper-value {
   font-size: 12.5px;
   line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  max-height: calc(1.3em * 2);
+  word-break: break-word;
 }
 .bos .ims-bom-party-inline {
   font-weight: 500;
@@ -633,6 +646,12 @@ body.is-bom-resizing {
 .bos .ims-bom-aether-for-line span {
   min-width: 0;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  max-height: calc(1.35em * 2);
+  word-break: break-word;
 }
 .bos .ims-bom-aether-totals-bar {
   display: grid;
