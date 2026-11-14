@@ -83,6 +83,7 @@ type PublicBom = {
   tone?: string | null;
   density?: string | null;
   hideMargin?: boolean | null;
+  scheduleColumns?: string[] | null;
 };
 
 function toPaperModel(doc: PublicBom): BomPaperModel {
@@ -135,6 +136,7 @@ function toPaperModel(doc: PublicBom): BomPaperModel {
     tone: normalizeBomPaperTone(doc.tone),
     density: normalizeBomPaperDensity(doc.density),
     hideMargin: Boolean(doc.hideMargin),
+    scheduleColumns: Array.isArray(doc.scheduleColumns) ? doc.scheduleColumns : null,
     lines: (doc.lines ?? []).map((l) => ({
       section: l.section,
       lineKind: (l.lineKind as BomPaperModel["lines"][number]["lineKind"]) ?? "stock",

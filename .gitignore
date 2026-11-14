@@ -34,6 +34,7 @@ web/next-env.d.ts
 test-results/
 playwright-report/
 blob-report/
+web/.tmp/
 
 # Android / Capacitor local builds
 android/.gradle/

@@ -383,6 +383,7 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
       tone: session.settings.bomPaperTone ?? "neutral",
       density: session.settings.bomPaperDensity ?? "comfort",
       hideMargin: session.settings.bomHideMargin ?? false,
+      scheduleColumns: session.settings.bomScheduleColumns ?? null,
     },
     doc.paper,
   );
@@ -1047,6 +1048,7 @@ function BomEditorForm({
     tone: settings.bomPaperTone ?? "neutral",
     density: docDensity,
     hideMargin: customerPreview,
+    scheduleColumns: settings.bomScheduleColumns ?? null,
     lines: lines
       .filter((l) => l.description.trim())
       .map((l) => ({
@@ -1372,7 +1374,7 @@ function BomEditorForm({
               </Field>
               <Field
                 label={bomIndustryPackMeta(docPack).sizeLabel}
-                hint={`Industry pack columns: ${scheduleColumnsFor(docPurpose, docPack)
+                hint={`Schedule columns: ${scheduleColumnsFor(docPurpose, docPack, settings.bomScheduleColumns)
                   .filter((c) => c !== "check" && c !== "index")
                   .map((c) => BOM_COLUMN_LABEL[c])
                   .join(" · ")}. Scale-marked lines multiply by the first number in this field.`}

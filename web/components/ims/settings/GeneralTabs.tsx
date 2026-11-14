@@ -1,18 +1,22 @@
 "use client";
 
-import { Alert, Field, FormGrid, Input, Select, Textarea } from "@/components/bos";
+import { Alert, Button, Field, FormGrid, Input, Select, Textarea } from "@/components/bos";
 import type {
   BomIndustryPackId,
   BomPaperDensity,
   BomPaperTemplateId,
   BomPaperTone,
+  BomScheduleColumnId,
   ImsSettingsMeta,
 } from "@/lib/ims/api";
 import {
+  BOM_COLUMN_LABEL,
+  BOM_CONFIGURABLE_COLUMNS,
   BOM_INDUSTRY_PACK_META,
   BOM_PAPER_DENSITIES,
   BOM_PAPER_PURPOSE_META,
   BOM_PAPER_TONES,
+  BOM_REQUIRED_COLUMNS,
   bomIndustryPackMeta,
   bomPackFromBusinessType,
   bomPaperPurposeMeta,
@@ -20,8 +24,11 @@ import {
   normalizeBomPaperDensity,
   normalizeBomPaperPurpose,
   normalizeBomPaperTone,
+  normalizeBomScheduleColumns,
   sampleBomPaperModel,
+  scheduleColumnsFor,
   withCommercialSample,
+  type BomScheduleColumn,
 } from "@/lib/ims/bom-paper";
 import { GST_RATES, inr } from "@/lib/ims/format";
 import { GST_STATES, MONTHS, PREFIX_FIELDS, docNoSample, fiscalYearLabel, gstinPlace } from "@/lib/ims/settings";
@@ -158,6 +165,19 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
   const hideMargin = Boolean(draft.bomHideMargin);
   const purposeMeta = bomPaperPurposeMeta(purpose);
   const packMeta = bomIndustryPackMeta(pack);
+  const packDefaultCols = scheduleColumnsFor(purpose, pack);
+  const selectedCols = normalizeBomScheduleColumns(
+    draft.bomScheduleColumns?.length ? draft.bomScheduleColumns : packDefaultCols,
+    packDefaultCols,
+  );
+  const usingPackDefaults = !draft.bomScheduleColumns?.length;
+  const toggleColumn = (col: BomScheduleColumn) => {
+    if ((BOM_REQUIRED_COLUMNS as readonly string[]).includes(col)) return;
+    const next = new Set(selectedCols);
+    if (next.has(col)) next.delete(col);
+    else next.add(col);
+    set("bomScheduleColumns", normalizeBomScheduleColumns([...next], packDefaultCols) as BomScheduleColumnId[]);
+  };
   const sample = sampleBomPaperModel(draft.businessName || session.brand?.name || "Your business", pack);
   const previewModel = {
     ...withCommercialSample(sample),
@@ -167,6 +187,7 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
     density,
     hideMargin,
     customerState: sample.customerState || draft.state || null,
+    scheduleColumns: selectedCols,
   };
 
   return (
@@ -224,7 +245,11 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
                 id={id}
                 aria-describedby={describedBy}
                 value={pack}
-                onChange={(e) => set("bomIndustryPack", e.target.value as BomIndustryPackId)}
+                onChange={(e) => {
+                  set("bomIndustryPack", e.target.value as BomIndustryPackId);
+                  // Follow the new pack’s defaults until the user customizes columns again.
+                  set("bomScheduleColumns", null);
+                }}
               >
                 {BOM_INDUSTRY_PACK_META.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -275,6 +300,44 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
           onChange={(v) => set("bomHideMargin", v)}
           disabled={readOnly}
         />
+
+        <div className="ims-bom-col-config" aria-label="Schedule columns">
+          <div className="ims-bom-col-config-head">
+            <div>
+              <div className="ims-bom-col-config-title">Schedule columns</div>
+              <div className="ims-bom-col-config-desc">
+                Choose which columns appear on preview and PDF. Item and Qty stay on. Field purpose hides rate/amount automatically.
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={readOnly || usingPackDefaults}
+              onClick={() => set("bomScheduleColumns", null)}
+            >
+              Reset to pack
+            </Button>
+          </div>
+          <div className="ims-bom-col-chips" role="group">
+            {BOM_CONFIGURABLE_COLUMNS.map((col) => {
+              const on = selectedCols.includes(col);
+              const locked = (BOM_REQUIRED_COLUMNS as readonly string[]).includes(col);
+              return (
+                <button
+                  key={col}
+                  type="button"
+                  className={`ims-bom-col-chip${on ? " is-on" : ""}${locked ? " is-locked" : ""}`}
+                  aria-pressed={on}
+                  disabled={readOnly || locked}
+                  title={locked ? "Required on every schedule" : BOM_COLUMN_LABEL[col]}
+                  onClick={() => toggleColumn(col)}
+                >
+                  {BOM_COLUMN_LABEL[col]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <div className="ims-bom-tpl-preview" aria-label="BOM template preview">
           <div className="ims-bom-tpl-preview-label">

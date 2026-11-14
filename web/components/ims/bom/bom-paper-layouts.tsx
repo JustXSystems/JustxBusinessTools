@@ -25,7 +25,7 @@ import {
   type BomPaperSection,
   type BomScheduleColumn,
 } from "@/lib/ims/bom-paper";
-import { PaperBrandHead, sellerDetailInline } from "../shared/DocumentPaper";
+import { PaperBrandHead, sellerDetailCompact } from "../shared/DocumentPaper";
 import type { BomPaperModel } from "./BomPaper";
 
 const BOM_STAMP: Partial<Record<string, { text: string; color: string }>> = {
@@ -93,7 +93,7 @@ function PaperShell({
           <PaperBrandHead
             name={b.name || "Your business"}
             logoUrl={b.logoUrl}
-            detail={sellerDetailInline({
+            detail={sellerDetailCompact({
               address: b.address,
               state: b.state,
               gstin: b.gstin,
@@ -186,8 +186,24 @@ function LineOptionMarks({ line }: { line: BomPaperLine }) {
   );
 }
 
-function LineDesc({ line, showRemarks = true }: { line: BomPaperLine; showRemarks?: boolean }) {
-  const ids = lineIdentityBits(line);
+function LineDesc({
+  line,
+  showRemarks = true,
+  /** When false, SKU is omitted (usually because a dedicated SKU column is on). */
+  showSku = true,
+  /** When false, HSN is omitted (usually because a dedicated HSN column is on). */
+  showHsn = true,
+}: {
+  line: BomPaperLine;
+  showRemarks?: boolean;
+  showSku?: boolean;
+  showHsn?: boolean;
+}) {
+  const ids = lineIdentityBits(line).filter((bit) => {
+    if (!showSku && !bit.startsWith("HSN ")) return false;
+    if (!showHsn && bit.startsWith("HSN ")) return false;
+    return true;
+  });
   const tail = [...ids, showRemarks && line.remarks ? line.remarks : null].filter(Boolean);
   return (
     <>
@@ -380,6 +396,7 @@ function cellValue(
   hideMargin: boolean,
   marginFactor: number,
   fieldMode: boolean,
+  cols: ReadonlyArray<BomScheduleColumn>,
 ) {
   const priced = bomCustomerLinePricing(line, marginFactor, hideMargin);
   switch (col) {
@@ -390,7 +407,12 @@ function cellValue(
     case "item":
       return (
         <span style={{ whiteSpace: "normal" }}>
-          <LineDesc line={line} showRemarks={false} />
+          <LineDesc
+            line={line}
+            showRemarks={false}
+            showSku={!cols.includes("sku")}
+            showHsn={!cols.includes("hsn")}
+          />
         </span>
       );
     case "sku":
@@ -422,6 +444,10 @@ function cellValue(
   }
 }
 
+function colClass(col: BomScheduleColumn) {
+  return `ims-bom-col ims-bom-col--${col}${col === "check" ? " ims-bom-check-col" : ""}`;
+}
+
 function ScheduleTable({
   model,
   sections,
@@ -435,22 +461,24 @@ function ScheduleTable({
 }) {
   const purpose = normalizeBomPaperPurpose(model.template);
   const pack = normalizeBomIndustryPack(model.industryPack);
-  const cols = scheduleColumnsFor(purpose, pack);
+  const cols = scheduleColumnsFor(purpose, pack, model.scheduleColumns);
   const hideMargin = Boolean(model.hideMargin) && purpose !== "field";
   const fieldMode = purpose === "field";
   const marginFactor = bomCustomerMarginFactor(model.totals.materialsTotal, model.totals.marginAmount);
   const displayCols = cols;
+  const amountIdx = displayCols.indexOf("amount");
+  const qtyWithUnit = !displayCols.includes("unit");
 
   return (
     <div className="ims-bom-schedule-wrap">
-    <table className="bos-inv-paper-table ims-bom-schedule">
+    <table className={`bos-inv-paper-table ims-bom-schedule ims-bom-schedule--cols-${displayCols.length}`}>
       <thead>
         <tr>
           {displayCols.map((c) => (
-            <th key={c} className={c === "check" ? "ims-bom-check-col" : undefined}>
+            <th key={c} className={colClass(c)}>
               {c === "qty" && fieldMode
                 ? "To issue"
-                : c === "qty" && !displayCols.includes("unit")
+                : c === "qty" && qtyWithUnit
                   ? "Qty"
                   : BOM_COLUMN_LABEL[c]}
             </th>
@@ -475,18 +503,25 @@ function ScheduleTable({
               {sec.lines.map((l, i) => (
                 <tr key={`${sec.name}-${i}-${l.description}`}>
                   {displayCols.map((c) => (
-                    <td key={c} className={c === "check" ? "ims-bom-check-col" : undefined}>
-                      {c === "qty" && !displayCols.includes("unit")
+                    <td key={c} className={colClass(c)}>
+                      {c === "qty" && qtyWithUnit
                         ? qtyText(fieldMode ? bomFieldRemainingQty(l) : l.qty, l.unit)
-                        : cellValue(c, l, i, hideMargin, marginFactor, fieldMode)}
+                        : cellValue(c, l, i, hideMargin, marginFactor, fieldMode, displayCols)}
                     </td>
                   ))}
                 </tr>
               ))}
-              {showSectionTotals && !fieldMode ? (
+              {showSectionTotals && !fieldMode && amountIdx >= 0 ? (
                 <tr className="ims-bom-epc-sec-total">
-                  <td colSpan={Math.max(1, displayCols.length - 1)}>Section total — {sec.name}</td>
-                  <td>{inrExact(secTotal)}</td>
+                  {amountIdx > 0 ? (
+                    <td colSpan={amountIdx} className="ims-bom-epc-sec-total-label">
+                      Section total — {sec.name}
+                    </td>
+                  ) : null}
+                  <td className={colClass("amount")}>{inrExact(secTotal)}</td>
+                  {amountIdx < displayCols.length - 1 ? (
+                    <td colSpan={displayCols.length - amountIdx - 1} className="ims-bom-epc-sec-total-pad" />
+                  ) : null}
                 </tr>
               ) : null}
             </Fragment>
@@ -583,15 +618,13 @@ export function ProposalBomPaper({ model }: { model: BomPaperModel }) {
   const sections = groupBomSections(model.lines, model.totals.materialsTotal);
   const b = model.business;
   const stamp = stampOf(model.status);
-  const sellerLine = [
-    b.address,
-    b.state,
-    b.gstin ? `GSTIN ${b.gstin}` : null,
-    b.phone,
-    b.email,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const sellerLine = sellerDetailCompact({
+    address: b.address,
+    state: b.state,
+    gstin: b.gstin,
+    phone: b.phone,
+    email: b.email,
+  });
   const validDays = bomValidityDaysRemaining(model.validUntil, model.docDate);
   const validBit = model.validUntil
     ? `Valid ${dateLabel(model.validUntil)}${
@@ -657,6 +690,13 @@ export function ExecutiveBomPaper({ model }: { model: BomPaperModel }) {
   const hideMargin = Boolean(model.hideMargin);
   const c = bomCustomerComposition(model.totals, hideMargin);
   const marginFactor = bomCustomerMarginFactor(model.totals.materialsTotal, model.totals.marginAmount);
+  const cols = scheduleColumnsFor(
+    "executive",
+    normalizeBomIndustryPack(model.industryPack),
+    model.scheduleColumns,
+  );
+  const showLineAmount = cols.includes("amount");
+  const showLineRate = !showLineAmount && cols.includes("rate");
   return (
     <PaperShell model={model} purpose="executive">
       <div className="ims-bom-exec-hero">
@@ -716,24 +756,36 @@ export function ExecutiveBomPaper({ model }: { model: BomPaperModel }) {
                     {sec.lines.length} lines · {sec.sharePct}%
                   </span>
                 </div>
-                <b>{inrExact(secTotal)}</b>
+                {showLineAmount ? <b>{inrExact(secTotal)}</b> : null}
               </div>
               <ul className="ims-bom-exec-lines">
                 {sec.lines.map((l, i) => {
                   const priced = bomCustomerLinePricing(l, marginFactor, hideMargin);
-                  const cols = scheduleColumnsFor("executive", normalizeBomIndustryPack(model.industryPack));
                   const bits: string[] = [];
                   if (cols.includes("sku") && l.sku?.trim()) bits.push(l.sku.trim());
+                  if (cols.includes("hsn") && l.hsn?.trim()) bits.push(`HSN ${l.hsn.trim()}`);
                   if (cols.includes("kind") && lineKindLabel(l.lineKind)) bits.push(lineKindLabel(l.lineKind)!);
                   if (cols.includes("make") && l.makeText) bits.push(l.makeText);
+                  if (cols.includes("remarks") && l.remarks?.trim()) bits.push(l.remarks.trim());
+                  const moneyBit = showLineAmount
+                    ? inrExact(priced.amount)
+                    : showLineRate
+                      ? inrExact(priced.rate)
+                      : null;
                   return (
                   <li key={`${sec.name}-${i}`}>
                     <span>
-                      <LineDesc line={l} />
+                      <LineDesc
+                        line={l}
+                        showRemarks={false}
+                        showSku={!cols.includes("sku")}
+                        showHsn={!cols.includes("hsn")}
+                      />
                       {bits.length ? <small> · {bits.join(" · ")}</small> : null}
                     </span>
                     <span>
-                      {qtyText(l.qty, l.unit)} · {inrExact(priced.amount)}
+                      {qtyText(l.qty, l.unit)}
+                      {moneyBit ? ` · ${moneyBit}` : ""}
                     </span>
                   </li>
                   );
@@ -828,7 +880,8 @@ export function ShareBomPaper({ model }: { model: BomPaperModel }) {
   const hideMargin = Boolean(model.hideMargin);
   const c = bomCustomerComposition(model.totals, hideMargin);
   const marginFactor = bomCustomerMarginFactor(model.totals.materialsTotal, model.totals.marginAmount);
-  const cols = scheduleColumnsFor("share", normalizeBomIndustryPack(model.industryPack));
+  const cols = scheduleColumnsFor("share", normalizeBomIndustryPack(model.industryPack), model.scheduleColumns);
+  const showAmount = cols.includes("amount");
   return (
     <PaperShell model={model} purpose="share">
       <DocMeta model={model} />
@@ -839,9 +892,26 @@ export function ShareBomPaper({ model }: { model: BomPaperModel }) {
             sec.lines.map((l, i) => {
               const priced = bomCustomerLinePricing(l, marginFactor, hideMargin);
               const showKind = cols.includes("kind") && lineKindLabel(l.lineKind);
-              const showSku = cols.includes("sku") && l.sku?.trim();
+              const showSku = cols.includes("sku") && Boolean(l.sku?.trim());
               const showMake = cols.includes("make");
-              const showAmount = cols.includes("amount");
+              const showHsn = cols.includes("hsn") && Boolean(l.hsn?.trim());
+              const showRate = cols.includes("rate") && !showAmount;
+              const showRemarks = cols.includes("remarks") && Boolean(l.remarks?.trim());
+              const metaLeft = showMake
+                ? l.makeText || "—"
+                : showSku
+                  ? l.sku!
+                  : showHsn
+                    ? `HSN ${l.hsn}`
+                    : sec.name;
+              const metaMid = qtyText(l.qty, l.unit);
+              const metaRight = showAmount
+                ? inrExact(priced.amount)
+                : showRate
+                  ? inrExact(priced.rate)
+                  : showRemarks
+                    ? l.remarks!.trim()
+                    : null;
               return (
               <div key={`${sec.name}-${i}`} className="ims-bom-folio-card">
                 <div className="ims-bom-folio-card-top">
@@ -851,13 +921,18 @@ export function ShareBomPaper({ model }: { model: BomPaperModel }) {
                   ) : null}
                 </div>
                 <div className="ims-bom-folio-desc">
-                  <LineDesc line={l} />
-                  {showSku ? <small className="ims-bom-folio-sku">{l.sku}</small> : null}
+                  <LineDesc
+                    line={l}
+                    showRemarks={false}
+                    showSku={Boolean(showSku && !showMake)}
+                    showHsn={Boolean(showHsn && !showMake && !showSku)}
+                  />
+                  {showSku && showMake ? <small className="ims-bom-folio-sku">{l.sku}</small> : null}
                 </div>
-                <div className="ims-bom-folio-meta">
-                  <span>{showMake ? l.makeText || "—" : qtyText(l.qty, l.unit)}</span>
-                  <span>{showMake ? qtyText(l.qty, l.unit) : showSku ? l.sku : "—"}</span>
-                  {showAmount ? <b>{inrExact(priced.amount)}</b> : <b>{qtyText(l.qty, l.unit)}</b>}
+                <div className={`ims-bom-folio-meta${metaRight ? "" : " ims-bom-folio-meta--pair"}`}>
+                  <span>{metaLeft}</span>
+                  <span>{metaMid}</span>
+                  {metaRight ? <b>{metaRight}</b> : null}
                 </div>
               </div>
               );

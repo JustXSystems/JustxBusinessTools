@@ -46,13 +46,36 @@ export function PaperBrandHead({
   );
 }
 
+/** Collapse multi-line / noisy address text to one printable phrase. */
+export function flattenPaperAddress(address?: string | null): string {
+  return String(address ?? "")
+    .replace(/\r\n/g, "\n")
+    .split(/\n+/)
+    .map((s) => s.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
 export function sellerDetail(p: Pick<PaperParty, "address" | "state" | "gstin" | "phone" | "email">): string {
-  return [p.address, p.state, p.gstin ? `GSTIN ${p.gstin}` : null, p.phone, p.email].filter(Boolean).join("\n");
+  const addr = flattenPaperAddress(p.address);
+  return [addr || null, p.state, p.gstin ? `GSTIN ${p.gstin}` : null, p.phone, p.email].filter(Boolean).join("\n");
 }
 
 /** Single-line seller contact for compact BOM / proposal headers. */
 export function sellerDetailInline(p: Pick<PaperParty, "address" | "state" | "gstin" | "phone" | "email">): string {
-  return [p.address, p.state, p.gstin ? `GSTIN ${p.gstin}` : null, p.phone, p.email].filter(Boolean).join(" · ");
+  const addr = flattenPaperAddress(p.address);
+  return [addr || null, p.state, p.gstin ? `GSTIN ${p.gstin}` : null, p.phone, p.email].filter(Boolean).join(" · ");
+}
+
+/**
+ * Compact seller block for BOM paper — max two lines:
+ * 1) address · state  2) GSTIN · phone · email
+ */
+export function sellerDetailCompact(p: Pick<PaperParty, "address" | "state" | "gstin" | "phone" | "email">): string {
+  const addr = flattenPaperAddress(p.address);
+  const line1 = [addr || null, p.state?.trim() || null].filter(Boolean).join(", ");
+  const line2 = [p.gstin ? `GSTIN ${p.gstin}` : null, p.phone, p.email].filter(Boolean).join(" · ");
+  return [line1 || null, line2 || null].filter(Boolean).join("\n");
 }
 
 /**

@@ -146,6 +146,18 @@ export type BomIndustryPackId =
 
 export type BomPaperTone = "neutral" | "bold" | "editorial";
 export type BomPaperDensity = "compact" | "comfort";
+export type BomScheduleColumnId =
+  | "index"
+  | "item"
+  | "sku"
+  | "hsn"
+  | "make"
+  | "kind"
+  | "qty"
+  | "unit"
+  | "rate"
+  | "amount"
+  | "remarks";
 
 export type ImsSettings = {
   businessName: string;
@@ -169,6 +181,8 @@ export type ImsSettings = {
   bomPaperTone: BomPaperTone;
   bomPaperDensity: BomPaperDensity;
   bomHideMargin: boolean;
+  /** Null/omitted = industry-pack column defaults. */
+  bomScheduleColumns?: BomScheduleColumnId[] | null;
   poApprovalLimit: number;
   draftPoPurgeDays: number;
   paymentTermsDays: number;

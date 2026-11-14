@@ -20,6 +20,7 @@ import {
   normalizeBomIndustryPack,
   normalizeBomPaperPurpose,
   normalizeBomPaperTemplate,
+  normalizeBomScheduleColumns,
   sampleBomPaperModel,
   scheduleColumnsFor,
   withBomPaperSettingsDefaults,
@@ -63,6 +64,41 @@ describe("bom-paper purposes", () => {
     expect(normalizeBomIndustryPack("nope")).toBe("general");
     expect(scheduleColumnsFor("field", "epc")).not.toContain("rate");
     expect(scheduleColumnsFor("technical", "epc")).toContain("remarks");
+    const custom = scheduleColumnsFor("proposal", "general", ["item", "sku", "qty", "amount"]);
+    expect(custom).toEqual(["item", "sku", "qty", "amount"]);
+    expect(normalizeBomScheduleColumns(["qty", "make"], ["item", "qty"])).toEqual(["item", "make", "qty"]);
+    expect(scheduleColumnsFor("field", "solar", ["item", "qty", "rate", "amount"])).toEqual([
+      "check",
+      "item",
+      "qty",
+    ]);
+
+    // Every configurable column alone still keeps required item+qty and stable order.
+    for (const col of ["index", "sku", "hsn", "make", "kind", "unit", "rate", "amount", "remarks"] as const) {
+      const cols = normalizeBomScheduleColumns([col], ["item", "qty"]);
+      expect(cols[0]).toBe(col === "index" ? "index" : "item");
+      expect(cols).toContain("item");
+      expect(cols).toContain("qty");
+      expect(cols).toContain(col);
+      expect(cols.indexOf("item")).toBeLessThan(cols.indexOf("qty"));
+    }
+
+    // Turning amount off must not invent pricing columns; field still strips them.
+    expect(scheduleColumnsFor("technical", "epc", ["item", "make", "qty", "unit", "remarks"])).toEqual([
+      "item",
+      "make",
+      "qty",
+      "unit",
+      "remarks",
+    ]);
+    expect(scheduleColumnsFor("proposal", "solar", ["item", "sku", "hsn", "qty", "rate", "amount"])).toEqual([
+      "item",
+      "sku",
+      "hsn",
+      "qty",
+      "rate",
+      "amount",
+    ]);
   });
 
   it("groups lines into roman sections with share percentages", () => {
