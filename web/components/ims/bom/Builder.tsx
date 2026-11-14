@@ -29,7 +29,15 @@ import { ensureBomPackageCatalog, ensureStockLinesForSave } from "@/lib/ims/ensu
 import { withBasePath } from "@/lib/base-path";
 import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
 import { ItemPickerDialog, PartySelect } from "../shared/pickers";
-import { BomPaper, modelFromDoc, type BomPaperModel } from "./BomPaper";
+import {
+  BOM_INDUSTRY_PACK_META,
+  BOM_PAPER_PURPOSE_META,
+  normalizeBomIndustryPack,
+  normalizeBomPaperPurpose,
+  type BomIndustryPackId,
+  type BomPaperPurpose,
+} from "@/lib/ims/bom-paper";
+import { BomPaper, mergePaperOptions, modelFromDoc, type BomPaperModel } from "./BomPaper";
 import { BomSplitLayout } from "./BomSplitLayout";
 
 type View =
@@ -337,13 +345,20 @@ function BomViewer({ id, onBack, onEdit }: { id: string; onBack: () => void; onE
     ...state.data.business,
     logoUrl: state.data.business.logoUrl || session.brand?.logoUrl || null,
   };
-  const model = modelFromDoc(doc, business, {
-    template: session.settings.bomPaperTemplate,
-    industryPack: session.settings.bomIndustryPack ?? "general",
-    tone: session.settings.bomPaperTone ?? "neutral",
-    density: session.settings.bomPaperDensity ?? "comfort",
-    hideMargin: session.settings.bomHideMargin ?? false,
-  });
+  const model = modelFromDoc(
+    doc,
+    business,
+    mergePaperOptions(
+      {
+        template: session.settings.bomPaperTemplate,
+        industryPack: session.settings.bomIndustryPack ?? "general",
+        tone: session.settings.bomPaperTone ?? "neutral",
+        density: session.settings.bomPaperDensity ?? "comfort",
+        hideMargin: session.settings.bomHideMargin ?? false,
+      },
+      doc.paper,
+    ),
+  );
   const confirmed = doc.status === "confirmed";
   const stockable = (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0).length;
   const reloadAll = () => {
@@ -837,7 +852,15 @@ function BomEditorForm({
   const { run, busy } = useImsAction();
   const print = usePrint();
   const settings = session.settings;
-  const [customerPreview, setCustomerPreview] = useState(Boolean(settings.bomHideMargin));
+  const [customerPreview, setCustomerPreview] = useState(
+    initial?.paper?.hideMargin ?? Boolean(settings.bomHideMargin),
+  );
+  const [docPurpose, setDocPurpose] = useState<BomPaperPurpose>(
+    normalizeBomPaperPurpose(initial?.paper?.purpose ?? settings.bomPaperTemplate),
+  );
+  const [docPack, setDocPack] = useState<BomIndustryPackId>(
+    normalizeBomIndustryPack(initial?.paper?.industryPack ?? settings.bomIndustryPack),
+  );
 
   const seeded = fromPackage;
   const [customerName, setCustomerName] = useState(initial?.customerName ?? "");
@@ -848,6 +871,8 @@ function BomEditorForm({
   const [marginPct, setMarginPct] = useState(String(initial?.marginPct ?? seeded?.defaultMarginPct ?? 0));
   const [taxPct, setTaxPct] = useState(String(initial?.taxPct ?? seeded?.defaultTaxPct ?? 0));
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [scopeOfSupply, setScopeOfSupply] = useState(initial?.scopeOfSupply ?? "");
+  const [exclusions, setExclusions] = useState(initial?.exclusions ?? "");
   const [preparedBy, setPreparedBy] = useState(initial?.preparedBy ?? session.actor.name ?? "");
   const [projectRef, setProjectRef] = useState(initial?.projectRef ?? "");
   const [validUntil, setValidUntil] = useState(initial?.validUntil ?? "");
@@ -921,6 +946,12 @@ function BomEditorForm({
       phone: business.phone || settings.phone,
       email: business.email || settings.email,
       logoUrl: business.logoUrl || session.brand?.logoUrl || null,
+      accent: business.accent ?? null,
+      bankName: business.bankName ?? null,
+      bankBranch: business.bankBranch ?? null,
+      bankAccount: business.bankAccount ?? null,
+      bankIfsc: business.bankIfsc ?? null,
+      bankUpi: business.bankUpi ?? null,
     },
     docNo: initial?.docNo ?? "Draft",
     docDate,
@@ -937,10 +968,12 @@ function BomEditorForm({
     paymentTerms: paymentTerms || null,
     deliveryTerms: deliveryTerms || null,
     warrantyTerms: warrantyTerms || null,
+    scopeOfSupply: scopeOfSupply || null,
+    exclusions: exclusions || null,
     marginPct: Number(marginPct) || 0,
     taxPct: Number(taxPct) || 0,
-    template: settings.bomPaperTemplate,
-    industryPack: settings.bomIndustryPack ?? "general",
+    template: docPurpose,
+    industryPack: docPack,
     tone: settings.bomPaperTone ?? "neutral",
     density: settings.bomPaperDensity ?? "comfort",
     hideMargin: customerPreview,
@@ -1019,6 +1052,13 @@ function BomEditorForm({
     paymentTerms: paymentTerms.trim() || null,
     deliveryTerms: deliveryTerms.trim() || null,
     warrantyTerms: warrantyTerms.trim() || null,
+    scopeOfSupply: scopeOfSupply.trim() || null,
+    exclusions: exclusions.trim() || null,
+    paper: {
+      purpose: docPurpose,
+      industryPack: docPack,
+      hideMargin: customerPreview,
+    },
     lines: lines
       .filter((l) => l.description.trim())
       .map((l, i) => ({
@@ -1272,8 +1312,52 @@ function BomEditorForm({
               <Field label="Warranty terms">
                 {({ id }) => <Input id={id} value={warrantyTerms} onChange={(e) => setWarrantyTerms(e.target.value)} placeholder="OEM + workmanship" />}
               </Field>
+              <Field label="Paper purpose" hint="Overrides tenant default for this BOM">
+                {({ id }) => (
+                  <Select id={id} value={docPurpose} onChange={(e) => setDocPurpose(normalizeBomPaperPurpose(e.target.value))}>
+                    {BOM_PAPER_PURPOSE_META.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label="Industry pack">
+                {({ id }) => (
+                  <Select id={id} value={docPack} onChange={(e) => setDocPack(normalizeBomIndustryPack(e.target.value))}>
+                    {BOM_INDUSTRY_PACK_META.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
             </FormGrid>
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+              <Field label="Scope of supply" full>
+                {({ id }) => (
+                  <Textarea
+                    id={id}
+                    rows={2}
+                    value={scopeOfSupply}
+                    onChange={(e) => setScopeOfSupply(e.target.value)}
+                    placeholder="What is included in this proposal"
+                  />
+                )}
+              </Field>
+              <Field label="Exclusions" full>
+                {({ id }) => (
+                  <Textarea
+                    id={id}
+                    rows={2}
+                    value={exclusions}
+                    onChange={(e) => setExclusions(e.target.value)}
+                    placeholder="What is not included"
+                  />
+                )}
+              </Field>
               <Field label="Notes" full>
                 {({ id }) => <Textarea id={id} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />}
               </Field>

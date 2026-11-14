@@ -39,6 +39,8 @@ export type BomPaperModel = {
   paymentTerms?: string | null;
   deliveryTerms?: string | null;
   warrantyTerms?: string | null;
+  scopeOfSupply?: string | null;
+  exclusions?: string | null;
   marginPct: number;
   taxPct: number;
   lines: ReadonlyArray<BomPaperLine>;
@@ -82,6 +84,8 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness, options?: BomPa
     paymentTerms: doc.paymentTerms ?? null,
     deliveryTerms: doc.deliveryTerms ?? null,
     warrantyTerms: doc.warrantyTerms ?? null,
+    scopeOfSupply: doc.scopeOfSupply ?? null,
+    exclusions: doc.exclusions ?? null,
     marginPct: doc.marginPct,
     taxPct: doc.taxPct,
     lines: (doc.lines ?? []).map((l) => ({
@@ -103,11 +107,25 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness, options?: BomPa
       taxAmount: doc.taxAmount,
       grandTotal: doc.grandTotal,
     },
-    template: opts.template,
-    industryPack: opts.industryPack,
-    tone: opts.tone,
-    density: opts.density,
-    hideMargin: opts.hideMargin,
+    template: opts.template ?? (doc.paper?.purpose as BomPaperTemplateId | undefined) ?? null,
+    industryPack: opts.industryPack ?? (doc.paper?.industryPack as BomIndustryPackId | undefined) ?? null,
+    tone: opts.tone ?? (doc.paper?.tone as BomPaperTone | undefined) ?? null,
+    density: opts.density ?? (doc.paper?.density as BomPaperDensity | undefined) ?? null,
+    hideMargin: opts.hideMargin ?? doc.paper?.hideMargin ?? null,
+  };
+}
+
+/** Merge tenant defaults with optional per-doc paper override. */
+export function mergePaperOptions(
+  tenant: BomPaperOptions,
+  docPaper?: { purpose?: string | null; industryPack?: string | null; tone?: string | null; density?: string | null; hideMargin?: boolean | null } | null,
+): BomPaperOptions {
+  return {
+    template: (docPaper?.purpose as BomPaperTemplateId | undefined) || tenant.template,
+    industryPack: (docPaper?.industryPack as BomIndustryPackId | undefined) || tenant.industryPack,
+    tone: (docPaper?.tone as BomPaperTone | undefined) || tenant.tone,
+    density: (docPaper?.density as BomPaperDensity | undefined) || tenant.density,
+    hideMargin: docPaper?.hideMargin ?? tenant.hideMargin,
   };
 }
 

@@ -53,6 +53,53 @@
   padding: 16px 18px 22px;
 }
 
+.bos .ims-bom-bank {
+  margin: 10px 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--bom-line);
+  border-radius: 8px;
+  background: var(--bom-soft);
+}
+.bos .ims-bom-bank > b {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bom-faint);
+  margin-bottom: 4px;
+}
+.bos .ims-bom-bank-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 11px;
+  color: var(--bom-ink);
+}
+.bos .ims-bom-scope {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 10px 0 8px;
+}
+.bos .ims-bom-scope b {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bom-faint);
+  margin-bottom: 2px;
+}
+.bos .ims-bom-scope p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--bom-ink);
+  white-space: pre-wrap;
+}
+@media (max-width: 720px) {
+  .bos .ims-bom-scope { grid-template-columns: 1fr; }
+}
+
 .ims-bom-layout.is-resizing {
   user-select: none;
   cursor: col-resize;

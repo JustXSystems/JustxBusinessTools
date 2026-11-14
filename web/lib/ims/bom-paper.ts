@@ -435,6 +435,33 @@ export function bomCustomerComposition(totals: BomTotals, hideMargin: boolean): 
   };
 }
 
+export type BomTaxBreakup = {
+  intraState: boolean;
+  taxTotal: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  halfPct: number;
+};
+
+/** Split BOM tax into CGST/SGST or IGST from seller vs site state. */
+export function bomTaxBreakup(
+  taxAmount: number,
+  taxPct: number,
+  sellerState?: string | null,
+  placeOfSupply?: string | null,
+): BomTaxBreakup {
+  const taxTotal = round2(taxAmount);
+  const a = String(sellerState ?? "").trim().toLowerCase();
+  const b = String(placeOfSupply ?? "").trim().toLowerCase();
+  const intraState = !a || !b || a === b;
+  const cgst = intraState ? round2(taxTotal / 2) : 0;
+  const sgst = intraState ? round2(taxTotal - cgst) : 0;
+  const igst = intraState ? 0 : taxTotal;
+  const halfPct = round2((Number(taxPct) || 0) / 2);
+  return { intraState, taxTotal, cgst, sgst, igst, halfPct };
+}
+
 /** Demo model for Settings picker previews — pack-aware sample lines. */
 export function sampleBomPaperModel(
   businessName = "Your business",
@@ -700,4 +727,32 @@ export function sampleBomPaperModel(
     },
     industryPack: pack,
   };
+}
+
+/** Optional commercial demo fields for settings preview models. */
+export function withCommercialSample<T extends Record<string, unknown>>(model: T): T & {
+  scopeOfSupply: string;
+  exclusions: string;
+  business: T extends { business: infer B } ? B & {
+    bankName: string;
+    bankBranch: string;
+    bankAccount: string;
+    bankIfsc: string;
+    bankUpi: string;
+  } : never;
+} {
+  const business = {
+    ...((model as { business?: Record<string, unknown> }).business ?? {}),
+    bankName: "HDFC Bank",
+    bankBranch: "MG Road",
+    bankAccount: "XXXX1234",
+    bankIfsc: "HDFC0001234",
+    bankUpi: "sales@example",
+  };
+  return {
+    ...model,
+    scopeOfSupply: "Supply of listed materials and standard commissioning as noted.",
+    exclusions: "Civil works, statutory fees, and extra cabling beyond schedule.",
+    business,
+  } as never;
 }

@@ -292,6 +292,9 @@ export function mapDoc(r: DocRow, lines?: BomDocLine[]) {
     payment_terms?: string | null;
     delivery_terms?: string | null;
     warranty_terms?: string | null;
+    scope_of_supply?: string | null;
+    exclusions?: string | null;
+    paper_json?: unknown;
   };
   return {
     id: r.id,
@@ -319,6 +322,9 @@ export function mapDoc(r: DocRow, lines?: BomDocLine[]) {
     paymentTerms: ext.payment_terms ?? null,
     deliveryTerms: ext.delivery_terms ?? null,
     warrantyTerms: ext.warranty_terms ?? null,
+    scopeOfSupply: ext.scope_of_supply ?? null,
+    exclusions: ext.exclusions ?? null,
+    paper: parseJsonObject(ext.paper_json),
     invoiceId: r.invoice_id,
     /** Set when converting to invoice. Both modes are supported. */
     invoiceConvertMode: convertModeOf(r.invoice_convert_mode),
@@ -531,6 +537,18 @@ const docInput = z.object({
   paymentTerms: optText(240),
   deliveryTerms: optText(240),
   warrantyTerms: optText(240),
+  scopeOfSupply: optText(4000),
+  exclusions: optText(4000),
+  paper: z
+    .object({
+      purpose: z.string().trim().max(32).optional(),
+      industryPack: z.string().trim().max(32).optional(),
+      tone: z.string().trim().max(16).optional(),
+      density: z.string().trim().max(16).optional(),
+      hideMargin: z.boolean().optional(),
+    })
+    .nullable()
+    .optional(),
   /** Selected optional-line keys (`string[]` or `{ key: boolean }`) used when exploding a package. */
   options: z.union([z.record(z.string().trim().min(1).max(64), z.boolean()), z.array(z.string().trim().min(1).max(64)).max(200)]).optional(),
   variables: z.record(z.string(), z.coerce.number()).optional(),
@@ -1052,6 +1070,12 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         phone: settings.phone,
         email: settings.email,
         logoUrl: brand.logoUrl ?? null,
+        accent: brand.accent ?? null,
+        bankName: brand.bankName ?? null,
+        bankBranch: brand.bankBranch ?? null,
+        bankAccount: brand.bankAccount ?? null,
+        bankIfsc: brand.bankIfsc ?? null,
+        bankUpi: brand.bankUpi ?? null,
       },
     });
   });
@@ -1138,11 +1162,13 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         `INSERT INTO ims_bom_docs
           (id, tenant_id, package_id, package_name, doc_no, status, doc_date, capacity_label, title,
            customer_name, location, project_ref, party_id, margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total,
-           notes, prepared_by, valid_until, payment_terms, delivery_terms, warranty_terms, created_by, created_by_name)
+           notes, prepared_by, valid_until, payment_terms, delivery_terms, warranty_terms,
+           scope_of_supply, exclusions, paper_json, created_by, created_by_name)
          VALUES
           (:id, :tenantId, :packageId, :packageName, :docNo, 'draft', :docDate, :capacityLabel, :title,
            :customerName, :location, :projectRef, :partyId, :marginPct, :taxPct, :materialsTotal, :marginAmount, :taxAmount, :grandTotal,
-           :notes, :preparedBy, :validUntil, :paymentTerms, :deliveryTerms, :warrantyTerms, :createdBy, :createdByName)`,
+           :notes, :preparedBy, :validUntil, :paymentTerms, :deliveryTerms, :warrantyTerms,
+           :scopeOfSupply, :exclusions, CAST(:paper AS JSON), :createdBy, :createdByName)`,
         {
           id,
           tenantId: actor.tenantId,
@@ -1168,6 +1194,9 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           paymentTerms: body.paymentTerms ?? null,
           deliveryTerms: body.deliveryTerms ?? null,
           warrantyTerms: body.warrantyTerms ?? null,
+          scopeOfSupply: body.scopeOfSupply ?? null,
+          exclusions: body.exclusions ?? null,
+          paper: body.paper ? JSON.stringify(body.paper) : null,
           createdBy: actor.userId,
           createdByName: actor.name ?? actor.email ?? null,
         },
@@ -1226,7 +1255,8 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           margin_pct = :marginPct, tax_pct = :taxPct,
           materials_total = :materialsTotal, margin_amount = :marginAmount, tax_amount = :taxAmount, grand_total = :grandTotal,
           notes = :notes, prepared_by = :preparedBy,
-          valid_until = :validUntil, payment_terms = :paymentTerms, delivery_terms = :deliveryTerms, warranty_terms = :warrantyTerms
+          valid_until = :validUntil, payment_terms = :paymentTerms, delivery_terms = :deliveryTerms, warranty_terms = :warrantyTerms,
+          scope_of_supply = :scopeOfSupply, exclusions = :exclusions, paper_json = CAST(:paper AS JSON)
          WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`,
         {
           id,
@@ -1251,6 +1281,16 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           paymentTerms: body.paymentTerms ?? null,
           deliveryTerms: body.deliveryTerms ?? null,
           warrantyTerms: body.warrantyTerms ?? null,
+          scopeOfSupply: body.scopeOfSupply ?? null,
+          exclusions: body.exclusions ?? null,
+          paper:
+            body.paper !== undefined
+              ? body.paper
+                ? JSON.stringify(body.paper)
+                : null
+              : existing.paper
+                ? JSON.stringify(existing.paper)
+                : null,
         },
       );
       await replaceDocLines(conn, actor.tenantId, id, lines);

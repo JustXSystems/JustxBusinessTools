@@ -7,6 +7,7 @@ import {
   bomCustomerComposition,
   bomIndustryPackMeta,
   bomPaperPurposeMeta,
+  bomTaxBreakup,
   groupBomSections,
   lineKindCode,
   normalizeBomIndustryPack,
@@ -77,6 +78,18 @@ describe("bom-paper purposes", () => {
     expect(hidden.margin).toBe(0);
     expect(hidden.materials).toBe(c.subtotal);
     expect(hidden.grand).toBe(c.grand);
+  });
+
+  it("splits tax into CGST/SGST or IGST from place of supply", () => {
+    const intra = bomTaxBreakup(1800, 18, "Karnataka", "Karnataka");
+    expect(intra.intraState).toBe(true);
+    expect(intra.cgst).toBe(900);
+    expect(intra.sgst).toBe(900);
+    expect(intra.igst).toBe(0);
+    const inter = bomTaxBreakup(1800, 18, "Karnataka", "Maharashtra");
+    expect(inter.intraState).toBe(false);
+    expect(inter.igst).toBe(1800);
+    expect(inter.cgst).toBe(0);
   });
 
   it("maps line kinds to compact ledger codes", () => {

@@ -20,6 +20,7 @@ import {
   normalizeBomPaperPurpose,
   normalizeBomPaperTone,
   sampleBomPaperModel,
+  withCommercialSample,
 } from "@/lib/ims/bom-paper";
 import { GST_RATES, inr } from "@/lib/ims/format";
 import { GST_STATES, MONTHS, PREFIX_FIELDS, docNoSample, fiscalYearLabel, gstinPlace } from "@/lib/ims/settings";
@@ -152,7 +153,7 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
   const purposeMeta = bomPaperPurposeMeta(purpose);
   const packMeta = bomIndustryPackMeta(pack);
   const previewModel = {
-    ...sampleBomPaperModel(draft.businessName || session.brand?.name || "Your business", pack),
+    ...withCommercialSample(sampleBomPaperModel(draft.businessName || session.brand?.name || "Your business", pack)),
     template: purpose,
     industryPack: pack,
     tone,

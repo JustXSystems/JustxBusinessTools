@@ -1,11 +1,12 @@
 "use client";
 
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
 import { dateLabel, inrExact, qtyText, rupeesInWords } from "@/lib/ims/format";
 import {
   BOM_COLUMN_LABEL,
   bomCustomerComposition,
   bomIndustryPackMeta,
+  bomTaxBreakup,
   groupBomSections,
   lineAmount,
   lineIdentityBits,
@@ -63,13 +64,17 @@ function PaperShell({
 }) {
   const b = model.business;
   const stamp = stampOf(model.status);
+  const accent = model.business.accent?.trim();
   return (
     <article
       className={paperClass(model, purpose)}
       data-bom-tpl={purpose}
       data-bom-pack={normalizeBomIndustryPack(model.industryPack)}
       aria-label="Bill of materials"
-      style={{ position: "static" }}
+      style={{
+        position: "static",
+        ...(accent ? ({ ["--bom-accent"]: accent } as CSSProperties) : null),
+      }}
     >
       {!hideDefaultTop ? (
         <div className="bos-inv-paper-top ims-bom-sheet-top">
@@ -192,7 +197,9 @@ function SignBlock({ model, left = "Customer acceptance" }: { model: BomPaperMod
 function FootMatter({ model, signLeft }: { model: BomPaperModel; signLeft?: string }) {
   return (
     <>
+      <ScopeBlock model={model} />
       <TermsGrid model={model} />
+      <BankBlock model={model} />
       {model.notes ? <div className="bos-inv-notes">{model.notes}</div> : null}
       <SignBlock model={model} left={signLeft} />
     </>
@@ -202,6 +209,7 @@ function FootMatter({ model, signLeft }: { model: BomPaperModel; signLeft?: stri
 function CommercialTotals({ model }: { model: BomPaperModel }) {
   const hideMargin = Boolean(model.hideMargin);
   const c = bomCustomerComposition(model.totals, hideMargin);
+  const tax = bomTaxBreakup(c.tax, model.taxPct, model.business.state, model.location);
   return (
     <>
       <div className="bos-inv-totals">
@@ -216,13 +224,26 @@ function CommercialTotals({ model }: { model: BomPaperModel }) {
           </div>
         ) : null}
         <div className="bos-inv-totals-row">
-          <span>Subtotal</span>
+          <span>Taxable</span>
           <span>{inrExact(c.subtotal)}</span>
         </div>
-        <div className="bos-inv-totals-row">
-          <span>Tax{model.taxPct ? ` (${model.taxPct}%)` : ""}</span>
-          <span>{inrExact(c.tax)}</span>
-        </div>
+        {tax.intraState ? (
+          <>
+            <div className="bos-inv-totals-row">
+              <span>CGST{tax.halfPct ? ` (${tax.halfPct}%)` : ""}</span>
+              <span>{inrExact(tax.cgst)}</span>
+            </div>
+            <div className="bos-inv-totals-row">
+              <span>SGST{tax.halfPct ? ` (${tax.halfPct}%)` : ""}</span>
+              <span>{inrExact(tax.sgst)}</span>
+            </div>
+          </>
+        ) : (
+          <div className="bos-inv-totals-row">
+            <span>IGST{model.taxPct ? ` (${model.taxPct}%)` : ""}</span>
+            <span>{inrExact(tax.igst)}</span>
+          </div>
+        )}
         <div className="bos-inv-totals-row is-total">
           <span>Total</span>
           <span>{inrExact(c.grand)}</span>
@@ -230,6 +251,45 @@ function CommercialTotals({ model }: { model: BomPaperModel }) {
       </div>
       <div className="ims-paper-words">{rupeesInWords(c.grand)}</div>
     </>
+  );
+}
+
+function BankBlock({ model }: { model: BomPaperModel }) {
+  const b = model.business;
+  const hasBank = Boolean(b.bankAccount || b.bankUpi || b.bankName);
+  if (!hasBank) return null;
+  return (
+    <div className="ims-bom-bank" aria-label="Bank details">
+      <b>Bank / payment</b>
+      <div className="ims-bom-bank-grid">
+        {b.bankName ? <span>{b.bankName}{b.bankBranch ? ` · ${b.bankBranch}` : ""}</span> : null}
+        {b.bankAccount ? <span>A/C {b.bankAccount}</span> : null}
+        {b.bankIfsc ? <span>IFSC {b.bankIfsc}</span> : null}
+        {b.bankUpi ? <span>UPI {b.bankUpi}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function ScopeBlock({ model }: { model: BomPaperModel }) {
+  const scope = model.scopeOfSupply?.trim();
+  const exclusions = model.exclusions?.trim();
+  if (!scope && !exclusions) return null;
+  return (
+    <div className="ims-bom-scope" aria-label="Scope and exclusions">
+      {scope ? (
+        <div>
+          <b>Scope of supply</b>
+          <p>{scope}</p>
+        </div>
+      ) : null}
+      {exclusions ? (
+        <div>
+          <b>Exclusions</b>
+          <p>{exclusions}</p>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -385,6 +445,7 @@ function ScheduleTable({
 function InvestmentBar({ model }: { model: BomPaperModel }) {
   const hideMargin = Boolean(model.hideMargin);
   const c = bomCustomerComposition(model.totals, hideMargin);
+  const tax = bomTaxBreakup(c.tax, model.taxPct, model.business.state, model.location);
   const pack = bomIndustryPackMeta(model.industryPack);
   return (
     <div className="ims-bom-aether-totals-bar" aria-label="Investment summary">
@@ -398,10 +459,23 @@ function InvestmentBar({ model }: { model: BomPaperModel }) {
           <b>{inrExact(c.margin)}</b>
         </div>
       ) : null}
-      <div>
-        <span>Tax{model.taxPct ? ` ${model.taxPct}%` : ""}</span>
-        <b>{inrExact(c.tax)}</b>
-      </div>
+      {tax.intraState ? (
+        <>
+          <div>
+            <span>CGST{tax.halfPct ? ` ${tax.halfPct}%` : ""}</span>
+            <b>{inrExact(tax.cgst)}</b>
+          </div>
+          <div>
+            <span>SGST{tax.halfPct ? ` ${tax.halfPct}%` : ""}</span>
+            <b>{inrExact(tax.sgst)}</b>
+          </div>
+        </>
+      ) : (
+        <div>
+          <span>IGST{model.taxPct ? ` ${model.taxPct}%` : ""}</span>
+          <b>{inrExact(tax.igst)}</b>
+        </div>
+      )}
       <div className="is-grand">
         <span>Total</span>
         <b>{inrExact(c.grand)}</b>

@@ -38,6 +38,11 @@ type PublicBusiness = {
   phone?: string | null;
   email?: string | null;
   logoUrl?: string | null;
+  bankName?: string | null;
+  bankBranch?: string | null;
+  bankAccount?: string | null;
+  bankIfsc?: string | null;
+  bankUpi?: string | null;
 };
 
 type PublicBom = {
@@ -54,6 +59,8 @@ type PublicBom = {
   paymentTerms?: string | null;
   deliveryTerms?: string | null;
   warrantyTerms?: string | null;
+  scopeOfSupply?: string | null;
+  exclusions?: string | null;
   notes: string | null;
   preparedBy?: string | null;
   marginPct?: number;
@@ -93,6 +100,11 @@ function toPaperModel(doc: PublicBom): BomPaperModel {
       phone: business.phone ?? null,
       email: business.email ?? null,
       logoUrl: business.logoUrl ?? null,
+      bankName: business.bankName ?? null,
+      bankBranch: business.bankBranch ?? null,
+      bankAccount: business.bankAccount ?? null,
+      bankIfsc: business.bankIfsc ?? null,
+      bankUpi: business.bankUpi ?? null,
     },
     docNo: doc.docNo,
     docDate: doc.docDate,
@@ -109,6 +121,8 @@ function toPaperModel(doc: PublicBom): BomPaperModel {
     paymentTerms: doc.paymentTerms ?? null,
     deliveryTerms: doc.deliveryTerms ?? null,
     warrantyTerms: doc.warrantyTerms ?? null,
+    scopeOfSupply: doc.scopeOfSupply ?? null,
+    exclusions: doc.exclusions ?? null,
     marginPct: Number(doc.marginPct) || 0,
     taxPct: Number(doc.taxPct) || 0,
     template: normalizeBomPaperTemplate(doc.template) as BomPaperTemplateId,
