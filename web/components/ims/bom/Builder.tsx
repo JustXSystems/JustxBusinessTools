@@ -27,6 +27,7 @@ import type { ImsItem } from "@/lib/ims/api";
 import { inr, inrExact, stampLabel } from "@/lib/ims/format";
 import { formatCatalogEnsureSummary, exportBomExcel } from "@/lib/ims/bom-excel";
 import { ensureBomPackageCatalog, ensureStockLinesForSave } from "@/lib/ims/ensure-catalog";
+import { canRevokeBomProposal, proposalShareButtonLabel, shareBomProposal } from "@/lib/ims/bom-proposal-share";
 import { purchase } from "@/lib/ims/purchase";
 import { withBasePath } from "@/lib/base-path";
 import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
@@ -368,26 +369,40 @@ function BomViewer({
                 variant="ghost"
                 disabled={Boolean(busy)}
                 onClick={async () => {
-                  const out = await run("proposal", () => bom.createProposal(doc.id), { success: "Proposal link ready" });
-                  if (!out) return;
-                  // Production hosts under NEXT_PUBLIC_BASE_PATH (e.g. /jbt), same as /q/{token} quotes.
-                  const path = withBasePath(`/bom/proposal/${out.token}`);
-                  const url = `${window.location.origin}${path}`;
-                  const wa = `https://wa.me/?text=${encodeURIComponent(`Please review our materials proposal: ${url}`)}`;
-                  window.prompt("Share this proposal link (copied to clipboard if supported):", url);
                   try {
-                    await navigator.clipboard.writeText(url);
+                    const shared = await shareBomProposal(doc, async (id, body) => {
+                      const out = await run("proposal", () => bom.createProposal(id, body), {
+                        success: body?.renew ? "New proposal round ready" : "Proposal link ready",
+                        refresh: false,
+                      });
+                      if (!out) throw new Error("Could not prepare proposal link");
+                      return out;
+                    });
+                    if (!shared) return;
+                    window.prompt(
+                      shared.reused
+                        ? "Existing proposal link (prior status kept):"
+                        : shared.renewed
+                          ? "New decision-round link:"
+                          : "Share this proposal link:",
+                      shared.url,
+                    );
+                    try {
+                      await navigator.clipboard.writeText(shared.url);
+                    } catch {
+                      /* ignore */
+                    }
+                    if (window.confirm("Open WhatsApp share?")) window.open(shared.whatsappUrl, "_blank", "noopener,noreferrer");
+                    reloadAll();
                   } catch {
-                    /* ignore */
+                    /* run() already toasted API errors */
                   }
-                  if (window.confirm("Open WhatsApp share?")) window.open(wa, "_blank", "noopener,noreferrer");
-                  reloadAll();
                 }}
               >
-                {doc.proposalStatus && doc.proposalStatus !== "revoked" ? "Reshare proposal" : "Share proposal"}
+                {proposalShareButtonLabel(doc.proposalStatus)}
               </Button>
             ) : null}
-            {confirmed && doc.proposalToken && doc.proposalStatus && doc.proposalStatus !== "revoked" ? (
+            {confirmed && canRevokeBomProposal(doc.proposalStatus) ? (
               <Button
                 variant="ghost"
                 disabled={Boolean(busy)}
@@ -778,7 +793,7 @@ function BomViewer({
               </>
             ) : null}
           </dl>
-          {doc.proposalToken && doc.proposalStatus !== "revoked" ? (
+          {doc.proposalToken && doc.proposalStatus && doc.proposalStatus !== "revoked" ? (
             <div className="ims-toolbar" style={{ marginTop: 10, marginBottom: 0 }}>
               <Button
                 size="sm"
@@ -786,7 +801,12 @@ function BomViewer({
                 onClick={async () => {
                   const path = withBasePath(`/bom/proposal/${doc.proposalToken}`);
                   const url = `${window.location.origin}${path}`;
-                  window.prompt("Customer proposal link:", url);
+                  window.prompt(
+                    doc.proposalStatus === "accepted" || doc.proposalStatus === "rejected"
+                      ? "Existing proposal link (decision already recorded):"
+                      : "Customer proposal link:",
+                    url,
+                  );
                   try {
                     await navigator.clipboard.writeText(url);
                   } catch {

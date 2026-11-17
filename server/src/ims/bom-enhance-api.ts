@@ -22,6 +22,7 @@ import {
   matchRateCardToBomLines,
   mergeSerialNotes,
   normalizeOptionSelection,
+  planProposalShare,
   proposalWhatsAppUrl,
   remainingIssueQty,
   rotateAlternates,
@@ -57,6 +58,11 @@ export type BomEnhanceDoc = {
   invoiceConvertMode?: string | null;
   variables?: Record<string, unknown> | null;
   options?: Record<string, unknown> | null;
+  proposalToken?: string | null;
+  proposalStatus?: string | null;
+  proposalSentAt?: string | null;
+  proposalRespondedAt?: string | null;
+  proposalResponseNote?: string | null;
   lines?: BomEnhanceDocLine[];
 };
 
@@ -425,9 +431,44 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
     requirePerm(res, "bom");
     const actor = actorOf(res);
     const id = String(req.params.id);
+    const body = parse(z.object({ renew: z.boolean().optional() }).default({}), req.body ?? {});
     const doc = await loaders.loadDoc(deps.db, actor.tenantId, id);
     if (!doc) throw notFound("BOM document not found");
     if (doc.status !== "confirmed") throw conflict("Confirm the BOM before sharing a proposal");
+
+    const plan = planProposalShare(doc.proposalStatus, doc.proposalToken, Boolean(body.renew));
+    const origin = String(req.headers.origin || "").replace(/\/$/, "");
+    // Match web withBasePath (/jbt on production justxsystems.com).
+    const baseRaw = (process.env.WEB_BASE_PATH ?? process.env.NEXT_PUBLIC_BASE_PATH ?? "").trim();
+    const basePath = !baseRaw || baseRaw === "/" ? "" : `/${baseRaw.replace(/^\/+|\/+$/g, "")}`;
+    const urlsFor = (token: string) => {
+      const proposalPath = `${basePath}/bom/proposal/${token}`;
+      const proposalUrl = origin ? `${origin}${proposalPath}` : proposalPath;
+      return {
+        token,
+        proposalPath,
+        proposalUrl,
+        whatsappUrl: proposalWhatsAppUrl(proposalUrl, doc.customerName),
+      };
+    };
+
+    if (plan.action === "block_accepted") {
+      throw conflict(
+        "This proposal was already accepted by the customer. Copy the existing link, or renew for a new decision round (that clears the previous acceptance).",
+      );
+    }
+
+    if (plan.action === "reuse" && doc.proposalToken) {
+      res.json({
+        ...urlsFor(doc.proposalToken),
+        reused: true,
+        renewed: false,
+        previousStatus: plan.previousStatus,
+        doc,
+      });
+      return;
+    }
+
     const token = randomBytes(24).toString("hex");
     await exec(
       deps.db,
@@ -436,24 +477,21 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
        WHERE tenant_id = :tenantId AND id = :id`,
       { tenantId: actor.tenantId, id, token },
     );
-    const origin = String(req.headers.origin || "").replace(/\/$/, "");
-    // Match web withBasePath (/jbt on production justxsystems.com).
-    const baseRaw = (process.env.WEB_BASE_PATH ?? process.env.NEXT_PUBLIC_BASE_PATH ?? "").trim();
-    const basePath = !baseRaw || baseRaw === "/" ? "" : `/${baseRaw.replace(/^\/+|\/+$/g, "")}`;
-    const proposalPath = `${basePath}/bom/proposal/${token}`;
-    const proposalUrl = origin ? `${origin}${proposalPath}` : proposalPath;
+    const renewed = plan.action === "renew";
     await recordEvent(deps, actor, {
-      type: "bom.doc.proposal_sent",
+      type: renewed ? "bom.doc.proposal_renewed" : "bom.doc.proposal_sent",
       entityType: "bom_doc",
       entityId: id,
-      summary: `Proposal link created for ${doc.docNo}`,
-      payload: { token },
+      summary: renewed
+        ? `Proposal link renewed for ${doc.docNo} (was ${plan.previousStatus})`
+        : `Proposal link created for ${doc.docNo}`,
+      payload: { token, previousStatus: plan.previousStatus, renewed },
     });
     res.json({
-      token,
-      proposalPath,
-      proposalUrl,
-      whatsappUrl: proposalWhatsAppUrl(proposalUrl, doc.customerName),
+      ...urlsFor(token),
+      reused: false,
+      renewed,
+      previousStatus: plan.previousStatus,
       doc: await loaders.loadDoc(deps.db, actor.tenantId, id),
     });
   });
@@ -462,12 +500,36 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
     requirePerm(res, "bom");
     const actor = actorOf(res);
     const id = String(req.params.id);
-    if (!(await loaders.loadDoc(deps.db, actor.tenantId, id))) throw notFound("BOM document not found");
+    const existing = await loaders.loadDoc(deps.db, actor.tenantId, id);
+    if (!existing) throw notFound("BOM document not found");
+    if (!existing.proposalToken) throw conflict("No proposal link to revoke");
+    const status = existing.proposalStatus;
+    if (status === "accepted") {
+      throw conflict("This proposal was already accepted. Revoke is only for open links — start a new decision round instead if needed.");
+    }
+    if (status === "rejected") {
+      throw conflict("This proposal was already rejected. Share a new round if you want another customer decision.");
+    }
+    if (status === "revoked") {
+      throw conflict("Proposal link is already revoked");
+    }
+    if (status !== "sent" && status !== "viewed") {
+      throw conflict("Only open proposal links (sent or viewed) can be revoked");
+    }
     await exec(
       deps.db,
-      `UPDATE ims_bom_docs SET proposal_status = 'revoked' WHERE tenant_id = :tenantId AND id = :id AND proposal_token IS NOT NULL`,
+      `UPDATE ims_bom_docs SET proposal_status = 'revoked'
+       WHERE tenant_id = :tenantId AND id = :id AND proposal_token IS NOT NULL
+         AND proposal_status IN ('sent', 'viewed')`,
       { tenantId: actor.tenantId, id },
     );
+    await recordEvent(deps, actor, {
+      type: "bom.doc.proposal_revoked",
+      entityType: "bom_doc",
+      entityId: id,
+      summary: `Proposal link revoked for ${existing.docNo}`,
+      payload: { previousStatus: status },
+    });
     res.json({ doc: await loaders.loadDoc(deps.db, actor.tenantId, id) });
   });
 

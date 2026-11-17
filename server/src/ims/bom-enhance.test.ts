@@ -16,6 +16,7 @@ import {
   mergeSerialNotes,
   normalizeOptionSelection,
   pickAlternateWhenShort,
+  planProposalShare,
   proposalWhatsAppUrl,
   remainingIssueQty,
   rotateAlternates,
@@ -166,6 +167,18 @@ describe("proposalWhatsAppUrl", () => {
     const url = proposalWhatsAppUrl("https://example.com/p/abc", "Riya");
     expect(url.startsWith("https://wa.me/?text=")).toBe(true);
     expect(decodeURIComponent(url.split("text=")[1]!)).toContain("Riya");
+  });
+});
+
+describe("planProposalShare", () => {
+  it("reuses open links and blocks silent wipe of acceptance", () => {
+    expect(planProposalShare("sent", "tok", false)).toEqual({ action: "reuse", previousStatus: "sent" });
+    expect(planProposalShare("viewed", "tok", false)).toEqual({ action: "reuse", previousStatus: "viewed" });
+    expect(planProposalShare("accepted", "tok", false)).toEqual({ action: "block_accepted", previousStatus: "accepted" });
+    expect(planProposalShare("accepted", "tok", true)).toEqual({ action: "renew", previousStatus: "accepted" });
+    expect(planProposalShare("rejected", null, false).action).toBe("create");
+    expect(planProposalShare("revoked", "tok", false).action).toBe("create");
+    expect(planProposalShare(null, null, false).action).toBe("create");
   });
 });
 

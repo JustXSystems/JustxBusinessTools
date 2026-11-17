@@ -29,7 +29,7 @@ import {
   type BomHealth,
 } from "@/lib/ims/bom";
 import { ims } from "@/lib/ims/api";
-import { withBasePath } from "@/lib/base-path";
+import { proposalShareButtonLabel, shareBomProposal } from "@/lib/ims/bom-proposal-share";
 import { dateLabel, downloadCsv, inrCompact, inrExact, PERIOD_OPTIONS, stampLabel, type BadgeView } from "@/lib/ims/format";
 import { PeriodSelect, type PeriodOrAll } from "../finance/shared";
 import { Loaded, PageHeader, Stack, StatusBadge, useIms, useImsAction, useImsData } from "../core";
@@ -317,19 +317,31 @@ export function BomList({
   };
 
   const shareProposal = async (d: BomDoc) => {
-    if (d.status !== "confirmed") {
-      window.alert("Confirm the BOM before sharing a proposal link.");
-      return;
-    }
-    const out = await run("proposal", () => bom.createProposal(d.id), { success: "Proposal link ready" });
-    if (!out) return;
-    const path = withBasePath(`/bom/proposal/${out.token}`);
-    const url = `${window.location.origin}${path}`;
-    window.prompt("Share this proposal link:", url);
     try {
-      await navigator.clipboard.writeText(url);
+      const shared = await shareBomProposal(d, async (id, body) => {
+        const out = await run("proposal", () => bom.createProposal(id, body), {
+          success: body?.renew ? "New proposal round ready" : "Proposal link ready",
+          refresh: false,
+        });
+        if (!out) throw new Error("Could not prepare proposal link");
+        return out;
+      });
+      if (!shared) return;
+      window.prompt(
+        shared.reused
+          ? "Existing proposal link (prior status kept):"
+          : shared.renewed
+            ? "New decision-round link:"
+            : "Share this proposal link:",
+        shared.url,
+      );
+      try {
+        await navigator.clipboard.writeText(shared.url);
+      } catch {
+        /* ignore */
+      }
     } catch {
-      /* ignore */
+      /* run() already toasted API errors */
     }
   };
 
@@ -393,8 +405,20 @@ export function BomList({
         </Button>
       ) : null}
       {d.status === "confirmed" ? (
-        <Button size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => void shareProposal(d)} title="Copy proposal share link">
-          Share
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={Boolean(busy)}
+          onClick={() => void shareProposal(d)}
+          title={
+            d.proposalStatus === "accepted"
+              ? "Accepted — copy link or start a new decision round"
+              : d.proposalStatus === "sent" || d.proposalStatus === "viewed"
+                ? "Copy existing proposal link (keeps current status)"
+                : "Share proposal link"
+          }
+        >
+          {proposalShareButtonLabel(d.proposalStatus)}
         </Button>
       ) : null}
       {d.status === "confirmed" && !d.invoiceId && canSales ? (

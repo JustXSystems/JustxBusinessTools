@@ -546,6 +546,37 @@ export function isProposalStatus(v: string | null | undefined): v is "sent" | "v
   return v === "sent" || v === "viewed" || v === "accepted" || v === "rejected" || v === "revoked";
 }
 
+/**
+ * Share / reshare policy for customer proposal links.
+ * - Open links (sent/viewed): reuse unless renew is requested.
+ * - Accepted: block unless renew (new decision round) — never silently wipe approval.
+ * - Rejected / revoked / missing: create a fresh link.
+ */
+export type ProposalSharePlan =
+  | { action: "reuse"; previousStatus: "sent" | "viewed" }
+  | { action: "create"; previousStatus: string | null }
+  | { action: "renew"; previousStatus: "sent" | "viewed" | "accepted" | "rejected" | "revoked" | string }
+  | { action: "block_accepted"; previousStatus: "accepted" };
+
+export function planProposalShare(
+  status: string | null | undefined,
+  token: string | null | undefined,
+  renew = false,
+): ProposalSharePlan {
+  const hasToken = Boolean(token?.trim());
+  const s = status?.trim() || null;
+  if (s === "accepted" && hasToken) {
+    return renew ? { action: "renew", previousStatus: "accepted" } : { action: "block_accepted", previousStatus: "accepted" };
+  }
+  if ((s === "sent" || s === "viewed") && hasToken) {
+    return renew ? { action: "renew", previousStatus: s } : { action: "reuse", previousStatus: s };
+  }
+  if (renew && hasToken && (s === "rejected" || s === "revoked")) {
+    return { action: "renew", previousStatus: s };
+  }
+  return { action: "create", previousStatus: s };
+}
+
 /* ---------- Rate card matching ---------- */
 
 export type RateCardMatchSource = {

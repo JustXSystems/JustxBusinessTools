@@ -564,8 +564,17 @@ export const bom = {
       entityType,
       entityId,
     }),
-  createProposal: (id: string) =>
-    post<{ token: string; proposalPath: string; proposalUrl: string; whatsappUrl: string; doc: BomDoc }>(`/bom/docs/${id}/proposal`),
+  createProposal: (id: string, body?: { renew?: boolean }) =>
+    post<{
+      token: string;
+      proposalPath: string;
+      proposalUrl: string;
+      whatsappUrl: string;
+      reused?: boolean;
+      renewed?: boolean;
+      previousStatus?: string | null;
+      doc: BomDoc;
+    }>(`/bom/docs/${id}/proposal`, body ?? {}),
   revokeProposal: (id: string) => post<{ doc: BomDoc }>(`/bom/docs/${id}/proposal/revoke`),
   createPosFromShortfall: (id: string) =>
     post<{ orders: Array<{ id: string; poNo: string; supplierName: string; status: string; grandTotal?: number }> }>(`/bom/docs/${id}/create-pos`),
