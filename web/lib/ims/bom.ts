@@ -188,10 +188,24 @@ export type BomDoc = {
   stockIssueCount: number;
   variables?: Record<string, unknown> | null;
   options?: Record<string, unknown> | null;
+  /** Customer share-link lifecycle: sent → viewed → accepted|rejected (or revoked). */
+  proposalToken?: string | null;
+  proposalStatus?: "sent" | "viewed" | "accepted" | "rejected" | "revoked" | string | null;
+  proposalSentAt?: string | null;
+  proposalRespondedAt?: string | null;
+  proposalResponseNote?: string | null;
   createdByName: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   lines?: BomDocLine[];
+};
+
+export const BOM_PROPOSAL_STATUS_LABEL: Record<string, string> = {
+  sent: "Sent",
+  viewed: "Viewed",
+  accepted: "Accepted",
+  rejected: "Rejected",
+  revoked: "Revoked",
 };
 
 export type BomDocLineInput = {

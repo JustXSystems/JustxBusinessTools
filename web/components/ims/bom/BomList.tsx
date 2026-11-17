@@ -22,6 +22,7 @@ import {
 import {
   BOM_DOC_STATUS_LABEL,
   BOM_INVOICE_CONVERT_LABEL,
+  BOM_PROPOSAL_STATUS_LABEL,
   bom,
   type BomDoc,
   type BomDocStatus,
@@ -122,8 +123,27 @@ function BomSortHeader({ label, active, onClick, align }: { label: string; activ
 }
 
 function ProgressBadges({ d }: { d: BomDoc }) {
+  const proposal = d.proposalStatus;
+  const proposalTone =
+    proposal === "accepted" ? "emerald" : proposal === "rejected" || proposal === "revoked" ? "coral" : proposal ? "amber" : null;
   return (
     <span className="ims-bom-list-flow">
+      {proposal && proposalTone ? (
+        <Badge
+          tone={proposalTone}
+          title={
+            d.proposalResponseNote
+              ? d.proposalResponseNote
+              : d.proposalRespondedAt
+                ? `Responded ${d.proposalRespondedAt}`
+                : d.proposalSentAt
+                  ? `Sent ${d.proposalSentAt}`
+                  : undefined
+          }
+        >
+          {BOM_PROPOSAL_STATUS_LABEL[proposal] ?? proposal}
+        </Badge>
+      ) : null}
       {d.invoiceId ? (
         <Badge tone="blue" title={d.invoiceConvertMode ? BOM_INVOICE_CONVERT_LABEL[d.invoiceConvertMode] : undefined}>
           Invoiced
@@ -136,7 +156,7 @@ function ProgressBadges({ d }: { d: BomDoc }) {
       ) : d.status === "confirmed" ? (
         <Badge tone="amber">Needs stock</Badge>
       ) : null}
-      {!d.invoiceId && !d.stockIssuedAt && d.status !== "confirmed" ? <span className="ims-faint">—</span> : null}
+      {!proposal && !d.invoiceId && !d.stockIssuedAt && d.status !== "confirmed" ? <span className="ims-faint">—</span> : null}
     </span>
   );
 }
