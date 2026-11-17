@@ -9,6 +9,7 @@ import {
   BOM_INVOICE_CONVERT_MODES,
   BOM_LINE_KIND_LABEL,
   BOM_LINE_KINDS,
+  BOM_PROPOSAL_STATUS_LABEL,
   bom,
   computeBomTotals,
   inferBaseQty,
@@ -23,7 +24,7 @@ import {
   type BomPackage,
 } from "@/lib/ims/bom";
 import type { ImsItem } from "@/lib/ims/api";
-import { inr, inrExact } from "@/lib/ims/format";
+import { inr, inrExact, stampLabel } from "@/lib/ims/format";
 import { formatCatalogEnsureSummary, exportBomExcel } from "@/lib/ims/bom-excel";
 import { ensureBomPackageCatalog, ensureStockLinesForSave } from "@/lib/ims/ensure-catalog";
 import { purchase } from "@/lib/ims/purchase";
@@ -383,7 +384,20 @@ function BomViewer({
                   reloadAll();
                 }}
               >
-                Share proposal
+                {doc.proposalStatus && doc.proposalStatus !== "revoked" ? "Reshare proposal" : "Share proposal"}
+              </Button>
+            ) : null}
+            {confirmed && doc.proposalToken && doc.proposalStatus && doc.proposalStatus !== "revoked" ? (
+              <Button
+                variant="ghost"
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  if (!window.confirm("Revoke the customer share link? They will no longer be able to open or respond.")) return;
+                  const out = await run("proposal-revoke", () => bom.revokeProposal(doc.id), { success: "Proposal link revoked" });
+                  if (out) reloadAll();
+                }}
+              >
+                Revoke link
               </Button>
             ) : null}
             {confirmed && availability.data?.hasShortfall && can("po") ? (
@@ -717,6 +731,75 @@ function BomViewer({
         }
         preview={<BomPaper model={model} />}
       />
+      {confirmed && doc.proposalStatus ? (
+        <Card interactive={false} className="ims-bom-proposal-status">
+          <div className="ims-bom-proposal-status-head">
+            <Badge
+              tone={
+                doc.proposalStatus === "accepted"
+                  ? "emerald"
+                  : doc.proposalStatus === "rejected" || doc.proposalStatus === "revoked"
+                    ? "coral"
+                    : "amber"
+              }
+            >
+              {BOM_PROPOSAL_STATUS_LABEL[doc.proposalStatus] ?? doc.proposalStatus}
+            </Badge>
+            <strong>Customer proposal</strong>
+          </div>
+          <p className="ims-faint" style={{ margin: "6px 0 0" }}>
+            {doc.proposalStatus === "sent"
+              ? "Link shared — waiting for the customer to open it."
+              : doc.proposalStatus === "viewed"
+                ? "Customer opened the link — waiting for accept or reject."
+                : doc.proposalStatus === "accepted"
+                  ? "Customer accepted this materials proposal."
+                  : doc.proposalStatus === "rejected"
+                    ? "Customer rejected this materials proposal."
+                    : "Share link was revoked."}
+          </p>
+          <dl className="ims-bom-proposal-status-meta">
+            {doc.proposalSentAt ? (
+              <>
+                <dt>Sent</dt>
+                <dd>{stampLabel(doc.proposalSentAt)}</dd>
+              </>
+            ) : null}
+            {doc.proposalRespondedAt ? (
+              <>
+                <dt>Responded</dt>
+                <dd>{stampLabel(doc.proposalRespondedAt)}</dd>
+              </>
+            ) : null}
+            {doc.proposalResponseNote ? (
+              <>
+                <dt>Note</dt>
+                <dd>{doc.proposalResponseNote}</dd>
+              </>
+            ) : null}
+          </dl>
+          {doc.proposalToken && doc.proposalStatus !== "revoked" ? (
+            <div className="ims-toolbar" style={{ marginTop: 10, marginBottom: 0 }}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => {
+                  const path = withBasePath(`/bom/proposal/${doc.proposalToken}`);
+                  const url = `${window.location.origin}${path}`;
+                  window.prompt("Customer proposal link:", url);
+                  try {
+                    await navigator.clipboard.writeText(url);
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                Copy link
+              </Button>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
       <BomActivityStrip docId={doc.id} />
     </Stack>
   );

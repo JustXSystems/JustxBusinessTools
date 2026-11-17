@@ -124,6 +124,33 @@
   display: flex;
   justify-content: flex-end;
 }
+.ims-bom-proposal-status {
+  padding: 14px 16px;
+}
+.ims-bom-proposal-status-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.ims-bom-proposal-status-meta {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+.ims-bom-proposal-status-meta dt {
+  margin: 0;
+  color: var(--bos-text-faint, #94a3b8);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ims-bom-proposal-status-meta dd {
+  margin: 0;
+}
 .ims-bom-activity {
   margin-top: 4px;
 }

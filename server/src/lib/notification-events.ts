@@ -100,6 +100,18 @@ export const NOTIFICATION_EVENTS = {
     audience: ["owner"] as NotificationAudience[],
     icon: "✖️",
   },
+  "document.bom_proposal_accepted": {
+    category: "workflow" as const,
+    severity: "attention" as const,
+    audience: ["owner"] as NotificationAudience[],
+    icon: "✅",
+  },
+  "document.bom_proposal_rejected": {
+    category: "workflow" as const,
+    severity: "urgent" as const,
+    audience: ["owner"] as NotificationAudience[],
+    icon: "✖️",
+  },
   "document.survey_submitted": {
     category: "activity" as const,
     severity: "info" as const,

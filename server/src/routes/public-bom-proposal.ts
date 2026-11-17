@@ -4,6 +4,7 @@ import { pool } from "../db.js";
 import { exec, money, one, rows, tsOf } from "../ims/db.js";
 import { round2, round3 } from "../ims/logic.js";
 import { normalizeBomPaperTemplate } from "../ims/settings.js";
+import { publishNotificationAsync } from "../lib/notification-publish.js";
 import { withBrowserFileAccessToken } from "../lib/storage.js";
 
 const router = Router();
@@ -418,8 +419,13 @@ router.post("/:token/decide", async (req, res) => {
     res.status(400).json({ error: `Proposal is already ${row.proposal_status}` });
     return;
   }
-  const responseNote = [responderName?.trim(), note?.trim()].filter(Boolean).join(": ").slice(0, 500) || null;
-  await exec(
+  if (row.proposal_status === "revoked") {
+    res.status(400).json({ error: "This proposal link was revoked" });
+    return;
+  }
+  const actorLabel = responderName?.trim() || "Customer";
+  const responseNote = [actorLabel, note?.trim()].filter(Boolean).join(": ").slice(0, 500) || null;
+  const updated = await exec(
     pool,
     `UPDATE ims_bom_docs SET
        proposal_status = :status,
@@ -430,23 +436,72 @@ router.post("/:token/decide", async (req, res) => {
        AND proposal_status NOT IN ('revoked', 'accepted', 'rejected')`,
     { id: row.id, token, status: decision, note: responseNote },
   );
+  if (!updated.affectedRows) {
+    res.status(409).json({ error: "Proposal changed while you were responding — refresh and try again" });
+    return;
+  }
+
+  const eventType = decision === "accepted" ? "bom.doc.proposal_accepted" : "bom.doc.proposal_rejected";
+  const summary = `Proposal ${decision} by ${actorLabel} for ${row.doc_no}`;
   try {
     await exec(
       pool,
       `INSERT INTO ims_events (tenant_id, actor_user_id, actor_name, event_type, entity_type, entity_id, summary, payload)
-       VALUES (:tenantId, NULL, :actorName, :type, 'bom_doc', :entityId, :summary, :payload)`,
+       VALUES (:tenantId, NULL, :actorName, :type, 'bom_doc', :entityId, :summary, CAST(:payload AS JSON))`,
       {
         tenantId: row.tenant_id,
-        actorName: responderName?.trim() || "Customer",
-        type: decision === "accepted" ? "bom.doc.proposal_accepted" : "bom.doc.proposal_rejected",
+        actorName: actorLabel,
+        type: eventType,
         entityId: row.id,
-        summary: `Proposal ${decision} for ${row.doc_no}`,
-        payload: JSON.stringify({ decision, note: note ?? null, responderName: responderName ?? null }),
+        summary: summary.slice(0, 255),
+        payload: JSON.stringify({
+          decision,
+          note: note?.trim() || null,
+          responderName: actorLabel,
+          docNo: row.doc_no,
+          customerName: row.customer_name,
+        }),
       },
     );
-  } catch {
-    /* best-effort public event */
+  } catch (err) {
+    console.warn("[bom-proposal] event log failed", err instanceof Error ? err.message : err);
   }
+
+  let orgId: number | undefined;
+  try {
+    const orgRow = await one<{ organization_id: number }>(
+      pool,
+      `SELECT organization_id FROM business_profiles WHERE id = :id LIMIT 1`,
+      { id: row.tenant_id },
+    );
+    if (orgRow) orgId = Number(orgRow.organization_id);
+  } catch {
+    /* best-effort */
+  }
+  if (orgId != null) {
+    publishNotificationAsync({
+      eventType: decision === "accepted" ? "document.bom_proposal_accepted" : "document.bom_proposal_rejected",
+      title: decision === "accepted" ? "BOM proposal accepted by customer" : "BOM proposal rejected by customer",
+      body: `${row.doc_no} · ${actorLabel} ${decision} the materials proposal${row.customer_name ? ` (${row.customer_name})` : ""}.`,
+      organizationId: orgId,
+      businessProfileId: row.tenant_id,
+      href: "/ims",
+      entityType: "bom_doc",
+      entityId: row.id,
+      dedupeKey: `bom-proposal-decide:${row.id}:${decision}`,
+      severity: decision === "rejected" ? "urgent" : "attention",
+      meta: {
+        decision,
+        docNo: row.doc_no,
+        responderName: actorLabel,
+        note: note?.trim() || null,
+        customerName: row.customer_name,
+      },
+      expiresInHours: 336,
+      targetUserId: null,
+    });
+  }
+
   const refreshed = await loadByToken(token);
   if (!refreshed) {
     res.status(404).json({ error: "Proposal not found" });
