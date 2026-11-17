@@ -14,6 +14,10 @@ export const adminDeepLink = {
       : "/admin/team?filter=pending",
 
   profiles: () => "/admin/profiles",
+  profileAccess: (id?: number, tab: "fabric" | "licenses" | "home" | "people" = "fabric") =>
+    id != null && id > 0
+      ? `/admin/profiles?id=${id}&tab=${tab === "licenses" ? "fabric" : tab}`
+      : `/admin/profiles?tab=${tab === "licenses" ? "fabric" : tab}`,
   profilePending: (id?: number) =>
     id != null && id > 0
       ? `/admin/profiles?filter=pending&id=${id}`

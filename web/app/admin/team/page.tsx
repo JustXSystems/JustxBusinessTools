@@ -39,9 +39,9 @@ type Filter = "all" | "pending" | "active" | "suspended" | "unverified";
 type AccessMode = "all" | "selected";
 
 const ROLE_HELP: Record<string, string> = {
-  owner: "Full control, including billing and user approvals",
-  admin: "Manage team, profiles, tools, and settings",
-  staff: "Create and edit records on granted branches",
+  owner: "Operator Business Profile controls — team, billing scope, no /admin",
+  admin: "JBT Admin Console — profiles, tool licenses, catalog, users",
+  staff: "Create and edit records on granted Business Profiles",
   viewer: "Read-only access",
 };
 
@@ -261,9 +261,11 @@ function AdminTeamInner() {
   return (
     <div className="admin-page">
       <section className="panel admin-card admin-page-head">
-        <h2>People</h2>
+        <h2>Users</h2>
         <p className="muted">
-          Invite staff, approve login, verify email / phone / KYC separately, then assign branches and the full tool catalog.
+          JBT Admin console for org-wide people: invite, approve, verify, and assign Business Profile
+          access. Day-to-day Staff/Viewer management for a business also lives on operator Business
+          Profile → Team (Owners only). Tool licenses are assigned per profile under Profiles &amp; tools.
         </p>
         <div className="result-grid">
           <button type="button" className={`result-card ${filter === "all" ? "is-selected" : ""}`} onClick={() => setFilter("all")}>

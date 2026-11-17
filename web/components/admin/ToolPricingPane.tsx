@@ -110,7 +110,6 @@ export const ToolPricingPane = forwardRef<
     sku,
     licensed,
     periodEnd,
-    recordLimitOverride,
     profiles,
     businessProfileId,
     onBusinessProfileChange,
@@ -122,10 +121,6 @@ export const ToolPricingPane = forwardRef<
   ref,
 ) {
   const [form, setForm] = useState<FormState>(() => formFromSku(sku, toolName, toolCategory));
-  const [grantDays, setGrantDays] = useState("30");
-  const [recordLimitInput, setRecordLimitInput] = useState(
-    recordLimitOverride == null ? "" : String(recordLimitOverride),
-  );
   const [saving, setSaving] = useState(false);
   const savedSnap = useRef("");
 
@@ -135,12 +130,7 @@ export const ToolPricingPane = forwardRef<
     savedSnap.current = JSON.stringify(next);
   }, [sku, toolId, toolName, toolCategory]);
 
-  useEffect(() => {
-    setRecordLimitInput(recordLimitOverride == null ? "" : String(recordLimitOverride));
-  }, [recordLimitOverride, toolId, businessProfileId]);
-
   const dirty = JSON.stringify(form) !== savedSnap.current;
-  const profilePayload = businessProfileId != null ? { businessProfileId } : {};
 
   const packsForTool = useMemo(
     () => bundles.filter((b) => b.id === "all_tools" || b.toolIds.includes(toolId)),
@@ -204,101 +194,6 @@ export const ToolPricingPane = forwardRef<
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [saving, dirty, sku, form, toolId, toolName, toolCategory],
   );
-
-  async function grant(days: number) {
-    setSaving(true);
-    try {
-      await api("/admin/skus/grant", {
-        method: "POST",
-        body: JSON.stringify({ toolIds: [toolId], days, ...profilePayload }),
-      });
-      onMessage(`${toolName} licensed for ${days} day(s) on this business profile.`);
-      await onReload();
-    } catch (err) {
-      onMessage(err instanceof Error ? err.message : "Grant failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function grantTrial() {
-    setSaving(true);
-    try {
-      await api("/admin/skus/grant", {
-        method: "POST",
-        body: JSON.stringify({
-          toolIds: [toolId],
-          days: Number(form.trialDays) || 14,
-          preferTrial: true,
-          ...profilePayload,
-        }),
-      });
-      onMessage(`${toolName} trial license granted for this business profile.`);
-      await onReload();
-    } catch (err) {
-      onMessage(err instanceof Error ? err.message : "Trial grant failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function extend(days: number) {
-    setSaving(true);
-    try {
-      await api("/admin/skus/extend", {
-        method: "POST",
-        body: JSON.stringify({ toolIds: [toolId], days, ...profilePayload }),
-      });
-      onMessage(`${toolName} license extended by ${days} day(s).`);
-      await onReload();
-    } catch (err) {
-      onMessage(err instanceof Error ? err.message : "Extend failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function revoke() {
-    setSaving(true);
-    try {
-      await api("/admin/skus/revoke", {
-        method: "POST",
-        body: JSON.stringify({ toolIds: [toolId], ...profilePayload }),
-      });
-      onMessage(`${toolName} license revoked for this business profile.`);
-      await onReload();
-    } catch (err) {
-      onMessage(err instanceof Error ? err.message : "Revoke failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function saveRecordLimit() {
-    setSaving(true);
-    try {
-      const trimmed = recordLimitInput.trim();
-      const recordLimit = trimmed === "" ? null : Math.max(0, Math.floor(Number(trimmed)));
-      if (trimmed !== "" && Number.isNaN(recordLimit)) {
-        onMessage("Record limit must be a number");
-        return;
-      }
-      await api("/admin/skus/record-limit", {
-        method: "POST",
-        body: JSON.stringify({ toolId, recordLimit, ...profilePayload }),
-      });
-      onMessage(
-        recordLimit == null
-          ? "Record limit override cleared for this profile."
-          : `Record limit set to ${recordLimit} for this profile.`,
-      );
-      await onReload();
-    } catch (err) {
-      onMessage(err instanceof Error ? err.message : "Record limit update failed");
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <section className="panel admin-card tm-pane tm-product-pane">
@@ -500,14 +395,17 @@ export const ToolPricingPane = forwardRef<
       </form>
 
       <div className="tm-license-ops">
-        <h3 className="tm-section-title">Business profile license</h3>
+        <h3 className="tm-section-title">Assign to a Business Profile</h3>
         <p className="muted">
-          Licenses and record caps are per business profile. Org MRR counts one seat per licensed profile.
-          {seatCount != null && seatCount > 0 ? ` Currently ${seatCount} seat(s) across the org.` : ""}
+          Tool licenses are managed per Business Profile. Open Profiles &amp; tools, select the
+          profile, then use the Tool licenses tab.
+          {seatCount != null && seatCount > 0
+            ? ` This product currently has ${seatCount} licensed seat(s) across the org.`
+            : ""}
         </p>
         <div className="admin-form-grid">
           <label className="field field-span-2">
-            <span>Business profile</span>
+            <span>Jump to profile</span>
             <select
               value={businessProfileId ?? ""}
               disabled={profiles.length === 0}
@@ -522,81 +420,26 @@ export const ToolPricingPane = forwardRef<
               ))}
             </select>
           </label>
-          <label className="field">
-            <span>License days</span>
-            <input
-              type="number"
-              min={1}
-              value={grantDays}
-              disabled={form.includedFree}
-              onChange={(e) => setGrantDays(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Record limit override</span>
-            <input
-              type="number"
-              min={0}
-              step="1"
-              value={recordLimitInput}
-              disabled={form.includedFree || licensed}
-              placeholder="Platform / SKU default"
-              onChange={(e) => setRecordLimitInput(e.target.value)}
-            />
-          </label>
         </div>
         <div className="admin-form-row">
-          {licensed ? (
-            <>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={saving || form.includedFree}
-                onClick={() => void extend(Number(grantDays) || 30)}
-              >
-                Extend license
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={saving || form.includedFree}
-                onClick={() => void revoke()}
-              >
-                Revoke
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={saving || form.includedFree}
-              onClick={() => void grant(Number(grantDays) || 30)}
-            >
-              Grant license
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            disabled={saving || form.includedFree}
-            onClick={() => void grantTrial()}
+          <Link
+            href={
+              businessProfileId
+                ? `/admin/profiles?id=${businessProfileId}&tab=fabric`
+                : "/admin/profiles?tab=fabric"
+            }
+            className="btn btn-primary btn-sm"
           >
-            Grant trial ({Number(form.trialDays) || 14}d)
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            disabled={saving || form.includedFree || licensed}
-            onClick={() => void saveRecordLimit()}
-          >
-            Save record limit
-          </button>
+            Open Access Fabric
+          </Link>
+          <span className={`pill ${licensed ? "pill-success" : ""}`}>
+            {form.includedFree
+              ? "Included free"
+              : licensed
+                ? `Licensed here${periodEnd ? ` · ${periodEnd.slice(0, 10)}` : ""}`
+                : "Not licensed on selected profile"}
+          </span>
         </div>
-        <p className="muted tm-hint">
-          {licensed
-            ? "Licensed tools have unlimited records — clear the license to apply a freemium record-cap override."
-            : "Save record limit raises the freemium cap for this profile+tool without a paid license. Leave blank and save to clear."}
-        </p>
       </div>
 
       {packsForTool.length > 0 ? (

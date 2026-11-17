@@ -37,13 +37,13 @@ import { MfaSettingsPanel } from "@/components/profile/MfaSettingsPanel";
 import { SendViaDefaultsPanel } from "@/components/profile/SendViaDefaultsPanel";
 import { FollowUpReminderPanel } from "@/components/profile/FollowUpReminderPanel";
 import { CollapsibleSection } from "@/components/common/CollapsibleSection";
-import { TeamRequestsPanel } from "@/components/profile/TeamRequestsPanel";
+import { TeamMembersPanel } from "@/components/profile/TeamMembersPanel";
 import { ClockDisplaySettingsPanel } from "@/components/profile/ClockDisplaySettingsPanel";
 import { FlashDisplaySettingsPanel } from "@/components/profile/FlashDisplaySettingsPanel";
 import { normalizeClockDisplaySettings } from "@/lib/clock-display";
 import { normalizeFlashDisplaySettings } from "@/lib/flash-display";
 
-type ProfileTab = "company" | "brand" | "send" | "delivery" | "tools" | "legal";
+type ProfileTab = "company" | "brand" | "send" | "delivery" | "tools" | "team" | "legal";
 
 const PROFILE_TABS: Array<{ id: ProfileTab; label: string; hint: string }> = [
   { id: "company", label: "Company", hint: "Identity, address, quote footer" },
@@ -51,6 +51,7 @@ const PROFILE_TABS: Array<{ id: ProfileTab; label: string; hint: string }> = [
   { id: "send", label: "Send Via", hint: "WhatsApp, email & follow-ups" },
   { id: "delivery", label: "Delivery", hint: "Downloads & file webhooks" },
   { id: "tools", label: "Tools", hint: "Home screen" },
+  { id: "team", label: "Team", hint: "Roles & profile access" },
   { id: "legal", label: "Bank & terms", hint: "Banking & T&C" },
 ];
 
@@ -61,13 +62,16 @@ const TAB_SECTIONS: Record<ProfileTab, string[]> = {
   send: ["sendDefaults", "followUp"],
   delivery: ["delivery"],
   tools: ["homeTools"],
+  team: ["team"],
   legal: ["bank", "terms", "quoteTerms"],
 };
 
 export default function ProfilePage() {
   const { user } = useAuth();
   const canEdit = canEditBusinessProfile(user);
+  const isBusinessOwner = user?.role === "owner";
   const { config, refresh: refreshConfig } = usePlatformConfig();
+  const visibleTabs = PROFILE_TABS.filter((tab) => tab.id !== "team" || isBusinessOwner);
   const platformTools = config?.tools ?? [];
   const catalogIds = useMemo(
     () => mergedHomeTools(platformTools).map((t) => t.id),
@@ -248,10 +252,11 @@ export default function ProfilePage() {
         <div className="tool-header-text">
           <div className="tool-header-title">Business Profile</div>
           <div className="tool-header-sub">
-            One profile per branch — letterhead, Send Via defaults, and delivery for all tools.
+            Company settings, home tools, and — for Business Owners — team roles and access for this
+            profile.
           </div>
         </div>
-        {canEdit ? (
+        {canEdit && activeTab !== "team" ? (
           <button type="button" className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </button>
@@ -262,15 +267,13 @@ export default function ProfilePage() {
         <div className="panel" style={{ marginBottom: 14 }}>
           <p className="section-note" style={{ margin: 0 }}>
             {user?.role === "staff"
-              ? "Staff can view Business Profile details but cannot edit them. Only the Business Owner or Admin can make changes."
-              : "Viewing as a team user — Business Profile details are read-only. Only the Business Owner or Admin can edit these settings."}
+              ? "Staff can view Business Profile details but cannot edit them. Only the Business Owner can make changes."
+              : "Viewing as a team user — Business Profile details are read-only. Only the Business Owner can edit these settings."}
           </p>
         </div>
       ) : null}
 
       <MfaSettingsPanel />
-
-      {canEdit ? <TeamRequestsPanel /> : null}
 
       {error ? <div className="error-banner">{error}</div> : null}
       {message ? <div className="panel profile-success">{message}</div> : null}
@@ -278,7 +281,7 @@ export default function ProfilePage() {
       <div className="profile-shell">
         <nav className="profile-tabs-bar" aria-label="Business Profile sections">
           <div className="profile-tabs" role="tablist">
-            {PROFILE_TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -691,7 +694,7 @@ export default function ProfilePage() {
         <h3 className="panel-title">Tools on home</h3>
         <p className="section-note">
           Only selected tools appear on Home after login. Subscription / billing always shows the full
-          catalog.
+          catalog. Justxsystems admins assign commercial licenses in Admin → Profiles &amp; tools.
         </p>
         <HomeToolPicker
           selectedIds={profile.homeToolIds ?? []}
@@ -704,6 +707,8 @@ export default function ProfilePage() {
         />
       </div>
           ) : null}
+
+          {activeTab === "team" && isBusinessOwner ? <TeamMembersPanel /> : null}
 
           {activeTab === "send" ? (
             <>

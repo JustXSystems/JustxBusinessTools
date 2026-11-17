@@ -43,8 +43,9 @@ Legend: **R/W** = read + write / actions · **Read** = view (and safe inbox acti
 
 ### Admin
 
-- Super-user for the org (and platform admins across the product).
+- Super-user for the org (and platform admins across the product) — the JBT Admin Console audience.
 - **Admin Console** only for this role (plus platform admin emails / `is_platform_admin`).
+- **Access Fabric:** pick a Business Profile, read the readiness score, provision packs, align home surface, and manage people reach.
 - Full Operator access when they open the operator app (all menus above).
 - Login → **`/admin`**.
 
@@ -52,8 +53,9 @@ Legend: **R/W** = read + write / actions · **Read** = view (and safe inbox acti
 
 - Operator View only — **no** Admin Console.
 - Read/write: Home, Business Profile, Sync Center, Email Outbox, Notifications, My Tools.
+- **Business Profile → Team:** invite Staff/Viewer, approve join requests, change roles, suspend/reactivate, and grant/revoke access to the active Business Profile.
 - Configures **Company document delivery** and installs the **desktop sync agent** via Sync Center (for UNC and/or Email Outbox → Open in Outlook).
-- Scoped to Business Profiles they belong to.
+- Scoped to Business Profiles they belong to. Tool commercial licenses are assigned by JBT Admins under Admin → Profiles & tools.
 
 ### Staff
 

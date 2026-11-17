@@ -25,9 +25,9 @@ export const adminNavigation: AdminNavSection[] = [
   },
   {
     id: "directory",
-    label: "Directory",
+    label: "Access",
     items: [
-      { href: "/admin/profiles", label: "Business profiles", icon: "profile" },
+      { href: "/admin/profiles", label: "Access Fabric", icon: "profile" },
       { href: "/admin/team", label: "Users", icon: "users" },
     ],
   },
@@ -35,7 +35,7 @@ export const adminNavigation: AdminNavSection[] = [
     id: "catalog",
     label: "Catalog",
     items: [
-      { href: "/admin/tools", label: "Tools", icon: "tools" },
+      { href: "/admin/tools", label: "Catalog & products", icon: "tools" },
       { href: "/admin/experience", label: "Experience", icon: "experience" },
     ],
   },

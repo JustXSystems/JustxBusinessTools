@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { AccessFabricPane } from "@/components/admin/AccessFabricPane";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
 import { QuotationEmailTemplatePicker } from "@/components/profile/QuotationEmailTemplatePicker";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
@@ -60,8 +61,46 @@ type Person = {
   implicit: boolean;
 };
 
-type Tab = "identity" | "address" | "bank" | "branding" | "home" | "access" | "lifecycle";
+type Tab =
+  | "fabric"
+  | "licenses"
+  | "home"
+  | "people"
+  | "identity"
+  | "address"
+  | "bank"
+  | "branding"
+  | "lifecycle";
 type Filter = "all" | "pending" | "approved" | "archived" | "incomplete";
+
+const PROFILE_TABS: Array<{ id: Tab; label: string }> = [
+  { id: "fabric", label: "Access Fabric" },
+  { id: "home", label: "Home surface" },
+  { id: "people", label: "People reach" },
+  { id: "identity", label: "Identity" },
+  { id: "address", label: "Address" },
+  { id: "bank", label: "Bank" },
+  { id: "branding", label: "Branding" },
+  { id: "lifecycle", label: "Lifecycle" },
+];
+
+function normalizeTab(raw: string | null): Tab | null {
+  if (!raw) return null;
+  if (raw === "licenses" || raw === "access") return raw === "access" ? "people" : "fabric";
+  if (
+    raw === "fabric" ||
+    raw === "home" ||
+    raw === "people" ||
+    raw === "identity" ||
+    raw === "address" ||
+    raw === "bank" ||
+    raw === "branding" ||
+    raw === "lifecycle"
+  ) {
+    return raw;
+  }
+  return null;
+}
 
 const emptyForm = {
   businessName: "",
@@ -137,6 +176,7 @@ function AdminProfilesInner() {
     const n = Number(search.get("id"));
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [search]);
+  const initialTab = useMemo((): Tab | null => normalizeTab(search.get("tab")), [search]);
 
   const { config } = usePlatformConfig();
   const platformTools = config?.tools ?? [];
@@ -186,10 +226,10 @@ function AdminProfilesInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId, profiles]);
 
-  async function openProfile(id: number) {
+  async function openProfile(id: number, preferredTab?: Tab | null) {
     setCreating(false);
     setSelectedId(id);
-    setTab("identity");
+    setTab(preferredTab ?? initialTab ?? "fabric");
     setError("");
     const data = await api<{ profile: Profile; people: Person[] }>(`/admin/profiles/${id}`);
     setForm(fromProfile(data.profile));
@@ -266,8 +306,12 @@ function AdminProfilesInner() {
       <section className="panel admin-card admin-page-head">
         <div className="analytics-toolbar">
           <div>
-            <h2>GST branches</h2>
-            <p className="muted">Legal identity, bank details, approval, and who can work on each branch.</p>
+            <h2>Access Fabric</h2>
+            <p className="muted">
+              Profile-first command center: readiness score, pack provisioning, tool lattice, home
+              surface, and people reach. Catalog Live/Hidden stays under Catalog &amp; products.
+              Business Owners manage day-to-day team access in operator Business Profile → Team.
+            </p>
           </div>
           <button
             type="button"
@@ -282,7 +326,7 @@ function AdminProfilesInner() {
               setMessage("");
             }}
           >
-            Add branch
+            Add profile
           </button>
         </div>
         <div className="result-grid">
@@ -307,9 +351,9 @@ function AdminProfilesInner() {
       <div className="admin-page-scroll">
       <div className="team-workspace">
         <section className="panel admin-card admin-dir-panel">
-          <h2>Directory</h2>
+          <h2>Profiles</h2>
           <div className="admin-form-row">
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, GSTIN, state" aria-label="Search profiles" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search business, GSTIN, org, state" aria-label="Search profiles" />
             <div className="admin-tabs">
               {(["all", "pending", "approved", "archived", "incomplete"] as Filter[]).map((f) => (
                 <button key={f} type="button" className={filter === f ? "active" : ""} onClick={() => setFilter(f)}>{f}</button>
@@ -351,31 +395,40 @@ function AdminProfilesInner() {
         <section ref={detailRef} className="panel admin-card admin-detail-panel">
           {creating || selected ? (
             <>
-              <h2>{creating ? "New branch" : selected?.businessName}</h2>
+              <h2>{creating ? "New Business Profile" : selected?.businessName}</h2>
               {!creating && selected ? (
                 <p className="muted">
-                  {selected.planId} plan · {selected.recordCount} records · {selected.documentCount} documents · {selected.staffCount} staff grants
+                  {selected.organizationName ? `${selected.organizationName} · ` : ""}
+                  {selected.planId} plan · {selected.recordCount} records · {selected.documentCount}{" "}
+                  documents · {selected.staffCount} people grants
                 </p>
               ) : (
-                <p className="muted">New branches stay pending until an owner/admin approves them.</p>
+                <p className="muted">New profiles stay pending until approved.</p>
               )}
               <div className="admin-tabs-bar">
                 <div className="admin-tabs" role="tablist">
-                  {(["identity", "address", "bank", "branding", "home", "access", "lifecycle"] as Tab[]).map((t) => (
+                  {PROFILE_TABS.map((t) => (
                     <button
-                      key={t}
+                      key={t.id}
                       type="button"
                       role="tab"
-                      className={tab === t ? "active" : ""}
-                      onClick={() => setTab(t)}
-                      disabled={creating && (t === "access" || t === "lifecycle")}
+                      className={tab === t.id ? "active" : ""}
+                      onClick={() => setTab(t.id)}
+                      disabled={
+                        creating &&
+                        (t.id === "fabric" || t.id === "people" || t.id === "lifecycle")
+                      }
                     >
-                      {t === "home" ? "Home tools" : t[0].toUpperCase() + t.slice(1)}
+                      {t.label}
                     </button>
                   ))}
                 </div>
                 <div className="admin-tabs-actions">
-                  {tab === "identity" || tab === "address" || tab === "bank" || tab === "branding" || tab === "home" ? (
+                  {tab === "identity" ||
+                  tab === "address" ||
+                  tab === "bank" ||
+                  tab === "branding" ||
+                  tab === "home" ? (
                     <button type="submit" form="profile-save-form" className="btn btn-primary">
                       {creating || !selectedId ? "Create (pending approval)" : "Save profile"}
                     </button>
@@ -528,7 +581,9 @@ function AdminProfilesInner() {
                 {tab === "home" ? (
                   <div className="admin-stack">
                     <p className="section-note">
-                      Tools shown on the operator home screen for this branch. Subscription catalog is unchanged.
+                      Which tools appear on this profile&apos;s operator home. Commercial
+                      entitlements and pack provisioning live on Access Fabric; org Live/Hidden
+                      stays under Catalog &amp; products.
                     </p>
                     <HomeToolPicker
                       selectedIds={homeToolIds}
@@ -539,37 +594,66 @@ function AdminProfilesInner() {
                 ) : null}
               </form>
 
-              {tab === "access" && selected ? (
-                <ul className="admin-list">
-                  {people.map((person) => (
-                    <li key={person.userId}>
-                      <span>
-                        {person.name || person.email}
-                        <span className="muted"> · {person.role}</span>
-                      </span>
-                      {person.implicit ? (
-                        <span className="pill pill-success">all branches</span>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => run(person.access ? "Access revoked." : "Access granted.", async () => {
-                            if (person.access) {
-                              await api(`/admin/profiles/${selected.id}/access/${person.userId}`, { method: "DELETE" });
-                            } else {
-                              await api(`/admin/profiles/${selected.id}/access`, {
-                                method: "POST",
-                                body: JSON.stringify({ userId: person.userId }),
-                              });
+              {tab === "fabric" && selected ? (
+                <AccessFabricPane
+                  businessProfileId={selected.id}
+                  profileName={selected.businessName}
+                  identityCompleteness={selected.completeness}
+                  approvalStatus={selected.approvalStatus}
+                  peopleGranted={people.filter((p) => p.access || p.implicit).length}
+                  peopleTotal={people.length}
+                  homeToolIds={homeToolIds}
+                  onNavigate={(target) => setTab(target)}
+                  onMutated={async () => {
+                    invalidateAdminData("admin-profiles");
+                    await reload();
+                    if (selectedId) await openProfile(selectedId, "fabric");
+                  }}
+                />
+              ) : null}
+
+              {tab === "people" && selected ? (
+                <div className="admin-stack">
+                  <p className="section-note">
+                    Who may switch into this Business Profile. Owners and org Admins always have
+                    access. For day-to-day role changes, Business Owners use operator Business
+                    Profile → Team.
+                  </p>
+                  <ul className="admin-list">
+                    {people.map((person) => (
+                      <li key={person.userId}>
+                        <span>
+                          {person.name || person.email}
+                          <span className="muted"> · {person.role}</span>
+                        </span>
+                        {person.implicit ? (
+                          <span className="pill pill-success">all profiles</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() =>
+                              run(person.access ? "Access revoked." : "Access granted.", async () => {
+                                if (person.access) {
+                                  await api(`/admin/profiles/${selected.id}/access/${person.userId}`, {
+                                    method: "DELETE",
+                                  });
+                                } else {
+                                  await api(`/admin/profiles/${selected.id}/access`, {
+                                    method: "POST",
+                                    body: JSON.stringify({ userId: person.userId }),
+                                  });
+                                }
+                              })
                             }
-                          })}
-                        >
-                          {person.access ? "Revoke" : "Grant"}
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                          >
+                            {person.access ? "Revoke" : "Grant"}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
 
               {tab === "lifecycle" && selected ? (
@@ -648,8 +732,10 @@ function AdminProfilesInner() {
             </>
           ) : (
             <>
-              <h2>Branch detail</h2>
-              <p className="muted">Select a GST branch to edit identity, banking, staff access, and approval.</p>
+              <h2>Select a Business Profile</h2>
+              <p className="muted">
+                Choose a profile to open its Access Fabric — readiness, packs, lattice, and reach.
+              </p>
             </>
           )}
         </section>

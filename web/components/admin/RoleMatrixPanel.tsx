@@ -80,7 +80,8 @@ export function RoleMatrixPanel() {
         <div>
           <h2>Role permission matrix</h2>
           <p className="muted">
-            Admin alone can open <code>/admin</code>. Owner edits Business Profile and Sync Center;
+            Only JBT Admins (org Admin / platform) open <code>/admin</code>. Business Owners manage
+            team and profile settings from operator Business Profile — never the Admin Console.
             Staff can view Profile and use Email Outbox / My Tools; Viewer sees Home and My Tools
             only. Owner row and Admin Console column are locked.
           </p>

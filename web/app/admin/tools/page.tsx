@@ -388,9 +388,10 @@ export default function AdminToolsPage() {
       <section className="panel admin-card admin-page-head">
         <div className="analytics-toolbar">
           <div>
-            <h2>Tool management</h2>
+            <h2>Catalog &amp; products</h2>
             <p className="muted">
-              Place tools on home, publish commercial offers, and revise field schemas — one tool at a time.
+              Org-wide placement (Live/Hidden), commercial SKUs, and schemas. To grant tools to a
+              Business Profile, use Profiles &amp; tools.
             </p>
           </div>
           <div className="admin-form-row">
@@ -406,8 +407,18 @@ export default function AdminToolsPage() {
                 <option value="off">Flat list (no groups)</option>
               </select>
             </label>
+            <Link
+              href={
+                businessProfileId
+                  ? `/admin/profiles?id=${businessProfileId}&tab=fabric`
+                  : "/admin/profiles?tab=fabric"
+              }
+              className="btn btn-primary btn-sm"
+            >
+              Open Access Fabric
+            </Link>
             <Link href="/admin/subscriptions" className="btn btn-secondary btn-sm">
-              Packs & access
+              Packs &amp; entitlements
             </Link>
             <Link href="/admin/analytics" className="btn btn-secondary btn-sm">
               Usage analytics
