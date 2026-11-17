@@ -29,6 +29,7 @@ export function ShellRouter({ children }: { children: ReactNode }) {
     pathname.startsWith("/register") ||
     pathname.startsWith("/status") ||
     pathname.startsWith("/q") ||
+    pathname.startsWith("/bom/proposal") ||
     pathname === "/bos" ||
     pathname.startsWith("/bos/") ||
     pathname === "/ims" ||
