@@ -8,53 +8,43 @@ import {
   normalizeEnabledModules,
   setProfileImsModules,
 } from "../../lib/ims-profile-modules.js";
-import { getActiveOrgId, getActiveProfileId, getActiveUserId } from "../../lib/request-context.js";
+import { getActiveUserId } from "../../lib/request-context.js";
+import {
+  adminResolveError,
+  listAdminBusinessProfiles,
+  resolveAdminBusinessProfile,
+} from "../../lib/admin/tenant-guard.js";
 
 const router = Router();
 
-async function resolveProfileId(raw: unknown): Promise<number> {
-  const orgId = getActiveOrgId();
-  const requested = Number(raw);
-  if (Number.isInteger(requested) && requested > 0) {
-    const [rows] = await pool.query(
-      `SELECT id FROM business_profiles WHERE id = :id AND organization_id = :orgId LIMIT 1`,
-      { id: requested, orgId },
-    );
-    if (Array.isArray(rows) && rows.length > 0) return requested;
-    throw Object.assign(new Error("Business profile not found in this organization"), { status: 404 });
-  }
-  return getActiveProfileId();
-}
-
-async function listOrgProfiles(orgId: number) {
-  const [rows] = await pool.query(
-    `SELECT id, business_name, is_default FROM business_profiles
-     WHERE organization_id = :orgId
-     ORDER BY is_default DESC, business_name ASC`,
-    { orgId },
-  );
-  return (Array.isArray(rows) ? rows : []).map((row) => {
-    const r = row as Record<string, unknown>;
-    return {
-      id: Number(r.id),
-      businessName: String(r.business_name ?? `Profile #${r.id}`),
-      isDefault: Boolean(r.is_default),
-    };
-  });
-}
-
 router.get("/", async (req, res) => {
   try {
-    const orgId = getActiveOrgId();
-    const businessProfileId = await resolveProfileId(req.query.businessProfileId ?? req.query.profileId);
-    const [stored, profiles] = await Promise.all([
-      getProfileImsModules(pool, businessProfileId),
-      listOrgProfiles(orgId),
-    ]);
+    const resolved = await resolveAdminBusinessProfile(
+      req.query.businessProfileId ?? req.query.profileId,
+    );
+    if (adminResolveError(resolved)) {
+      res.status(resolved.status).json({ error: resolved.error });
+      return;
+    }
+    const profiles = await listAdminBusinessProfiles(resolved?.organizationId ?? null);
+    if (!resolved) {
+      res.json({
+        businessProfileId: null,
+        organizationId: null,
+        profiles,
+        unrestricted: true,
+        enabled: IMS_MODULE_CATALOG.map((m) => m.key),
+        alwaysOn: [...IMS_ALWAYS_ON_MODULES],
+        catalog: IMS_MODULE_CATALOG,
+      });
+      return;
+    }
+    const stored = await getProfileImsModules(pool, resolved.profileId);
     const unrestricted = stored == null;
     const enabled = unrestricted ? IMS_MODULE_CATALOG.map((m) => m.key) : stored;
     res.json({
-      businessProfileId,
+      businessProfileId: resolved.profileId,
+      organizationId: resolved.organizationId,
       profiles,
       unrestricted,
       enabled,
@@ -69,26 +59,37 @@ router.get("/", async (req, res) => {
 
 router.put("/", async (req, res) => {
   try {
-    const businessProfileId = await resolveProfileId(req.body?.businessProfileId ?? req.body?.profileId);
+    const resolved = await resolveAdminBusinessProfile(
+      req.body?.businessProfileId ?? req.body?.profileId,
+      { required: true },
+    );
+    if (adminResolveError(resolved) || !resolved) {
+      const err = adminResolveError(resolved)
+        ? resolved
+        : { status: 400, error: "businessProfileId required" };
+      res.status(err.status).json({ error: err.error });
+      return;
+    }
     const unrestricted = req.body?.unrestricted === true;
     let stored;
     if (unrestricted) {
-      stored = await setProfileImsModules(pool, businessProfileId, null);
+      stored = await setProfileImsModules(pool, resolved.profileId, null);
     } else {
       const raw = Array.isArray(req.body?.enabled) ? (req.body.enabled as unknown[]) : [];
       const keys = raw.filter((k): k is string => typeof k === "string");
-      stored = await setProfileImsModules(pool, businessProfileId, normalizeEnabledModules(keys));
+      stored = await setProfileImsModules(pool, resolved.profileId, normalizeEnabledModules(keys));
     }
     await logAudit(
       "ims.modules.update",
       "business_profile",
-      String(businessProfileId),
+      String(resolved.profileId),
       { unrestricted, enabled: stored, by: getActiveUserId() },
       req.ip,
     );
-    const profiles = await listOrgProfiles(getActiveOrgId());
+    const profiles = await listAdminBusinessProfiles(resolved.organizationId);
     res.json({
-      businessProfileId,
+      businessProfileId: resolved.profileId,
+      organizationId: resolved.organizationId,
       profiles,
       unrestricted: stored == null,
       enabled: stored ?? IMS_MODULE_CATALOG.map((m) => m.key),

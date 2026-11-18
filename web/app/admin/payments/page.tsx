@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { UpiPaymentsPanel } from "@/components/admin/UpiPaymentsPanel";
 import type { PaymentsActionHandle } from "@/components/admin/payments-actions";
 import { api } from "@/lib/api";
@@ -94,7 +95,15 @@ const RANGES = [
   { value: 180, label: "6 months" },
 ] as const;
 
-const emptyOpForm = { party: "", amountInr: "", kind: "receivable", dueDate: "", reference: "", notes: "" };
+const emptyOpForm = {
+  party: "",
+  amountInr: "",
+  kind: "receivable",
+  dueDate: "",
+  reference: "",
+  notes: "",
+  organizationId: null as number | null,
+};
 
 function inr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
@@ -318,6 +327,10 @@ function AdminPaymentsInner() {
 
   async function createOp(e: React.FormEvent) {
     e.preventDefault();
+    if (opForm.organizationId == null) {
+      setMessage("Select an organization before logging a payment");
+      return;
+    }
     setBusyId("create");
     setTabBusy(true);
     setMessage("");
@@ -325,6 +338,7 @@ function AdminPaymentsInner() {
       await api("/admin/payments/ops", {
         method: "POST",
         body: JSON.stringify({
+          organizationId: opForm.organizationId,
           party: opForm.party,
           amountInr: Number(opForm.amountInr),
           kind: opForm.kind,
@@ -982,6 +996,12 @@ function AdminPaymentsInner() {
               <h2>Log payment</h2>
               <p className="muted">Fill the fields, then use Log payment in the tab bar (creates a pending desk item).</p>
               <form ref={opFormRef} className="admin-form-grid" onSubmit={createOp} id="payment-desk-log-form">
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <AdminOrgSelect
+                    value={opForm.organizationId}
+                    onChange={(organizationId) => setOpForm({ ...opForm, organizationId })}
+                  />
+                </div>
                 <label className="field">
                   <span>Party</span>
                   <input

@@ -11,8 +11,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 }
 
 /**
- * `/api/admin/*` — platform admins and org role `admin` only.
- * Owner / Staff / Viewer are denied (Business Owner uses Business Profile instead).
+ * `/api/admin/*` — Justxsystems platform super users only.
+ * Org Owner / Admin / Staff / Viewer use Business Profile / operator APIs instead.
  */
 export async function requireAdminRole(
   _req: Request,
@@ -24,9 +24,11 @@ export async function requireAdminRole(
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  if (ctx.isPlatformAdmin || ctx.role === "admin") {
+  if (ctx.isPlatformAdmin) {
     next();
     return;
   }
-  res.status(403).json({ error: "Admin access required — Admin role only" });
+  res.status(403).json({
+    error: "JBT Admin Console requires a Justxsystems platform super user",
+  });
 }

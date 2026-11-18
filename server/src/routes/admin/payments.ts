@@ -2,8 +2,13 @@ import { Router } from "express";
 import { pool } from "../../db.js";
 import { logAudit } from "../../lib/audit.js";
 import { createApproval, reviewApproval } from "../../lib/admin/approvals.js";
-import { getActiveOrgId, getActiveUserId } from "../../lib/request-context.js";
+import { getActiveUserId } from "../../lib/request-context.js";
 import { orgEqualsSql, orgScopeParams } from "../../lib/platform-admin.js";
+import {
+  adminResolveError,
+  requireAdminOrgId,
+  resolveAdminResourceOrgId,
+} from "../../lib/admin/tenant-guard.js";
 import { getCollectionsSummary } from "../../lib/payments/collections.js";
 import { getSaasPaymentSummary } from "../../lib/payments/saas.js";
 import { notifyPaymentOps } from "../../lib/notification-billing.js";
@@ -91,7 +96,12 @@ router.get("/ops", async (req, res) => {
 });
 
 router.post("/ops", async (req, res) => {
-  const orgId = getActiveOrgId();
+  const orgResolved = requireAdminOrgId(req.body?.organizationId);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const party = String(req.body?.party ?? "").trim();
   if (!party) {
     res.status(400).json({ error: "party required" });
@@ -128,7 +138,12 @@ router.post("/ops", async (req, res) => {
 
 router.post("/ops/:id/approve", async (req, res) => {
   const id = Number(req.params.id);
-  const orgId = getActiveOrgId();
+  const orgResolved = await resolveAdminResourceOrgId("payment_ops", id);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const [opsRows] = await pool.query(
     `SELECT party, amount_inr, kind FROM payment_ops WHERE id = :id AND organization_id = :orgId`,
     { id, orgId },
@@ -162,7 +177,12 @@ router.post("/ops/:id/approve", async (req, res) => {
 
 router.post("/ops/:id/reject", async (req, res) => {
   const id = Number(req.params.id);
-  const orgId = getActiveOrgId();
+  const orgResolved = await resolveAdminResourceOrgId("payment_ops", id);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const [opsRows] = await pool.query(
     `SELECT party, amount_inr, kind FROM payment_ops WHERE id = :id AND organization_id = :orgId`,
     { id, orgId },

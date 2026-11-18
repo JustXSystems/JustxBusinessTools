@@ -49,6 +49,8 @@ export type ProfileOption = {
   id: number;
   businessName: string;
   isDefault: boolean;
+  organizationId?: number;
+  organizationName?: string | null;
 };
 
 type FormState = {
@@ -397,8 +399,8 @@ export const ToolPricingPane = forwardRef<
       <div className="tm-license-ops">
         <h3 className="tm-section-title">Assign to a Business Profile</h3>
         <p className="muted">
-          Tool licenses are managed per Business Profile. Open Profiles &amp; tools, select the
-          profile, then use the Tool licenses tab.
+          Entitlements are managed per Business Profile. Open Access Fabric, select the
+          profile, then provision packs or grant tools on the lattice.
           {seatCount != null && seatCount > 0
             ? ` This product currently has ${seatCount} licensed seat(s) across the org.`
             : ""}
@@ -409,11 +411,17 @@ export const ToolPricingPane = forwardRef<
             <select
               value={businessProfileId ?? ""}
               disabled={profiles.length === 0}
-              onChange={(e) => onBusinessProfileChange(Number(e.target.value))}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isInteger(v) && v > 0) onBusinessProfileChange(v);
+              }}
             >
-              {profiles.length === 0 ? <option value="">No profiles</option> : null}
+              <option value="">
+                {profiles.length === 0 ? "No profiles" : "Select a Business Profile…"}
+              </option>
               {profiles.map((p) => (
                 <option key={p.id} value={p.id}>
+                  {p.organizationName ? `${p.organizationName} — ` : ""}
                   {p.businessName}
                   {p.isDefault ? " (default)" : ""}
                 </option>

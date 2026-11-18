@@ -10,7 +10,17 @@ type AdminSwitch = { key: string; tool: string; label: string; description: stri
  * Per-tool feature switches (Admin → Tools → <tool> → Placement). Each switch gates a change to a
  * screen customers already use, so all of them start off.
  */
-export function FeatureSwitchesPanel({ toolId, toolName, toolLive }: { toolId: string; toolName: string; toolLive: boolean }) {
+export function FeatureSwitchesPanel({
+  toolId,
+  toolName,
+  toolLive,
+  businessProfileId,
+}: {
+  toolId: string;
+  toolName: string;
+  toolLive: boolean;
+  businessProfileId: number | null;
+}) {
   const { refresh } = usePlatformConfig();
   const [switches, setSwitches] = useState<AdminSwitch[] | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -18,25 +28,41 @@ export function FeatureSwitchesPanel({ toolId, toolName, toolLive }: { toolId: s
 
   useEffect(() => {
     let alive = true;
-    api<{ switches: AdminSwitch[] }>("/admin/features").then(
+    if (businessProfileId == null) {
+      setSwitches([]);
+      return () => {
+        alive = false;
+      };
+    }
+    const qs = `?businessProfileId=${businessProfileId}`;
+    api<{ switches: AdminSwitch[] }>(`/admin/features${qs}`).then(
       (r) => alive && setSwitches(r.switches),
       () => alive && setSwitches([]),
     );
     return () => {
       alive = false;
     };
-  }, []);
+  }, [businessProfileId]);
 
   const mine = switches?.filter((s) => s.tool === toolId) ?? [];
+  if (businessProfileId == null) {
+    return (
+      <section className="panel admin-card tm-pane" style={{ marginTop: 16 }} aria-label={`${toolName} switches`}>
+        <h2>Switches</h2>
+        <p className="muted">Select a Business Profile above to manage org feature switches.</p>
+      </section>
+    );
+  }
   if (!mine.length) return null;
 
   async function toggle(s: AdminSwitch, enabled: boolean) {
+    if (businessProfileId == null) return;
     setBusyKey(s.key);
     setMessage("");
     try {
       const r = await api<{ switches: AdminSwitch[] }>(`/admin/features/${encodeURIComponent(s.key)}`, {
         method: "PUT",
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify({ enabled, businessProfileId }),
       });
       setSwitches(r.switches);
       setMessage(`${s.label} is ${enabled ? "on" : "off"}. Users see the change within a minute or on refresh.`);

@@ -85,8 +85,8 @@ export function TeamMembersPanel() {
     <div className="admin-stack" style={{ gap: 16 }}>
       <p className="section-note" style={{ margin: 0 }}>
         People reach for this Business Profile: invite Staff/Viewer, set roles, and grant or revoke
-        who can enter. Commercial tool licenses stay with Justxsystems Access Fabric in Admin —
-        Owners never use <code>/admin</code>.
+        who can enter. Commercial tool licenses are assigned only by Justxsystems platform super
+        users in Access Fabric — org Owner/Admin never use <code>/admin</code>.
       </p>
 
       <TeamRequestsPanel />
@@ -127,11 +127,10 @@ export function TeamMembersPanel() {
             <span>Temporary password</span>
             <input
               type="password"
-              required
               minLength={8}
               value={invite.password}
               onChange={(e) => setInvite({ ...invite, password: e.target.value })}
-              placeholder="Min 8 characters"
+              placeholder="Required for new emails (min 8)"
             />
           </label>
           <label className="field">
@@ -187,7 +186,7 @@ export function TeamMembersPanel() {
 
         <div className="admin-stack" style={{ gap: 12 }}>
           {manageable.map((m) => (
-            <div key={m.id} className="flex-row-wrap" style={{ alignItems: "flex-end", gap: 10 }}>
+            <div key={m.id} className="flex-row-wrap profile-team-row" style={{ alignItems: "flex-end", gap: 10 }}>
               <div className="min-w-240" style={{ flex: 1 }}>
                 <strong>{m.name || m.email}</strong>
                 <p className="muted" style={{ margin: "4px 0 0" }}>

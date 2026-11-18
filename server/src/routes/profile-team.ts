@@ -13,15 +13,27 @@ import {
 
 const router = Router();
 
-function requireOwner(res: import("express").Response): boolean {
+/** Owner or org Admin (or platform super user) may manage team on Business Profile. */
+function requireTeamManager(res: import("express").Response): boolean {
   const ctx = getRequestContext();
-  if (!ctx?.userId || ctx.role !== "owner") {
+  if (!ctx?.userId) {
+    res.status(403).json({ error: "Authentication required" });
+    return false;
+  }
+  if (ctx.isPlatformAdmin && !ctx.actAsRole) {
     res.status(403).json({
-      error: "Only the Business Profile Owner can manage team access here",
+      error: "Enter Operator as a Business Profile role first (/enter)",
+      code: "NEED_ACT_AS",
     });
     return false;
   }
-  return true;
+  if (ctx.role === "owner" || ctx.role === "admin" || ctx.role === "legacy") {
+    return true;
+  }
+  res.status(403).json({
+    error: "Only the Business Owner or org Admin can manage team access here",
+  });
+  return false;
 }
 
 function parseUserId(raw: string | undefined): number | null {
@@ -49,7 +61,7 @@ function mapMember(row: Record<string, unknown>, profileId: number) {
 
 /** Pending Staff/Viewer join requests for the Owner's organization. */
 router.get("/pending", async (_req, res) => {
-  if (!requireOwner(res)) return;
+  if (!requireTeamManager(res)) return;
   const orgId = getActiveOrgId();
   const [rows] = await pool.query(
     `SELECT u.id, u.email, u.name, u.phone, u.status, u.created_at, m.role
@@ -78,7 +90,7 @@ router.get("/pending", async (_req, res) => {
 
 /** Active / suspended staff for the current Business Profile. */
 router.get("/members", async (_req, res) => {
-  if (!requireOwner(res)) return;
+  if (!requireTeamManager(res)) return;
   const orgId = getActiveOrgId();
   const profileId = getActiveProfileId();
   const [rows] = await pool.query(
@@ -89,7 +101,7 @@ router.get("/members", async (_req, res) => {
      LEFT JOIN branch_access ba
        ON ba.user_id = u.id AND ba.business_profile_id = :profileId
      WHERE m.organization_id = :orgId
-       AND u.status IN ('active', 'suspended', 'pending')
+       AND u.status IN ('active', 'suspended')
      ORDER BY
        CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'staff' THEN 2 ELSE 3 END,
        u.name IS NULL, u.name, u.email`,
@@ -102,7 +114,7 @@ router.get("/members", async (_req, res) => {
 });
 
 router.post("/invite", async (req, res) => {
-  if (!requireOwner(res)) return;
+  if (!requireTeamManager(res)) return;
   const orgId = getActiveOrgId();
   const profileId = getActiveProfileId();
   const email = String(req.body?.email ?? "").trim().toLowerCase();
@@ -198,7 +210,7 @@ router.post("/invite", async (req, res) => {
 });
 
 router.post("/:userId/approve", async (req, res) => {
-  if (!requireOwner(res)) return;
+  if (!requireTeamManager(res)) return;
   const userId = parseUserId(req.params.userId);
   if (!userId) {
     res.status(400).json({ error: "Invalid member" });
@@ -266,7 +278,7 @@ router.post("/:userId/approve", async (req, res) => {
 });
 
 router.post("/:userId/reject", async (req, res) => {
-  if (!requireOwner(res)) return;
+  if (!requireTeamManager(res)) return;
   const userId = parseUserId(req.params.userId);
   if (!userId) {
     res.status(400).json({ error: "Invalid member" });
@@ -326,7 +338,7 @@ router.post("/:userId/reject", async (req, res) => {
 });
 
 router.patch("/:userId", async (req, res) => {
-  if (!requireOwner(res)) return;
+  if (!requireTeamManager(res)) return;
   const userId = parseUserId(req.params.userId);
   if (!userId) {
     res.status(400).json({ error: "Invalid member" });
@@ -370,7 +382,7 @@ router.patch("/:userId", async (req, res) => {
 });
 
 router.post("/:userId/suspend", async (req, res) => {
-  if (!requireOwner(res)) return;
+  if (!requireTeamManager(res)) return;
   const userId = parseUserId(req.params.userId);
   if (!userId) {
     res.status(400).json({ error: "Invalid member" });
@@ -406,7 +418,7 @@ router.post("/:userId/suspend", async (req, res) => {
 });
 
 router.post("/:userId/reactivate", async (req, res) => {
-  if (!requireOwner(res)) return;
+  if (!requireTeamManager(res)) return;
   const userId = parseUserId(req.params.userId);
   if (!userId) {
     res.status(400).json({ error: "Invalid member" });
@@ -442,7 +454,7 @@ router.post("/:userId/reactivate", async (req, res) => {
 });
 
 router.post("/:userId/access", async (req, res) => {
-  if (!requireOwner(res)) return;
+  if (!requireTeamManager(res)) return;
   const userId = parseUserId(req.params.userId);
   if (!userId) {
     res.status(400).json({ error: "Invalid member" });
@@ -472,7 +484,7 @@ router.post("/:userId/access", async (req, res) => {
 });
 
 router.delete("/:userId/access", async (req, res) => {
-  if (!requireOwner(res)) return;
+  if (!requireTeamManager(res)) return;
   const userId = parseUserId(req.params.userId);
   if (!userId) {
     res.status(400).json({ error: "Invalid member" });

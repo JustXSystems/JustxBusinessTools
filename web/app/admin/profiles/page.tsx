@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AccessFabricPane } from "@/components/admin/AccessFabricPane";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
@@ -14,9 +14,12 @@ import {
   type QuotationEmailTemplateId,
 } from "@/lib/quotation-email-templates";
 import { api } from "@/lib/api";
+import { adminDeepLink } from "@/lib/admin-deep-links";
+import { withBasePath } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { useRevealWhenStacked } from "@/hooks/useRevealWhenStacked";
+import Link from "next/link";
 
 type Profile = {
   id: number;
@@ -63,7 +66,6 @@ type Person = {
 
 type Tab =
   | "fabric"
-  | "licenses"
   | "home"
   | "people"
   | "identity"
@@ -86,20 +88,19 @@ const PROFILE_TABS: Array<{ id: Tab; label: string }> = [
 
 function normalizeTab(raw: string | null): Tab | null {
   if (!raw) return null;
-  if (raw === "licenses" || raw === "access") return raw === "access" ? "people" : "fabric";
-  if (
-    raw === "fabric" ||
-    raw === "home" ||
-    raw === "people" ||
-    raw === "identity" ||
-    raw === "address" ||
-    raw === "bank" ||
-    raw === "branding" ||
-    raw === "lifecycle"
-  ) {
-    return raw;
-  }
+  if (raw === "licenses") return "fabric";
+  if (raw === "access") return "people";
+  if (PROFILE_TABS.some((t) => t.id === raw)) return raw as Tab;
   return null;
+}
+
+function syncProfileUrl(id: number | null, tab: Tab, filter: Filter) {
+  const params = new URLSearchParams();
+  if (filter !== "all") params.set("filter", filter);
+  if (id != null) params.set("id", String(id));
+  if (tab !== "fabric") params.set("tab", tab);
+  const qs = params.toString();
+  window.history.replaceState(null, "", withBasePath(`/admin/profiles${qs ? `?${qs}` : ""}`));
 }
 
 const emptyForm = {
@@ -191,15 +192,31 @@ function AdminProfilesInner() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const { ref: detailRef, reveal: revealDetail } = useRevealWhenStacked<HTMLElement>();
   const [creating, setCreating] = useState(false);
-  const [tab, setTab] = useState<Tab>("identity");
+  const [createOrgId, setCreateOrgId] = useState<number | null>(null);
+  const [tab, setTab] = useState<Tab>(initialTab ?? "fabric");
   const [form, setForm] = useState(emptyForm);
   const [homeToolIds, setHomeToolIds] = useState<string[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [rejectNote, setRejectNote] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const openSeq = useRef(0);
+  const appliedFocus = useRef<number | null>(null);
+  const previousSelectedId = useRef<number | null>(null);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
+  const orgOptions = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const p of profiles) {
+      if (p.organizationId == null) continue;
+      if (!map.has(p.organizationId)) {
+        map.set(p.organizationId, p.organizationName || `Org ${p.organizationId}`);
+      }
+    }
+    return [...map.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [profiles]);
 
   const reload = useCallback(async () => {
     try {
@@ -219,24 +236,46 @@ function AdminProfilesInner() {
   }, [initialFilter]);
 
   useEffect(() => {
+    if (selectedId == null && !creating) return;
+    syncProfileUrl(creating ? null : selectedId, tab, filter);
+  }, [selectedId, tab, filter, creating]);
+
+  useEffect(() => {
+    if (initialTab && selectedId != null && !creating) {
+      setTab(initialTab);
+    }
+  }, [initialTab, selectedId, creating]);
+
+  const openProfile = useCallback(
+    async (id: number, preferredTab?: Tab | null) => {
+      const seq = ++openSeq.current;
+      setCreating(false);
+      setSelectedId(id);
+      const nextTab = preferredTab ?? initialTab ?? "fabric";
+      setTab(nextTab);
+      setError("");
+      try {
+        const data = await api<{ profile: Profile; people: Person[] }>(`/admin/profiles/${id}`);
+        if (seq !== openSeq.current) return;
+        setForm(fromProfile(data.profile));
+        setHomeToolIds(data.profile.homeToolIds ?? catalogIds);
+        setPeople(data.people);
+        setRejectNote(data.profile.reviewNote ?? "");
+      } catch (err) {
+        if (seq !== openSeq.current) return;
+        setError(err instanceof Error ? err.message : "Failed to open profile");
+      }
+    },
+    [catalogIds, initialTab],
+  );
+
+  useEffect(() => {
     if (!focusId || profiles.length === 0) return;
     if (!profiles.some((p) => p.id === focusId)) return;
-    if (selectedId === focusId) return;
-    void openProfile(focusId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, profiles]);
-
-  async function openProfile(id: number, preferredTab?: Tab | null) {
-    setCreating(false);
-    setSelectedId(id);
-    setTab(preferredTab ?? initialTab ?? "fabric");
-    setError("");
-    const data = await api<{ profile: Profile; people: Person[] }>(`/admin/profiles/${id}`);
-    setForm(fromProfile(data.profile));
-    setHomeToolIds(data.profile.homeToolIds ?? catalogIds);
-    setPeople(data.people);
-    setRejectNote(data.profile.reviewNote ?? "");
-  }
+    if (appliedFocus.current === focusId) return;
+    appliedFocus.current = focusId;
+    void openProfile(focusId, initialTab);
+  }, [focusId, profiles, openProfile, initialTab]);
 
   const visible = profiles.filter((p) => {
     const q = query.trim().toLowerCase();
@@ -284,13 +323,17 @@ function AdminProfilesInner() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    await run(creating || !selectedId ? "Branch created — pending approval." : "Profile saved.", async () => {
+    await run(creating || !selectedId ? "Profile created — pending approval." : "Profile saved.", async () => {
       if (creating || !selectedId) {
+        if (createOrgId == null) {
+          throw new Error("Select an organization for the new Business Profile");
+        }
         const created = await api<{ id: number }>("/admin/profiles", {
           method: "POST",
-          body: JSON.stringify({ ...form, homeToolIds }),
+          body: JSON.stringify({ ...form, homeToolIds, organizationId: createOrgId }),
         });
         setCreating(false);
+        setCreateOrgId(null);
         return created.id;
       }
       await api(`/admin/profiles/${selectedId}`, {
@@ -310,20 +353,24 @@ function AdminProfilesInner() {
             <p className="muted">
               Profile-first command center: readiness score, pack provisioning, tool lattice, home
               surface, and people reach. Catalog Live/Hidden stays under Catalog &amp; products.
-              Business Owners manage day-to-day team access in operator Business Profile → Team.
+              Org Owners and org Admins manage day-to-day team access in operator Business Profile
+              → Team.
             </p>
           </div>
           <button
             type="button"
             className="btn btn-primary"
             onClick={() => {
+              previousSelectedId.current = selectedId;
               setCreating(true);
               setSelectedId(null);
               setForm(emptyForm);
               setHomeToolIds(catalogIds);
               setPeople([]);
+              setCreateOrgId(orgOptions[0]?.id ?? null);
               setTab("identity");
               setMessage("");
+              appliedFocus.current = null;
             }}
           >
             Add profile
@@ -352,9 +399,9 @@ function AdminProfilesInner() {
       <div className="team-workspace">
         <section className="panel admin-card admin-dir-panel">
           <h2>Profiles</h2>
-          <div className="admin-form-row">
+          <div className="admin-form-row admin-dir-filters">
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search business, GSTIN, org, state" aria-label="Search profiles" />
-            <div className="admin-tabs">
+            <div className="admin-tabs admin-tabs-scroll" role="tablist" aria-label="Profile filter">
               {(["all", "pending", "approved", "archived", "incomplete"] as Filter[]).map((f) => (
                 <button key={f} type="button" className={filter === f ? "active" : ""} onClick={() => setFilter(f)}>{f}</button>
               ))}
@@ -367,7 +414,8 @@ function AdminProfilesInner() {
                 key={p.id}
                 className={`tracker-row admin-member-row ${selectedId === p.id && !creating ? "is-selected" : ""}`}
                 onClick={() => {
-                  void openProfile(p.id);
+                  appliedFocus.current = p.id;
+                  void openProfile(p.id, "fabric");
                   revealDetail();
                 }}
               >
@@ -388,7 +436,7 @@ function AdminProfilesInner() {
                 </div>
               </button>
             ))}
-            {visible.length === 0 ? <p className="muted">No branches match this filter.</p> : null}
+            {visible.length === 0 ? <p className="muted">No profiles match this filter.</p> : null}
           </div>
         </section>
 
@@ -397,16 +445,26 @@ function AdminProfilesInner() {
             <>
               <h2>{creating ? "New Business Profile" : selected?.businessName}</h2>
               {!creating && selected ? (
-                <p className="muted">
-                  {selected.organizationName ? `${selected.organizationName} · ` : ""}
-                  {selected.planId} plan · {selected.recordCount} records · {selected.documentCount}{" "}
-                  documents · {selected.staffCount} people grants
-                </p>
+                <>
+                  <p className="muted">
+                    {selected.organizationName ? `${selected.organizationName} · ` : ""}
+                    {selected.planId} plan · {selected.recordCount} records · {selected.documentCount}{" "}
+                    documents · {selected.staffCount} people grants
+                  </p>
+                  <div className="admin-form-row">
+                    <Link
+                      href={adminDeepLink.enterAs(selected.id)}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Enter as…
+                    </Link>
+                  </div>
+                </>
               ) : (
                 <p className="muted">New profiles stay pending until approved.</p>
               )}
               <div className="admin-tabs-bar">
-                <div className="admin-tabs" role="tablist">
+                <div className="admin-tabs admin-tabs-scroll" role="tablist">
                   {PROFILE_TABS.map((t) => (
                     <button
                       key={t.id}
@@ -434,7 +492,22 @@ function AdminProfilesInner() {
                     </button>
                   ) : null}
                   {creating ? (
-                    <button type="button" className="btn btn-ghost" onClick={() => { setCreating(false); setForm(emptyForm); }}>Cancel</button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => {
+                        setCreating(false);
+                        setCreateOrgId(null);
+                        setForm(emptyForm);
+                        const restoreId = previousSelectedId.current;
+                        if (restoreId) {
+                          appliedFocus.current = restoreId;
+                          void openProfile(restoreId, "fabric");
+                        }
+                      }}
+                    >
+                      Cancel
+                    </button>
                   ) : null}
                 </div>
               </div>
@@ -443,6 +516,28 @@ function AdminProfilesInner() {
               <form id="profile-save-form" onSubmit={save} className="admin-stack">
                 {tab === "identity" ? (
                   <div className="admin-form-grid">
+                    {creating ? (
+                      <label className="field" style={{ gridColumn: "1 / -1" }}>
+                        <span>Organization</span>
+                        <select
+                          value={createOrgId ?? ""}
+                          required
+                          onChange={(e) => {
+                            const v = Number(e.target.value);
+                            setCreateOrgId(Number.isInteger(v) && v > 0 ? v : null);
+                          }}
+                        >
+                          <option value="">
+                            {orgOptions.length === 0 ? "No organizations yet" : "Select organization…"}
+                          </option>
+                          {orgOptions.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
                     <label className="field"><span>Legal name</span>
                       <input value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} required />
                     </label>
@@ -604,6 +699,7 @@ function AdminProfilesInner() {
                   peopleTotal={people.length}
                   homeToolIds={homeToolIds}
                   onNavigate={(target) => setTab(target)}
+                  onHomeToolsChange={setHomeToolIds}
                   onMutated={async () => {
                     invalidateAdminData("admin-profiles");
                     await reload();
@@ -616,7 +712,7 @@ function AdminProfilesInner() {
                 <div className="admin-stack">
                   <p className="section-note">
                     Who may switch into this Business Profile. Owners and org Admins always have
-                    access. For day-to-day role changes, Business Owners use operator Business
+                    access. For day-to-day role changes, Owner/org Admin use operator Business
                     Profile → Team.
                   </p>
                   <ul className="admin-list">

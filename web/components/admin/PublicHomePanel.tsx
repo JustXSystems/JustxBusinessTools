@@ -13,7 +13,7 @@ import { BRAND_DEFAULTS } from "@jbt/shared";
 import { api } from "@/lib/api";
 import type { ExperienceSaveHandle } from "@/components/admin/experience-save";
 import { invalidateAdminData } from "@/hooks/useLiveRefresh";
-import { publicAssetUrl } from "@/lib/base-path";
+import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import {
   EMPTY_MEDIA,
   EMPTY_STYLE,
@@ -1599,9 +1599,15 @@ export const PublicHomePanel = forwardRef<ExperienceSaveHandle>(function PublicH
             Enabled for guests at `/`
           </label>
           <span className="muted" style={{ fontSize: "0.82rem" }}>
-            Guests see this at `/` when enabled. Logged-in users always see the operator home.
+            Guests see this at `/` when enabled. Use preview to view the guest page while signed in
+            as platform (skips the Operator enter gate).
           </span>
-          <a className="btn" href="/" target="_blank" rel="noreferrer">
+          <a
+            className="btn"
+            href={withBasePath("/?preview=public")}
+            target="_blank"
+            rel="noreferrer"
+          >
             Open public home
           </a>
           <button

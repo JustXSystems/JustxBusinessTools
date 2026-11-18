@@ -2,11 +2,9 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
+import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { RoleMatrixPanel } from "@/components/admin/RoleMatrixPanel";
-import { usePlatformConfig } from "@/components/config/ConfigProvider";
-import { groupItemsByKey } from "@/lib/group-items";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { useRevealWhenStacked } from "@/hooks/useRevealWhenStacked";
 
@@ -27,20 +25,13 @@ type Member = {
 };
 
 type Branch = { id: number; businessName: string };
-type CatalogTool = {
-  id: string;
-  name: string;
-  groupName: string;
-  available: boolean;
-  toolType: string;
-};
-type Tab = "profile" | "access" | "tools" | "verify";
+type Tab = "profile" | "access" | "verify";
 type Filter = "all" | "pending" | "active" | "suspended" | "unverified";
 type AccessMode = "all" | "selected";
 
 const ROLE_HELP: Record<string, string> = {
-  owner: "Operator Business Profile controls — team, billing scope, no /admin",
-  admin: "JBT Admin Console — profiles, tool licenses, catalog, users",
+  owner: "Operator Business Profile — team & settings; no /admin",
+  admin: "Org Admin — Business Profile team & settings; no /admin",
   staff: "Create and edit records on granted Business Profiles",
   viewer: "Read-only access",
 };
@@ -52,35 +43,6 @@ function statusClass(status: string) {
   if (status === "pending") return "pill pill-warning";
   if (status === "suspended" || status === "rejected") return "pill pill-danger";
   return "pill";
-}
-
-function mergeCatalog(
-  rows: Array<{ id: string; groupName: string; available: boolean; toolType: string }>,
-): CatalogTool[] {
-  const names = new Map(uniqueTools().map((t) => [t.id, t]));
-  const byId = new Map<string, CatalogTool>();
-  for (const row of rows) {
-    const fallback = names.get(row.id);
-    byId.set(row.id, {
-      id: row.id,
-      name: fallback?.name ?? row.id,
-      groupName: row.groupName || fallback?.category || "General",
-      available: row.available,
-      toolType: row.toolType,
-    });
-  }
-  for (const t of uniqueTools()) {
-    if (!byId.has(t.id)) {
-      byId.set(t.id, {
-        id: t.id,
-        name: t.name,
-        groupName: t.category,
-        available: true,
-        toolType: "",
-      });
-    }
-  }
-  return Array.from(byId.values());
 }
 
 export default function AdminTeamPage() {
@@ -99,8 +61,6 @@ export default function AdminTeamPage() {
 
 function AdminTeamInner() {
   const search = useSearchParams();
-  const { config } = usePlatformConfig();
-  const groupTools = config?.toolGrouping?.enabled !== false;
   const initialFilter = useMemo((): Filter => {
     const f = search.get("filter");
     if (f === "pending" || f === "active" || f === "suspended" || f === "unverified") return f;
@@ -112,11 +72,10 @@ function AdminTeamInner() {
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [search]);
 
-  const [catalog, setCatalog] = useState<CatalogTool[]>(() => mergeCatalog([]));
-  const [toolQuery, setToolQuery] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [summary, setSummary] = useState({ total: 0, pending: 0, active: 0, suspended: 0, unverified: 0 });
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [inviteBranches, setInviteBranches] = useState<Branch[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>(initialFilter);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -124,8 +83,6 @@ function AdminTeamInner() {
   const [tab, setTab] = useState<Tab>("profile");
   const [branchIds, setBranchIds] = useState<number[]>([]);
   const [branchMode, setBranchMode] = useState<AccessMode>("all");
-  const [toolMode, setToolMode] = useState<AccessMode>("all");
-  const [toolIds, setToolIds] = useState<string[]>([]);
   const [sessions, setSessions] = useState({ active: 0, lastSeenAt: null as string | null });
   const [copyFrom, setCopyFrom] = useState("");
   const [message, setMessage] = useState("");
@@ -136,6 +93,7 @@ function AdminTeamInner() {
     phone: "",
     password: "",
     role: "staff",
+    organizationId: null as number | null,
     branchIds: [] as number[],
   });
   const [profile, setProfile] = useState({ name: "", phone: "", role: "staff" });
@@ -146,22 +104,10 @@ function AdminTeamInner() {
 
   const reload = useCallback(async () => {
     try {
-      const [team, branchData] = await Promise.all([
-        api<{ members: Member[]; summary: typeof summary }>("/admin/team"),
-        api<{ branches: Branch[] }>("/admin/branches"),
-      ]);
+      const team = await api<{ members: Member[]; summary: typeof summary }>("/admin/team");
       setMembers(team.members);
       setSummary(team.summary);
-      setBranches(branchData.branches);
       setError("");
-      try {
-        const catalogData = await api<{
-          tools: Array<{ id: string; groupName: string; available: boolean; toolType: string }>;
-        }>("/admin/catalog");
-        setCatalog(mergeCatalog(catalogData.tools));
-      } catch {
-        setCatalog(mergeCatalog([]));
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load team");
     }
@@ -190,8 +136,6 @@ function AdminTeamInner() {
         member: Member;
         branchIds: number[];
         branchMode?: AccessMode;
-        tools: Array<{ toolId: string; granted: boolean }>;
-        toolMode: AccessMode;
         sessions?: { active: number; lastSeenAt: string | null };
       }>(`/admin/team/${id}`);
       setProfile({
@@ -201,11 +145,18 @@ function AdminTeamInner() {
       });
       setBranchIds(data.branchIds);
       setBranchMode(data.branchMode ?? (data.branchIds.length ? "selected" : "all"));
-      setToolMode(data.toolMode);
-      setToolIds(data.tools.filter((t) => t.granted).map((t) => t.toolId));
       setSessions(data.sessions ?? { active: 0, lastSeenAt: null });
       setNewPassword("");
       setCopyFrom("");
+      const orgId = data.member.organizationId;
+      if (orgId != null) {
+        const branchData = await api<{ branches: Branch[] }>(
+          `/admin/branches?organizationId=${orgId}`,
+        );
+        setBranches(branchData.branches);
+      } else {
+        setBranches([]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load member");
     }
@@ -220,14 +171,6 @@ function AdminTeamInner() {
     if (filter === "unverified") return m.kycStatus === "unverified" || !m.emailVerified;
     return true;
   });
-
-  const toolGroups = useMemo(() => {
-    const q = toolQuery.trim().toLowerCase();
-    const rows = catalog.filter(
-      (t) => !q || `${t.name} ${t.id} ${t.groupName}`.toLowerCase().includes(q),
-    );
-    return groupItemsByKey(rows, (t) => t.groupName || "General", groupTools, "All tools");
-  }, [catalog, toolQuery, groupTools]);
 
   async function run(label: string, fn: () => Promise<number | void>) {
     setError("");
@@ -263,9 +206,9 @@ function AdminTeamInner() {
       <section className="panel admin-card admin-page-head">
         <h2>Users</h2>
         <p className="muted">
-          JBT Admin console for org-wide people: invite, approve, verify, and assign Business Profile
-          access. Day-to-day Staff/Viewer management for a business also lives on operator Business
-          Profile → Team (Owners only). Tool licenses are assigned per profile under Profiles &amp; tools.
+          Platform console for people across organizations: invite, approve, verify, and assign
+          Business Profile access. Org Owners and org Admins manage day-to-day Staff/Viewer access
+          from operator Business Profile → Team. Tool licenses are assigned only in Access Fabric.
         </p>
         <div className="result-grid">
           <button type="button" className={`result-card ${filter === "all" ? "is-selected" : ""}`} onClick={() => setFilter("all")}>
@@ -348,9 +291,9 @@ function AdminTeamInner() {
           <p className="muted">{ROLE_HELP[selected.role] ?? selected.role}</p>
           <div className="admin-tabs-bar">
             <div className="admin-tabs" role="tablist">
-              {(["profile", "access", "tools", "verify"] as Tab[]).map((t) => (
+              {(["profile", "access", "verify"] as Tab[]).map((t) => (
                 <button key={t} type="button" role="tab" className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-                  {t === "access" ? "Branches" : t === "verify" ? "Verification" : t[0].toUpperCase() + t.slice(1)}
+                  {t === "access" ? "Profiles" : t === "verify" ? "Verification" : t[0].toUpperCase() + t.slice(1)}
                 </button>
               ))}
             </div>
@@ -385,22 +328,6 @@ function AdminTeamInner() {
                   }
                 >
                   Save branch access
-                </button>
-              ) : null}
-              {tab === "tools" ? (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() =>
-                    void run("Tool access saved.", () =>
-                      api(`/admin/team/${selected.id}/tools`, {
-                        method: "PUT",
-                        body: JSON.stringify({ mode: toolMode, toolIds }),
-                      }).then(() => undefined),
-                    )
-                  }
-                >
-                  Save tool access
                 </button>
               ) : null}
             </div>
@@ -548,7 +475,7 @@ function AdminTeamInner() {
                 Owners and admins always see every GST branch. Staff and viewers can be limited to selected branches.
               </p>
               {selected.role === "owner" || selected.role === "admin" ? (
-                <p className="muted">This role has access to all GST branches automatically.</p>
+                <p className="muted">This role has access to all Business Profiles automatically.</p>
               ) : (
                 <>
                   <label className="field">
@@ -570,7 +497,9 @@ function AdminTeamInner() {
                           {b.businessName}
                         </label>
                       ))}
-                      {branches.length === 0 ? <p className="muted">No GST branches yet. Add them under Profiles.</p> : null}
+                      {branches.length === 0 ? (
+                        <p className="muted">No Business Profiles yet. Add them under Access Fabric.</p>
+                      ) : null}
                     </div>
                   ) : (
                     <ul className="admin-list">
@@ -581,81 +510,6 @@ function AdminTeamInner() {
                   )}
                 </>
               )}
-            </div>
-          ) : null}
-
-          {tab === "tools" ? (
-            <div className="admin-stack">
-              <p className="muted">
-                Complete catalog from Tools admin, plus any built-in tools not yet grouped. Hidden tools stay in this list so you can still grant them.
-              </p>
-              <label className="field">
-                <span>Access mode</span>
-                <select value={toolMode} onChange={(e) => setToolMode(e.target.value as AccessMode)}>
-                  <option value="all">All tools</option>
-                  <option value="selected">Selected tools only</option>
-                </select>
-              </label>
-              <div className="admin-form-row">
-                <input
-                  value={toolQuery}
-                  onChange={(e) => setToolQuery(e.target.value)}
-                  placeholder={`Search ${catalog.length} tools`}
-                  aria-label="Search tools"
-                />
-                {toolMode === "selected" ? (
-                  <>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setToolIds(catalog.map((t) => t.id))}>Select all</button>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setToolIds([])}>Clear</button>
-                  </>
-                ) : null}
-                <span className="muted">
-                  {toolMode === "all" ? catalog.length : toolIds.length} / {catalog.length} granted
-                </span>
-              </div>
-              {toolGroups.map(([group, rows]) => (
-                <div key={group} className="admin-tool-group">
-                  {groupTools ? (
-                    <h3>
-                      {group}
-                      {toolMode === "selected" ? (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => setToolIds((prev) => {
-                            const ids = rows.map((r) => r.id);
-                            const allOn = ids.every((id) => prev.includes(id));
-                            return allOn ? prev.filter((id) => !ids.includes(id)) : Array.from(new Set([...prev, ...ids]));
-                          })}
-                        >
-                          Toggle group
-                        </button>
-                      ) : null}
-                    </h3>
-                  ) : null}
-                  <div className="branch-checklist">
-                    {rows.map((t) => {
-                      const checked = toolMode === "all" || toolIds.includes(t.id);
-                      return (
-                        <label key={t.id} className={`branch-check ${!t.available ? "is-muted" : ""}`}>
-                          <input
-                            type="checkbox"
-                            disabled={toolMode === "all"}
-                            checked={checked}
-                            onChange={() => setToolIds((prev) => prev.includes(t.id) ? prev.filter((id) => id !== t.id) : [...prev, t.id])}
-                          />
-                          <span>
-                            {t.name}
-                            <span className="muted"> · {t.id}{t.toolType ? ` · ${t.toolType}` : ""}</span>
-                          </span>
-                          {!t.available ? <span className="pill">hidden</span> : null}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-              {toolGroups.length === 0 ? <p className="muted">No tools match that search.</p> : null}
             </div>
           ) : null}
 
@@ -739,15 +593,43 @@ function AdminTeamInner() {
         <p className="muted">New people join as pending until you approve them. They cannot sign in before approval.</p>
         <form className="admin-form-grid" onSubmit={(e) => {
           e.preventDefault();
+          if (invite.organizationId == null) {
+            setError("Select an organization for the invite");
+            return;
+          }
           void run("Invite sent — awaiting approval.", async () => {
             const created = await api<{ userId: number; status: string }>("/admin/team/invite", {
               method: "POST",
               body: JSON.stringify(invite),
             });
-            setInvite({ name: "", email: "", phone: "", password: "", role: "staff", branchIds: [] });
+            setInvite({
+              name: "",
+              email: "",
+              phone: "",
+              password: "",
+              role: "staff",
+              organizationId: null,
+              branchIds: [],
+            });
+            setInviteBranches([]);
             return created.userId;
           });
         }}>
+          <AdminOrgSelect
+            value={invite.organizationId}
+            onChange={(organizationId) => {
+              setInvite((prev) => ({ ...prev, organizationId, branchIds: [] }));
+              if (organizationId == null) {
+                setInviteBranches([]);
+                return;
+              }
+              void api<{ branches: Branch[] }>(`/admin/branches?organizationId=${organizationId}`)
+                .then((d) => setInviteBranches(d.branches))
+                .catch(() => setInviteBranches([]));
+            }}
+            required
+            label="Organization"
+          />
           <label className="field"><span>Name</span>
             <input value={invite.name} onChange={(e) => setInvite({ ...invite, name: e.target.value })} />
           </label>
@@ -767,11 +649,11 @@ function AdminTeamInner() {
               <option value="viewer">Viewer</option>
             </select>
           </label>
-          {(invite.role === "staff" || invite.role === "viewer") && branches.length > 0 ? (
+          {(invite.role === "staff" || invite.role === "viewer") && inviteBranches.length > 0 ? (
             <div className="field" style={{ gridColumn: "1 / -1" }}>
               <span>Starting branches (optional)</span>
               <div className="branch-checklist">
-                {branches.map((b) => (
+                {inviteBranches.map((b) => (
                   <label key={b.id} className="branch-check">
                     <input
                       type="checkbox"
@@ -789,7 +671,9 @@ function AdminTeamInner() {
               </div>
             </div>
           ) : null}
-          <button type="submit" className="btn btn-primary">Send invite</button>
+          <button type="submit" className="btn btn-primary" disabled={invite.organizationId == null}>
+            Send invite
+          </button>
         </form>
       </section>
       </div>

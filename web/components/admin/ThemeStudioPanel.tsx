@@ -14,8 +14,16 @@ import {
   parseThemeImport,
   type ThemeTokens,
 } from "@/lib/theme";
+import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 
-type Theme = { id: number; name: string; isActive: boolean; tokens: ThemeTokens };
+type Theme = {
+  id: number;
+  name: string;
+  isActive: boolean;
+  tokens: ThemeTokens;
+  organizationId?: number;
+  organizationName?: string | null;
+};
 type Preset = { name: string; tokens: ThemeTokens };
 type PreviewFrame = "splash" | "login" | "home";
 
@@ -25,14 +33,16 @@ export const ThemeStudioPanel = forwardRef<ExperienceSaveHandle>(function ThemeS
   const fileRef = useRef<HTMLInputElement>(null);
   const [themes, setThemes] = useState<Theme[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
+  const [organizationId, setOrganizationId] = useState<number | null>(null);
   const [draft, setDraft] = useState<ThemeTokens>({ ...JUSTX_ELECTRIC });
   const [name, setName] = useState("Justxsystems Electric");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [previewFrame, setPreviewFrame] = useState<PreviewFrame>("home");
 
-  async function reload() {
-    const data = await api<{ themes: Theme[]; presets: Preset[] }>("/admin/themes");
+  async function reload(orgId = organizationId) {
+    const qs = orgId != null ? `?organizationId=${orgId}` : "";
+    const data = await api<{ themes: Theme[]; presets: Preset[] }>(`/admin/themes${qs}`);
     setThemes(data.themes);
     setPresets(data.presets);
     const active = data.themes.find((t) => t.isActive);
@@ -46,7 +56,7 @@ export const ThemeStudioPanel = forwardRef<ExperienceSaveHandle>(function ThemeS
   useEffect(() => {
     reload().catch((e: Error) => setMessage(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [organizationId]);
 
   function selectPreset(p: Preset) {
     setDraft({ ...JUSTX_ELECTRIC, ...p.tokens });
@@ -60,25 +70,33 @@ export const ThemeStudioPanel = forwardRef<ExperienceSaveHandle>(function ThemeS
   }
 
   const saveAndActivate = useCallback(async () => {
+    if (organizationId == null) {
+      setMessage("Select an organization before saving a theme");
+      throw new Error("organizationId required");
+    }
     setSaving(true);
     setMessage("");
     try {
       const created = await api<{ id: number }>("/admin/themes", {
         method: "POST",
-        body: JSON.stringify({ name: name.trim() || "Custom theme", tokens: draft }),
+        body: JSON.stringify({
+          name: name.trim() || "Custom theme",
+          tokens: draft,
+          organizationId,
+        }),
       });
       await api(`/admin/themes/${created.id}/activate`, { method: "POST" });
       applyThemeTokens(draft);
       await refresh();
-      setMessage("Theme saved and applied to the operator app.");
-      await reload();
+      setMessage("Theme saved and applied for the selected organization.");
+      await reload(organizationId);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Save failed");
       throw err;
     } finally {
       setSaving(false);
     }
-  }, [draft, name, refresh]);
+  }, [draft, name, organizationId, refresh]);
 
   useImperativeHandle(
     ref,
@@ -123,6 +141,17 @@ export const ThemeStudioPanel = forwardRef<ExperienceSaveHandle>(function ThemeS
         {message ? <p className="muted">{message}</p> : null}
         <div className="admin-pane-stack">
           <section className="panel admin-card">
+            <h2>Organization</h2>
+            <p className="muted">
+              Admin Console themes are per organization. Operator Business Profile selection is ignored.
+            </p>
+            <AdminOrgSelect
+              value={organizationId}
+              onChange={setOrganizationId}
+              emptyLabel="Select organization to edit themes…"
+            />
+          </section>
+          <section className="panel admin-card">
             <h2>Presets</h2>
             <div className="admin-theme-presets">
               {presets.map((p) => (
@@ -152,6 +181,9 @@ export const ThemeStudioPanel = forwardRef<ExperienceSaveHandle>(function ThemeS
                   <div>
                     <strong>{t.name}</strong>
                     {t.isActive ? <span className="pill pill-success">Active</span> : null}
+                    {t.organizationName ? (
+                      <span className="muted small"> · {t.organizationName}</span>
+                    ) : null}
                   </div>
                   <div className="admin-form-row">
                     {!t.isActive ? (

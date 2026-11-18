@@ -80,16 +80,17 @@ Canonical detail: [`ROLES.md`](ROLES.md).
 
 | Role | Admin console `/admin` | Login lands on | Billing | Write tool records | Approve users | Manage branches / tools | Sync Center | Email Outbox | Notifications | Business Profile |
 |------|------------------------|----------------|---------|--------------------|---------------|-------------------------|-------------|--------------|---------------|------------------|
+| Platform super | **Yes** | **Admin Console** | Yes (console) | Via act-as | Via act-as / console | Console | Via `/enter` act-as | Via act-as | Via act-as | Via act-as |
 | Owner | No (uses Profile app) | Operator Home | Yes | Yes | Yes | Yes | R/W | R/W | R/W | R/W |
-| Admin | **Yes** | **Admin Console** | Yes | Yes | Yes | Yes | R/W | R/W | R/W | R/W |
+| Org Admin | No | Operator Home | Yes | Yes | Yes | Yes | R/W | R/W | R/W | R/W |
 | Staff | No | Operator Home | No | Yes | No | No | — | R/W | Read | Read |
 | Viewer | No | Operator Home | No | Yes (My Tools) | No | No | — | — | — | — |
 
 Hard rules:
 
-- Only **Admin** role (and platform admins) opens the admin console (`adminConsole`).
+- Only **Justxsystems platform super users** open the Admin Console (`/admin`). Org Admin / Owner use operator Business Profile (see [`ROLES.md`](ROLES.md)).
 - **Staff** and **Viewer** cannot open Sync Center; **Viewer** cannot open Email Outbox / Notifications / Business Profile.
-- Org **Admin** login redirects to `/admin`, not Operator Home.
+- Platform Operator entry is gated at `/enter` (Business Profile + required role). Without act-as, Operator UI (including `/bos` and `/ims`) and Operator APIs return `NEED_ACT_AS`. Act-as only against approved non-archived profiles. Opening `/admin` clears act-as. Preview guest marketing with `/?preview=public`.
 ---
 
 ## 3. Severity & triage

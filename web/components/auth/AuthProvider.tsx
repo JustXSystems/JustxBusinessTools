@@ -9,9 +9,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { api, verifyPhoneOtp as verifyPhoneOtpApi } from "@/lib/api";
-import { canAccessAdmin, canAccessPath } from "@/lib/auth-access";
+import {
+  canAccessAdmin,
+  canAccessPath,
+  isPublicHomePreview,
+  pathWithSearch,
+  platformNeedsOperatorEnter,
+} from "@/lib/auth-access";
 import { clearSubscriptionSnapshot } from "@/lib/subscription-cache";
 import { clearToolCart } from "@/lib/tool-cart";
 import type { SessionUser } from "@/lib/types/auth";
@@ -60,6 +66,11 @@ type AuthContextValue = {
   >;
   logout: () => Promise<void>;
   switchBranch: (profileId: number) => Promise<void>;
+  /** Platform super: set operator Business Profile + optional act-as role. */
+  setOperatorContext: (
+    profileId: number,
+    actAsRole: "owner" | "admin" | "staff" | "viewer" | null,
+  ) => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -85,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { branding, loading: brandingLoading } = usePlatformBranding();
 
@@ -106,19 +118,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       alive = false;
     };
   }, [refresh]);
-
-  useEffect(() => {
-    if (loading) return;
-    const guestOk = isGuestAllowedPath(pathname);
-    const isPublic = isPublicPath(pathname);
-    if (!user && !guestOk) {
-      router.replace("/login?next=" + encodeURIComponent(pathname));
-    } else if (user && !canAccessAdmin(user) && pathname.startsWith("/admin")) {
-      router.replace("/");
-    } else if (user && !isPublic && !canAccessPath(user, pathname)) {
-      router.replace(canAccessAdmin(user) ? "/admin" : "/");
-    }
-  }, [loading, user, pathname, router]);
 
   const login = useCallback(async (email: string, password: string) => {
     const data = await api<{ user?: SessionUser } | undefined>("/auth/login", {
@@ -202,12 +201,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [router]);
 
-  const switchBranch = useCallback(async (profileId: number) => {
-    const data = await api<{ user: SessionUser }>("/auth/switch-branch", {
-      method: "POST",
-      body: JSON.stringify({ businessProfileId: profileId }),
-    });
-    setUser(data.user);
+  const applyOperatorUser = useCallback((next: SessionUser) => {
+    setUser(next);
     clearSubscriptionSnapshot();
     try {
       window.dispatchEvent(new Event("jbt:auth-context-changed"));
@@ -215,6 +210,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
   }, []);
+
+  const switchBranch = useCallback(
+    async (profileId: number) => {
+      const data = await api<{ user: SessionUser }>("/auth/switch-branch", {
+        method: "POST",
+        body: JSON.stringify({ businessProfileId: profileId }),
+      });
+      applyOperatorUser(data.user);
+    },
+    [applyOperatorUser],
+  );
+
+  const setOperatorContext = useCallback(
+    async (
+      profileId: number,
+      actAsRole: "owner" | "admin" | "staff" | "viewer" | null,
+    ) => {
+      const data = await api<{ user: SessionUser }>("/auth/switch-branch", {
+        method: "POST",
+        body: JSON.stringify({ businessProfileId: profileId, actAsRole }),
+      });
+      applyOperatorUser(data.user);
+    },
+    [applyOperatorUser],
+  );
+
+  useEffect(() => {
+    if (loading) return;
+    const guestOk = isGuestAllowedPath(pathname);
+    const isPublic = isPublicPath(pathname);
+    if (!user && !guestOk) {
+      router.replace(
+        "/login?next=" + encodeURIComponent(pathWithSearch(pathname, searchParams)),
+      );
+    } else if (user && !canAccessAdmin(user) && pathname.startsWith("/admin")) {
+      // Org users (incl. former org-admins) never use /admin — operator home.
+      router.replace("/");
+    } else if (
+      user?.isPlatformAdmin &&
+      user.actAsRole &&
+      pathname.startsWith("/admin")
+    ) {
+      // Admin Console must not inherit Operator act-as / session org footguns.
+      void setOperatorContext(user.businessProfileId, null).catch(() => undefined);
+    } else if (user && platformNeedsOperatorEnter(user, pathname, searchParams)) {
+      // Platform supers must pick profile + role on /enter before Operator chrome.
+      router.replace(
+        "/enter?next=" + encodeURIComponent(pathWithSearch(pathname || "/", searchParams)),
+      );
+    } else if (
+      user &&
+      !isPublic &&
+      !isPublicHomePreview(pathname, searchParams) &&
+      !canAccessPath(user, pathname)
+    ) {
+      // Keep operator act-as troubleshooting in the operator shell (do not bounce to /admin).
+      router.replace("/");
+    }
+  }, [loading, user, pathname, searchParams, router, setOperatorContext]);
 
   const value = useMemo(
     () => ({
@@ -227,9 +281,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       switchBranch,
+      setOperatorContext,
       refresh,
     }),
-    [user, loading, login, verifyOtp, register, logout, switchBranch, refresh],
+    [user, loading, login, verifyOtp, register, logout, switchBranch, setOperatorContext, refresh],
   );
 
   const guestOk = isGuestAllowedPath(pathname);

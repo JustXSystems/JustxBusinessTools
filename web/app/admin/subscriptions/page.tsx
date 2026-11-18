@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
+import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { ProductPacksPanel } from "@/components/admin/ProductPacksPanel";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -101,6 +102,8 @@ export default function AdminSubscriptionsPage() {
     tierLabel: "",
   });
   const [notice, setNotice] = useState({ title: "", body: "", kind: "renewal", dueAt: "" });
+  const [noticeOrgId, setNoticeOrgId] = useState<number | null>(null);
+  const [assignOrgId, setAssignOrgId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -213,18 +216,19 @@ export default function AdminSubscriptionsPage() {
   }
 
   async function assign(planId: string, organizationId?: number) {
+    const orgId = organizationId ?? assignOrgId;
+    if (orgId == null) {
+      setMessage("Select an organization before assigning a plan");
+      return;
+    }
     setSaving(true);
     setMessage("");
     try {
       await api("/admin/subscriptions/assign", {
         method: "POST",
-        body: JSON.stringify({ planId, organizationId }),
+        body: JSON.stringify({ planId, organizationId: orgId }),
       });
-      setMessage(
-        organizationId
-          ? `Org ${organizationId} switched to ${planId}.`
-          : "Operator org switched to this mode. Limits apply on the next create.",
-      );
+      setMessage(`Organization ${orgId} switched to ${planId}.`);
       await reload();
       invalidateAdminData("admin-subscriptions");
     } catch (err) {
@@ -403,17 +407,20 @@ export default function AdminSubscriptionsPage() {
                       {plan.tierLabel ? ` · ${plan.tierLabel}` : ""}
                       {plan.trialDays && plan.trialDays > 0 ? ` · ${plan.trialDays}-day trial` : ""}
                     </p>
-                    <div className="admin-form-row">
+                    <div className="admin-form-row" onClick={(e) => e.stopPropagation()}>
+                      <AdminOrgSelect
+                        value={assignOrgId}
+                        onChange={setAssignOrgId}
+                        label="Assign to organization"
+                        emptyLabel="Select organization…"
+                      />
                       <button
                         type="button"
                         className="btn btn-primary btn-sm"
-                        disabled={saving || active?.planId === plan.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void assign(plan.id);
-                        }}
+                        disabled={saving || assignOrgId == null}
+                        onClick={() => void assign(plan.id)}
                       >
-                        {active?.planId === plan.id ? "Assigned" : "Assign to operator"}
+                        Assign mode
                       </button>
                     </div>
                   </article>
@@ -436,11 +443,19 @@ export default function AdminSubscriptionsPage() {
               className="admin-form-grid"
               onSubmit={async (e) => {
                 e.preventDefault();
-                await api("/admin/subscriptions/notices", { method: "POST", body: JSON.stringify(notice) });
+                if (noticeOrgId == null) {
+                  setMessage("Select an organization for the notice");
+                  return;
+                }
+                await api("/admin/subscriptions/notices", {
+                  method: "POST",
+                  body: JSON.stringify({ ...notice, organizationId: noticeOrgId }),
+                });
                 setNotice({ title: "", body: "", kind: "renewal", dueAt: "" });
                 await reload();
               }}
             >
+              <AdminOrgSelect value={noticeOrgId} onChange={setNoticeOrgId} />
               <label className="field">
                 <span>Title</span>
                 <input value={notice.title} onChange={(e) => setNotice({ ...notice, title: e.target.value })} required />

@@ -5,6 +5,7 @@ import "./ims-app.css";
 import type { ReactNode } from "react";
 import { BosRoot, Footnote } from "@/components/bos";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { ImpersonationBanner } from "@/components/layout/ImpersonationBanner";
 import { api } from "@/lib/api";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import { clearSubscriptionSnapshot } from "@/lib/subscription-cache";
@@ -64,5 +65,10 @@ export function ImsStandalone() {
     );
   }
 
-  return <ImsApp mode="standalone" onSignOut={() => void signOut()} />;
+  return (
+    <>
+      <ImpersonationBanner />
+      <ImsApp mode="standalone" onSignOut={() => void signOut()} />
+    </>
+  );
 }

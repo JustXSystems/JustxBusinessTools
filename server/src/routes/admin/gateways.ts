@@ -2,8 +2,15 @@ import { Router } from "express";
 import { pool } from "../../db.js";
 import { logAudit } from "../../lib/audit.js";
 import { jsonVal } from "../../lib/admin/approvals.js";
+import { orgEqualsSql, orgScopeParams } from "../../lib/platform-admin.js";
+import { getActiveUserId } from "../../lib/request-context.js";
+import {
+  adminResolveError,
+  optionalAdminOrgFilter,
+  requireAdminOrgId,
+  resolveAdminResourceOrgId,
+} from "../../lib/admin/tenant-guard.js";
 import { applyWebhookEvent } from "../../lib/payments/webhook-process.js";
-import { getActiveOrgId, getActiveUserId } from "../../lib/request-context.js";
 import { publishNotification } from "../../lib/notification-publish.js";
 
 const router = Router();
@@ -22,18 +29,31 @@ function maskConfig(config: unknown): Record<string, unknown> {
   return out;
 }
 
-router.get("/", async (_req, res) => {
-  const orgId = getActiveOrgId();
+router.get("/", async (req, res) => {
+  const filter = optionalAdminOrgFilter(req.query.organizationId);
+  if (adminResolveError(filter)) {
+    res.status(filter.status).json({ error: filter.error });
+    return;
+  }
+  const orgPred =
+    filter.orgId != null ? "g.organization_id = :filterOrgId" : orgEqualsSql("g.organization_id");
   const [rows] = await pool.query(
-    `SELECT id, provider, display_name, mode, enabled, mapped_plan_ids, config, last_health, last_health_at
-     FROM payment_gateways WHERE organization_id = :orgId ORDER BY id`,
-    { orgId },
+    `SELECT g.id, g.organization_id, o.name AS organization_name, g.provider, g.display_name, g.mode,
+            g.enabled, g.mapped_plan_ids, g.config, g.last_health, g.last_health_at
+     FROM payment_gateways g
+     LEFT JOIN organizations o ON o.id = g.organization_id
+     WHERE ${orgPred}
+     ORDER BY o.name ASC, g.id`,
+    { filterOrgId: filter.orgId, ...orgScopeParams() },
   );
   res.json({
+    organizationId: filter.orgId,
     gateways: (Array.isArray(rows) ? rows : []).map((row) => {
       const r = row as Record<string, unknown>;
       return {
         id: Number(r.id),
+        organizationId: Number(r.organization_id),
+        organizationName: r.organization_name == null ? null : String(r.organization_name),
         provider: String(r.provider),
         displayName: String(r.display_name),
         mode: String(r.mode),
@@ -48,7 +68,12 @@ router.get("/", async (_req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const orgId = getActiveOrgId();
+  const orgResolved = requireAdminOrgId(req.body?.organizationId);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const provider = String(req.body?.provider ?? "").trim();
   const displayName = String(req.body?.displayName ?? provider).trim();
   if (!provider || !displayName) {
@@ -74,7 +99,7 @@ router.post("/", async (req, res) => {
     `INSERT INTO gateway_events (gateway_id, event_type, message) VALUES (:id, 'created', :msg)`,
     { id, msg: `Gateway ${displayName} created by user ${getActiveUserId()}` },
   );
-  await logAudit("gateway.create", "payment_gateway", String(id), { provider }, req.ip);
+  await logAudit("gateway.create", "payment_gateway", String(id), { provider, orgId }, req.ip);
   await publishNotification({
     eventType: "admin.gateway_event",
     title: "Payment gateway added",
@@ -87,12 +112,17 @@ router.post("/", async (req, res) => {
     dedupeKey: `gateway-create:${id}`,
     expiresInHours: 168,
   });
-  res.status(201).json({ id });
+  res.status(201).json({ id, organizationId: orgId });
 });
 
 router.put("/:id", async (req, res) => {
-  const orgId = getActiveOrgId();
   const id = Number(req.params.id);
+  const orgResolved = await resolveAdminResourceOrgId("payment_gateways", id);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const [existing] = await pool.query(
     `SELECT config FROM payment_gateways WHERE id = :id AND organization_id = :orgId`,
     { id, orgId },
@@ -139,15 +169,21 @@ router.put("/:id", async (req, res) => {
     dedupeKey: `gateway-upd:${id}:${Date.now()}`,
     expiresInHours: 72,
   });
-  res.json({ ok: true });
+  res.json({ ok: true, organizationId: orgId });
 });
 
 router.post("/:id/test", async (req, res) => {
   const id = Number(req.params.id);
+  const orgResolved = await resolveAdminResourceOrgId("payment_gateways", id);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   await pool.query(
     `UPDATE payment_gateways SET last_health = 'ok', last_health_at = CURRENT_TIMESTAMP
      WHERE id = :id AND organization_id = :orgId`,
-    { id, orgId: getActiveOrgId() },
+    { id, orgId },
   );
   await pool.query(
     `INSERT INTO gateway_events (gateway_id, event_type, message)
@@ -158,7 +194,7 @@ router.post("/:id/test", async (req, res) => {
     eventType: "admin.gateway_event",
     title: "Gateway health check OK",
     body: `Gateway #${id} responded to a test ping.`,
-    organizationId: getActiveOrgId(),
+    organizationId: orgId,
     href: "/admin/gateways",
     entityType: "payment_gateway",
     entityId: String(id),
@@ -167,16 +203,23 @@ router.post("/:id/test", async (req, res) => {
     dedupeKey: `gateway-health:${id}:${Date.now()}`,
     expiresInHours: 48,
   });
-  res.json({ ok: true, lastHealth: "ok" });
+  res.json({ ok: true, lastHealth: "ok", organizationId: orgId });
 });
 
 router.get("/:id/events", async (req, res) => {
+  const id = Number(req.params.id);
+  const orgResolved = await resolveAdminResourceOrgId("payment_gateways", id);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
   const [rows] = await pool.query(
     `SELECT id, event_type, message, payload, created_at FROM gateway_events
      WHERE gateway_id = :id ORDER BY id DESC LIMIT 50`,
-    { id: Number(req.params.id) },
+    { id },
   );
   res.json({
+    organizationId: orgResolved,
     events: (Array.isArray(rows) ? rows : []).map((row) => {
       const r = row as Record<string, unknown>;
       return {
@@ -192,9 +235,14 @@ router.get("/:id/events", async (req, res) => {
 });
 
 router.post("/:id/events/:eventId/replay", async (req, res) => {
-  const orgId = getActiveOrgId();
   const gatewayId = Number(req.params.id);
   const eventId = Number(req.params.eventId);
+  const orgResolved = await resolveAdminResourceOrgId("payment_gateways", gatewayId);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const [gwRows] = await pool.query(
     `SELECT id, provider FROM payment_gateways WHERE id = :id AND organization_id = :orgId`,
     { id: gatewayId, orgId },
@@ -237,7 +285,7 @@ router.post("/:id/events/:eventId/replay", async (req, res) => {
       "gateway.webhook.replay",
       "gateway_event",
       String(eventId > 0 ? eventId : gatewayId),
-      { gatewayId },
+      { gatewayId, orgId },
       req.ip,
     );
     res.json({ ok: true, result });

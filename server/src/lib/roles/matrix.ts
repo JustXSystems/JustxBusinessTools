@@ -15,35 +15,36 @@ export type RoleCapability =
 export type RoleMatrix = Record<RoleKey, Record<RoleCapability, boolean>>;
 
 export const ROLE_CAPABILITY_LABELS: Record<RoleCapability, string> = {
-  adminConsole: "Platform / org admin console",
+  adminConsole: "JBT Admin Console (/admin)",
   billing: "Billing & subscriptions",
   writeRecords: "Create & edit records",
   exportData: "Export / download",
   approveUsers: "Approve team members",
-  manageBranches: "Manage GST branches",
-  manageTools: "Assign tool licenses",
+  manageBranches: "Manage Business Profiles",
+  manageTools: "Assign tool licenses (platform only)",
 };
 
 export const DEFAULT_ROLE_MATRIX: RoleMatrix = {
   owner: {
-    // Owner manages the Business Profile in the operator app — not /admin.
+    // Owner manages Business Profile in the operator app — never /admin.
     adminConsole: false,
     billing: true,
     writeRecords: true,
     exportData: true,
     approveUsers: true,
     manageBranches: true,
-    manageTools: true,
+    manageTools: false,
   },
   admin: {
-    // Only Admin role opens /admin with full console access.
-    adminConsole: true,
+    // Org Admin: operator Business Profile like Owner — never /admin.
+    // Tool licenses are Justxsystems platform super users only.
+    adminConsole: false,
     billing: true,
     writeRecords: true,
     exportData: true,
     approveUsers: true,
     manageBranches: true,
-    manageTools: true,
+    manageTools: false,
   },
   staff: {
     adminConsole: false,
@@ -83,12 +84,18 @@ function normalizeMatrix(raw: unknown): RoleMatrix {
   return enforceRoleHierarchyRules(base);
 }
 
-/** Hard rules aligned with Operator / Admin Console role hierarchy. */
+/** Hard rules aligned with Operator / JBT platform console hierarchy. */
 function enforceRoleHierarchyRules(matrix: RoleMatrix): RoleMatrix {
+  // /admin is platform-super-user only — no org role may claim adminConsole.
   matrix.owner.adminConsole = false;
-  matrix.admin.adminConsole = true;
+  matrix.admin.adminConsole = false;
   matrix.staff.adminConsole = false;
   matrix.viewer.adminConsole = false;
+  // Commercial tool licenses are assigned only in JBT Access Fabric (platform).
+  matrix.owner.manageTools = false;
+  matrix.admin.manageTools = false;
+  matrix.staff.manageTools = false;
+  matrix.viewer.manageTools = false;
   // Viewer may use My Tools (quotations / surveys); menu ACL hides other areas.
   matrix.viewer.writeRecords = true;
   matrix.viewer.exportData = true;
@@ -117,28 +124,38 @@ export async function getRoleMatrix(): Promise<RoleMatrix> {
 
 export async function saveRoleMatrix(input: unknown): Promise<RoleMatrix> {
   const matrix = enforceRoleHierarchyRules(normalizeMatrix(input));
-  // Owner keeps business capabilities; adminConsole stays locked off.
+  // Owner / org Admin keep Business Profile capabilities; /admin stays platform-only.
   matrix.owner = {
     ...DEFAULT_ROLE_MATRIX.owner,
     ...matrix.owner,
     adminConsole: false,
+    manageTools: false,
   };
   matrix.admin = {
+    ...DEFAULT_ROLE_MATRIX.admin,
     ...matrix.admin,
-    adminConsole: true,
+    adminConsole: false,
+    manageTools: false,
   };
   matrix.viewer = {
     ...matrix.viewer,
     adminConsole: false,
+    manageTools: false,
     writeRecords: true,
     exportData: true,
   };
+  matrix.staff = {
+    ...matrix.staff,
+    adminConsole: false,
+    manageTools: false,
+  };
+  const persisted = enforceRoleHierarchyRules(matrix);
   await pool.query(
     `INSERT INTO platform_config (config_key, value) VALUES (:key, :value)
      ON DUPLICATE KEY UPDATE value = :value`,
-    { key: CONFIG_KEY, value: JSON.stringify(matrix) },
+    { key: CONFIG_KEY, value: JSON.stringify(persisted) },
   );
-  return matrix;
+  return persisted;
 }
 
 export async function roleAllows(role: string | null | undefined, capability: RoleCapability): Promise<boolean> {

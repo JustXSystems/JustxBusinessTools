@@ -33,6 +33,7 @@ import partiesRouter from "./routes/parties.js";
 import { requestContextMiddleware } from "./middleware/request-context.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
 import { requireBranchAccess } from "./middleware/require-write.js";
+import { requireOperatorActAs } from "./middleware/require-operator-act-as.js";
 import { startAnalyticsRollupScheduler } from "./jobs/analytics-rollup.js";
 import { startRenewalNoticeScheduler } from "./jobs/renewal-notices.js";
 import { startFollowUpReminderScheduler } from "./jobs/quotation-followup-reminders.js";
@@ -46,6 +47,7 @@ import { ensureHomeToolIdsColumn } from "./lib/home-tools.js";
 import { ensureDocumentAccentColorColumn } from "./lib/document-accent.js";
 import { ensureThemePresetColumn } from "./lib/theme-presets.js";
 import { ensurePlatformAdminSchema } from "./lib/platform-admin.js";
+import { ensureActAsRoleSchema } from "./lib/auth/session.js";
 import { ensureNotificationSchema } from "./lib/notification-schema.js";
 import { isProductionRuntime, validateServerEnv } from "./lib/env.js";
 import { isUnauthenticatedApiPath } from "./lib/public-paths.js";
@@ -72,6 +74,10 @@ initSmsProvider();
 void Promise.all([
   ensureGstinUniqueness(),
   ensurePlatformAdminSchema(),
+  // Optional platform-only column — failure must not block live client auth.
+  ensureActAsRoleSchema().catch((err) => {
+    console.warn("[jbt] act_as_role schema ensure failed (platform act-as deferred)", err);
+  }),
   ensureHomeToolIdsColumn(),
   ensureDocumentAccentColorColumn(),
   ensureThemePresetColumn(),
@@ -130,6 +136,10 @@ app.use((req, res, next) => {
     return;
   }
   requireBranchAccess(req, res, next);
+});
+
+app.use((req, res, next) => {
+  requireOperatorActAs(req, res, next);
 });
 
 app.get("/api/health", async (_req, res) => {

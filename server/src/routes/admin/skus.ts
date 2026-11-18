@@ -1,8 +1,12 @@
 import { Router } from "express";
-import { pool } from "../../db.js";
 import { logAudit } from "../../lib/audit.js";
-import { getActiveOrgId, getActiveProfileId } from "../../lib/request-context.js";
 import { isPlatformAdmin } from "../../lib/platform-admin.js";
+import {
+  adminResolveError,
+  listAdminBusinessProfiles,
+  requireAdminOrgId,
+  resolveAdminBusinessProfile,
+} from "../../lib/admin/tenant-guard.js";
 import {
   getToolSku,
   listToolSkus,
@@ -28,54 +32,37 @@ import { listSubscriptionItems } from "../../lib/subscription-items.js";
 
 const router = Router();
 
-async function resolveProfileId(raw: unknown): Promise<number> {
-  const orgId = getActiveOrgId();
-  const requested = Number(raw);
-  if (Number.isInteger(requested) && requested > 0) {
-    const [rows] = await pool.query(
-      `SELECT id FROM business_profiles
-       WHERE id = :id AND organization_id = :orgId LIMIT 1`,
-      { id: requested, orgId },
-    );
-    if (Array.isArray(rows) && rows.length > 0) return requested;
-    throw Object.assign(new Error("Business profile not found in this organization"), {
-      status: 404,
-    });
-  }
-  return getActiveProfileId();
-}
-
-async function listOrgProfiles(orgId: number) {
-  const [rows] = await pool.query(
-    `SELECT id, business_name, is_default FROM business_profiles
-     WHERE organization_id = :orgId
-     ORDER BY is_default DESC, business_name ASC`,
-    { orgId },
-  );
-  return (Array.isArray(rows) ? rows : []).map((row) => {
-    const r = row as Record<string, unknown>;
-    return {
-      id: Number(r.id),
-      businessName: String(r.business_name ?? `Profile #${r.id}`),
-      isDefault: Boolean(r.is_default),
-    };
-  });
-}
-
 router.get("/", async (req, res) => {
   try {
-    const orgId = getActiveOrgId();
-    const profileId = await resolveProfileId(req.query.businessProfileId ?? req.query.profileId);
-    const [skus, licenses, entitlements, orgLicenses, bundles, billingItems, profiles] =
-      await Promise.all([
-        listToolSkus(),
-        listActiveLicenses(profileId),
-        listProfileEntitlements(profileId),
-        listActiveLicensesForOrg(orgId),
-        listProductBundles(),
-        listSubscriptionItems(orgId),
-        listOrgProfiles(orgId),
-      ]);
+    const resolved = await resolveAdminBusinessProfile(
+      req.query.businessProfileId ?? req.query.profileId,
+    );
+    if (adminResolveError(resolved)) {
+      res.status(resolved.status).json({ error: resolved.error });
+      return;
+    }
+    const profiles = await listAdminBusinessProfiles(resolved?.organizationId ?? null);
+    const [skus, bundles] = await Promise.all([listToolSkus(), listProductBundles()]);
+    if (!resolved) {
+      res.json({
+        skus,
+        licenses: [],
+        entitlements: [],
+        orgLicenses: [],
+        bundles,
+        billingItems: [],
+        profiles,
+        businessProfileId: null,
+        organizationId: null,
+      });
+      return;
+    }
+    const [licenses, entitlements, orgLicenses, billingItems] = await Promise.all([
+      listActiveLicenses(resolved.profileId),
+      listProfileEntitlements(resolved.profileId),
+      listActiveLicensesForOrg(resolved.organizationId),
+      listSubscriptionItems(resolved.organizationId),
+    ]);
     res.json({
       skus,
       licenses,
@@ -84,7 +71,8 @@ router.get("/", async (req, res) => {
       bundles,
       billingItems,
       profiles,
-      businessProfileId: profileId,
+      businessProfileId: resolved.profileId,
+      organizationId: resolved.organizationId,
     });
   } catch (err) {
     const status = Number((err as { status?: number }).status) || 500;
@@ -180,8 +168,6 @@ router.delete("/bundles/:id", async (req, res) => {
 
 router.post("/grant", async (req, res) => {
   try {
-    const orgId = getActiveOrgId();
-    const profileId = await resolveProfileId(req.body?.businessProfileId ?? req.body?.profileId);
     const days = Math.max(1, Number(req.body?.days ?? 30));
     const periodEnd = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     const all = Boolean(req.body?.allPaid);
@@ -189,6 +175,43 @@ router.post("/grant", async (req, res) => {
     const allProfiles = Boolean(req.body?.allProfiles);
     const bundleId = req.body?.bundleId ? String(req.body.bundleId) : "";
     const toolIds = Array.isArray(req.body?.toolIds) ? req.body.toolIds.map(String) : [];
+    const orgWide = allProfiles || all || bundleId === "all_tools";
+
+    let orgId: number;
+    let profileId: number | null = null;
+    if (orgWide) {
+      const profileHint = await resolveAdminBusinessProfile(
+        req.body?.businessProfileId ?? req.body?.profileId,
+      );
+      if (adminResolveError(profileHint)) {
+        res.status(profileHint.status).json({ error: profileHint.error });
+        return;
+      }
+      const orgResolved = requireAdminOrgId(
+        req.body?.organizationId ?? profileHint?.organizationId,
+      );
+      if (adminResolveError(orgResolved)) {
+        res.status(orgResolved.status).json({ error: orgResolved.error });
+        return;
+      }
+      orgId = orgResolved;
+      profileId = profileHint?.profileId ?? null;
+    } else {
+      const resolved = await resolveAdminBusinessProfile(
+        req.body?.businessProfileId ?? req.body?.profileId,
+        { required: true },
+      );
+      if (adminResolveError(resolved) || !resolved) {
+        const err = adminResolveError(resolved)
+          ? resolved
+          : { status: 400, error: "businessProfileId required" };
+        res.status(err.status).json({ error: err.error });
+        return;
+      }
+      orgId = resolved.organizationId;
+      profileId = resolved.profileId;
+    }
+
     let granted: string[];
     if (bundleId) {
       granted = await resolveBundleToolIds(bundleId);
@@ -200,7 +223,7 @@ router.post("/grant", async (req, res) => {
         });
       } else {
         await activateToolCommerce({
-          profileId,
+          profileId: profileId!,
           orgId,
           toolIds: granted,
           source: "pack",
@@ -225,7 +248,7 @@ router.post("/grant", async (req, res) => {
       } else {
         granted = (
           await activateToolCommerce({
-            profileId,
+            profileId: profileId!,
             orgId,
             toolIds,
             source: preferTrial ? "trial" : "admin",
@@ -242,7 +265,7 @@ router.post("/grant", async (req, res) => {
     await logAudit(
       "sku.grant",
       "profile_tool_license",
-      String(profileId),
+      String(profileId ?? orgId),
       { granted, days, bundleId: bundleId || null, preferTrial, allProfiles, orgId },
       req.ip,
     );
@@ -250,8 +273,9 @@ router.post("/grant", async (req, res) => {
       ok: true,
       granted,
       businessProfileId: profileId,
+      organizationId: orgId,
       periodEnd: periodEnd.toISOString(),
-      licenses: await listActiveLicenses(profileId),
+      licenses: profileId != null ? await listActiveLicenses(profileId) : [],
       orgLicenses: await listActiveLicensesForOrg(orgId),
       billingItems: await listSubscriptionItems(orgId),
     });
@@ -263,29 +287,39 @@ router.post("/grant", async (req, res) => {
 
 router.post("/extend", async (req, res) => {
   try {
-    const orgId = getActiveOrgId();
-    const profileId = await resolveProfileId(req.body?.businessProfileId ?? req.body?.profileId);
+    const resolved = await resolveAdminBusinessProfile(
+      req.body?.businessProfileId ?? req.body?.profileId,
+      { required: true },
+    );
+    if (adminResolveError(resolved) || !resolved) {
+      const err = adminResolveError(resolved)
+        ? resolved
+        : { status: 400, error: "businessProfileId required" };
+      res.status(err.status).json({ error: err.error });
+      return;
+    }
     const days = Math.max(1, Number(req.body?.days ?? 30));
     const toolIds = Array.isArray(req.body?.toolIds) ? req.body.toolIds.map(String) : [];
     if (toolIds.length === 0) {
       res.status(400).json({ error: "toolIds required" });
       return;
     }
-    const periodEnd = await extendToolLicenses(profileId, toolIds, days);
+    const periodEnd = await extendToolLicenses(resolved.profileId, toolIds, days);
     await logAudit(
       "sku.extend",
       "profile_tool_license",
-      String(profileId),
+      String(resolved.profileId),
       { toolIds, days },
       req.ip,
     );
     res.json({
       ok: true,
-      businessProfileId: profileId,
+      businessProfileId: resolved.profileId,
+      organizationId: resolved.organizationId,
       periodEnd: periodEnd.toISOString(),
-      licenses: await listActiveLicenses(profileId),
-      orgLicenses: await listActiveLicensesForOrg(orgId),
-      billingItems: await listSubscriptionItems(orgId),
+      licenses: await listActiveLicenses(resolved.profileId),
+      orgLicenses: await listActiveLicensesForOrg(resolved.organizationId),
+      billingItems: await listSubscriptionItems(resolved.organizationId),
     });
   } catch (err) {
     const status = Number((err as { status?: number }).status) || 500;
@@ -296,7 +330,17 @@ router.post("/extend", async (req, res) => {
 /** Extend / set freemium record cap for a profile+tool (does not grant a paid license). */
 router.post("/record-limit", async (req, res) => {
   try {
-    const profileId = await resolveProfileId(req.body?.businessProfileId ?? req.body?.profileId);
+    const resolved = await resolveAdminBusinessProfile(
+      req.body?.businessProfileId ?? req.body?.profileId,
+      { required: true },
+    );
+    if (adminResolveError(resolved) || !resolved) {
+      const err = adminResolveError(resolved)
+        ? resolved
+        : { status: 400, error: "businessProfileId required" };
+      res.status(err.status).json({ error: err.error });
+      return;
+    }
     const toolId = String(req.body?.toolId ?? "").trim();
     if (!toolId) {
       res.status(400).json({ error: "toolId required" });
@@ -311,19 +355,19 @@ router.post("/record-limit", async (req, res) => {
       res.status(400).json({ error: "recordLimit must be a number or null" });
       return;
     }
-    const entitlement = await setRecordLimitOverride(profileId, toolId, recordLimit);
+    const entitlement = await setRecordLimitOverride(resolved.profileId, toolId, recordLimit);
     await logAudit(
       "sku.record_limit",
       "profile_tool_license",
-      String(profileId),
+      String(resolved.profileId),
       { toolId, recordLimit },
       req.ip,
     );
     res.json({
       ok: true,
-      businessProfileId: profileId,
+      businessProfileId: resolved.profileId,
       entitlement,
-      licenses: await listActiveLicenses(profileId),
+      licenses: await listActiveLicenses(resolved.profileId),
     });
   } catch (err) {
     const status = Number((err as { status?: number }).status) || 500;
@@ -333,14 +377,24 @@ router.post("/record-limit", async (req, res) => {
 
 router.get("/entitlement", async (req, res) => {
   try {
-    const profileId = await resolveProfileId(req.query.businessProfileId ?? req.query.profileId);
+    const resolved = await resolveAdminBusinessProfile(
+      req.query.businessProfileId ?? req.query.profileId,
+      { required: true },
+    );
+    if (adminResolveError(resolved) || !resolved) {
+      const err = adminResolveError(resolved)
+        ? resolved
+        : { status: 400, error: "businessProfileId required" };
+      res.status(err.status).json({ error: err.error });
+      return;
+    }
     const toolId = String(req.query.toolId ?? "").trim();
     if (!toolId) {
       res.status(400).json({ error: "toolId required" });
       return;
     }
-    const entitlement = await getProfileToolEntitlement(profileId, toolId);
-    res.json({ businessProfileId: profileId, toolId, entitlement });
+    const entitlement = await getProfileToolEntitlement(resolved.profileId, toolId);
+    res.json({ businessProfileId: resolved.profileId, toolId, entitlement });
   } catch (err) {
     const status = Number((err as { status?: number }).status) || 500;
     res.status(status).json({ error: err instanceof Error ? err.message : "Lookup failed" });
@@ -349,29 +403,73 @@ router.get("/entitlement", async (req, res) => {
 
 router.post("/revoke", async (req, res) => {
   try {
-    const orgId = getActiveOrgId();
     const allProfiles = Boolean(req.body?.allProfiles);
     const toolIds = Array.isArray(req.body?.toolIds) ? req.body.toolIds.map(String) : undefined;
-    let profileId = getActiveProfileId();
-    if (!allProfiles) {
-      profileId = await resolveProfileId(req.body?.businessProfileId ?? req.body?.profileId);
-      await deactivateToolCommerce({ profileId, orgId, toolIds });
-    } else {
+    if (allProfiles) {
+      const profileHint = await resolveAdminBusinessProfile(
+        req.body?.businessProfileId ?? req.body?.profileId,
+      );
+      if (adminResolveError(profileHint)) {
+        res.status(profileHint.status).json({ error: profileHint.error });
+        return;
+      }
+      const orgResolved = requireAdminOrgId(
+        req.body?.organizationId ?? profileHint?.organizationId,
+      );
+      if (adminResolveError(orgResolved)) {
+        res.status(orgResolved.status).json({ error: orgResolved.error });
+        return;
+      }
+      const orgId = orgResolved;
       await deactivateToolCommerce({ orgId, toolIds });
+      await logAudit(
+        "sku.revoke",
+        "profile_tool_license",
+        String(orgId),
+        { toolIds: toolIds ?? "all", allProfiles: true },
+        req.ip,
+      );
+      res.json({
+        ok: true,
+        businessProfileId: null,
+        organizationId: orgId,
+        licenses: [],
+        orgLicenses: await listActiveLicensesForOrg(orgId),
+        billingItems: await listSubscriptionItems(orgId),
+      });
+      return;
     }
+
+    const resolved = await resolveAdminBusinessProfile(
+      req.body?.businessProfileId ?? req.body?.profileId,
+      { required: true },
+    );
+    if (adminResolveError(resolved) || !resolved) {
+      const err = adminResolveError(resolved)
+        ? resolved
+        : { status: 400, error: "businessProfileId required" };
+      res.status(err.status).json({ error: err.error });
+      return;
+    }
+    await deactivateToolCommerce({
+      profileId: resolved.profileId,
+      orgId: resolved.organizationId,
+      toolIds,
+    });
     await logAudit(
       "sku.revoke",
       "profile_tool_license",
-      allProfiles ? String(orgId) : String(profileId),
-      { toolIds: toolIds ?? "all", allProfiles },
+      String(resolved.profileId),
+      { toolIds: toolIds ?? "all", allProfiles: false },
       req.ip,
     );
     res.json({
       ok: true,
-      businessProfileId: allProfiles ? null : profileId,
-      licenses: allProfiles ? [] : await listActiveLicenses(profileId),
-      orgLicenses: await listActiveLicensesForOrg(orgId),
-      billingItems: await listSubscriptionItems(orgId),
+      businessProfileId: resolved.profileId,
+      organizationId: resolved.organizationId,
+      licenses: await listActiveLicenses(resolved.profileId),
+      orgLicenses: await listActiveLicensesForOrg(resolved.organizationId),
+      billingItems: await listSubscriptionItems(resolved.organizationId),
     });
   } catch (err) {
     const status = Number((err as { status?: number }).status) || 500;

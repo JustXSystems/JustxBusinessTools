@@ -12,6 +12,7 @@ export const ToolPlacementPane = forwardRef<
     groupName: string;
     available: boolean;
     openStandalone: boolean;
+    businessProfileId: number | null;
     onGroupName: (v: string) => void;
     onAvailable: (v: boolean) => void;
     onOpenStandalone: (v: boolean) => void;
@@ -23,6 +24,7 @@ export const ToolPlacementPane = forwardRef<
     groupName,
     available,
     openStandalone,
+    businessProfileId,
     onGroupName,
     onAvailable,
     onOpenStandalone,
@@ -34,11 +36,16 @@ export const ToolPlacementPane = forwardRef<
   const canStandalone = supportsStandaloneApp(toolId);
 
   async function save() {
+    if (businessProfileId == null) {
+      onSaved("Select a Business Profile before saving org placement");
+      throw new Error("Business Profile required");
+    }
     setBusy(true);
     try {
       await api(`/admin/catalog/${toolId}`, {
         method: "PUT",
         body: JSON.stringify({
+          businessProfileId,
           groupName,
           available,
           ...(canStandalone ? { openStandalone } : {}),
@@ -58,9 +65,15 @@ export const ToolPlacementPane = forwardRef<
   }
 
   async function hide() {
+    if (businessProfileId == null) {
+      onSaved("Select a Business Profile before changing org placement");
+      return;
+    }
     setBusy(true);
     try {
-      await api(`/admin/catalog/${toolId}`, { method: "DELETE" });
+      await api(`/admin/catalog/${toolId}?businessProfileId=${businessProfileId}`, {
+        method: "DELETE",
+      });
       onSaved("Tool hidden from the operator home catalog.");
     } catch (err) {
       onSaved(err instanceof Error ? err.message : "Hide failed");
@@ -77,15 +90,16 @@ export const ToolPlacementPane = forwardRef<
       label: () => "Save placement",
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- latest props closed over on each render
-    [busy, toolId, groupName, available, openStandalone, canStandalone],
+    [busy, toolId, groupName, available, openStandalone, canStandalone, businessProfileId],
   );
 
   return (
     <section className="panel admin-card tm-pane">
       <h2>Placement</h2>
       <p className="muted">
-        Org catalog visibility on the operator home screen. Setting Live also adds the tool to each
-        branch&apos;s home allowlist (if that branch uses a fixed tool list).
+        Org catalog visibility on the operator home screen for the Business Profile selected above.
+        Setting Live also adds the tool to that org&apos;s branch home allowlists (when fixed).
+        {!businessProfileId ? " Select a Business Profile to edit Live/Hidden." : ""}
       </p>
       <div className="admin-form-grid">
         <label className="field">

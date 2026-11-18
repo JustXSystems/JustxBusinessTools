@@ -129,7 +129,7 @@ export default function AdminToolsPage() {
     const qs =
       businessProfileId != null ? `?businessProfileId=${businessProfileId}` : "";
     const [c, s, d] = await Promise.all([
-      api<{ tools: CatalogRow[] }>("/admin/catalog"),
+      api<{ tools: CatalogRow[]; needsOrganization?: boolean }>(`/admin/catalog${qs}`),
       api<{
         skus: SkuState[];
         licenses: License[];
@@ -137,7 +137,7 @@ export default function AdminToolsPage() {
         orgLicenses?: License[];
         bundles?: BundleState[];
         profiles?: ProfileOption[];
-        businessProfileId?: number;
+        businessProfileId?: number | null;
       }>(`/admin/skus${qs}`),
       api<{ tools: ToolDef[] }>("/admin/config/tools"),
     ]);
@@ -148,7 +148,6 @@ export default function AdminToolsPage() {
     setOrgLicenses(s.orgLicenses ?? []);
     setBundles(s.bundles ?? []);
     setProfiles(s.profiles ?? []);
-    if (s.businessProfileId != null) setBusinessProfileId(s.businessProfileId);
     setDefs(d.tools);
   }, [businessProfileId]);
 
@@ -310,9 +309,14 @@ export default function AdminToolsPage() {
     const a = next[idx];
     next[idx] = next[swap];
     next[swap] = a;
+    if (businessProfileId == null) {
+      setMessage("Select a Business Profile before reordering org placement");
+      return;
+    }
     await api("/admin/catalog/reorder", {
       method: "POST",
       body: JSON.stringify({
+        businessProfileId,
         items: next.map((t, i) => ({ id: t.id, sortOrder: i, groupName: t.groupName })),
       }),
     });
@@ -358,9 +362,13 @@ export default function AdminToolsPage() {
       subtitleFields: newTemplate === "line_items" ? ["amount"] : ["notes"],
       statusField: null,
     };
+    if (businessProfileId == null) {
+      setMessage("Select a Business Profile before creating a tool in an org catalog");
+      return;
+    }
     await api("/admin/catalog", {
       method: "POST",
-      body: JSON.stringify({ id, title, groupName: group }),
+      body: JSON.stringify({ id, title, groupName: group, businessProfileId }),
     });
     await api(`/admin/config/tools/${id}`, {
       method: "POST",
@@ -390,11 +398,34 @@ export default function AdminToolsPage() {
           <div>
             <h2>Catalog &amp; products</h2>
             <p className="muted">
-              Org-wide placement (Live/Hidden), commercial SKUs, and schemas. To grant tools to a
-              Business Profile, use Profiles &amp; tools.
+              Platform catalog SKUs and schemas. Select a Business Profile to edit that org&apos;s
+              Live/Hidden placement or jump to Access Fabric for licenses. Operator profile
+              selection is ignored here.
             </p>
           </div>
           <div className="admin-form-row">
+            <label className="field" style={{ margin: 0, minWidth: 260 }}>
+              <span>Business Profile (for org placement / licenses)</span>
+              <select
+                value={businessProfileId ?? ""}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setBusinessProfileId(Number.isInteger(v) && v > 0 ? v : null);
+                }}
+                aria-label="Business Profile for catalog placement"
+              >
+                <option value="">
+                  {profiles.length === 0 ? "No profiles" : "Select a Business Profile…"}
+                </option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.organizationName ? `${p.organizationName} — ` : ""}
+                    {p.businessName}
+                    {p.isDefault ? " (default)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="field" style={{ margin: 0, minWidth: 220 }}>
               <span>Tools / Products grouping</span>
               <select
@@ -651,6 +682,7 @@ export default function AdminToolsPage() {
                   groupName={groupName}
                   available={available}
                   openStandalone={openStandalone}
+                  businessProfileId={businessProfileId}
                   onGroupName={setGroupName}
                   onAvailable={setAvailable}
                   onOpenStandalone={setOpenStandalone}
@@ -660,7 +692,12 @@ export default function AdminToolsPage() {
                     invalidateAdminData("admin-tools");
                   }}
                 />
-                <FeatureSwitchesPanel toolId={selected.id} toolName={selected.name} toolLive={selected.catalog?.available === true} />
+                <FeatureSwitchesPanel
+                  toolId={selected.id}
+                  toolName={selected.name}
+                  toolLive={selected.catalog?.available === true}
+                  businessProfileId={businessProfileId}
+                />
               </div>
 
               <div hidden={tab !== "pricing"} className={tab === "pricing" ? undefined : "payments-tab-park"}>

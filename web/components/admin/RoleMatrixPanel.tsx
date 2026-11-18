@@ -46,7 +46,7 @@ export function RoleMatrixPanel() {
     if (!matrix) return;
     // Locked capabilities / roles.
     if (role === "owner") return;
-    if (cap === "adminConsole") return;
+    if (cap === "adminConsole" || cap === "manageTools") return;
     if (role === "viewer" && (cap === "writeRecords" || cap === "exportData")) return;
     setMatrix({
       ...matrix,
@@ -80,10 +80,11 @@ export function RoleMatrixPanel() {
         <div>
           <h2>Role permission matrix</h2>
           <p className="muted">
-            Only JBT Admins (org Admin / platform) open <code>/admin</code>. Business Owners manage
-            team and profile settings from operator Business Profile — never the Admin Console.
-            Staff can view Profile and use Email Outbox / My Tools; Viewer sees Home and My Tools
-            only. Owner row and Admin Console column are locked.
+            Only Justxsystems platform super users open <code>/admin</code>. Org Owner and org Admin
+            manage team and settings from operator Business Profile. Tool licenses are assigned only
+            in Access Fabric (platform). Staff can view Profile and use Email Outbox / My Tools;
+            Viewer sees Home and My Tools only. Owner row, Admin Console, and Assign tool licenses
+            are locked.
           </p>
         </div>
         <div className="admin-form-row">
@@ -119,7 +120,9 @@ export function RoleMatrixPanel() {
                         <input
                           type="checkbox"
                           checked={Boolean(matrix[role][cap])}
-                          disabled={role === "owner" || cap === "adminConsole"}
+                          disabled={
+                            role === "owner" || cap === "adminConsole" || cap === "manageTools"
+                          }
                           onChange={() => toggle(role, cap)}
                           aria-label={`${role} ${cap}`}
                         />

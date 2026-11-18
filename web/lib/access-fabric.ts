@@ -1,20 +1,21 @@
 /**
  * Access Fabric — canonical model for Business Profile tool access.
  *
- * Layers (outer → inner):
- *   L1 Catalog   — org Live/Hidden placement
- *   L2 Entitle   — profile commercial licenses / included SKUs
- *   L3 Surface   — home_tool_ids allowlist on the operator home
- *   L4 Reach     — who may enter the profile (role + branch_access)
- *   L5 Identity  — legal completeness + approval lifecycle
+ * Layers:
+ *   identity  — legal completeness + approval
+ *   entitle   — profile commercial licenses / included SKUs
+ *   surface   — home_tool_ids allowlist on the operator home
+ *   reach     — who may enter the profile (role + branch_access)
+ *   catalog   — hard-lock pressure from unlicensed commercial tools
  *
- * JBT Admins operate L1–L5 in /admin.
- * Business Owners operate L3 (home tools) + L4 (team) on /profile.
+ * JBT Admins operate all layers in /admin Access Fabric.
+ * Business Owners operate surface + reach on /profile.
  */
 
 export type AccessLayerId = "catalog" | "entitle" | "surface" | "reach" | "identity";
 
-export type AccessSignal = "live" | "included" | "licensed" | "trial" | "locked" | "dim" | "orphan";
+/** Visual / filter signal for a tool node on the lattice. */
+export type AccessSignal = "included" | "licensed" | "locked" | "orphan" | "dim";
 
 export type FabricToolNode = {
   toolId: string;
@@ -71,6 +72,8 @@ export type AccessAction = {
 
 export type PackMatch = {
   pack: FabricPack;
+  /** Resolved membership used for coverage + home sync (never empty for all_tools). */
+  resolvedToolIds: string[];
   total: number;
   covered: number;
   missing: string[];
@@ -98,7 +101,7 @@ const LAYER_WEIGHTS: Record<AccessLayerId, number> = {
   entitle: 0.35,
   surface: 0.2,
   reach: 0.1,
-  catalog: 0.15, // approximated via hard-lock / sku presence on nodes
+  catalog: 0.15,
 };
 
 function clampPct(n: number) {
@@ -120,13 +123,30 @@ function toneFor(score: number): AccessReadiness["tone"] {
   return "bad";
 }
 
+/** True when home shows a tool the operator cannot use (unlicensed / hard-locked). */
+export function isOrphanHome(node: FabricToolNode): boolean {
+  return node.onHome && !node.includedFree && !node.licensed;
+}
+
+/**
+ * Signal priority:
+ * included → licensed → orphan (on home, unusable) → locked (hard lock off-home) → dim
+ */
 export function signalFor(node: FabricToolNode): AccessSignal {
   if (node.includedFree) return "included";
-  if (node.licensed) return node.periodEnd ? "licensed" : "licensed";
+  if (node.licensed) return "licensed";
+  if (isOrphanHome(node)) return "orphan";
   if (node.hardLock) return "locked";
-  if (node.onHome && !node.licensed && !node.includedFree) return "orphan";
-  if (!node.hasSku) return "dim";
   return "dim";
+}
+
+/** Resolve pack membership. Only `all_tools` expands when toolIds are empty. */
+export function resolvePackToolIds(pack: FabricPack, tools: FabricToolNode[]): string[] {
+  if (pack.toolIds.length > 0) return [...pack.toolIds];
+  if (pack.id === "all_tools") {
+    return tools.filter((t) => !t.includedFree && t.hasSku).map((t) => t.toolId);
+  }
+  return [];
 }
 
 export function computePackMatches(tools: FabricToolNode[], packs: FabricPack[]): PackMatch[] {
@@ -134,15 +154,14 @@ export function computePackMatches(tools: FabricToolNode[], packs: FabricPack[])
   return packs
     .filter((p) => p.available !== false)
     .map((pack) => {
-      const ids = pack.toolIds.length
-        ? pack.toolIds
-        : tools.filter((t) => !t.includedFree && t.hasSku).map((t) => t.toolId);
-      const nodes = ids.map((id) => byId.get(id)).filter(Boolean) as FabricToolNode[];
+      const resolvedToolIds = resolvePackToolIds(pack, tools);
+      const nodes = resolvedToolIds.map((id) => byId.get(id)).filter(Boolean) as FabricToolNode[];
       const covered = nodes.filter((n) => n.includedFree || n.licensed).length;
       const missing = nodes.filter((n) => !n.includedFree && !n.licensed).map((n) => n.toolId);
       const coveragePct = nodes.length ? clampPct((covered / nodes.length) * 100) : 100;
       return {
         pack,
+        resolvedToolIds,
         total: nodes.length,
         covered,
         missing,
@@ -163,13 +182,13 @@ export function computeAccessReadiness(input: FabricInputs): AccessReadiness {
   const includedCount = tools.filter((t) => t.includedFree).length;
   const licensedCount = tools.filter((t) => t.licensed && !t.includedFree).length;
   const entitled = tools.filter((t) => t.includedFree || t.licensed).length;
-  const dimCount = tools.filter((t) => !t.includedFree && !t.licensed && t.hasSku).length;
+  const dimCount = tools.filter((t) => signalFor(t) === "dim").length;
   const hardLocks = tools.filter((t) => t.hardLock && !t.licensed && !t.includedFree).length;
 
   const homeSet = new Set(input.homeToolIds);
   const homeNodes = tools.filter((t) => homeSet.has(t.toolId));
-  const homeUsable = homeNodes.filter((t) => t.includedFree || t.licensed || !t.hardLock);
-  const orphanHomeCount = homeNodes.filter((t) => !t.includedFree && !t.licensed && t.hardLock).length;
+  const homeUsable = homeNodes.filter((t) => t.includedFree || t.licensed);
+  const orphanHomeCount = homeNodes.filter((t) => isOrphanHome({ ...t, onHome: true })).length;
 
   const entitlementPct = clampPct((entitled / denom) * 100);
   const surfaceAlignmentPct = homeNodes.length
@@ -184,11 +203,7 @@ export function computeAccessReadiness(input: FabricInputs): AccessReadiness {
   const reachScore =
     input.peopleTotal <= 0
       ? 50
-      : clampPct(
-          ((input.peopleGranted + (input.approvalStatus === "approved" ? 1 : 0)) /
-            Math.max(1, input.peopleTotal)) *
-            100,
-        );
+      : clampPct((input.peopleGranted / Math.max(1, input.peopleTotal)) * 100);
 
   const layers: LayerScore[] = [
     {
@@ -212,14 +227,14 @@ export function computeAccessReadiness(input: FabricInputs): AccessReadiness {
       score: surfaceAlignmentPct,
       detail:
         orphanHomeCount > 0
-          ? `${orphanHomeCount} home tool(s) blocked without license`
+          ? `${orphanHomeCount} home tool(s) unusable without license`
           : `${homeNodes.length} on home · ${homeUsable.length} usable`,
     },
     {
       id: "reach",
       label: "People reach",
       score: reachScore,
-      detail: `${input.peopleGranted} explicit grant(s) · ${input.peopleTotal} in directory`,
+      detail: `${input.peopleGranted} with access · ${input.peopleTotal} in directory`,
     },
     {
       id: "catalog",
@@ -247,7 +262,7 @@ export function computeAccessReadiness(input: FabricInputs): AccessReadiness {
       id: "approve",
       priority: 10,
       title: "Approve this Business Profile",
-      detail: "Operators cannot fully run until the branch is approved.",
+      detail: "Operators cannot fully run until the profile is approved.",
       layer: "identity",
       action: "open-lifecycle",
     });
@@ -287,7 +302,7 @@ export function computeAccessReadiness(input: FabricInputs): AccessReadiness {
       id: "surface-orphan",
       priority: 40,
       title: "Align home surface",
-      detail: "Home shows tools that are hard-locked without a license.",
+      detail: "Home shows tools that are not licensed for this profile.",
       layer: "surface",
       action: "open-home",
     });
@@ -297,7 +312,7 @@ export function computeAccessReadiness(input: FabricInputs): AccessReadiness {
       id: "reach-gap",
       priority: 50,
       title: "Grant people reach",
-      detail: "Staff/Viewer accounts have no explicit access to this profile.",
+      detail: "Staff/Viewer accounts have no access to this profile.",
       layer: "reach",
       action: "open-people",
     });

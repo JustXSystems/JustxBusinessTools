@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { pool } from "../../db.js";
 import { rollupUsageForDate } from "../../lib/analytics/events.js";
-import { getActiveProfileId } from "../../lib/request-context.js";
 import { orgEqualsSql, orgScopeParams } from "../../lib/platform-admin.js";
 
 const router = Router();
@@ -33,8 +32,13 @@ router.post("/rollup", async (req, res) => {
     `SELECT id FROM business_profiles WHERE ${orgEqualsSql("organization_id")}`,
     orgScopeParams(),
   );
-  const ids = (Array.isArray(profiles) ? profiles : []).map((p) => Number((p as { id: number }).id));
-  const profileIds = ids.length ? ids : [getActiveProfileId()];
+  const profileIds = (Array.isArray(profiles) ? profiles : []).map((p) =>
+    Number((p as { id: number }).id),
+  );
+  if (profileIds.length === 0) {
+    res.json({ ok: true, profiles: 0, days: 0 });
+    return;
+  }
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 

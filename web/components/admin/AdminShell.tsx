@@ -71,11 +71,7 @@ function AdminShellInner({ children }: { children: ReactNode }) {
     nav.scrollLeft += linkRect.left + linkRect.width / 2 - (navRect.left + navRect.width / 2);
   }, [pathname, floating]);
 
-  const roleLabel = user?.isPlatformAdmin
-    ? "Platform super admin"
-    : user?.role
-      ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}`
-      : "Admin";
+  const roleLabel = "Platform super admin";
 
   const floatItems = adminNavigation.flatMap((section) =>
     section.items.map((item) => ({
@@ -101,10 +97,10 @@ function AdminShellInner({ children }: { children: ReactNode }) {
           footer={
             <>
               <Link
-                href="/"
+                href="/enter"
                 className="float-dock-item"
-                aria-label="Operator app"
-                title="Operator app"
+                aria-label="Enter Operator as…"
+                title="Enter Operator as…"
               >
                 <span className="float-dock-icon">
                   <NavIcon id="arrowLeft" />
@@ -193,7 +189,7 @@ function AdminShellInner({ children }: { children: ReactNode }) {
 
           <SidebarSessionFooter
             mini={mini}
-            operatorHref="/"
+            operatorHref="/enter"
             onLogout={() => logout()}
           />
         </aside>

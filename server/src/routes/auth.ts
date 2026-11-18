@@ -515,7 +515,12 @@ router.get("/me", async (req, res) => {
     res.status(401).json({ error: "Not authenticated" });
     return;
   }
-  const user = await loadSessionUser(ctx.userId, ctx.organizationId, ctx.businessProfileId);
+  const user = await loadSessionUser(
+    ctx.userId,
+    ctx.organizationId,
+    ctx.businessProfileId,
+    ctx.actAsRole ?? null,
+  );
   if (!user) {
     res.status(401).json({ error: "Not authenticated" });
     return;
@@ -553,16 +558,102 @@ router.post("/switch-branch", requireAuth, async (req, res) => {
     ? Number(profileRow.organization_id)
     : ctx.organizationId;
 
+  const {
+    parseActAsRole,
+    ensureActAsRoleSchema,
+    isActAsRoleColumnAvailable,
+  } = await import("../lib/auth/session.js");
+
+  // Live org users: never touch act_as_role (BAU branch switch must stay identical).
+  let nextActAs: import("../lib/request-context.js").OrgRole | null = null;
+  const bodyHasActAs = Object.prototype.hasOwnProperty.call(req.body ?? {}, "actAsRole");
+  if (ctx.isPlatformAdmin) {
+    try {
+      await ensureActAsRoleSchema();
+    } catch {
+      /* retried below */
+    }
+    nextActAs = bodyHasActAs
+      ? parseActAsRole(req.body?.actAsRole)
+      : (ctx.actAsRole ?? null);
+
+    // Setting or clearing act-as requires the column — never pretend it stuck in-memory only.
+    if (bodyHasActAs && !isActAsRoleColumnAvailable()) {
+      res.status(503).json({
+        error:
+          "Platform act-as is unavailable (sessions.act_as_role missing). Restart the API after DB is reachable, then retry /enter.",
+        code: "ACT_AS_UNAVAILABLE",
+      });
+      return;
+    }
+
+    // Act-as (or keeping act-as while switching profile) only against live profiles.
+    if (nextActAs) {
+      const [metaRows] = await pool.query(
+        `SELECT COALESCE(m.approval_status, 'approved') AS approval_status, m.archived_at
+         FROM business_profiles p
+         LEFT JOIN business_profile_meta m ON m.business_profile_id = p.id
+         WHERE p.id = :id
+         LIMIT 1`,
+        { id: profileId },
+      );
+      const meta = Array.isArray(metaRows)
+        ? (metaRows[0] as { approval_status?: string; archived_at?: string | Date | null } | undefined)
+        : undefined;
+      const status = String(meta?.approval_status ?? "approved").toLowerCase();
+      if (meta?.archived_at || status !== "approved") {
+        res.status(403).json({
+          error: "Act-as requires an approved, non-archived Business Profile",
+          code: "PROFILE_NOT_LIVE",
+        });
+        return;
+      }
+    }
+  }
+
   if (ctx.sessionId) {
-    await pool.query(
-      `UPDATE sessions SET business_profile_id = :profileId, organization_id = :orgId WHERE id = :sessionId`,
-      { profileId, orgId: nextOrgId, sessionId: ctx.sessionId },
+    if (ctx.isPlatformAdmin && isActAsRoleColumnAvailable()) {
+      await pool.query(
+        `UPDATE sessions
+         SET business_profile_id = :profileId,
+             organization_id = :orgId,
+             act_as_role = :actAsRole
+         WHERE id = :sessionId`,
+        {
+          profileId,
+          orgId: nextOrgId,
+          actAsRole: nextActAs,
+          sessionId: ctx.sessionId,
+        },
+      );
+    } else {
+      await pool.query(
+        `UPDATE sessions
+         SET business_profile_id = :profileId, organization_id = :orgId
+         WHERE id = :sessionId`,
+        { profileId, orgId: nextOrgId, sessionId: ctx.sessionId },
+      );
+    }
+  }
+
+  if (ctx.isPlatformAdmin) {
+    await logAudit(
+      "auth.act_as",
+      "session",
+      String(ctx.sessionId ?? ctx.userId),
+      { businessProfileId: profileId, organizationId: nextOrgId, actAsRole: nextActAs },
+      req.ip,
     );
   }
 
   const token = getTokenFromCookie(req.headers.cookie);
   if (token) {
-    const user = await loadSessionUser(ctx.userId!, nextOrgId, profileId);
+    const user = await loadSessionUser(
+      ctx.userId!,
+      nextOrgId,
+      profileId,
+      ctx.isPlatformAdmin ? nextActAs : null,
+    );
     res.json({ user });
     return;
   }
@@ -613,7 +704,25 @@ router.get("/google/callback", async (req, res) => {
 
   await logAudit("auth.google", "user", String(result.userId), undefined, req.ip);
   res.clearCookie("jbt_oauth_state");
-  res.redirect(webAppUrl("/"));
+
+  let land = "/";
+  try {
+    const { userIsPlatformAdmin } = await import("../lib/platform-admin.js");
+    const [userRows] = await pool.query(
+      `SELECT email, COALESCE(is_platform_admin, 0) AS is_platform_admin
+       FROM users WHERE id = :id LIMIT 1`,
+      { id: result.userId },
+    );
+    const u = Array.isArray(userRows)
+      ? (userRows[0] as { email: string; is_platform_admin: number } | undefined)
+      : undefined;
+    if (u && userIsPlatformAdmin(u.email, u.is_platform_admin)) {
+      land = "/admin";
+    }
+  } catch {
+    /* default home */
+  }
+  res.redirect(webAppUrl(land));
 });
 
 router.post("/otp/request", async (req, res) => {

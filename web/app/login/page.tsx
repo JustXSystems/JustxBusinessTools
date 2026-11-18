@@ -9,6 +9,7 @@ import { usePlatformBranding } from "@/components/branding/BrandingProvider";
 import { apiUrl, withBasePath } from "@/lib/api-base";
 import { requestPhoneOtp } from "@/lib/api";
 import { flashAppError } from "@/lib/app-flash";
+import { safeAppPath } from "@/lib/auth-access";
 
 type AuthMethods = { password: boolean; phoneOtp: boolean; google: boolean; mfa: boolean };
 
@@ -57,19 +58,21 @@ export default function LoginPage() {
 
   function redirectAfterLogin(user?: { isPlatformAdmin?: boolean; role?: string }) {
     const params = new URLSearchParams(window.location.search);
-    const next = params.get("next");
-    const canAdmin = user?.isPlatformAdmin || user?.role === "admin";
-    const dest =
-      next &&
-      next.startsWith("/") &&
-      !next.startsWith("/login") &&
-      !next.startsWith("/register")
-        ? canAdmin || !next.startsWith("/admin")
-          ? next
-          : "/admin"
-        : canAdmin
-          ? "/admin"
-          : "/";
+    const canAdmin = Boolean(user?.isPlatformAdmin);
+    const rawNext = params.get("next");
+    const next = rawNext
+      ? safeAppPath(rawNext, {
+          fallback: "",
+          denyPrefixes: ["/login", "/register"],
+        })
+      : "";
+    let dest: string;
+    if (next) {
+      const pathOnly = next.split("?")[0] ?? next;
+      dest = pathOnly.startsWith("/admin") && !canAdmin ? "/" : next;
+    } else {
+      dest = canAdmin ? "/admin" : "/";
+    }
     window.location.assign(withBasePath(dest));
   }
 

@@ -14,10 +14,20 @@ export const adminDeepLink = {
       : "/admin/team?filter=pending",
 
   profiles: () => "/admin/profiles",
-  profileAccess: (id?: number, tab: "fabric" | "licenses" | "home" | "people" = "fabric") =>
-    id != null && id > 0
-      ? `/admin/profiles?id=${id}&tab=${tab === "licenses" ? "fabric" : tab}`
-      : `/admin/profiles?tab=${tab === "licenses" ? "fabric" : tab}`,
+  /** Platform Impersonate gate — optional profile preselect. */
+  enterAs: (profileId?: number, role?: "owner" | "admin" | "staff" | "viewer") => {
+    const params = new URLSearchParams();
+    if (profileId != null && profileId > 0) params.set("profile", String(profileId));
+    if (role) params.set("role", role);
+    const qs = params.toString();
+    return qs ? `/enter?${qs}` : "/enter";
+  },
+  profileAccess: (id?: number, tab: "fabric" | "home" | "people" | "licenses" = "fabric") => {
+    const normalized = tab === "licenses" ? "fabric" : tab;
+    return id != null && id > 0
+      ? `/admin/profiles?id=${id}&tab=${normalized}`
+      : `/admin/profiles?tab=${normalized}`;
+  },
   profilePending: (id?: number) =>
     id != null && id > 0
       ? `/admin/profiles?filter=pending&id=${id}`

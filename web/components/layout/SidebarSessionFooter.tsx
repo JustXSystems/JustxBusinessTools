@@ -25,13 +25,23 @@ export function SidebarSessionFooter({
         <Link
           href={operatorHref}
           className="sidebar-session-btn sidebar-session-operator"
-          title="Open the operator business app"
-          aria-label="Operator app"
+          title={
+            operatorHref.startsWith("/enter")
+              ? "Enter Operator as a Business Profile role"
+              : "Open the operator business app"
+          }
+          aria-label={
+            operatorHref.startsWith("/enter") ? "Enter Operator as…" : "Operator app"
+          }
         >
           <span className="sidebar-session-icon" aria-hidden="true">
             <NavIcon id="home" />
           </span>
-          {!mini ? <span className="sidebar-session-text">Operator app</span> : null}
+          {!mini ? (
+            <span className="sidebar-session-text">
+              {operatorHref.startsWith("/enter") ? "Enter as…" : "Operator app"}
+            </span>
+          ) : null}
         </Link>
       ) : null}
 

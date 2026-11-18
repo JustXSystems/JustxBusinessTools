@@ -18,8 +18,13 @@ import {
   serializeProfileSendSettings,
 } from "../../lib/profile-send-settings.js";
 import { ensureQuoteTermsColumns, serializeQuoteTerms } from "../../lib/profile-terms.js";
-import { getActiveOrgId, getActiveUserId } from "../../lib/request-context.js";
+import { getActiveUserId } from "../../lib/request-context.js";
 import { orgEqualsSql, orgScopeParams } from "../../lib/platform-admin.js";
+import {
+  adminResolveError,
+  requireAdminOrgId,
+  resolveAdminResourceOrgId,
+} from "../../lib/admin/tenant-guard.js";
 import { publishNotification } from "../../lib/notification-publish.js";
 
 const router = Router();
@@ -184,7 +189,11 @@ router.get("/:id", async (req, res) => {
     return;
   }
   const mapped = mapProfile(row as Record<string, unknown>);
-  const orgId = Number((row as { organization_id: number }).organization_id) || getActiveOrgId();
+  const orgId = Number((row as { organization_id: number }).organization_id);
+  if (!Number.isInteger(orgId) || orgId < 1) {
+    res.status(500).json({ error: "Profile missing organization" });
+    return;
+  }
   const [peopleRows] = await pool.query(
     `SELECT u.id, u.email, u.name, om.role,
             CASE WHEN om.role IN ('owner', 'admin') THEN 1
@@ -211,7 +220,12 @@ router.get("/:id", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const orgId = getActiveOrgId();
+  const orgResolved = requireAdminOrgId(req.body?.organizationId);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const businessName = String(req.body?.businessName ?? "").trim();
   if (!businessName) {
     res.status(400).json({ error: "businessName required" });
@@ -275,7 +289,7 @@ router.post("/", async (req, res) => {
     href: `/admin/profiles?filter=pending&id=${id}`,
     entityType: "business_profile",
     entityId: String(id),
-    organizationId: getActiveOrgId(),
+    organizationId: orgId,
     businessProfileId: id,
     targetUserId: requesterId,
     dedupeKey: `branch-submit:${id}`,
@@ -288,7 +302,7 @@ router.post("/", async (req, res) => {
     href: `/admin/approvals?kind=profile`,
     entityType: "business_profile",
     entityId: String(id),
-    organizationId: getActiveOrgId(),
+    organizationId: orgId,
     businessProfileId: id,
     targetRoles: ["admin", "owner"],
     targetUserId: requesterId,
@@ -302,8 +316,13 @@ router.put("/:id", async (req, res) => {
   await ensureHomeToolIdsColumn();
   await ensureDocumentAccentColorColumn();
   await ensureSendSettingsColumn();
-  const orgId = getActiveOrgId();
   const id = Number(req.params.id);
+  const orgResolved = await resolveAdminResourceOrgId("business_profiles", id);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const body = (req.body ?? {}) as Record<string, unknown>;
   const homeOnly = isHomeToolsOnlyUpdate(body);
 
@@ -422,8 +441,13 @@ router.put("/:id", async (req, res) => {
 });
 
 router.post("/:id/default", async (req, res) => {
-  const orgId = getActiveOrgId();
   const id = Number(req.params.id);
+  const orgResolved = await resolveAdminResourceOrgId("business_profiles", id);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const [metaRows] = await pool.query(
     `SELECT COALESCE(m.approval_status, 'approved') AS approval_status
      FROM business_profiles p
@@ -451,6 +475,12 @@ router.post("/:id/default", async (req, res) => {
 
 router.post("/:id/approve", async (req, res) => {
   const id = Number(req.params.id);
+  const orgResolved = await resolveAdminResourceOrgId("business_profiles", id);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   await pool.query(
     `INSERT INTO business_profile_meta (business_profile_id, approval_status, reviewed_by, review_note)
      VALUES (:id, 'approved', :userId, :note)
@@ -461,7 +491,7 @@ router.post("/:id/approve", async (req, res) => {
     `SELECT id FROM approval_requests
      WHERE organization_id = :orgId AND entity_type = 'business_profile' AND entity_id = :eid AND status = 'pending'
      ORDER BY id DESC LIMIT 1`,
-    { orgId: getActiveOrgId(), eid: String(id) },
+    { orgId, eid: String(id) },
   );
   const row = Array.isArray(pending) ? pending[0] : null;
   if (row) await reviewApproval(Number((row as { id: number }).id), "approved", req.body?.note);
@@ -478,7 +508,7 @@ router.post("/:id/approve", async (req, res) => {
     title: "Business branch approved",
     body: `Branch #${id} is now approved and active.`,
     href: "/admin/profiles",
-    organizationId: getActiveOrgId(),
+    organizationId: orgId,
     entityType: "business_profile",
     entityId: String(id),
     businessProfileId: id,
@@ -580,8 +610,13 @@ router.post("/:id/unarchive", async (req, res) => {
 
 router.post("/:id/duplicate", async (req, res) => {
   await ensureQuoteTermsColumns();
-  const orgId = getActiveOrgId();
   const id = Number(req.params.id);
+  const orgResolved = await resolveAdminResourceOrgId("business_profiles", id);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const [rows] = await pool.query(
     `SELECT * FROM business_profiles WHERE id = :id AND ${orgEqualsSql("organization_id")}`,
     { id, orgId },
@@ -598,7 +633,7 @@ router.post("/:id/duplicate", async (req, res) => {
      VALUES (:orgId, :name, :gstin, :pan, :a1, :a2, :state, :stateCode, :phone, :email,
              :bankName, :bankBranch, :bankAccount, :bankIfsc, :bankUpi, :terms, :quoteTerms, 0)`,
     {
-      orgId,
+      orgId: Number(src.organization_id) || orgId,
       name: `${String(src.business_name ?? "Branch")} (copy)`,
       gstin: null,
       pan: src.pan ?? null,

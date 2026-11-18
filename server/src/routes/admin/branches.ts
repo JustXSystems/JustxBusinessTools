@@ -1,34 +1,86 @@
 import { Router } from "express";
 import { pool } from "../../db.js";
-import { getActiveOrgId } from "../../lib/request-context.js";
+import {
+  adminResolveError,
+  listAdminBusinessProfiles,
+  requireAdminOrgId,
+  resolveAdminBusinessProfile,
+} from "../../lib/admin/tenant-guard.js";
 
 const router = Router();
 
-router.get("/", async (_req, res) => {
-  const orgId = getActiveOrgId();
-  const [rows] = await pool.query(
-    `SELECT id, business_name, gstin, is_default, address_line1, state, phone, email
-     FROM business_profiles WHERE organization_id = :orgId ORDER BY is_default DESC, id`,
-    { orgId },
+router.get("/", async (req, res) => {
+  const profileHint = await resolveAdminBusinessProfile(
+    req.query.businessProfileId ?? req.query.profileId,
   );
-  const branches = (Array.isArray(rows) ? rows : []).map((row) => {
-    const r = row as Record<string, unknown>;
-    return {
-      id: Number(r.id),
-      businessName: String(r.business_name),
-      gstin: r.gstin as string | null,
-      isDefault: Boolean(r.is_default),
-      addressLine1: r.address_line1 as string | null,
-      state: r.state as string | null,
-      phone: r.phone as string | null,
-      email: r.email as string | null,
-    };
+  if (adminResolveError(profileHint)) {
+    res.status(profileHint.status).json({ error: profileHint.error });
+    return;
+  }
+
+  const orgRaw = req.query.organizationId ?? profileHint?.organizationId;
+  const orgResolved =
+    orgRaw != null && orgRaw !== ""
+      ? requireAdminOrgId(orgRaw)
+      : null;
+  if (orgResolved && adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+
+  const orgId = typeof orgResolved === "number" ? orgResolved : null;
+  const profiles = await listAdminBusinessProfiles(orgId);
+  const branches = profiles.map((p) => ({
+    id: p.id,
+    businessName: p.businessName,
+    gstin: null as string | null,
+    isDefault: p.isDefault,
+    organizationId: p.organizationId,
+    organizationName: p.organizationName,
+  }));
+
+  // Enrich with gstin when scoped to one org (keeps payload lean for global lists).
+  if (orgId != null) {
+    const [rows] = await pool.query(
+      `SELECT id, gstin, address_line1, state, phone, email
+       FROM business_profiles WHERE organization_id = :orgId`,
+      { orgId },
+    );
+    const extra = new Map(
+      (Array.isArray(rows) ? rows : []).map((row) => {
+        const r = row as Record<string, unknown>;
+        return [
+          Number(r.id),
+          {
+            gstin: (r.gstin as string | null) ?? null,
+            addressLine1: (r.address_line1 as string | null) ?? null,
+            state: (r.state as string | null) ?? null,
+            phone: (r.phone as string | null) ?? null,
+            email: (r.email as string | null) ?? null,
+          },
+        ] as const;
+      }),
+    );
+    for (const b of branches) {
+      const e = extra.get(b.id);
+      if (e) Object.assign(b, e);
+    }
+  }
+
+  res.json({
+    branches,
+    organizationId: orgId,
+    businessProfileId: profileHint?.profileId ?? null,
   });
-  res.json({ branches });
 });
 
 router.post("/", async (req, res) => {
-  const orgId = getActiveOrgId();
+  const orgResolved = requireAdminOrgId(req.body?.organizationId);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const businessName = String(req.body?.businessName ?? "").trim();
   if (!businessName) {
     res.status(400).json({ error: "businessName required" });
@@ -47,7 +99,7 @@ router.post("/", async (req, res) => {
     { id },
   );
 
-  res.status(201).json({ id, businessName });
+  res.status(201).json({ id, businessName, organizationId: orgId });
 });
 
 export default router;

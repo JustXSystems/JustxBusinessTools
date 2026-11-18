@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { BosIcon, BosRoot, Button, Field, Footnote, Input, Segmented } from "@/components/bos";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
+import { ImpersonationBanner } from "@/components/layout/ImpersonationBanner";
 import { api, requestPhoneOtp } from "@/lib/api";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import { isBosLive } from "@/lib/bos-app/handoff";
@@ -283,5 +284,10 @@ export function BosStandalone() {
     );
   }
 
-  return <BosApp mode="standalone" onSignOut={() => void signOut()} />;
+  return (
+    <>
+      <ImpersonationBanner />
+      <BosApp mode="standalone" onSignOut={() => void signOut()} />
+    </>
+  );
 }

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Header, BottomNavigation } from "@/components/layout/Header";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { ApiHealthBanner } from "@/components/layout/ApiHealthBanner";
+import { ImpersonationBanner } from "@/components/layout/ImpersonationBanner";
 import { OfflineSyncBanner } from "@/components/layout/OfflineSyncBanner";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { AnalyticsTracker } from "@/components/analytics/AnalyticsTracker";
@@ -23,6 +24,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <AnalyticsTracker />
               <ApiHealthBanner />
               <OfflineSyncBanner />
+              <ImpersonationBanner />
               <OperatorLayoutChrome>
                 <DesktopSidebar />
                 <div className="operator-main min-h-full">

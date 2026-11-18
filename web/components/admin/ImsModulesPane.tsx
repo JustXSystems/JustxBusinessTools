@@ -5,7 +5,13 @@ import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { api } from "@/lib/api";
 
-type ProfileOption = { id: number; businessName: string; isDefault: boolean };
+type ProfileOption = {
+  id: number;
+  businessName: string;
+  isDefault: boolean;
+  organizationId?: number;
+  organizationName?: string | null;
+};
 
 type CatalogRow = { key: string; label: string; section: string; required?: boolean };
 
@@ -53,12 +59,12 @@ export const ImsModulesPane = forwardRef<
       setUnrestricted(data.unrestricted);
       setEnabled(new Set(data.enabled));
       setContentWidthPct(clampWidthPct(layout.imsLayout?.contentWidthPct));
-      if (data.businessProfileId !== profileId) onBusinessProfileChange(data.businessProfileId);
+      // Do not adopt a server/session profile — Admin Console selection is explicit only.
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Failed to load IMS modules");
       setState(null);
     }
-  }, [onBusinessProfileChange]);
+  }, []);
 
   useEffect(() => {
     void load(businessProfileId);
@@ -104,6 +110,10 @@ export const ImsModulesPane = forwardRef<
 
   async function save() {
     if (!state) return;
+    if (businessProfileId == null) {
+      setLoadError("Select a Business Profile before saving IMS modules");
+      return;
+    }
     setBusy(true);
     try {
       const width = clampWidthPct(contentWidthPct);
@@ -111,7 +121,7 @@ export const ImsModulesPane = forwardRef<
         api<ModulesState>("/admin/ims-modules", {
           method: "PUT",
           body: JSON.stringify({
-            businessProfileId: state.businessProfileId,
+            businessProfileId,
             unrestricted,
             enabled: unrestricted ? undefined : [...enabled],
           }),
@@ -178,12 +188,19 @@ export const ImsModulesPane = forwardRef<
       <label className="field" style={{ maxWidth: 360, marginTop: 12 }}>
         <span>Business profile</span>
         <select
-          value={businessProfileId ?? state?.businessProfileId ?? ""}
-          onChange={(e) => onBusinessProfileChange(Number(e.target.value))}
+          value={businessProfileId ?? ""}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (Number.isInteger(v) && v > 0) onBusinessProfileChange(v);
+          }}
           aria-label="Business profile for IMS modules"
         >
+          <option value="">
+            {profileList.length === 0 ? "No profiles" : "Select a Business Profile…"}
+          </option>
           {profileList.map((p) => (
             <option key={p.id} value={p.id}>
+              {p.organizationName ? `${p.organizationName} — ` : ""}
               {p.businessName}
               {p.isDefault ? " (default)" : ""}
             </option>

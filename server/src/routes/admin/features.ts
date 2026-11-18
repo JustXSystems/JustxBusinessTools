@@ -7,7 +7,12 @@ import {
   isFeatureSwitchKey,
   setOrgFeatureSwitch,
 } from "../../lib/feature-switches.js";
-import { getActiveOrgId, getActiveUserId } from "../../lib/request-context.js";
+import { getActiveUserId } from "../../lib/request-context.js";
+import {
+  adminResolveError,
+  requireAdminOrgId,
+  resolveAdminBusinessProfile,
+} from "../../lib/admin/tenant-guard.js";
 
 const router = Router();
 
@@ -16,8 +21,29 @@ async function listSwitches(orgId: number) {
   return FEATURE_SWITCHES.map((s) => ({ ...s, enabled: state[s.key] }));
 }
 
-router.get("/", async (_req, res) => {
-  res.json({ switches: await listSwitches(getActiveOrgId()) });
+async function resolveFeatureOrg(input: {
+  organizationId?: unknown;
+  businessProfileId?: unknown;
+  profileId?: unknown;
+}): Promise<number | { error: string; status: number }> {
+  const profile = await resolveAdminBusinessProfile(
+    input.businessProfileId ?? input.profileId,
+  );
+  if (adminResolveError(profile)) return profile;
+  return requireAdminOrgId(input.organizationId ?? profile?.organizationId);
+}
+
+router.get("/", async (req, res) => {
+  const orgResolved = await resolveFeatureOrg({
+    organizationId: req.query.organizationId,
+    businessProfileId: req.query.businessProfileId,
+    profileId: req.query.profileId,
+  });
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  res.json({ switches: await listSwitches(orgResolved), organizationId: orgResolved });
 });
 
 router.put("/:key", async (req, res) => {
@@ -30,12 +56,24 @@ router.put("/:key", async (req, res) => {
     res.status(400).json({ error: "enabled (true/false) is required" });
     return;
   }
-  const orgId = getActiveOrgId();
+  const orgResolved = await resolveFeatureOrg({
+    organizationId: req.body?.organizationId,
+    businessProfileId: req.body?.businessProfileId,
+    profileId: req.body?.profileId,
+  });
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const enabled = req.body.enabled as boolean;
   await setOrgFeatureSwitch(orgId, key, enabled, getActiveUserId());
-  await pool.query(`UPDATE business_profiles SET config_version = config_version + 1 WHERE organization_id = :orgId`, { orgId });
+  await pool.query(
+    `UPDATE business_profiles SET config_version = config_version + 1 WHERE organization_id = :orgId`,
+    { orgId },
+  );
   await logAudit(enabled ? "feature.enable" : "feature.disable", "feature", key, { enabled }, req.ip);
-  res.json({ switches: await listSwitches(orgId) });
+  res.json({ switches: await listSwitches(orgId), organizationId: orgId });
 });
 
 export default router;

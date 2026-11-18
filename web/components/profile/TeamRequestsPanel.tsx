@@ -22,6 +22,7 @@ export function TeamRequestsPanel() {
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
   const [roles, setRoles] = useState<Record<number, "staff" | "viewer">>({});
+  const [rejectNotes, setRejectNotes] = useState<Record<number, string>>({});
 
   const reload = useCallback(async () => {
     try {
@@ -68,8 +69,17 @@ export function TeamRequestsPanel() {
     setMessage("");
     setError("");
     try {
-      await api(`/profile/team/${id}/reject`, { method: "POST", body: JSON.stringify({}) });
+      const note = (rejectNotes[id] ?? "").trim();
+      await api(`/profile/team/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ note: note || undefined }),
+      });
       setMessage("Join request declined.");
+      setRejectNotes((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reject failed");
@@ -88,7 +98,7 @@ export function TeamRequestsPanel() {
     >
       <p className="section-note">
         People who registered against your GSTIN wait here until you approve them as Staff or Viewer.
-        Justxsystems admins can also approve these optionally.
+        Justxsystems admins can also approve these from Access Fabric / Users.
       </p>
       {loading ? <p className="muted">Loading…</p> : null}
       {error ? <div className="error-banner">{error}</div> : null}
@@ -98,43 +108,56 @@ export function TeamRequestsPanel() {
       ) : null}
       <div className="admin-stack" style={{ gap: 12 }}>
         {members.map((m) => (
-          <div key={m.id} className="flex-row-wrap" style={{ alignItems: "flex-end", gap: 10 }}>
-            <div className="min-w-240" style={{ flex: 1 }}>
-              <strong>{m.name || m.email}</strong>
-              <p className="muted" style={{ margin: "4px 0 0" }}>
-                {m.email}
-                {m.phone ? ` · ${m.phone}` : ""}
-              </p>
-            </div>
-            <label className="field" style={{ minWidth: 140, margin: 0 }}>
-              <span>Role</span>
-              <select
-                value={roles[m.id] ?? "staff"}
-                onChange={(e) =>
-                  setRoles((prev) => ({ ...prev, [m.id]: e.target.value as "staff" | "viewer" }))
-                }
+          <div key={m.id} className="admin-stack" style={{ gap: 8 }}>
+            <div className="flex-row-wrap" style={{ alignItems: "flex-end", gap: 10 }}>
+              <div className="min-w-240" style={{ flex: 1 }}>
+                <strong>{m.name || m.email}</strong>
+                <p className="muted" style={{ margin: "4px 0 0" }}>
+                  {m.email}
+                  {m.phone ? ` · ${m.phone}` : ""}
+                </p>
+              </div>
+              <label className="field" style={{ minWidth: 140, margin: 0 }}>
+                <span>Role</span>
+                <select
+                  value={roles[m.id] ?? "staff"}
+                  onChange={(e) =>
+                    setRoles((prev) => ({ ...prev, [m.id]: e.target.value as "staff" | "viewer" }))
+                  }
+                  disabled={busyId === m.id}
+                >
+                  <option value="staff">Staff</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
                 disabled={busyId === m.id}
+                onClick={() => void approve(m.id)}
               >
-                <option value="staff">Staff</option>
-                <option value="viewer">Viewer</option>
-              </select>
+                Approve
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={busyId === m.id}
+                onClick={() => void reject(m.id)}
+              >
+                Reject
+              </button>
+            </div>
+            <label className="field" style={{ margin: 0 }}>
+              <span>Reject note (optional)</span>
+              <input
+                value={rejectNotes[m.id] ?? ""}
+                onChange={(e) =>
+                  setRejectNotes((prev) => ({ ...prev, [m.id]: e.target.value }))
+                }
+                placeholder="Shared with the requester if you reject"
+                disabled={busyId === m.id}
+              />
             </label>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={busyId === m.id}
-              onClick={() => void approve(m.id)}
-            >
-              Approve
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              disabled={busyId === m.id}
-              onClick={() => void reject(m.id)}
-            >
-              Reject
-            </button>
           </div>
         ))}
       </div>

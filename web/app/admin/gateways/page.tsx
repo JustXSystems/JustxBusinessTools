@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { useRevealWhenStacked } from "@/hooks/useRevealWhenStacked";
@@ -10,6 +11,8 @@ import { adminDeepLink } from "@/lib/admin-deep-links";
 
 type Gateway = {
   id: number;
+  organizationId?: number;
+  organizationName?: string | null;
   provider: string;
   displayName: string;
   mode: string;
@@ -135,6 +138,7 @@ function AdminGatewaysInner() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [createOrgId, setCreateOrgId] = useState<number | null>(null);
 
   useEffect(() => {
     setFilter(filterFromUrl);
@@ -201,7 +205,7 @@ function AdminGatewaysInner() {
       if (filter === "off" && g.enabled) return false;
       if (filter === "unhealthy" && (g.lastHealth === "ok" || !g.enabled)) return false;
       if (!q) return true;
-      return `${g.displayName} ${g.provider} ${g.mode} ${(g.mappedPlanIds ?? []).join(" ")}`.toLowerCase().includes(q);
+      return `${g.displayName} ${g.organizationName ?? ""} ${g.provider} ${g.mode} ${(g.mappedPlanIds ?? []).join(" ")}`.toLowerCase().includes(q);
     });
   }, [gateways, filter, query]);
 
@@ -320,10 +324,15 @@ function AdminGatewaysInner() {
 
   async function createGateway(e: React.FormEvent) {
     e.preventDefault();
+    if (createOrgId == null) {
+      setError("Select an organization for the new gateway");
+      return;
+    }
     await run("Gateway created (starts disabled).", async () => {
       const created = await api<{ id: number }>("/admin/gateways", {
         method: "POST",
         body: JSON.stringify({
+          organizationId: createOrgId,
           provider: form.provider,
           displayName: form.displayName.trim(),
           mode: form.mode,
@@ -337,6 +346,7 @@ function AdminGatewaysInner() {
         }),
       });
       setForm(emptyForm);
+      setCreateOrgId(null);
       setShowAdd(false);
       const { nextId } = await load(created.id);
       if (nextId != null) await loadEvents(nextId);
@@ -352,7 +362,8 @@ function AdminGatewaysInner() {
           <div>
             <h2>Gateways</h2>
             <p className="muted">
-              Connect Razorpay, Stripe, or Cashfree, map them to plans, and keep a health trace before going live.
+              Connect Razorpay, Stripe, or Cashfree per organization. Operator Business Profile
+              selection is ignored — pick the org when adding a gateway.
             </p>
           </div>
           <div className="admin-form-row">
@@ -446,6 +457,9 @@ function AdminGatewaysInner() {
               >
                 <div>
                   <strong>{g.displayName}</strong>
+                  {g.organizationName ? (
+                    <span className="muted small"> · {g.organizationName}</span>
+                  ) : null}
                   <span className="muted">
                     {g.provider} · {g.mode} · {(g.mappedPlanIds ?? []).join(", ") || "no plans"}
                   </span>
@@ -466,6 +480,9 @@ function AdminGatewaysInner() {
               <h2>Add gateway</h2>
               <p className="muted">Starts disabled. Run a health check before enabling live mode.</p>
               <form className="admin-form-grid" onSubmit={createGateway}>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <AdminOrgSelect value={createOrgId} onChange={setCreateOrgId} />
+                </div>
                 <label className="field">
                   <span>Provider</span>
                   <select

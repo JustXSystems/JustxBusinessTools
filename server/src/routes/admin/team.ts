@@ -10,7 +10,7 @@ import { logAudit } from "../../lib/audit.js";
 import { getActiveOrgId, getActiveSessionId, getActiveUserId } from "../../lib/request-context.js";
 import { isPlatformAdmin, orgEqualsSql, orgScopeParams } from "../../lib/platform-admin.js";
 import { publishNotification } from "../../lib/notification-publish.js";
-import { assertOrgMember, resolveAdminOrgId } from "../../lib/admin/tenant-guard.js";
+import { assertOrgMember, requireAdminOrgId } from "../../lib/admin/tenant-guard.js";
 
 const router = Router();
 const ROLES = new Set(["owner", "admin", "staff", "viewer"]);
@@ -47,14 +47,14 @@ const MEMBER_SQL = `SELECT u.id, u.email, u.name, u.phone, u.status, m.role, m.c
      INNER JOIN organizations o ON o.id = m.organization_id
      LEFT JOIN user_verifications v ON v.user_id = u.id`;
 
-async function orgForMember(userId: number): Promise<number> {
+async function orgForMember(userId: number): Promise<number | null> {
   if (!isPlatformAdmin()) return getActiveOrgId();
   const [rows] = await pool.query(
     `SELECT organization_id FROM org_members WHERE user_id = :userId LIMIT 1`,
     { userId },
   );
   const row = Array.isArray(rows) ? (rows[0] as { organization_id: number } | undefined) : undefined;
-  return row ? Number(row.organization_id) : getActiveOrgId();
+  return row ? Number(row.organization_id) : null;
 }
 
 async function countOwners(orgId: number): Promise<number> {
@@ -117,7 +117,7 @@ function parseUserId(param: string | undefined): number | null {
 }
 
 router.post("/invite", async (req, res) => {
-  const orgResolved = resolveAdminOrgId(req.body?.organizationId);
+  const orgResolved = requireAdminOrgId(req.body?.organizationId);
   if (typeof orgResolved === "object") {
     res.status(orgResolved.status).json({ error: orgResolved.error });
     return;
@@ -221,14 +221,6 @@ router.get("/:userId", async (req, res) => {
     return;
   }
   const branchIds = await listBranchAccessForUser(userId);
-  const [toolRows] = await pool.query(
-    `SELECT tool_id, granted FROM user_tool_access WHERE user_id = :userId`,
-    { userId },
-  );
-  const tools = (Array.isArray(toolRows) ? toolRows : []).map((t) => {
-    const r = t as { tool_id: string; granted: number };
-    return { toolId: r.tool_id, granted: Boolean(r.granted) };
-  });
   const [sessionRows] = await pool.query(
     `SELECT COUNT(*) AS cnt, MAX(created_at) AS last_seen
      FROM sessions WHERE user_id = :userId AND expires_at > CURRENT_TIMESTAMP`,
@@ -239,8 +231,6 @@ router.get("/:userId", async (req, res) => {
     member: mapMember(row as Record<string, unknown>),
     branchIds,
     branchMode: branchIds.length ? "selected" : "all",
-    tools,
-    toolMode: tools.length ? "selected" : "all",
     sessions: {
       active: Number(session?.cnt ?? 0),
       lastSeenAt: session?.last_seen ? String(session.last_seen) : null,
@@ -583,16 +573,10 @@ router.post("/:userId/copy-access", async (req, res) => {
     return;
   }
   const orgId = await orgForMember(userId);
-  if (!(await memberRole(orgId, userId)) || !(await memberRole(orgId, fromId))) {
+  if (orgId == null || !(await memberRole(orgId, userId)) || !(await memberRole(orgId, fromId))) {
     res.status(404).json({ error: "Member not found" });
     return;
   }
-  await pool.query(`DELETE FROM user_tool_access WHERE user_id = :userId`, { userId });
-  await pool.query(
-    `INSERT INTO user_tool_access (user_id, tool_id, granted)
-     SELECT :userId, tool_id, granted FROM user_tool_access WHERE user_id = :fromId`,
-    { userId, fromId },
-  );
   const current = await listBranchAccessForUser(userId);
   for (const id of current) await revokeBranchAccess(userId, id);
   const sourceBranches = await listBranchAccessForUser(fromId);
@@ -608,6 +592,10 @@ router.delete("/:userId", async (req, res) => {
     return;
   }
   const orgId = await orgForMember(userId);
+  if (orgId == null) {
+    res.status(404).json({ error: "Member not found" });
+    return;
+  }
   if (userId === getActiveUserId()) {
     res.status(400).json({ error: "You cannot remove yourself" });
     return;
@@ -628,68 +616,6 @@ router.delete("/:userId", async (req, res) => {
   });
   await logAudit("team.remove", "user", String(userId), { role }, req.ip);
   res.status(204).send();
-});
-
-router.get("/:userId/tools", async (req, res) => {
-  const userId = Number(req.params.userId);
-  const member = await assertOrgMember(userId);
-  if (!member.ok) {
-    res.status(member.status).json({ error: member.error });
-    return;
-  }
-  const [rows] = await pool.query(
-    `SELECT tool_id, granted FROM user_tool_access WHERE user_id = :userId`,
-    { userId },
-  );
-  const tools = (Array.isArray(rows) ? rows : []).map((row) => {
-    const r = row as { tool_id: string; granted: number };
-    return { toolId: r.tool_id, granted: Boolean(r.granted) };
-  });
-  res.json({ tools, toolMode: tools.length ? "selected" : "all" });
-});
-
-router.put("/:userId/tools", async (req, res) => {
-  const userId = Number(req.params.userId);
-  const member = await assertOrgMember(userId);
-  if (!member.ok) {
-    res.status(member.status).json({ error: member.error });
-    return;
-  }
-  const mode = String(req.body?.mode ?? "selected");
-  await pool.query(`DELETE FROM user_tool_access WHERE user_id = :userId`, { userId });
-  if (mode !== "all") {
-    const toolIds = Array.isArray(req.body?.toolIds)
-      ? (req.body.toolIds as unknown[]).map(String).filter(Boolean)
-      : [];
-    for (const toolId of toolIds) {
-      await pool.query(
-        `INSERT INTO user_tool_access (user_id, tool_id, granted) VALUES (:userId, :toolId, 1)`,
-        { userId, toolId },
-      );
-    }
-  }
-  await logAudit("team.tools", "user", String(userId), { mode }, req.ip);
-  res.json({ ok: true });
-});
-
-router.post("/:userId/tools", async (req, res) => {
-  const userId = Number(req.params.userId);
-  const member = await assertOrgMember(userId);
-  if (!member.ok) {
-    res.status(member.status).json({ error: member.error });
-    return;
-  }
-  const toolId = String(req.body?.toolId ?? "");
-  if (!toolId) {
-    res.status(400).json({ error: "toolId required" });
-    return;
-  }
-  await pool.query(
-    `INSERT INTO user_tool_access (user_id, tool_id, granted) VALUES (:userId, :toolId, :granted)
-     ON DUPLICATE KEY UPDATE granted = :granted`,
-    { userId, toolId, granted: Number(req.body?.granted !== false) },
-  );
-  res.json({ ok: true });
 });
 
 router.get("/:userId/branches", async (req, res) => {

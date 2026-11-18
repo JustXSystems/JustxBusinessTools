@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { bumpCommerceRevision } from "@/lib/commerce-revision";
@@ -137,21 +138,6 @@ export function ProductPacksPanel({
       else startCreate();
     } catch (err) {
       onMessage(err instanceof Error ? err.message : "Delete failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function grantPack(id: string) {
-    setSaving(true);
-    try {
-      const r = await api<{ granted: string[] }>("/admin/skus/grant", {
-        method: "POST",
-        body: JSON.stringify({ bundleId: id, days: 365 }),
-      });
-      onMessage(`Granted ${r.granted.length} tool license(s) from pack.`);
-    } catch (err) {
-      onMessage(err instanceof Error ? err.message : "Grant failed");
     } finally {
       setSaving(false);
     }
@@ -311,16 +297,16 @@ export function ProductPacksPanel({
             </div>
           )}
 
+          <p className="muted">
+            Define pack membership here. Provision licenses to a Business Profile from{" "}
+            <Link href="/admin/profiles?tab=fabric">Access Fabric</Link> (profile-first pack
+            provisioner).
+          </p>
           <div className="admin-form-row">
-            {!creating && editingId ? (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={saving}
-                onClick={() => void grantPack(editingId)}
-              >
-                Grant to operator (365d)
-              </button>
+            {!creating ? (
+              <Link href="/admin/profiles?tab=fabric" className="btn btn-secondary btn-sm">
+                Open Access Fabric
+              </Link>
             ) : null}
             {!creating && editingId && editingId !== "all_tools" ? (
               <button

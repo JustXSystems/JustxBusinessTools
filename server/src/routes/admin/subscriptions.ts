@@ -2,7 +2,6 @@ import { Router } from "express";
 import { pool } from "../../db.js";
 import { logAudit } from "../../lib/audit.js";
 import { applyPlanToOrganization } from "../../lib/payments/org-subscription.js";
-import { getActiveOrgId } from "../../lib/request-context.js";
 import { isPlatformAdmin, orgEqualsSql, orgScopeParams } from "../../lib/platform-admin.js";
 import {
   ensureSubscriptionPlanSchema,
@@ -114,12 +113,13 @@ router.post("/assign", async (req, res) => {
     res.status(400).json({ error: "Assign free (limited) or pro (unlimited)" });
     return;
   }
-  let orgId = Number(req.body?.organizationId) || getActiveOrgId();
-  if (!isPlatformAdmin() && orgId !== getActiveOrgId()) {
-    res.status(403).json({ error: "Cannot assign for another organization" });
+  const { requireAdminOrgId, adminResolveError } = await import("../../lib/admin/tenant-guard.js");
+  const orgResolved = requireAdminOrgId(req.body?.organizationId);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
     return;
   }
-  if (!Number.isInteger(orgId) || orgId < 1) orgId = getActiveOrgId();
+  const orgId = orgResolved;
 
   await applyPlanToOrganization(orgId, plan.id, {
     trialDays: plan.trialDays,
@@ -264,11 +264,13 @@ router.get("/notices", async (_req, res) => {
 });
 
 router.post("/notices", async (req, res) => {
-  const orgId = Number(req.body?.organizationId) || getActiveOrgId();
-  if (!isPlatformAdmin() && orgId !== getActiveOrgId()) {
-    res.status(403).json({ error: "Cannot schedule for another organization" });
+  const { requireAdminOrgId, adminResolveError } = await import("../../lib/admin/tenant-guard.js");
+  const orgResolved = requireAdminOrgId(req.body?.organizationId);
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
     return;
   }
+  const orgId = orgResolved;
   const title = String(req.body?.title ?? "").trim();
   const body = String(req.body?.body ?? "").trim();
   if (!title || !body) {

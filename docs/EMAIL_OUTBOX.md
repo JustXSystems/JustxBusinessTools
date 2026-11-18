@@ -40,7 +40,7 @@ Full “who / what / how” for files: [`SYNC_CENTER.md`](SYNC_CENTER.md)#who-ne
 | **Email webhook URL** (Path A) | **Business Profile → Send Via → Email** | Owner / Admin | **Per company / GSTIN** — Power Automate HTTP URL for that mailbox. Blind-follow: [`MICROSOFT_GRAPH_EMAIL.md`](MICROSOFT_GRAPH_EMAIL.md) |
 | Platform Email webhook fallback | **Admin → Integrations** or `EMAIL_WEBHOOK_URL` | Platform admin | Used only if profile URL is empty |
 | `NOTIFY_EMAIL_WEBHOOK_URL` | `.env` fallback | Engineer | Alias only if Admin / primary empty |
-| Email template / accent / Reply-To | **Business Profile** → Send Via → Email | Owner | Also Admin → GST branches → Branding |
+| Email template / accent / Reply-To | **Business Profile** → Send Via → Email | Owner | Also Admin → Access Fabric → Branding |
 | Default To / CC / subject text | Same Send Via panel | Owner | Prefills Quotation send modal |
 | Desktop agent token | **Sync Center** → Download setup | **Owner or Admin** (Staff cannot open Sync Center) | Path C only — same agent as UNC sync |
 | Mail client / `mailto` handler | Windows default apps | Staff PC | Path B |

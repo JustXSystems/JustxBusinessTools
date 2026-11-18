@@ -1,9 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
-import { getRequestContext } from "../lib/request-context.js";
+import { getActiveRole, getRequestContext, isActingAsOrgRole } from "../lib/request-context.js";
 
 /**
  * Business Profile details (including document accent + send channels) may be
  * edited by Business Owner or org Admin. Staff / Viewer are read-only.
+ * Platform supers keep access unless they are acting as a limited role.
  */
 export async function requireBusinessProfileOwner(
   _req: Request,
@@ -15,7 +16,15 @@ export async function requireBusinessProfileOwner(
     next();
     return;
   }
-  if (ctx.role === "owner" || ctx.role === "admin" || ctx.role === "legacy") {
+  if (ctx.isPlatformAdmin && !isActingAsOrgRole()) {
+    res.status(403).json({
+      error: "Enter Operator as a Business Profile role first (/enter)",
+      code: "NEED_ACT_AS",
+    });
+    return;
+  }
+  const role = getActiveRole();
+  if (role === "owner" || role === "admin" || role === "legacy") {
     next();
     return;
   }

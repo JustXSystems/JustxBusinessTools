@@ -17,6 +17,7 @@ import subscriptionsRouter from "./subscriptions.js";
 import teamRouter from "./team.js";
 import themesRouter from "./themes.js";
 import integrationsRouter from "./integrations.js";
+import organizationsRouter from "./organizations.js";
 
 const router = Router();
 
@@ -271,6 +272,7 @@ router.use("/analytics", analyticsRouter);
 router.use("/approvals", approvalsInboxRouter);
 router.use("/audit", auditRouter);
 router.use("/ops", opsRouter);
+router.use("/organizations", organizationsRouter);
 router.use("/payments", paymentsRouter);
 router.use("/branches", branchesRouter);
 router.use("/profiles", profilesRouter);

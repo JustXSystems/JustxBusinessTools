@@ -8,6 +8,8 @@ function initials(name: string | null | undefined, email: string | null | undefi
 function formatRoleLabel(role?: string | null) {
   const raw = (role || "").trim();
   if (!raw) return "";
+  // Preserve phrases like "Acting as staff" / "Platform admin".
+  if (/\s/.test(raw)) return raw;
   return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
 }
 

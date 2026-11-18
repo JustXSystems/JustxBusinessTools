@@ -5,7 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
-import { canEditBusinessProfile } from "@/lib/auth-access";
+import { canEditBusinessProfile, canManageBusinessTeam } from "@/lib/auth-access";
 import {
   EMPTY_PROFILE,
   INDIAN_STATES,
@@ -69,9 +69,9 @@ const TAB_SECTIONS: Record<ProfileTab, string[]> = {
 export default function ProfilePage() {
   const { user } = useAuth();
   const canEdit = canEditBusinessProfile(user);
-  const isBusinessOwner = user?.role === "owner";
+  const canManageTeam = canManageBusinessTeam(user);
   const { config, refresh: refreshConfig } = usePlatformConfig();
-  const visibleTabs = PROFILE_TABS.filter((tab) => tab.id !== "team" || isBusinessOwner);
+  const visibleTabs = PROFILE_TABS.filter((tab) => tab.id !== "team" || canManageTeam);
   const platformTools = config?.tools ?? [];
   const catalogIds = useMemo(
     () => mergedHomeTools(platformTools).map((t) => t.id),
@@ -694,7 +694,7 @@ export default function ProfilePage() {
         <h3 className="panel-title">Tools on home</h3>
         <p className="section-note">
           Only selected tools appear on Home after login. Subscription / billing always shows the full
-          catalog. Justxsystems admins assign commercial licenses in Admin → Profiles &amp; tools.
+          catalog. Justxsystems admins assign commercial licenses in Admin → Access Fabric.
         </p>
         <HomeToolPicker
           selectedIds={profile.homeToolIds ?? []}
@@ -708,7 +708,7 @@ export default function ProfilePage() {
       </div>
           ) : null}
 
-          {activeTab === "team" && isBusinessOwner ? <TeamMembersPanel /> : null}
+          {activeTab === "team" && canManageTeam ? <TeamMembersPanel /> : null}
 
           {activeTab === "send" ? (
             <>

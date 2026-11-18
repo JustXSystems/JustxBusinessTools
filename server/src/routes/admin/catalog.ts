@@ -2,7 +2,11 @@ import { Router } from "express";
 import { pool } from "../../db.js";
 import { logAudit } from "../../lib/audit.js";
 import { jsonVal } from "../../lib/admin/approvals.js";
-import { getActiveOrgId } from "../../lib/request-context.js";
+import {
+  adminResolveError,
+  requireAdminOrgId,
+  resolveAdminBusinessProfile,
+} from "../../lib/admin/tenant-guard.js";
 import { publishToolDefinition, listToolDefinitions } from "../../lib/config/effective.js";
 import { appendToolToOrgHomeSelections, ensureOpenStandaloneColumn } from "../../lib/home-tools.js";
 
@@ -110,8 +114,49 @@ async function ensureCatalog(orgId: number): Promise<void> {
   }
 }
 
-router.get("/", async (_req, res) => {
-  const orgId = getActiveOrgId();
+async function resolveCatalogOrgId(input: {
+  organizationId?: unknown;
+  businessProfileId?: unknown;
+  profileId?: unknown;
+}): Promise<number | { error: string; status: number }> {
+  const profile = await resolveAdminBusinessProfile(
+    input.businessProfileId ?? input.profileId,
+  );
+  if (adminResolveError(profile)) return profile;
+  return requireAdminOrgId(input.organizationId ?? profile?.organizationId);
+}
+
+router.get("/", async (req, res) => {
+  const orgResolved = await resolveCatalogOrgId({
+    organizationId: req.query.organizationId,
+    businessProfileId: req.query.businessProfileId,
+    profileId: req.query.profileId,
+  });
+  if (adminResolveError(orgResolved)) {
+    if (orgResolved.status !== 400) {
+      res.status(orgResolved.status).json({ error: orgResolved.error });
+      return;
+    }
+    // Missing org/profile: browse platform product defs only (no Live/Hidden org placement).
+    const defs = await listToolDefinitions();
+    res.json({
+      tools: defs.map((d, i) => ({
+        id: d.id,
+        groupName: String((d.definition as { category?: string })?.category ?? "General"),
+        sortOrder: i,
+        available: false,
+        openStandalone: STANDALONE_DEFAULT_TOOLS.has(d.id),
+        formula: null,
+        fieldOverrides: null,
+        toolType: d.toolType ?? "tracker",
+        definition: d.definition ?? {},
+      })),
+      organizationId: null,
+      needsOrganization: true,
+    });
+    return;
+  }
+  const orgId = orgResolved;
   await ensureCatalog(orgId);
   await ensureOpenStandaloneColumn();
   const defs = await listToolDefinitions();
@@ -140,11 +185,20 @@ router.get("/", async (_req, res) => {
       definition: def?.definition ?? {},
     };
   });
-  res.json({ tools });
+  res.json({ tools, organizationId: orgId, needsOrganization: false });
 });
 
 router.post("/", async (req, res) => {
-  const orgId = getActiveOrgId();
+  const orgResolved = await resolveCatalogOrgId({
+    organizationId: req.body?.organizationId,
+    businessProfileId: req.body?.businessProfileId,
+    profileId: req.body?.profileId,
+  });
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const toolId = String(req.body?.id ?? "").trim();
   const title = String(req.body?.title ?? "").trim();
   if (!toolId || !title) {
@@ -198,7 +252,16 @@ router.post("/", async (req, res) => {
 });
 
 router.put("/:toolId", async (req, res) => {
-  const orgId = getActiveOrgId();
+  const orgResolved = await resolveCatalogOrgId({
+    organizationId: req.body?.organizationId,
+    businessProfileId: req.body?.businessProfileId,
+    profileId: req.body?.profileId,
+  });
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const toolId = req.params.toolId;
   if (req.body?.definition && typeof req.body.definition === "object") {
     await publishToolDefinition(toolId, req.body.definition as Record<string, unknown>);
@@ -239,7 +302,16 @@ router.put("/:toolId", async (req, res) => {
 });
 
 router.post("/reorder", async (req, res) => {
-  const orgId = getActiveOrgId();
+  const orgResolved = await resolveCatalogOrgId({
+    organizationId: req.body?.organizationId,
+    businessProfileId: req.body?.businessProfileId,
+    profileId: req.body?.profileId,
+  });
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const items = Array.isArray(req.body?.items) ? req.body.items as Array<{ id: string; sortOrder: number; groupName?: string }> : [];
   for (const item of items) {
     await pool.query(
@@ -252,7 +324,16 @@ router.post("/reorder", async (req, res) => {
 });
 
 router.delete("/:toolId", async (req, res) => {
-  const orgId = getActiveOrgId();
+  const orgResolved = await resolveCatalogOrgId({
+    organizationId: req.body?.organizationId ?? req.query.organizationId,
+    businessProfileId: req.body?.businessProfileId ?? req.query.businessProfileId,
+    profileId: req.body?.profileId ?? req.query.profileId,
+  });
+  if (adminResolveError(orgResolved)) {
+    res.status(orgResolved.status).json({ error: orgResolved.error });
+    return;
+  }
+  const orgId = orgResolved;
   const toolId = req.params.toolId;
   await pool.query(
     `UPDATE tool_catalog SET available = 0 WHERE organization_id = :orgId AND tool_id = :toolId`,

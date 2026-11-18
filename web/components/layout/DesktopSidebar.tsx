@@ -176,7 +176,13 @@ export function DesktopSidebar() {
               <SidebarIdentityChip
                 name={user?.name}
                 email={user?.email}
-                role={user?.role}
+                role={
+                  user?.isPlatformAdmin
+                    ? user.actAsRole
+                      ? `Acting as ${user.actAsRole}`
+                      : "Platform admin"
+                    : user?.role
+                }
                 mini={mini}
               />
               <SidebarAttachmentToggle mini={mini} />

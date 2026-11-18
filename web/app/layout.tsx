@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { IBM_Plex_Sans, IBM_Plex_Mono, Inter, Outfit, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ClientInit } from "@/components/ClientInit";
@@ -78,9 +79,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <BrandingProvider>
           <DocumentIconSync />
           <InstallPrompt />
-          <AuthProvider>
-            <ShellRouter>{children}</ShellRouter>
-          </AuthProvider>
+          <Suspense fallback={null}>
+            <AuthProvider>
+              <ShellRouter>{children}</ShellRouter>
+            </AuthProvider>
+          </Suspense>
         </BrandingProvider>
       </body>
     </html>

@@ -63,8 +63,6 @@ const SIGNAL_LABEL: Record<string, string> = {
   locked: "Hard lock",
   orphan: "Orphan home",
   dim: "Unlicensed",
-  live: "Live",
-  trial: "Trial",
 };
 
 export function AccessFabricPane({
@@ -77,6 +75,7 @@ export function AccessFabricPane({
   homeToolIds,
   onNavigate,
   onMutated,
+  onHomeToolsChange,
 }: {
   businessProfileId: number;
   profileName: string;
@@ -87,6 +86,7 @@ export function AccessFabricPane({
   homeToolIds: string[];
   onNavigate?: (target: "home" | "people" | "identity" | "lifecycle") => void;
   onMutated?: () => void | Promise<void>;
+  onHomeToolsChange?: (ids: string[]) => void;
 }) {
   const [skus, setSkus] = useState<SkuRow[]>([]);
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
@@ -225,7 +225,7 @@ export function AccessFabricPane({
   async function provisionPack(packId: string) {
     const match = readiness.packs.find((p) => p.pack.id === packId);
     await run(packId, `Provisioned ${match?.pack.name ?? packId}.`, async () => {
-      await api("/admin/skus/grant", {
+      const granted = await api<{ granted?: string[] }>("/admin/skus/grant", {
         method: "POST",
         body: JSON.stringify({
           bundleId: packId,
@@ -234,11 +234,20 @@ export function AccessFabricPane({
         }),
       });
       if (syncHome && match) {
-        const nextHome = Array.from(new Set([...homeToolIds, ...match.pack.toolIds]));
-        await api(`/admin/profiles/${businessProfileId}`, {
-          method: "PUT",
-          body: JSON.stringify({ homeToolIds: nextHome }),
-        });
+        const syncIds =
+          (Array.isArray(granted.granted) && granted.granted.length > 0
+            ? granted.granted
+            : match.resolvedToolIds.length > 0
+              ? match.resolvedToolIds
+              : match.missing) ?? [];
+        if (syncIds.length > 0) {
+          const nextHome = Array.from(new Set([...homeToolIds, ...syncIds]));
+          await api(`/admin/profiles/${businessProfileId}`, {
+            method: "PUT",
+            body: JSON.stringify({ homeToolIds: nextHome }),
+          });
+          onHomeToolsChange?.(nextHome);
+        }
       }
     });
   }
@@ -403,7 +412,7 @@ export function AccessFabricPane({
               placeholder="Scan tools…"
               aria-label="Search tools"
             />
-            <div className="admin-tabs" role="tablist" aria-label="Lattice filter">
+            <div className="admin-tabs ax-lattice-filters" role="tablist" aria-label="Lattice filter">
               {(
                 [
                   ["all", "All"],
