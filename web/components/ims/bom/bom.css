@@ -700,6 +700,14 @@
 .ims-bom-dc-workspace > .ims-bom-layout {
   min-height: min(70vh, 720px);
 }
+/* DC compose must stay single-column (confirmed BOM compose-actions is 2-col). */
+.ims-bom-dc-compose {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  align-content: start;
+}
 
 /* Tone & density — brand voice without new skins */
 .bos .ims-bom-sheet.ims-bom-tone--bold {

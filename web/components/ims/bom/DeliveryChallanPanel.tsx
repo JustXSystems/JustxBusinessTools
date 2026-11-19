@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, Field, FormGrid, Input, Textarea } from "@/components/bos";
 import { BOM_DC_STATUS_LABEL, bom, type BomDc, type BomDoc } from "@/lib/ims/bom";
 import { todayLocal } from "@/lib/ims/format";
-import { useImsAction, useImsData, usePrint } from "../core";
+import { ErrorBlock, LoadingBlock, useImsAction, useImsData, usePrint } from "../core";
 import { BomSplitLayout } from "./BomSplitLayout";
 import { DcPaper, type DcPaperModel } from "./DcPaper";
 
@@ -61,7 +61,9 @@ export function DeliveryChallanPanel({
           </Badge>
         </div>
       ) : null}
-      {dcs.length ? (
+      {dcsState.loading && !dcsState.data ? (
+        <LoadingBlock rows={1} />
+      ) : dcs.length ? (
         <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
           {dcs.map((dc: BomDc) => (
             <div
@@ -122,7 +124,7 @@ export function DeliveryChallanPanel({
         <Button size="sm" disabled={busy} onClick={() => onOpenWorkspace({ kind: "create" })}>
           Create delivery challan
         </Button>
-      ) : remainingLines.length ? (
+      ) : remainingState.loading && !remainingState.data ? null : remainingLines.length ? (
         <div style={{ fontSize: 13, opacity: 0.75 }}>All BOM stock quantities are on live delivery challans.</div>
       ) : (
         <div style={{ fontSize: 13, opacity: 0.75 }}>No stock-linked lines — link catalogue items on the BOM first.</div>
@@ -154,17 +156,31 @@ export function DeliveryChallanWorkspace({
   onDone: () => void;
 }) {
   const print = usePrint();
+  const excludeDcId = workspace.kind === "manage" ? workspace.dcId : undefined;
   const dcsState = useImsData(() => bom.listDcs(doc.id), [doc.id, doc.updatedAt, doc.stockIssuedAt]);
-  const remainingState = useImsData(
-    () => bom.dcRemaining(doc.id, workspace.kind === "manage" ? workspace.dcId : undefined),
-    [doc.id, doc.updatedAt, doc.stockIssuedAt, workspace],
-  );
+  const remainingState = useImsData(() => bom.dcRemaining(doc.id, excludeDcId), [doc.id, doc.updatedAt, doc.stockIssuedAt, excludeDcId]);
   const remainingLines = remainingState.data?.lines ?? [];
   const openRemaining = remainingLines.filter((l) => l.remainingQty > 0);
   const bomDocNo = dcsState.data?.bomDocNo ?? doc.docNo;
   const dcs = dcsState.data?.dcs ?? [];
 
+  if (dcsState.error) return <ErrorBlock error={dcsState.error} onRetry={dcsState.reload} />;
+  if (remainingState.error) return <ErrorBlock error={remainingState.error} onRetry={remainingState.reload} />;
+
   if (workspace.kind === "create") {
+    if (remainingState.loading && !remainingState.data) return <LoadingBlock rows={2} />;
+    if (!openRemaining.length) {
+      return (
+        <Card className="ims-bom-action-card">
+          <Alert tone="amber" title="Nothing left to deliver">
+            All BOM stock quantities are already on live delivery challans.{" "}
+            <Button size="sm" variant="ghost" onClick={onBack}>
+              Back to BOM
+            </Button>
+          </Alert>
+        </Card>
+      );
+    }
     return (
       <DcEditorForm
         doc={doc}
@@ -178,6 +194,8 @@ export function DeliveryChallanWorkspace({
       />
     );
   }
+
+  if (dcsState.loading && !dcsState.data) return <LoadingBlock rows={2} />;
 
   const dc = dcs.find((d) => d.id === workspace.dcId) ?? null;
   if (!dc) {
@@ -193,8 +211,11 @@ export function DeliveryChallanWorkspace({
     );
   }
 
+  if (remainingState.loading && !remainingState.data) return <LoadingBlock rows={2} />;
+
   return (
     <DcManagerForm
+      key={`${dc.id}:${dc.updatedAt ?? ""}:${dc.status}`}
       doc={doc}
       bomDocNo={bomDocNo}
       dc={dc}
@@ -213,13 +234,13 @@ export function DeliveryChallanWorkspace({
 
 function DcLivePreview({ model }: { model: DcPaperModel }) {
   return (
-    <div className="ims-bom-preview-wrap">
+    <>
       <div className="ims-bom-preview-toolbar" role="group" aria-label="Preview mode">
         <span className="ims-bom-preview-label">Live Preview</span>
         <Badge tag="mint">DELIVERY CHALLAN</Badge>
       </div>
       <DcPaper model={model} />
-    </div>
+    </>
   );
 }
 
@@ -243,13 +264,28 @@ function DcEditorForm({
   onSaved: () => void;
 }) {
   const [docDate, setDocDate] = useState(todayLocal());
-  const [shipTo, setShipTo] = useState(doc.location ?? "");
+  const [shipTo, setShipTo] = useState("");
   const [transporter, setTransporter] = useState("");
   const [vehicleNo, setVehicleNo] = useState("");
   const [notes, setNotes] = useState("");
   const [qtyById, setQtyById] = useState<Record<string, string>>(() =>
     Object.fromEntries(remaining.map((l) => [l.bomLineId, String(l.remainingQty)])),
   );
+
+  // Seed qtys if remaining arrives/changes after first paint (or line set grows).
+  useEffect(() => {
+    setQtyById((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const line of remaining) {
+        if (next[line.bomLineId] === undefined) {
+          next[line.bomLineId] = String(line.remainingQty);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [remaining]);
 
   const paperLines = useMemo(
     () =>
@@ -323,9 +359,8 @@ function DcEditorForm({
         </div>
       </div>
       <BomSplitLayout
-        confirm
         compose={
-          <div className="ims-bom-compose-actions">
+          <div className="ims-bom-dc-compose">
             <Card className="ims-bom-action-card">
               <Alert tone="blue" title="Composer">
                 Edit quantities and dispatch details. Live Preview updates on the invoice paper template — BOM reference {bomDocNo} prints on the sheet; Verified by fills when you verify.
@@ -622,9 +657,8 @@ function DcManagerForm({
         </div>
       </div>
       <BomSplitLayout
-        confirm
         compose={
-          <div className="ims-bom-compose-actions">
+          <div className="ims-bom-dc-compose">
             <Card className="ims-bom-action-card">
               <Alert tone="blue" title="Composer">
                 BOM reference <b>{dc.bomDocNo ?? bomDocNo}</b>

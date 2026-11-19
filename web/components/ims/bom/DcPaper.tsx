@@ -100,12 +100,12 @@ export function DcPaper({ model }: { model: DcPaperModel }) {
         <div>
           <div className="bos-inv-paper-label">Deliver to</div>
           <div className="bos-inv-paper-value">{model.customerName || "—"}</div>
-          {shipTo || model.location ? <div className="ims-paper-sub">{[shipTo || null, model.location].filter(Boolean).join("\n")}</div> : null}
+          {shipTo ? <div className="ims-paper-sub">{shipTo}</div> : model.location ? <div className="ims-paper-sub">{model.location}</div> : null}
         </div>
         <div>
           <div className="bos-inv-paper-label">Customer</div>
           <div className="bos-inv-paper-value">{model.customerName || "—"}</div>
-          {model.location ? <div className="ims-paper-sub">{model.location}</div> : null}
+          {model.location && model.location !== shipTo ? <div className="ims-paper-sub">{model.location}</div> : null}
         </div>
       </div>
 

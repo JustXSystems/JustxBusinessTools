@@ -186,18 +186,24 @@ function BomViewer({
     <Stack>
       <PageHeader
         title={doc.docNo}
-        sub={`${doc.customerName || "No customer"} · ${BOM_DOC_STATUS_LABEL[doc.status]}`}
+        sub={`${doc.customerName || "No customer"} · ${BOM_DOC_STATUS_LABEL[doc.status]}${dcWorkspace ? " · Delivery challan" : ""}`}
         actions={
           <>
-            <Button variant="ghost" onClick={onBack}>
-              Back
+            <Button
+              variant="ghost"
+              onClick={() => {
+                if (dcWorkspace) setDcWorkspace(null);
+                else onBack();
+              }}
+            >
+              {dcWorkspace ? "Back to BOM" : "Back"}
             </Button>
             <Button variant="ghost" onClick={print}>
               Print / PDF
             </Button>
             <Button
               variant="ghost"
-              disabled={Boolean(busy)}
+              disabled={Boolean(busy) || Boolean(dcWorkspace)}
               onClick={async () => {
                 const out = await run("dup", () => bom.duplicateDoc(doc.id), { success: `Copied ${doc.docNo}` });
                 if (out?.doc) onDuplicated(out.doc.id);
