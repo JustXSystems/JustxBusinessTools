@@ -27,7 +27,7 @@ export const ToolPlacementPane = forwardRef<
     onGroupName: (v: string) => void;
     onAvailable: (v: boolean) => void;
     onOpenStandalone: (v: boolean) => void;
-    onSaved: (msg: string) => void;
+    onSaved: (msg: string, tone?: "success" | "error") => void;
   }
 >(function ToolPlacementPane(
   {
@@ -65,7 +65,7 @@ export const ToolPlacementPane = forwardRef<
 
   async function save() {
     if (businessProfileId == null) {
-      onSaved("Select a Business Profile before saving org placement");
+      onSaved("Select a Business Profile before saving org placement", "error");
       throw new Error("Business Profile required");
     }
     setBusy(true);
@@ -100,7 +100,7 @@ export const ToolPlacementPane = forwardRef<
           : "Placement saved. Live tools are added to branch home lists; refresh home to see them.",
       );
     } catch (err) {
-      onSaved(err instanceof Error ? err.message : "Save failed");
+      onSaved(err instanceof Error ? err.message : "Save failed", "error");
       throw err;
     } finally {
       setBusy(false);
@@ -109,7 +109,7 @@ export const ToolPlacementPane = forwardRef<
 
   async function hide() {
     if (businessProfileId == null) {
-      onSaved("Select a Business Profile before changing org placement");
+      onSaved("Select a Business Profile before changing org placement", "error");
       return;
     }
     setBusy(true);
@@ -124,7 +124,7 @@ export const ToolPlacementPane = forwardRef<
           : "Tool hidden from the operator home catalog.",
       );
     } catch (err) {
-      onSaved(err instanceof Error ? err.message : "Hide failed");
+      onSaved(err instanceof Error ? err.message : "Hide failed", "error");
     } finally {
       setBusy(false);
     }

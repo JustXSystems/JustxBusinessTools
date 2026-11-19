@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Alert,
@@ -24,9 +24,11 @@ import {
   AdminPageSkeleton,
   AdminSection,
   AdminTabs,
+  useAdminConfirm,
 } from "@/components/admin/ui";
 import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
 import { api } from "@/lib/api";
+import { withBasePath } from "@/lib/base-path";
 import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { RoleMatrixPanel } from "@/components/admin/RoleMatrixPanel";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -72,9 +74,17 @@ const FILTER_OPTIONS: ReadonlyArray<{ value: Filter; label: string }> = [
 
 const TAB_OPTIONS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: "profile", label: "Profile" },
-  { value: "access", label: "Profiles" },
+  { value: "access", label: "Branch access" },
   { value: "verify", label: "Verification" },
 ];
+
+function syncTeamUrl(filter: Filter, userId: number | null) {
+  const params = new URLSearchParams();
+  if (filter !== "all") params.set("filter", filter);
+  if (userId != null) params.set("user", String(userId));
+  const qs = params.toString();
+  window.history.replaceState(null, "", withBasePath(`/admin/team${qs ? `?${qs}` : ""}`));
+}
 
 function statusTone(status: string): BosBadgeTone {
   if (status === "active" || status === "verified") return "emerald";
@@ -133,6 +143,9 @@ function AdminTeamInner() {
   const [profile, setProfile] = useState({ name: "", phone: "", role: "staff" });
   const [approveRole, setApproveRole] = useState<"staff" | "viewer">("staff");
   const [newPassword, setNewPassword] = useState("");
+  const { confirm, dialog: confirmDialog } = useAdminConfirm();
+  const inviteRef = useRef<HTMLDivElement>(null);
+  const appliedUser = useRef<number | null>(null);
 
   const selected = members.find((m) => m.id === selectedId) ?? null;
 
@@ -157,10 +170,24 @@ function AdminTeamInner() {
   useEffect(() => {
     if (!focusUserId || members.length === 0) return;
     if (!members.some((m) => m.id === focusUserId)) return;
-    if (selectedId === focusUserId) return;
+    if (selectedId === focusUserId) {
+      appliedUser.current = focusUserId;
+      return;
+    }
+    if (appliedUser.current === focusUserId) return;
+    appliedUser.current = focusUserId;
     void openMember(focusUserId);
+    revealDetail();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- open once when list + query user are ready
   }, [focusUserId, members]);
+
+  // Two-way URL sync: filter + selected user (inbound handled by initialFilter / focusUserId above).
+  useEffect(() => {
+    if (!loaded) return;
+    // Deep-linked user not opened yet — don't strip ?user= before the open effect runs.
+    if (focusUserId != null && selectedId == null && members.some((m) => m.id === focusUserId)) return;
+    syncTeamUrl(filter, selectedId);
+  }, [loaded, filter, selectedId, focusUserId, members]);
 
   async function openMember(id: number, resetTab = true) {
     setSelectedId(id);
@@ -246,10 +273,82 @@ function AdminTeamInner() {
     );
   }
 
+  function reviewPending() {
+    const first = members.find((m) => m.status === "pending");
+    setFilter("pending");
+    setQuery("");
+    if (!first) return;
+    void openMember(first.id);
+    revealDetail();
+  }
+
+  function focusInvite() {
+    const el = inviteRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.querySelector<HTMLInputElement>("input, select")?.focus({ preventScroll: true });
+  }
+
+  function confirmReject(m: Member) {
+    confirm({
+      title: m.role === "owner" ? "Reject this new business?" : "Decline this join request?",
+      description: (
+        <>
+          <strong>{m.name || m.email}</strong> will be declined and cannot sign in. You can reactivate them later from
+          the Suspended filter.
+        </>
+      ),
+      confirmLabel: "Reject",
+      onConfirm: () =>
+        run("Request declined.", () =>
+          api(`/admin/team/${m.id}/reject`, { method: "POST" }).then(() => undefined),
+        ),
+    });
+  }
+
+  function confirmSuspend(m: Member) {
+    confirm({
+      title: "Suspend this account?",
+      description: (
+        <>
+          <strong>{m.name || m.email}</strong> will be blocked from signing in. Use Reactivate to restore access.
+        </>
+      ),
+      confirmLabel: "Suspend",
+      onConfirm: () =>
+        run("Account suspended.", () =>
+          api(`/admin/team/${m.id}/suspend`, { method: "POST" }).then(() => undefined),
+        ),
+    });
+  }
+
+  function confirmResetPassword(m: Member) {
+    confirm({
+      title: "Reset password?",
+      description: (
+        <>
+          Sets a new password for <strong>{m.email}</strong>. Share it with them securely — they will need it to sign
+          in.
+        </>
+      ),
+      confirmLabel: "Reset password",
+      tone: "primary",
+      onConfirm: () =>
+        run("Password updated.", () =>
+          api(`/admin/team/${m.id}/reset-password`, {
+            method: "POST",
+            body: JSON.stringify({ password: newPassword }),
+          }).then(() => {
+            setNewPassword("");
+          }),
+        ),
+    });
+  }
+
   if (!loaded) {
     if (error) {
       return (
-        <AdminPage title="People" sub="Directory · access · verification">
+        <AdminPage title="People" section="Access" sub="Directory · access · verification">
           <AdminErrorState message={error} onRetry={reload} />
         </AdminPage>
       );
@@ -285,12 +384,26 @@ function AdminTeamInner() {
   return (
     <AdminPage
       title="People"
+      section="Access"
+      entity={selected ? selected.name || selected.email : undefined}
       sub="Directory · access · verification"
       toolbar={
         <>
           <Badge auto tone={summary.pending ? "amber" : "emerald"}>
             {summary.pending ? `${summary.pending} pending approval` : "No pending approvals"}
           </Badge>
+          <Button variant="primary" size="sm" icon="plus" onClick={focusInvite}>
+            Invite
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={summary.pending === 0}
+            title={summary.pending === 0 ? "Nothing waiting for approval" : undefined}
+            onClick={reviewPending}
+          >
+            Review pending{summary.pending ? ` (${summary.pending})` : ""}
+          </Button>
           <Button variant="ghost" size="sm" icon="refresh" onClick={() => void reload()}>
             Refresh
           </Button>
@@ -459,27 +572,13 @@ function AdminTeamInner() {
                             </Button>
                           </>
                         )}
-                        <Button
-                          variant="destructive"
-                          onClick={() =>
-                            void run("Request declined.", () =>
-                              api(`/admin/team/${selected.id}/reject`, { method: "POST" }).then(() => undefined),
-                            )
-                          }
-                        >
+                        <Button variant="destructive" onClick={() => confirmReject(selected)}>
                           Reject
                         </Button>
                       </>
                     ) : null}
                     {selected.status === "active" ? (
-                      <Button
-                        variant="destructive"
-                        onClick={() =>
-                          void run("Account suspended.", () =>
-                            api(`/admin/team/${selected.id}/suspend`, { method: "POST" }).then(() => undefined),
-                          )
-                        }
-                      >
+                      <Button variant="destructive" onClick={() => confirmSuspend(selected)}>
                         Suspend
                       </Button>
                     ) : null}
@@ -532,14 +631,7 @@ function AdminTeamInner() {
                     className="admin-cc-inline"
                     onSubmit={(e) => {
                       e.preventDefault();
-                      void run("Password updated.", () =>
-                        api(`/admin/team/${selected.id}/reset-password`, {
-                          method: "POST",
-                          body: JSON.stringify({ password: newPassword }),
-                        }).then(() => {
-                          setNewPassword("");
-                        }),
-                      );
+                      confirmResetPassword(selected);
                     }}
                   >
                     <TextField
@@ -789,6 +881,7 @@ function AdminTeamInner() {
             </AdminSection>
           )}
 
+          <div ref={inviteRef} id="team-invite">
           <AdminSection
             title="Invite teammate"
             description="New people join as pending until you approve them. They cannot sign in before approval."
@@ -904,8 +997,10 @@ function AdminTeamInner() {
               </div>
             </form>
           </AdminSection>
+          </div>
         </div>
       </div>
+      {confirmDialog}
     </AdminPage>
   );
 }

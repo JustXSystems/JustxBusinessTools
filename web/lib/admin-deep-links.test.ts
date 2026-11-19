@@ -30,4 +30,12 @@ describe("adminDeepLink tool capabilities", () => {
       "/admin/tools?tool=imsdealer&tab=pricing&profile=3",
     );
   });
+
+  it("builds failure and limit-block destinations", () => {
+    expect(adminDeepLink.paymentSaasFailed()).toBe("/admin/payments?tab=saas&txnStatus=failed");
+    expect(adminDeepLink.analytics("limit_blocks")).toBe("/admin/analytics?focus=limit_blocks");
+    expect(adminDeepLink.upiClaimPending()).toBe("/admin/payments?tab=upi&status=pending");
+    expect(adminDeepLink.paymentOpPending()).toBe("/admin/payments?tab=ops&filter=pending");
+    expect(adminDeepLink.approvals("profile")).toBe("/admin/approvals?kind=profile");
+  });
 });

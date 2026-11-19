@@ -7,10 +7,12 @@ import { ProductPacksPanel } from "@/components/admin/ProductPacksPanel";
 import {
   AdminEmpty,
   AdminErrorState,
+  AdminGlossary,
   AdminPage,
   AdminPageSkeleton,
   AdminSection,
   AdminTabs,
+  useAdminConfirm,
 } from "@/components/admin/ui";
 import { SelectField, TextField, TextareaField } from "@/components/admin/ui/AdminFields";
 import {
@@ -154,6 +156,7 @@ export default function AdminSubscriptionsPage() {
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { confirm, dialog: confirmDialog } = useAdminConfirm();
 
   const limited = plans.find((p) => p.accessMode === "limited" || p.id === "free");
   const paid = plans.find((p) => p.accessMode === "unlimited" || p.id === "pro");
@@ -325,6 +328,38 @@ export default function AdminSubscriptionsPage() {
     }
   }
 
+  /** Confirm before switching an org's plan — assigning changes its SKU licenses, not just a label. */
+  function requestAssign(planId: string, organizationId?: number) {
+    const orgId = organizationId ?? assignOrgId;
+    if (orgId == null) {
+      setError("Select an organization before assigning a plan");
+      return;
+    }
+    const plan = plans.find((p) => p.id === planId);
+    const unlimited = plan?.accessMode === "unlimited" || planId === "pro";
+    const orgName = tenants.find((t) => t.organizationId === orgId)?.organizationName || `Organization ${orgId}`;
+    const planLabel = unlimited ? "All Tools Pack" : "Freemium";
+    confirm({
+      title: `Switch ${orgName} to ${planLabel}?`,
+      description: unlimited ? (
+        <>
+          <strong>All Tools Pack</strong> removes the record cap and grants a license for <strong>every paid tool</strong>{" "}
+          to {orgName}
+          {plan?.trialDays ? ` (starts with a ${plan.trialDays}-day trial)` : ""}. Review per-profile grants afterwards in
+          Access Fabric.
+        </>
+      ) : (
+        <>
+          <strong>Freemium</strong> revokes the paid tool licenses {orgName} currently has and applies the record cap (
+          {plan?.recordLimit ?? limited?.recordLimit ?? 28} records / tool, export locked). Existing data is kept.
+        </>
+      ),
+      confirmLabel: `Switch to ${planLabel}`,
+      tone: unlimited ? "primary" : "destructive",
+      onConfirm: () => assign(planId, orgId),
+    });
+  }
+
   async function runRenewals() {
     setSaving(true);
     setMessage("");
@@ -379,7 +414,7 @@ export default function AdminSubscriptionsPage() {
   if (!loaded) {
     if (error) {
       return (
-        <AdminPage title="Operator access" sub="Plans · packs · renewals">
+        <AdminPage title="Plans" section="Revenue" sub="Platform modes · product packs · renewals">
           <AdminErrorState message={error} onRetry={() => void refresh()} />
         </AdminPage>
       );
@@ -438,7 +473,7 @@ export default function AdminSubscriptionsPage() {
             variant="ghost"
             size="sm"
             disabled={saving || t.planId === "free"}
-            onClick={() => void assign("free", t.organizationId)}
+            onClick={() => requestAssign("free", t.organizationId)}
           >
             → Freemium
           </Button>
@@ -446,7 +481,7 @@ export default function AdminSubscriptionsPage() {
             variant="primary"
             size="sm"
             disabled={saving || t.planId === "pro"}
-            onClick={() => void assign("pro", t.organizationId)}
+            onClick={() => requestAssign("pro", t.organizationId)}
           >
             → All Tools Pack
           </Button>
@@ -507,7 +542,7 @@ export default function AdminSubscriptionsPage() {
             variant="primary"
             size="sm"
             disabled={saving || c.planId === "pro"}
-            onClick={() => void assign("pro", c.organizationId)}
+            onClick={() => requestAssign("pro", c.organizationId)}
           >
             → All Tools Pack
           </Button>
@@ -556,7 +591,8 @@ export default function AdminSubscriptionsPage() {
 
   return (
     <AdminPage
-      title="Operator access"
+      title="Plans"
+      section="Revenue"
       sub="Platform freemium · product packs · renewals"
       toolbar={
         <>
@@ -580,6 +616,8 @@ export default function AdminSubscriptionsPage() {
         </>
       }
     >
+      <AdminGlossary />
+
       <Alert tone="blue" title="How operator access works">
         Platform freemium (record cap) plus product packs. Per-tool subscriptions live in{" "}
         <Link className="admin-cc-link" href={adminDeepLink.toolsPricing()}>
@@ -728,7 +766,7 @@ export default function AdminSubscriptionsPage() {
                         variant="primary"
                         size="sm"
                         disabled={saving || assignOrgId == null}
-                        onClick={() => void assign(plan.id)}
+                        onClick={() => requestAssign(plan.id)}
                       >
                         Assign mode
                       </Button>
@@ -937,6 +975,7 @@ export default function AdminSubscriptionsPage() {
           </AdminSection>
         </div>
       ) : null}
+      {confirmDialog}
     </AdminPage>
   );
 }

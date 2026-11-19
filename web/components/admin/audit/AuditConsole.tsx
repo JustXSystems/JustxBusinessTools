@@ -358,7 +358,7 @@ export function AuditConsole() {
 
   if (error && !overview) {
     return (
-      <AdminPage title="Audit & security" sub="Who changed what">
+      <AdminPage title="Audit" section="Platform" sub="Who changed what">
         <AdminErrorState message={error} onRetry={load} />
       </AdminPage>
     );
@@ -541,7 +541,8 @@ export function AuditConsole() {
 
   return (
     <AdminPage
-      title="Audit & security"
+      title="Audit"
+      section="Platform"
       sub={`Who changed what across sign-ins, team access, billing, and documents${
         overview.platformWide ? " · platform-wide view" : ""
       }.`}

@@ -16,8 +16,10 @@ import {
 import {
   AdminEmpty,
   AdminErrorState,
+  AdminGlossary,
   AdminSection,
   AdminTabs,
+  useAdminConfirm,
 } from "@/components/admin/ui";
 import { TextField } from "@/components/admin/ui/AdminFields";
 import {
@@ -95,9 +97,9 @@ function signalTone(signal: string): BosBadgeTone {
 
 const SIGNAL_LABEL: Record<string, string> = {
   included: "Included",
-  licensed: "Signal",
-  locked: "Lock",
-  orphan: "Orphan",
+  licensed: "Licensed",
+  locked: "Locked",
+  orphan: "On home unlicensed",
   dim: "Gap",
 };
 
@@ -146,6 +148,7 @@ export function AccessFabricPane({
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const { confirm, dialog: confirmDialog } = useAdminConfirm();
   const capabilitiesRef = useRef<ToolCapabilityLatticeHandle>(null);
   const didFocusRef = useRef<string | null>(null);
 
@@ -340,9 +343,57 @@ export function AccessFabricPane({
     });
   }
 
+  function requestProvisionPack(packId: string) {
+    const match = readiness.packs.find((p) => p.pack.id === packId);
+    const names = new Map(tools.map((t) => [t.toolId, t.name]));
+    const missing = match?.missing ?? [];
+    const shown = missing.slice(0, 6).map((id) => names.get(id) ?? id);
+    const more = missing.length - shown.length;
+    const packName = match?.pack.name ?? packId;
+    confirm({
+      title: `Provision ${packName}?`,
+      description: (
+        <>
+          Grants {missing.length > 0 ? <strong>{missing.length} tool license{missing.length === 1 ? "" : "s"}</strong> : "the pack's tool licenses"} to{" "}
+          <strong>{profileName}</strong> for <strong>{grantDays()} days</strong>
+          {missing.length > 0 ? `: ${shown.join(", ")}${more > 0 ? ` and ${more} more` : ""}` : ""}.
+          {syncHome ? " Granted tools are also added to this profile's home." : ""}
+        </>
+      ),
+      confirmLabel: "Provision pack",
+      tone: "primary",
+      onConfirm: () => provisionPack(packId),
+    });
+  }
+
+  function requestRevoke(node: FabricToolNode) {
+    confirm({
+      title: `Revoke ${node.name}?`,
+      description: (
+        <>
+          Removes the license for <strong>{node.name}</strong> from <strong>{profileName}</strong>. The profile loses
+          access to this tool until it is licensed again
+          {node.onHome ? "; it stays on the home list but shows as unlicensed" : ""}.
+        </>
+      ),
+      confirmLabel: "Revoke license",
+      onConfirm: () =>
+        run(node.toolId, `Revoked ${node.name}.`, async () => {
+          await api("/admin/skus/revoke", {
+            method: "POST",
+            body: JSON.stringify({
+              toolIds: [node.toolId],
+              businessProfileId,
+            }),
+          });
+          await capabilitiesRef.current?.reload();
+        }),
+    });
+  }
+
   function handleAction(action: AccessAction) {
     if (action.action === "grant-pack" && action.packId) {
-      void provisionPack(action.packId);
+      requestProvisionPack(action.packId);
       return;
     }
     if (action.action === "open-home") onNavigate?.("home");
@@ -438,13 +489,14 @@ export function AccessFabricPane({
   const filterOptions: ReadonlyArray<{ value: FabricFilter; label: string }> = [
     { value: "all", label: "All" },
     { value: "dim", label: "Gaps" },
-    { value: "licensed", label: "On" },
-    { value: "locked", label: "Locks" },
-    { value: "orphan", label: "Home" },
+    { value: "licensed", label: "Licensed" },
+    { value: "locked", label: "Locked" },
+    { value: "orphan", label: "On home unlicensed" },
   ];
 
   return (
     <div className="admin-cc-fab" id="ax-fabric">
+      <AdminGlossary />
       <Card className="admin-cc-pad">
         <div className="admin-cc-fab-strip" aria-label="Access readiness">
           <div
@@ -538,7 +590,7 @@ export function AccessFabricPane({
               className={cx("admin-cc-pack", match.recommended && "is-recommended")}
               disabled={busy || match.missing.length === 0}
               title={match.pack.tagline ?? match.pack.name}
-              onClick={() => void provisionPack(match.pack.id)}
+              onClick={() => requestProvisionPack(match.pack.id)}
             >
               <strong>{match.pack.name}</strong>
               <span>
@@ -660,18 +712,7 @@ export function AccessFabricPane({
                       variant="destructive"
                       size="sm"
                       disabled={busy}
-                      onClick={() =>
-                        void run(selected.toolId, `Revoked ${selected.name}.`, async () => {
-                          await api("/admin/skus/revoke", {
-                            method: "POST",
-                            body: JSON.stringify({
-                              toolIds: [selected.toolId],
-                              businessProfileId,
-                            }),
-                          });
-                          await capabilitiesRef.current?.reload();
-                        })
-                      }
+                      onClick={() => requestRevoke(selected)}
                     >
                       Revoke
                     </Button>
@@ -744,6 +785,7 @@ export function AccessFabricPane({
           </AdminSection>
         )}
       </div>
+      {confirmDialog}
     </div>
   );
 }

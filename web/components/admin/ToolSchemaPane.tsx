@@ -49,7 +49,7 @@ export const ToolSchemaPane = forwardRef<
     toolId: string;
     toolType: string;
     definition: Record<string, unknown> | null;
-    onPublished: (msg: string) => void;
+    onPublished: (msg: string, tone?: "success" | "error") => void;
   }
 >(function ToolSchemaPane({ toolId, toolType, definition, onPublished }, ref) {
   const isQr = toolId === QR_TOOL_ID;
@@ -100,7 +100,7 @@ export const ToolSchemaPane = forwardRef<
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Publish failed";
       setLocalError(msg);
-      onPublished(msg);
+      onPublished(msg, "error");
       throw err;
     } finally {
       setBusy(false);

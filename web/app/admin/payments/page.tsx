@@ -13,6 +13,7 @@ import {
   AdminPageSkeleton,
   AdminSection,
   AdminTabs,
+  useAdminConfirm,
 } from "@/components/admin/ui";
 import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
 import {
@@ -166,6 +167,10 @@ function statusTone(status: string): BosBadgeTone {
   return "neutral";
 }
 
+function parseTxnStatus(raw: string | null): TxnStatus {
+  return raw === "success" || raw === "failed" || raw === "pending" ? raw : "all";
+}
+
 function cap(s: string) {
   return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
@@ -211,6 +216,11 @@ function AdminPaymentsInner() {
   const router = useRouter();
   const upiSaveRef = useRef<PaymentsActionHandle>(null);
   const opFormRef = useRef<HTMLFormElement>(null);
+  const opDetailRef = useRef<HTMLDivElement>(null);
+  const upiWrapRef = useRef<HTMLDivElement>(null);
+  const scrolledOp = useRef<number | null>(null);
+  const scrolledClaim = useRef<number | null>(null);
+  const { confirm, dialog: confirmDialog } = useAdminConfirm();
   const tabFromUrl = useMemo((): Tab => {
     const t = searchParams.get("tab");
     if (t === "saas" || t === "collections" || t === "ops" || t === "upi" || t === "overview") return t;
@@ -229,7 +239,7 @@ function AdminPaymentsInner() {
   });
   const [opForm, setOpForm] = useState(emptyOpForm);
   const [txnQuery, setTxnQuery] = useState("");
-  const [txnStatus, setTxnStatus] = useState<TxnStatus>("all");
+  const [txnStatus, setTxnStatus] = useState<TxnStatus>(() => parseTxnStatus(searchParams.get("txnStatus")));
   const [opsFilter, setOpsFilter] = useState<OpsFilter>(() => {
     const f = searchParams.get("filter");
     if (f === "pending" || f === "approved" || f === "rejected") return f;
@@ -263,6 +273,15 @@ function AdminPaymentsInner() {
     return "all";
   }, [searchParams]);
 
+  const txnStatusFromUrl = useMemo(
+    () => parseTxnStatus(searchParams.get("txnStatus")),
+    [searchParams],
+  );
+  const focusClaimId = useMemo(() => {
+    const n = Number(searchParams.get("claim"));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [searchParams]);
+
   useEffect(() => {
     if (tab === "upi") setUpiReady(true);
   }, [tab]);
@@ -275,10 +294,49 @@ function AdminPaymentsInner() {
     if (tabFromUrl === "ops") setOpsFilter(filterFromUrl);
   }, [tabFromUrl, filterFromUrl]);
 
-  function selectTab(next: Tab, extras?: { filter?: OpsFilter; op?: number | null }) {
+  // ?tab=saas&txnStatus=failed (deep link from dashboard failures) pre-filters the charge list.
+  useEffect(() => {
+    if (tabFromUrl === "saas") setTxnStatus(txnStatusFromUrl);
+  }, [tabFromUrl, txnStatusFromUrl]);
+
+  // Deep-linked payment-desk op: scroll its detail card into view once the queue has loaded.
+  useEffect(() => {
+    if (tab !== "ops" || !focusOpId || selectedOpId !== focusOpId) return;
+    if (scrolledOp.current === focusOpId) return;
+    const el = opDetailRef.current;
+    if (!el) return;
+    scrolledOp.current = focusOpId;
+    const raf = window.requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return () => window.cancelAnimationFrame(raf);
+  }, [tab, focusOpId, selectedOpId, ops]);
+
+  // Deep-linked UPI claim: bring the panel (and its selected claim row, once loaded) into view.
+  useEffect(() => {
+    if (tab !== "upi" || !focusClaimId || scrolledClaim.current === focusClaimId) return;
+    const wrap = upiWrapRef.current;
+    if (!wrap) return;
+    scrolledClaim.current = focusClaimId;
+    const raf = window.requestAnimationFrame(() => wrap.scrollIntoView({ behavior: "smooth", block: "start" }));
+    const t = window.setTimeout(() => {
+      wrap.querySelector<HTMLElement>('[aria-pressed="true"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 700);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+    };
+  }, [tab, focusClaimId, upiReady]);
+
+  function selectTab(
+    next: Tab,
+    extras?: { filter?: OpsFilter; op?: number | null; txnStatus?: TxnStatus },
+  ) {
     setTab(next);
     const params = new URLSearchParams();
     params.set("tab", next);
+    if (next === "saas") {
+      const s = extras?.txnStatus ?? txnStatus;
+      if (s !== "all") params.set("txnStatus", s);
+    }
     if (next === "ops") {
       const f = extras?.filter ?? opsFilter;
       if (f && f !== "all") params.set("filter", f);
@@ -392,6 +450,40 @@ function AdminPaymentsInner() {
     }
   }
 
+  function confirmReview(op: PaymentOp, action: "approve" | "reject") {
+    const what = (
+      <>
+        <strong>{op.party}</strong> · {op.kind} · {inr(op.amountInr)}
+      </>
+    );
+    if (action === "approve") {
+      confirm({
+        title: "Approve this payment desk item?",
+        description: (
+          <>
+            {what}. Approving marks it cleared and removes it from the pending queue. This can&apos;t be undone from
+            this page.
+          </>
+        ),
+        confirmLabel: "Approve",
+        tone: "primary",
+        onConfirm: () => reviewOp(op.id, "approve"),
+      });
+      return;
+    }
+    confirm({
+      title: "Reject this payment desk item?",
+      description: (
+        <>
+          {what}. Rejecting closes it without clearing — nothing is marked paid or collected. This can&apos;t be undone
+          from this page.
+        </>
+      ),
+      confirmLabel: "Reject",
+      onConfirm: () => reviewOp(op.id, "reject"),
+    });
+  }
+
   async function reviewOp(id: number, action: "approve" | "reject") {
     setBusyId(id);
     try {
@@ -406,7 +498,30 @@ function AdminPaymentsInner() {
     }
   }
 
+  /** Overview primary: jump straight to the next item that needs a decision (desk first, then UPI). */
+  function clearNextPending() {
+    const next = pendingOps[0];
+    if (next) {
+      setOpsFilter("pending");
+      setSelectedOpId(next.id);
+      selectTab("ops", { filter: "pending", op: next.id });
+      return;
+    }
+    if (pendingSummary.upiClaims > 0) {
+      selectTab("upi");
+      return;
+    }
+    if (pendingSummary.deskOps > 0) {
+      setOpsFilter("pending");
+      selectTab("ops", { filter: "pending", op: null });
+    }
+  }
+
   async function runTabPrimary() {
+    if (tab === "overview") {
+      clearNextPending();
+      return;
+    }
     if (tab === "upi") {
       const handle = upiSaveRef.current;
       if (!handle) return;
@@ -424,10 +539,13 @@ function AdminPaymentsInner() {
       opFormRef.current?.requestSubmit();
       return;
     }
-    if (tab === "overview" || tab === "saas" || tab === "collections") {
+    if (tab === "saas" || tab === "collections") {
       exportCsv(saas, collections, ops);
     }
   }
+
+  const nothingPending =
+    pendingOps.length === 0 && pendingSummary.upiClaims === 0 && pendingSummary.deskOps === 0;
 
   const tabPrimaryLabel =
     tab === "upi"
@@ -438,19 +556,22 @@ function AdminPaymentsInner() {
         ? busyId === "create"
           ? "Logging…"
           : "Log payment"
-        : "Export CSV";
+        : tab === "overview"
+          ? "Clear next pending"
+          : "Export CSV";
 
   const tabPrimaryDisabled =
     tabBusy ||
     busyId === "create" ||
-    ((tab === "overview" || tab === "saas" || tab === "collections") && !saas && !collections);
+    (tab === "overview" && nothingPending) ||
+    ((tab === "saas" || tab === "collections") && !saas && !collections);
 
   // The UPI pane is self-contained, so a failed billing load must not block it.
   if (loading && !saas && !collections && tab !== "upi") return <AdminPageSkeleton cards={7} />;
 
   if (!saas && !collections && tab !== "upi") {
     return (
-      <AdminPage title="Payments" sub="SaaS billing · collections · payment desk">
+      <AdminPage title="Payments" section="Revenue" sub="SaaS billing · collections · payment desk">
         <AdminErrorState message={error || "Could not load payments"} onRetry={() => void load(days)} />
       </AdminPage>
     );
@@ -587,6 +708,7 @@ function AdminPaymentsInner() {
   return (
     <AdminPage
       title="Payments"
+      section="Revenue"
       sub="SaaS billing · collections (AR/AP) · payment desk"
       toolbar={
         <>
@@ -600,14 +722,26 @@ function AdminPaymentsInner() {
             onChange={(next) => selectTab(next)}
           />
           <Button
-            variant={tab === "upi" || tab === "ops" ? "primary" : "secondary"}
+            variant={tab === "upi" || tab === "ops" || tab === "overview" ? "primary" : "secondary"}
             size="sm"
-            icon={tab === "upi" || tab === "ops" ? undefined : "download"}
+            icon={tab === "saas" || tab === "collections" ? "download" : undefined}
             disabled={Boolean(tabPrimaryDisabled)}
+            title={tab === "overview" && nothingPending ? "Nothing waiting for a decision" : undefined}
             onClick={() => void runTabPrimary()}
           >
             {tabPrimaryLabel}
           </Button>
+          {tab === "overview" ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="download"
+              disabled={!saas && !collections}
+              onClick={() => exportCsv(saas, collections, ops)}
+            >
+              Export CSV
+            </Button>
+          ) : null}
           <Button variant="ghost" size="sm" icon="refresh" onClick={() => void load(days)} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
           </Button>
@@ -652,7 +786,7 @@ function AdminPaymentsInner() {
           selected: tab === "saas" && txnStatus === "failed",
           onClick: () => {
             setTxnStatus("failed");
-            selectTab("saas");
+            selectTab("saas", { txnStatus: "failed" });
           },
         })}
         {kpi({
@@ -709,11 +843,11 @@ function AdminPaymentsInner() {
       {message ? <Alert tone={messageTone === "error" ? "coral" : "emerald"} title={message} /> : null}
 
       {upiReady ? (
-        <div hidden={tab !== "upi"} className="admin-cc-hidden">
+        <div ref={upiWrapRef} hidden={tab !== "upi"} className="admin-cc-hidden">
           <UpiPaymentsPanel
             ref={upiSaveRef}
             initialStatus={searchParams.get("status") || "pending"}
-            focusClaimId={Number(searchParams.get("claim")) || null}
+            focusClaimId={focusClaimId}
           />
         </div>
       ) : null}
@@ -834,7 +968,7 @@ function AdminPaymentsInner() {
                       className="admin-cc-row"
                       onClick={() => {
                         setSelectedOpId(op.id);
-                        selectTab("ops");
+                        selectTab("ops", { op: op.id });
                       }}
                     >
                       <div className="admin-cc-row-main">
@@ -868,7 +1002,10 @@ function AdminPaymentsInner() {
                   aria-label="Charge status"
                   options={TXN_STATUSES.map((s) => ({ value: s, label: cap(s) }))}
                   value={txnStatus}
-                  onChange={setTxnStatus}
+                  onChange={(s) => {
+                    setTxnStatus(s);
+                    selectTab("saas", { txnStatus: s });
+                  }}
                 />
               </div>
               {filteredTxns.length === 0 ? (
@@ -1033,6 +1170,7 @@ function AdminPaymentsInner() {
 
           <div className="admin-cc-split-stack">
             {selectedOp ? (
+              <div ref={opDetailRef}>
               <AdminSection
                 title={selectedOp.party}
                 actions={
@@ -1065,14 +1203,14 @@ function AdminPaymentsInner() {
                     <Button
                       variant="primary"
                       disabled={busyId === selectedOp.id}
-                      onClick={() => void reviewOp(selectedOp.id, "approve")}
+                      onClick={() => confirmReview(selectedOp, "approve")}
                     >
                       Approve
                     </Button>
                     <Button
                       variant="destructive"
                       disabled={busyId === selectedOp.id}
-                      onClick={() => void reviewOp(selectedOp.id, "reject")}
+                      onClick={() => confirmReview(selectedOp, "reject")}
                     >
                       Reject
                     </Button>
@@ -1083,6 +1221,7 @@ function AdminPaymentsInner() {
                   </p>
                 )}
               </AdminSection>
+              </div>
             ) : (
               <AdminSection title="Review">
                 <AdminEmpty title="Nothing selected" icon="receipt">
@@ -1151,6 +1290,7 @@ function AdminPaymentsInner() {
           </div>
         </div>
       ) : null}
+      {confirmDialog}
     </AdminPage>
   );
 }

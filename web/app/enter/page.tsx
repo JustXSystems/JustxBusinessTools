@@ -238,9 +238,12 @@ function EnterInner() {
 
           <p className="bos-text-muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.45 }}>
             Pick a live Business Profile and org role. This does not sign in as their password or MFA —
-            it enacts their menus and capability gates. Admin Console stays global and ignores this
-            context.
+            it enacts their menus and capability gates.
           </p>
+          <Alert tone="blue" title="Operator menus only">
+            Act-as changes <strong>Operator</strong> menus and gates only. The Admin Console stays global and
+            always ignores this context — you keep full platform access there.
+          </Alert>
 
           {noProfiles ? (
             <Alert

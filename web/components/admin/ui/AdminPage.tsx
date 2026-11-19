@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import {
   Alert,
+  Breadcrumbs,
   Button,
   EmptyState,
   Grid,
@@ -15,25 +16,81 @@ import {
   type BosSegmentOption,
 } from "@/components/bos";
 
-/** Standard admin page frame: module header + optional toolbar + scroll body. */
+export type AdminCrumb = { label: string; href?: string };
+
+/** Standard admin page frame: crumb + module header + optional toolbar + scroll body. */
 export function AdminPage({
   title,
   sub,
-  brand = "Control center",
+  brand,
+  section,
+  crumbs,
+  entity,
   toolbar,
   children,
   className,
 }: {
   title: ReactNode;
   sub?: ReactNode;
+  /** Legacy single brand string; prefer `section` + `crumbs`. */
   brand?: ReactNode;
+  /** Nav section label, e.g. Overview / Access / Revenue. */
+  section?: string;
+  crumbs?: AdminCrumb[];
+  /** Selected entity shown after the page title in the brand slot. */
+  entity?: ReactNode;
   toolbar?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
+  const crumbItems: AdminCrumb[] =
+    crumbs ??
+    ([
+      section ? { label: section } : null,
+      typeof title === "string" ? { label: title } : null,
+      entity != null && entity !== "" ? { label: String(entity) } : null,
+    ].filter(Boolean) as AdminCrumb[]);
+
+  const brandNode =
+    brand ??
+    (crumbItems.length > 0 ? (
+      crumbItems.some((c) => c.href) ? (
+        <Breadcrumbs
+          items={crumbItems.map((c) => ({
+            label: c.label,
+            href: c.href,
+          }))}
+        />
+      ) : (
+        <nav className="bos-breadcrumbs admin-cc-crumbs" aria-label="Breadcrumb">
+          {crumbItems.map((c, i) => {
+            const last = i === crumbItems.length - 1;
+            return (
+              <span key={`${c.label}-${i}`}>
+                {i > 0 ? (
+                  <span className="bos-breadcrumbs-sep" aria-hidden>
+                    ›
+                  </span>
+                ) : null}
+                {last ? (
+                  <span className="bos-breadcrumbs-current" aria-current="page">
+                    {c.label}
+                  </span>
+                ) : (
+                  <span className="admin-cc-crumb-muted">{c.label}</span>
+                )}
+              </span>
+            );
+          })}
+        </nav>
+      )
+    ) : (
+      "Control center"
+    ));
+
   return (
     <div className={cx("admin-cc-page", className)}>
-      <ModuleHeader title={title} sub={sub} brand={brand} />
+      <ModuleHeader title={title} sub={sub} brand={brandNode} />
       {toolbar ? <ModuleToolbar>{toolbar}</ModuleToolbar> : null}
       <div className="admin-cc-body">{children}</div>
     </div>
@@ -163,5 +220,19 @@ export function AdminSection({
       </div>
       {children}
     </section>
+  );
+}
+
+/** One-line commerce / access glossary for Plans & Fabric. */
+export function AdminGlossary({ children }: { children?: ReactNode }) {
+  return (
+    <p className="admin-cc-glossary">
+      {children ?? (
+        <>
+          <strong>Mode</strong> = freemium cap · <strong>Pack</strong> = SKU bundle ·{" "}
+          <strong>License</strong> = per-profile tool grant (Access Fabric)
+        </>
+      )}
+    </p>
   );
 }

@@ -71,6 +71,7 @@ export default function ExperienceInner() {
   return (
     <AdminPage
       title="Experience"
+      section="Product"
       sub={`${TAB_TITLE[tab]} · theme · branding · public home`}
       toolbar={
         <>

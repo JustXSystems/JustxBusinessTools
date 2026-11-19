@@ -322,7 +322,7 @@ export default function AdminIntegrationsPage() {
 
   if (!isPlatform) {
     return (
-      <AdminPage title="Integrations" sub="Platform configuration">
+      <AdminPage title="Integrations" section="Platform" sub="Platform configuration">
         <AdminEmpty title="Platform admins only" icon="lock">
           Platform configuration is available to Justxsystems platform admins only.
         </AdminEmpty>
@@ -332,7 +332,7 @@ export default function AdminIntegrationsPage() {
 
   if (error && !data) {
     return (
-      <AdminPage title="Integrations" sub="Platform configuration">
+      <AdminPage title="Integrations" section="Platform" sub="Platform configuration">
         <AdminErrorState message={error} onRetry={load} />
       </AdminPage>
     );
@@ -363,6 +363,7 @@ export default function AdminIntegrationsPage() {
   return (
     <AdminPage
       title="Integrations"
+      section="Platform"
       sub="One-stop view of platform configuration — status, tests, and editable optional services."
       toolbar={
         <>

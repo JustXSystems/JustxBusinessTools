@@ -119,7 +119,7 @@ export default function AdminDashboardPage() {
 
   if (error && !data) {
     return (
-      <AdminPage title="Command center" sub="Platform pulse">
+      <AdminPage section="Overview" title="Command center" sub="Platform pulse">
         <AdminErrorState message={error} onRetry={load} />
       </AdminPage>
     );
@@ -165,6 +165,7 @@ export default function AdminDashboardPage() {
 
   return (
     <AdminPage
+      section="Overview"
       title="Command center"
       sub="Attention · health · usage · cash"
       toolbar={
@@ -215,7 +216,7 @@ export default function AdminDashboardPage() {
             chip={{ color: "rose", glyph: "↻" }}
           />
         </Link>
-        <Link href={adminDeepLink.analytics()} className="admin-cc-kpi-link">
+        <Link href={adminDeepLink.analytics("limit_blocks")} className="admin-cc-kpi-link">
           <KpiCard
             label="Limit blocks (30d)"
             value={t.limit_blocks}
@@ -296,7 +297,7 @@ export default function AdminDashboardPage() {
             </div>
           </Card>
         </Link>
-        <Link href={adminDeepLink.paymentSaas()}>
+        <Link href={adminDeepLink.paymentSaasFailed()}>
           <Card interactive>
             <div className="bos-kpi-label">Payment failures</div>
             <div className="bos-kpi-value">{health.payments.failedCount}</div>
@@ -362,15 +363,18 @@ export default function AdminDashboardPage() {
           }
         >
           <Grid cols={2} min={120} gap={8}>
-            <KpiCard label="Receivable" value={inr(data.collections.totalReceivable)} interactive={false} />
-            <KpiCard
-              label="Overdue"
-              value={inr(data.collections.overdueReceivable)}
-              valueTone="coral"
-              interactive={false}
-            />
-            <KpiCard label="Net position" value={inr(data.collections.netPosition)} interactive={false} />
-            <KpiCard label="AMC ≤30d" value={data.collections.amcRenewalsNext30d} interactive={false} />
+            <Link href={adminDeepLink.paymentCollections()} className="admin-cc-kpi-link">
+              <KpiCard label="Receivable" value={inr(data.collections.totalReceivable)} />
+            </Link>
+            <Link href={adminDeepLink.paymentCollectionsOverdue()} className="admin-cc-kpi-link">
+              <KpiCard label="Overdue" value={inr(data.collections.overdueReceivable)} valueTone="coral" />
+            </Link>
+            <Link href={adminDeepLink.payments()} className="admin-cc-kpi-link">
+              <KpiCard label="Net position" value={inr(data.collections.netPosition)} />
+            </Link>
+            <Link href={adminDeepLink.subscriptionsRenewals()} className="admin-cc-kpi-link">
+              <KpiCard label="AMC ≤30d" value={data.collections.amcRenewalsNext30d} />
+            </Link>
           </Grid>
           <div style={{ height: 12 }} />
           {data.subscription ? (
@@ -457,7 +461,12 @@ export default function AdminDashboardPage() {
           </Link>
           <Link href={adminDeepLink.profiles()}>
             <Button variant="secondary" size="sm">
-              Organizations
+              Business Profiles
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.subscriptions()}>
+            <Button variant="secondary" size="sm">
+              Plans
             </Button>
           </Link>
           <Link href={adminDeepLink.gateways()}>

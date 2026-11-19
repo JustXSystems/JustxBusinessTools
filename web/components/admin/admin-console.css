@@ -61,6 +61,30 @@
   flex: 1 0 auto;
 }
 
+/* Compact notice: Admin Console ignores Operator act-as. Natural height, never grows. */
+.bos.admin-bos .admin-cc-scope-chip {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  max-width: calc(100% - 28px);
+  margin: 8px 14px 0;
+  padding: 4px 10px;
+  border: 1px solid var(--bos-border, rgba(128, 128, 128, 0.35));
+  border-radius: 999px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--bos-text-faint);
+}
+
+.bos.admin-bos .admin-cc-scope-chip a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .bos.admin-bos .admin-cc-brand-wrap {
   display: flex;
   align-items: center;
@@ -2048,4 +2072,44 @@
   .bos.admin-bos .admin-cc-login {
     place-items: start center;
   }
+}
+/* Flow clarity — glossary + crumbs */
+.bos.admin-bos .admin-cc-glossary {
+  margin: 0 0 4px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--bos-text-muted);
+  background: color-mix(in srgb, var(--bos-blue) 8%, var(--bos-surface));
+  border: 1px solid var(--bos-border-soft);
+  border-radius: 10px;
+}
+
+.bos.admin-bos .admin-cc-glossary strong {
+  color: var(--bos-text);
+  font-weight: 650;
+}
+
+.bos.admin-bos .admin-cc-crumb-muted {
+  color: var(--bos-text-faint);
+  font-size: 12px;
+}
+
+.bos.admin-bos .admin-cc-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 4px 8px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  color: var(--bos-text-muted);
+  background: var(--bos-surface);
+  border: 1px dashed var(--bos-border);
+  border-radius: 999px;
+}
+
+.bos.admin-bos .admin-cc-scope-chip a {
+  color: var(--bos-blue);
+  font-weight: 600;
+  text-decoration: none;
 }

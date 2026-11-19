@@ -158,7 +158,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "UPI claims pending",
       detail: `${upiPending} claim${upiPending === 1 ? "" : "s"} · ₹${Math.round(upiAmountInr).toLocaleString("en-IN")}`,
       count: upiPending,
-      href: adminDeepLink.approvals("upi_claim"),
+      href: adminDeepLink.upiClaimPending(),
     });
   }
   if (desk > 0) {
@@ -168,7 +168,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Payment desk items",
       detail: `${desk} offline / manual payment${desk === 1 ? "" : "s"} need a decision`,
       count: desk,
-      href: adminDeepLink.approvals("payment_op"),
+      href: adminDeepLink.paymentOpPending(),
     });
   }
   if (renewalsSoon > 0) {
@@ -188,7 +188,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Limit blocks (30d)",
       detail: `${limitBlocks} blocked save${limitBlocks === 1 ? "" : "s"} — freemium friction / upgrade signal`,
       count: limitBlocks,
-      href: adminDeepLink.profileAccess(undefined, "fabric"),
+      href: adminDeepLink.analytics("limit_blocks"),
     });
   }
   if (deliveryFailed > 0) {

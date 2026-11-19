@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import {
   AdminEmpty,
@@ -11,6 +11,7 @@ import {
   AdminPageSkeleton,
   AdminSection,
   AdminTabs,
+  useAdminConfirm,
 } from "@/components/admin/ui";
 import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
 import {
@@ -140,6 +141,9 @@ export default function AdminGatewaysPage() {
 
 function AdminGatewaysInner() {
   const search = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const { confirm, dialog: confirmDialog } = useAdminConfirm();
   const filterFromUrl = useMemo((): Filter => {
     const f = search.get("filter");
     if (f === "live" || f === "test" || f === "enabled" || f === "off" || f === "unhealthy") return f;
@@ -173,6 +177,18 @@ function AdminGatewaysInner() {
   useEffect(() => {
     setFilter(filterFromUrl);
   }, [filterFromUrl]);
+
+  const changeFilter = useCallback(
+    (next: Filter) => {
+      setFilter(next);
+      const params = new URLSearchParams(search.toString());
+      if (next === "all") params.delete("filter");
+      else params.set("filter", next);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, search],
+  );
 
   const load = useCallback(async (keepId?: number | null) => {
     setError("");
@@ -242,6 +258,24 @@ function AdminGatewaysInner() {
     });
   }, [gateways, filter, query]);
 
+  // When the filter/search hides the selected gateway, move to the first visible one (or clear).
+  useEffect(() => {
+    if (!loaded || selectedId == null) return;
+    if (visible.some((g) => g.id === selectedId)) return;
+    const first = visible[0];
+    if (first) {
+      setSelectedId(first.id);
+      setPane("health");
+      setShowAdd(false);
+      void loadEvents(first.id).catch((e) =>
+        setError(e instanceof Error ? e.message : "Could not load trace"),
+      );
+    } else {
+      setSelectedId(null);
+      setEvents([]);
+    }
+  }, [loaded, selectedId, visible, loadEvents]);
+
   const summary = useMemo(() => {
     const live = gateways.filter((g) => g.mode === "live").length;
     const enabled = gateways.filter((g) => g.enabled).length;
@@ -273,6 +307,40 @@ function AdminGatewaysInner() {
     } finally {
       setBusy(null);
     }
+  }
+
+  function requestToggleEnabled(g: Gateway) {
+    if (!g.enabled && g.mode === "live") {
+      confirm({
+        title: `Enable live charging on ${g.displayName}?`,
+        description:
+          "This gateway is in live mode. Once enabled it can take real customer payments and checkouts will be charged.",
+        confirmLabel: "Enable live charging",
+        onConfirm: () => toggleEnabled(g),
+      });
+      return;
+    }
+    void toggleEnabled(g);
+  }
+
+  function requestReplay(g: Gateway, ev: GwEvent) {
+    confirm({
+      title: `Replay event #${ev.id}?`,
+      description:
+        "The stored webhook payload is processed again without signature checks and may re-apply subscription or payment changes.",
+      confirmLabel: "Replay event",
+      onConfirm: () => replayEvent(g, ev),
+    });
+  }
+
+  function requestInject(g: Gateway) {
+    confirm({
+      title: "Inject sample webhook?",
+      description:
+        "A sample subscription.activated event is processed without signature checks and may activate a plan on a profile. Use for mock / recovery only.",
+      confirmLabel: "Inject webhook",
+      onConfirm: () => injectSampleWebhook(g),
+    });
   }
 
   async function toggleEnabled(g: Gateway) {
@@ -389,7 +457,7 @@ function AdminGatewaysInner() {
   if (!loaded) {
     if (error) {
       return (
-        <AdminPage title="Gateways" sub="Payment providers per organization">
+        <AdminPage title="Gateways" section="Revenue" sub="Payment providers per organization">
           <AdminErrorState message={error} onRetry={() => void refresh()} />
         </AdminPage>
       );
@@ -417,7 +485,7 @@ function AdminGatewaysInner() {
       type="button"
       className={cx("admin-cc-kpi-btn", filter === key && "is-selected")}
       aria-pressed={filter === key}
-      onClick={() => setFilter(key)}
+      onClick={() => changeFilter(key)}
     >
       <KpiCard label={label} value={value} chip={chip} delta={delta} deltaTone={deltaTone} />
     </button>
@@ -450,6 +518,7 @@ function AdminGatewaysInner() {
   return (
     <AdminPage
       title="Gateways"
+      section="Revenue"
       sub="Razorpay · Stripe · Cashfree per organization"
       toolbar={
         <>
@@ -522,7 +591,7 @@ function AdminGatewaysInner() {
               placeholder="Search name, provider, plan"
               aria-label="Search gateways"
             />
-            <AdminTabs aria-label="Gateway filter" options={filterOptions} value={filter} onChange={setFilter} />
+            <AdminTabs aria-label="Gateway filter" options={filterOptions} value={filter} onChange={changeFilter} />
           </div>
           <div className="admin-cc-dir-list">
             {visible.map((g) => {
@@ -648,7 +717,7 @@ function AdminGatewaysInner() {
                     <Button
                       variant={selected.enabled ? "destructive" : "secondary"}
                       disabled={Boolean(busy)}
-                      onClick={() => void toggleEnabled(selected)}
+                      onClick={() => requestToggleEnabled(selected)}
                     >
                       {selected.enabled ? "Disable" : "Enable"}
                     </Button>
@@ -730,7 +799,7 @@ function AdminGatewaysInner() {
               {pane === "trace" ? (
                 <div className="admin-cc-form">
                   <div className="admin-cc-form-actions">
-                    <Button variant="secondary" size="sm" disabled={Boolean(busy)} onClick={() => void injectSampleWebhook(selected)}>
+                    <Button variant="secondary" size="sm" disabled={Boolean(busy)} onClick={() => requestInject(selected)}>
                       Inject sample webhook
                     </Button>
                     <span className="admin-cc-cell-sub">Replays skip signature checks. Use for mock / recovery only.</span>
@@ -751,7 +820,7 @@ function AdminGatewaysInner() {
                             <div className="admin-cc-cell-sub">{fmtWhen(ev.createdAt)}</div>
                           </div>
                           {ev.hasPayload ? (
-                            <Button variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => void replayEvent(selected, ev)}>
+                            <Button variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => requestReplay(selected, ev)}>
                               Replay
                             </Button>
                           ) : (
@@ -868,6 +937,7 @@ function AdminGatewaysInner() {
           </FormGrid>
         </form>
       </Dialog>
+      {confirmDialog}
     </AdminPage>
   );
 }

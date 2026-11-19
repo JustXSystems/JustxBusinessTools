@@ -44,7 +44,7 @@ type Summary = {
 };
 
 const KIND_LABEL: Record<ApprovalsKind, string> = {
-  profile: "Branch",
+  profile: "Business Profile",
   user: "User",
   payment_op: "Payment desk",
   upi_claim: "UPI claim",
@@ -161,7 +161,7 @@ function AdminApprovalsInner() {
   if (!loaded) {
     if (error) {
       return (
-        <AdminPage title="Approvals inbox" sub="Pending reviews">
+        <AdminPage section="Overview" title="Approvals" sub="Pending reviews">
           <AdminErrorState message={error} onRetry={reload} />
         </AdminPage>
       );
@@ -171,7 +171,7 @@ function AdminApprovalsInner() {
 
   const tabOptions: ReadonlyArray<{ value: ApprovalsKind | "all"; label: string }> = [
     { value: "all", label: `All (${summary.total})` },
-    { value: "profile", label: `Branches (${summary.profiles})` },
+    { value: "profile", label: `Business Profiles (${summary.profiles})` },
     { value: "user", label: `Users (${summary.users})` },
     { value: "payment_op", label: `Payment desk (${summary.paymentOps})` },
     { value: "upi_claim", label: `UPI claims (${summary.upiClaims})` },
@@ -216,7 +216,7 @@ function AdminApprovalsInner() {
         const rejectKey = `${item.kind}:${item.id}:reject`;
         return (
           <div className="admin-cc-actions">
-            <Link href={item.href}>
+            <Link href={KIND_HUB[item.kind]}>
               <Button variant="secondary" size="sm">
                 Open
               </Button>
@@ -268,7 +268,8 @@ function AdminApprovalsInner() {
 
   return (
     <AdminPage
-      title="Approvals inbox"
+      section="Overview"
+      title="Approvals"
       sub="Pending reviews"
       toolbar={
         <>
@@ -288,13 +289,13 @@ function AdminApprovalsInner() {
       }
     >
       <Alert tone="amber" title="Review policy">
-        Pending branches (Justxsystems soft review — Owners can already use JBT), join requests, payment-desk items, and UPI
+        Pending business profiles (Justxsystems soft review — Owners can already use JBT), join requests, payment-desk items, and UPI
         claims. Rejecting a business as Justxsystems admin suspends all users on that org and ends their sessions.
       </Alert>
 
       <Grid cols={5} min={140} gap={12}>
         {kpiButton("all", "Total", summary.total, { color: "blue", glyph: "◎" })}
-        {kpiButton("profile", "Branches", summary.profiles, { color: "lavender", glyph: "▣" })}
+        {kpiButton("profile", "Business Profiles", summary.profiles, { color: "lavender", glyph: "▣" })}
         {kpiButton("user", "Users", summary.users, { color: "mint", glyph: "👤" }, summary.users ? "Registrations & joins" : "Clear")}
         {kpiButton("payment_op", "Payment desk", summary.paymentOps, { color: "rose", glyph: "₹" })}
         {kpiButton("upi_claim", "UPI claims", summary.upiClaims, { color: "amber", glyph: "◈" })}

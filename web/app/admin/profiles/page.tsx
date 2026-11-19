@@ -28,6 +28,7 @@ import {
   AdminPageSkeleton,
   AdminSection,
   AdminTabs,
+  useAdminConfirm,
 } from "@/components/admin/ui";
 import { SelectField, TextareaField, TextField } from "@/components/admin/ui/AdminFields";
 import { AccessFabricPane } from "@/components/admin/AccessFabricPane";
@@ -127,6 +128,11 @@ function normalizeTab(raw: string | null): Tab | null {
   if (raw === "access") return "people";
   if (PROFILE_TABS.some((t) => t.id === raw)) return raw as Tab;
   return null;
+}
+
+/** Pending reviews land on Lifecycle (Approve / Reject); everything else opens Access Fabric. */
+function defaultTabFor(profile: Pick<Profile, "approvalStatus"> | null | undefined, filter: Filter): Tab {
+  return filter === "pending" || profile?.approvalStatus === "pending" ? "lifecycle" : "fabric";
 }
 
 function syncProfileUrl(
@@ -246,6 +252,8 @@ function AdminProfilesInner() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const { confirm, dialog: confirmDialog } = useAdminConfirm();
+  const profilesRef = useRef<Profile[]>([]);
   const openSeq = useRef(0);
   const appliedFocus = useRef<number | null>(null);
   const previousSelectedId = useRef<number | null>(null);
@@ -267,6 +275,7 @@ function AdminProfilesInner() {
   const reload = useCallback(async () => {
     try {
       const data = await api<{ profiles: Profile[]; summary: typeof summary }>("/admin/profiles");
+      profilesRef.current = data.profiles;
       setProfiles(data.profiles);
       setSummary(data.summary);
       setError("");
@@ -298,7 +307,8 @@ function AdminProfilesInner() {
       const seq = ++openSeq.current;
       setCreating(false);
       setSelectedId(id);
-      const nextTab = preferredTab ?? initialTab ?? "fabric";
+      const nextTab =
+        preferredTab ?? initialTab ?? defaultTabFor(profilesRef.current.find((p) => p.id === id), "all");
       setTab(nextTab);
       setFabricFocusTool(focusCapabilityTool);
       setError("");
@@ -322,8 +332,12 @@ function AdminProfilesInner() {
     if (!profiles.some((p) => p.id === focusId)) return;
     if (appliedFocus.current === focusId) return;
     appliedFocus.current = focusId;
-    void openProfile(focusId, initialTab);
-  }, [focusId, profiles, openProfile, initialTab]);
+    void openProfile(
+      focusId,
+      initialTab ?? defaultTabFor(profiles.find((p) => p.id === focusId), initialFilter),
+    );
+    revealDetail();
+  }, [focusId, profiles, openProfile, initialTab, initialFilter, revealDetail]);
 
   const visible = profiles.filter((p) => {
     const q = query.trim().toLowerCase();
@@ -346,7 +360,7 @@ function AdminProfilesInner() {
       invalidateAdminData("admin-profiles");
       await reload();
       if (typeof focus === "number") await openProfile(focus);
-      else if (selectedId && !creating) await openProfile(selectedId);
+      else if (selectedId && !creating) await openProfile(selectedId, tab);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     }
@@ -392,6 +406,36 @@ function AdminProfilesInner() {
     });
   }
 
+  function approveProfile(p: Profile) {
+    void run("Business Profile approved.", () =>
+      api(`/admin/profiles/${p.id}/approve`, { method: "POST" }).then(() => undefined),
+    );
+  }
+
+  function confirmReject(p: Profile) {
+    confirm({
+      title: "Reject this Business Profile?",
+      description: (
+        <>
+          Rejecting <strong>{p.businessName}</strong>
+          {p.organizationName ? ` (${p.organizationName})` : ""} as a Justxsystems admin suspends{" "}
+          <strong>every user in this organization</strong> and ends all their sessions immediately. The review note
+          is saved with the rejection.
+        </>
+      ),
+      confirmLabel: "Reject and suspend org",
+      onConfirm: () =>
+        run(
+          "Business Profile rejected. If you are a Justxsystems admin, all org users were suspended and logged out.",
+          () =>
+            api(`/admin/profiles/${p.id}/reject`, {
+              method: "POST",
+              body: JSON.stringify({ note: rejectNote || "Rejected" }),
+            }).then(() => undefined),
+        ),
+    });
+  }
+
   function startCreate() {
     previousSelectedId.current = selectedId;
     setCreating(true);
@@ -419,7 +463,7 @@ function AdminProfilesInner() {
   if (!loaded) {
     if (error) {
       return (
-        <AdminPage title="Organizations" sub="Access Fabric">
+        <AdminPage title="Business Profiles" section="Access" sub="Access Fabric · licenses, packs and reach per profile">
           <AdminErrorState message={error} onRetry={reload} />
         </AdminPage>
       );
@@ -531,8 +575,10 @@ function AdminProfilesInner() {
 
   return (
     <AdminPage
-      title="Organizations"
-      sub="Access Fabric · profiles · tools · reach"
+      title="Business Profiles"
+      section="Access"
+      entity={!creating ? selected?.businessName : undefined}
+      sub="Access Fabric = what each Business Profile is licensed for · tools · home surface · people reach"
       toolbar={
         <>
           <Badge auto tone={summary.pending ? "amber" : "emerald"}>
@@ -540,12 +586,12 @@ function AdminProfilesInner() {
           </Badge>
           <Link href={adminDeepLink.tools()}>
             <Button variant="secondary" size="sm">
-              Catalog &amp; products
+              Catalog
             </Button>
           </Link>
           <Link href={adminDeepLink.subscriptions()}>
             <Button variant="secondary" size="sm">
-              Packs &amp; plans
+              Plans
             </Button>
           </Link>
           <Button variant="primary" size="sm" icon="plus" onClick={startCreate}>
@@ -557,8 +603,8 @@ function AdminProfilesInner() {
       <Alert tone="blue" title="Profile-first command center">
         Select a Business Profile, assign tools, then tune each product&apos;s capabilities (module ceilings). Pack
         provisioning, tool lattice, home surface, and people reach live here. Catalog Live/Hidden and SKU pricing stay
-        under <Link className="admin-cc-link" href={adminDeepLink.tools()}>Catalog &amp; products</Link>; packs under{" "}
-        <Link className="admin-cc-link" href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>. Org Owners
+        under <Link className="admin-cc-link" href={adminDeepLink.tools()}>Catalog</Link>; packs under{" "}
+        <Link className="admin-cc-link" href={adminDeepLink.subscriptions()}>Plans</Link>. Org Owners
         and org Admins manage day-to-day team access in operator Business Profile → Team.
       </Alert>
 
@@ -602,7 +648,7 @@ function AdminProfilesInner() {
                   aria-pressed={active}
                   onClick={() => {
                     appliedFocus.current = p.id;
-                    void openProfile(p.id, "fabric");
+                    void openProfile(p.id, defaultTabFor(p, filter));
                     revealDetail();
                   }}
                 >
@@ -667,6 +713,11 @@ function AdminProfilesInner() {
                     <Badge auto tone={statusTone(selected.approvalStatus)}>
                       {selected.approvalStatus}
                     </Badge>
+                    {selected.approvalStatus === "pending" ? (
+                      <Button variant="primary" size="sm" onClick={() => approveProfile(selected)}>
+                        Approve
+                      </Button>
+                    ) : null}
                     <Link href={adminDeepLink.enterAs(selected.id, "owner")}>
                       <Button variant="secondary" size="sm">
                         Enter as…
@@ -866,7 +917,7 @@ function AdminProfilesInner() {
                     />
                     <p className="admin-cc-note-text">
                       Plain / Corporate message templates and Reply-To are edited on Business Profile → Send Via for
-                      this branch. See <code className="admin-cc-code">docs/EMAIL_WEBHOOK.md</code> for HTML delivery.
+                      this Business Profile. See <code className="admin-cc-code">docs/EMAIL_WEBHOOK.md</code> for HTML delivery.
                     </p>
                   </>
                 ) : null}
@@ -876,7 +927,7 @@ function AdminProfilesInner() {
                     <p className="admin-cc-note-text">
                       Which tools appear on this profile&apos;s operator home. Commercial entitlements and pack
                       provisioning live on Access Fabric; org Live/Hidden and SKU pricing stay under{" "}
-                      <Link href={adminDeepLink.tools()}>Catalog &amp; products</Link>.
+                      <Link href={adminDeepLink.tools()}>Catalog</Link>.
                     </p>
                     <HomeToolPicker
                       selectedIds={homeToolIds}
@@ -937,11 +988,7 @@ function AdminProfilesInner() {
                     {selected.approvalStatus === "pending" || selected.approvalStatus === "rejected" ? (
                       <Button
                         variant="primary"
-                        onClick={() =>
-                          void run("Branch approved.", () =>
-                            api(`/admin/profiles/${selected.id}/approve`, { method: "POST" }).then(() => undefined),
-                          )
-                        }
+                        onClick={() => approveProfile(selected)}
                       >
                         Approve
                       </Button>
@@ -950,7 +997,7 @@ function AdminProfilesInner() {
                       <Button
                         variant="secondary"
                         onClick={() =>
-                          void run("Default branch updated.", () =>
+                          void run("Default Business Profile updated.", () =>
                             api(`/admin/profiles/${selected.id}/default`, { method: "POST" }).then(() => undefined),
                           )
                         }
@@ -975,7 +1022,7 @@ function AdminProfilesInner() {
                       <Button
                         variant="primary"
                         onClick={() =>
-                          void run("Branch restored.", () =>
+                          void run("Business Profile restored.", () =>
                             api(`/admin/profiles/${selected.id}/unarchive`, { method: "POST" }).then(() => undefined),
                           )
                         }
@@ -989,7 +1036,7 @@ function AdminProfilesInner() {
                     )}
                   </div>
                   <p className="admin-cc-note-text">
-                    Archive hides the branch from normal use. Use the <strong>archived</strong> filter to find it
+                    Archive hides the Business Profile from normal use. Use the <strong>archived</strong> filter to find it
                     later, then Restore.
                   </p>
 
@@ -1003,19 +1050,7 @@ function AdminProfilesInner() {
                             onChange={(e) => setRejectNote(e.target.value)}
                             placeholder="Rejection note"
                           />
-                          <Button
-                            variant="destructive"
-                            onClick={() =>
-                              void run(
-                                "Business rejected. If you are a Justxsystems admin, all org users were suspended and logged out.",
-                                () =>
-                                  api(`/admin/profiles/${selected.id}/reject`, {
-                                    method: "POST",
-                                    body: JSON.stringify({ note: rejectNote || "Rejected" }),
-                                  }).then(() => undefined),
-                              )
-                            }
-                          >
+                          <Button variant="destructive" onClick={() => confirmReject(selected)}>
                             Reject
                           </Button>
                         </div>
@@ -1030,10 +1065,10 @@ function AdminProfilesInner() {
                   <Dialog
                     open={archiveOpen}
                     onClose={() => setArchiveOpen(false)}
-                    title={selected.isDefault ? "Archive default branch?" : "Archive profile?"}
+                    title={selected.isDefault ? "Archive default Business Profile?" : "Archive Business Profile?"}
                     description={
                       selected.isDefault
-                        ? `Archive default branch “${selected.businessName}”? It will leave the active directory. Another branch becomes default if one exists.`
+                        ? `Archive default Business Profile “${selected.businessName}”? It will leave the active directory. Another Business Profile becomes default if one exists.`
                         : `Archive ${selected.businessName}?`
                     }
                     icon={{ tone: "coral" }}
@@ -1046,7 +1081,7 @@ function AdminProfilesInner() {
                           variant="destructive"
                           onClick={() => {
                             setArchiveOpen(false);
-                            void run("Branch archived.", () =>
+                            void run("Business Profile archived.", () =>
                               api(`/admin/profiles/${selected.id}`, { method: "DELETE" }).then(() => undefined),
                             );
                           }}
@@ -1059,6 +1094,10 @@ function AdminProfilesInner() {
                 </div>
               ) : null}
             </>
+          ) : initialTab === "fabric" && focusId == null ? (
+            <AdminEmpty title="Choose a Business Profile to open Access Fabric" icon="sparkle">
+              Pick a profile from the list — Access Fabric shows its readiness, packs, tool licenses, and reach.
+            </AdminEmpty>
           ) : (
             <AdminEmpty title="Select a Business Profile" icon="sparkle">
               Choose a profile to open its Access Fabric — readiness, packs, lattice, and reach.
@@ -1066,6 +1105,7 @@ function AdminProfilesInner() {
           )}
         </section>
       </div>
+      {confirmDialog}
     </AdminPage>
   );
 }

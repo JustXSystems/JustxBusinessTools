@@ -37,7 +37,10 @@ export const adminDeepLink = {
   payments: () => "/admin/payments",
   paymentCollections: () => "/admin/payments?tab=collections",
   paymentSaas: () => "/admin/payments?tab=saas",
+  /** SaaS charges pre-filtered to failures. */
+  paymentSaasFailed: () => "/admin/payments?tab=saas&txnStatus=failed",
   paymentOps: () => "/admin/payments?tab=ops",
+  paymentCollectionsOverdue: () => "/admin/payments?tab=collections",
   paymentOpPending: (opId?: number) =>
     opId != null && opId > 0
       ? `/admin/payments?tab=ops&filter=pending&op=${opId}`
@@ -81,7 +84,8 @@ export const adminDeepLink = {
     }
     return `/admin/profiles?${params.toString()}`;
   },
-  analytics: () => "/admin/analytics",
+  analytics: (focus?: "limit_blocks") =>
+    focus ? `/admin/analytics?focus=${focus}` : "/admin/analytics",
   analyticsTool: (toolId: string) => `/admin/analytics/tools/${encodeURIComponent(toolId)}`,
   gateways: (filter?: "unhealthy" | "enabled" | "live" | "off" | "test") =>
     filter ? `/admin/gateways?filter=${filter}` : "/admin/gateways",

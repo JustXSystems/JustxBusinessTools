@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
@@ -23,6 +24,7 @@ import {
   adminNavigation,
   type AdminNavItem,
 } from "@/config/admin-navigation.config";
+import { adminDeepLink, type ApprovalsKind } from "@/lib/admin-deep-links";
 import "./admin-console.css";
 
 /** Phones / touch-first screens: no keyboard hint, shorter nav search label. */
@@ -45,6 +47,13 @@ function useCompactViewport(): boolean {
 function flatAdminItems(): AdminNavItem[] {
   return adminNavigation.flatMap((s) => s.items);
 }
+
+const APPROVAL_KINDS: Array<{ kind: ApprovalsKind; label: string }> = [
+  { kind: "profile", label: "Profiles" },
+  { kind: "user", label: "Users" },
+  { kind: "payment_op", label: "Payment ops" },
+  { kind: "upi_claim", label: "UPI claims" },
+];
 
 function matchActive(pathname: string, items: AdminNavItem[]): string {
   const exact = items.find((i) => i.exact && pathname === i.href);
@@ -88,6 +97,12 @@ function AdminShellChrome({ children }: { children: ReactNode }) {
     [pathname, router],
   );
 
+  /** Deep links differ by query/hash only, so always push (pathname check would no-op). */
+  const goDeep = useCallback((href: string) => router.push(href), [router]);
+
+  /** Platform super still carrying Operator act-as while in Admin Console (it is ignored here). */
+  const actingAs = Boolean(user?.isPlatformAdmin && user.actAsRole);
+
   const commands = useMemo<BosCommand[]>(() => {
     const navCmds: BosCommand[] = items.map((item) => ({
       id: `nav-${item.href}`,
@@ -97,8 +112,38 @@ function AdminShellChrome({ children }: { children: ReactNode }) {
       icon: <NavIcon id={item.icon} />,
       onSelect: () => go(item.href),
     }));
+    const deep = (
+      id: string,
+      label: string,
+      section: string,
+      href: string,
+      keywords?: string,
+    ): BosCommand => ({
+      id: `deep-${id}`,
+      label,
+      section,
+      keywords: keywords ? `${keywords} ${href}` : href,
+      onSelect: () => goDeep(href),
+    });
+    const flowCmds: BosCommand[] = [
+      deep("approvals-all", "Approvals — all pending", "Approvals", adminDeepLink.approvals(), "queue review"),
+      ...APPROVAL_KINDS.map(({ kind, label }) =>
+        deep(`approvals-${kind}`, `Approvals — ${label}`, "Approvals", adminDeepLink.approvals(kind), kind),
+      ),
+      deep("pay-overview", "Payments — Overview", "Payments", adminDeepLink.payments(), "money"),
+      deep("pay-saas", "Payments — SaaS charges", "Payments", adminDeepLink.paymentSaas(), "subscription billing"),
+      deep("pay-collections", "Payments — Collections", "Payments", adminDeepLink.paymentCollections(), "dues overdue"),
+      deep("pay-ops", "Payments — Ops", "Payments", adminDeepLink.paymentOps(), "operations payouts"),
+      deep("pay-upi-pending", "Payments — UPI pending claims", "Payments", adminDeepLink.upiClaimPending(), "upi claim verify"),
+      deep("plans-renewals", "Plans — Renewals", "Plans", adminDeepLink.subscriptionsRenewals(), "subscriptions expiring"),
+      deep("profiles-fabric", "Business Profiles — Fabric", "Business Profiles", adminDeepLink.profileAccess(), "tools licenses ims capabilities"),
+      deep("exp-theme", "Experience — Theme", "Experience", adminDeepLink.experienceTheme(), "colors appearance"),
+      deep("exp-public-home", "Experience — Public home", "Experience", adminDeepLink.experiencePublicHome(), "landing"),
+      deep("analytics-limit-blocks", "Analytics — Limit blocks", "Analytics", adminDeepLink.analytics("limit_blocks"), "quota ceiling upgrade"),
+    ];
     return [
       ...navCmds,
+      ...flowCmds,
       {
         id: "enter-operator",
         label: "Enter Operator as…",
@@ -113,7 +158,7 @@ function AdminShellChrome({ children }: { children: ReactNode }) {
         onSelect: () => logout(),
       },
     ];
-  }, [go, items, logout]);
+  }, [go, goDeep, items, logout]);
 
   useCommandHotkey(() => setPaletteOpen(true));
 
@@ -193,6 +238,15 @@ function AdminShellChrome({ children }: { children: ReactNode }) {
         footer={footer}
       >
         <div className="admin-cc-main-stack">
+          {actingAs ? (
+            <div className="admin-cc-scope-chip" role="status">
+              <span>
+                Admin Console ignores act-as
+                {user?.actAsRole ? ` (${user.actAsRole})` : ""}.
+              </span>
+              <Link href="/enter">Operator /enter</Link>
+            </div>
+          ) : null}
           <div className="admin-cc-content">{children}</div>
           <PoweredByFooter variant="bar" />
         </div>

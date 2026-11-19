@@ -351,6 +351,36 @@ export default function LoginPage() {
                       </Button>
                     </form>
                   )}
+
+                  {methods.google ? (
+                    <>
+                      <div
+                        role="separator"
+                        aria-label="or"
+                        className="bos-text-muted"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          fontSize: 12,
+                          margin: "4px 0",
+                        }}
+                      >
+                        <span style={{ flex: 1, height: 1, background: "currentColor", opacity: 0.2 }} />
+                        <span>or</span>
+                        <span style={{ flex: 1, height: 1, background: "currentColor", opacity: 0.2 }} />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        block
+                        disabled={loading}
+                        onClick={() => window.location.assign(apiUrl("/api/auth/google"))}
+                      >
+                        Continue with Google
+                      </Button>
+                    </>
+                  ) : null}
                 </>
               )}
 

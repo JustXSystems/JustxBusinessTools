@@ -27,7 +27,7 @@ export const adminNavigation: AdminNavSection[] = [
     id: "directory",
     label: "Access",
     items: [
-      { href: "/admin/profiles", label: "Organizations", icon: "profile" },
+      { href: "/admin/profiles", label: "Business Profiles", icon: "profile" },
       { href: "/admin/team", label: "People", icon: "users" },
     ],
   },

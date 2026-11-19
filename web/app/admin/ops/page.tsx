@@ -143,7 +143,7 @@ export default function AdminOpsPage() {
 
   if (error && !data) {
     return (
-      <AdminPage title="Operations" sub="Service health">
+      <AdminPage title="Operations" section="Platform" sub="Service health">
         <AdminErrorState message={error} onRetry={load} />
       </AdminPage>
     );
@@ -196,6 +196,7 @@ export default function AdminOpsPage() {
   return (
     <AdminPage
       title="Operations"
+      section="Platform"
       sub="Service health · error pulse · observability"
       toolbar={
         <>

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Alert,
   Badge,
@@ -166,6 +167,16 @@ function exportCsv(overview: Overview) {
 }
 
 export default function AdminAnalyticsPage() {
+  return (
+    <Suspense fallback={<AdminPageSkeleton cards={6} />}>
+      <AdminAnalyticsInner />
+    </Suspense>
+  );
+}
+
+function AdminAnalyticsInner() {
+  const search = useSearchParams();
+  const focusLimitBlocks = search.get("focus") === "limit_blocks";
   const [days, setDays] = useState(30);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [breakdown, setBreakdown] = useState<Breakdown | null>(null);
@@ -232,7 +243,7 @@ export default function AdminAnalyticsPage() {
 
   if (error && !overview) {
     return (
-      <AdminPage title="Usage intelligence" sub="Product analytics" toolbar={rangePills}>
+      <AdminPage section="Overview" title="Analytics" sub="Product analytics" toolbar={rangePills}>
         <AdminErrorState message={error} onRetry={() => void load(days)} />
       </AdminPage>
     );
@@ -320,7 +331,8 @@ export default function AdminAnalyticsPage() {
 
   return (
     <AdminPage
-      title="Usage intelligence"
+      section="Overview"
+      title="Analytics"
       sub={`Org-wide product analytics · ${analyticsRangeLabel(days)}`}
       toolbar={
         <>
@@ -336,6 +348,11 @@ export default function AdminAnalyticsPage() {
     >
       {error ? <AdminErrorState message={error} onRetry={() => void load(days)} /> : null}
       {rollupMsg ? <Alert tone={rollupTone(rollupMsg)} title={rollupMsg} /> : null}
+      {focusLimitBlocks ? (
+        <Alert tone="amber" title="Showing limit-block friction (30d)">
+          {t.limit_blocks.toLocaleString()} limit blocks in range. Tools with blocks are flagged in the Tools table below.
+        </Alert>
+      ) : null}
 
       <Grid cols={6} min={150} gap={12}>
         <KpiCard

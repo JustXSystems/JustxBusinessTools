@@ -109,7 +109,7 @@ export const ToolPricingPane = forwardRef<
     seatCount?: number;
     bundles: BundleState[];
     onReload: () => Promise<void>;
-    onMessage: (msg: string) => void;
+    onMessage: (msg: string, tone?: "success" | "error") => void;
   }
 >(function ToolPricingPane(
   {
@@ -196,7 +196,7 @@ export const ToolPricingPane = forwardRef<
       bumpCommerceRevision();
       await onReload();
     } catch (err) {
-      onMessage(err instanceof Error ? err.message : "Save failed");
+      onMessage(err instanceof Error ? err.message : "Save failed", "error");
       throw err;
     } finally {
       setSaving(false);
@@ -218,7 +218,7 @@ export const ToolPricingPane = forwardRef<
       onMessage(label);
       await onReload();
     } catch (err) {
-      onMessage(err instanceof Error ? err.message : "License action failed");
+      onMessage(err instanceof Error ? err.message : "License action failed", "error");
     } finally {
       setLicenseBusy(false);
     }

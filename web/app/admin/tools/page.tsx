@@ -82,10 +82,11 @@ function tabFromSearch(raw: string | null): Tab {
   return "placement";
 }
 
-function syncUrl(toolId: string, tab: Tab) {
+function syncUrl(toolId: string, tab: Tab, profileId?: number | null) {
   const params = new URLSearchParams();
   params.set("tool", toolId);
   if (tab !== "placement") params.set("tab", tab);
+  if (profileId != null && profileId > 0) params.set("profile", String(profileId));
   window.history.replaceState(null, "", withBasePath(`/admin/tools?${params.toString()}`));
 }
 
@@ -109,6 +110,7 @@ export default function AdminToolsPage() {
   const [dirFilter, setDirFilter] = useState<DirFilter>("all");
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "error">("success");
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -125,6 +127,17 @@ export default function AdminToolsPage() {
   const placementRef = useRef<ToolsSaveHandle>(null);
   const pricingRef = useRef<ToolsSaveHandle>(null);
   const schemaRef = useRef<ToolsSaveHandle>(null);
+  const createFormRef = useRef<HTMLFormElement>(null);
+
+  function say(text: string, tone: "success" | "error" = "success") {
+    setMessageTone(tone);
+    setMessage(text);
+  }
+
+  function changeProfile(next: number | null) {
+    setBusinessProfileId(next);
+    if (selectedId) syncUrl(selectedId, tab, next);
+  }
 
   async function setToolGrouping(enabled: boolean) {
     setGroupingBusy(true);
@@ -135,10 +148,10 @@ export default function AdminToolsPage() {
         body: JSON.stringify({ enabled }),
       });
       await refreshConfig();
-      setMessage(enabled ? "Tools/Products grouping is on." : "Tools/Products grouping is off — lists are flat everywhere.");
+      say(enabled ? "Tools/Products grouping is on." : "Tools/Products grouping is off — lists are flat everywhere.");
       invalidateAdminData("admin-tools");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not update grouping");
+      say(err instanceof Error ? err.message : "Could not update grouping", "error");
     } finally {
       setGroupingBusy(false);
     }
@@ -225,16 +238,17 @@ export default function AdminToolsPage() {
     return { total: directory.length, live, hidden, paid, licensed };
   }, [directory, needsOrganization]);
 
+  // Live / Hidden / Licensed are per-Business-Profile views — without a profile they cannot be evaluated.
+  const profileRequiredForFilter =
+    needsOrganization && (dirFilter === "live" || dirFilter === "hidden" || dirFilter === "licensed");
+
   const filtered = useMemo(() => {
+    if (profileRequiredForFilter) return [];
     const q = query.trim().toLowerCase();
     return directory.filter((t) => {
-      if (needsOrganization && (dirFilter === "live" || dirFilter === "hidden" || dirFilter === "licensed")) {
-        /* Org placement / licenses require a Business Profile — show all until one is selected. */
-      } else {
-        if (dirFilter === "live" && t.catalog?.available === false) return false;
-        if (dirFilter === "hidden" && t.catalog?.available !== false) return false;
-        if (dirFilter === "licensed" && !t.licensed) return false;
-      }
+      if (dirFilter === "live" && t.catalog?.available === false) return false;
+      if (dirFilter === "hidden" && t.catalog?.available !== false) return false;
+      if (dirFilter === "licensed" && !t.licensed) return false;
       if (dirFilter === "paid" && !(t.sku && !t.sku.includedFree)) return false;
       if (!q) return true;
       return (
@@ -244,7 +258,7 @@ export default function AdminToolsPage() {
         t.toolType.toLowerCase().includes(q)
       );
     });
-  }, [directory, query, dirFilter, needsOrganization]);
+  }, [directory, query, dirFilter, profileRequiredForFilter]);
 
   const selected = directory.find((t) => t.id === selectedId) ?? filtered[0] ?? directory[0] ?? null;
 
@@ -280,7 +294,7 @@ export default function AdminToolsPage() {
       }
     } catch (e) {
       const text = e instanceof Error ? e.message : "Failed to load tools";
-      if (loaded) setMessage(text);
+      if (loaded) say(text, "error");
       else setLoadError(text);
     }
   };
@@ -297,17 +311,34 @@ export default function AdminToolsPage() {
     );
   }, [selected, selectedId]);
 
+  // "New tool" (toolbar or directory) opens the create form — bring it into view and focus the first field.
+  const focusCreateForm = useCallback(() => {
+    const form = createFormRef.current;
+    if (!form) return;
+    form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    form.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+  }, []);
+
+  useEffect(() => {
+    if (creating) focusCreateForm();
+  }, [creating, focusCreateForm]);
+
+  function startCreate() {
+    if (creating) focusCreateForm();
+    else setCreating(true);
+  }
+
   function select(id: string, nextTab = tab) {
     setSelectedId(id);
     setTab(nextTab);
     setMessage("");
-    syncUrl(id, nextTab);
+    syncUrl(id, nextTab, businessProfileId);
   }
 
   function goTab(next: Tab) {
     if (!selected) return;
     setTab(next);
-    syncUrl(selected.id, next);
+    syncUrl(selected.id, next, businessProfileId);
   }
 
   async function saveActive() {
@@ -346,7 +377,7 @@ export default function AdminToolsPage() {
     next[idx] = next[swap];
     next[swap] = a;
     if (businessProfileId == null) {
-      setMessage("Select a Business Profile before reordering org placement");
+      say("Select a Business Profile before reordering org placement", "error");
       return;
     }
     try {
@@ -360,7 +391,7 @@ export default function AdminToolsPage() {
       await reload();
       invalidateAdminData("admin-tools");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Reorder failed");
+      say(err instanceof Error ? err.message : "Reorder failed", "error");
     }
   }
 
@@ -403,7 +434,7 @@ export default function AdminToolsPage() {
       statusField: null,
     };
     if (businessProfileId == null) {
-      setMessage("Select a Business Profile before creating a tool in an org catalog");
+      say("Select a Business Profile before creating a tool in an org catalog", "error");
       return;
     }
     try {
@@ -424,9 +455,9 @@ export default function AdminToolsPage() {
       await reload();
       invalidateAdminData("admin-tools");
       select(id, "schema");
-      setMessage(`Created ${title}. Configure fields (including formulas), then pricing if needed.`);
+      say(`Created ${title}. Configure fields (including formulas), then pricing if needed.`);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Create failed");
+      say(err instanceof Error ? err.message : "Create failed", "error");
     }
   }
 
@@ -438,7 +469,7 @@ export default function AdminToolsPage() {
   if (!loaded) {
     if (loadError) {
       return (
-        <AdminPage title="Catalog & products" sub="Tools · placement · pricing · schema">
+        <AdminPage title="Catalog" section="Product" sub="Tools · placement · pricing · schema">
           <AdminErrorState message={loadError} onRetry={() => void loadAll()} />
         </AdminPage>
       );
@@ -492,21 +523,26 @@ export default function AdminToolsPage() {
 
   return (
     <AdminPage
-      title="Catalog & products"
+      title="Catalog"
+      section="Product"
+      entity={selected?.name}
       sub="Tools · placement · pricing · schema"
       toolbar={
         <>
           <Badge auto tone={needsOrganization ? "amber" : "emerald"}>
             {needsOrganization ? "Platform view" : "Org placement"}
           </Badge>
+          <Button variant="primary" size="sm" icon="plus" onClick={startCreate}>
+            New tool
+          </Button>
           <Link href={adminDeepLink.toolCapabilities(businessProfileId ?? undefined, selectedId || undefined)}>
-            <Button variant="primary" size="sm">
-              Open Access Fabric
+            <Button variant="ghost" size="sm">
+              Access Fabric
             </Button>
           </Link>
           <Link href={adminDeepLink.subscriptions()}>
             <Button variant="secondary" size="sm">
-              Packs &amp; entitlements
+              Plans
             </Button>
           </Link>
           <Link href={adminDeepLink.analytics()}>
@@ -537,7 +573,7 @@ export default function AdminToolsPage() {
             aria-label="Business Profile for catalog placement"
             onChange={(e) => {
               const v = Number(e.target.value);
-              setBusinessProfileId(Number.isInteger(v) && v > 0 ? v : null);
+              changeProfile(Number.isInteger(v) && v > 0 ? v : null);
             }}
           >
             <option value="">{profiles.length === 0 ? "No profiles" : "Select a Business Profile…"}</option>
@@ -576,10 +612,17 @@ export default function AdminToolsPage() {
         {kpiButton("licensed", "Licensed here", needsOrganization ? "—" : stats.licensed, { color: "rose", glyph: "◈" }, true)}
       </Grid>
 
-      {message ? <Alert tone="blue" title={message} /> : null}
+      {message ? <Alert tone={messageTone === "error" ? "coral" : "emerald"} title={message} /> : null}
 
       <div className="admin-cc-split">
-        <AdminSection title="Directory" description={`${filtered.length} of ${directory.length} tools shown`}>
+        <AdminSection
+          title="Directory"
+          description={
+            profileRequiredForFilter
+              ? "Needs a Business Profile"
+              : `${filtered.length} of ${directory.length} tools shown`
+          }
+        >
           <div className="admin-cc-stack">
             <SearchInput
               value={query}
@@ -591,7 +634,36 @@ export default function AdminToolsPage() {
           </div>
 
           <div className="admin-cc-dir-list">
-            {groups.length === 0 ? (
+            {profileRequiredForFilter ? (
+              <AdminEmpty
+                title="Choose a Business Profile first"
+                icon="layers"
+                actions={
+                  profiles.length > 0 ? (
+                    <>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => changeProfile((profiles.find((p) => p.isDefault) ?? profiles[0]).id)}
+                      >
+                        Use {(profiles.find((p) => p.isDefault) ?? profiles[0]).businessName}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setDirFilter("all")}>
+                        Show all tools
+                      </Button>
+                    </>
+                  ) : (
+                    <Button variant="ghost" size="sm" onClick={() => setDirFilter("all")}>
+                      Show all tools
+                    </Button>
+                  )
+                }
+              >
+                {dirFilter === "licensed" ? "Licensed" : dirFilter === "live" ? "Live" : "Hidden"} is evaluated per
+                Business Profile. Pick one in Scope above to see which tools are{" "}
+                {dirFilter === "licensed" ? "licensed" : dirFilter === "live" ? "live on its home" : "hidden from it"}.
+              </AdminEmpty>
+            ) : groups.length === 0 ? (
               <AdminEmpty title="No tools match" icon="search">
                 No tools match this filter.
               </AdminEmpty>
@@ -650,7 +722,12 @@ export default function AdminToolsPage() {
           </div>
 
           {creating ? (
-            <form className="admin-cc-form" style={{ marginTop: 14 }} onSubmit={(e) => void createTool(e)}>
+            <form
+              ref={createFormRef}
+              className="admin-cc-form"
+              style={{ marginTop: 14 }}
+              onSubmit={(e) => void createTool(e)}
+            >
               <div className="bos-block-label">Create tool</div>
               <TextField
                 label="Tool id"
@@ -693,7 +770,7 @@ export default function AdminToolsPage() {
             </form>
           ) : (
             <div style={{ marginTop: 14 }}>
-              <Button variant="secondary" size="sm" icon="plus" onClick={() => setCreating(true)}>
+              <Button variant="secondary" size="sm" icon="plus" onClick={startCreate}>
                 New tool
               </Button>
             </div>
@@ -754,8 +831,8 @@ export default function AdminToolsPage() {
                   onGroupName={setGroupName}
                   onAvailable={setAvailable}
                   onOpenStandalone={setOpenStandalone}
-                  onSaved={async (msg) => {
-                    setMessage(msg);
+                  onSaved={async (msg, tone) => {
+                    say(msg, tone ?? "success");
                     await reload();
                     invalidateAdminData("admin-tools");
                   }}
@@ -781,14 +858,14 @@ export default function AdminToolsPage() {
                   recordLimitOverride={selected.recordLimitOverride}
                   profiles={profiles}
                   businessProfileId={businessProfileId}
-                  onBusinessProfileChange={setBusinessProfileId}
+                  onBusinessProfileChange={changeProfile}
                   seatCount={selected.seatCount}
                   bundles={bundles}
                   onReload={async () => {
                     await reload();
                     invalidateAdminData("admin-tools");
                   }}
-                  onMessage={setMessage}
+                  onMessage={(msg, tone) => say(msg, tone ?? "success")}
                 />
               </div>
 
@@ -798,8 +875,8 @@ export default function AdminToolsPage() {
                   toolId={selected.id}
                   toolType={selected.toolType}
                   definition={selected.definition}
-                  onPublished={async (msg) => {
-                    setMessage(msg);
+                  onPublished={async (msg, tone) => {
+                    say(msg, tone ?? "success");
                     await reload();
                     invalidateAdminData("admin-tools");
                   }}
