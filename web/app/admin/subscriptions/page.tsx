@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { ProductPacksPanel } from "@/components/admin/ProductPacksPanel";
+import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
@@ -70,6 +71,16 @@ type Notice = {
   sentAt: string | null;
 };
 
+type RenewalCandidate = {
+  organizationId: number;
+  organizationName: string;
+  planId: string;
+  planName: string;
+  periodEnd: string;
+  daysLeft: number;
+  mrrInr: number;
+};
+
 function featureList(features: unknown): string[] {
   if (Array.isArray(features)) return features.map(String);
   return [];
@@ -88,6 +99,7 @@ export default function AdminSubscriptionsPage() {
   });
   const [tenantQuery, setTenantQuery] = useState("");
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [renewals, setRenewals] = useState<RenewalCandidate[]>([]);
   const [editingId, setEditingId] = useState<string | null>("free");
   const [form, setForm] = useState({
     name: "",
@@ -112,12 +124,15 @@ export default function AdminSubscriptionsPage() {
   const editing = plans.find((p) => p.id === editingId) ?? limited ?? paid ?? null;
 
   const reload = useCallback(async () => {
-    const [p, a, n] = await Promise.all([
+    const [p, a, n, r] = await Promise.all([
       api<{ plans: Plan[] }>("/admin/subscriptions/plans"),
       api<{ subscription: Active | null; tenants?: TenantSub[]; summary?: TenantSummary }>(
         "/admin/subscriptions/active",
       ),
       api<{ notices: Notice[] }>("/admin/subscriptions/notices"),
+      api<{ candidates: RenewalCandidate[]; withinDays: number }>(
+        "/admin/subscriptions/renewals?withinDays=14",
+      ),
     ]);
     setPlans(p.plans);
     setActive(a.subscription);
@@ -132,6 +147,7 @@ export default function AdminSubscriptionsPage() {
       },
     );
     setNotices(n.notices);
+    setRenewals(r.candidates ?? []);
     return p.plans;
   }, []);
 
@@ -148,6 +164,15 @@ export default function AdminSubscriptionsPage() {
       setMessage(e instanceof Error ? e.message : "Failed to load subscriptions");
     }
   }, { intervalMs: 45_000 });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash.replace(/^#/, "");
+    if (hash !== "renewals") return;
+    const el = document.getElementById("renewals");
+    if (!el) return;
+    requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, [renewals]);
 
   function startEdit(plan: Plan) {
     setEditingId(plan.id);
@@ -273,14 +298,20 @@ export default function AdminSubscriptionsPage() {
             <h2>Operator access</h2>
             <p className="muted">
               Platform freemium (record cap) plus product packs. Per-tool subscriptions live in{" "}
-              <Link href="/admin/tools?tab=pricing">Tool management → Product</Link>. Assigning All Tools Pack
-              grants every paid SKU license; Freemium revokes those licenses. UPI verify:{" "}
-              <Link href="/admin/upi">UPI</Link>.
+              <Link href={adminDeepLink.toolsPricing()}>Catalog &amp; products → Product</Link>. Assigning All
+              Tools Pack grants every paid SKU license; Freemium revokes those licenses. Profile grants:{" "}
+              <Link href={adminDeepLink.profileAccess(undefined, "fabric")}>Access Fabric</Link>. UPI verify:{" "}
+              <Link href={adminDeepLink.upi()}>UPI</Link>.
             </p>
           </div>
-          <Link href="/admin/tools?tab=pricing" className="btn btn-primary btn-sm">
-            Tool products
-          </Link>
+          <div className="admin-form-row">
+            <Link href={adminDeepLink.toolsPricing()} className="btn btn-primary btn-sm">
+              Tool products
+            </Link>
+            <Link href={adminDeepLink.profileAccess(undefined, "fabric")} className="btn btn-secondary btn-sm">
+              Access Fabric
+            </Link>
+          </div>
         </div>
         <div className="analytics-kpis">
           <div className="result-card">
@@ -429,15 +460,78 @@ export default function AdminSubscriptionsPage() {
             </div>
           </section>
 
+          <section id="renewals" className="panel admin-card">
+            <div className="analytics-toolbar">
+              <div>
+                <h2>Renewals due ≤14d</h2>
+                <p className="muted">Live candidates from org subscriptions approaching period end.</p>
+              </div>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={saving} onClick={() => void runRenewals()}>
+                Run renewal job
+              </button>
+            </div>
+            <div className="tracker-list admin-scroll-list">
+              {renewals.length === 0 ? (
+                <p className="muted">No renewals in the next 14 days.</p>
+              ) : (
+                renewals.map((c) => (
+                  <div key={c.organizationId} className="tracker-row">
+                    <div className="tracker-row-main">
+                      <span className="tracker-row-title">
+                        {c.organizationName || `Org ${c.organizationId}`}
+                      </span>
+                      <span className="tracker-row-sub">
+                        {c.planName} · ends {c.periodEnd} · {c.daysLeft}d left
+                      </span>
+                    </div>
+                    <div className="tracker-row-meta">
+                      <span>
+                        <span className="m-lbl">MRR</span>
+                        <span className="m-val">{inr(c.mrrInr)}</span>
+                      </span>
+                      <span className={c.daysLeft <= 3 ? "pill pill-danger" : "pill pill-warning"}>
+                        {c.daysLeft}d
+                      </span>
+                    </div>
+                    <div className="tracker-actions">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={saving}
+                        onClick={() => {
+                          setNoticeOrgId(c.organizationId);
+                          setNotice({
+                            title: `Renewal: ${c.planName}`,
+                            body: `${c.organizationName || `Org ${c.organizationId}`} renews on ${c.periodEnd}.`,
+                            kind: "renewal",
+                            dueAt: "",
+                          });
+                          setMessage(`Prefilled notice for ${c.organizationName || c.organizationId}.`);
+                        }}
+                      >
+                        Prefill notice
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={saving || c.planId === "pro"}
+                        onClick={() => void assign("pro", c.organizationId)}
+                      >
+                        → All Tools Pack
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
           <section className="panel admin-card">
             <div className="analytics-toolbar">
               <div>
                 <h2>Renewal notifications</h2>
                 <p className="muted">Queue notices for periods ending within 14 days, or create one manually.</p>
               </div>
-              <button type="button" className="btn btn-secondary btn-sm" disabled={saving} onClick={() => void runRenewals()}>
-                Run renewal job
-              </button>
             </div>
             <form
               className="admin-form-grid"

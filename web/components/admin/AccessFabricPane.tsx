@@ -7,6 +7,8 @@ import {
   type ToolCapabilityLatticeHandle,
 } from "@/components/admin/ToolCapabilityLattice";
 import { uniqueTools } from "@/config/tools.config";
+import { adminDeepLink } from "@/lib/admin-deep-links";
+import { ensureToolsOnHome } from "@/lib/admin-home-tools";
 import { api } from "@/lib/api";
 import {
   computeAccessReadiness,
@@ -27,6 +29,7 @@ type SkuRow = {
   available: boolean;
   trialDays?: number;
   accessPolicy?: "soft_cap" | "hard_lock";
+  unlicensedRecordLimit?: number | null;
 };
 
 type LicenseRow = {
@@ -34,6 +37,7 @@ type LicenseRow = {
   name: string;
   status: string;
   periodEnd: string | null;
+  recordLimitOverride?: number | null;
 };
 
 type BundleRow = {
@@ -81,6 +85,7 @@ export function AccessFabricPane({
   onNavigate,
   onMutated,
   onHomeToolsChange,
+  onSelectedToolIdChange,
 }: {
   businessProfileId: number;
   profileName: string;
@@ -93,17 +98,23 @@ export function AccessFabricPane({
   onNavigate?: (target: "home" | "people" | "identity" | "lifecycle") => void;
   onMutated?: () => void | Promise<void>;
   onHomeToolsChange?: (ids: string[]) => void;
+  onSelectedToolIdChange?: (toolId: string | null) => void;
 }) {
   const [skus, setSkus] = useState<SkuRow[]>([]);
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
   const [entitlements, setEntitlements] = useState<LicenseRow[]>([]);
   const [bundles, setBundles] = useState<BundleRow[]>([]);
   const [capabilityTools, setCapabilityTools] = useState<FabricCapabilityTool[]>([]);
-  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
+  const [selectedToolId, setSelectedToolIdState] = useState<string | null>(null);
+  function setSelectedToolId(toolId: string | null) {
+    setSelectedToolIdState(toolId);
+    onSelectedToolIdChange?.(toolId);
+  }
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "dim" | "licensed" | "orphan" | "locked">("all");
   const [days, setDays] = useState("30");
   const [syncHome, setSyncHome] = useState(true);
+  const [profileLimit, setProfileLimit] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -134,27 +145,36 @@ export function AccessFabricPane({
   const tools = useMemo((): FabricToolNode[] => {
     const names = new Map(uniqueTools().map((t) => [t.id, t]));
     const skuById = new Map(skus.map((s) => [s.toolId, s]));
-    const licById = new Map([...licenses, ...entitlements].map((l) => [l.toolId, l]));
+    const activeById = new Map(licenses.map((l) => [l.toolId, l]));
+    const entById = new Map(entitlements.map((l) => [l.toolId, l]));
     const home = new Set(homeToolIds);
-    const ids = new Set<string>([...names.keys(), ...skuById.keys(), ...licById.keys()]);
+    const ids = new Set<string>([
+      ...names.keys(),
+      ...skuById.keys(),
+      ...activeById.keys(),
+      ...entById.keys(),
+    ]);
     return Array.from(ids)
       .map((toolId) => {
         const fallback = names.get(toolId);
         const sku = skuById.get(toolId);
-        const lic = licById.get(toolId);
+        const lic = activeById.get(toolId);
+        const ent = entById.get(toolId);
         const includedFree = Boolean(sku?.includedFree);
         return {
           toolId,
           name: sku?.name || fallback?.name || toolId,
           category: sku?.category || fallback?.category || "General",
           includedFree,
-          licensed: includedFree || Boolean(lic && lic.status !== "revoked"),
+          licensed: includedFree || Boolean(lic && lic.status === "active"),
           periodEnd: lic?.periodEnd ?? null,
           hardLock: sku?.accessPolicy === "hard_lock",
           onHome: home.has(toolId),
           hasSku: Boolean(sku),
           priceInr: sku?.priceInr ?? 0,
           trialDays: sku?.trialDays ?? 14,
+          recordLimitOverride: ent?.recordLimitOverride ?? lic?.recordLimitOverride ?? null,
+          unlicensedRecordLimit: sku?.unlicensedRecordLimit ?? null,
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -217,13 +237,15 @@ export function AccessFabricPane({
     });
   }, [tools, query, filter]);
 
-  // Prefer gaps, then focus, then first visible — once per profile / focus change.
+  // Prefer explicit focus, then gaps, then first visible — once per profile / focus change.
+  // Wait until the focused tool exists before marking applied, then stop re-forcing selection.
   useEffect(() => {
     const focusKey = `${businessProfileId}:${focusToolId ?? ""}`;
-    if (didFocusRef.current === focusKey && selectedToolId) return;
     if (tools.length === 0) return;
+    if (didFocusRef.current === focusKey) return;
 
-    if (focusToolId && tools.some((t) => t.toolId === focusToolId)) {
+    if (focusToolId) {
+      if (!tools.some((t) => t.toolId === focusToolId)) return;
       setSelectedToolId(focusToolId);
       didFocusRef.current = focusKey;
       return;
@@ -233,7 +255,7 @@ export function AccessFabricPane({
     const next = gap?.toolId ?? tools[0]?.toolId ?? null;
     setSelectedToolId(next);
     didFocusRef.current = focusKey;
-  }, [businessProfileId, focusToolId, tools, selectedToolId]);
+  }, [businessProfileId, focusToolId, tools]);
 
   const selected = useMemo(
     () => tools.find((t) => t.toolId === selectedToolId) ?? null,
@@ -262,6 +284,12 @@ export function AccessFabricPane({
     return Math.max(1, Math.floor(Number(days) || 30));
   }
 
+  async function syncToolsHome(toolIds: string[]) {
+    if (!syncHome || toolIds.length === 0) return;
+    const nextHome = await ensureToolsOnHome(businessProfileId, toolIds, homeToolIds);
+    onHomeToolsChange?.(nextHome);
+  }
+
   async function provisionPack(packId: string) {
     const match = readiness.packs.find((p) => p.pack.id === packId);
     await run(packId, `Provisioned ${match?.pack.name ?? packId}.`, async () => {
@@ -273,22 +301,13 @@ export function AccessFabricPane({
           businessProfileId,
         }),
       });
-      if (syncHome && match) {
-        const syncIds =
-          (Array.isArray(granted.granted) && granted.granted.length > 0
-            ? granted.granted
-            : match.resolvedToolIds.length > 0
-              ? match.resolvedToolIds
-              : match.missing) ?? [];
-        if (syncIds.length > 0) {
-          const nextHome = Array.from(new Set([...homeToolIds, ...syncIds]));
-          await api(`/admin/profiles/${businessProfileId}`, {
-            method: "PUT",
-            body: JSON.stringify({ homeToolIds: nextHome }),
-          });
-          onHomeToolsChange?.(nextHome);
-        }
-      }
+      const syncIds =
+        (Array.isArray(granted.granted) && granted.granted.length > 0
+          ? granted.granted
+          : match?.resolvedToolIds.length
+            ? match.resolvedToolIds
+            : match?.missing) ?? [];
+      await syncToolsHome(syncIds);
       await capabilitiesRef.current?.reload();
     });
   }
@@ -320,14 +339,44 @@ export function AccessFabricPane({
           businessProfileId,
         }),
       });
+      await syncToolsHome([toolId]);
       setSelectedToolId(toolId);
       await capabilitiesRef.current?.reload();
+    });
+  }
+
+  async function saveSelectedRecordLimit() {
+    if (!selected) return;
+    await run(selected.toolId, "Record-limit override saved.", async () => {
+      const recordLimit =
+        profileLimit.trim() === "" ? null : Math.max(0, Math.floor(Number(profileLimit)));
+      if (recordLimit != null && Number.isNaN(recordLimit)) {
+        throw new Error("Record limit must be a number or blank");
+      }
+      await api("/admin/skus/record-limit", {
+        method: "POST",
+        body: JSON.stringify({
+          businessProfileId,
+          toolId: selected.toolId,
+          recordLimit,
+        }),
+      });
     });
   }
 
   const selectedSignal = selected ? signalFor(selected) : null;
   const selectedCap = selected ? capById.get(selected.toolId) : undefined;
   const busy = busyKey != null;
+
+  useEffect(() => {
+    if (!selected) {
+      setProfileLimit("");
+      return;
+    }
+    setProfileLimit(
+      selected.recordLimitOverride == null ? "" : String(selected.recordLimitOverride),
+    );
+  }, [selected?.toolId, selected?.recordLimitOverride]);
 
   return (
     <div className="ax-fabric ax-cockpit">
@@ -386,8 +435,14 @@ export function AccessFabricPane({
             />
             <span>Sync home</span>
           </label>
-          <Link href="/admin/tools" className="btn btn-ghost btn-sm">
+          <Link
+            href={adminDeepLink.tools(selectedToolId ?? undefined, "pricing", businessProfileId)}
+            className="btn btn-ghost btn-sm"
+          >
             Catalog
+          </Link>
+          <Link href={adminDeepLink.subscriptions()} className="btn btn-ghost btn-sm">
+            Packs
           </Link>
         </div>
       </header>
@@ -581,6 +636,7 @@ export function AccessFabricPane({
                                 businessProfileId,
                               }),
                             });
+                            await syncToolsHome([selected.toolId]);
                             await capabilitiesRef.current?.reload();
                           })
                         }
@@ -602,6 +658,7 @@ export function AccessFabricPane({
                                 businessProfileId,
                               }),
                             });
+                            await syncToolsHome([selected.toolId]);
                             await capabilitiesRef.current?.reload();
                           })
                         }
@@ -610,10 +667,50 @@ export function AccessFabricPane({
                       </button>
                     </>
                   )}
+                  <Link
+                    href={adminDeepLink.tools(selected.toolId, "pricing", businessProfileId)}
+                    className="btn btn-ghost btn-sm"
+                  >
+                    Product
+                  </Link>
                 </div>
               </div>
 
               <div className="ax-inspector-body">
+                <div className="admin-form-grid ax-record-limit">
+                  <label className="field">
+                    <span>Profile record-limit override</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="1"
+                      value={profileLimit}
+                      disabled={busy}
+                      placeholder={
+                        selected.unlicensedRecordLimit != null
+                          ? `SKU default ${selected.unlicensedRecordLimit}`
+                          : "Platform default"
+                      }
+                      onChange={(e) => setProfileLimit(e.target.value)}
+                    />
+                  </label>
+                  <div className="admin-form-row" style={{ alignItems: "end" }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={busy}
+                      onClick={() => void saveSelectedRecordLimit()}
+                    >
+                      Save override
+                    </button>
+                    {selected.recordLimitOverride != null ? (
+                      <span className="pill">Active {selected.recordLimitOverride}</span>
+                    ) : (
+                      <span className="muted small">Blank clears override</span>
+                    )}
+                  </div>
+                </div>
+
                 {selectedCap?.hasCeiling ? (
                   <p className="ax-inspector-cap-hint muted">
                     Module ceiling

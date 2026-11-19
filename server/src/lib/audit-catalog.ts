@@ -175,19 +175,50 @@ const LABEL_BY_ACTION: Record<string, string> = {
   "artifact.agent_revoke": "Revoked sync agent",
 };
 
+function positiveId(id: string): number | null {
+  const n = Number(id);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 const ENTITY_HREF: Record<string, (id: string) => string | null> = {
-  user: () => "/admin/team",
-  business_profile: () => "/admin/profiles",
-  tool: (id) => `/admin/tools?tool=${encodeURIComponent(id)}`,
-  tool_sku: () => "/admin/skus",
-  product_bundle: () => "/admin/skus",
-  org_tool_license: () => "/admin/subscriptions",
+  user: (id) => {
+    const n = positiveId(id);
+    return n != null ? `/admin/team?user=${n}` : "/admin/team";
+  },
+  business_profile: (id) => {
+    const n = positiveId(id);
+    return n != null ? `/admin/profiles?id=${n}&tab=fabric` : "/admin/profiles?tab=fabric";
+  },
+  tool: (id) => (id ? `/admin/tools?tool=${encodeURIComponent(id)}` : "/admin/tools"),
+  tool_sku: (id) =>
+    id
+      ? `/admin/tools?tool=${encodeURIComponent(id)}&tab=pricing`
+      : "/admin/tools?tab=pricing",
+  product_bundle: () => "/admin/subscriptions",
+  org_tool_license: (id) => {
+    const n = positiveId(id);
+    return n != null ? `/admin/profiles?id=${n}&tab=fabric` : "/admin/profiles?tab=fabric";
+  },
+  profile_tool_license: (id) => {
+    const n = positiveId(id);
+    return n != null ? `/admin/profiles?id=${n}&tab=fabric` : "/admin/profiles?tab=fabric";
+  },
   subscription_plan: () => "/admin/subscriptions",
-  subscription_notice: () => "/admin/subscriptions",
-  payment_op: () => "/admin/payments",
+  subscription_notice: () => "/admin/subscriptions#renewals",
+  payment_op: (id) => {
+    const n = positiveId(id);
+    return n != null
+      ? `/admin/payments?tab=ops&op=${n}`
+      : "/admin/payments?tab=ops";
+  },
   payment_gateway: () => "/admin/gateways",
-  upi_claim: () => "/admin/upi",
-  platform_config: () => "/admin/team",
+  upi_claim: (id) => {
+    const n = positiveId(id);
+    return n != null
+      ? `/admin/payments?tab=upi&status=pending&claim=${n}`
+      : "/admin/payments?tab=upi";
+  },
+  platform_config: () => "/admin/experience?tab=branding",
 };
 
 export function categorizeAuditAction(action: string): AuditCategory {

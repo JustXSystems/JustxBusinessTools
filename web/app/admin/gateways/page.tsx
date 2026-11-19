@@ -723,7 +723,8 @@ function AdminGatewaysInner() {
                   <p className="muted">Checkout for these plans will use this gateway when it is enabled.</p>
                   {plans.length === 0 ? (
                     <p className="muted">
-                      No plans loaded. Create them under <Link href="/admin/subscriptions">Subscriptions</Link>.
+                      No plans loaded. Create them under{" "}
+                      <Link href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>.
                     </p>
                   ) : (
                     <div className="gw-plan-chips">

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
+import { adminDeepLink } from "@/lib/admin-deep-links";
+import { ensureToolsOnHome } from "@/lib/admin-home-tools";
 import { api } from "@/lib/api";
 import { bumpCommerceRevision } from "@/lib/commerce-revision";
 
@@ -60,6 +62,7 @@ type FormState = {
   description: string;
   priceInr: string;
   annualPriceInr: string;
+  billingInterval: "month" | "year";
   includedFree: boolean;
   available: boolean;
   trialDays: string;
@@ -76,6 +79,7 @@ function formFromSku(sku: SkuState | null, fallbackName: string, fallbackCategor
     description: sku?.description ?? "",
     priceInr: String(sku?.priceInr ?? 0),
     annualPriceInr: sku?.annualPriceInr == null ? "" : String(sku.annualPriceInr),
+    billingInterval: sku?.billingInterval === "year" ? "year" : "month",
     includedFree: Boolean(sku?.includedFree),
     available: sku?.available !== false,
     trialDays: String(sku?.trialDays ?? 0),
@@ -112,6 +116,7 @@ export const ToolPricingPane = forwardRef<
     sku,
     licensed,
     periodEnd,
+    recordLimitOverride = null,
     profiles,
     businessProfileId,
     onBusinessProfileChange,
@@ -124,6 +129,12 @@ export const ToolPricingPane = forwardRef<
 ) {
   const [form, setForm] = useState<FormState>(() => formFromSku(sku, toolName, toolCategory));
   const [saving, setSaving] = useState(false);
+  const [licenseBusy, setLicenseBusy] = useState(false);
+  const [grantDays, setGrantDays] = useState("30");
+  const [syncHome, setSyncHome] = useState(true);
+  const [profileLimit, setProfileLimit] = useState(
+    recordLimitOverride == null ? "" : String(recordLimitOverride),
+  );
   const savedSnap = useRef("");
 
   useEffect(() => {
@@ -131,6 +142,10 @@ export const ToolPricingPane = forwardRef<
     setForm(next);
     savedSnap.current = JSON.stringify(next);
   }, [sku, toolId, toolName, toolCategory]);
+
+  useEffect(() => {
+    setProfileLimit(recordLimitOverride == null ? "" : String(recordLimitOverride));
+  }, [recordLimitOverride, toolId, businessProfileId]);
 
   const dirty = JSON.stringify(form) !== savedSnap.current;
 
@@ -163,7 +178,7 @@ export const ToolPricingPane = forwardRef<
         unlicensedRecordLimit:
           form.unlicensedRecordLimit.trim() === "" ? null : Number(form.unlicensedRecordLimit),
         featured: form.featured,
-        billingInterval: "month",
+        billingInterval: form.billingInterval,
       };
       if (sku) {
         await api(`/admin/skus/${toolId}`, { method: "PUT", body: JSON.stringify(body) });
@@ -183,6 +198,51 @@ export const ToolPricingPane = forwardRef<
     } finally {
       setSaving(false);
     }
+  }
+
+  function requireProfile(): number {
+    if (businessProfileId == null) {
+      throw new Error("Select a Business Profile before managing entitlements");
+    }
+    return businessProfileId;
+  }
+
+  async function runLicense(label: string, fn: (profileId: number) => Promise<void>) {
+    setLicenseBusy(true);
+    try {
+      const profileId = requireProfile();
+      await fn(profileId);
+      onMessage(label);
+      await onReload();
+    } catch (err) {
+      onMessage(err instanceof Error ? err.message : "License action failed");
+    } finally {
+      setLicenseBusy(false);
+    }
+  }
+
+  async function maybeSyncHome(profileId: number) {
+    if (!syncHome) return;
+    await ensureToolsOnHome(profileId, [toolId]);
+  }
+
+  async function saveRecordLimit() {
+    await runLicense(
+      profileLimit.trim() === ""
+        ? `Cleared record-limit override for ${toolName}.`
+        : `Record-limit override set to ${profileLimit} for ${toolName}.`,
+      async (profileId) => {
+        const recordLimit =
+          profileLimit.trim() === "" ? null : Math.max(0, Math.floor(Number(profileLimit)));
+        if (recordLimit != null && Number.isNaN(recordLimit)) {
+          throw new Error("Record limit must be a number or blank");
+        }
+        await api("/admin/skus/record-limit", {
+          method: "POST",
+          body: JSON.stringify({ businessProfileId: profileId, toolId, recordLimit }),
+        });
+      },
+    );
   }
 
   useImperativeHandle(
@@ -205,7 +265,7 @@ export const ToolPricingPane = forwardRef<
           <p className="muted">
             Each tool is a product with its own offer. Operators subscribe to tools; platform record caps apply only when
             unlicensed. Packs live under{" "}
-            <Link href="/admin/subscriptions">Operator access</Link>.
+            <Link href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>.
           </p>
         </div>
         <div className="admin-form-row">
@@ -314,7 +374,23 @@ export const ToolPricingPane = forwardRef<
             </select>
           </label>
           <label className="field">
-            <span>Price (INR / month)</span>
+            <span>Billing interval</span>
+            <select
+              value={form.billingInterval}
+              disabled={form.includedFree}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  billingInterval: e.target.value === "year" ? "year" : "month",
+                }))
+              }
+            >
+              <option value="month">Monthly</option>
+              <option value="year">Yearly</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>{form.billingInterval === "year" ? "Price (INR / year)" : "Price (INR / month)"}</span>
             <input
               type="number"
               min={0}
@@ -331,7 +407,7 @@ export const ToolPricingPane = forwardRef<
               min={0}
               step="1"
               value={form.annualPriceInr}
-              disabled={form.includedFree}
+              disabled={form.includedFree || form.billingInterval === "year"}
               placeholder="Leave blank if unused"
               onChange={(e) => setForm((f) => ({ ...f, annualPriceInr: e.target.value }))}
             />
@@ -397,17 +473,18 @@ export const ToolPricingPane = forwardRef<
       </form>
 
       <div className="tm-license-ops">
-        <h3 className="tm-section-title">Assign to a Business Profile</h3>
+        <h3 className="tm-section-title">Subscription for this Business Profile</h3>
         <p className="muted">
-          Entitlements are managed per Business Profile. Open Access Fabric, select the
-          profile, then provision packs or grant tools on the lattice.
+          Grant, trial, extend, or revoke this product for the selected profile without leaving Tools.
+          Packs and platform Freemium / All Tools modes live under{" "}
+          <Link href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>.
           {seatCount != null && seatCount > 0
             ? ` This product currently has ${seatCount} licensed seat(s) across the org.`
             : ""}
         </p>
         <div className="admin-form-grid">
           <label className="field field-span-2">
-            <span>Jump to profile</span>
+            <span>Business Profile</span>
             <select
               value={businessProfileId ?? ""}
               disabled={profiles.length === 0}
@@ -428,18 +505,39 @@ export const ToolPricingPane = forwardRef<
               ))}
             </select>
           </label>
+          <label className="field">
+            <span>Grant / extend days</span>
+            <input
+              type="number"
+              min={1}
+              value={grantDays}
+              disabled={form.includedFree || businessProfileId == null}
+              onChange={(e) => setGrantDays(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Profile record-limit override</span>
+            <input
+              type="number"
+              min={0}
+              step="1"
+              value={profileLimit}
+              disabled={businessProfileId == null}
+              placeholder="Platform / SKU default"
+              onChange={(e) => setProfileLimit(e.target.value)}
+            />
+          </label>
         </div>
         <div className="admin-form-row">
-          <Link
-            href={
-              businessProfileId
-                ? `/admin/profiles?id=${businessProfileId}&tab=fabric`
-                : "/admin/profiles?tab=fabric"
-            }
-            className="btn btn-primary btn-sm"
-          >
-            Open Access Fabric
-          </Link>
+          <label className="ax-check ax-check-compact">
+            <input
+              type="checkbox"
+              checked={syncHome}
+              disabled={businessProfileId == null}
+              onChange={(e) => setSyncHome(e.target.checked)}
+            />
+            <span>Sync home on grant / trial</span>
+          </label>
           <span className={`pill ${licensed ? "pill-success" : ""}`}>
             {form.includedFree
               ? "Included free"
@@ -447,6 +545,112 @@ export const ToolPricingPane = forwardRef<
                 ? `Licensed here${periodEnd ? ` · ${periodEnd.slice(0, 10)}` : ""}`
                 : "Not licensed on selected profile"}
           </span>
+          {recordLimitOverride != null ? (
+            <span className="pill">Override {recordLimitOverride} records</span>
+          ) : null}
+        </div>
+        <div className="admin-form-row">
+          {form.includedFree ? (
+            <span className="pill">No license required</span>
+          ) : licensed ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={licenseBusy || businessProfileId == null}
+                onClick={() =>
+                  void runLicense(`Extended ${toolName}.`, async (profileId) => {
+                    await api("/admin/skus/extend", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        toolIds: [toolId],
+                        days: Math.max(1, Math.floor(Number(grantDays) || 30)),
+                        businessProfileId: profileId,
+                      }),
+                    });
+                  })
+                }
+              >
+                Extend
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={licenseBusy || businessProfileId == null}
+                onClick={() =>
+                  void runLicense(`Revoked ${toolName}.`, async (profileId) => {
+                    await api("/admin/skus/revoke", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        toolIds: [toolId],
+                        businessProfileId: profileId,
+                      }),
+                    });
+                  })
+                }
+              >
+                Revoke
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={licenseBusy || businessProfileId == null}
+                onClick={() =>
+                  void runLicense(`Licensed ${toolName}.`, async (profileId) => {
+                    await api("/admin/skus/grant", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        toolIds: [toolId],
+                        days: Math.max(1, Math.floor(Number(grantDays) || 30)),
+                        businessProfileId: profileId,
+                      }),
+                    });
+                    await maybeSyncHome(profileId);
+                  })
+                }
+              >
+                Grant
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={licenseBusy || businessProfileId == null}
+                onClick={() =>
+                  void runLicense(`Trial started for ${toolName}.`, async (profileId) => {
+                    await api("/admin/skus/grant", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        toolIds: [toolId],
+                        days: Math.max(1, Number(sku?.trialDays) || Number(form.trialDays) || 14),
+                        preferTrial: true,
+                        businessProfileId: profileId,
+                      }),
+                    });
+                    await maybeSyncHome(profileId);
+                  })
+                }
+              >
+                Start trial
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={licenseBusy || businessProfileId == null}
+            onClick={() => void saveRecordLimit()}
+          >
+            Save record limit
+          </button>
+          <Link
+            href={adminDeepLink.toolCapabilities(businessProfileId ?? undefined, toolId)}
+            className="btn btn-ghost btn-sm"
+          >
+            Open in Access Fabric
+          </Link>
         </div>
       </div>
 
@@ -464,7 +668,7 @@ export const ToolPricingPane = forwardRef<
               </li>
             ))}
           </ul>
-          <Link href="/admin/subscriptions" className="btn btn-ghost btn-sm">
+          <Link href={adminDeepLink.subscriptions()} className="btn btn-ghost btn-sm">
             Manage packs
           </Link>
         </div>

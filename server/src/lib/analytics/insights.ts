@@ -11,9 +11,9 @@ export async function generateInsights(days: unknown = 30): Promise<
     insights.push({
       type: "upgrade",
       title: "Record limits are blocking work",
-      body: `${overview.totals.limit_blocks} blocked saves ${overview.days ? `in the last ${overview.days} days` : "across all recorded time"}. Upgrading to Pro removes per-tool limits.`,
-      actionLabel: "View subscription",
-      actionHref: "/subscription",
+      body: `${overview.totals.limit_blocks} blocked saves ${overview.days ? `in the last ${overview.days} days` : "across all recorded time"}. Raise freemium ceilings or provision licenses on Access Fabric.`,
+      actionLabel: "Open Access Fabric",
+      actionHref: adminDeepLink.profileAccess(undefined, "fabric"),
     });
   }
 
@@ -36,7 +36,7 @@ export async function generateInsights(days: unknown = 30): Promise<
       title: `Top tool: ${top.toolId}`,
       body: `${top.creates} records created in the selected window. Share this workflow with the rest of the team.`,
       actionLabel: "Tool analytics",
-      actionHref: `/admin/analytics/tools/${top.toolId}`,
+      actionHref: adminDeepLink.analyticsTool(top.toolId),
     });
   }
 
@@ -57,6 +57,8 @@ export async function generateInsights(days: unknown = 30): Promise<
       type: "conversion",
       title: "Opens are not turning into records",
       body: `Only ${Math.round(createRate * 100)}% of tool opens created a record. Check form friction or permissions.`,
+      actionLabel: "Review analytics",
+      actionHref: adminDeepLink.analytics(),
     });
   }
 

@@ -76,6 +76,7 @@ export default function AdminToolsPage() {
   const groupTools = config?.toolGrouping?.enabled !== false;
   const [groupingBusy, setGroupingBusy] = useState(false);
   const [catalog, setCatalog] = useState<CatalogRow[]>([]);
+  const [needsOrganization, setNeedsOrganization] = useState(false);
   const [skus, setSkus] = useState<SkuState[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
   const [entitlements, setEntitlements] = useState<License[]>([]);
@@ -140,6 +141,7 @@ export default function AdminToolsPage() {
       api<{ tools: ToolDef[] }>("/admin/config/tools"),
     ]);
     setCatalog(c.tools);
+    setNeedsOrganization(Boolean(c.needsOrganization) || businessProfileId == null);
     setSkus(s.skus);
     setLicenses(s.licenses);
     setEntitlements(s.entitlements ?? []);
@@ -147,6 +149,7 @@ export default function AdminToolsPage() {
     setBundles(s.bundles ?? []);
     setProfiles(s.profiles ?? []);
     setDefs(d.tools);
+    return s.profiles ?? [];
   }, [businessProfileId]);
 
   const directory = useMemo<DirectoryItem[]>(() => {
@@ -181,7 +184,7 @@ export default function AdminToolsPage() {
         toolType: def?.toolType || builtin?.type || cat?.toolType || "utility",
         catalog: cat,
         sku,
-        licensed: Boolean(lic),
+        licensed: Boolean(lic && (lic.status == null || lic.status === "active")),
         periodEnd: lic?.periodEnd ?? null,
         recordLimitOverride: ent?.recordLimitOverride ?? lic?.recordLimitOverride ?? null,
         seatCount: seatMap.get(id) ?? 0,
@@ -191,20 +194,28 @@ export default function AdminToolsPage() {
   }, [catalog, skus, licenses, entitlements, orgLicenses, defs]);
 
   const stats = useMemo(() => {
+    if (needsOrganization) {
+      const paid = directory.filter((t) => t.sku && !t.sku.includedFree).length;
+      return { total: directory.length, live: 0, hidden: 0, paid, licensed: 0 };
+    }
     const live = directory.filter((t) => t.catalog?.available !== false).length;
     const hidden = directory.filter((t) => t.catalog?.available === false).length;
     const paid = directory.filter((t) => t.sku && !t.sku.includedFree).length;
     const licensed = directory.filter((t) => t.licensed).length;
     return { total: directory.length, live, hidden, paid, licensed };
-  }, [directory]);
+  }, [directory, needsOrganization]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return directory.filter((t) => {
-      if (dirFilter === "live" && t.catalog?.available === false) return false;
-      if (dirFilter === "hidden" && t.catalog?.available !== false) return false;
+      if (needsOrganization && (dirFilter === "live" || dirFilter === "hidden" || dirFilter === "licensed")) {
+        /* Org placement / licenses require a Business Profile — show all until one is selected. */
+      } else {
+        if (dirFilter === "live" && t.catalog?.available === false) return false;
+        if (dirFilter === "hidden" && t.catalog?.available !== false) return false;
+        if (dirFilter === "licensed" && !t.licensed) return false;
+      }
       if (dirFilter === "paid" && !(t.sku && !t.sku.includedFree)) return false;
-      if (dirFilter === "licensed" && !t.licensed) return false;
       if (!q) return true;
       return (
         t.id.includes(q) ||
@@ -213,7 +224,7 @@ export default function AdminToolsPage() {
         t.toolType.toLowerCase().includes(q)
       );
     });
-  }, [directory, query, dirFilter]);
+  }, [directory, query, dirFilter, needsOrganization]);
 
   const selected = directory.find((t) => t.id === selectedId) ?? filtered[0] ?? directory[0] ?? null;
 
@@ -221,14 +232,20 @@ export default function AdminToolsPage() {
   useLiveRefresh(
     async () => {
       try {
-        await reload();
+        const loadedProfiles = await reload();
         if (!didBootTools.current) {
           didBootTools.current = true;
           const params = new URLSearchParams(window.location.search);
           const fromUrl = params.get("tool") || "";
           if (fromUrl) setSelectedId(fromUrl);
           const profileRaw = Number(params.get("profile") || params.get("businessProfileId"));
-          if (Number.isInteger(profileRaw) && profileRaw > 0) setBusinessProfileId(profileRaw);
+          if (Number.isInteger(profileRaw) && profileRaw > 0) {
+            setBusinessProfileId(profileRaw);
+          } else {
+            const preferred = loadedProfiles.find((p) => p.isDefault) ?? loadedProfiles[0];
+            // Prefer default Business Profile so Live/Hidden KPIs are meaningful on first load.
+            if (preferred) setBusinessProfileId(preferred.id);
+          }
           // Modules moved to Access Fabric (profile-first tool capabilities).
           if (params.get("tab") === "modules") {
             const href = adminDeepLink.toolCapabilities(
@@ -310,15 +327,19 @@ export default function AdminToolsPage() {
       setMessage("Select a Business Profile before reordering org placement");
       return;
     }
-    await api("/admin/catalog/reorder", {
-      method: "POST",
-      body: JSON.stringify({
-        businessProfileId,
-        items: next.map((t, i) => ({ id: t.id, sortOrder: i, groupName: t.groupName })),
-      }),
-    });
-    await reload();
-    invalidateAdminData("admin-tools");
+    try {
+      await api("/admin/catalog/reorder", {
+        method: "POST",
+        body: JSON.stringify({
+          businessProfileId,
+          items: next.map((t, i) => ({ id: t.id, sortOrder: i, groupName: t.groupName })),
+        }),
+      });
+      await reload();
+      invalidateAdminData("admin-tools");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Reorder failed");
+    }
   }
 
   async function createTool(e: React.FormEvent) {
@@ -363,24 +384,28 @@ export default function AdminToolsPage() {
       setMessage("Select a Business Profile before creating a tool in an org catalog");
       return;
     }
-    await api("/admin/catalog", {
-      method: "POST",
-      body: JSON.stringify({ id, title, groupName: group, businessProfileId }),
-    });
-    await api(`/admin/config/tools/${id}`, {
-      method: "POST",
-      body: JSON.stringify({ definition }),
-    });
-    setNewId("");
-    setNewTitle("");
-    setNewDesc("");
-    setNewGroup("Custom Tools");
-    setNewTemplate("blank");
-    setCreating(false);
-    await reload();
-    invalidateAdminData("admin-tools");
-    select(id, "schema");
-    setMessage(`Created ${title}. Configure fields (including formulas), then pricing if needed.`);
+    try {
+      await api("/admin/catalog", {
+        method: "POST",
+        body: JSON.stringify({ id, title, groupName: group, businessProfileId }),
+      });
+      await api(`/admin/config/tools/${id}`, {
+        method: "POST",
+        body: JSON.stringify({ definition }),
+      });
+      setNewId("");
+      setNewTitle("");
+      setNewDesc("");
+      setNewGroup("Custom Tools");
+      setNewTemplate("blank");
+      setCreating(false);
+      await reload();
+      invalidateAdminData("admin-tools");
+      select(id, "schema");
+      setMessage(`Created ${title}. Configure fields (including formulas), then pricing if needed.`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Create failed");
+    }
   }
 
   const groups = useMemo(
@@ -395,9 +420,9 @@ export default function AdminToolsPage() {
           <div>
             <h2>Catalog &amp; products</h2>
             <p className="muted">
-              Platform catalog SKUs and schemas. Select a Business Profile to edit that org&apos;s
-              Live/Hidden placement or jump to Access Fabric for licenses. Operator profile
-              selection is ignored here.
+              Create and configure tools, set Live/Hidden placement, publish product pricing, and
+              grant subscriptions for a Business Profile. Packs &amp; platform modes live under Plans
+              &amp; entitlements; module ceilings live on Access Fabric.
             </p>
           </div>
           <div className="admin-form-row">
@@ -436,35 +461,49 @@ export default function AdminToolsPage() {
               </select>
             </label>
             <Link
-              href={
-                businessProfileId
-                  ? `/admin/profiles?id=${businessProfileId}&tab=fabric`
-                  : "/admin/profiles?tab=fabric"
-              }
+              href={adminDeepLink.toolCapabilities(businessProfileId ?? undefined, selectedId || undefined)}
               className="btn btn-primary btn-sm"
             >
               Open Access Fabric
             </Link>
-            <Link href="/admin/subscriptions" className="btn btn-secondary btn-sm">
+            <Link href={adminDeepLink.subscriptions()} className="btn btn-secondary btn-sm">
               Packs &amp; entitlements
             </Link>
-            <Link href="/admin/analytics" className="btn btn-secondary btn-sm">
+            <Link href={adminDeepLink.analytics()} className="btn btn-secondary btn-sm">
               Usage analytics
             </Link>
           </div>
+          {needsOrganization ? (
+            <p className="muted tm-flash">
+              Select a Business Profile to see Live/Hidden placement and licensed counts for that org.
+              Product SKUs and schemas are still editable platform-wide.
+            </p>
+          ) : null}
         </div>
         <div className="analytics-kpis tm-kpis">
           <button type="button" className={`result-card${dirFilter === "all" ? " is-selected" : ""}`} onClick={() => setDirFilter("all")}>
             <span>Tools</span>
             <strong>{stats.total}</strong>
           </button>
-          <button type="button" className={`result-card${dirFilter === "live" ? " is-selected" : ""}`} onClick={() => setDirFilter("live")}>
+          <button
+            type="button"
+            className={`result-card${dirFilter === "live" ? " is-selected" : ""}`}
+            disabled={needsOrganization}
+            title={needsOrganization ? "Select a Business Profile" : undefined}
+            onClick={() => setDirFilter("live")}
+          >
             <span>Live on home</span>
-            <strong>{stats.live}</strong>
+            <strong>{needsOrganization ? "—" : stats.live}</strong>
           </button>
-          <button type="button" className={`result-card${dirFilter === "hidden" ? " is-selected" : ""}`} onClick={() => setDirFilter("hidden")}>
+          <button
+            type="button"
+            className={`result-card${dirFilter === "hidden" ? " is-selected" : ""}`}
+            disabled={needsOrganization}
+            title={needsOrganization ? "Select a Business Profile" : undefined}
+            onClick={() => setDirFilter("hidden")}
+          >
             <span>Hidden</span>
-            <strong>{stats.hidden}</strong>
+            <strong>{needsOrganization ? "—" : stats.hidden}</strong>
           </button>
           <button type="button" className={`result-card${dirFilter === "paid" ? " is-selected" : ""}`} onClick={() => setDirFilter("paid")}>
             <span>Paid products</span>
@@ -473,10 +512,12 @@ export default function AdminToolsPage() {
           <button
             type="button"
             className={`result-card${dirFilter === "licensed" ? " is-selected" : ""}`}
+            disabled={needsOrganization}
+            title={needsOrganization ? "Select a Business Profile" : undefined}
             onClick={() => setDirFilter("licensed")}
           >
             <span>Licensed here</span>
-            <strong>{stats.licensed}</strong>
+            <strong>{needsOrganization ? "—" : stats.licensed}</strong>
           </button>
         </div>
       </section>
@@ -535,8 +576,20 @@ export default function AdminToolsPage() {
                         <em>{t.id}</em>
                       </span>
                       <span className="tm-dir-meta">
-                        <span className={t.catalog?.available === false ? "pill" : "pill pill-success"}>
-                          {t.catalog?.available === false ? "Hidden" : "Live"}
+                        <span
+                          className={
+                            needsOrganization
+                              ? "pill"
+                              : t.catalog?.available === false
+                                ? "pill"
+                                : "pill pill-success"
+                          }
+                        >
+                          {needsOrganization
+                            ? "Platform"
+                            : t.catalog?.available === false
+                              ? "Hidden"
+                              : "Live"}
                         </span>
                         {t.sku?.includedFree ? (
                           <span className="pill">Incl.</span>
@@ -609,7 +662,7 @@ export default function AdminToolsPage() {
                   <p className="muted">{selected.id}</p>
                 </div>
                 <div className="tm-order-btns">
-                  <Link href={`/admin/analytics/tools/${selected.id}`} className="btn btn-secondary btn-sm">
+                  <Link href={adminDeepLink.analyticsTool(selected.id)} className="btn btn-secondary btn-sm">
                     Analytics
                   </Link>
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => void move(selected.id, -1)}>

@@ -208,6 +208,7 @@ function AdminProfilesInner() {
   const [creating, setCreating] = useState(false);
   const [createOrgId, setCreateOrgId] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab ?? "fabric");
+  const [fabricFocusTool, setFabricFocusTool] = useState<string | null>(focusCapabilityTool);
   const [form, setForm] = useState(emptyForm);
   const [homeToolIds, setHomeToolIds] = useState<string[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
@@ -251,8 +252,8 @@ function AdminProfilesInner() {
 
   useEffect(() => {
     if (selectedId == null && !creating) return;
-    syncProfileUrl(creating ? null : selectedId, tab, filter, focusCapabilityTool);
-  }, [selectedId, tab, filter, creating, focusCapabilityTool]);
+    syncProfileUrl(creating ? null : selectedId, tab, filter, fabricFocusTool);
+  }, [selectedId, tab, filter, creating, fabricFocusTool]);
 
   useEffect(() => {
     if (initialTab && selectedId != null && !creating) {
@@ -267,6 +268,7 @@ function AdminProfilesInner() {
       setSelectedId(id);
       const nextTab = preferredTab ?? initialTab ?? "fabric";
       setTab(nextTab);
+      setFabricFocusTool(focusCapabilityTool);
       setError("");
       try {
         const data = await api<{ profile: Profile; people: Person[] }>(`/admin/profiles/${id}`);
@@ -280,7 +282,7 @@ function AdminProfilesInner() {
         setError(err instanceof Error ? err.message : "Failed to open profile");
       }
     },
-    [catalogIds, initialTab],
+    [catalogIds, initialTab, focusCapabilityTool],
   );
 
   useEffect(() => {
@@ -367,11 +369,19 @@ function AdminProfilesInner() {
             <p className="muted">
               Profile-first command center: select a Business Profile, assign tools, then tune each
               product&apos;s capabilities (module ceilings). Pack provisioning, tool lattice, home
-              surface, and people reach live here. Catalog Live/Hidden stays under Catalog &amp;
-              products. Org Owners and org Admins manage day-to-day team access in operator Business
-              Profile → Team.
+              surface, and people reach live here. Catalog Live/Hidden and SKU pricing stay under{" "}
+              <Link href={adminDeepLink.tools()}>Catalog &amp; products</Link>; packs under{" "}
+              <Link href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>. Org Owners and org
+              Admins manage day-to-day team access in operator Business Profile → Team.
             </p>
           </div>
+          <div className="admin-form-row">
+            <Link href={adminDeepLink.tools()} className="btn btn-secondary btn-sm">
+              Catalog &amp; products
+            </Link>
+            <Link href={adminDeepLink.subscriptions()} className="btn btn-secondary btn-sm">
+              Packs &amp; plans
+            </Link>
           <button
             type="button"
             className="btn btn-primary"
@@ -390,6 +400,7 @@ function AdminProfilesInner() {
           >
             Add profile
           </button>
+          </div>
         </div>
         <div className="result-grid">
           {([
@@ -468,7 +479,7 @@ function AdminProfilesInner() {
                   </p>
                   <div className="admin-form-row">
                     <Link
-                      href={adminDeepLink.enterAs(selected.id)}
+                      href={adminDeepLink.enterAs(selected.id, "owner")}
                       className="btn btn-secondary btn-sm"
                     >
                       Enter as…
@@ -692,8 +703,9 @@ function AdminProfilesInner() {
                   <div className="admin-stack">
                     <p className="section-note">
                       Which tools appear on this profile&apos;s operator home. Commercial
-                      entitlements and pack provisioning live on Access Fabric; org Live/Hidden
-                      stays under Catalog &amp; products.
+                      entitlements and pack provisioning live on Access Fabric; org Live/Hidden and
+                      SKU pricing stay under{" "}
+                      <Link href={adminDeepLink.tools()}>Catalog &amp; products</Link>.
                     </p>
                     <HomeToolPicker
                       selectedIds={homeToolIds}
@@ -713,9 +725,12 @@ function AdminProfilesInner() {
                   peopleGranted={people.filter((p) => p.access || p.implicit).length}
                   peopleTotal={people.length}
                   homeToolIds={homeToolIds}
-                  focusToolId={focusCapabilityTool}
+                  focusToolId={fabricFocusTool ?? focusCapabilityTool}
                   onNavigate={(target) => setTab(target)}
                   onHomeToolsChange={setHomeToolIds}
+                  onSelectedToolIdChange={(toolId) => {
+                    setFabricFocusTool(toolId);
+                  }}
                   onMutated={async () => {
                     invalidateAdminData("admin-profiles");
                     await reload();

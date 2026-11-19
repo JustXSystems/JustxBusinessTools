@@ -169,7 +169,7 @@ export default function AdminDashboardPage() {
             <strong>{inbox.upiClaims}</strong>
             <span className="analytics-delta">{inr(inbox.upiAmountInr)}</span>
           </Link>
-          <Link href={adminDeepLink.subscriptions()} className={`result-card${inbox.renewalsSoon ? " dash-kpi-warn" : ""}`}>
+          <Link href={adminDeepLink.subscriptionsRenewals()} className={`result-card${inbox.renewalsSoon ? " dash-kpi-warn" : ""}`}>
             <span>Renewals ≤14d</span>
             <strong>{inbox.renewalsSoon}</strong>
             <span className="analytics-delta">Plans &amp; notice job</span>
@@ -233,7 +233,7 @@ export default function AdminDashboardPage() {
                 : "All enabled gateways look healthy"}
             </p>
           </Link>
-          <Link href={adminDeepLink.profiles()} className="panel admin-card dash-health-card">
+          <Link href={adminDeepLink.delivery()} className="panel admin-card dash-health-card">
             <h2>Document delivery</h2>
             <strong>{health.delivery.failed7d} failed</strong>
             <p className={health.delivery.failed7d ? "analytics-delta is-down" : "muted"}>
@@ -327,7 +327,7 @@ export default function AdminDashboardPage() {
                 <Link href={adminDeepLink.payments()} className="btn btn-ghost btn-sm">
                   Payments
                 </Link>
-                <Link href="/admin/subscriptions" className="btn btn-ghost btn-sm">
+                <Link href={adminDeepLink.subscriptions()} className="btn btn-ghost btn-sm">
                   Plans
                 </Link>
               </div>
@@ -410,7 +410,7 @@ export default function AdminDashboardPage() {
                       <span>{row.creates} creates</span>
                       <span>{pct(row.creates, row.opens)}% conv.</span>
                     </div>
-                    <Link href={`/admin/analytics/tools/${row.toolId}`} className="btn btn-ghost btn-sm">
+                    <Link href={adminDeepLink.analyticsTool(row.toolId)} className="btn btn-ghost btn-sm">
                       Deep dive
                     </Link>
                   </div>
@@ -437,6 +437,12 @@ export default function AdminDashboardPage() {
             </Link>
             <Link href={adminDeepLink.ops()} className="btn btn-secondary btn-sm">
               Operations
+            </Link>
+            <Link href={adminDeepLink.experienceTheme()} className="btn btn-secondary btn-sm">
+              Theme
+            </Link>
+            <Link href={adminDeepLink.experiencePublicHome()} className="btn btn-secondary btn-sm">
+              Public home
             </Link>
             <Link href={adminDeepLink.experienceBranding()} className="btn btn-secondary btn-sm">
               Experience

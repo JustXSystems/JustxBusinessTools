@@ -2,8 +2,9 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { adminDeepLink } from "@/lib/admin-deep-links";
+import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
 type IntegrationStatus = "not_configured" | "disabled" | "active" | "error";
@@ -848,7 +849,7 @@ export default function AdminIntegrationsPage() {
               >
                 Send test POST
               </button>
-              <Link href="/admin/ops" className="btn btn-ghost">
+              <Link href={adminDeepLink.ops()} className="btn btn-ghost">
                 Operations
               </Link>
             </div>

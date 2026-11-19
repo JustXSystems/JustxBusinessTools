@@ -7,7 +7,8 @@ export const adminDeepLink = {
   approvals: (kind?: "profile" | "user" | "payment_op" | "upi_claim") =>
     kind ? `/admin/approvals?kind=${kind}` : "/admin/approvals",
 
-  users: () => "/admin/team",
+  users: (userId?: number) =>
+    userId != null && userId > 0 ? `/admin/team?user=${userId}` : "/admin/team",
   userPending: (userId?: number) =>
     userId != null && userId > 0
       ? `/admin/team?filter=pending&user=${userId}`
@@ -50,8 +51,22 @@ export const adminDeepLink = {
 
   experienceBranding: () => "/admin/experience?tab=branding",
   experienceTheme: () => "/admin/experience?tab=theme",
-  tools: () => "/admin/tools",
-  toolsPricing: () => "/admin/tools?tab=pricing",
+  experiencePublicHome: () => "/admin/experience?tab=public-home",
+  tools: (toolId?: string, tab?: "placement" | "pricing" | "schema", profileId?: number) => {
+    const params = new URLSearchParams();
+    if (toolId) params.set("tool", toolId);
+    if (tab && tab !== "placement") params.set("tab", tab);
+    if (profileId != null && profileId > 0) params.set("profile", String(profileId));
+    const qs = params.toString();
+    return qs ? `/admin/tools?${qs}` : "/admin/tools";
+  },
+  toolsPricing: (toolId?: string, profileId?: number) => {
+    const params = new URLSearchParams();
+    if (toolId) params.set("tool", toolId);
+    params.set("tab", "pricing");
+    if (profileId != null && profileId > 0) params.set("profile", String(profileId));
+    return `/admin/tools?${params.toString()}`;
+  },
   /** Profile-first tool capabilities (IMS modules and future ceilings). */
   imsModules: (profileId?: number) =>
     profileId != null && profileId > 0
@@ -61,14 +76,21 @@ export const adminDeepLink = {
     const params = new URLSearchParams();
     if (profileId != null && profileId > 0) params.set("id", String(profileId));
     params.set("tab", "fabric");
-    params.set("focus", toolId && toolId !== "imsdealer" ? toolId : "ims");
+    if (toolId) {
+      params.set("focus", toolId === "imsdealer" ? "ims" : toolId);
+    }
     return `/admin/profiles?${params.toString()}`;
   },
   analytics: () => "/admin/analytics",
+  analyticsTool: (toolId: string) => `/admin/analytics/tools/${encodeURIComponent(toolId)}`,
   gateways: (filter?: "unhealthy" | "enabled" | "live" | "off" | "test") =>
     filter ? `/admin/gateways?filter=${filter}` : "/admin/gateways",
   audit: () => "/admin/audit",
   integrations: () => "/admin/integrations",
   subscriptions: () => "/admin/subscriptions",
+  /** Plans page renewals panel (hash target). */
+  subscriptionsRenewals: () => "/admin/subscriptions#renewals",
   ops: () => "/admin/ops",
+  /** Document / artifact delivery health lives on Operations. */
+  delivery: () => "/admin/ops#delivery",
 } as const;

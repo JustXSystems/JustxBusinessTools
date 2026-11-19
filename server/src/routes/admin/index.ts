@@ -178,7 +178,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Renewals within 14 days",
       detail: `${renewalsSoon} subscription${renewalsSoon === 1 ? "" : "s"} approaching period end`,
       count: renewalsSoon,
-      href: adminDeepLink.subscriptions(),
+      href: adminDeepLink.subscriptionsRenewals(),
     });
   }
   if (limitBlocks > 0) {
@@ -188,7 +188,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Limit blocks (30d)",
       detail: `${limitBlocks} blocked save${limitBlocks === 1 ? "" : "s"} — freemium friction / upgrade signal`,
       count: limitBlocks,
-      href: adminDeepLink.analytics(),
+      href: adminDeepLink.profileAccess(undefined, "fabric"),
     });
   }
   if (deliveryFailed > 0) {
@@ -198,7 +198,7 @@ router.get("/dashboard", async (_req, res) => {
       title: "Document delivery failures",
       detail: `${deliveryFailed} failed PDF deliver${deliveryFailed === 1 ? "y" : "ies"} in the last 7 days`,
       count: deliveryFailed,
-      href: adminDeepLink.profiles(),
+      href: adminDeepLink.delivery(),
     });
   }
   if (gatewaysUnhealthy > 0) {

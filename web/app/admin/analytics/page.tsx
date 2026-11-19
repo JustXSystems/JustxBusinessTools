@@ -9,6 +9,7 @@ import {
 } from "@/components/admin/AnalyticsRangePills";
 import { LiveActivityStream } from "@/components/admin/LiveActivityStream";
 import { uniqueTools } from "@/config/tools.config";
+import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
@@ -352,7 +353,7 @@ export default function AdminAnalyticsPage() {
                   <span>{row.exports} exports</span>
                   {row.limitBlocks ? <span className="pill pill-warning">{row.limitBlocks} blocked</span> : null}
                 </div>
-                <Link href={`/admin/analytics/tools/${row.toolId}`} className="btn btn-ghost btn-sm">
+                <Link href={adminDeepLink.analyticsTool(row.toolId)} className="btn btn-ghost btn-sm">
                   Deep dive
                 </Link>
               </div>

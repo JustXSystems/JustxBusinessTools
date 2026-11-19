@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
@@ -93,6 +94,15 @@ export default function AdminOpsPage() {
 
   useLiveRefresh(load, { intervalMs: 20_000 });
 
+  useEffect(() => {
+    if (!data || typeof window === "undefined") return;
+    const hash = window.location.hash.replace(/^#/, "");
+    if (hash !== "delivery") return;
+    const el = document.getElementById("delivery");
+    if (!el) return;
+    requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, [data]);
+
   if (error && !data) return <p className="field-error">{error}</p>;
   if (!data) return <p className="muted">Loading operations…</p>;
 
@@ -128,7 +138,7 @@ export default function AdminOpsPage() {
             </span>
           </article>
           <Link
-            href="/admin/audit"
+            href={adminDeepLink.audit()}
             className={`result-card${signals.auditHighRisk7d ? " dash-kpi-warn" : ""}`}
           >
             <span>Audit risk (7d)</span>
@@ -145,11 +155,15 @@ export default function AdminOpsPage() {
 
       <div className="admin-page-scroll">
         <div className="admin-grid dash-health-grid">
-          <Link href="/admin/profiles" className="panel admin-card dash-health-card">
+          <Link
+            id="delivery"
+            href={adminDeepLink.integrations()}
+            className="panel admin-card dash-health-card"
+          >
             <h2>Document delivery</h2>
             <strong>{signals.deliveryFailed7d} failed</strong>
             <p className={signals.deliveryFailed7d ? "analytics-delta is-down" : "muted"}>
-              {signals.deliveryPending7d} pending · 7 days
+              {signals.deliveryPending7d} pending · 7 days · check Drive / webhook integrations
             </p>
           </Link>
           <a

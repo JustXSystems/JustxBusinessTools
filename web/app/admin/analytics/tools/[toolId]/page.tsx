@@ -9,6 +9,7 @@ import {
   formatAnalyticsBucket,
 } from "@/components/admin/AnalyticsRangePills";
 import { uniqueTools } from "@/config/tools.config";
+import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 
@@ -84,7 +85,7 @@ export default function AdminToolAnalyticsPage() {
       <section className="panel admin-card">
         <div className="analytics-toolbar">
           <div>
-            <Link href="/admin/analytics" className="btn btn-ghost btn-sm">← All tools</Link>
+            <Link href={adminDeepLink.analytics()} className="btn btn-ghost btn-sm">← All tools</Link>
             <h2>{name}</h2>
             <p className="muted">
               {toolId === "_app"

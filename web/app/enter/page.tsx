@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
+import { adminDeepLink } from "@/lib/admin-deep-links";
 import { isEnterableBranch, safeAppPath } from "@/lib/auth-access";
 import { withBasePath } from "@/lib/base-path";
 import type { SessionUser } from "@/lib/types/auth";
@@ -209,15 +210,16 @@ function EnterInner() {
 
         {noProfiles ? (
           <p className="enter-error">
-            No Business Profiles exist yet. Create and approve one in Admin → Profiles, then return
-            here.
+            No Business Profiles exist yet.{" "}
+            <Link href={adminDeepLink.profiles()}>Create one in Access Fabric</Link>, approve it,
+            then return here.
           </p>
         ) : null}
 
         {noLive ? (
           <p className="enter-error">
-            No approved, non-archived profiles. Enable “Include pending &amp; archived” or approve a
-            profile in Admin Console.
+            No approved, non-archived profiles. Enable “Include pending &amp; archived” or{" "}
+            <Link href={adminDeepLink.profilePending()}>approve a pending profile</Link>.
           </p>
         ) : null}
 

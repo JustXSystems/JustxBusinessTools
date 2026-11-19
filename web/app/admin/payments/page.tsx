@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { UpiPaymentsPanel } from "@/components/admin/UpiPaymentsPanel";
 import type { PaymentsActionHandle } from "@/components/admin/payments-actions";
+import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 
@@ -428,11 +429,11 @@ function AdminPaymentsInner() {
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => void load(days)} disabled={loading}>
               {loading ? "Refreshing…" : "Refresh"}
             </button>
-            <Link href="/admin/gateways" className="btn btn-secondary btn-sm">
+            <Link href={adminDeepLink.gateways()} className="btn btn-secondary btn-sm">
               Gateways
             </Link>
-            <Link href="/admin/subscriptions" className="btn btn-secondary btn-sm">
-              Subscriptions
+            <Link href={adminDeepLink.subscriptions()} className="btn btn-secondary btn-sm">
+              Plans
             </Link>
           </div>
         </div>
@@ -797,7 +798,7 @@ function AdminPaymentsInner() {
                 <p className="muted">No subscription</p>
               )}
               <p className="muted">
-                Manage plans in <Link href="/admin/subscriptions">Subscriptions</Link>.
+                Manage plans in <Link href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>.
               </p>
             </section>
             <section className="panel admin-card">

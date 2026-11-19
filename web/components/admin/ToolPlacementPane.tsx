@@ -3,6 +3,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
+import { ensureToolsOnHome, removeToolsFromHome } from "@/lib/admin-home-tools";
 import { api } from "@/lib/api";
 import { supportsStandaloneApp } from "@/lib/tool-launch";
 
@@ -41,6 +42,7 @@ export const ToolPlacementPane = forwardRef<
 ) {
   const { refresh: refreshConfig } = usePlatformConfig();
   const [busy, setBusy] = useState(false);
+  const [syncHome, setSyncHome] = useState(true);
   const [contentWidthPct, setContentWidthPct] = useState(90);
   const canStandalone = supportsStandaloneApp(toolId);
   const isIms = toolId === "imsdealer";
@@ -75,6 +77,10 @@ export const ToolPlacementPane = forwardRef<
           ...(canStandalone ? { openStandalone } : {}),
         }),
       });
+      if (syncHome) {
+        if (available) await ensureToolsOnHome(businessProfileId, [toolId]);
+        else await removeToolsFromHome(businessProfileId, [toolId]);
+      }
       if (isIms) {
         const layout = await api<{ imsLayout: { contentWidthPct: number } }>("/admin/config/ims-layout", {
           method: "PUT",
@@ -108,7 +114,12 @@ export const ToolPlacementPane = forwardRef<
       await api(`/admin/catalog/${toolId}?businessProfileId=${businessProfileId}`, {
         method: "DELETE",
       });
-      onSaved("Tool hidden from the operator home catalog.");
+      if (syncHome) await removeToolsFromHome(businessProfileId, [toolId]);
+      onSaved(
+        syncHome
+          ? "Tool hidden from the operator home catalog and removed from the home allowlist."
+          : "Tool hidden from the operator home catalog.",
+      );
     } catch (err) {
       onSaved(err instanceof Error ? err.message : "Hide failed");
     } finally {
@@ -124,7 +135,7 @@ export const ToolPlacementPane = forwardRef<
       label: () => "Save placement",
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- latest props closed over on each render
-    [busy, toolId, groupName, available, openStandalone, canStandalone, businessProfileId, contentWidthPct, isIms],
+    [busy, toolId, groupName, available, openStandalone, canStandalone, businessProfileId, contentWidthPct, isIms, syncHome],
   );
 
   return (
@@ -186,6 +197,15 @@ export const ToolPlacementPane = forwardRef<
         ) : null}
       </div>
       <div className="admin-form-row">
+        <label className="ax-check ax-check-compact">
+          <input
+            type="checkbox"
+            checked={syncHome}
+            disabled={busy || businessProfileId == null}
+            onChange={(e) => setSyncHome(e.target.checked)}
+          />
+          <span>Sync home allowlist</span>
+        </label>
         <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void hide()}>
           Hide from home
         </button>

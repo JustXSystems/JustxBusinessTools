@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import type { BundleState, SkuState } from "@/components/admin/ToolPricingPane";
+import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { bumpCommerceRevision } from "@/lib/commerce-revision";
-import type { BundleState, SkuState } from "@/components/admin/ToolPricingPane";
 
 function inr(n: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -299,13 +300,22 @@ export function ProductPacksPanel({
 
           <p className="muted">
             Define pack membership here. Provision licenses to a Business Profile from{" "}
-            <Link href="/admin/profiles?tab=fabric">Access Fabric</Link> (profile-first pack
-            provisioner).
+            <Link href={adminDeepLink.profileAccess(undefined, "fabric")}>Access Fabric</Link>{" "}
+            (profile-first pack provisioner). Per-tool pricing lives under{" "}
+            <Link href={adminDeepLink.toolsPricing()}>Catalog &amp; products</Link>.
           </p>
           <div className="admin-form-row">
             {!creating ? (
-              <Link href="/admin/profiles?tab=fabric" className="btn btn-secondary btn-sm">
+              <Link
+                href={adminDeepLink.profileAccess(undefined, "fabric")}
+                className="btn btn-secondary btn-sm"
+              >
                 Open Access Fabric
+              </Link>
+            ) : null}
+            {!creating ? (
+              <Link href={adminDeepLink.toolsPricing()} className="btn btn-ghost btn-sm">
+                Tool products
               </Link>
             ) : null}
             {!creating && editingId && editingId !== "all_tools" ? (

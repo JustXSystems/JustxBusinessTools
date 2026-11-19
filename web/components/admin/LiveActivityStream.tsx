@@ -545,16 +545,29 @@ export function LiveActivityStream({
                           </ul>
                           <div className="admin-form-row">
                             {ev.toolId ? (
-                              <Link href={`/admin/analytics/tools/${ev.toolId}`} className="btn btn-ghost btn-sm">
+                              <Link
+                                href={adminDeepLink.analyticsTool(ev.toolId)}
+                                className="btn btn-ghost btn-sm"
+                              >
                                 Tool deep dive
                               </Link>
                             ) : null}
                             {meta.aspect === "blocks" || meta.aspect === "upgrades" ? (
-                              <Link href={adminDeepLink.subscriptions()} className="btn btn-secondary btn-sm">
-                                Review plans
+                              <Link
+                                href={adminDeepLink.profileAccess(undefined, "fabric")}
+                                className="btn btn-secondary btn-sm"
+                              >
+                                Open Access Fabric
                               </Link>
                             ) : null}
-                            {ev.actorEmail ? (
+                            {ev.userId ? (
+                              <Link
+                                href={adminDeepLink.users(ev.userId)}
+                                className="btn btn-ghost btn-sm"
+                              >
+                                Open user
+                              </Link>
+                            ) : ev.actorEmail ? (
                               <Link href={adminDeepLink.users()} className="btn btn-ghost btn-sm">
                                 Team directory
                               </Link>

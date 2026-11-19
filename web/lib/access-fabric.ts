@@ -46,6 +46,10 @@ export type FabricToolNode = {
   hasSku: boolean;
   priceInr: number;
   trialDays: number;
+  /** Profile-level freemium override when set. */
+  recordLimitOverride?: number | null;
+  /** SKU default unlicensed record limit. */
+  unlicensedRecordLimit?: number | null;
 };
 
 export type FabricPack = {

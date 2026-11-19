@@ -53,7 +53,22 @@ export function FeatureSwitchesPanel({
       </section>
     );
   }
-  if (!mine.length) return null;
+  if (switches == null) {
+    return (
+      <section className="panel admin-card tm-pane" style={{ marginTop: 16 }} aria-label={`${toolName} switches`}>
+        <h2>Switches</h2>
+        <p className="muted">Loading feature switches…</p>
+      </section>
+    );
+  }
+  if (!mine.length) {
+    return (
+      <section className="panel admin-card tm-pane" style={{ marginTop: 16 }} aria-label={`${toolName} switches`}>
+        <h2>Switches</h2>
+        <p className="muted">No feature switches registered for {toolName}.</p>
+      </section>
+    );
+  }
 
   async function toggle(s: AdminSwitch, enabled: boolean) {
     if (businessProfileId == null) return;
