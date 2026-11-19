@@ -3,11 +3,11 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from "react";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -36,19 +36,25 @@ type CapabilityDetail = {
 export type ToolCapabilityLatticeHandle = {
   focusTool: (toolId?: string) => void;
   reload: () => Promise<void>;
+  /** Latest capability summary rows (for roster badges). */
+  getSummary: () => CapabilitySummaryTool[];
 };
 
 type Props = {
   businessProfileId: number;
-  initialToolId?: string | null;
+  /** Parent-controlled tool selection (master–detail). */
+  selectedToolId: string | null;
+  onSelectedToolIdChange?: (toolId: string) => void;
   onSummary?: (tools: FabricCapabilityTool[]) => void;
   onRequestGrant?: (toolId: string) => void | Promise<void>;
 };
 
 export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Props>(
-  function ToolCapabilityLattice({ businessProfileId, initialToolId, onSummary, onRequestGrant }, ref) {
+  function ToolCapabilityLattice(
+    { businessProfileId, selectedToolId, onSelectedToolIdChange, onSummary, onRequestGrant },
+    ref,
+  ) {
     const [tools, setTools] = useState<CapabilitySummaryTool[]>([]);
-    const [selectedId, setSelectedId] = useState<string | null>(null);
     const [detail, setDetail] = useState<CapabilityDetail | null>(null);
     const [unrestricted, setUnrestricted] = useState(true);
     const [enabled, setEnabled] = useState<Set<string>>(new Set());
@@ -60,11 +66,8 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
     const [error, setError] = useState("");
     const onSummaryRef = useRef(onSummary);
     onSummaryRef.current = onSummary;
-    const initialToolRef = useRef(initialToolId);
-    initialToolRef.current = initialToolId;
-    const selectedIdRef = useRef<string | null>(null);
-    selectedIdRef.current = selectedId;
-    const bootedProfileRef = useRef<number | null>(null);
+    const toolsRef = useRef(tools);
+    toolsRef.current = tools;
 
     const reloadSummary = useCallback(async () => {
       const data = await api<{ tools: CapabilitySummaryTool[] }>(
@@ -92,6 +95,8 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
         setDetail(data);
         setUnrestricted(data.unrestricted);
         setEnabled(new Set(data.enabled));
+        setModuleQuery("");
+        setModuleFilter("all");
         return data;
       },
       [businessProfileId],
@@ -99,64 +104,53 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
 
     const refresh = useCallback(async () => {
       setError("");
-      const profileChanged = bootedProfileRef.current !== businessProfileId;
       try {
-        const list = await reloadSummary();
-        const current = selectedIdRef.current;
-        const keepSelection =
-          !profileChanged && current != null && list.some((t) => t.toolId === current);
-
-        if (keepSelection && current) {
-          bootedProfileRef.current = businessProfileId;
-          await loadDetail(current);
-          return;
-        }
-
-        const preferId = initialToolRef.current;
-        const prefer =
-          (preferId && list.some((t) => t.toolId === preferId) && preferId) ||
-          list.find((t) => t.hasCeiling && t.entitled)?.toolId ||
-          list.find((t) => t.entitled)?.toolId ||
-          list[0]?.toolId ||
-          null;
-        bootedProfileRef.current = businessProfileId;
-        setSelectedId(prefer);
-        if (prefer) await loadDetail(prefer);
+        await reloadSummary();
+        if (selectedToolId) await loadDetail(selectedToolId);
         else setDetail(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load capabilities");
-        if (profileChanged) {
-          setTools([]);
-          setDetail(null);
-        }
       }
-    }, [businessProfileId, reloadSummary, loadDetail]);
+    }, [reloadSummary, loadDetail, selectedToolId]);
 
     useLiveRefresh(() => refresh().catch(() => undefined), {
       intervalMs: 60_000,
       deps: [businessProfileId],
     });
 
+    useEffect(() => {
+      if (!selectedToolId) {
+        setDetail(null);
+        return;
+      }
+      let cancelled = false;
+      setError("");
+      void loadDetail(selectedToolId).catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message);
+          setDetail(null);
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [selectedToolId, loadDetail]);
+
     useImperativeHandle(
       ref,
       () => ({
         focusTool: (toolId?: string) => {
           const el = document.getElementById("ax-capabilities");
-          el?.scrollIntoView({ behavior: "smooth", block: "start" });
-          if (toolId) {
-            setSelectedId(toolId);
-            void loadDetail(toolId).catch((e: Error) => setError(e.message));
-          }
+          el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          if (toolId) onSelectedToolIdChange?.(toolId);
         },
         reload: refresh,
+        getSummary: () => toolsRef.current,
       }),
-      [refresh, loadDetail],
+      [refresh, onSelectedToolIdChange],
     );
 
-    const alwaysOn = useMemo(
-      () => new Set(detail?.alwaysOn ?? []),
-      [detail],
-    );
+    const alwaysOn = useMemo(() => new Set(detail?.alwaysOn ?? []), [detail]);
 
     const sections = useMemo(() => {
       const catalog = detail?.catalog ?? [];
@@ -169,28 +163,14 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
       return [...map.entries()];
     }, [detail]);
 
-    async function selectTool(toolId: string) {
-      setSelectedId(toolId);
-      setMessage("");
-      setError("");
-      setModuleQuery("");
-      setModuleFilter("all");
-      try {
-        await loadDetail(toolId);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load tool");
-        setDetail(null);
-      }
-    }
-
     async function persist(nextUnrestricted: boolean, nextEnabled: Set<string>, label: string) {
-      if (!selectedId || !detail?.hasCeiling) return;
-      setBusyKey(selectedId);
+      if (!selectedToolId || !detail?.hasCeiling) return;
+      setBusyKey(selectedToolId);
       setMessage("");
       setError("");
       try {
         const data = await api<CapabilityDetail>(
-          `/admin/tool-capabilities/${encodeURIComponent(selectedId)}`,
+          `/admin/tool-capabilities/${encodeURIComponent(selectedToolId)}`,
           {
             method: "PUT",
             body: JSON.stringify({
@@ -243,11 +223,7 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
           return { section, pct: 100, optional };
         }
         const on = optional.filter((r) => enabled.has(r.key)).length;
-        return {
-          section,
-          pct: Math.round((on / optional.length) * 100),
-          optional,
-        };
+        return { section, pct: Math.round((on / optional.length) * 100), optional };
       });
     }, [sections, alwaysOn, enabled, unrestricted]);
 
@@ -269,80 +245,31 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
 
     const busy = busyKey != null;
 
-    return (
-      <section id="ax-capabilities" className="ax-capabilities" aria-label="Tool capabilities">
-        <div className="ax-section-head">
-          <h4>Tool capabilities</h4>
-          <p className="muted">
-            Profile-first control: pick an assigned tool, then tune its module ceiling. Tools without a
-            registered ceiling use whole-tool access (grant / revoke on the lattice below).
-          </p>
+    if (!selectedToolId) {
+      return (
+        <div id="ax-capabilities" className="ax-cap-inspector ax-cap-inspector-empty">
+          <p className="muted">Select a tool to tune licenses or module ceilings.</p>
         </div>
+      );
+    }
 
+    return (
+      <div id="ax-capabilities" className="ax-cap-inspector" aria-label="Tool capabilities">
         {error ? <p className="field-error">{error}</p> : null}
-        {message ? <p className="muted">{message}</p> : null}
+        {message ? <p className="muted ax-cap-flash">{message}</p> : null}
 
-        {tools.length === 0 ? (
-          <p className="muted">
-            No tools assigned yet. Grant licenses on the Tool lattice, then return here to tune
-            capabilities.
-          </p>
-        ) : (
-          <div className="ax-cap-rail" role="tablist" aria-label="Assigned tools">
-            {tools.map((tool) => {
-              const active = tool.toolId === selectedId;
-              const signal = !tool.entitled
-                ? "locked"
-                : !tool.hasCeiling
-                  ? "included"
-                  : tool.unrestricted
-                    ? "licensed"
-                    : "dim";
-              return (
-                <button
-                  key={tool.toolId}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  className={`ax-cap-chip${active ? " is-active" : ""}`}
-                  data-signal={signal}
-                  onClick={() => void selectTool(tool.toolId)}
-                >
-                  <strong>{tool.name}</strong>
-                  <span>
-                    {!tool.entitled
-                      ? "Unassigned"
-                      : !tool.hasCeiling
-                        ? "Whole-tool"
-                        : tool.unrestricted
-                          ? "Full signal"
-                          : `${tool.coveragePct ?? 0}% modules`}
-                  </span>
-                  {tool.hasCeiling && tool.coveragePct != null ? (
-                    <span
-                      className="ax-cap-chip-ring"
-                      style={{ "--pct": tool.coveragePct } as CSSProperties}
-                      aria-hidden
-                    />
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {detail && !detail.entitled ? (
+        {!detail ? (
+          <p className="muted">Loading capabilities…</p>
+        ) : !detail.entitled ? (
           <div className="ax-cap-locked">
             <div>
-              <strong>{detail.name} is not assigned</strong>
-              <p className="muted">
-                License this tool on the profile first. Module ceilings unlock after entitlement.
-              </p>
+              <strong>Not licensed</strong>
+              <p className="muted">Grant a license before module ceilings unlock.</p>
             </div>
             <button
               type="button"
               className="btn btn-primary btn-sm"
-              disabled={granting || busyKey != null}
+              disabled={granting || busy}
               onClick={() => {
                 if (!onRequestGrant) return;
                 setGranting(true);
@@ -352,21 +279,16 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
               {granting ? "Granting…" : "Grant license"}
             </button>
           </div>
-        ) : null}
-
-        {detail && detail.entitled && !detail.hasCeiling ? (
+        ) : !detail.hasCeiling ? (
           <div className="ax-cap-whole">
-            <strong>{detail.name}</strong>
+            <strong>Whole-tool access</strong>
             <p className="muted">
-              Whole-tool access — operators get the full product once licensed. No left-nav module
-              ceiling is registered for <code>{detail.toolId}</code> yet.
+              No module ceiling for <code>{detail.toolId}</code> — license is the unit of access.
             </p>
           </div>
-        ) : null}
-
-        {detail && detail.entitled && detail.hasCeiling ? (
+        ) : (
           <div className="ax-cap-detail">
-            <div className="ax-cap-mode" role="group" aria-label="Capability mode">
+            <div className="ax-cap-mode ax-cap-mode-compact" role="group" aria-label="Capability mode">
               <button
                 type="button"
                 className={`ax-cap-mode-btn${unrestricted ? " is-active" : ""}`}
@@ -377,8 +299,7 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
                   void persist(true, enabled, `Unrestricted modules for ${detail.name}.`);
                 }}
               >
-                <strong>Unrestricted</strong>
-                <span>Every left-nav module stays live (roles may still narrow).</span>
+                Unrestricted
               </button>
               <button
                 type="button"
@@ -392,49 +313,37 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
                   void persist(false, next, `Curated ceiling for ${detail.name}.`);
                 }}
               >
-                <strong>Curated</strong>
-                <span>Pick which modules this Business Profile may open.</span>
+                Curated{detail.coveragePct != null && !unrestricted ? ` · ${detail.coveragePct}%` : ""}
               </button>
             </div>
 
-            <div className="ax-cap-section-rail" aria-label="Section coverage">
+            <div className="ax-cap-section-rail ax-cap-section-rail-compact" aria-label="Section coverage">
               {sectionCoverage.map(({ section, pct, optional }) => {
                 const allOn = unrestricted || optional.every((r) => enabled.has(r.key));
                 return (
-                  <article key={section} className="ax-cap-section-card">
-                    <div
-                      className="ax-pack-ring"
-                      style={{ "--pct": pct } as CSSProperties}
-                      aria-label={`${section} ${pct}%`}
-                    >
-                      <span>{pct}%</span>
-                    </div>
-                    <div>
-                      <strong>{section}</strong>
-                      <p className="muted">
-                        {optional.length} optional · {alwaysOn.size ? "core always on" : "no core"}
-                      </p>
-                    </div>
-                    {optional.length ? (
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        disabled={busy || unrestricted}
-                        onClick={() => selectSection(section, !allOn)}
-                      >
-                        {allOn ? "Clear" : "Enable"}
-                      </button>
-                    ) : null}
-                  </article>
+                  <button
+                    key={section}
+                    type="button"
+                    className="ax-cap-section-chip"
+                    disabled={busy || unrestricted || optional.length === 0}
+                    title={optional.length ? `${section}: ${pct}%` : section}
+                    onClick={() => selectSection(section, !allOn)}
+                  >
+                    <span className="ax-cap-section-meter" aria-hidden>
+                      <i style={{ width: `${pct}%` }} />
+                    </span>
+                    <strong>{section}</strong>
+                    <em>{pct}%</em>
+                  </button>
                 );
               })}
             </div>
 
-            <div className="admin-form-row ax-cap-scan">
+            <div className="ax-cap-scan admin-form-row">
               <input
                 value={moduleQuery}
                 onChange={(e) => setModuleQuery(e.target.value)}
-                placeholder="Scan modules…"
+                placeholder="Filter modules…"
                 aria-label="Search modules"
                 disabled={unrestricted}
               />
@@ -443,7 +352,7 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
                   [
                     ["all", "All"],
                     ["live", "Live"],
-                    ["dim", "Dimmed"],
+                    ["dim", "Dim"],
                   ] as const
                 ).map(([id, label]) => (
                   <button
@@ -460,62 +369,46 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
               </div>
             </div>
 
-            <div className="ax-legend">
-              <span data-signal="included">Always on</span>
-              <span data-signal="licensed">Live</span>
-              <span data-signal="dim">Dimmed</span>
-            </div>
-
             <fieldset
               disabled={unrestricted || busy}
-              className="ax-cap-modules"
-              style={{ opacity: unrestricted ? 0.55 : 1 }}
+              className="ax-cap-module-list"
+              style={{ opacity: unrestricted ? 0.5 : 1 }}
             >
-              <legend className="sr-only">Module selection</legend>
+              <legend className="sr-only">Modules</legend>
               {visibleModules.map(([section, rows]) => (
-                <div key={section} className="ax-cat">
+                <div key={section} className="ax-cap-module-group">
                   <h5>{section}</h5>
-                  <div className="ax-nodes">
+                  <ul>
                     {rows.map((row) => {
                       const locked = alwaysOn.has(row.key);
                       const live = locked || unrestricted || enabled.has(row.key);
-                      const signal = locked ? "included" : live ? "licensed" : "dim";
                       return (
-                        <article key={row.key} className="ax-node" data-signal={signal}>
-                          <div className="ax-node-head">
+                        <li key={row.key} data-signal={locked ? "included" : live ? "licensed" : "dim"}>
+                          <div>
                             <strong>{row.label}</strong>
-                            <span className="ax-node-signal">
-                              {locked ? "Always on" : live ? "Live" : "Dimmed"}
-                            </span>
+                            <span>{locked ? "Always on" : live ? "Live" : "Dimmed"}</span>
                           </div>
-                          <p className="muted">
-                            <code>{row.key}</code>
-                          </p>
-                          <div className="ax-node-actions">
-                            {locked ? null : (
-                              <button
-                                type="button"
-                                className={`btn btn-sm ${live ? "btn-ghost" : "btn-primary"}`}
-                                disabled={busy || unrestricted}
-                                onClick={() => toggleModule(row.key, !live)}
-                              >
-                                {live ? "Dim" : "Enable"}
-                              </button>
-                            )}
-                          </div>
-                        </article>
+                          {locked ? null : (
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${live ? "btn-ghost" : "btn-primary"}`}
+                              disabled={busy || unrestricted}
+                              onClick={() => toggleModule(row.key, !live)}
+                            >
+                              {live ? "Dim" : "On"}
+                            </button>
+                          )}
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                 </div>
               ))}
-              {visibleModules.length === 0 ? (
-                <p className="muted">No modules match this scan.</p>
-              ) : null}
+              {visibleModules.length === 0 ? <p className="muted">No modules match.</p> : null}
             </fieldset>
           </div>
-        ) : null}
-      </section>
+        )}
+      </div>
     );
   },
 );

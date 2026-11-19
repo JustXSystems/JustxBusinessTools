@@ -10,7 +10,6 @@ import { uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
 import {
   computeAccessReadiness,
-  groupToolsByCategory,
   signalFor,
   type AccessAction,
   type FabricCapabilityTool,
@@ -65,9 +64,9 @@ function ringTone(tone: "ok" | "warn" | "bad") {
 const SIGNAL_LABEL: Record<string, string> = {
   included: "Included",
   licensed: "Signal",
-  locked: "Hard lock",
-  orphan: "Orphan home",
-  dim: "Unlicensed",
+  locked: "Lock",
+  orphan: "Orphan",
+  dim: "Gap",
 };
 
 export function AccessFabricPane({
@@ -90,7 +89,6 @@ export function AccessFabricPane({
   peopleGranted: number;
   peopleTotal: number;
   homeToolIds: string[];
-  /** Deep-link into Tool capabilities for a specific tool (e.g. imsdealer). */
   focusToolId?: string | null;
   onNavigate?: (target: "home" | "people" | "identity" | "lifecycle") => void;
   onMutated?: () => void | Promise<void>;
@@ -101,6 +99,7 @@ export function AccessFabricPane({
   const [entitlements, setEntitlements] = useState<LicenseRow[]>([]);
   const [bundles, setBundles] = useState<BundleRow[]>([]);
   const [capabilityTools, setCapabilityTools] = useState<FabricCapabilityTool[]>([]);
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "dim" | "licensed" | "orphan" | "locked">("all");
   const [days, setDays] = useState("30");
@@ -109,14 +108,7 @@ export function AccessFabricPane({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const capabilitiesRef = useRef<ToolCapabilityLatticeHandle>(null);
-
-  useEffect(() => {
-    if (!focusToolId) return;
-    const t = window.setTimeout(() => {
-      capabilitiesRef.current?.focusTool(focusToolId);
-    }, 120);
-    return () => window.clearTimeout(t);
-  }, [focusToolId, businessProfileId]);
+  const didFocusRef = useRef<string | null>(null);
 
   const reload = useCallback(async () => {
     const data = await api<{
@@ -207,6 +199,11 @@ export function AccessFabricPane({
     ],
   );
 
+  const capById = useMemo(
+    () => new Map(capabilityTools.map((c) => [c.toolId, c])),
+    [capabilityTools],
+  );
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tools.filter((t) => {
@@ -220,7 +217,30 @@ export function AccessFabricPane({
     });
   }, [tools, query, filter]);
 
-  const groups = useMemo(() => groupToolsByCategory(visible), [visible]);
+  // Prefer gaps, then focus, then first visible — once per profile / focus change.
+  useEffect(() => {
+    const focusKey = `${businessProfileId}:${focusToolId ?? ""}`;
+    if (didFocusRef.current === focusKey && selectedToolId) return;
+    if (tools.length === 0) return;
+
+    if (focusToolId && tools.some((t) => t.toolId === focusToolId)) {
+      setSelectedToolId(focusToolId);
+      didFocusRef.current = focusKey;
+      return;
+    }
+
+    const gap = tools.find((t) => signalFor(t) === "dim" || signalFor(t) === "orphan");
+    const next = gap?.toolId ?? tools[0]?.toolId ?? null;
+    setSelectedToolId(next);
+    didFocusRef.current = focusKey;
+  }, [businessProfileId, focusToolId, tools, selectedToolId]);
+
+  const selected = useMemo(
+    () => tools.find((t) => t.toolId === selectedToolId) ?? null,
+    [tools, selectedToolId],
+  );
+
+  const nextAction = readiness.actions[0] ?? null;
 
   async function run(key: string, label: string, fn: () => Promise<void>) {
     setBusyKey(key);
@@ -269,6 +289,7 @@ export function AccessFabricPane({
           onHomeToolsChange?.(nextHome);
         }
       }
+      await capabilitiesRef.current?.reload();
     });
   }
 
@@ -282,6 +303,7 @@ export function AccessFabricPane({
     if (action.action === "open-identity") onNavigate?.("identity");
     if (action.action === "open-lifecycle") onNavigate?.("lifecycle");
     if (action.action === "open-capabilities") {
+      if (action.toolId) setSelectedToolId(action.toolId);
       capabilitiesRef.current?.focusTool(action.toolId);
     }
   }
@@ -298,16 +320,20 @@ export function AccessFabricPane({
           businessProfileId,
         }),
       });
+      setSelectedToolId(toolId);
       await capabilitiesRef.current?.reload();
-      capabilitiesRef.current?.focusTool(toolId);
     });
   }
 
+  const selectedSignal = selected ? signalFor(selected) : null;
+  const selectedCap = selected ? capById.get(selected.toolId) : undefined;
+  const busy = busyKey != null;
+
   return (
-    <div className="ax-fabric">
-      <header className="ax-fabric-hero">
+    <div className="ax-fabric ax-cockpit">
+      <header className="ax-strip" aria-label="Access readiness">
         <div
-          className="ax-readiness-ring"
+          className="ax-readiness-ring ax-readiness-ring-sm"
           style={
             {
               "--pct": readiness.score,
@@ -319,156 +345,115 @@ export function AccessFabricPane({
         >
           <div>
             <b>{readiness.score}</b>
-            <small>Grade {readiness.grade}</small>
+            <small>{readiness.grade}</small>
           </div>
         </div>
-        <div className="ax-fabric-hero-copy">
-          <p className="ax-eyebrow">Access Fabric · {profileName}</p>
-          <h3>Readiness command</h3>
-          <p className="muted">
-            Identity → entitlements → home surface → people reach → catalog pressure
-            {capabilityTools.some((t) => t.hasCeiling) ? " → tool capabilities" : ""}.
-            Assign tools, then tune each product&apos;s module ceiling for this Business Profile.
-          </p>
-          <div className="ax-layer-rail" aria-label="Layer scores">
+
+        <div className="ax-strip-main">
+          <div className="ax-strip-title">
+            <p className="ax-eyebrow">Access Fabric</p>
+            <h3>{profileName}</h3>
+          </div>
+          <div className="ax-layer-dots" aria-label="Layer scores">
             {readiness.layers.map((layer) => (
-              <div key={layer.id} className="ax-layer-chip">
-                <span className="ax-layer-chip-label">{layer.label}</span>
+              <div key={layer.id} className="ax-layer-dot" title={`${layer.label}: ${layer.detail}`}>
+                <span>{layer.label}</span>
                 <strong>{layer.score}</strong>
-                <div className="ax-layer-meter" aria-hidden>
-                  <span style={{ width: `${layer.score}%` }} />
-                </div>
-                <em>{layer.detail}</em>
+                <i aria-hidden>
+                  <b style={{ width: `${layer.score}%` }} />
+                </i>
               </div>
             ))}
           </div>
         </div>
-        <div className="ax-fabric-controls">
-          <label className="field">
-            <span>Grant window (days)</span>
+
+        <div className="ax-strip-controls">
+          <label className="ax-inline-field">
+            <span>Days</span>
             <input
               type="number"
               min={1}
               value={days}
               onChange={(e) => setDays(e.target.value)}
+              aria-label="Grant window days"
             />
           </label>
-          <label className="ax-check">
+          <label className="ax-check ax-check-compact">
             <input
               type="checkbox"
               checked={syncHome}
               onChange={(e) => setSyncHome(e.target.checked)}
             />
-            <span>Sync pack tools onto home surface</span>
+            <span>Sync home</span>
           </label>
           <Link href="/admin/tools" className="btn btn-ghost btn-sm">
-            Catalog placement
+            Catalog
           </Link>
         </div>
       </header>
 
-      {readiness.actions.length > 0 ? (
-        <section className="ax-actions" aria-label="Next actions">
-          <h4>Next signals</h4>
-          <ul>
-            {readiness.actions.map((action) => (
-              <li key={action.id}>
-                <div>
-                  <strong>{action.title}</strong>
-                  <p className="muted">{action.detail}</p>
-                </div>
-                {action.action || action.packId ? (
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={busyKey != null}
-                    onClick={() => handleAction(action)}
-                  >
-                    {action.action === "grant-pack" ? "Provision" : "Open"}
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <section className="ax-packs" aria-label="Pack provisioner">
-        <div className="ax-section-head">
-          <h4>Pack provisioner</h4>
-          <p className="muted">Apply commercial packs to this profile in one shot.</p>
-        </div>
-        <div className="ax-pack-rail">
-          {readiness.packs.map((match) => (
-            <article
-              key={match.pack.id}
-              className={`ax-pack-card${match.recommended ? " is-recommended" : ""}`}
+      {nextAction ? (
+        <div className="ax-next-chip" role="status">
+          <div>
+            <strong>{nextAction.title}</strong>
+            <span className="muted">{nextAction.detail}</span>
+          </div>
+          {nextAction.action || nextAction.packId ? (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={busy}
+              onClick={() => handleAction(nextAction)}
             >
-              <div className="ax-pack-card-top">
-                <div>
-                  <strong>{match.pack.name}</strong>
-                  {match.pack.tagline ? <p className="muted">{match.pack.tagline}</p> : null}
-                </div>
-                {match.recommended ? <span className="pill pill-warning">Recommended</span> : null}
-              </div>
-              <div
-                className="ax-pack-ring"
-                style={{ "--pct": match.coveragePct } as CSSProperties}
-                aria-label={`${match.coveragePct}% pack coverage`}
-              >
-                <span>{match.coveragePct}%</span>
-              </div>
-              <p className="muted ax-pack-meta">
-                {match.covered}/{match.total} covered
-                {match.missing.length ? ` · ${match.missing.length} missing` : " · complete"}
-                {match.pack.priceInr ? ` · ${inr(match.pack.priceInr)}` : ""}
-              </p>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                disabled={busyKey != null || match.missing.length === 0}
-                onClick={() => void provisionPack(match.pack.id)}
-              >
-                {busyKey === match.pack.id
-                  ? "Provisioning…"
-                  : match.missing.length
-                    ? `Grant ${match.missing.length} tool(s)`
-                    : "Fully covered"}
-              </button>
-            </article>
-          ))}
-          {readiness.packs.length === 0 ? (
-            <p className="muted">No product packs configured yet.</p>
+              {nextAction.action === "grant-pack" ? "Provision" : "Open"}
+            </button>
           ) : null}
         </div>
-      </section>
+      ) : null}
 
-      <ToolCapabilityLattice
-        ref={capabilitiesRef}
-        businessProfileId={businessProfileId}
-        initialToolId={focusToolId}
-        onSummary={setCapabilityTools}
-        onRequestGrant={(toolId) => void grantCapabilityTool(toolId)}
-      />
+      {readiness.packs.length > 0 ? (
+        <div className="ax-pack-strip" aria-label="Packs">
+          {readiness.packs.map((match) => (
+            <button
+              key={match.pack.id}
+              type="button"
+              className={`ax-pack-chip${match.recommended ? " is-recommended" : ""}`}
+              disabled={busy || match.missing.length === 0}
+              title={match.pack.tagline ?? match.pack.name}
+              onClick={() => void provisionPack(match.pack.id)}
+            >
+              <strong>{match.pack.name}</strong>
+              <span>
+                {match.coveragePct}%
+                {match.missing.length ? ` · +${match.missing.length}` : ""}
+                {match.pack.priceInr ? ` · ${inr(match.pack.priceInr)}` : ""}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
 
-      <section id="ax-tool-lattice" className="ax-lattice" aria-label="Tool lattice">
-        <div className="ax-section-head">
-          <h4>Tool lattice</h4>
-          <div className="admin-form-row">
+      {(message || error) && (
+        <p className={error ? "field-error" : "muted ax-cap-flash"}>{error || message}</p>
+      )}
+
+      <div className="ax-workspace" id="ax-tool-lattice">
+        <aside className="ax-roster" aria-label="Tools">
+          <div className="ax-roster-toolbar">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Scan tools…"
+              placeholder="Find tool…"
               aria-label="Search tools"
             />
-            <div className="admin-tabs ax-lattice-filters" role="tablist" aria-label="Lattice filter">
+            <div className="admin-tabs ax-lattice-filters" role="tablist" aria-label="Filter">
               {(
                 [
                   ["all", "All"],
                   ["dim", "Gaps"],
-                  ["licensed", "Signal"],
+                  ["licensed", "On"],
                   ["locked", "Locks"],
-                  ["orphan", "Orphans"],
+                  ["orphan", "Home"],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -483,133 +468,176 @@ export function AccessFabricPane({
               ))}
             </div>
           </div>
-        </div>
 
-        {message ? <p className="muted">{message}</p> : null}
-        {error ? <p className="field-error">{error}</p> : null}
-
-        <div className="ax-legend">
-          <span data-signal="licensed">Signal</span>
-          <span data-signal="included">Included</span>
-          <span data-signal="dim">Gap</span>
-          <span data-signal="locked">Hard lock</span>
-          <span data-signal="orphan">Orphan home</span>
-        </div>
-
-        {groups.map(([category, rows]) => (
-          <div key={category} className="ax-cat">
-            <h5>{category}</h5>
-            <div className="ax-nodes">
-              {rows.map((node) => {
-                const signal = signalFor(node);
-                const busy = busyKey === node.toolId;
-                return (
-                  <article key={node.toolId} className="ax-node" data-signal={signal}>
-                    <div className="ax-node-head">
+          <ul className="ax-roster-list">
+            {visible.map((node) => {
+              const signal = signalFor(node);
+              const cap = capById.get(node.toolId);
+              const active = node.toolId === selectedToolId;
+              return (
+                <li key={node.toolId}>
+                  <button
+                    type="button"
+                    className={`ax-roster-row${active ? " is-active" : ""}`}
+                    data-signal={signal}
+                    onClick={() => setSelectedToolId(node.toolId)}
+                  >
+                    <span className="ax-roster-name">
                       <strong>{node.name}</strong>
+                      <em>{node.category}</em>
+                    </span>
+                    <span className="ax-roster-meta">
                       <span className="ax-node-signal">{SIGNAL_LABEL[signal] ?? signal}</span>
-                    </div>
-                    <p className="muted">
-                      <code>{node.toolId}</code>
-                      {node.hasSku && !node.includedFree ? ` · ${inr(node.priceInr)}/mo` : ""}
-                      {node.periodEnd ? ` · until ${node.periodEnd.slice(0, 10)}` : ""}
-                      {node.onHome ? " · on home" : ""}
-                    </p>
-                    <div className="ax-node-actions">
-                      {node.includedFree ? null : node.licensed ? (
-                        <>
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            disabled={busy}
-                            onClick={() =>
-                              void run(node.toolId, `Extended ${node.name}.`, async () => {
-                                await api("/admin/skus/extend", {
-                                  method: "POST",
-                                  body: JSON.stringify({
-                                    toolIds: [node.toolId],
-                                    days: grantDays(),
-                                    businessProfileId,
-                                  }),
-                                });
-                              })
-                            }
-                          >
-                            Extend
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            disabled={busy}
-                            onClick={() =>
-                              void run(node.toolId, `Revoked ${node.name}.`, async () => {
-                                await api("/admin/skus/revoke", {
-                                  method: "POST",
-                                  body: JSON.stringify({
-                                    toolIds: [node.toolId],
-                                    businessProfileId,
-                                  }),
-                                });
-                              })
-                            }
-                          >
-                            Revoke
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className="btn btn-primary btn-sm"
-                            disabled={busy}
-                            onClick={() =>
-                              void run(node.toolId, `Licensed ${node.name}.`, async () => {
-                                await api("/admin/skus/grant", {
-                                  method: "POST",
-                                  body: JSON.stringify({
-                                    toolIds: [node.toolId],
-                                    days: grantDays(),
-                                    businessProfileId,
-                                  }),
-                                });
-                                await capabilitiesRef.current?.reload();
-                              })
-                            }
-                          >
-                            Grant
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            disabled={busy}
-                            onClick={() =>
-                              void run(node.toolId, `Trial for ${node.name}.`, async () => {
-                                await api("/admin/skus/grant", {
-                                  method: "POST",
-                                  body: JSON.stringify({
-                                    toolIds: [node.toolId],
-                                    days: node.trialDays || 14,
-                                    preferTrial: true,
-                                    businessProfileId,
-                                  }),
-                                });
-                                await capabilitiesRef.current?.reload();
-                              })
-                            }
-                          >
-                            Trial
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
+                      {cap?.hasCeiling && cap.entitled && cap.coveragePct != null ? (
+                        <span className="ax-roster-cap">{cap.coveragePct}%</span>
+                      ) : null}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+            {visible.length === 0 ? (
+              <li className="ax-roster-empty muted">No tools match.</li>
+            ) : null}
+          </ul>
+        </aside>
+
+        <section className="ax-inspector" aria-label="Tool inspector">
+          {!selected ? (
+            <div className="ax-inspector-empty">
+              <p className="muted">Select a tool from the list.</p>
             </div>
-          </div>
-        ))}
-        {groups.length === 0 ? <p className="muted">No tools match this scan.</p> : null}
-      </section>
+          ) : (
+            <>
+              <div className="ax-inspector-head">
+                <div>
+                  <p className="ax-eyebrow">{selected.category}</p>
+                  <h4>{selected.name}</h4>
+                  <p className="muted">
+                    <code>{selected.toolId}</code>
+                    {selected.hasSku && !selected.includedFree ? ` · ${inr(selected.priceInr)}/mo` : ""}
+                    {selected.periodEnd ? ` · until ${selected.periodEnd.slice(0, 10)}` : ""}
+                    {selected.onHome ? " · on home" : ""}
+                    {selectedSignal ? ` · ${SIGNAL_LABEL[selectedSignal]}` : ""}
+                  </p>
+                </div>
+                <div className="ax-inspector-actions">
+                  {selected.includedFree ? (
+                    <span className="pill">Included free</span>
+                  ) : selected.licensed ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(selected.toolId, `Extended ${selected.name}.`, async () => {
+                            await api("/admin/skus/extend", {
+                              method: "POST",
+                              body: JSON.stringify({
+                                toolIds: [selected.toolId],
+                                days: grantDays(),
+                                businessProfileId,
+                              }),
+                            });
+                          })
+                        }
+                      >
+                        Extend
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(selected.toolId, `Revoked ${selected.name}.`, async () => {
+                            await api("/admin/skus/revoke", {
+                              method: "POST",
+                              body: JSON.stringify({
+                                toolIds: [selected.toolId],
+                                businessProfileId,
+                              }),
+                            });
+                            await capabilitiesRef.current?.reload();
+                          })
+                        }
+                      >
+                        Revoke
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(selected.toolId, `Licensed ${selected.name}.`, async () => {
+                            await api("/admin/skus/grant", {
+                              method: "POST",
+                              body: JSON.stringify({
+                                toolIds: [selected.toolId],
+                                days: grantDays(),
+                                businessProfileId,
+                              }),
+                            });
+                            await capabilitiesRef.current?.reload();
+                          })
+                        }
+                      >
+                        Grant
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(selected.toolId, `Trial for ${selected.name}.`, async () => {
+                            await api("/admin/skus/grant", {
+                              method: "POST",
+                              body: JSON.stringify({
+                                toolIds: [selected.toolId],
+                                days: selected.trialDays || 14,
+                                preferTrial: true,
+                                businessProfileId,
+                              }),
+                            });
+                            await capabilitiesRef.current?.reload();
+                          })
+                        }
+                      >
+                        Trial
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="ax-inspector-body">
+                {selectedCap?.hasCeiling ? (
+                  <p className="ax-inspector-cap-hint muted">
+                    Module ceiling
+                    {selectedCap.entitled
+                      ? selectedCap.unrestricted
+                        ? " · unrestricted"
+                        : ` · curated ${selectedCap.coveragePct ?? 0}%`
+                      : " · locked until licensed"}
+                  </p>
+                ) : null}
+
+                <ToolCapabilityLattice
+                  ref={capabilitiesRef}
+                  businessProfileId={businessProfileId}
+                  selectedToolId={selectedToolId}
+                  onSelectedToolIdChange={setSelectedToolId}
+                  onSummary={setCapabilityTools}
+                  onRequestGrant={(toolId) => grantCapabilityTool(toolId)}
+                />
+              </div>
+            </>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
