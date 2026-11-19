@@ -4,7 +4,6 @@ import "./bom.css";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, EmptyState, Field, FilterChip, FormGrid, Input, Select, Textarea } from "@/components/bos";
 import {
-  BOM_DC_STATUS_LABEL,
   BOM_DOC_STATUS_LABEL,
   BOM_INVOICE_CONVERT_LABEL,
   BOM_INVOICE_CONVERT_MODES,
@@ -17,7 +16,6 @@ import {
   previewBomInvoice,
   qtyForCapacity,
   type BomBusiness,
-  type BomDc,
   type BomDoc,
   type BomDocLineInput,
   type BomDocStatus,
@@ -51,6 +49,7 @@ import {
 import { BomPaper, mergePaperOptions, modelFromDoc, type BomPaperModel } from "./BomPaper";
 import { BomActivityStrip, BomList, canDeleteBomDoc } from "./BomList";
 import { BomSplitLayout } from "./BomSplitLayout";
+import { DeliveryChallanPanel, DeliveryChallanWorkspace, type DcWorkspace } from "./DeliveryChallanPanel";
 
 type View =
   | { mode: "list" }
@@ -107,221 +106,6 @@ export default function BomBuilderScreen() {
   );
 }
 
-function DeliveryChallanPanel({
-  doc,
-  busy,
-  onDone,
-  run,
-  canApprove,
-  selectedDcIds,
-  onToggleDc,
-}: {
-  doc: BomDoc;
-  busy: boolean;
-  onDone: () => void;
-  run: ReturnType<typeof useImsAction>["run"];
-  canApprove: boolean;
-  selectedDcIds: string[];
-  onToggleDc: (id: string) => void;
-}) {
-  const dcsState = useImsData(() => bom.listDcs(doc.id), [doc.id, doc.updatedAt, doc.stockIssuedAt]);
-  const remainingState = useImsData(() => bom.dcRemaining(doc.id), [doc.id, doc.updatedAt, doc.stockIssuedAt, dcsState.data?.dcs?.length]);
-  const [qtyById, setQtyById] = useState<Record<string, string>>({});
-  const [showCreate, setShowCreate] = useState(false);
-  const remainingLines = remainingState.data?.lines ?? [];
-  const openRemaining = remainingLines.filter((l) => l.remainingQty > 0);
-  const dcs = dcsState.data?.dcs ?? [];
-
-  return (
-    <Card className="ims-bom-action-card">
-      <Alert tone="blue" title="Delivery challans (stock out)">
-        Create one or more DCs from this confirmed BOM (quantities editable). Verify records your name, then approve posts stock out. An invoice can link multiple approved DCs; without DC links, invoice issue still posts stock.
-      </Alert>
-      {doc.stockIssuedAt ? (
-        <div style={{ marginBottom: 10 }}>
-          <Badge tone="emerald">
-            Stock fully covered · {doc.stockIssueCount} DC{doc.stockIssueCount === 1 ? "" : "s"} · {doc.stockIssuedAt}
-          </Badge>
-        </div>
-      ) : null}
-      {dcs.length ? (
-        <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
-          {dcs.map((dc: BomDc) => (
-            <div
-              key={dc.id}
-              style={{
-                borderTop: "1px solid var(--bos-border, #e2e8f0)",
-                paddingTop: 8,
-                display: "grid",
-                gap: 6,
-              }}
-            >
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                <b style={{ fontSize: 13 }}>{dc.docNo}</b>
-                <Badge tone={dc.status === "approved" ? "emerald" : dc.status === "verified" ? "blue" : dc.status === "cancelled" ? "neutral" : "amber"}>
-                  {BOM_DC_STATUS_LABEL[dc.status] ?? dc.status}
-                </Badge>
-                <span style={{ fontSize: 12, opacity: 0.7 }}>
-                  {(dc.lines ?? []).reduce((s, l) => s + l.qty, 0)} units · {dc.docDate}
-                </span>
-                {dc.verifiedByName ? <span style={{ fontSize: 12, opacity: 0.75 }}>Verified by {dc.verifiedByName}</span> : null}
-                {dc.approvedByName ? <span style={{ fontSize: 12, opacity: 0.75 }}>Approved by {dc.approvedByName}</span> : null}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {dc.status === "draft" ? (
-                  <>
-                    <Button
-                      size="sm"
-                      disabled={busy}
-                      onClick={async () => {
-                        const out = await run("dc-verify", () => bom.verifyDc(dc.id), { success: "Delivery challan verified" });
-                        if (out) onDone();
-                      }}
-                    >
-                      Verify
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={async () => {
-                        if (!window.confirm(`Cancel ${dc.docNo}?`)) return;
-                        const out = await run("dc-cancel", () => bom.cancelDc(dc.id), { success: "Delivery challan cancelled" });
-                        if (out) onDone();
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </>
-                ) : null}
-                {dc.status === "verified" ? (
-                  <>
-                    <Button
-                      size="sm"
-                      disabled={busy || !canApprove}
-                      title={!canApprove ? "Approvals permission required" : undefined}
-                      onClick={async () => {
-                        const out = await run("dc-approve", () => bom.approveDc(dc.id), { success: "DC approved — stock out posted" });
-                        if (out) onDone();
-                      }}
-                    >
-                      Approve (stock out)
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={async () => {
-                        if (!window.confirm(`Cancel verified ${dc.docNo}?`)) return;
-                        const out = await run("dc-cancel", () => bom.cancelDc(dc.id), { success: "Delivery challan cancelled" });
-                        if (out) onDone();
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </>
-                ) : null}
-                {dc.status === "approved" && dc.stockPosted ? (
-                  <>
-                    {!doc.invoiceId ? (
-                      <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
-                        <input type="checkbox" checked={selectedDcIds.includes(dc.id)} onChange={() => onToggleDc(dc.id)} />
-                        Link on invoice
-                      </label>
-                    ) : null}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={async () => {
-                        if (!window.confirm(`Reverse ${dc.docNo} and return stock?`)) return;
-                        const out = await run("dc-reverse", () => bom.reverseDc(dc.id), { success: "Delivery challan reversed" });
-                        if (out) onDone();
-                      }}
-                    >
-                      Reverse stock
-                    </Button>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div style={{ fontSize: 13, opacity: 0.75, marginBottom: 10 }}>No delivery challans yet.</div>
-      )}
-      {!canApprove && dcs.some((d) => d.status === "verified") ? (
-        <Alert tone="amber" title="Approvals permission needed">
-          Verified DCs need Approvals to post stock out.
-        </Alert>
-      ) : null}
-      {openRemaining.length ? (
-        <>
-          {!showCreate ? (
-            <Button size="sm" disabled={busy} onClick={() => setShowCreate(true)}>
-              Create delivery challan
-            </Button>
-          ) : (
-            <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>New DC — edit quantities</div>
-              {openRemaining.map((line) => (
-                <div key={line.bomLineId} style={{ display: "grid", gap: 4, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
-                  <div style={{ fontSize: 13 }}>
-                    {line.description}{" "}
-                    <span style={{ opacity: 0.65 }}>
-                      · remaining {line.remainingQty} {line.unit}
-                      {line.issuedQty > 0 ? ` (delivered ${line.issuedQty})` : ""}
-                    </span>
-                  </div>
-                  <Input
-                    value={qtyById[line.bomLineId] ?? String(line.remainingQty)}
-                    onChange={(e) => setQtyById((prev) => ({ ...prev, [line.bomLineId]: e.target.value }))}
-                    placeholder="Qty"
-                    style={{ width: 120 }}
-                  />
-                </div>
-              ))}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Button
-                  size="sm"
-                  disabled={busy}
-                  onClick={async () => {
-                    const lines = openRemaining
-                      .map((line) => {
-                        const qty = Number(qtyById[line.bomLineId] ?? line.remainingQty) || 0;
-                        return { bomLineId: line.bomLineId, qty: Math.min(Math.max(0, qty), line.remainingQty) };
-                      })
-                      .filter((l) => l.qty > 0);
-                    if (!lines.length) {
-                      window.alert("Enter at least one quantity.");
-                      return;
-                    }
-                    const out = await run("dc-create", () => bom.createDc(doc.id, { lines }), { success: "Delivery challan drafted" });
-                    if (out) {
-                      setShowCreate(false);
-                      setQtyById({});
-                      onDone();
-                    }
-                  }}
-                >
-                  Save draft DC
-                </Button>
-                <Button size="sm" variant="ghost" disabled={busy} onClick={() => setShowCreate(false)}>
-                  Close
-                </Button>
-              </div>
-            </div>
-          )}
-        </>
-      ) : remainingLines.length ? (
-        <div style={{ fontSize: 13, opacity: 0.75 }}>All BOM stock quantities are on live delivery challans.</div>
-      ) : (
-        <div style={{ fontSize: 13, opacity: 0.75 }}>No stock-linked lines — link catalogue items on the BOM first.</div>
-      )}
-    </Card>
-  );
-}
-
 function BomViewer({
   id,
   onBack,
@@ -344,6 +128,7 @@ function BomViewer({
   const [issueOnCreate, setIssueOnCreate] = useState(false);
   const [linkDcIds, setLinkDcIds] = useState<string[]>([]);
   const [customerState, setCustomerState] = useState<string | null>(null);
+  const [dcWorkspace, setDcWorkspace] = useState<DcWorkspace | null>(null);
   const doc = state.data?.doc;
   const canApproveDc = isOwner || can("approvals");
   const stockViaDc = linkDcIds.length > 0;
@@ -659,6 +444,24 @@ function BomViewer({
         }
       />
 
+      {dcWorkspace && doc ? (
+        <DeliveryChallanWorkspace
+          doc={doc}
+          workspace={dcWorkspace}
+          busy={Boolean(busy)}
+          run={run}
+          canApprove={canApproveDc}
+          selectedDcIds={linkDcIds}
+          onToggleDc={(dcId) =>
+            setLinkDcIds((prev) => (prev.includes(dcId) ? prev.filter((x) => x !== dcId) : [...prev, dcId]))
+          }
+          onBack={() => setDcWorkspace(null)}
+          onDone={() => {
+            setDcWorkspace(null);
+            reloadAll();
+          }}
+        />
+      ) : (
       <BomSplitLayout
         confirm={confirmed}
         compose={
@@ -800,6 +603,7 @@ function BomViewer({
                 onToggleDc={(dcId) =>
                   setLinkDcIds((prev) => (prev.includes(dcId) ? prev.filter((x) => x !== dcId) : [...prev, dcId]))
                 }
+                onOpenWorkspace={setDcWorkspace}
               />
 
               {doc.notes ? (
@@ -816,6 +620,7 @@ function BomViewer({
         }
         preview={<BomPaper model={model} />}
       />
+      )}
       {confirmed && doc.proposalStatus ? (
         <Card interactive={false} className="ims-bom-proposal-status">
           <div className="ims-bom-proposal-status-head">

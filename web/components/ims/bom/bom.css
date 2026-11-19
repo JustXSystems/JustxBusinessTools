@@ -680,8 +680,25 @@
 .ims-bom-preview-toolbar {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   padding: 0 2px;
+}
+.ims-bom-preview-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--bos-text-muted, #64748b);
+  margin-right: 4px;
+}
+.ims-bom-dc-workspace {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  width: 100%;
+}
+.ims-bom-dc-workspace > .ims-bom-layout {
+  min-height: min(70vh, 720px);
 }
 
 /* Tone & density — brand voice without new skins */

@@ -329,7 +329,17 @@ function stockLinesOf(doc: BomDoc): BomDocLine[] {
   return (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
 }
 
-function displayName(actor: Parameters<typeof actorName>[0]): string {
+/** Prefer IMS team display name, then platform name/email. */
+async function displayName(db: Queryable, actor: Parameters<typeof actorName>[0]): Promise<string> {
+  if (actor.userId) {
+    const row = await one<{ display_name: string | null }>(
+      db,
+      `SELECT display_name FROM ims_members WHERE tenant_id = :tenantId AND user_id = :userId LIMIT 1`,
+      { tenantId: actor.tenantId, userId: actor.userId },
+    );
+    const custom = row?.display_name?.trim();
+    if (custom) return custom;
+  }
   return actorName(actor) ?? "User";
 }
 
@@ -413,6 +423,7 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     const settings = await getSettings(deps, actor.tenantId);
     const docDate = body.docDate ?? todayISO();
     const id = randomUUID();
+    const userName = await displayName(deps.db, actor);
 
     await tx(deps.db, async (conn) => {
       const locked = await one<{ status: string }>(
@@ -452,7 +463,7 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
           vehicleNo: body.vehicleNo ?? null,
           notes: body.notes ?? null,
           userId: actor.userId,
-          userName: displayName(actor),
+          userName,
         },
       );
       let sort = 0;
@@ -595,7 +606,7 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     if (existing.status !== "draft") throw conflict("Only draft delivery challans can be verified");
     if (!existing.lines?.length) throw conflict("Add lines before verifying");
 
-    const name = displayName(actor);
+    const name = await displayName(deps.db, actor);
     const verified = await exec(
       deps.db,
       `UPDATE ims_bom_dcs SET status = 'verified', verified_by = :userId, verified_by_name = :userName, verified_at = CURRENT_TIMESTAMP
@@ -629,7 +640,7 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
 
     const settings = await getSettings(deps, actor.tenantId);
     const date = body.date ?? todayISO();
-    const name = displayName(actor);
+    const name = await displayName(deps.db, actor);
 
     const posted = await tx(deps.db, async (conn) => {
       const locked = await one<{ status: string; stock_posted: number; bom_doc_id: string; doc_no: string }>(
