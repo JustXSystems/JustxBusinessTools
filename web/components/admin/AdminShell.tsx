@@ -248,7 +248,7 @@ function AdminShellChrome({ children }: { children: ReactNode }) {
             </div>
           ) : null}
           <div className="admin-cc-content">{children}</div>
-          <PoweredByFooter variant="bar" />
+          <PoweredByFooter variant="bar" autoHide />
         </div>
       </AppShell>
       <CommandPalette

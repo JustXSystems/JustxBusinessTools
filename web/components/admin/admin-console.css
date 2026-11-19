@@ -1527,6 +1527,13 @@
   background: color-mix(in srgb, var(--bos-surface) 70%, transparent);
 }
 
+/* Autohide status bar: no permanent bottom chrome reservation on desktop. */
+@media (min-width: 901px) {
+  .bos.admin-bos.admin-bos-fill {
+    --chrome-bottom: 0px;
+  }
+}
+
 .bos.admin-bos .bos-nav-foot {
   margin-top: auto;
 }

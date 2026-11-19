@@ -2953,6 +2953,19 @@ body:has(.mobile-menu) .float-dock {
   pointer-events: none;
 }
 
+/* Admin: tuck the status bar away until the pointer or scroll hits the bottom. */
+@media (min-width: 901px) {
+  .powered-by-footer--bar.is-autohide {
+    transition: transform 0.22s ease, opacity 0.18s ease;
+    will-change: transform, opacity;
+  }
+
+  .powered-by-footer--bar.is-autohide:not(.is-revealed) {
+    transform: translateY(calc(100% + 2px));
+    opacity: 0;
+  }
+}
+
 .powered-by-footer--bar.has-clock {
   justify-content: space-between;
 }
