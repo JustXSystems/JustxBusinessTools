@@ -99,7 +99,7 @@ export function DeliveryChallanPanel({
                 {dc.status === "verified" && canApprove ? (
                   <Button
                     size="sm"
-                    disabled={busy}
+                    disabled={Boolean(busy)}
                     onClick={async () => {
                       const out = await run("dc-approve", () => bom.approveDc(dc.id), { success: "DC approved — stock out posted" });
                       if (out) onDone();
@@ -121,7 +121,7 @@ export function DeliveryChallanPanel({
         </Alert>
       ) : null}
       {openRemaining.length ? (
-        <Button size="sm" disabled={busy} onClick={() => onOpenWorkspace({ kind: "create" })}>
+        <Button size="sm" disabled={Boolean(busy)} onClick={() => onOpenWorkspace({ kind: "create" })}>
           Create delivery challan
         </Button>
       ) : remainingState.loading && !remainingState.data ? null : remainingLines.length ? (
@@ -133,7 +133,10 @@ export function DeliveryChallanPanel({
   );
 }
 
-/** Full BOM-style Composer + Live Preview workspace for create / manage DC. */
+/**
+ * Full BOM-style Composer + Live Preview workspace for create / manage DC.
+ * Save & verify keep the workspace open; create switches into manage; approve/cancel/reverse close.
+ */
 export function DeliveryChallanWorkspace({
   doc,
   workspace,
@@ -143,28 +146,32 @@ export function DeliveryChallanWorkspace({
   selectedDcIds,
   onToggleDc,
   onBack,
-  onDone,
+  onClose,
+  onCreated,
+  onRefresh,
 }: {
   doc: BomDoc;
   workspace: DcWorkspace;
-  busy: boolean;
+  busy: string | null;
   run: ReturnType<typeof useImsAction>["run"];
   canApprove: boolean;
   selectedDcIds: string[];
   onToggleDc: (id: string) => void;
   onBack: () => void;
-  onDone: () => void;
+  /** Terminal actions (approve / cancel / reverse) — leave the workspace. */
+  onClose: () => void;
+  /** After drafting a DC — open it in manage mode. */
+  onCreated: (dcId: string) => void;
+  /** Soft refresh BOM after save/verify without leaving. */
+  onRefresh: () => void;
 }) {
   const print = usePrint();
   const excludeDcId = workspace.kind === "manage" ? workspace.dcId : undefined;
-  const dcsState = useImsData(() => bom.listDcs(doc.id), [doc.id, doc.updatedAt, doc.stockIssuedAt]);
   const remainingState = useImsData(() => bom.dcRemaining(doc.id, excludeDcId), [doc.id, doc.updatedAt, doc.stockIssuedAt, excludeDcId]);
   const remainingLines = remainingState.data?.lines ?? [];
   const openRemaining = remainingLines.filter((l) => l.remainingQty > 0);
-  const bomDocNo = dcsState.data?.bomDocNo ?? doc.docNo;
-  const dcs = dcsState.data?.dcs ?? [];
+  const bomDocNo = doc.docNo;
 
-  if (dcsState.error) return <ErrorBlock error={dcsState.error} onRetry={dcsState.reload} />;
   if (remainingState.error) return <ErrorBlock error={remainingState.error} onRetry={remainingState.reload} />;
 
   if (workspace.kind === "create") {
@@ -190,14 +197,67 @@ export function DeliveryChallanWorkspace({
         run={run}
         print={print}
         onBack={onBack}
-        onSaved={onDone}
+        onCreated={onCreated}
       />
     );
   }
 
-  if (dcsState.loading && !dcsState.data) return <LoadingBlock rows={2} />;
+  return (
+    <DcManagerLoader
+      doc={doc}
+      bomDocNo={bomDocNo}
+      dcId={workspace.dcId}
+      remaining={remainingLines}
+      remainingLoading={remainingState.loading && !remainingState.data}
+      busy={busy}
+      run={run}
+      canApprove={canApprove}
+      selectedDcIds={selectedDcIds}
+      onToggleDc={onToggleDc}
+      onBack={onBack}
+      onClose={onClose}
+      onRefresh={onRefresh}
+      print={print}
+    />
+  );
+}
 
-  const dc = dcs.find((d) => d.id === workspace.dcId) ?? null;
+function DcManagerLoader({
+  doc,
+  bomDocNo,
+  dcId,
+  remaining,
+  remainingLoading,
+  busy,
+  run,
+  canApprove,
+  selectedDcIds,
+  onToggleDc,
+  onBack,
+  onClose,
+  onRefresh,
+  print,
+}: {
+  doc: BomDoc;
+  bomDocNo: string;
+  dcId: string;
+  remaining: RemainingLine[];
+  remainingLoading: boolean;
+  busy: string | null;
+  run: ReturnType<typeof useImsAction>["run"];
+  canApprove: boolean;
+  selectedDcIds: string[];
+  onToggleDc: (id: string) => void;
+  onBack: () => void;
+  onClose: () => void;
+  onRefresh: () => void;
+  print: () => void;
+}) {
+  // Load the DC directly — avoids false "not found" while the BOM DC list is still fetching.
+  const dcState = useImsData(() => bom.getDc(dcId), [dcId, doc.updatedAt, doc.stockIssuedAt]);
+  if (dcState.error) return <ErrorBlock error={dcState.error} onRetry={dcState.reload} />;
+  if (dcState.loading && !dcState.data) return <LoadingBlock rows={2} />;
+  const dc = dcState.data?.dc ?? null;
   if (!dc) {
     return (
       <Card className="ims-bom-action-card">
@@ -210,23 +270,25 @@ export function DeliveryChallanWorkspace({
       </Card>
     );
   }
-
-  if (remainingState.loading && !remainingState.data) return <LoadingBlock rows={2} />;
+  if (remainingLoading) return <LoadingBlock rows={2} />;
 
   return (
     <DcManagerForm
-      key={`${dc.id}:${dc.updatedAt ?? ""}:${dc.status}`}
       doc={doc}
       bomDocNo={bomDocNo}
       dc={dc}
-      remaining={remainingLines}
+      remaining={remaining}
       busy={busy}
       run={run}
       canApprove={canApprove}
       selectedDcIds={selectedDcIds}
       onToggleDc={onToggleDc}
       onBack={onBack}
-      onDone={onDone}
+      onClose={onClose}
+      onRefresh={() => {
+        dcState.reload();
+        onRefresh();
+      }}
       print={print}
     />
   );
@@ -252,17 +314,18 @@ function DcEditorForm({
   run,
   print,
   onBack,
-  onSaved,
+  onCreated,
 }: {
   doc: BomDoc;
   bomDocNo: string;
   remaining: RemainingLine[];
-  busy: boolean;
+  busy: string | null;
   run: ReturnType<typeof useImsAction>["run"];
   print: () => void;
   onBack: () => void;
-  onSaved: () => void;
+  onCreated: (dcId: string) => void;
 }) {
+  const remainingKey = remaining.map((l) => l.bomLineId).join(",");
   const [docDate, setDocDate] = useState(todayLocal());
   const [shipTo, setShipTo] = useState("");
   const [transporter, setTransporter] = useState("");
@@ -272,7 +335,6 @@ function DcEditorForm({
     Object.fromEntries(remaining.map((l) => [l.bomLineId, String(l.remainingQty)])),
   );
 
-  // Seed qtys if remaining arrives/changes after first paint (or line set grows).
   useEffect(() => {
     setQtyById((prev) => {
       const next = { ...prev };
@@ -285,7 +347,8 @@ function DcEditorForm({
       }
       return changed ? next : prev;
     });
-  }, [remaining]);
+    // remainingKey tracks line identity; remaining values used only to seed missing keys.
+  }, [remaining, remainingKey]);
 
   const paperLines = useMemo(
     () =>
@@ -337,7 +400,7 @@ function DcEditorForm({
         }),
       { success: "Delivery challan drafted" },
     );
-    if (out) onSaved();
+    if (out?.dc?.id) onCreated(out.dc.id);
   };
 
   return (
@@ -353,8 +416,8 @@ function DcEditorForm({
           <Button size="sm" icon="printer" onClick={print}>
             Print
           </Button>
-          <Button size="sm" variant="primary" disabled={busy} onClick={save}>
-            Save draft DC
+          <Button size="sm" variant="primary" disabled={Boolean(busy)} onClick={save}>
+            {busy === "dc-create" ? "Saving…" : "Save draft DC"}
           </Button>
         </div>
       </div>
@@ -420,20 +483,22 @@ function DcManagerForm({
   selectedDcIds,
   onToggleDc,
   onBack,
-  onDone,
+  onClose,
+  onRefresh,
   print,
 }: {
   doc: BomDoc;
   bomDocNo: string;
   dc: BomDc;
   remaining: RemainingLine[];
-  busy: boolean;
+  busy: string | null;
   run: ReturnType<typeof useImsAction>["run"];
   canApprove: boolean;
   selectedDcIds: string[];
   onToggleDc: (id: string) => void;
   onBack: () => void;
-  onDone: () => void;
+  onClose: () => void;
+  onRefresh: () => void;
   print: () => void;
 }) {
   const isDraft = dc.status === "draft";
@@ -447,8 +512,17 @@ function DcManagerForm({
     Object.fromEntries((dc.lines ?? []).map((l) => [l.bomLineId, String(l.qty)])),
   );
 
+  // When server status/revision changes (verify/approve), adopt server fields without remounting mid-edit.
+  useEffect(() => {
+    setDocDate(dc.docDate);
+    setShipTo(dc.shipTo ?? "");
+    setTransporter(dc.transporter ?? "");
+    setVehicleNo(dc.vehicleNo ?? "");
+    setNotes(dc.notes ?? "");
+    setQtyById(Object.fromEntries((dc.lines ?? []).map((l) => [l.bomLineId, String(l.qty)])));
+  }, [dc.id, dc.status, dc.updatedAt]); // lines intentionally omitted — tied to updatedAt
+
   const editableLines = useMemo(() => {
-    // remaining fetched with excludeDcId — remainingQty is capacity available to this DC.
     return (dc.lines ?? []).map((l) => {
       const rem = remById.get(l.bomLineId);
       const available = rem ? rem.remainingQty : l.qty;
@@ -511,73 +585,59 @@ function DcManagerForm({
       })
       .filter((l) => l.qty > 0);
 
-  const save = async () => {
+  const persist = () => {
     const lines = linePayload();
     if (!lines.length) {
       window.alert("Enter at least one quantity.");
-      return;
+      return null;
     }
-    const out = await run(
-      "dc-update",
-      () =>
-        bom.updateDc(dc.id, {
-          docDate,
-          shipTo: shipTo.trim() || null,
-          transporter: transporter.trim() || null,
-          vehicleNo: vehicleNo.trim() || null,
-          notes: notes.trim() || null,
-          lines,
-        }),
-      { success: "Delivery challan updated" },
-    );
-    if (out) onDone();
+    return {
+      docDate,
+      shipTo: shipTo.trim() || null,
+      transporter: transporter.trim() || null,
+      vehicleNo: vehicleNo.trim() || null,
+      notes: notes.trim() || null,
+      lines,
+    };
+  };
+
+  const save = async () => {
+    const body = persist();
+    if (!body) return;
+    const out = await run("dc-update", () => bom.updateDc(dc.id, body), { success: "Delivery challan updated" });
+    if (out) onRefresh();
   };
 
   const actions = (
     <>
       {isDraft ? (
         <>
-          <Button size="sm" disabled={busy} onClick={save}>
-            Save
+          <Button size="sm" disabled={Boolean(busy)} onClick={save}>
+            {busy === "dc-update" ? "Saving…" : "Save"}
           </Button>
           <Button
             size="sm"
             variant="primary"
-            disabled={busy}
+            disabled={Boolean(busy)}
             onClick={async () => {
-              const lines = linePayload();
-              if (!lines.length) {
-                window.alert("Enter at least one quantity.");
-                return;
-              }
-              const saved = await run(
-                "dc-update",
-                () =>
-                  bom.updateDc(dc.id, {
-                    docDate,
-                    shipTo: shipTo.trim() || null,
-                    transporter: transporter.trim() || null,
-                    vehicleNo: vehicleNo.trim() || null,
-                    notes: notes.trim() || null,
-                    lines,
-                  }),
-                { success: "Delivery challan saved" },
-              );
+              const body = persist();
+              if (!body) return;
+              const saved = await run("dc-update", () => bom.updateDc(dc.id, body), { success: "Delivery challan saved" });
               if (!saved) return;
               const out = await run("dc-verify", () => bom.verifyDc(dc.id), { success: "Delivery challan verified" });
-              if (out) onDone();
+              if (out) onRefresh();
             }}
           >
-            Verify
+            {busy === "dc-verify" ? "Verifying…" : "Verify"}
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            disabled={busy}
+            disabled={Boolean(busy)}
             onClick={async () => {
               if (!window.confirm(`Cancel ${dc.docNo}?`)) return;
               const out = await run("dc-cancel", () => bom.cancelDc(dc.id), { success: "Delivery challan cancelled" });
-              if (out) onDone();
+              if (out) onClose();
             }}
           >
             Cancel DC
@@ -589,23 +649,23 @@ function DcManagerForm({
           <Button
             size="sm"
             variant="primary"
-            disabled={busy || !canApprove}
+            disabled={Boolean(busy) || !canApprove}
             title={!canApprove ? "Approvals permission required" : undefined}
             onClick={async () => {
               const out = await run("dc-approve", () => bom.approveDc(dc.id), { success: "DC approved — stock out posted" });
-              if (out) onDone();
+              if (out) onClose();
             }}
           >
-            Approve (stock out)
+            {busy === "dc-approve" ? "Approving…" : "Approve (stock out)"}
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            disabled={busy}
+            disabled={Boolean(busy)}
             onClick={async () => {
               if (!window.confirm(`Cancel verified ${dc.docNo}?`)) return;
               const out = await run("dc-cancel", () => bom.cancelDc(dc.id), { success: "Delivery challan cancelled" });
-              if (out) onDone();
+              if (out) onClose();
             }}
           >
             Cancel DC
@@ -623,11 +683,11 @@ function DcManagerForm({
           <Button
             size="sm"
             variant="ghost"
-            disabled={busy}
+            disabled={Boolean(busy)}
             onClick={async () => {
               if (!window.confirm(`Reverse ${dc.docNo} and return stock?`)) return;
               const out = await run("dc-reverse", () => bom.reverseDc(dc.id), { success: "Delivery challan reversed" });
-              if (out) onDone();
+              if (out) onClose();
             }}
           >
             Reverse stock

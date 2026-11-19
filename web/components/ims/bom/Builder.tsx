@@ -201,9 +201,10 @@ function BomViewer({
             <Button variant="ghost" onClick={print}>
               Print / PDF
             </Button>
+            {!dcWorkspace ? (
             <Button
               variant="ghost"
-              disabled={Boolean(busy) || Boolean(dcWorkspace)}
+              disabled={Boolean(busy)}
               onClick={async () => {
                 const out = await run("dup", () => bom.duplicateDoc(doc.id), { success: `Copied ${doc.docNo}` });
                 if (out?.doc) onDuplicated(out.doc.id);
@@ -211,7 +212,8 @@ function BomViewer({
             >
               Duplicate
             </Button>
-            {doc.status === "draft" ? (
+            ) : null}
+            {!dcWorkspace && doc.status === "draft" ? (
               <>
                 <Button variant="ghost" onClick={onEdit}>
                   Edit
@@ -249,202 +251,202 @@ function BomViewer({
                 )}
               </>
             ) : null}
-            {canDeleteBomDoc(doc, isOwner) ? (
-              <Button
-                variant="ghost"
-                disabled={Boolean(busy)}
-                title={doc.status === "draft" ? "Delete draft" : "Delete (owner)"}
-                onClick={async () => {
-                  const kind = doc.status === "draft" ? "draft" : doc.status;
-                  if (!window.confirm(`Delete ${kind} ${doc.docNo}? This cannot be undone.`)) return;
-                  const out = await run(
-                    "delete",
-                    async () => {
-                      await bom.deleteDoc(doc.id);
-                      return true;
-                    },
-                    { success: `${doc.docNo} deleted` },
-                  );
-                  if (out) onBack();
-                }}
-              >
-                Delete
-              </Button>
-            ) : null}
-            <Button
-              variant="ghost"
-              disabled={Boolean(busy)}
-              onClick={() => void exportBomExcel(doc, business)}
-            >
-              Export Excel
-            </Button>
-            {confirmed ? (
-              <Button
-                variant="ghost"
-                disabled={Boolean(busy)}
-                onClick={async () => {
-                  try {
-                    const shared = await shareBomProposal(doc, async (id, body) => {
-                      const out = await run("proposal", () => bom.createProposal(id, body), {
-                        success: body?.renew ? "New proposal round ready" : "Proposal link ready",
-                        refresh: false,
-                      });
-                      if (!out) throw new Error("Could not prepare proposal link");
-                      return out;
-                    });
-                    if (!shared) return;
-                    window.prompt(
-                      shared.reused
-                        ? "Existing proposal link (prior status kept):"
-                        : shared.renewed
-                          ? "New decision-round link:"
-                          : "Share this proposal link:",
-                      shared.url,
-                    );
-                    try {
-                      await navigator.clipboard.writeText(shared.url);
-                    } catch {
-                      /* ignore */
-                    }
-                    if (window.confirm("Open WhatsApp share?")) window.open(shared.whatsappUrl, "_blank", "noopener,noreferrer");
-                    reloadAll();
-                  } catch {
-                    /* run() already toasted API errors */
-                  }
-                }}
-              >
-                {proposalShareButtonLabel(doc.proposalStatus)}
-              </Button>
-            ) : null}
-            {confirmed && canRevokeBomProposal(doc.proposalStatus) ? (
-              <Button
-                variant="ghost"
-                disabled={Boolean(busy)}
-                onClick={async () => {
-                  if (!window.confirm("Revoke the customer share link? They will no longer be able to open or respond.")) return;
-                  const out = await run("proposal-revoke", () => bom.revokeProposal(doc.id), { success: "Proposal link revoked" });
-                  if (out) reloadAll();
-                }}
-              >
-                Revoke link
-              </Button>
-            ) : null}
-            {confirmed && availability.data?.hasShortfall && can("po") ? (
-              <Button
-                variant="ghost"
-                disabled={Boolean(busy)}
-                onClick={async () => {
-                  if (!window.confirm("Draft purchase orders for shortfall items, grouped by preferred supplier?")) return;
-                  const out = await run("create-pos", () => bom.createPosFromShortfall(doc.id), {
-                    success: "Draft POs created from shortfall",
-                  });
-                  if (out?.orders?.length) {
-                    window.alert(`Created ${out.orders.length} draft PO(s):\n${out.orders.map((o) => `${o.poNo} · ${o.supplierName}`).join("\n")}`);
-                  }
-                  reloadAll();
-                }}
-              >
-                Draft POs (shortfall)
-              </Button>
-            ) : null}
-            {confirmed && availability.data?.hasShortfall ? (
-              <Button
-                variant="ghost"
-                disabled={Boolean(busy)}
-                onClick={async () => {
-                  const out = await run("alts", () => bom.suggestAlternates(doc.id), { success: "Checked alternates" });
-                  if (!out) return;
-                  const lines = out.suggestions ?? [];
-                  if (!lines.length) {
-                    window.alert("No alternate suggestions for current shortfalls.");
-                    return;
-                  }
-                  const msg = lines
-                    .map((s) => `${s.description}: ${s.suggested?.name ?? "none"} (need ${s.need}, on hand ${s.onHand})`)
-                    .join("\n");
-                  window.alert(`Alternate suggestions:\n${msg}`);
-                }}
-              >
-                Suggest alternates
-              </Button>
-            ) : null}
-            {confirmed ? (
+            {!dcWorkspace ? (
               <>
-                <Button
-                  variant="ghost"
-                  disabled={Boolean(busy)}
-                  onClick={async () => {
-                    const out = await run("pick", () => bom.pickList(doc.id), { success: "Pick list ready" });
-                    if (!out?.lines?.length) {
-                      window.alert("Nothing left to pick.");
-                      return;
-                    }
-                    window.alert(
-                      out.lines
-                        .map((l) => `${l.description}: pick ${l.remainingQty} ${l.unit} (on hand ${l.onHand})${l.serialNotes ? ` · ${l.serialNotes}` : ""}`)
-                        .join("\n"),
-                    );
-                  }}
-                >
-                  Pick list
-                </Button>
-                <Button
-                  variant="ghost"
-                  disabled={Boolean(busy)}
-                  onClick={async () => {
-                    if (!window.confirm("Freeze as-built sold vs issued quantities?")) return;
-                    const out = await run("as-built", () => bom.asBuilt(doc.id), { success: "As-built frozen" });
-                    if (out?.variance?.length) {
-                      window.alert(
-                        out.variance
-                          .map((v) => `${v.description}: sold ${v.soldQty}, issued ${v.issuedQty}, var ${v.variance}`)
-                          .join("\n"),
+                {canDeleteBomDoc(doc, isOwner) ? (
+                  <Button
+                    variant="ghost"
+                    disabled={Boolean(busy)}
+                    title={doc.status === "draft" ? "Delete draft" : "Delete (owner)"}
+                    onClick={async () => {
+                      const kind = doc.status === "draft" ? "draft" : doc.status;
+                      if (!window.confirm(`Delete ${kind} ${doc.docNo}? This cannot be undone.`)) return;
+                      const out = await run(
+                        "delete",
+                        async () => {
+                          await bom.deleteDoc(doc.id);
+                          return true;
+                        },
+                        { success: `${doc.docNo} deleted` },
                       );
-                    }
-                    reloadAll();
-                  }}
-                >
-                  Freeze as-built
+                      if (out) onBack();
+                    }}
+                  >
+                    Delete
+                  </Button>
+                ) : null}
+                <Button variant="ghost" disabled={Boolean(busy)} onClick={() => void exportBomExcel(doc, business)}>
+                  Export Excel
                 </Button>
-                <Button
-                  variant="ghost"
-                  disabled={Boolean(busy)}
-                  onClick={async () => {
-                    const out = await run("service-kit", () => bom.serviceKit(doc.id), { success: "Service kit" });
-                    window.alert(
-                      out?.lines?.length
-                        ? out.lines.map((l) => `${l.description} · ${l.qty} ${l.unit}`).join("\n")
-                        : "No service/spare lines on this BOM.",
-                    );
-                  }}
-                >
-                  Service kit
-                </Button>
+                {confirmed ? (
+                  <Button
+                    variant="ghost"
+                    disabled={Boolean(busy)}
+                    onClick={async () => {
+                      try {
+                        const shared = await shareBomProposal(doc, async (id, body) => {
+                          const out = await run("proposal", () => bom.createProposal(id, body), {
+                            success: body?.renew ? "New proposal round ready" : "Proposal link ready",
+                            refresh: false,
+                          });
+                          if (!out) throw new Error("Could not prepare proposal link");
+                          return out;
+                        });
+                        if (!shared) return;
+                        window.prompt(
+                          shared.reused
+                            ? "Existing proposal link (prior status kept):"
+                            : shared.renewed
+                              ? "New decision-round link:"
+                              : "Share this proposal link:",
+                          shared.url,
+                        );
+                        try {
+                          await navigator.clipboard.writeText(shared.url);
+                        } catch {
+                          /* ignore */
+                        }
+                        if (window.confirm("Open WhatsApp share?")) window.open(shared.whatsappUrl, "_blank", "noopener,noreferrer");
+                        reloadAll();
+                      } catch {
+                        /* run() already toasted API errors */
+                      }
+                    }}
+                  >
+                    {proposalShareButtonLabel(doc.proposalStatus)}
+                  </Button>
+                ) : null}
+                {confirmed && canRevokeBomProposal(doc.proposalStatus) ? (
+                  <Button
+                    variant="ghost"
+                    disabled={Boolean(busy)}
+                    onClick={async () => {
+                      if (!window.confirm("Revoke the customer share link? They will no longer be able to open or respond.")) return;
+                      const out = await run("proposal-revoke", () => bom.revokeProposal(doc.id), { success: "Proposal link revoked" });
+                      if (out) reloadAll();
+                    }}
+                  >
+                    Revoke link
+                  </Button>
+                ) : null}
+                {confirmed && availability.data?.hasShortfall && can("po") ? (
+                  <Button
+                    variant="ghost"
+                    disabled={Boolean(busy)}
+                    onClick={async () => {
+                      if (!window.confirm("Draft purchase orders for shortfall items, grouped by preferred supplier?")) return;
+                      const out = await run("create-pos", () => bom.createPosFromShortfall(doc.id), {
+                        success: "Draft POs created from shortfall",
+                      });
+                      if (out?.orders?.length) {
+                        window.alert(`Created ${out.orders.length} draft PO(s):\n${out.orders.map((o) => `${o.poNo} · ${o.supplierName}`).join("\n")}`);
+                      }
+                      reloadAll();
+                    }}
+                  >
+                    Draft POs (shortfall)
+                  </Button>
+                ) : null}
+                {confirmed && availability.data?.hasShortfall ? (
+                  <Button
+                    variant="ghost"
+                    disabled={Boolean(busy)}
+                    onClick={async () => {
+                      const out = await run("alts", () => bom.suggestAlternates(doc.id), { success: "Checked alternates" });
+                      if (!out) return;
+                      const lines = out.suggestions ?? [];
+                      if (!lines.length) {
+                        window.alert("No alternate suggestions for current shortfalls.");
+                        return;
+                      }
+                      const msg = lines
+                        .map((s) => `${s.description}: ${s.suggested?.name ?? "none"} (need ${s.need}, on hand ${s.onHand})`)
+                        .join("\n");
+                      window.alert(`Alternate suggestions:\n${msg}`);
+                    }}
+                  >
+                    Suggest alternates
+                  </Button>
+                ) : null}
+                {confirmed ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      disabled={Boolean(busy)}
+                      onClick={async () => {
+                        const out = await run("pick", () => bom.pickList(doc.id), { success: "Pick list ready" });
+                        if (!out?.lines?.length) {
+                          window.alert("Nothing left to pick.");
+                          return;
+                        }
+                        window.alert(
+                          out.lines
+                            .map((l) => `${l.description}: pick ${l.remainingQty} ${l.unit} (on hand ${l.onHand})${l.serialNotes ? ` · ${l.serialNotes}` : ""}`)
+                            .join("\n"),
+                        );
+                      }}
+                    >
+                      Pick list
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={Boolean(busy)}
+                      onClick={async () => {
+                        if (!window.confirm("Freeze as-built sold vs issued quantities?")) return;
+                        const out = await run("as-built", () => bom.asBuilt(doc.id), { success: "As-built frozen" });
+                        if (out?.variance?.length) {
+                          window.alert(
+                            out.variance
+                              .map((v) => `${v.description}: sold ${v.soldQty}, issued ${v.issuedQty}, var ${v.variance}`)
+                              .join("\n"),
+                          );
+                        }
+                        reloadAll();
+                      }}
+                    >
+                      Freeze as-built
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={Boolean(busy)}
+                      onClick={async () => {
+                        const out = await run("service-kit", () => bom.serviceKit(doc.id), { success: "Service kit" });
+                        window.alert(
+                          out?.lines?.length
+                            ? out.lines.map((l) => `${l.description} · ${l.qty} ${l.unit}`).join("\n")
+                            : "No service/spare lines on this BOM.",
+                        );
+                      }}
+                    >
+                      Service kit
+                    </Button>
+                  </>
+                ) : null}
+                {confirmed && !doc.invoiceId && !doc.stockIssuedAt ? (
+                  <Button
+                    variant="ghost"
+                    disabled={Boolean(busy)}
+                    onClick={async () => {
+                      const out = await run("reopen", () => bom.reopenDoc(doc.id), { success: "Reopened as draft" });
+                      if (out) reloadAll();
+                    }}
+                  >
+                    Reopen
+                  </Button>
+                ) : null}
+                {doc.status !== "cancelled" && !doc.invoiceId && !doc.stockIssuedAt ? (
+                  <Button
+                    variant="ghost"
+                    disabled={Boolean(busy)}
+                    onClick={async () => {
+                      const out = await run("cancel", () => bom.cancelDoc(doc.id), { success: "BOM cancelled" });
+                      if (out) reloadAll();
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
               </>
-            ) : null}
-            {confirmed && !doc.invoiceId && !doc.stockIssuedAt ? (
-              <Button
-                variant="ghost"
-                disabled={Boolean(busy)}
-                onClick={async () => {
-                  const out = await run("reopen", () => bom.reopenDoc(doc.id), { success: "Reopened as draft" });
-                  if (out) reloadAll();
-                }}
-              >
-                Reopen
-              </Button>
-            ) : null}
-            {doc.status !== "cancelled" && !doc.invoiceId && !doc.stockIssuedAt ? (
-              <Button
-                variant="ghost"
-                disabled={Boolean(busy)}
-                onClick={async () => {
-                  const out = await run("cancel", () => bom.cancelDoc(doc.id), { success: "BOM cancelled" });
-                  if (out) reloadAll();
-                }}
-              >
-                Cancel
-              </Button>
             ) : null}
           </>
         }
@@ -454,7 +456,7 @@ function BomViewer({
         <DeliveryChallanWorkspace
           doc={doc}
           workspace={dcWorkspace}
-          busy={Boolean(busy)}
+          busy={busy}
           run={run}
           canApprove={canApproveDc}
           selectedDcIds={linkDcIds}
@@ -462,10 +464,15 @@ function BomViewer({
             setLinkDcIds((prev) => (prev.includes(dcId) ? prev.filter((x) => x !== dcId) : [...prev, dcId]))
           }
           onBack={() => setDcWorkspace(null)}
-          onDone={() => {
+          onClose={() => {
             setDcWorkspace(null);
             reloadAll();
           }}
+          onCreated={(dcId) => {
+            setDcWorkspace({ kind: "manage", dcId });
+            reloadAll();
+          }}
+          onRefresh={reloadAll}
         />
       ) : (
       <BomSplitLayout
