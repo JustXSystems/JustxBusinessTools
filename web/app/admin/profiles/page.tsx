@@ -94,11 +94,19 @@ function normalizeTab(raw: string | null): Tab | null {
   return null;
 }
 
-function syncProfileUrl(id: number | null, tab: Tab, filter: Filter) {
+function syncProfileUrl(
+  id: number | null,
+  tab: Tab,
+  filter: Filter,
+  focusTool?: string | null,
+) {
   const params = new URLSearchParams();
   if (filter !== "all") params.set("filter", filter);
   if (id != null) params.set("id", String(id));
   if (tab !== "fabric") params.set("tab", tab);
+  if (tab === "fabric" && focusTool) {
+    params.set("focus", focusTool === "imsdealer" ? "ims" : focusTool);
+  }
   const qs = params.toString();
   window.history.replaceState(null, "", withBasePath(`/admin/profiles${qs ? `?${qs}` : ""}`));
 }
@@ -178,6 +186,12 @@ function AdminProfilesInner() {
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [search]);
   const initialTab = useMemo((): Tab | null => normalizeTab(search.get("tab")), [search]);
+  const focusCapabilityTool = useMemo(() => {
+    const raw = (search.get("focus") || search.get("tool") || "").trim().toLowerCase();
+    if (!raw || raw === "fabric" || raw === "capabilities") return null;
+    if (raw === "ims" || raw === "ims-modules" || raw === "modules") return "imsdealer";
+    return raw;
+  }, [search]);
 
   const { config } = usePlatformConfig();
   const platformTools = config?.tools ?? [];
@@ -237,8 +251,8 @@ function AdminProfilesInner() {
 
   useEffect(() => {
     if (selectedId == null && !creating) return;
-    syncProfileUrl(creating ? null : selectedId, tab, filter);
-  }, [selectedId, tab, filter, creating]);
+    syncProfileUrl(creating ? null : selectedId, tab, filter, focusCapabilityTool);
+  }, [selectedId, tab, filter, creating, focusCapabilityTool]);
 
   useEffect(() => {
     if (initialTab && selectedId != null && !creating) {
@@ -351,10 +365,11 @@ function AdminProfilesInner() {
           <div>
             <h2>Access Fabric</h2>
             <p className="muted">
-              Profile-first command center: readiness score, pack provisioning, tool lattice, home
-              surface, and people reach. Catalog Live/Hidden stays under Catalog &amp; products.
-              Org Owners and org Admins manage day-to-day team access in operator Business Profile
-              → Team.
+              Profile-first command center: select a Business Profile, assign tools, then tune each
+              product&apos;s capabilities (module ceilings). Pack provisioning, tool lattice, home
+              surface, and people reach live here. Catalog Live/Hidden stays under Catalog &amp;
+              products. Org Owners and org Admins manage day-to-day team access in operator Business
+              Profile → Team.
             </p>
           </div>
           <button
@@ -698,6 +713,7 @@ function AdminProfilesInner() {
                   peopleGranted={people.filter((p) => p.access || p.implicit).length}
                   peopleTotal={people.length}
                   homeToolIds={homeToolIds}
+                  focusToolId={focusCapabilityTool}
                   onNavigate={(target) => setTab(target)}
                   onHomeToolsChange={setHomeToolIds}
                   onMutated={async () => {

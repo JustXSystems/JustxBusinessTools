@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  ToolCapabilityLattice,
+  type ToolCapabilityLatticeHandle,
+} from "@/components/admin/ToolCapabilityLattice";
 import { uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
 import {
@@ -9,6 +13,7 @@ import {
   groupToolsByCategory,
   signalFor,
   type AccessAction,
+  type FabricCapabilityTool,
   type FabricPack,
   type FabricToolNode,
 } from "@/lib/access-fabric";
@@ -73,6 +78,7 @@ export function AccessFabricPane({
   peopleGranted,
   peopleTotal,
   homeToolIds,
+  focusToolId,
   onNavigate,
   onMutated,
   onHomeToolsChange,
@@ -84,6 +90,8 @@ export function AccessFabricPane({
   peopleGranted: number;
   peopleTotal: number;
   homeToolIds: string[];
+  /** Deep-link into Tool capabilities for a specific tool (e.g. imsdealer). */
+  focusToolId?: string | null;
   onNavigate?: (target: "home" | "people" | "identity" | "lifecycle") => void;
   onMutated?: () => void | Promise<void>;
   onHomeToolsChange?: (ids: string[]) => void;
@@ -92,6 +100,7 @@ export function AccessFabricPane({
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
   const [entitlements, setEntitlements] = useState<LicenseRow[]>([]);
   const [bundles, setBundles] = useState<BundleRow[]>([]);
+  const [capabilityTools, setCapabilityTools] = useState<FabricCapabilityTool[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "dim" | "licensed" | "orphan" | "locked">("all");
   const [days, setDays] = useState("30");
@@ -99,6 +108,15 @@ export function AccessFabricPane({
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const capabilitiesRef = useRef<ToolCapabilityLatticeHandle>(null);
+
+  useEffect(() => {
+    if (!focusToolId) return;
+    const t = window.setTimeout(() => {
+      capabilitiesRef.current?.focusTool(focusToolId);
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [focusToolId, businessProfileId]);
 
   const reload = useCallback(async () => {
     const data = await api<{
@@ -175,6 +193,7 @@ export function AccessFabricPane({
         homeToolIds,
         tools,
         packs,
+        capabilityTools,
       }),
     [
       identityCompleteness,
@@ -184,6 +203,7 @@ export function AccessFabricPane({
       homeToolIds,
       tools,
       packs,
+      capabilityTools,
     ],
   );
 
@@ -261,6 +281,26 @@ export function AccessFabricPane({
     if (action.action === "open-people") onNavigate?.("people");
     if (action.action === "open-identity") onNavigate?.("identity");
     if (action.action === "open-lifecycle") onNavigate?.("lifecycle");
+    if (action.action === "open-capabilities") {
+      capabilitiesRef.current?.focusTool(action.toolId);
+    }
+  }
+
+  async function grantCapabilityTool(toolId: string) {
+    const node = tools.find((t) => t.toolId === toolId);
+    const name = node?.name ?? toolId;
+    await run(toolId, `Licensed ${name}.`, async () => {
+      await api("/admin/skus/grant", {
+        method: "POST",
+        body: JSON.stringify({
+          toolIds: [toolId],
+          days: grantDays(),
+          businessProfileId,
+        }),
+      });
+      await capabilitiesRef.current?.reload();
+      capabilitiesRef.current?.focusTool(toolId);
+    });
   }
 
   return (
@@ -286,8 +326,9 @@ export function AccessFabricPane({
           <p className="ax-eyebrow">Access Fabric · {profileName}</p>
           <h3>Readiness command</h3>
           <p className="muted">
-            Five layers: identity → entitlements → home surface → people reach → catalog pressure.
-            Provision packs to close gaps; align home so operators only see usable tools.
+            Identity → entitlements → home surface → people reach → catalog pressure
+            {capabilityTools.some((t) => t.hasCeiling) ? " → tool capabilities" : ""}.
+            Assign tools, then tune each product&apos;s module ceiling for this Business Profile.
           </p>
           <div className="ax-layer-rail" aria-label="Layer scores">
             {readiness.layers.map((layer) => (
@@ -402,7 +443,15 @@ export function AccessFabricPane({
         </div>
       </section>
 
-      <section className="ax-lattice" aria-label="Tool lattice">
+      <ToolCapabilityLattice
+        ref={capabilitiesRef}
+        businessProfileId={businessProfileId}
+        initialToolId={focusToolId}
+        onSummary={setCapabilityTools}
+        onRequestGrant={(toolId) => void grantCapabilityTool(toolId)}
+      />
+
+      <section id="ax-tool-lattice" className="ax-lattice" aria-label="Tool lattice">
         <div className="ax-section-head">
           <h4>Tool lattice</h4>
           <div className="admin-form-row">
@@ -512,7 +561,7 @@ export function AccessFabricPane({
                           <button
                             type="button"
                             className="btn btn-primary btn-sm"
-                            disabled={busy || !node.hasSku}
+                            disabled={busy}
                             onClick={() =>
                               void run(node.toolId, `Licensed ${node.name}.`, async () => {
                                 await api("/admin/skus/grant", {
@@ -523,6 +572,7 @@ export function AccessFabricPane({
                                     businessProfileId,
                                   }),
                                 });
+                                await capabilitiesRef.current?.reload();
                               })
                             }
                           >
@@ -531,7 +581,7 @@ export function AccessFabricPane({
                           <button
                             type="button"
                             className="btn btn-ghost btn-sm"
-                            disabled={busy || !node.hasSku}
+                            disabled={busy}
                             onClick={() =>
                               void run(node.toolId, `Trial for ${node.name}.`, async () => {
                                 await api("/admin/skus/grant", {
@@ -543,6 +593,7 @@ export function AccessFabricPane({
                                     businessProfileId,
                                   }),
                                 });
+                                await capabilitiesRef.current?.reload();
                               })
                             }
                           >

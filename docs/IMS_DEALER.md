@@ -7,10 +7,10 @@ dealers and distributors. Built on the BOS kit with the IMS skin
 | Where | How |
 |---|---|
 | Inside JBT | `/tools/imsdealer` (tool id `imsdealer`, opt-in: Admin → Tools → Visible on home → Live) |
-| Full screen | `/ims` (same app without JBT chrome; topbar **Full screen** / ⌘K from the tool, or open `/ims` directly). Width is Admin → Tools → IMS → Modules (`ims_layout.contentWidthPct`, default 90%). Left nav is collapsible. |
+| Full screen | `/ims` (same app without JBT chrome; topbar **Full screen** / ⌘K from the tool, or open `/ims` directly). Width is Admin → Tools → IMS → Placement (`ims_layout.contentWidthPct`, default 90%). Left nav is collapsible. |
 | API | `/api/ims/*` |
 | Schema | `mysql/migrations/028_ims_core.sql` + `029`–`040` (`ims_*` plus shared `jbt_parties` registry) |
-| Module ceiling | Admin → Tools → Justxsystems IMS → **Modules** (per business profile). `NULL` `ims_modules` = all modules. Roles can only further restrict. |
+| Module ceiling | Admin → Profiles → Access Fabric → **Tool capabilities** (per business profile). `NULL` `ims_modules` = all modules. Roles can only further restrict. |
 
 Deep links: `?m=<module>&open=<id>`, e.g. `/tools/imsdealer?m=purchase&open=<poId>`.
 
@@ -48,7 +48,8 @@ every permission. Non-GET requests need a write role.
 
 ## Modules
 
-Platform Admin picks which left-nav modules each business profile may use
+Platform Admin picks which left-nav modules each business profile may use under
+**Admin → Profiles → Access Fabric → Tool capabilities**
 (`business_profiles.ims_modules` JSON array; migration `038`). Dashboard, Settings,
 More Actions and Help Desk stay always on. The IMS session exposes `enabledModules`
 (`null` = unrestricted); the sidebar and API both honour that ceiling before role

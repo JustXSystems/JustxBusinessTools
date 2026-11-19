@@ -52,10 +52,18 @@ export const adminDeepLink = {
   experienceTheme: () => "/admin/experience?tab=theme",
   tools: () => "/admin/tools",
   toolsPricing: () => "/admin/tools?tab=pricing",
+  /** Profile-first tool capabilities (IMS modules and future ceilings). */
   imsModules: (profileId?: number) =>
     profileId != null && profileId > 0
-      ? `/admin/tools?tool=imsdealer&tab=modules&profile=${profileId}`
-      : "/admin/tools?tool=imsdealer&tab=modules",
+      ? `/admin/profiles?id=${profileId}&tab=fabric&focus=ims`
+      : "/admin/profiles?tab=fabric&focus=ims",
+  toolCapabilities: (profileId?: number, toolId?: string) => {
+    const params = new URLSearchParams();
+    if (profileId != null && profileId > 0) params.set("id", String(profileId));
+    params.set("tab", "fabric");
+    params.set("focus", toolId && toolId !== "imsdealer" ? toolId : "ims");
+    return `/admin/profiles?${params.toString()}`;
+  },
   analytics: () => "/admin/analytics",
   gateways: (filter?: "unhealthy" | "enabled" | "live" | "off" | "test") =>
     filter ? `/admin/gateways?filter=${filter}` : "/admin/gateways",

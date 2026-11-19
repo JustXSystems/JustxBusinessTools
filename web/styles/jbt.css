@@ -6274,6 +6274,163 @@ body:has(.mobile-menu) .float-dock {
   flex: 0 0 auto;
 }
 
+/* —— Tool capabilities (profile-first module ceilings) —— */
+.ax-capabilities {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border-radius: var(--radius-md, 14px);
+  border: 1px solid rgba(var(--accent-rgb), 0.16);
+  background:
+    radial-gradient(420px 180px at 100% 0%, rgba(var(--accent-rgb), 0.08), transparent 55%),
+    var(--glass-2);
+  min-width: 0;
+  scroll-margin-top: 88px;
+}
+
+.ax-cap-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ax-cap-chip {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 12px;
+  min-width: min(100%, 140px);
+  border-radius: 12px;
+  border: 1px solid var(--border-hair);
+  background: var(--bg-1, var(--bg-0));
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.14s ease, transform 0.14s ease, background 0.14s ease;
+}
+
+.ax-cap-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+.ax-cap-chip.is-active {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: linear-gradient(165deg, rgba(var(--accent-rgb), 0.12), rgba(255, 255, 255, 0.02));
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+}
+
+.ax-cap-chip strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.ax-cap-chip > span:not(.ax-cap-chip-ring) {
+  font-size: 11px;
+  color: var(--text-mid);
+}
+
+.ax-cap-chip-ring {
+  --pct: 0;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: conic-gradient(rgba(var(--accent-rgb), 0.95) calc(var(--pct) * 1%), rgba(255, 255, 255, 0.12) 0);
+}
+
+.ax-cap-locked,
+.ax-cap-whole {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed var(--border-hair);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ax-cap-locked p,
+.ax-cap-whole p {
+  margin: 4px 0 0;
+}
+
+.ax-cap-detail {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ax-cap-mode {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 8px;
+}
+
+.ax-cap-mode-btn {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-hair);
+  background: var(--bg-1, var(--bg-0));
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.ax-cap-mode-btn span {
+  font-size: 12.5px;
+  color: var(--text-mid);
+}
+
+.ax-cap-mode-btn.is-active {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  background: linear-gradient(165deg, rgba(var(--accent-rgb), 0.12), transparent);
+}
+
+.ax-cap-section-rail {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: 8px;
+}
+
+.ax-cap-section-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-hair);
+  background: var(--bg-1, var(--bg-0));
+  min-width: 0;
+}
+
+.ax-cap-section-card p {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.ax-cap-scan {
+  align-items: center;
+}
+
+.ax-cap-modules {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
 @media (max-width: 1100px) {
   .ax-fabric-hero {
     grid-template-columns: auto minmax(0, 1fr);

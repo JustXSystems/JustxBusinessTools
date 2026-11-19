@@ -75,7 +75,7 @@ export function createImsRouter({ db, host, sources = [], catalogs = [] }: Creat
     const enabled = res.locals.imsEnabledModules as string[] | null | undefined;
     if (!pathAllowedForModules(req.path, enabled)) {
       res.status(403).json({
-        error: "This IMS module isn't enabled for this business profile. Ask a platform admin to turn it on under Admin → Tools → Justxsystems IMS → Modules.",
+        error: "This IMS module isn't enabled for this business profile. Ask a platform admin to enable it under Admin → Profiles → Access Fabric → Tool capabilities.",
         code: "IMS_MODULE_DISABLED",
       });
       return;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  capabilityCoverageScore,
   computeAccessReadiness,
   computePackMatches,
   signalFor,
@@ -135,5 +136,61 @@ describe("computeAccessReadiness", () => {
     expect(readiness.actions.some((a) => a.id === "surface-orphan")).toBe(true);
     expect(readiness.packs[0]?.recommended).toBe(true);
     expect(readiness.packs[0]?.resolvedToolIds).toEqual(["quotation", "invoice"]);
+  });
+
+  it("adds a capabilities layer and open-capabilities action when ceilings exist", () => {
+    const readiness = computeAccessReadiness({
+      identityCompleteness: 100,
+      approvalStatus: "approved",
+      peopleGranted: 2,
+      peopleTotal: 2,
+      homeToolIds: ["imsdealer"],
+      tools: [tool({ toolId: "imsdealer", name: "IMS", licensed: true, onHome: true })],
+      packs: [],
+      capabilityTools: [
+        {
+          toolId: "imsdealer",
+          name: "IMS",
+          entitled: true,
+          hasCeiling: true,
+          unrestricted: false,
+          coveragePct: 40,
+        },
+      ],
+    });
+    expect(readiness.layers.some((l) => l.id === "capabilities")).toBe(true);
+    expect(readiness.actions.some((a) => a.action === "open-capabilities")).toBe(true);
+  });
+});
+
+describe("capabilityCoverageScore", () => {
+  it("scores unrestricted assigned ceilings at 100", () => {
+    const result = capabilityCoverageScore([
+      {
+        toolId: "imsdealer",
+        name: "IMS",
+        entitled: true,
+        hasCeiling: true,
+        unrestricted: true,
+        coveragePct: 100,
+      },
+    ]);
+    expect(result.score).toBe(100);
+    expect(result.curatedGaps).toBe(0);
+  });
+
+  it("penalizes unassigned ceiling tools", () => {
+    const result = capabilityCoverageScore([
+      {
+        toolId: "imsdealer",
+        name: "IMS",
+        entitled: false,
+        hasCeiling: true,
+        unrestricted: null,
+        coveragePct: null,
+      },
+    ]);
+    expect(result.score).toBe(25);
+    expect(result.unassignedCeilings).toBe(1);
   });
 });

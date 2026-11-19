@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FeatureSwitchesPanel } from "@/components/admin/FeatureSwitchesPanel";
-import { ImsModulesPane } from "@/components/admin/ImsModulesPane";
 import { ToolPlacementPane } from "@/components/admin/ToolPlacementPane";
 import {
   ToolPricingPane,
@@ -15,6 +14,7 @@ import { ToolSchemaPane } from "@/components/admin/ToolSchemaPane";
 import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
 import { getToolDefinition, uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
+import { adminDeepLink } from "@/lib/admin-deep-links";
 import { withBasePath } from "@/lib/base-path";
 import { groupItemsByKey } from "@/lib/group-items";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
@@ -41,7 +41,7 @@ type License = {
 
 type ToolDef = { id: string; toolType: string; definition: Record<string, unknown> };
 
-type Tab = "placement" | "pricing" | "schema" | "modules";
+type Tab = "placement" | "pricing" | "schema";
 type DirFilter = "all" | "live" | "hidden" | "paid" | "licensed";
 
 type DirectoryItem = {
@@ -58,10 +58,9 @@ type DirectoryItem = {
   definition: Record<string, unknown> | null;
 };
 
-function tabFromSearch(raw: string | null, toolId: string): Tab {
+function tabFromSearch(raw: string | null): Tab {
   if (raw === "pricing" || raw === "skus" || raw === "licenses") return "pricing";
   if (raw === "schema" || raw === "config" || raw === "fields") return "schema";
-  if (raw === "modules" && toolId === "imsdealer") return "modules";
   return "placement";
 }
 
@@ -105,7 +104,6 @@ export default function AdminToolsPage() {
   const placementRef = useRef<ToolsSaveHandle>(null);
   const pricingRef = useRef<ToolsSaveHandle>(null);
   const schemaRef = useRef<ToolsSaveHandle>(null);
-  const modulesRef = useRef<ToolsSaveHandle>(null);
 
   async function setToolGrouping(enabled: boolean) {
     setGroupingBusy(true);
@@ -229,9 +227,18 @@ export default function AdminToolsPage() {
           const params = new URLSearchParams(window.location.search);
           const fromUrl = params.get("tool") || "";
           if (fromUrl) setSelectedId(fromUrl);
-          setTab(tabFromSearch(params.get("tab"), fromUrl));
           const profileRaw = Number(params.get("profile") || params.get("businessProfileId"));
           if (Number.isInteger(profileRaw) && profileRaw > 0) setBusinessProfileId(profileRaw);
+          // Modules moved to Access Fabric (profile-first tool capabilities).
+          if (params.get("tab") === "modules") {
+            const href = adminDeepLink.toolCapabilities(
+              Number.isInteger(profileRaw) && profileRaw > 0 ? profileRaw : undefined,
+              fromUrl || "imsdealer",
+            );
+            window.location.replace(withBasePath(href));
+            return;
+          }
+          setTab(tabFromSearch(params.get("tab")));
         }
       } catch (e) {
         setMessage(e instanceof Error ? e.message : "Failed to load tools");
@@ -249,23 +256,17 @@ export default function AdminToolsPage() {
       selected.catalog?.openStandalone ??
         (selected.id === "bos" || selected.id === "imsdealer"),
     );
-    if (tab === "modules" && selected.id !== "imsdealer") {
-      setTab("placement");
-      syncUrl(selected.id, "placement");
-    }
-  }, [selected, selectedId, tab]);
+  }, [selected, selectedId]);
 
   function select(id: string, nextTab = tab) {
     setSelectedId(id);
-    const resolved = nextTab === "modules" && id !== "imsdealer" ? "placement" : nextTab;
-    setTab(resolved);
+    setTab(nextTab);
     setMessage("");
-    syncUrl(id, resolved);
+    syncUrl(id, nextTab);
   }
 
   function goTab(next: Tab) {
     if (!selected) return;
-    if (next === "modules" && selected.id !== "imsdealer") return;
     setTab(next);
     syncUrl(selected.id, next);
   }
@@ -276,9 +277,7 @@ export default function AdminToolsPage() {
         ? placementRef.current
         : tab === "pricing"
           ? pricingRef.current
-          : tab === "modules"
-            ? modulesRef.current
-            : schemaRef.current;
+          : schemaRef.current;
     if (!handle) return;
     setSaving(true);
     try {
@@ -297,9 +296,7 @@ export default function AdminToolsPage() {
         ? selected?.sku
           ? "Save product"
           : "Publish product"
-        : tab === "modules"
-          ? "Save modules"
-          : "Publish revision";
+        : "Publish revision";
 
   async function move(id: string, dir: -1 | 1) {
     const idx = catalog.findIndex((t) => t.id === id);
@@ -650,16 +647,12 @@ export default function AdminToolsPage() {
                   >
                     Schema
                   </button>
-                  {selected.id === "imsdealer" ? (
-                    <button
-                      type="button"
-                      role="tab"
-                      className={tab === "modules" ? "active" : ""}
-                      onClick={() => goTab("modules")}
-                    >
-                      Modules
-                    </button>
-                  ) : null}
+                  <Link
+                    href={adminDeepLink.toolCapabilities(businessProfileId ?? undefined, selected.id)}
+                    className="btn btn-ghost btn-sm"
+                  >
+                    Capabilities
+                  </Link>
                 </div>
                 <div className="admin-tabs-actions">
                   <button
@@ -737,17 +730,6 @@ export default function AdminToolsPage() {
                 />
               </div>
 
-              {selected.id === "imsdealer" ? (
-                <div hidden={tab !== "modules"} className={tab === "modules" ? undefined : "payments-tab-park"}>
-                  <ImsModulesPane
-                    ref={modulesRef}
-                    profiles={profiles}
-                    businessProfileId={businessProfileId}
-                    onBusinessProfileChange={setBusinessProfileId}
-                    onSaved={(msg) => setMessage(msg)}
-                  />
-                </div>
-              ) : null}
             </>
           ) : (
             <section className="panel admin-card">

@@ -2,17 +2,34 @@
  * Access Fabric — canonical model for Business Profile tool access.
  *
  * Layers:
- *   identity  — legal completeness + approval
- *   entitle   — profile commercial licenses / included SKUs
- *   surface   — home_tool_ids allowlist on the operator home
- *   reach     — who may enter the profile (role + branch_access)
- *   catalog   — hard-lock pressure from unlicensed commercial tools
+ *   identity      — legal completeness + approval
+ *   entitle       — profile commercial licenses / included SKUs
+ *   surface       — home_tool_ids allowlist on the operator home
+ *   reach         — who may enter the profile (role + branch_access)
+ *   catalog       — hard-lock pressure from unlicensed commercial tools
+ *   capabilities  — per-tool module ceilings (when adapters exist), dynamic
  *
  * JBT Admins operate all layers in /admin Access Fabric.
  * Business Owners operate surface + reach on /profile.
  */
 
-export type AccessLayerId = "catalog" | "entitle" | "surface" | "reach" | "identity";
+export type AccessLayerId =
+  | "catalog"
+  | "entitle"
+  | "surface"
+  | "reach"
+  | "identity"
+  | "capabilities";
+
+/** Summary row from GET /admin/tool-capabilities for readiness. */
+export type FabricCapabilityTool = {
+  toolId: string;
+  name: string;
+  entitled: boolean;
+  hasCeiling: boolean;
+  unrestricted: boolean | null;
+  coveragePct: number | null;
+};
 
 /** Visual / filter signal for a tool node on the lattice. */
 export type AccessSignal = "included" | "licensed" | "locked" | "orphan" | "dim";
@@ -50,6 +67,8 @@ export type FabricInputs = {
   homeToolIds: string[];
   tools: FabricToolNode[];
   packs: FabricPack[];
+  /** Assigned-tool capability ceilings; omit or empty to skip the capabilities layer. */
+  capabilityTools?: FabricCapabilityTool[];
 };
 
 export type LayerScore = {
@@ -66,8 +85,15 @@ export type AccessAction = {
   detail: string;
   layer: AccessLayerId;
   href?: string;
-  action?: "grant-pack" | "open-home" | "open-people" | "open-identity" | "open-lifecycle";
+  action?:
+    | "grant-pack"
+    | "open-home"
+    | "open-people"
+    | "open-identity"
+    | "open-lifecycle"
+    | "open-capabilities";
   packId?: string;
+  toolId?: string;
 };
 
 export type PackMatch = {
@@ -102,7 +128,51 @@ const LAYER_WEIGHTS: Record<AccessLayerId, number> = {
   surface: 0.2,
   reach: 0.1,
   catalog: 0.15,
+  capabilities: 0.1,
 };
+
+/** When capabilities layer is active, nudge entitle/surface down so weights still sum ~1. */
+const WEIGHTS_WITH_CAPABILITIES: Record<AccessLayerId, number> = {
+  identity: 0.18,
+  entitle: 0.3,
+  surface: 0.16,
+  reach: 0.1,
+  catalog: 0.16,
+  capabilities: 0.1,
+};
+
+export function capabilityCoverageScore(tools: ReadonlyArray<FabricCapabilityTool>): {
+  score: number;
+  detail: string;
+  curatedGaps: number;
+  unassignedCeilings: number;
+} {
+  const ceilings = tools.filter((t) => t.hasCeiling);
+  if (ceilings.length === 0) {
+    return { score: 100, detail: "No module ceilings registered", curatedGaps: 0, unassignedCeilings: 0 };
+  }
+  const unassignedCeilings = ceilings.filter((t) => !t.entitled).length;
+  const assigned = ceilings.filter((t) => t.entitled);
+  if (assigned.length === 0) {
+    return {
+      score: 25,
+      detail: `${unassignedCeilings} capability tool(s) not assigned`,
+      curatedGaps: 0,
+      unassignedCeilings,
+    };
+  }
+  const pcts = assigned.map((t) => (t.unrestricted ? 100 : (t.coveragePct ?? 0)));
+  const score = Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length);
+  const curatedGaps = assigned.filter((t) => t.unrestricted === false && (t.coveragePct ?? 100) < 100).length;
+  return {
+    score,
+    detail: curatedGaps
+      ? `${curatedGaps} curated tool(s) with modules dimmed`
+      : `${assigned.length} assigned · full module signal`,
+    curatedGaps,
+    unassignedCeilings,
+  };
+}
 
 function clampPct(n: number) {
   if (!Number.isFinite(n)) return 0;
@@ -205,6 +275,11 @@ export function computeAccessReadiness(input: FabricInputs): AccessReadiness {
       ? 50
       : clampPct((input.peopleGranted / Math.max(1, input.peopleTotal)) * 100);
 
+  const capabilityTools = input.capabilityTools ?? [];
+  const hasCapabilityLayer = capabilityTools.some((t) => t.hasCeiling);
+  const capability = capabilityCoverageScore(capabilityTools);
+  const weights = hasCapabilityLayer ? WEIGHTS_WITH_CAPABILITIES : LAYER_WEIGHTS;
+
   const layers: LayerScore[] = [
     {
       id: "identity",
@@ -246,12 +321,17 @@ export function computeAccessReadiness(input: FabricInputs): AccessReadiness {
     },
   ];
 
+  if (hasCapabilityLayer) {
+    layers.push({
+      id: "capabilities",
+      label: "Capabilities",
+      score: clampPct(capability.score),
+      detail: capability.detail,
+    });
+  }
+
   const weighted = clampPct(
-    layers[0].score * LAYER_WEIGHTS.identity +
-      layers[1].score * LAYER_WEIGHTS.entitle +
-      layers[2].score * LAYER_WEIGHTS.surface +
-      layers[3].score * LAYER_WEIGHTS.reach +
-      layers[4].score * LAYER_WEIGHTS.catalog,
+    layers.reduce((sum, layer) => sum + layer.score * (weights[layer.id] ?? 0), 0),
   );
 
   const packs = computePackMatches(tools, input.packs);
@@ -315,6 +395,31 @@ export function computeAccessReadiness(input: FabricInputs): AccessReadiness {
       detail: "Staff/Viewer accounts have no access to this profile.",
       layer: "reach",
       action: "open-people",
+    });
+  }
+  if (hasCapabilityLayer && capability.unassignedCeilings > 0) {
+    const gap = capabilityTools.find((t) => t.hasCeiling && !t.entitled);
+    actions.push({
+      id: "capability-assign",
+      priority: 45,
+      title: gap ? `Assign ${gap.name}` : "Assign capability tools",
+      detail: "Module ceilings stay locked until the tool is licensed on this profile.",
+      layer: "capabilities",
+      action: "open-capabilities",
+      toolId: gap?.toolId,
+    });
+  } else if (hasCapabilityLayer && capability.curatedGaps > 0) {
+    const gap = capabilityTools.find(
+      (t) => t.hasCeiling && t.entitled && t.unrestricted === false && (t.coveragePct ?? 100) < 100,
+    );
+    actions.push({
+      id: "capability-tune",
+      priority: 48,
+      title: gap ? `Tune ${gap.name} modules` : "Tune tool capabilities",
+      detail: "Some left-nav modules are dimmed under a curated ceiling.",
+      layer: "capabilities",
+      action: "open-capabilities",
+      toolId: gap?.toolId,
     });
   }
 

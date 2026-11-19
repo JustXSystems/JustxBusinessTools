@@ -76,6 +76,20 @@ export const DEFAULT_TOOL_SKUS: Array<
     priceInr: 999,
     includedFree: false,
   },
+  {
+    toolId: "bos",
+    name: "Justxsystems BOS",
+    category: "Utilities",
+    priceInr: 1499,
+    includedFree: false,
+  },
+  {
+    toolId: "imsdealer",
+    name: "Justxsystems IMS",
+    category: "Utilities",
+    priceInr: 1499,
+    includedFree: false,
+  },
 ];
 
 let schemaReady: Promise<void> | null = null;

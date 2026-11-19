@@ -1,21 +1,23 @@
+/**
+ * Compat shim — IMS module ceilings now live on Access Fabric via
+ * `/admin/tool-capabilities/imsdealer`. Kept so older clients/scripts keep working.
+ */
 import { Router } from "express";
 import { pool } from "../../db.js";
 import { logAudit } from "../../lib/audit.js";
-import {
-  IMS_ALWAYS_ON_MODULES,
-  IMS_MODULE_CATALOG,
-  getProfileImsModules,
-  normalizeEnabledModules,
-  setProfileImsModules,
-} from "../../lib/ims-profile-modules.js";
 import { getActiveUserId } from "../../lib/request-context.js";
 import {
   adminResolveError,
   listAdminBusinessProfiles,
   resolveAdminBusinessProfile,
 } from "../../lib/admin/tenant-guard.js";
+import { imsCapabilityAdapter } from "../../lib/tool-capabilities/ims-adapter.js";
+import { coveragePct, snapshotFromStored } from "../../lib/tool-capabilities/types.js";
+import { listActiveLicenses } from "../../lib/tool-licenses.js";
+import { collectAssignedToolIds } from "../../lib/tool-capabilities/assigned.js";
 
 const router = Router();
+const TOOL_ID = imsCapabilityAdapter.toolId;
 
 router.get("/", async (req, res) => {
   try {
@@ -33,23 +35,23 @@ router.get("/", async (req, res) => {
         organizationId: null,
         profiles,
         unrestricted: true,
-        enabled: IMS_MODULE_CATALOG.map((m) => m.key),
-        alwaysOn: [...IMS_ALWAYS_ON_MODULES],
-        catalog: IMS_MODULE_CATALOG,
+        enabled: imsCapabilityAdapter.catalog.map((m) => m.key),
+        alwaysOn: [...imsCapabilityAdapter.alwaysOn],
+        catalog: imsCapabilityAdapter.catalog,
       });
       return;
     }
-    const stored = await getProfileImsModules(pool, resolved.profileId);
-    const unrestricted = stored == null;
-    const enabled = unrestricted ? IMS_MODULE_CATALOG.map((m) => m.key) : stored;
+    const stored = await imsCapabilityAdapter.get(pool, resolved.profileId);
+    const snap = snapshotFromStored(imsCapabilityAdapter, stored);
     res.json({
       businessProfileId: resolved.profileId,
       organizationId: resolved.organizationId,
       profiles,
-      unrestricted,
-      enabled,
-      alwaysOn: [...IMS_ALWAYS_ON_MODULES],
-      catalog: IMS_MODULE_CATALOG,
+      unrestricted: snap.unrestricted,
+      enabled: snap.enabled,
+      alwaysOn: snap.alwaysOn,
+      catalog: snap.catalog,
+      coveragePct: coveragePct(snap.unrestricted, snap.enabled, snap.catalog, snap.alwaysOn),
     });
   } catch (err) {
     const status = Number((err as { status?: number }).status) || 500;
@@ -70,31 +72,45 @@ router.put("/", async (req, res) => {
       res.status(err.status).json({ error: err.error });
       return;
     }
+
+    const licenses = await listActiveLicenses(resolved.profileId);
+    const { assigned } = collectAssignedToolIds(licenses);
+    if (!assigned.has(TOOL_ID)) {
+      res.status(409).json({
+        error: "License Justxsystems IMS on this Business Profile before tuning module ceilings.",
+      });
+      return;
+    }
+
     const unrestricted = req.body?.unrestricted === true;
-    let stored;
+    let stored: string[] | null;
     if (unrestricted) {
-      stored = await setProfileImsModules(pool, resolved.profileId, null);
+      stored = await imsCapabilityAdapter.set(pool, resolved.profileId, null);
     } else {
       const raw = Array.isArray(req.body?.enabled) ? (req.body.enabled as unknown[]) : [];
       const keys = raw.filter((k): k is string => typeof k === "string");
-      stored = await setProfileImsModules(pool, resolved.profileId, normalizeEnabledModules(keys));
+      stored = await imsCapabilityAdapter.set(pool, resolved.profileId, keys);
     }
+
     await logAudit(
-      "ims.modules.update",
+      "tool.capabilities.update",
       "business_profile",
       String(resolved.profileId),
-      { unrestricted, enabled: stored, by: getActiveUserId() },
+      { toolId: TOOL_ID, unrestricted, enabled: stored, by: getActiveUserId(), via: "ims-modules" },
       req.ip,
     );
+
     const profiles = await listAdminBusinessProfiles(resolved.organizationId);
+    const snap = snapshotFromStored(imsCapabilityAdapter, stored);
     res.json({
       businessProfileId: resolved.profileId,
       organizationId: resolved.organizationId,
       profiles,
-      unrestricted: stored == null,
-      enabled: stored ?? IMS_MODULE_CATALOG.map((m) => m.key),
-      alwaysOn: [...IMS_ALWAYS_ON_MODULES],
-      catalog: IMS_MODULE_CATALOG,
+      unrestricted: snap.unrestricted,
+      enabled: snap.enabled,
+      alwaysOn: snap.alwaysOn,
+      catalog: snap.catalog,
+      coveragePct: coveragePct(snap.unrestricted, snap.enabled, snap.catalog, snap.alwaysOn),
     });
   } catch (err) {
     const status = Number((err as { status?: number }).status) || 500;
