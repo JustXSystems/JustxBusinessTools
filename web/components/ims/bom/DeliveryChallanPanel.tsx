@@ -17,6 +17,28 @@ type RemainingLine = {
   issuedQty: number;
 };
 
+/** Client-side BOM→DC qty/date guards (server re-checks on create/patch/verify/approve). */
+function validateDcDraft(input: {
+  docDate: string;
+  lines: Array<{ description: string; unit: string; qty: number; remainingQty: number }>;
+}): string | null {
+  if (!input.docDate.trim()) return "Choose a challan date.";
+  if (input.docDate > todayLocal()) return "Challan date can’t be in the future.";
+  const positive = input.lines.filter((l) => l.qty > 0);
+  if (!positive.length) return "Enter at least one quantity greater than zero.";
+  for (const line of input.lines) {
+    if (!(line.qty >= 0) || Number.isNaN(line.qty)) {
+      return `Enter a valid quantity for “${line.description}”.`;
+    }
+    if (line.qty > line.remainingQty + 1e-9) {
+      return line.remainingQty <= 0
+        ? `No remaining quantity for “${line.description}” — already on a DC or issued from the BOM/invoice.`
+        : `Only ${line.remainingQty} ${line.unit} remaining for “${line.description}”.`;
+    }
+  }
+  return null;
+}
+
 export type DcWorkspace = { kind: "create" } | { kind: "manage"; dcId: string };
 
 /**
@@ -57,7 +79,9 @@ export function DeliveryChallanPanel({
       {doc.stockIssuedAt ? (
         <div style={{ marginBottom: 10 }}>
           <Badge tone="emerald">
-            Stock fully covered · {doc.stockIssueCount} DC{doc.stockIssueCount === 1 ? "" : "s"} · {doc.stockIssuedAt}
+            {doc.stockIssueCount > 0
+              ? `Stock fully covered · ${doc.stockIssueCount} DC${doc.stockIssueCount === 1 ? "" : "s"} · ${doc.stockIssuedAt}`
+              : `Stock issued (invoice/BOM) · ${doc.stockIssuedAt}`}
           </Badge>
         </div>
       ) : null}
@@ -377,16 +401,23 @@ function DcEditorForm({
   };
 
   const save = async () => {
-    const lines = remaining
-      .map((line) => {
-        const qty = Number(qtyById[line.bomLineId] ?? line.remainingQty) || 0;
-        return { bomLineId: line.bomLineId, qty: Math.min(Math.max(0, qty), line.remainingQty) };
-      })
-      .filter((l) => l.qty > 0);
-    if (!lines.length) {
-      window.alert("Enter at least one quantity.");
+    const parsed = remaining.map((line) => {
+      const raw = Number(qtyById[line.bomLineId] ?? line.remainingQty);
+      const qty = Number.isFinite(raw) ? Math.max(0, raw) : NaN;
+      return {
+        bomLineId: line.bomLineId,
+        description: line.description,
+        unit: line.unit,
+        qty,
+        remainingQty: line.remainingQty,
+      };
+    });
+    const err = validateDcDraft({ docDate, lines: parsed });
+    if (err) {
+      window.alert(err);
       return;
     }
+    const lines = parsed.filter((l) => l.qty > 0).map((l) => ({ bomLineId: l.bomLineId, qty: l.qty }));
     const out = await run(
       "dc-create",
       () =>
@@ -430,7 +461,9 @@ function DcEditorForm({
               </Alert>
               <FormGrid>
                 <Field label="Challan date">
-                  {({ id }) => <Input id={id} type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} />}
+                  {({ id }) => (
+                    <Input id={id} type="date" value={docDate} max={todayLocal()} onChange={(e) => setDocDate(e.target.value)} />
+                  )}
                 </Field>
                 <Field label="Ship to / consignee">
                   {({ id }) => <Input id={id} value={shipTo} onChange={(e) => setShipTo(e.target.value)} placeholder="Delivery address" />}
@@ -577,18 +610,21 @@ function DcManagerForm({
     lines: paperLines,
   };
 
-  const linePayload = () =>
-    editableLines
-      .map((line) => {
-        const qty = Number(qtyById[line.bomLineId] ?? 0) || 0;
-        return { bomLineId: line.bomLineId, qty: Math.min(Math.max(0, qty), line.remainingQty) };
-      })
-      .filter((l) => l.qty > 0);
-
   const persist = () => {
-    const lines = linePayload();
-    if (!lines.length) {
-      window.alert("Enter at least one quantity.");
+    const parsed = editableLines.map((line) => {
+      const raw = Number(qtyById[line.bomLineId] ?? 0);
+      const qty = Number.isFinite(raw) ? Math.max(0, raw) : NaN;
+      return {
+        bomLineId: line.bomLineId,
+        description: line.description,
+        unit: line.unit,
+        qty,
+        remainingQty: line.remainingQty,
+      };
+    });
+    const err = validateDcDraft({ docDate, lines: parsed });
+    if (err) {
+      window.alert(err);
       return null;
     }
     return {
@@ -597,7 +633,7 @@ function DcManagerForm({
       transporter: transporter.trim() || null,
       vehicleNo: vehicleNo.trim() || null,
       notes: notes.trim() || null,
-      lines,
+      lines: parsed.filter((l) => l.qty > 0).map((l) => ({ bomLineId: l.bomLineId, qty: l.qty })),
     };
   };
 
@@ -741,7 +777,9 @@ function DcManagerForm({
                 <>
                   <FormGrid>
                     <Field label="Challan date">
-                      {({ id }) => <Input id={id} type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} />}
+                      {({ id }) => (
+                        <Input id={id} type="date" value={docDate} max={todayLocal()} onChange={(e) => setDocDate(e.target.value)} />
+                      )}
                     </Field>
                     <Field label="Ship to / consignee">
                       {({ id }) => <Input id={id} value={shipTo} onChange={(e) => setShipTo(e.target.value)} />}

@@ -7,7 +7,7 @@ import type { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { BomDoc, BomDocLine } from "./bom.js";
-import { remainingIssueQty } from "./bom-enhance.js";
+import { availableDcQty, remainingIssueQty } from "./bom-enhance.js";
 import { actorName, actorOf, can, isoDate, optText, parse, qstr, recordEvent, requirePerm, type ImsDeps } from "./context.js";
 import { exec, isoOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
 import { badRequest, conflict, forbidden, notFound } from "./host.js";
@@ -249,11 +249,11 @@ export async function syncBomIssuedFromDcs(db: Queryable, tenantId: number, bomD
       { tenantId, id: bomDocId },
     );
   } else {
+    // Partial delivery: keep stock_issued_at clear so remaining lines stay DC-eligible.
+    // (stock_issued_at means “fully covered”; issued_qty on lines tracks what was posted.)
     await exec(
       db,
-      `UPDATE ims_bom_docs
-       SET stock_issued_at = COALESCE(stock_issued_at, CURRENT_TIMESTAMP), stock_issue_count = :n
-       WHERE tenant_id = :tenantId AND id = :id`,
+      `UPDATE ims_bom_docs SET stock_issued_at = NULL, stock_issue_count = :n WHERE tenant_id = :tenantId AND id = :id`,
       { tenantId, id: bomDocId, n: Number(approvedCount?.n ?? 0) },
     );
   }
@@ -329,6 +329,57 @@ function stockLinesOf(doc: BomDoc): BomDocLine[] {
   return (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
 }
 
+/** Plan DC lines against BOM remaining capacity (live DC commits + already-issued stock). */
+function planDcLinesAgainstBom(
+  doc: BomDoc,
+  requested: ReadonlyArray<{ bomLineId: string; qty: number; remarks?: string | null }>,
+  committed: Map<string, number>,
+): Array<{ line: BomDocLine; qty: number; remarks: string | null }> {
+  const stock = stockLinesOf(doc);
+  if (!stock.length) throw conflict("No stock-linked lines on this BOM");
+  const byId = new Map(stock.map((l) => [l.id, l]));
+  if (new Set(requested.map((l) => l.bomLineId)).size !== requested.length) {
+    throw badRequest("Each BOM line may only appear once on a delivery challan");
+  }
+  const planned: Array<{ line: BomDocLine; qty: number; remarks: string | null }> = [];
+  for (const reqLine of requested) {
+    const line = byId.get(reqLine.bomLineId);
+    if (!line) throw badRequest("Only stock lines linked to a catalogue item can go on a delivery challan");
+    if (!line.itemId) throw badRequest(`“${line.description}” has no catalogue item — link an item before adding it to a DC`);
+    const rem = availableDcQty(line.qty, committed.get(line.id) ?? 0, line.issuedQty ?? 0, doc.stockIssuedAt);
+    const qty = round3(reqLine.qty);
+    if (!(qty > 0)) throw conflict(`Quantity must be greater than zero for “${line.description}”`);
+    if (qty > rem + 1e-9) {
+      throw conflict(
+        rem <= 0
+          ? `No remaining quantity for “${line.description}” — already on a DC or issued from the BOM/invoice`
+          : `Only ${rem} ${line.unit} remaining for “${line.description}”`,
+      );
+    }
+    planned.push({ line, qty, remarks: reqLine.remarks ?? null });
+  }
+  if (!planned.length) throw badRequest("Add at least one line with quantity");
+  return planned;
+}
+
+/** Re-check an existing DC still fits the BOM before verify/approve (defence in depth). */
+async function assertExistingDcFitsBom(
+  db: Queryable,
+  tenantId: number,
+  doc: BomDoc,
+  dcId: string,
+  lines: BomDcLine[],
+): Promise<void> {
+  if (doc.status !== "confirmed") throw conflict("BOM must be confirmed");
+  if (!lines.length) throw conflict("Delivery challan has no lines");
+  const committed = await committedDcQtyByBomLine(db, tenantId, doc.id, { excludeDcId: dcId });
+  planDcLinesAgainstBom(
+    doc,
+    lines.map((l) => ({ bomLineId: l.bomLineId, qty: l.qty, remarks: l.remarks })),
+    committed,
+  );
+}
+
 /** Prefer IMS team display name, then platform name/email. */
 async function displayName(db: Queryable, actor: Parameters<typeof actorName>[0]): Promise<string> {
   if (actor.userId) {
@@ -360,7 +411,8 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     });
     const lines = stockLinesOf(doc).map((l) => {
       const committedQty = committed.get(l.id) ?? 0;
-      const remaining = remainingIssueQty(l.qty, committedQty);
+      const issuedQty = l.issuedQty ?? 0;
+      const remaining = availableDcQty(l.qty, committedQty, issuedQty, doc.stockIssuedAt);
       return {
         bomLineId: l.id,
         itemId: l.itemId,
@@ -372,10 +424,11 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
         bomQty: l.qty,
         committedQty,
         remainingQty: remaining,
-        issuedQty: l.issuedQty ?? 0,
+        issuedQty,
+        stockIssuedAt: doc.stockIssuedAt,
       };
     });
-    res.json({ bomDocId: bomId, lines });
+    res.json({ bomDocId: bomId, lines, stockIssuedAt: doc.stockIssuedAt, bomDocNo: doc.docNo });
   });
 
   router.get("/bom/docs/:id/dcs", async (req, res) => {
@@ -412,38 +465,30 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     const doc = await loaders.loadDoc(deps.db, actor.tenantId, bomId);
     if (!doc) throw notFound("BOM document not found");
     if (doc.status !== "confirmed") throw conflict("Confirm the BOM before creating a delivery challan");
-
-    const stock = stockLinesOf(doc);
-    if (!stock.length) throw conflict("No stock-linked lines on this BOM");
-    const byId = new Map(stock.map((l) => [l.id, l]));
-    if (new Set(body.lines.map((l) => l.bomLineId)).size !== body.lines.length) {
-      throw badRequest("Each BOM line may only appear once on a delivery challan");
+    if (doc.invoiceId && doc.stockIssuedAt && !(await bomHasApprovedDcs(deps.db, actor.tenantId, bomId))) {
+      throw conflict(
+        "Materials were already issued from this BOM’s invoice. Reverse/cancel that invoice stock before creating a delivery challan, or link approved DCs on a new draft invoice.",
+      );
     }
 
     const settings = await getSettings(deps, actor.tenantId);
     const docDate = body.docDate ?? todayISO();
+    if (docDate > todayISO()) throw badRequest("Challan date can’t be in the future");
     const id = randomUUID();
     const userName = await displayName(deps.db, actor);
 
     await tx(deps.db, async (conn) => {
-      const locked = await one<{ status: string }>(
+      const locked = await one<{ status: string; stock_issued_at: unknown; invoice_id: string | null }>(
         conn,
-        `SELECT status FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        `SELECT status, stock_issued_at, invoice_id FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
         { tenantId: actor.tenantId, id: bomId },
       );
       if (!locked || locked.status !== "confirmed") throw conflict("Confirm the BOM before creating a delivery challan");
+      const fresh = await loaders.loadDoc(conn, actor.tenantId, bomId);
+      if (!fresh) throw notFound("BOM document not found");
 
       const committed = await committedDcQtyByBomLine(conn, actor.tenantId, bomId);
-      const planned: Array<{ line: BomDocLine; qty: number; remarks: string | null }> = [];
-      for (const reqLine of body.lines) {
-        const line = byId.get(reqLine.bomLineId);
-        if (!line) throw badRequest("Only stock lines linked to a catalogue item can go on a delivery challan");
-        const rem = remainingIssueQty(line.qty, committed.get(line.id) ?? 0);
-        const qty = round3(Math.min(reqLine.qty, rem));
-        if (!(qty > 0)) throw conflict(`No remaining quantity for “${line.description}”`);
-        if (reqLine.qty > rem + 1e-9) throw conflict(`Only ${rem} ${line.unit} remaining for “${line.description}”`);
-        planned.push({ line, qty, remarks: reqLine.remarks ?? null });
-      }
+      const planned = planDcLinesAgainstBom(fresh, body.lines, committed);
 
       const docNo = await nextDocNo(conn, actor.tenantId, "bom_dc", "DC", docDate, settings.businessName);
       await exec(
@@ -510,6 +555,9 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     const existing = await loadDc(deps.db, actor.tenantId, id);
     if (!existing) throw notFound("Delivery challan not found");
     if (existing.status !== "draft") throw conflict("Only draft delivery challans can be edited");
+    if (body.docDate !== undefined && body.docDate > todayISO()) {
+      throw badRequest("Challan date can’t be in the future");
+    }
 
     const doc = await loaders.loadDoc(deps.db, actor.tenantId, existing.bomDocId);
     if (!doc || doc.status !== "confirmed") throw conflict("BOM must stay confirmed");
@@ -521,6 +569,15 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
         { tenantId: actor.tenantId, id },
       );
       if (!locked || locked.status !== "draft") throw conflict("Only draft delivery challans can be edited");
+
+      const bomLocked = await one<{ status: string }>(
+        conn,
+        `SELECT status FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        { tenantId: actor.tenantId, id: locked.bom_doc_id },
+      );
+      if (!bomLocked || bomLocked.status !== "confirmed") throw conflict("BOM must stay confirmed");
+      const fresh = await loaders.loadDoc(conn, actor.tenantId, locked.bom_doc_id);
+      if (!fresh) throw notFound("BOM document not found");
 
       if (body.shipTo !== undefined || body.transporter !== undefined || body.vehicleNo !== undefined || body.notes !== undefined || body.docDate !== undefined) {
         await exec(
@@ -550,19 +607,11 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
       }
 
       if (body.lines) {
-        const stock = stockLinesOf(doc);
-        const byId = new Map(stock.map((l) => [l.id, l]));
-        if (new Set(body.lines.map((l) => l.bomLineId)).size !== body.lines.length) {
-          throw badRequest("Each BOM line may only appear once on a delivery challan");
-        }
         const committed = await committedDcQtyByBomLine(conn, actor.tenantId, existing.bomDocId, { excludeDcId: id });
+        const planned = planDcLinesAgainstBom(fresh, body.lines, committed);
         await exec(conn, `DELETE FROM ims_bom_dc_lines WHERE tenant_id = :tenantId AND dc_id = :dcId`, { tenantId: actor.tenantId, dcId: id });
         let sort = 0;
-        for (const reqLine of body.lines) {
-          const line = byId.get(reqLine.bomLineId);
-          if (!line) throw badRequest("Only stock lines linked to a catalogue item can go on a delivery challan");
-          const rem = remainingIssueQty(line.qty, committed.get(line.id) ?? 0);
-          if (reqLine.qty > rem + 1e-9) throw conflict(`Only ${rem} ${line.unit} remaining for “${line.description}”`);
+        for (const p of planned) {
           await exec(
             conn,
             `INSERT INTO ims_bom_dc_lines
@@ -573,15 +622,15 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
               id: randomUUID(),
               tenantId: actor.tenantId,
               dcId: id,
-              bomLineId: line.id,
-              itemId: line.itemId,
-              section: line.section,
+              bomLineId: p.line.id,
+              itemId: p.line.itemId,
+              section: p.line.section,
               sortNo: sort++,
-              description: line.description,
-              makeText: line.makeText,
-              qty: round3(reqLine.qty),
-              unit: line.unit,
-              remarks: reqLine.remarks ?? null,
+              description: p.line.description,
+              makeText: p.line.makeText,
+              qty: p.qty,
+              unit: p.line.unit,
+              remarks: p.remarks,
             },
           );
         }
@@ -607,13 +656,33 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     if (!existing.lines?.length) throw conflict("Add lines before verifying");
 
     const name = await displayName(deps.db, actor);
-    const verified = await exec(
-      deps.db,
-      `UPDATE ims_bom_dcs SET status = 'verified', verified_by = :userId, verified_by_name = :userName, verified_at = CURRENT_TIMESTAMP
-       WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`,
-      { tenantId: actor.tenantId, id, userId: actor.userId, userName: name },
-    );
-    if (!verified.affectedRows) throw conflict("Only draft delivery challans can be verified");
+    await tx(deps.db, async (conn) => {
+      const locked = await one<{ status: string; bom_doc_id: string; doc_date: unknown }>(
+        conn,
+        `SELECT status, bom_doc_id, doc_date FROM ims_bom_dcs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        { tenantId: actor.tenantId, id },
+      );
+      if (!locked || locked.status !== "draft") throw conflict("Only draft delivery challans can be verified");
+
+      await one(
+        conn,
+        `SELECT id FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        { tenantId: actor.tenantId, id: locked.bom_doc_id },
+      );
+      const doc = await loaders.loadDoc(conn, actor.tenantId, locked.bom_doc_id);
+      if (!doc) throw notFound("BOM document not found");
+      const lines = await loadDcLines(conn, actor.tenantId, id);
+      await assertExistingDcFitsBom(conn, actor.tenantId, doc, id, lines);
+      if (isoOf(locked.doc_date) > todayISO()) throw badRequest("Challan date can’t be in the future");
+
+      const verified = await exec(
+        conn,
+        `UPDATE ims_bom_dcs SET status = 'verified', verified_by = :userId, verified_by_name = :userName, verified_at = CURRENT_TIMESTAMP
+         WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`,
+        { tenantId: actor.tenantId, id, userId: actor.userId, userName: name },
+      );
+      if (!verified.affectedRows) throw conflict("Only draft delivery challans can be verified");
+    });
     await recordEvent(deps, actor, {
       type: "bom.dc.verified",
       entityType: "bom_dc",
@@ -643,15 +712,24 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     const name = await displayName(deps.db, actor);
 
     const posted = await tx(deps.db, async (conn) => {
-      const locked = await one<{ status: string; stock_posted: number; bom_doc_id: string; doc_no: string }>(
+      const locked = await one<{ status: string; stock_posted: number; bom_doc_id: string; doc_no: string; doc_date: unknown }>(
         conn,
-        `SELECT status, stock_posted, bom_doc_id, doc_no FROM ims_bom_dcs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        `SELECT status, stock_posted, bom_doc_id, doc_no, doc_date FROM ims_bom_dcs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
         { tenantId: actor.tenantId, id },
       );
       if (!locked || locked.status !== "verified") throw conflict("Verify the delivery challan before approving");
       if (locked.stock_posted) throw conflict("Stock was already posted for this delivery challan");
 
+      await one(
+        conn,
+        `SELECT id FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        { tenantId: actor.tenantId, id: locked.bom_doc_id },
+      );
+      const freshBom = await loaders.loadDoc(conn, actor.tenantId, locked.bom_doc_id);
+      if (!freshBom || freshBom.status !== "confirmed") throw conflict("BOM must be confirmed");
       const lines = await loadDcLines(conn, actor.tenantId, id);
+      await assertExistingDcFitsBom(conn, actor.tenantId, freshBom, id, lines);
+
       const movements = [];
       for (const line of lines) {
         if (!line.itemId || !(line.qty > 0)) continue;
@@ -666,10 +744,10 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
               refType: "dc",
               refId: id,
               refNo: locked.doc_no,
-              partyId: doc.partyId ?? null,
-              partyName: doc.customerName,
+              partyId: freshBom.partyId ?? null,
+              partyName: freshBom.customerName,
               reason: "Delivery challan (BOM)",
-              notes: doc.title || doc.capacityLabel || null,
+              notes: freshBom.title || freshBom.capacityLabel || null,
               date,
             },
             { allowNegative: settings.allowNegativeStock },
@@ -688,8 +766,7 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
       );
       if (!claimed.affectedRows) throw conflict("Delivery challan was already approved");
 
-      const fresh = await loaders.loadDoc(conn, actor.tenantId, locked.bom_doc_id);
-      await syncBomIssuedFromDcs(conn, actor.tenantId, locked.bom_doc_id, stockLinesOf(fresh!));
+      await syncBomIssuedFromDcs(conn, actor.tenantId, locked.bom_doc_id, stockLinesOf(freshBom));
       return movements;
     });
 
@@ -874,6 +951,17 @@ export async function bomHasLiveDcs(db: Queryable, tenantId: number, bomDocId: s
     db,
     `SELECT COUNT(*) AS n FROM ims_bom_dcs
      WHERE tenant_id = :tenantId AND bom_doc_id = :bomDocId AND status IN ('draft','verified','approved')`,
+    { tenantId, bomDocId },
+  );
+  return Number(row?.n ?? 0) > 0;
+}
+
+/** True when at least one approved (stock-posted) DC exists — distinguishes DC stock from invoice explode. */
+export async function bomHasApprovedDcs(db: Queryable, tenantId: number, bomDocId: string): Promise<boolean> {
+  const row = await one<{ n: number }>(
+    db,
+    `SELECT COUNT(*) AS n FROM ims_bom_dcs
+     WHERE tenant_id = :tenantId AND bom_doc_id = :bomDocId AND status = 'approved' AND stock_posted = 1`,
     { tenantId, bomDocId },
   );
   return Number(row?.n ?? 0) > 0;

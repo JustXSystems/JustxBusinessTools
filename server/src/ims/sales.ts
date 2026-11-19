@@ -625,6 +625,14 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
        WHERE tenant_id = :tenantId AND id = :id AND stock_issued_at IS NULL`,
       { tenantId: actor.tenantId, id: row.source_ref, n: bomStockItems.length },
     );
+    // Mark each stock line fully issued so BOM→DC remaining treats invoice explode as consumed.
+    await exec(
+      conn,
+      `UPDATE ims_bom_doc_lines SET issued_qty = qty
+       WHERE tenant_id = :tenantId AND doc_id = :docId
+         AND line_kind = 'stock' AND item_id IS NOT NULL AND qty > 0 AND issued_qty = 0`,
+      { tenantId: actor.tenantId, docId: row.source_ref },
+    );
   }
   return { invoiceNo, row };
 }

@@ -657,6 +657,28 @@ export function remainingIssueQty(soldQty: number, issuedQty: number): number {
   return round3(Math.max(0, soldQty - issuedQty));
 }
 
+/**
+ * Qty still available to put on a Delivery Challan for one BOM line.
+ * - `committedQty` = live DC drafts/verified/approved (reserves capacity).
+ * - `issuedQty` = stock already posted (approved DCs or invoice explode).
+ * - When `stockIssuedAt` is set but neither committed nor issued qty is recorded
+ *   (legacy / invoice-explode path), treat the full BOM qty as consumed so a DC
+ *   cannot post a second stock OUT.
+ */
+export function availableDcQty(
+  bomQty: number,
+  committedQty: number,
+  issuedQty: number,
+  stockIssuedAt?: string | null,
+): number {
+  let issued = round3(Math.max(0, issuedQty));
+  const committed = round3(Math.max(0, committedQty));
+  if (stockIssuedAt && issued <= 0 && committed <= 0) {
+    issued = round3(Math.max(0, bomQty));
+  }
+  return remainingIssueQty(bomQty, Math.max(committed, issued));
+}
+
 export const SERIAL_NOTES_MAX = 500;
 
 /** Append a new serial/batch note to existing ones (deduped, `; `-separated). Blank additions are ignored. */

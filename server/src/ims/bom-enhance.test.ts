@@ -18,6 +18,7 @@ import {
   pickAlternateWhenShort,
   planProposalShare,
   proposalWhatsAppUrl,
+  availableDcQty,
   remainingIssueQty,
   rotateAlternates,
   selectedOptionKeys,
@@ -159,6 +160,24 @@ describe("as-built and partial issue", () => {
     expect(applyPartialIssue([{ id: "1", qty: 5, issuedQty: 3 }], [{ lineId: "1", qty: 10 }])).toEqual([
       { lineId: "1", qty: 2, nextIssuedQty: 5 },
     ]);
+  });
+
+  it("availableDcQty blocks double stock-out after invoice explode / DC commit", () => {
+    // Open BOM — full qty available
+    expect(availableDcQty(10, 0, 0, null)).toBe(10);
+    // Draft/verified DCs reserve capacity
+    expect(availableDcQty(10, 4, 0, null)).toBe(6);
+    // Approved DC issued_qty sync
+    expect(availableDcQty(10, 4, 4, "2026-01-01")).toBe(6);
+    // Invoice explode set stock_issued_at without per-line issued_qty — nothing left for DCs
+    expect(availableDcQty(10, 0, 0, "2026-01-01")).toBe(0);
+    // Invoice explode that also wrote issued_qty
+    expect(availableDcQty(10, 0, 10, "2026-01-01")).toBe(0);
+    // Partial issued via DCs still leaves remainder
+    expect(availableDcQty(10, 3, 3, "2026-01-01")).toBe(7);
+    // Over-commit: requested qty must not exceed remaining (verify/approve re-check)
+    expect(8 > availableDcQty(10, 4, 0, null) + 1e-9).toBe(true);
+    expect(6 <= availableDcQty(10, 4, 0, null) + 1e-9).toBe(true);
   });
 });
 

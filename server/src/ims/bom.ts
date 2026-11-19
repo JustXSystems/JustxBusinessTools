@@ -1892,15 +1892,23 @@ export function registerBom(router: Router, deps: ImsDeps): void {
               { tenantId: actor.tenantId, invoiceId },
             );
             if (inv?.stock_posted) {
-              const uniqueItems = new Set(
-                (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0).map((l) => l.itemId!),
-              ).size;
+              const stockLines = (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
+              const uniqueItems = new Set(stockLines.map((l) => l.itemId!)).size;
               await exec(
                 conn,
                 `UPDATE ims_bom_docs SET stock_issued_at = CURRENT_TIMESTAMP, stock_issue_count = :n
                  WHERE tenant_id = :tenantId AND id = :id AND stock_issued_at IS NULL`,
                 { tenantId: actor.tenantId, id, n: uniqueItems },
               );
+              // Record per-line issued qty so DCs / remaining APIs don't treat this as an open BOM.
+              for (const line of stockLines) {
+                await exec(
+                  conn,
+                  `UPDATE ims_bom_doc_lines SET issued_qty = :qty
+                   WHERE tenant_id = :tenantId AND doc_id = :docId AND id = :lineId AND issued_qty = 0`,
+                  { tenantId: actor.tenantId, docId: id, lineId: line.id, qty: line.qty },
+                );
+              }
             }
           }
         },
