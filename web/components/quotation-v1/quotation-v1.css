@@ -773,6 +773,16 @@
   font-size: 12px;
 }
 
+.qgv1-compose .qgv1-items .qgv1-gst-col-toggle {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .qgv1-compose .qgv1-items .amt {
   padding-top: 4px;
   padding-bottom: 4px;
@@ -1628,6 +1638,22 @@
   background: var(--glass-2);
   border-bottom: 1px solid var(--border-hair);
   padding: 9px 8px;
+}
+
+.qgv1-gst-col-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.qgv1-gst-col-toggle {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: rgb(var(--accent-rgb));
+  cursor: pointer;
 }
 
 .qgv1-items td {

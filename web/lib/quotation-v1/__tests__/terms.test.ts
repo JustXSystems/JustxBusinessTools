@@ -8,6 +8,7 @@ import {
   newQuotationDraft,
   normalizeQuotation,
   quoteTermsForOptions,
+  showGstColumnsOf,
 } from "@/lib/quotation-v1";
 
 describe("buildTerms with Business Profile terms per For", () => {
@@ -46,6 +47,24 @@ describe("gstNote", () => {
 
   it("allows clearing the note so the sheet can hide it", () => {
     expect(gstNoteOf({ gstNote: "" })).toBe("");
+  });
+});
+
+describe("showGstColumns", () => {
+  it("seeds drafts with GST columns visible", () => {
+    expect(newQuotationDraft().showGstColumns).toBe(true);
+    expect(showGstColumnsOf(newQuotationDraft())).toBe(true);
+  });
+
+  it("keeps columns visible for legacy quotes without the field", () => {
+    const q = newQuotationDraft();
+    delete q.showGstColumns;
+    expect(showGstColumnsOf(q)).toBe(true);
+    expect(normalizeQuotation(q).showGstColumns).toBe(true);
+  });
+
+  it("honours an explicit hide", () => {
+    expect(showGstColumnsOf({ showGstColumns: false })).toBe(false);
   });
 });
 

@@ -83,6 +83,11 @@ export type QuotationV1 = {
    * Undefined on older docs falls back to the built-in default; blank hides the note.
    */
   gstNote?: string;
+  /**
+   * When false, omit GST% and GST Amount columns on the live preview / PDF sheet.
+   * Undefined on older docs defaults to true (columns shown).
+   */
+  showGstColumns?: boolean;
   gstOverride: GstOverride;
   createdAt: string;
   updatedAt?: string;

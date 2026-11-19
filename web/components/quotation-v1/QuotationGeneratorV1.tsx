@@ -33,6 +33,7 @@ import {
   renderPageBreakMarkers,
   sanitizeNumStr,
   sanitizeSignedNumStr,
+  showGstColumnsOf,
   snapshotOf,
   templateItems,
   typeLabel,
@@ -1447,7 +1448,21 @@ export function QuotationGeneratorV1() {
                       <th>Description</th>
                       <th>Qty</th>
                       <th>Rate</th>
-                      <th>GST%</th>
+                      <th>
+                        <span className="qgv1-gst-col-head">
+                          <input
+                            type="checkbox"
+                            className="qgv1-gst-col-toggle"
+                            checked={showGstColumnsOf(current)}
+                            onChange={(e) =>
+                              patch((q) => ({ ...q, showGstColumns: e.target.checked }))
+                            }
+                            title="Show GST% and GST Amount on Live preview & PDF"
+                            aria-label="Show GST% and GST Amount on Live preview and PDF"
+                          />
+                          GST%
+                        </span>
+                      </th>
                       <th title="Click amount to reverse-calculate rate from inclusive total">
                         Amount
                       </th>

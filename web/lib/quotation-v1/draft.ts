@@ -51,12 +51,18 @@ export function gstNoteOf(q: Pick<QuotationV1, "gstNote">): string {
   return q.gstNote;
 }
 
-/** Backfill fields added after v1 (city, followUpDate, gstNote) on older saved docs. */
+/** Live preview / PDF item columns; legacy quotes without the field keep columns visible. */
+export function showGstColumnsOf(q: Pick<QuotationV1, "showGstColumns">): boolean {
+  return q.showGstColumns !== false;
+}
+
+/** Backfill fields added after v1 (city, followUpDate, gstNote, showGstColumns) on older saved docs. */
 export function normalizeQuotation(q: QuotationV1): QuotationV1 {
   return {
     ...q,
     followUpDate: q.followUpDate ?? "",
     gstNote: q.gstNote ?? DEFAULT_GST_NOTE,
+    showGstColumns: q.showGstColumns !== false,
     customer: {
       ...blankCustomer(),
       ...(q.customer ?? {}),
@@ -104,6 +110,7 @@ export function newQuotationDraft(
     buybackLabel: DEFAULT_BUYBACK_LABEL,
     notes: buildTerms(category, eng, profileTerms),
     gstNote: DEFAULT_GST_NOTE,
+    showGstColumns: true,
     gstOverride: { mode: "manual", cgst: 0, sgst: 0, igst: null },
     createdAt: new Date().toISOString(),
     history: [{ ts: new Date().toISOString(), event: "Draft created" }],

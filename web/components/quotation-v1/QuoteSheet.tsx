@@ -8,6 +8,7 @@ import {
   gstNoteOf,
   money,
   numToWordsIndian,
+  showGstColumnsOf,
   typeLabel,
 } from "@/lib/quotation-v1";
 import { documentAccentCssVars } from "@/lib/document-accent";
@@ -23,6 +24,7 @@ type Props = {
 
 export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
   const t = computeTotals(q, c);
+  const showGstCols = showGstColumnsOf(q);
   const gstNoteLines = gstNoteOf(q)
     .split("\n")
     .map((l) => l.trim())
@@ -155,9 +157,9 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
             <th>Description</th>
             <th>Qty</th>
             <th>Unit Price</th>
-            <th>GST%</th>
+            {showGstCols ? <th>GST%</th> : null}
             <th>Base Total</th>
-            <th>GST Amount</th>
+            {showGstCols ? <th>GST Amount</th> : null}
             <th>Total Amount</th>
           </tr>
         </thead>
@@ -171,9 +173,9 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
                 <td>{it.desc}</td>
                 <td>{it.qty}</td>
                 <td>₹{money(Number(it.rate) || 0)}</td>
-                <td>{it.gst}%</td>
+                {showGstCols ? <td>{it.gst}%</td> : null}
                 <td>₹{money(base)}</td>
-                <td>₹{money(gstAmt)}</td>
+                {showGstCols ? <td>₹{money(gstAmt)}</td> : null}
                 <td>₹{money(base + gstAmt)}</td>
               </tr>
             );
@@ -184,9 +186,9 @@ export function QuoteSheet({ quote: q, company: c, showBreakMarkers }: Props) {
               <td>{q.extraCharge.label}</td>
               <td>1</td>
               <td>₹{money(t.exBase)}</td>
-              <td>{q.extraCharge.gst}%</td>
+              {showGstCols ? <td>{q.extraCharge.gst}%</td> : null}
               <td>₹{money(t.exBase)}</td>
-              <td>₹{money(t.exGstAmt)}</td>
+              {showGstCols ? <td>₹{money(t.exGstAmt)}</td> : null}
               <td>₹{money(t.exTotal)}</td>
             </tr>
           ) : null}
