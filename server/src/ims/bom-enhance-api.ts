@@ -6,7 +6,6 @@ import type { Router } from "express";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
-  applyPartialIssue,
   applyRateCardRates,
   computeAsBuiltVariance,
   computeCostRollup,
@@ -17,17 +16,14 @@ import {
   evaluateConfirmGates,
   explodeNestedPackageLines,
   FORMULA_PRESETS,
-  isLegacyFullIssue,
   lineIncludedByOptions,
   matchRateCardToBomLines,
-  mergeSerialNotes,
   normalizeOptionSelection,
   planProposalShare,
   proposalWhatsAppUrl,
   remainingIssueQty,
   rotateAlternates,
   selectedOptionKeys,
-  SERIAL_NOTES_MAX,
   suggestAlternatesForShortfall,
   type GateLine,
   type PackageLineLike,
@@ -38,7 +34,8 @@ import { badRequest, conflict, notFound } from "./host.js";
 import { computeTotals, formatINR, isIntraStateSupply, round2, round3, todayISO } from "./logic.js";
 import { loadParty } from "./parties.js";
 import { getSettings } from "./settings.js";
-import { nextDocNo, postMovement } from "./stock.js";
+import { bomHasLiveDcs } from "./bom-dc.js";
+import { nextDocNo } from "./stock.js";
 
 export type BomEnhanceDoc = {
   id: string;
@@ -1246,27 +1243,6 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
     return out;
   }
 
-  /** Same explode-invoice guards as the full issue-stock route. */
-  async function assertNoExplodeInvoiceStock(
-    db: Queryable,
-    tenantId: number,
-    invoiceId: string | null | undefined,
-    convertMode: string | null | undefined,
-  ) {
-    if (!invoiceId || convertMode !== "explode_lines") return;
-    const inv = await one<{ stock_posted: number; status: string }>(
-      db,
-      `SELECT stock_posted, status FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id LIMIT 1`,
-      { tenantId, id: invoiceId },
-    );
-    if (inv && inv.status === "draft") {
-      throw conflict("A draft explode invoice is linked. Issue or delete that draft before issuing stock from the BOM.");
-    }
-    if (inv && inv.status === "issued" && inv.stock_posted) {
-      throw conflict("Stock was already posted when the linked explode invoice was issued");
-    }
-  }
-
   /* ---------- Alternates (#38) ---------- */
 
   router.post("/bom/docs/:id/suggest-alternates", async (req, res) => {
@@ -1327,6 +1303,9 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
       throw conflict("Alternates can only be swapped on a draft BOM, or a confirmed BOM with no stock issued");
     };
     assertSwappable(doc.status, doc.stockIssuedAt, doc.stockIssueCount);
+    if (await bomHasLiveDcs(deps.db, actor.tenantId, id)) {
+      throw conflict("Cancel or reverse delivery challans before swapping alternates on this BOM");
+    }
 
     const line = (doc.lines ?? []).find((l) => l.id === body.lineId);
     if (!line) throw notFound("BOM line not found");
@@ -1476,135 +1455,10 @@ export function registerBomEnhance(router: Router, deps: ImsDeps, loaders: BomEn
 
   /* ---------- Partial issue + serial notes (#44 #45) ---------- */
 
-  router.post("/bom/docs/:id/issue-stock-partial", async (req, res) => {
+  /** @deprecated Partial stock out is via Delivery Challans (see bom-dc.ts). */
+  router.post("/bom/docs/:id/issue-stock-partial", async (_req, res) => {
     requirePerm(res, "bom");
-    requirePerm(res, "stockOut");
-    const actor = actorOf(res);
-    const id = String(req.params.id);
-    const body = parse(
-      z.object({
-        lines: z
-          .array(
-            z.object({
-              lineId: z.string().uuid(),
-              qty: z.coerce.number().gt(0).max(1e9),
-              serialNotes: optText(SERIAL_NOTES_MAX),
-            }),
-          )
-          .min(1, "Select at least one line")
-          .max(500),
-        date: isoDate.optional(),
-      }),
-      req.body,
-    );
-    if (new Set(body.lines.map((l) => l.lineId)).size !== body.lines.length) {
-      throw badRequest("Each line may only appear once per partial issue");
-    }
-    const doc = await loaders.loadDoc(deps.db, actor.tenantId, id);
-    if (!doc) throw notFound("BOM document not found");
-    if (doc.status !== "confirmed") throw conflict("Confirm the BOM before issuing stock");
-    await assertNoExplodeInvoiceStock(deps.db, actor.tenantId, doc.invoiceId, doc.invoiceConvertMode);
-
-    const settings = await getSettings(deps, actor.tenantId);
-    const date = body.date ?? todayISO();
-    const notesByLine = new Map(body.lines.map((l) => [l.lineId, l.serialNotes ?? null]));
-
-    const result = await tx(deps.db, async (conn) => {
-      const locked = await one<{
-        stock_issued_at: string | null;
-        status: string;
-        invoice_id: string | null;
-        invoice_convert_mode: string | null;
-      }>(
-        conn,
-        `SELECT stock_issued_at, status, invoice_id, invoice_convert_mode FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
-        { tenantId: actor.tenantId, id },
-      );
-      if (!locked) throw notFound("BOM document not found");
-      if (locked.status !== "confirmed") throw conflict("Confirm the BOM before issuing stock");
-      await assertNoExplodeInvoiceStock(conn, actor.tenantId, locked.invoice_id, locked.invoice_convert_mode);
-
-      // Re-read lines under the doc lock so issued_qty is current.
-      const fresh = await loaders.loadDoc(conn, actor.tenantId, id);
-      const allLines = fresh?.lines ?? [];
-      const stockLines = allLines.filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
-      if (!stockLines.length) throw conflict("No stock-linked lines to issue. Link catalogue items on stock lines first.");
-      if (isLegacyFullIssue(locked.stock_issued_at, stockLines)) throw conflict("Stock was already issued in full for this BOM");
-
-      const byId = new Map(stockLines.map((l) => [l.id, l]));
-      for (const r of body.lines) {
-        if (!byId.has(r.lineId)) throw badRequest("Only stock lines linked to a catalogue item can be issued");
-      }
-      const plan = applyPartialIssue(
-        stockLines.map((l) => ({ id: l.id, qty: l.qty, issuedQty: l.issuedQty ?? 0 })),
-        body.lines.map((l) => ({ lineId: l.lineId, qty: l.qty })),
-      );
-      if (!plan.length) throw conflict("Nothing left to issue for the selected lines");
-
-      const movements = [];
-      for (const p of plan) {
-        const line = byId.get(p.lineId)!;
-        const mergedNotes = mergeSerialNotes(line.serialNotes, notesByLine.get(p.lineId));
-        if (mergedNotes && mergedNotes.length > SERIAL_NOTES_MAX) {
-          throw badRequest(`Serial notes for "${line.description}" exceed ${SERIAL_NOTES_MAX} characters`);
-        }
-        const movementNotes = notesByLine.get(p.lineId)
-          ? `Serial: ${notesByLine.get(p.lineId)}`.slice(0, 500)
-          : doc.title || doc.capacityLabel || null;
-        movements.push(
-          await postMovement(
-            conn,
-            actor,
-            {
-              itemId: line.itemId!,
-              type: "OUT",
-              qty: p.qty,
-              refType: "bom",
-              refId: doc.id,
-              refNo: doc.docNo,
-              partyId: doc.partyId ?? null,
-              partyName: doc.customerName,
-              reason: "BOM materials partial issue",
-              notes: movementNotes,
-              date,
-            },
-            { allowNegative: settings.allowNegativeStock },
-          ),
-        );
-        await exec(
-          conn,
-          `UPDATE ims_bom_doc_lines SET issued_qty = :issuedQty, serial_notes = :serialNotes
-           WHERE tenant_id = :tenantId AND doc_id = :docId AND id = :lineId`,
-          { tenantId: actor.tenantId, docId: id, lineId: p.lineId, issuedQty: p.nextIssuedQty, serialNotes: mergedNotes },
-        );
-      }
-      await exec(
-        conn,
-        `UPDATE ims_bom_docs
-         SET stock_issued_at = COALESCE(stock_issued_at, CURRENT_TIMESTAMP), stock_issue_count = stock_issue_count + :n
-         WHERE tenant_id = :tenantId AND id = :id`,
-        { tenantId: actor.tenantId, id, n: movements.length },
-      );
-      const remaining = stockLines.map((l) => {
-        const p = plan.find((x) => x.lineId === l.id);
-        return remainingIssueQty(l.qty, p ? p.nextIssuedQty : (l.issuedQty ?? 0));
-      });
-      return { movements, plan, fullyIssued: remaining.every((r) => !(r > 0)) };
-    });
-
-    await recordEvent(deps, actor, {
-      type: "bom.doc.stock_issued_partial",
-      entityType: "bom_doc",
-      entityId: id,
-      summary: `Partially issued stock for BOM ${doc.docNo} (${result.movements.length} line${result.movements.length === 1 ? "" : "s"})`,
-      payload: { count: result.movements.length, lines: result.plan, fullyIssued: result.fullyIssued },
-    });
-    res.json({
-      doc: await loaders.loadDoc(deps.db, actor.tenantId, id),
-      movements: result.movements,
-      issued: result.plan,
-      fullyIssued: result.fullyIssued,
-    });
+    throw conflict("Partial delivery uses Delivery Challans. Create one or more DCs with the quantities you need, then verify and approve each.");
   });
 
   router.get("/bom/docs/:id/pick-list", async (req, res) => {

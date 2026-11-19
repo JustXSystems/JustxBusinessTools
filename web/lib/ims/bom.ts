@@ -643,7 +643,7 @@ export const bom = {
     }>(`/bom/docs/${id}/pick-list`),
   createInvoice: (
     id: string,
-    body: { mode: BomInvoiceConvertMode; issue?: boolean; gstRate?: number; invoiceDate?: string },
+    body: { mode: BomInvoiceConvertMode; issue?: boolean; gstRate?: number; invoiceDate?: string; dcIds?: string[] },
   ) =>
     post<{ doc: BomDoc; invoice: { invoice: { id: string; invoiceNo: string; status: string; stockPosted: boolean } }; mode: BomInvoiceConvertMode }>(
       `/bom/docs/${id}/create-invoice`,
@@ -655,4 +655,109 @@ export const bom = {
     post<{ doc: BomDoc; movements: Array<{ id: string; itemId: string; itemName: string; qty: number }> }>(`/bom/docs/${id}/reverse-stock`, body ?? {}),
   availability: (id: string) =>
     get<{ allowNegativeStock: boolean; hasShortfall: boolean; items: BomAvailabilityLine[] }>(`/bom/docs/${id}/availability`),
+
+  /* ---------- Delivery Challans (stock out on approve) ---------- */
+  dcRemaining: (bomId: string, excludeDcId?: string) =>
+    get<{
+      bomDocId: string;
+      lines: Array<{
+        bomLineId: string;
+        itemId: string | null;
+        description: string;
+        makeText: string | null;
+        unit: string;
+        section: string;
+        sortNo: number;
+        bomQty: number;
+        committedQty: number;
+        remainingQty: number;
+        issuedQty: number;
+      }>;
+    }>(`/bom/docs/${bomId}/dc-remaining`, excludeDcId ? { excludeDcId } : undefined),
+  listDcs: (bomId: string) => get<{ dcs: BomDc[]; bomDocNo: string }>(`/bom/docs/${bomId}/dcs`),
+  getDc: (id: string) => get<{ dc: BomDc }>(`/bom/dcs/${id}`),
+  createDc: (
+    bomId: string,
+    body: {
+      docDate?: string;
+      shipTo?: string | null;
+      transporter?: string | null;
+      vehicleNo?: string | null;
+      notes?: string | null;
+      lines: Array<{ bomLineId: string; qty: number; remarks?: string | null }>;
+    },
+  ) => post<{ dc: BomDc }>(`/bom/docs/${bomId}/dcs`, body),
+  updateDc: (
+    id: string,
+    body: {
+      docDate?: string;
+      shipTo?: string | null;
+      transporter?: string | null;
+      vehicleNo?: string | null;
+      notes?: string | null;
+      lines?: Array<{ bomLineId: string; qty: number; remarks?: string | null }>;
+    },
+  ) => patch<{ dc: BomDc }>(`/bom/dcs/${id}`, body),
+  verifyDc: (id: string) => post<{ dc: BomDc }>(`/bom/dcs/${id}/verify`),
+  approveDc: (id: string, body?: { date?: string }) =>
+    post<{ dc: BomDc; movements: Array<{ id: string; itemId: string; itemName: string; qty: number }>; doc: BomDoc }>(
+      `/bom/dcs/${id}/approve`,
+      body ?? {},
+    ),
+  cancelDc: (id: string) => post<{ dc: BomDc }>(`/bom/dcs/${id}/cancel`),
+  reverseDc: (id: string, body?: { date?: string }) =>
+    post<{ dc: BomDc; movements: Array<{ id: string; itemId: string; itemName: string; qty: number }>; doc: BomDoc }>(
+      `/bom/dcs/${id}/reverse`,
+      body ?? {},
+    ),
+  invoiceDcLinks: (invoiceId: string) => get<{ dcIds: string[]; dcs: BomDc[] }>(`/invoices/${invoiceId}/dc-links`),
+  setInvoiceDcLinks: (invoiceId: string, dcIds: string[]) => put<{ dcIds: string[] }>(`/invoices/${invoiceId}/dc-links`, { dcIds }),
+};
+
+export const BOM_DC_STATUSES = ["draft", "verified", "approved", "cancelled"] as const;
+export type BomDcStatus = (typeof BOM_DC_STATUSES)[number];
+export const BOM_DC_STATUS_LABEL: Record<BomDcStatus, string> = {
+  draft: "Draft",
+  verified: "Verified",
+  approved: "Approved",
+  cancelled: "Cancelled",
+};
+
+export type BomDcLine = {
+  id: string;
+  dcId: string;
+  bomLineId: string;
+  itemId: string | null;
+  section: string;
+  sortNo: number;
+  description: string;
+  makeText: string | null;
+  qty: number;
+  unit: string;
+  remarks: string | null;
+};
+
+export type BomDc = {
+  id: string;
+  bomDocId: string;
+  docNo: string;
+  status: BomDcStatus;
+  docDate: string;
+  shipTo: string | null;
+  transporter: string | null;
+  vehicleNo: string | null;
+  notes: string | null;
+  verifiedBy: number | null;
+  verifiedByName: string | null;
+  verifiedAt: string | null;
+  approvedBy: number | null;
+  approvedByName: string | null;
+  approvedAt: string | null;
+  stockPosted: boolean;
+  createdByName: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  lines?: BomDcLine[];
+  bomDocNo?: string | null;
+  customerName?: string | null;
 };

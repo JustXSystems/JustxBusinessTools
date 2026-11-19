@@ -71,6 +71,9 @@ export type ImsInvoice = {
   balance: number;
   payMode: string | null;
   stockPosted: boolean;
+  /** Linked delivery challans (stock already moved on DC approve when present). */
+  dcIds?: string[];
+  dcLinks?: Array<{ id: string; docNo: string; status: string; stockPosted: boolean }>;
   accountManagerId: number | null;
   accountManagerName: string | null;
   promiseDate: string | null;
@@ -117,7 +120,12 @@ export type ArActivity = {
 };
 
 export type HsnRow = { hsn: string; unit: string; gstRate: number; qty: number; taxable: number; tax: number };
-export type InvoiceDetail = { invoice: ImsInvoice & { lines: ImsLine[] }; hsn: HsnRow[]; payments: ImsPayment[]; activity: ArActivity[] };
+export type InvoiceDetail = {
+  invoice: ImsInvoice & { lines: ImsLine[]; dcIds?: string[]; dcLinks?: Array<{ id: string; docNo: string; status: string; stockPosted: boolean }> };
+  hsn: HsnRow[];
+  payments: ImsPayment[];
+  activity: ArActivity[];
+};
 
 export type InvoiceList = {
   range: DateRange | null;

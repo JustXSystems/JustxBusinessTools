@@ -95,7 +95,18 @@ function InvoiceBody({ detail, onEdit, onGone }: { detail: InvoiceDetail; onEdit
                   ["Customer", inv.customerName],
                   ["Due", inv.status === "issued" ? `${dateLabel(inv.dueDate)}${inv.daysOverdue > 0 ? ` · ${inv.daysOverdue} days overdue` : ""}` : dateLabel(inv.dueDate)],
                   ["Tax", inv.intraState ? `CGST ${inrExact(inv.cgst)} + SGST ${inrExact(inv.sgst)}` : `IGST ${inrExact(inv.igst)}`],
-                  ["Stock", inv.stockPosted ? "Moved out" : isDraft ? "Moves when issued" : "Returned"],
+                  [
+                    "Stock",
+                    inv.dcLinks?.length
+                      ? inv.stockPosted
+                        ? `Via ${inv.dcLinks.length} DC${inv.dcLinks.length === 1 ? "" : "s"} (${inv.dcLinks.map((d) => d.docNo).join(", ")})`
+                        : `DC linked · ${inv.dcLinks.map((d) => d.docNo).join(", ")}`
+                      : inv.stockPosted
+                        ? "Moved out"
+                        : isDraft
+                          ? "Moves when issued"
+                          : "Returned",
+                  ],
                   ...(inv.promiseDate ? ([["Promise", `${inrExact(inv.promiseAmount ?? inv.balance)} by ${dateLabel(inv.promiseDate)}`]] as Array<[string, string]>) : []),
                   ...(inv.disputed ? ([["Dispute", inv.disputeReason ?? "Disputed"]] as Array<[string, string]>) : []),
                 ]}
@@ -110,7 +121,16 @@ function InvoiceBody({ detail, onEdit, onGone }: { detail: InvoiceDetail; onEdit
               ) : null}
               {isDraft && canWrite ? (
                 <>
-                  <Button variant="primary" icon="check" disabled={busy === "issue"} onClick={() => run("issue", () => finance.issueInvoice(inv.id), { success: "Invoice issued — stock updated" })}>
+                  <Button
+                    variant="primary"
+                    icon="check"
+                    disabled={busy === "issue"}
+                    onClick={() =>
+                      run("issue", () => finance.issueInvoice(inv.id), {
+                        success: inv.dcLinks?.length ? "Invoice issued — stock stays on linked DCs" : "Invoice issued — stock updated",
+                      })
+                    }
+                  >
                     {busy === "issue" ? "Issuing…" : "Issue"}
                   </Button>
                   <Button icon="edit" onClick={() => onEdit(inv.id)}>
@@ -221,7 +241,9 @@ function InvoiceBody({ detail, onEdit, onGone }: { detail: InvoiceDetail; onEdit
         busy={busy === "cancel"}
         suggestions={["Wrong customer", "Wrong items or rates", "Duplicate invoice", "Order cancelled by customer"]}
         onConfirm={async (reason) => {
-          const out = await run("cancel", () => finance.cancelInvoice(inv.id, reason), { success: "Invoice cancelled — stock returned" });
+          const out = await run("cancel", () => finance.cancelInvoice(inv.id, reason), {
+            success: inv.dcLinks?.length ? "Invoice cancelled — stock remains on delivery challans" : "Invoice cancelled — stock returned",
+          });
           if (out) setDlg(null);
         }}
       />

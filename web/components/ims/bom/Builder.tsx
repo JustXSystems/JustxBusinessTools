@@ -4,6 +4,7 @@ import "./bom.css";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, EmptyState, Field, FilterChip, FormGrid, Input, Select, Textarea } from "@/components/bos";
 import {
+  BOM_DC_STATUS_LABEL,
   BOM_DOC_STATUS_LABEL,
   BOM_INVOICE_CONVERT_LABEL,
   BOM_INVOICE_CONVERT_MODES,
@@ -16,6 +17,7 @@ import {
   previewBomInvoice,
   qtyForCapacity,
   type BomBusiness,
+  type BomDc,
   type BomDoc,
   type BomDocLineInput,
   type BomDocStatus,
@@ -105,89 +107,218 @@ export default function BomBuilderScreen() {
   );
 }
 
-function PartialIssueForm({
+function DeliveryChallanPanel({
   doc,
   busy,
   onDone,
   run,
+  canApprove,
+  selectedDcIds,
+  onToggleDc,
 }: {
   doc: BomDoc;
   busy: boolean;
   onDone: () => void;
   run: ReturnType<typeof useImsAction>["run"];
+  canApprove: boolean;
+  selectedDcIds: string[];
+  onToggleDc: (id: string) => void;
 }) {
-  const stockLines = useMemo(
-    () =>
-      (doc.lines ?? [])
-        .filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0)
-        .map((l) => {
-          const issued = Number(l.issuedQty ?? 0);
-          const remaining = Math.max(0, Number(l.qty) - issued);
-          return { line: l, remaining, issued };
-        })
-        .filter((x) => x.remaining > 0),
-    [doc.lines],
-  );
+  const dcsState = useImsData(() => bom.listDcs(doc.id), [doc.id, doc.updatedAt, doc.stockIssuedAt]);
+  const remainingState = useImsData(() => bom.dcRemaining(doc.id), [doc.id, doc.updatedAt, doc.stockIssuedAt, dcsState.data?.dcs?.length]);
   const [qtyById, setQtyById] = useState<Record<string, string>>({});
-  const [serialById, setSerialById] = useState<Record<string, string>>({});
-
-  if (!stockLines.length) return null;
+  const [showCreate, setShowCreate] = useState(false);
+  const remainingLines = remainingState.data?.lines ?? [];
+  const openRemaining = remainingLines.filter((l) => l.remainingQty > 0);
+  const dcs = dcsState.data?.dcs ?? [];
 
   return (
-    <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-      <div style={{ fontSize: 13, fontWeight: 600 }}>Partial issue</div>
-      {stockLines.map(({ line, remaining, issued }) => (
-        <div key={line.id} style={{ display: "grid", gap: 4, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
-          <div style={{ fontSize: 13 }}>
-            {line.description}{" "}
-            <span style={{ opacity: 0.65 }}>
-              · remaining {remaining} {line.unit}
-              {issued > 0 ? ` (issued ${issued})` : ""}
-            </span>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Input
-              value={qtyById[line.id] ?? String(remaining)}
-              onChange={(e) => setQtyById((prev) => ({ ...prev, [line.id]: e.target.value }))}
-              placeholder="Qty"
-              style={{ width: 100 }}
-            />
-            <Input
-              value={serialById[line.id] ?? ""}
-              onChange={(e) => setSerialById((prev) => ({ ...prev, [line.id]: e.target.value }))}
-              placeholder="Serial / lot notes"
-              style={{ flex: 1, minWidth: 160 }}
-            />
-          </div>
+    <Card className="ims-bom-action-card">
+      <Alert tone="blue" title="Delivery challans (stock out)">
+        Create one or more DCs from this confirmed BOM (quantities editable). Verify records your name, then approve posts stock out. An invoice can link multiple approved DCs; without DC links, invoice issue still posts stock.
+      </Alert>
+      {doc.stockIssuedAt ? (
+        <div style={{ marginBottom: 10 }}>
+          <Badge tone="emerald">
+            Stock fully covered · {doc.stockIssueCount} DC{doc.stockIssueCount === 1 ? "" : "s"} · {doc.stockIssuedAt}
+          </Badge>
         </div>
-      ))}
-      <Button
-        size="sm"
-        disabled={busy}
-        onClick={async () => {
-          const lines = stockLines
-            .map(({ line, remaining }) => {
-              const qty = Number(qtyById[line.id] ?? remaining) || 0;
-              return {
-                lineId: line.id,
-                qty: Math.min(Math.max(0, qty), remaining),
-                serialNotes: serialById[line.id]?.trim() || null,
-              };
-            })
-            .filter((l) => l.qty > 0);
-          if (!lines.length) {
-            window.alert("Enter at least one quantity to issue.");
-            return;
-          }
-          const out = await run("partial-stock", () => bom.issueStockPartial(doc.id, { lines }), {
-            success: "Partial stock issued",
-          });
-          if (out) onDone();
-        }}
-      >
-        Issue selected qty
-      </Button>
-    </div>
+      ) : null}
+      {dcs.length ? (
+        <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+          {dcs.map((dc: BomDc) => (
+            <div
+              key={dc.id}
+              style={{
+                borderTop: "1px solid var(--bos-border, #e2e8f0)",
+                paddingTop: 8,
+                display: "grid",
+                gap: 6,
+              }}
+            >
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                <b style={{ fontSize: 13 }}>{dc.docNo}</b>
+                <Badge tone={dc.status === "approved" ? "emerald" : dc.status === "verified" ? "blue" : dc.status === "cancelled" ? "neutral" : "amber"}>
+                  {BOM_DC_STATUS_LABEL[dc.status] ?? dc.status}
+                </Badge>
+                <span style={{ fontSize: 12, opacity: 0.7 }}>
+                  {(dc.lines ?? []).reduce((s, l) => s + l.qty, 0)} units · {dc.docDate}
+                </span>
+                {dc.verifiedByName ? <span style={{ fontSize: 12, opacity: 0.75 }}>Verified by {dc.verifiedByName}</span> : null}
+                {dc.approvedByName ? <span style={{ fontSize: 12, opacity: 0.75 }}>Approved by {dc.approvedByName}</span> : null}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {dc.status === "draft" ? (
+                  <>
+                    <Button
+                      size="sm"
+                      disabled={busy}
+                      onClick={async () => {
+                        const out = await run("dc-verify", () => bom.verifyDc(dc.id), { success: "Delivery challan verified" });
+                        if (out) onDone();
+                      }}
+                    >
+                      Verify
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={async () => {
+                        if (!window.confirm(`Cancel ${dc.docNo}?`)) return;
+                        const out = await run("dc-cancel", () => bom.cancelDc(dc.id), { success: "Delivery challan cancelled" });
+                        if (out) onDone();
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </>
+                ) : null}
+                {dc.status === "verified" ? (
+                  <>
+                    <Button
+                      size="sm"
+                      disabled={busy || !canApprove}
+                      title={!canApprove ? "Approvals permission required" : undefined}
+                      onClick={async () => {
+                        const out = await run("dc-approve", () => bom.approveDc(dc.id), { success: "DC approved — stock out posted" });
+                        if (out) onDone();
+                      }}
+                    >
+                      Approve (stock out)
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={async () => {
+                        if (!window.confirm(`Cancel verified ${dc.docNo}?`)) return;
+                        const out = await run("dc-cancel", () => bom.cancelDc(dc.id), { success: "Delivery challan cancelled" });
+                        if (out) onDone();
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </>
+                ) : null}
+                {dc.status === "approved" && dc.stockPosted ? (
+                  <>
+                    {!doc.invoiceId ? (
+                      <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
+                        <input type="checkbox" checked={selectedDcIds.includes(dc.id)} onChange={() => onToggleDc(dc.id)} />
+                        Link on invoice
+                      </label>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={async () => {
+                        if (!window.confirm(`Reverse ${dc.docNo} and return stock?`)) return;
+                        const out = await run("dc-reverse", () => bom.reverseDc(dc.id), { success: "Delivery challan reversed" });
+                        if (out) onDone();
+                      }}
+                    >
+                      Reverse stock
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize: 13, opacity: 0.75, marginBottom: 10 }}>No delivery challans yet.</div>
+      )}
+      {!canApprove && dcs.some((d) => d.status === "verified") ? (
+        <Alert tone="amber" title="Approvals permission needed">
+          Verified DCs need Approvals to post stock out.
+        </Alert>
+      ) : null}
+      {openRemaining.length ? (
+        <>
+          {!showCreate ? (
+            <Button size="sm" disabled={busy} onClick={() => setShowCreate(true)}>
+              Create delivery challan
+            </Button>
+          ) : (
+            <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>New DC — edit quantities</div>
+              {openRemaining.map((line) => (
+                <div key={line.bomLineId} style={{ display: "grid", gap: 4, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
+                  <div style={{ fontSize: 13 }}>
+                    {line.description}{" "}
+                    <span style={{ opacity: 0.65 }}>
+                      · remaining {line.remainingQty} {line.unit}
+                      {line.issuedQty > 0 ? ` (delivered ${line.issuedQty})` : ""}
+                    </span>
+                  </div>
+                  <Input
+                    value={qtyById[line.bomLineId] ?? String(line.remainingQty)}
+                    onChange={(e) => setQtyById((prev) => ({ ...prev, [line.bomLineId]: e.target.value }))}
+                    placeholder="Qty"
+                    style={{ width: 120 }}
+                  />
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={async () => {
+                    const lines = openRemaining
+                      .map((line) => {
+                        const qty = Number(qtyById[line.bomLineId] ?? line.remainingQty) || 0;
+                        return { bomLineId: line.bomLineId, qty: Math.min(Math.max(0, qty), line.remainingQty) };
+                      })
+                      .filter((l) => l.qty > 0);
+                    if (!lines.length) {
+                      window.alert("Enter at least one quantity.");
+                      return;
+                    }
+                    const out = await run("dc-create", () => bom.createDc(doc.id, { lines }), { success: "Delivery challan drafted" });
+                    if (out) {
+                      setShowCreate(false);
+                      setQtyById({});
+                      onDone();
+                    }
+                  }}
+                >
+                  Save draft DC
+                </Button>
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => setShowCreate(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      ) : remainingLines.length ? (
+        <div style={{ fontSize: 13, opacity: 0.75 }}>All BOM stock quantities are on live delivery challans.</div>
+      ) : (
+        <div style={{ fontSize: 13, opacity: 0.75 }}>No stock-linked lines — link catalogue items on the BOM first.</div>
+      )}
+    </Card>
   );
 }
 
@@ -211,8 +342,11 @@ function BomViewer({
   const availability = useImsData(() => bom.availability(id), [id, state.data?.doc?.stockIssuedAt, state.data?.doc?.updatedAt]);
   const [convertMode, setConvertMode] = useState<BomInvoiceConvertMode>("lump_sum");
   const [issueOnCreate, setIssueOnCreate] = useState(false);
+  const [linkDcIds, setLinkDcIds] = useState<string[]>([]);
   const [customerState, setCustomerState] = useState<string | null>(null);
   const doc = state.data?.doc;
+  const canApproveDc = isOwner || can("approvals");
+  const stockViaDc = linkDcIds.length > 0;
   const partyId = doc?.partyId ?? null;
   useEffect(() => {
     let cancelled = false;
@@ -238,16 +372,6 @@ function BomViewer({
   );
   const allowNegative = Boolean(availability.data?.allowNegativeStock);
   const blockOnShortfall = stockShortfalls.length > 0 && !allowNegative;
-  const linkedInvoice = state.data?.linkedInvoice ?? null;
-  const explodeDraftLinked =
-    Boolean(doc?.invoiceId) &&
-    doc?.invoiceConvertMode === "explode_lines" &&
-    linkedInvoice?.status === "draft";
-  const explodeStockPosted =
-    doc?.invoiceConvertMode === "explode_lines" &&
-    linkedInvoice?.status === "issued" &&
-    Boolean(linkedInvoice?.stockPosted);
-
   if (!state.data && !state.error) return <LoadingBlock />;
   if (state.error || !state.data || !doc) return <ErrorBlock error={state.error ?? new Error("Not found")} onRetry={state.reload} />;
 
@@ -268,7 +392,6 @@ function BomViewer({
   );
   const model = modelFromDoc(doc, business, { ...paperOpts, customerState });
   const confirmed = doc.status === "confirmed";
-  const stockable = (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0).length;
   const reloadAll = () => {
     state.reload();
     availability.reload();
@@ -579,27 +702,37 @@ function BomViewer({
                             id={fid}
                             value={issueOnCreate ? "issue" : "draft"}
                             onChange={(e) => setIssueOnCreate(e.target.value === "issue")}
-                            disabled={Boolean(doc.stockIssuedAt && convertMode === "explode_lines")}
+                            disabled={Boolean(!stockViaDc && doc.stockIssuedAt && convertMode === "explode_lines")}
                           >
                             <option value="draft">Save as draft invoice</option>
-                            <option value="issue" disabled={Boolean(doc.stockIssuedAt && convertMode === "explode_lines")}>
-                              Create and issue (posts stock for linked lines)
+                            <option
+                              value="issue"
+                              disabled={Boolean(!stockViaDc && doc.stockIssuedAt && convertMode === "explode_lines")}
+                            >
+                              {stockViaDc
+                                ? "Create and issue (stock already on linked DCs)"
+                                : "Create and issue (posts stock for linked lines)"}
                             </option>
                           </Select>
                         )}
                       </Field>
                     </div>
-                    {doc.stockIssuedAt && convertMode === "explode_lines" ? (
+                    {linkDcIds.length ? (
+                      <Alert tone="blue" title={`${linkDcIds.length} delivery challan(s) selected`}>
+                        Invoice will reference these DCs. Stock out stays on DC approve — invoice issue will not post stock again. Tick DCs under Delivery challans below.
+                      </Alert>
+                    ) : null}
+                    {!stockViaDc && doc.stockIssuedAt && convertMode === "explode_lines" ? (
                       <Alert tone="amber" title="Stock already issued">
-                        Explode + issue is blocked. Create a draft explode invoice, or switch to lump-sum.
+                        Explode + issue is blocked unless you link approved delivery challans. Create a draft explode invoice, switch to lump-sum, or tick DCs below.
                       </Alert>
                     ) : null}
-                    {issueOnCreate && convertMode === "explode_lines" && !can("stockOut") ? (
+                    {issueOnCreate && convertMode === "explode_lines" && !stockViaDc && !can("stockOut") ? (
                       <Alert tone="amber" title="Stock-out permission needed">
-                        Issuing an explode invoice posts stock. Ask an owner for Stock out, or save as draft.
+                        Issuing an explode invoice without DC links posts stock. Ask an owner for Stock out, save as draft, or link approved DCs.
                       </Alert>
                     ) : null}
-                    {issueOnCreate && convertMode === "explode_lines" && stockShortfalls.length ? (
+                    {issueOnCreate && convertMode === "explode_lines" && !stockViaDc && stockShortfalls.length ? (
                       <Alert tone={blockOnShortfall ? "coral" : "amber"} title={blockOnShortfall ? "Insufficient stock" : "Stock below need"}>
                         {stockShortfalls
                           .slice(0, 4)
@@ -624,17 +757,23 @@ function BomViewer({
                       <Button
                         disabled={
                           Boolean(busy) ||
-                          (issueOnCreate && convertMode === "explode_lines" && Boolean(doc.stockIssuedAt)) ||
-                          (issueOnCreate && convertMode === "explode_lines" && !can("stockOut")) ||
-                          (issueOnCreate && convertMode === "explode_lines" && blockOnShortfall)
+                          (issueOnCreate && convertMode === "explode_lines" && !stockViaDc && Boolean(doc.stockIssuedAt)) ||
+                          (issueOnCreate && convertMode === "explode_lines" && !stockViaDc && !can("stockOut")) ||
+                          (issueOnCreate && convertMode === "explode_lines" && !stockViaDc && blockOnShortfall)
                         }
                         onClick={async () => {
                           const out = await run(
                             "invoice",
-                            () => bom.createInvoice(doc.id, { mode: convertMode, issue: issueOnCreate }),
+                            () =>
+                              bom.createInvoice(doc.id, {
+                                mode: convertMode,
+                                issue: issueOnCreate,
+                                dcIds: linkDcIds.length ? linkDcIds : undefined,
+                              }),
                             { success: issueOnCreate ? "Invoice issued from BOM" : "Draft invoice created" },
                           );
                           if (out?.invoice?.invoice?.id) {
+                            setLinkDcIds([]);
                             reloadAll();
                             navigate("sales", `open:${out.invoice.invoice.id}`);
                           }
@@ -651,86 +790,17 @@ function BomViewer({
                 )}
               </Card>
 
-              <Card className="ims-bom-action-card">
-                <Alert tone="blue" title="Issue materials (stock out)">
-                  Posts OUT movements for stock lines linked to catalogue items. Use this when the invoice is lump-sum (or not issued yet) and you still need to deduct components.
-                </Alert>
-                {doc.stockIssuedAt ? (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <Badge tone="emerald">
-                      Stock issued · {doc.stockIssueCount} item{doc.stockIssueCount === 1 ? "" : "s"} · {doc.stockIssuedAt}
-                    </Badge>
-                    {can("stockOut") && !explodeStockPosted ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={Boolean(busy)}
-                        onClick={async () => {
-                          if (!window.confirm("Return these materials to stock and clear the BOM issue flag?")) return;
-                          const out = await run("revstock", () => bom.reverseStock(doc.id), { success: "BOM stock reversed" });
-                          if (out) reloadAll();
-                        }}
-                      >
-                        Reverse stock
-                      </Button>
-                    ) : explodeStockPosted ? (
-                      <span style={{ fontSize: 13, opacity: 0.75 }}>Stock came from the explode invoice — cancel that invoice to return materials.</span>
-                    ) : null}
-                  </div>
-                ) : can("stockOut") ? (
-                  explodeStockPosted ? (
-                    <Alert tone="amber" title="Stock already posted">
-                      Materials went out with the linked explode invoice. Cancel that invoice if you need to return stock.
-                    </Alert>
-                  ) : explodeDraftLinked ? (
-                    <Alert tone="amber" title="Draft explode invoice linked">
-                      Issue or delete the draft explode invoice before issuing stock from this BOM — otherwise Sales issue will be blocked.
-                      {can("sales") && doc.invoiceId ? (
-                        <div style={{ marginTop: 8 }}>
-                          <Button size="sm" onClick={() => navigate("sales", `open:${doc.invoiceId}`)}>
-                            Open draft invoice
-                          </Button>
-                        </div>
-                      ) : null}
-                    </Alert>
-                  ) : (
-                    <>
-                      <div style={{ opacity: 0.75, fontSize: 13, marginBottom: 10 }}>
-                        {stockable
-                          ? `${stockable} stock line${stockable === 1 ? "" : "s"} ready to issue.`
-                          : "No stock-linked lines yet — edit the BOM and link catalogue items on stock lines."}
-                      </div>
-                      {stockShortfalls.length ? (
-                        <Alert tone={blockOnShortfall ? "coral" : "amber"} title={blockOnShortfall ? "Insufficient stock" : "Stock below need"}>
-                          {stockShortfalls
-                            .slice(0, 4)
-                            .map((s) => `${s.name}: need ${s.need} ${s.unit}, have ${s.have}`)
-                            .join(" · ")}
-                          {stockShortfalls.length > 4 ? ` · +${stockShortfalls.length - 4} more` : ""}
-                          {allowNegative ? " · Negative stock is allowed in Settings." : ""}
-                        </Alert>
-                      ) : null}
-                      <Button
-                        disabled={Boolean(busy) || !stockable || blockOnShortfall}
-                        onClick={async () => {
-                          if (stockShortfalls.length && allowNegative) {
-                            if (!window.confirm("On-hand is below need, but negative stock is allowed. Issue anyway?")) return;
-                          }
-                          const out = await run("stock", () => bom.issueStock(doc.id), { success: "Stock issued from BOM" });
-                          if (out) reloadAll();
-                        }}
-                      >
-                        Issue all stock
-                      </Button>
-                      <PartialIssueForm doc={doc} busy={Boolean(busy)} onDone={reloadAll} run={run} />
-                    </>
-                  )
-                ) : (
-                  <Alert tone="amber" title="Stock-out permission needed">
-                    Your IMS role needs Stock out to issue materials.
-                  </Alert>
-                )}
-              </Card>
+              <DeliveryChallanPanel
+                doc={doc}
+                busy={Boolean(busy)}
+                onDone={reloadAll}
+                run={run}
+                canApprove={canApproveDc}
+                selectedDcIds={linkDcIds}
+                onToggleDc={(dcId) =>
+                  setLinkDcIds((prev) => (prev.includes(dcId) ? prev.filter((x) => x !== dcId) : [...prev, dcId]))
+                }
+              />
 
               {doc.notes ? (
                 <Card className="ims-bom-action-card ims-bom-action-card--notes">

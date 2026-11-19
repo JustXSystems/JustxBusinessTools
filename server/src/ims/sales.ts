@@ -41,6 +41,27 @@ import {
 import { getSettings, listMembers, type ImsSettings } from "./settings.js";
 import { nextDocNo, postMovement } from "./stock.js";
 
+/** Invoice ↔ DC links (table in 050). Kept local to avoid a bom ↔ sales import cycle. */
+async function listInvoiceDcIds(db: Queryable, tenantId: number, invoiceId: string): Promise<string[]> {
+  const list = await rows<{ dc_id: string }>(
+    db,
+    `SELECT dc_id FROM ims_invoice_dc_links WHERE tenant_id = :tenantId AND invoice_id = :invoiceId`,
+    { tenantId, invoiceId },
+  );
+  return list.map((r) => r.dc_id);
+}
+
+/** Live (non-cancelled) DCs on a BOM — invoice must not also post stock while these exist. */
+async function bomHasLiveDcsLocal(db: Queryable, tenantId: number, bomDocId: string): Promise<boolean> {
+  const row = await one<{ n: number }>(
+    db,
+    `SELECT COUNT(*) AS n FROM ims_bom_dcs
+     WHERE tenant_id = :tenantId AND bom_doc_id = :bomDocId AND status IN ('draft','verified','approved')`,
+    { tenantId, bomDocId },
+  );
+  return Number(row?.n ?? 0) > 0;
+}
+
 /* ---------- Shared finance helpers (also used by payables.ts and ledger.ts) ---------- */
 
 export const DRAFT_PREFIX = "DRAFT-";
@@ -348,11 +369,31 @@ export async function invoiceDetail(deps: ImsDeps, tenantId: number, id: string)
   const today = todayISO();
   const r = await loadInvoiceRow(deps.db, tenantId, id);
   const invoice = mapInvoice(r, today, true);
-  const [payments, activity] = await Promise.all([
+  const [payments, activity, dcLinkRows] = await Promise.all([
     rows<PaymentRow>(deps.db, `SELECT * FROM ims_payments WHERE tenant_id = :tenantId AND doc_type = 'invoice' AND doc_id = :id ORDER BY paid_on DESC, created_at DESC`, { tenantId, id }),
     rows<ActivityRow>(deps.db, `SELECT * FROM ims_ar_activity WHERE tenant_id = :tenantId AND invoice_id = :id ORDER BY created_at DESC LIMIT 200`, { tenantId, id }),
+    rows<{ dc_id: string; doc_no: string; status: string; stock_posted: number }>(
+      deps.db,
+      `SELECT l.dc_id, d.doc_no, d.status, d.stock_posted
+       FROM ims_invoice_dc_links l
+       INNER JOIN ims_bom_dcs d ON d.id = l.dc_id AND d.tenant_id = l.tenant_id
+       WHERE l.tenant_id = :tenantId AND l.invoice_id = :id
+       ORDER BY d.doc_no ASC`,
+      { tenantId, id },
+    ),
   ]);
-  return { invoice, hsn: hsnSummary(invoice.lines ?? []), payments: payments.map(mapPayment), activity: activity.map(mapActivity) };
+  const dcLinks = dcLinkRows.map((d) => ({
+    id: d.dc_id,
+    docNo: d.doc_no,
+    status: d.status,
+    stockPosted: Boolean(d.stock_posted),
+  }));
+  return {
+    invoice: { ...invoice, dcIds: dcLinks.map((d) => d.id), dcLinks },
+    hsn: hsnSummary(invoice.lines ?? []),
+    payments: payments.map(mapPayment),
+    activity: activity.map(mapActivity),
+  };
 }
 
 export const LineInput = z.object({
@@ -476,6 +517,8 @@ export async function createLinkedInvoice(
   hooks?: {
     /** Runs inside the invoice transaction before insert (use FOR UPDATE locks here). */
     before?: (conn: PoolConnection) => Promise<void>;
+    /** After insert, before optional issue — e.g. link delivery challans so issue skips stock OUT. */
+    afterInsert?: (conn: PoolConnection, invoiceId: string) => Promise<void>;
     /** Runs inside the same transaction after insert/issue so callers can link source rows atomically. */
     after?: (conn: PoolConnection, invoiceId: string) => Promise<void>;
   },
@@ -486,6 +529,7 @@ export async function createLinkedInvoice(
   const invoiceNo = await tx(deps.db, async (conn) => {
     await hooks?.before?.(conn);
     await insertInvoice(conn, actor, id, values, { sourceTool: input.sourceTool ?? null, sourceRef: input.sourceRef ?? null });
+    await hooks?.afterInsert?.(conn, id);
     const issuedNo = input.issue ? (await issueDraft(conn, actor, settings, id, "invoice")).invoiceNo : null;
     await hooks?.after?.(conn, id);
     return issuedNo;
@@ -504,6 +548,7 @@ export async function createLinkedInvoice(
 /**
  * Issue a draft in the caller's transaction: number it, post an OUT movement for every item-linked
  * line (respecting the negative-stock rule) and mark stock as posted.
+ * When the invoice links one or more delivery challans, stock was already moved on DC approve — skip OUT.
  */
 async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSettings, id: string, refType: "invoice" | "pos"): Promise<{ invoiceNo: string; row: InvoiceRow }> {
   const row = await loadInvoiceRow(conn, actor.tenantId, id, true);
@@ -516,10 +561,19 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
   await assertDayOpen(conn, actor.tenantId, invoiceDate);
   const invoiceNo = await nextDocNo(conn, actor.tenantId, "invoice", settings.invoicePrefix, invoiceDate, settings.businessName);
 
+  const dcIds = await listInvoiceDcIds(conn, actor.tenantId, id);
+  const stockViaDc = dcIds.length > 0;
+
   // BOM explode invoices: refuse a second OUT and keep stock_issued_at in sync. Lump-sum never owns the BOM stock flag.
-  const bomStockItems = row.source_tool === "ims_bom" && row.source_ref ? [...new Set(lines.filter((l) => l.itemId && l.qty > 0).map((l) => l.itemId!))] : [];
+  // Skip when DCs already own stock movements.
+  const bomStockItems = !stockViaDc && row.source_tool === "ims_bom" && row.source_ref ? [...new Set(lines.filter((l) => l.itemId && l.qty > 0).map((l) => l.itemId!))] : [];
   let bomExplode = false;
-  if (row.source_tool === "ims_bom" && row.source_ref && bomStockItems.length) {
+  if (!stockViaDc && row.source_tool === "ims_bom" && row.source_ref && bomStockItems.length) {
+    if (await bomHasLiveDcsLocal(conn, actor.tenantId, row.source_ref)) {
+      throw conflict(
+        "This BOM has delivery challans. Link approved DCs to the invoice (so stock stays on the DCs), or cancel open DCs before issuing stock from the invoice.",
+      );
+    }
     const bom = await one<{ stock_issued_at: string | null; invoice_convert_mode: string | null }>(
       conn,
       `SELECT stock_issued_at, invoice_convert_mode FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
@@ -527,41 +581,44 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
     );
     bomExplode = bom?.invoice_convert_mode === "explode_lines";
     if (bomExplode && bom?.stock_issued_at) {
-      throw conflict("Materials for this BOM were already issued. Use a lump-sum invoice, or reverse the BOM stock issue before issuing this explode invoice.");
+      throw conflict("Materials for this BOM were already issued. Use a lump-sum invoice, link approved delivery challans, or reverse stock before issuing this explode invoice.");
     }
   }
 
-  for (const l of lines) {
-    if (!l.itemId || !(l.qty > 0)) continue;
-    try {
-      await postMovement(
-        conn,
-        actor,
-        {
-          itemId: l.itemId,
-          type: "OUT",
-          qty: l.qty,
-          unitPrice: l.qty ? round2(l.taxable / l.qty) : l.rate,
-          refType,
-          refId: id,
-          refNo: invoiceNo,
-          partyId: row.customer_id,
-          partyName: row.customer_name,
-          date: invoiceDate,
-        },
-        { allowNegative: settings.allowNegativeStock },
-      );
-    } catch (err) {
-      if (err instanceof ImsError && err.status === 404) throw badRequest(`“${l.name}” is no longer in your items. Remove the line or pick the item again.`);
-      throw err;
+  if (!stockViaDc) {
+    for (const l of lines) {
+      if (!l.itemId || !(l.qty > 0)) continue;
+      try {
+        await postMovement(
+          conn,
+          actor,
+          {
+            itemId: l.itemId,
+            type: "OUT",
+            qty: l.qty,
+            unitPrice: l.qty ? round2(l.taxable / l.qty) : l.rate,
+            refType,
+            refId: id,
+            refNo: invoiceNo,
+            partyId: row.customer_id,
+            partyName: row.customer_name,
+            date: invoiceDate,
+          },
+          { allowNegative: settings.allowNegativeStock },
+        );
+      } catch (err) {
+        if (err instanceof ImsError && err.status === 404) throw badRequest(`“${l.name}” is no longer in your items. Remove the line or pick the item again.`);
+        throw err;
+      }
     }
   }
+  // stock_posted=1 when invoice moved stock, or when linked DCs already covered stock.
   await exec(conn, `UPDATE ims_invoices SET status = 'issued', invoice_no = :invoiceNo, stock_posted = 1, issued_at = CURRENT_TIMESTAMP WHERE tenant_id = :tenantId AND id = :id`, {
     tenantId: actor.tenantId,
     id,
     invoiceNo,
   });
-  if (row.source_tool === "ims_bom" && row.source_ref && bomExplode && bomStockItems.length) {
+  if (!stockViaDc && row.source_tool === "ims_bom" && row.source_ref && bomExplode && bomStockItems.length) {
     await exec(
       conn,
       `UPDATE ims_bom_docs SET stock_issued_at = CURRENT_TIMESTAMP, stock_issue_count = :n
@@ -572,9 +629,11 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
   return { invoiceNo, row };
 }
 
-/** Puts back the stock an issued invoice took out. */
+/** Puts back the stock an issued invoice took out. Skips when stock came from linked delivery challans. */
 async function reverseInvoiceStock(conn: PoolConnection, actor: ImsActor, row: InvoiceRow, reason: string): Promise<void> {
   if (!row.stock_posted) return;
+  const dcIds = await listInvoiceDcIds(conn, actor.tenantId, row.id);
+  if (dcIds.length) return;
   for (const l of json<ImsLine[]>(row.lines, [])) {
     if (!l.itemId || !(l.qty > 0)) continue;
     const exists = await one<{ id: string }>(conn, `SELECT id FROM ims_items WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id: l.itemId });
@@ -799,10 +858,12 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     const actor = actorOf(res);
     requirePerm(res, "sales");
     const input = parse(z.object({ reason: z.string().trim().min(3, "Give a short reason").max(255) }), req.body);
-    const row = await tx(deps.db, async (conn) => {
+    const outcome = await tx(deps.db, async (conn) => {
       const r = await loadInvoiceRow(conn, actor.tenantId, req.params.id, true);
       if (r.status !== "issued") throw conflict(r.status === "draft" ? "Drafts are deleted, not cancelled" : "This invoice is already cancelled");
       if (money(r.amount_paid) > 0.005) throw conflict(`${formatINR(money(r.amount_paid))} has been received against this invoice. Void those payments first, then cancel.`);
+      const dcIds = await listInvoiceDcIds(conn, actor.tenantId, r.id);
+      const stockViaDc = dcIds.length > 0;
       const hadStock = Boolean(r.stock_posted);
       await reverseInvoiceStock(conn, actor, r, "Invoice cancelled");
       await exec(conn, `UPDATE ims_invoices SET status = 'cancelled', stock_posted = 0, cancelled_at = CURRENT_TIMESTAMP, cancel_reason = :reason WHERE tenant_id = :tenantId AND id = :id`, {
@@ -810,14 +871,18 @@ export function registerSales(router: Router, deps: ImsDeps): void {
         id: r.id,
         reason: input.reason,
       });
-      // Free the BOM so convert can run again. Explode stock came from this invoice — clear the flag after reverse.
+      await exec(conn, `DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId AND invoice_id = :id`, {
+        tenantId: actor.tenantId,
+        id: r.id,
+      });
+      // Free the BOM so convert can run again. Only clear stock flags when this invoice owned the OUT (not DCs).
       if (r.source_tool === "ims_bom" && r.source_ref) {
         const bom = await one<{ invoice_convert_mode: string | null }>(
           conn,
           `SELECT invoice_convert_mode FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
           { tenantId: actor.tenantId, id: r.source_ref },
         );
-        const clearStock = bom?.invoice_convert_mode === "explode_lines" && hadStock;
+        const clearStock = !stockViaDc && bom?.invoice_convert_mode === "explode_lines" && hadStock;
         await exec(
           conn,
           clearStock
@@ -829,17 +894,25 @@ export function registerSales(router: Router, deps: ImsDeps): void {
                WHERE tenant_id = :tenantId AND id = :bomId AND invoice_id = :invoiceId`,
           { tenantId: actor.tenantId, bomId: r.source_ref, invoiceId: r.id },
         );
+        if (clearStock) {
+          await exec(conn, `UPDATE ims_bom_doc_lines SET issued_qty = 0 WHERE tenant_id = :tenantId AND doc_id = :bomId`, {
+            tenantId: actor.tenantId,
+            bomId: r.source_ref,
+          });
+        }
       }
-      return r;
+      return { row: r, stockViaDc };
     });
     await recordEvent(deps, actor, {
       type: "invoice.cancelled",
       entityType: "invoice",
-      entityId: row.id,
-      summary: `Cancelled invoice ${row.invoice_no} (${formatINR(money(row.grand_total))}) — stock returned`,
-      payload: { reason: input.reason },
+      entityId: outcome.row.id,
+      summary: outcome.stockViaDc
+        ? `Cancelled invoice ${outcome.row.invoice_no} (${formatINR(money(outcome.row.grand_total))}) — stock remains on delivery challans`
+        : `Cancelled invoice ${outcome.row.invoice_no} (${formatINR(money(outcome.row.grand_total))}) — stock returned`,
+      payload: { reason: input.reason, stockViaDc: outcome.stockViaDc },
     });
-    res.json(await invoiceDetail(deps, actor.tenantId, row.id));
+    res.json(await invoiceDetail(deps, actor.tenantId, outcome.row.id));
   });
 
   router.post("/invoices/:id/duplicate", async (req, res) => {
@@ -876,6 +949,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     if (row.status !== "draft") throw conflict("Only drafts can be deleted. Cancel an issued invoice instead.");
     await tx(deps.db, async (conn) => {
       await exec(conn, `DELETE FROM ims_ar_activity WHERE tenant_id = :tenantId AND invoice_id = :id`, { tenantId: actor.tenantId, id: row.id });
+      await exec(conn, `DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId AND invoice_id = :id`, { tenantId: actor.tenantId, id: row.id });
       await exec(conn, `DELETE FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`, { tenantId: actor.tenantId, id: row.id });
       if (row.source_tool && row.source_ref) {
         await exec(conn, `DELETE FROM ims_links WHERE tenant_id = :tenantId AND target_type = 'invoice' AND target_id = :id`, { tenantId: actor.tenantId, id: row.id });

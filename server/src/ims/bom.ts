@@ -9,6 +9,7 @@ import { badRequest, conflict, forbidden, notFound } from "./host.js";
 import { periodRange, round2, round3, todayISO, type ImsLineInput } from "./logic.js";
 import { confirmBomDoc, reopenBomDoc, registerBomEnhance } from "./bom-enhance-api.js";
 import { explodeNestedPackageLines, isLegacyFullIssue, normalizeOptionSelection, selectedOptionKeys } from "./bom-enhance.js";
+import { assertDcsLinkable, bomHasLiveDcs, linkInvoiceDcs, registerBomDc } from "./bom-dc.js";
 import { createLinkedInvoice } from "./sales.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo, postMovement } from "./stock.js";
@@ -1544,6 +1545,9 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     if (existing.status !== "confirmed") throw conflict("Only confirmed BOMs can be reopened");
     if (existing.invoiceId) throw conflict("This BOM is linked to an invoice and can't be reopened");
     if (existing.stockIssuedAt) throw conflict("Materials were already issued from this BOM — it can't be reopened");
+    if (await bomHasLiveDcs(deps.db, actor.tenantId, id)) {
+      throw conflict("Cancel or reverse delivery challans on this BOM before reopening");
+    }
     await reopenBomDoc(deps, { tenantId: actor.tenantId, userId: actor.userId ?? null, name: actor.name ?? null }, existing);
     res.json({ doc: await loadDoc(deps.db, actor.tenantId, id) });
   });
@@ -1557,6 +1561,9 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     if (existing.status === "cancelled") throw conflict("Already cancelled");
     if (existing.invoiceId) throw conflict("This BOM is linked to an invoice and can't be cancelled");
     if (existing.stockIssuedAt) throw conflict("Materials were already issued from this BOM — it can't be cancelled");
+    if (await bomHasLiveDcs(deps.db, actor.tenantId, id)) {
+      throw conflict("Cancel or reverse delivery challans on this BOM before cancelling");
+    }
     await exec(deps.db, `UPDATE ims_bom_docs SET status = 'cancelled' WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id });
     await recordEvent(deps, actor, { type: "bom.doc.cancelled", entityType: "bom_doc", entityId: id, summary: `Cancelled ${existing.docNo}`, payload: { docNo: existing.docNo } });
     res.json({ doc: await loadDoc(deps.db, actor.tenantId, id) });
@@ -1570,10 +1577,29 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     if (!existing) throw notFound("BOM document not found");
     if (existing.invoiceId) throw conflict("This BOM is linked to an invoice — open Sales and handle that invoice first.");
     if (existing.stockIssuedAt) throw conflict("Materials were issued from this BOM — reverse stock before deleting.");
+    if (await bomHasLiveDcs(deps.db, actor.tenantId, id)) {
+      throw conflict("Cancel or reverse delivery challans on this BOM before deleting");
+    }
     if (existing.status !== "draft" && !isOwner(res)) {
       throw forbidden("Only an owner can delete a confirmed or cancelled BOM.");
     }
     await tx(deps.db, async (conn) => {
+      const dcIds = await rows<{ id: string }>(
+        conn,
+        `SELECT id FROM ims_bom_dcs WHERE tenant_id = :tenantId AND bom_doc_id = :id`,
+        { tenantId: actor.tenantId, id },
+      );
+      for (const dc of dcIds) {
+        await exec(conn, `DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId AND dc_id = :dcId`, {
+          tenantId: actor.tenantId,
+          dcId: dc.id,
+        });
+        await exec(conn, `DELETE FROM ims_bom_dc_lines WHERE tenant_id = :tenantId AND dc_id = :dcId`, {
+          tenantId: actor.tenantId,
+          dcId: dc.id,
+        });
+      }
+      await exec(conn, `DELETE FROM ims_bom_dcs WHERE tenant_id = :tenantId AND bom_doc_id = :id`, { tenantId: actor.tenantId, id });
       await exec(conn, `DELETE FROM ims_bom_doc_lines WHERE tenant_id = :tenantId AND doc_id = :id`, { tenantId: actor.tenantId, id });
       await exec(conn, `DELETE FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id });
     });
@@ -1708,10 +1734,14 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         issue: z.boolean().optional(),
         gstRate: z.coerce.number().min(0).max(100).optional(),
         invoiceDate: isoDate.optional(),
+        /** Approved DCs to attach — invoice issue will not post stock when these are set. */
+        dcIds: z.array(z.string().uuid()).max(100).optional(),
       }),
       req.body,
     );
-    if (body.issue && body.mode === "explode_lines") requirePerm(res, "stockOut");
+    const dcIds = body.dcIds ?? [];
+    const stockViaDc = dcIds.length > 0;
+    if (body.issue && body.mode === "explode_lines" && !stockViaDc) requirePerm(res, "stockOut");
 
     const doc = await loadDoc(deps.db, actor.tenantId, id);
     if (!doc) throw notFound("BOM document not found");
@@ -1719,12 +1749,16 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     if (doc.invoiceId) throw conflict("This BOM already has an invoice. Open it from Sales.");
     if (!doc.customerName.trim()) throw conflict("Customer name is required");
     if (!doc.lines?.length) throw conflict("BOM has no lines");
-    if (body.issue && body.mode === "explode_lines" && doc.stockIssuedAt) {
-      throw conflict("Materials were already issued from this BOM. Create a draft explode invoice, or use lump-sum billing.");
+    if (stockViaDc) await assertDcsLinkable(deps.db, actor.tenantId, id, dcIds);
+    if (body.issue && body.mode === "explode_lines" && !stockViaDc && (await bomHasLiveDcs(deps.db, actor.tenantId, id))) {
+      throw conflict("This BOM has delivery challans. Link approved DCs on create, or cancel open DCs before issuing stock from the invoice.");
+    }
+    if (body.issue && body.mode === "explode_lines" && !stockViaDc && doc.stockIssuedAt) {
+      throw conflict("Materials were already issued from this BOM. Link approved delivery challans, create a draft explode invoice, or use lump-sum billing.");
     }
 
     const settings = await getSettings(deps, actor.tenantId);
-    if (body.issue && body.mode === "explode_lines" && !settings.allowNegativeStock) {
+    if (body.issue && body.mode === "explode_lines" && !stockViaDc && !settings.allowNegativeStock) {
       const availability = await computeBomAvailability(deps.db, actor.tenantId, doc.lines ?? []);
       if (bomHasShortfall(availability)) {
         const tip = availability
@@ -1834,9 +1868,12 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           if (!locked) throw notFound("BOM document not found");
           if (locked.status !== "confirmed") throw conflict("Confirm the BOM before creating an invoice");
           if (locked.invoice_id) throw conflict("This BOM already has an invoice. Open it from Sales.");
-          if (body.issue && body.mode === "explode_lines" && locked.stock_issued_at) {
-            throw conflict("Materials were already issued from this BOM. Create a draft explode invoice, or use lump-sum billing.");
+          if (body.issue && body.mode === "explode_lines" && !stockViaDc && locked.stock_issued_at) {
+            throw conflict("Materials were already issued from this BOM. Link approved delivery challans, create a draft explode invoice, or use lump-sum billing.");
           }
+        },
+        afterInsert: async (conn, invoiceId) => {
+          if (dcIds.length) await linkInvoiceDcs(conn, actor.tenantId, invoiceId, dcIds);
         },
         after: async (conn, invoiceId) => {
           const linked = await exec(
@@ -1848,7 +1885,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           if (!linked.affectedRows) {
             throw conflict("Another invoice was linked to this BOM at the same time. Open Sales and check recent drafts.");
           }
-          if (body.issue && body.mode === "explode_lines" && stockLineCount > 0) {
+          if (body.issue && body.mode === "explode_lines" && !stockViaDc && stockLineCount > 0) {
             const inv = await one<{ stock_posted: number }>(
               conn,
               `SELECT stock_posted FROM ims_invoices WHERE tenant_id = :tenantId AND id = :invoiceId LIMIT 1`,
@@ -1900,135 +1937,13 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     });
   });
 
-  router.post("/bom/docs/:id/issue-stock", async (req, res) => {
+  /** @deprecated Stock out is via Delivery Challan approve. Kept for clear client errors. */
+  router.post("/bom/docs/:id/issue-stock", async (_req, res) => {
     requirePerm(res, "bom");
-    requirePerm(res, "stockOut");
-    const actor = actorOf(res);
-    const id = String(req.params.id);
-    const body = parse(z.object({ date: isoDate.optional() }), req.body);
-    const doc = await loadDoc(deps.db, actor.tenantId, id);
-    if (!doc) throw notFound("BOM document not found");
-    if (doc.status !== "confirmed") throw conflict("Confirm the BOM before issuing stock");
-    if (doc.stockIssuedAt) throw conflict("Stock was already issued for this BOM");
-    if (doc.invoiceId && doc.invoiceConvertMode === "explode_lines") {
-      const inv = await one<{ stock_posted: number; status: string }>(
-        deps.db,
-        `SELECT stock_posted, status FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id LIMIT 1`,
-        { tenantId: actor.tenantId, id: doc.invoiceId },
-      );
-      if (inv && inv.status === "draft") {
-        throw conflict("A draft explode invoice is linked. Issue or delete that draft before issuing stock from the BOM.");
-      }
-      if (inv && inv.status === "issued" && inv.stock_posted) {
-        throw conflict("Stock was already posted when the linked explode invoice was issued");
-      }
-    }
-
-    const stockLines = (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
-    if (!stockLines.length) {
-      throw conflict("No stock-linked lines to issue. Link catalogue items on stock lines first (or use explode invoice).");
-    }
-
-    // Aggregate qty by item
-    const byItem = new Map<string, { qty: number; name: string }>();
-    for (const l of stockLines) {
-      const cur = byItem.get(l.itemId!) ?? { qty: 0, name: l.description };
-      cur.qty = round3(cur.qty + l.qty);
-      byItem.set(l.itemId!, cur);
-    }
-
-    const settings = await getSettings(deps, actor.tenantId);
-    if (!settings.allowNegativeStock) {
-      const availability = await computeBomAvailability(deps.db, actor.tenantId, doc.lines ?? []);
-      if (bomHasShortfall(availability)) {
-        const tip = availability
-          .filter((a) => a.shortfall > 0)
-          .slice(0, 3)
-          .map((a) => `${a.name} (need ${a.need}, have ${a.have})`)
-          .join("; ");
-        throw conflict(`Insufficient stock. ${tip}`);
-      }
-    }
-    const date = body.date ?? todayISO();
-    const posted = await tx(deps.db, async (conn) => {
-      const locked = await one<{
-        stock_issued_at: string | null;
-        status: string;
-        invoice_id: string | null;
-        invoice_convert_mode: string | null;
-      }>(
-        conn,
-        `SELECT stock_issued_at, status, invoice_id, invoice_convert_mode FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
-        { tenantId: actor.tenantId, id },
-      );
-      if (!locked) throw notFound("BOM document not found");
-      if (locked.status !== "confirmed") throw conflict("Confirm the BOM before issuing stock");
-      if (locked.stock_issued_at) throw conflict("Stock was already issued for this BOM");
-      if (locked.invoice_id && locked.invoice_convert_mode === "explode_lines") {
-        const inv = await one<{ stock_posted: number; status: string }>(
-          conn,
-          `SELECT stock_posted, status FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id LIMIT 1`,
-          { tenantId: actor.tenantId, id: locked.invoice_id },
-        );
-        if (inv && inv.status === "draft") {
-          throw conflict("A draft explode invoice is linked. Issue or delete that draft before issuing stock from the BOM.");
-        }
-        if (inv && inv.status === "issued" && inv.stock_posted) {
-          throw conflict("Stock was already posted when the linked explode invoice was issued");
-        }
-      }
-
-      const out = [];
-      for (const [itemId, v] of byItem) {
-        out.push(
-          await postMovement(
-            conn,
-            actor,
-            {
-              itemId,
-              type: "OUT",
-              qty: v.qty,
-              refType: "bom",
-              refId: doc.id,
-              refNo: doc.docNo,
-              partyId: doc.partyId,
-              partyName: doc.customerName,
-              reason: "BOM materials issue",
-              notes: doc.title || doc.capacityLabel || null,
-              date,
-            },
-            { allowNegative: settings.allowNegativeStock },
-          ),
-        );
-      }
-      const claimed = await exec(
-        conn,
-        `UPDATE ims_bom_docs SET stock_issued_at = CURRENT_TIMESTAMP, stock_issue_count = :n
-         WHERE tenant_id = :tenantId AND id = :id AND stock_issued_at IS NULL`,
-        { tenantId: actor.tenantId, id, n: byItem.size },
-      );
-      if (!claimed.affectedRows) throw conflict("Stock was already issued for this BOM");
-      // Record per-line issued qty so partial-issue / reverse / as-built stay consistent with a full issue.
-      await exec(
-        conn,
-        `UPDATE ims_bom_doc_lines SET issued_qty = qty
-         WHERE tenant_id = :tenantId AND doc_id = :id AND line_kind = 'stock' AND item_id IS NOT NULL AND qty > 0`,
-        { tenantId: actor.tenantId, id },
-      );
-      return out;
-    });
-
-    await recordEvent(deps, actor, {
-      type: "bom.doc.stock_issued",
-      entityType: "bom_doc",
-      entityId: id,
-      summary: `Issued stock for BOM ${doc.docNo} (${posted.length} item${posted.length === 1 ? "" : "s"})`,
-      payload: { count: posted.length },
-    });
-
-    res.json({ doc: await loadDoc(deps.db, actor.tenantId, id), movements: posted });
+    throw conflict("Stock out from a BOM now uses Delivery Challans. Create a DC from the confirmed BOM, verify it, then approve to post stock.");
   });
 
+  /** Legacy reverse for pre-DC BOM issues only. Prefer reversing each approved DC. */
   router.post("/bom/docs/:id/reverse-stock", async (req, res) => {
     requirePerm(res, "bom");
     requirePerm(res, "stockOut");
@@ -2037,6 +1952,9 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const body = parse(z.object({ date: isoDate.optional() }), req.body);
     const doc = await loadDoc(deps.db, actor.tenantId, id);
     if (!doc) throw notFound("BOM document not found");
+    if (await bomHasLiveDcs(deps.db, actor.tenantId, id)) {
+      throw conflict("Reverse each approved delivery challan on this BOM instead of using BOM reverse stock.");
+    }
     if (!doc.stockIssuedAt) throw conflict("No BOM stock issue to reverse");
     if (doc.invoiceId && doc.invoiceConvertMode === "explode_lines") {
       const inv = await one<{ stock_posted: number; status: string }>(
@@ -2076,7 +1994,6 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         }
       }
 
-      // Return what was actually issued: per-line issued_qty (full or partial issue), or full qty for legacy full issues.
       const fresh = await loadDoc(conn, actor.tenantId, id);
       const freshStock = (fresh?.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
       const legacyFull = isLegacyFullIssue(locked.stock_issued_at, freshStock);
@@ -2137,4 +2054,5 @@ export function registerBom(router: Router, deps: ImsDeps): void {
   });
 
   registerBomEnhance(router, deps, { loadDoc, loadPackage });
+  registerBomDc(router, deps, { loadDoc });
 }

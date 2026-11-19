@@ -152,9 +152,11 @@ function ProgressBadges({ d }: { d: BomDoc }) {
         <Badge tone="amber">No invoice</Badge>
       ) : null}
       {d.stockIssuedAt ? (
-        <Badge tone="emerald">Stock out</Badge>
+        <Badge tone="emerald" title={d.stockIssueCount ? `${d.stockIssueCount} DC(s)` : undefined}>
+          DC stock
+        </Badge>
       ) : d.status === "confirmed" ? (
-        <Badge tone="amber">Needs stock</Badge>
+        <Badge tone="amber">Needs DC</Badge>
       ) : null}
       {!proposal && !d.invoiceId && !d.stockIssuedAt && d.status !== "confirmed" ? <span className="ims-faint">—</span> : null}
     </span>
@@ -383,7 +385,7 @@ export function BomList({
       { header: "Status", value: (d) => BOM_DOC_STATUS_LABEL[d.status as BomDocStatus] ?? d.status },
       { header: "Total", value: (d) => d.grandTotal },
       { header: "Invoice", value: (d) => (d.invoiceId ? "Yes" : "No") },
-      { header: "Stock", value: (d) => (d.stockIssuedAt ? "Issued" : "—") },
+      { header: "Stock", value: (d) => (d.stockIssuedAt ? (d.stockIssueCount ? `DC ×${d.stockIssueCount}` : "Issued") : "—") },
     ]);
   };
 

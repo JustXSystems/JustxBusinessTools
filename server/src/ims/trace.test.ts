@@ -179,7 +179,7 @@ describe("bomTrace", () => {
     });
     expect(t.type).toBe("bom");
     expect(t.steps.find((s) => s.label === "Invoice")?.state).toBe("ok");
-    expect(t.steps.find((s) => s.label === "Stock issue")?.state).toBe("ok");
+    expect(t.steps.find((s) => s.label === "Stock / DC")?.state).toBe("ok");
     expect(t.steps.find((s) => s.label === "Purchase")?.state).toBe("ok");
   });
 });

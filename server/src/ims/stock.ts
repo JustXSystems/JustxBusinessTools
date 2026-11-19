@@ -13,7 +13,7 @@ export type MovementInput = {
   damaged?: boolean;
   unitCost?: number | null;
   unitPrice?: number | null;
-  refType?: "manual" | "po" | "invoice" | "return" | "check" | "pos" | "tally" | "import" | "bom";
+  refType?: "manual" | "po" | "invoice" | "return" | "check" | "pos" | "tally" | "import" | "bom" | "dc";
   refId?: string | null;
   refNo?: string | null;
   partyId?: string | null;

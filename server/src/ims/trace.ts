@@ -452,8 +452,8 @@ export function bomTrace(f: BomTraceFacts): Omit<Trace, "events"> {
   );
   steps.push(
     f.stockIssuedAt
-      ? { label: "Stock issue", title: `${plural(f.stockIssueCount, "line")} issued`, detail: f.stockIssuedAt.slice(0, 16).replace("T", " "), state: "ok" }
-      : { label: "Stock issue", title: "Not issued", detail: "Issue materials from the confirmed BOM", state: f.status === "confirmed" ? "warn" : "na" },
+      ? { label: "Stock / DC", title: `${plural(f.stockIssueCount, "DC")} posted`, detail: f.stockIssuedAt.slice(0, 16).replace("T", " "), state: "ok" }
+      : { label: "Stock / DC", title: "Not delivered", detail: "Create delivery challans from the confirmed BOM, then verify and approve", state: f.status === "confirmed" ? "warn" : "na" },
   );
   if (f.pos.length) {
     steps.push({
