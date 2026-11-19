@@ -6,6 +6,29 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { UpiPaymentsPanel } from "@/components/admin/UpiPaymentsPanel";
 import type { PaymentsActionHandle } from "@/components/admin/payments-actions";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPage,
+  AdminPageSkeleton,
+  AdminSection,
+  AdminTabs,
+} from "@/components/admin/ui";
+import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
+import {
+  Alert,
+  Badge,
+  Button,
+  DataTable,
+  FormGrid,
+  Grid,
+  KpiCard,
+  ProgressBar,
+  SearchInput,
+  cx,
+  type BosBadgeTone,
+  type BosColumn,
+} from "@/components/bos";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -96,6 +119,9 @@ const RANGES = [
   { value: 180, label: "6 months" },
 ] as const;
 
+const TXN_STATUSES: ReadonlyArray<TxnStatus> = ["all", "success", "failed", "pending"];
+const OPS_FILTERS: ReadonlyArray<OpsFilter> = ["all", "pending", "approved", "rejected"];
+
 const emptyOpForm = {
   party: "",
   amountInr: "",
@@ -132,12 +158,16 @@ function fmtWhen(value: string | null | undefined) {
   });
 }
 
-function statusPill(status: string) {
+function statusTone(status: string): BosBadgeTone {
   const s = status.toLowerCase();
-  if (s === "success" || s === "paid" || s === "approved" || s === "cleared" || s === "active") return "pill pill-success";
-  if (s === "pending" || s === "open" || s === "draft") return "pill pill-warning";
-  if (s === "failed" || s === "rejected" || s === "overdue" || s === "canceled" || s === "cancelled") return "pill pill-danger";
-  return "pill";
+  if (s === "success" || s === "paid" || s === "approved" || s === "cleared" || s === "active") return "emerald";
+  if (s === "pending" || s === "open" || s === "draft") return "amber";
+  if (s === "failed" || s === "rejected" || s === "overdue" || s === "canceled" || s === "cancelled") return "coral";
+  return "neutral";
+}
+
+function cap(s: string) {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
 function exportCsv(saas: SaasPayload | null, collections: CollectionsPayload | null, ops: PaymentOp[]) {
@@ -170,13 +200,7 @@ function exportCsv(saas: SaasPayload | null, collections: CollectionsPayload | n
 
 export default function AdminPaymentsPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="admin-page">
-          <p className="muted">Loading payments…</p>
-        </div>
-      }
-    >
+    <Suspense fallback={<AdminPageSkeleton cards={7} />}>
       <AdminPaymentsInner />
     </Suspense>
   );
@@ -222,6 +246,12 @@ function AdminPaymentsInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"ok" | "error">("ok");
+
+  function say(text: string, tone: "ok" | "error" = "ok") {
+    setMessageTone(tone);
+    setMessage(text);
+  }
 
   const focusOpId = useMemo(() => {
     const n = Number(searchParams.get("op"));
@@ -329,7 +359,7 @@ function AdminPaymentsInner() {
   async function createOp(e: React.FormEvent) {
     e.preventDefault();
     if (opForm.organizationId == null) {
-      setMessage("Select an organization before logging a payment");
+      say("Select an organization before logging a payment", "error");
       return;
     }
     setBusyId("create");
@@ -350,12 +380,12 @@ function AdminPaymentsInner() {
       });
       const next = await loadOps();
       setOpForm(emptyOpForm);
-      setMessage("Logged on the payment desk. Approval is pending.");
+      say("Logged on the payment desk. Approval is pending.");
       invalidateAdminData("admin-payments");
       if (next[0]) setSelectedOpId(next[0].id);
       setOpsFilter("pending");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not log payment");
+      say(err instanceof Error ? err.message : "Could not log payment", "error");
     } finally {
       setBusyId(null);
       setTabBusy(false);
@@ -368,9 +398,9 @@ function AdminPaymentsInner() {
       await api(`/admin/payments/ops/${id}/${action}`, { method: "POST" });
       invalidateAdminData("admin-payments");
       await loadOps();
-      setMessage(action === "approve" ? "Approved and marked cleared." : "Rejected.");
+      say(action === "approve" ? "Approved and marked cleared." : "Rejected.");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Review failed");
+      say(err instanceof Error ? err.message : "Review failed", "error");
     } finally {
       setBusyId(null);
     }
@@ -415,157 +445,271 @@ function AdminPaymentsInner() {
     busyId === "create" ||
     ((tab === "overview" || tab === "saas" || tab === "collections") && !saas && !collections);
 
+  // The UPI pane is self-contained, so a failed billing load must not block it.
+  if (loading && !saas && !collections && tab !== "upi") return <AdminPageSkeleton cards={7} />;
+
+  if (!saas && !collections && tab !== "upi") {
+    return (
+      <AdminPage title="Payments" sub="SaaS billing · collections · payment desk">
+        <AdminErrorState message={error || "Could not load payments"} onRetry={() => void load(days)} />
+      </AdminPage>
+    );
+  }
+
+  const tabOptions: ReadonlyArray<{ value: Tab; label: string }> = [
+    { value: "overview", label: "Overview" },
+    { value: "saas", label: "SaaS billing" },
+    { value: "collections", label: "Collections" },
+    { value: "ops", label: `Payment desk${pendingOps.length ? ` (${pendingOps.length})` : ""}` },
+    { value: "upi", label: `UPI QR${pendingSummary.upiClaims ? ` (${pendingSummary.upiClaims})` : ""}` },
+  ];
+
+  const kpi = (opts: {
+    label: string;
+    value: string | number;
+    delta: string;
+    deltaTone: "up" | "down" | "warn" | "info" | "muted";
+    chip: { color: "blue" | "amber" | "mint" | "lavender" | "rose" | "sage"; glyph: string };
+    selected: boolean;
+    onClick: () => void;
+  }) => (
+    <button
+      type="button"
+      className={cx("admin-cc-kpi-btn", opts.selected && "is-selected")}
+      aria-pressed={opts.selected}
+      onClick={opts.onClick}
+    >
+      <KpiCard
+        label={opts.label}
+        value={opts.value}
+        chip={opts.chip}
+        delta={opts.delta}
+        deltaTone={opts.deltaTone}
+      />
+    </button>
+  );
+
+  const txnColumns: ReadonlyArray<BosColumn<Transaction>> = [
+    {
+      key: "charge",
+      header: "Charge",
+      cell: (t) => (
+        <div>
+          <div className="admin-cc-cell-title">{t.type.replace(/_/g, " ")}</div>
+          <div className="admin-cc-cell-sub">
+            {fmtWhen(t.occurredAt)} · {t.provider}
+          </div>
+          {t.errorMessage ? (
+            <div className="admin-cc-cell-sub" style={{ color: "var(--bos-coral-600)" }}>
+              {t.errorCode ? `${t.errorCode}: ` : ""}
+              {t.errorMessage}
+            </div>
+          ) : null}
+        </div>
+      ),
+    },
+    { key: "amount", header: "Amount", align: "right", mono: true, cell: (t) => inr(t.amountInr) },
+    {
+      key: "status",
+      header: "Status",
+      cell: (t) => (
+        <Badge auto tone={statusTone(t.status)}>
+          {t.status}
+        </Badge>
+      ),
+    },
+  ];
+
+  const invoiceColumns: ReadonlyArray<BosColumn<Invoice>> = [
+    {
+      key: "invoice",
+      header: "Invoice",
+      cell: (inv) => (
+        <div>
+          <div className="admin-cc-cell-title">{inv.invoiceNo}</div>
+          <div className="admin-cc-cell-sub">
+            {fmtDate(inv.periodStart)} – {fmtDate(inv.periodEnd)}
+          </div>
+        </div>
+      ),
+    },
+    { key: "amount", header: "Amount", align: "right", mono: true, cell: (inv) => inr(inv.amountInr) },
+    {
+      key: "status",
+      header: "Status",
+      cell: (inv) => (
+        <Badge auto tone={statusTone(inv.status)}>
+          {inv.status}
+        </Badge>
+      ),
+    },
+  ];
+
+  const agingRows = (rows: CollectionsPayload["aging"]) => (
+    <div className="admin-cc-stack">
+      {rows.map((b) => (
+        <div key={b.label} className="admin-cc-funnel-row">
+          <span>{b.label}</span>
+          <ProgressBar
+            value={Math.max(6, (b.amount / agingMax) * 100)}
+            tone={b.count ? "amber" : "blue"}
+            label={`${b.label} aging`}
+          />
+          <span className="admin-cc-funnel-meta">
+            {b.count} items · {inr(b.amount)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+
+  const mixBar = (
+    <>
+      <ProgressBar value={(ar / cashTotal) * 100} tone="emerald" label="Receivable share of cash mix" size="lg" />
+      <div className="admin-cc-mix-legend">
+        <Badge auto tone="emerald">
+          AR {inr(ar)} ({Math.round((ar / cashTotal) * 100)}%)
+        </Badge>
+        <Badge auto tone="neutral">
+          AP {inr(ap)} ({Math.round((ap / cashTotal) * 100)}%)
+        </Badge>
+      </div>
+    </>
+  );
+
+  const kvItem = (label: string, value: React.ReactNode) => (
+    <li>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </li>
+  );
+
   return (
-    <div className="admin-page">
-      <section className="panel admin-card admin-page-head">
-        <div className="analytics-toolbar">
-          <div>
-            <h2>Payments</h2>
-            <p className="muted">
-              SaaS billing, collections (AR/AP), and a desk for approvals — one cash view for the organization.
-            </p>
-          </div>
-          <div className="admin-form-row">
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void load(days)} disabled={loading}>
-              {loading ? "Refreshing…" : "Refresh"}
-            </button>
-            <Link href={adminDeepLink.gateways()} className="btn btn-secondary btn-sm">
-              Gateways
-            </Link>
-            <Link href={adminDeepLink.subscriptions()} className="btn btn-secondary btn-sm">
-              Plans
-            </Link>
-          </div>
-        </div>
-
-        <div className="analytics-range" role="tablist" aria-label="Billing window">
-          {RANGES.map((r) => (
-            <button
-              key={r.value}
-              type="button"
-              role="tab"
-              aria-selected={days === r.value}
-              className={days === r.value ? "active" : ""}
-              onClick={() => setDays(r.value)}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="analytics-kpis">
-          <button type="button" className={`result-card ${tab === "saas" ? "is-selected" : ""}`} onClick={() => selectTab("saas")}>
-            <span>Collected ({days}d)</span>
-            <strong>{inr(saas?.summary.collectedInr ?? 0)}</strong>
-            <span className="analytics-delta">{saas?.summary.successCount ?? 0} successful charges</span>
-          </button>
-          <button
-            type="button"
-            className={`result-card ${tab === "saas" && txnStatus === "failed" ? "is-selected" : ""}`}
-            onClick={() => {
-              setTxnStatus("failed");
-              selectTab("saas");
-            }}
-          >
-            <span>Failure rate</span>
-            <strong>{pct(saas?.summary.failureRate ?? 0)}</strong>
-            <span className={`analytics-delta ${(saas?.summary.failedCount ?? 0) > 0 ? "is-down" : "is-up"}`}>
-              {saas?.summary.failedCount ?? 0} failed — click to review
-            </span>
-          </button>
-          <button
-            type="button"
-            className={`result-card ${tab === "collections" ? "is-selected" : ""}`}
-            onClick={() => selectTab("collections")}
-          >
-            <span>Receivable</span>
-            <strong>{inr(ar)}</strong>
-            <span className="analytics-delta">Pending {inr(collections?.summary.pendingReceivable ?? 0)}</span>
-          </button>
-          <button
-            type="button"
-            className={`result-card ${tab === "collections" ? "is-selected" : ""}`}
-            onClick={() => selectTab("collections")}
-          >
-            <span>Overdue</span>
-            <strong>{inr(collections?.summary.overdueReceivable ?? 0)}</strong>
-            <span className={`analytics-delta ${(collections?.summary.overdueReceivable ?? 0) > 0 ? "is-down" : ""}`}>
-              AMC renewals {collections?.summary.amcRenewalsNext30d ?? 0}
-            </span>
-          </button>
-          <button
-            type="button"
-            className={`result-card ${tab === "collections" ? "is-selected" : ""}`}
-            onClick={() => selectTab("collections")}
-          >
-            <span>Net position</span>
-            <strong>{inr(collections?.summary.netPosition ?? 0)}</strong>
-            <span className="analytics-delta">Payables {inr(ap)}</span>
-          </button>
-          <button type="button" className={`result-card ${tab === "upi" ? "is-selected" : ""}`} onClick={() => selectTab("upi")}>
-            <span>UPI pending</span>
-            <strong>{pendingSummary.upiClaims}</strong>
-            <span className="analytics-delta">{inr(pendingSummary.upiAmountInr)} awaiting verify</span>
-          </button>
-          <button
-            type="button"
-            className={`result-card ${tab === "ops" ? "is-selected" : ""}`}
-            onClick={() => {
-              setOpsFilter("pending");
-              selectTab("ops");
-            }}
-          >
-            <span>Desk pending</span>
-            <strong>{pendingOps.length || pendingSummary.deskOps}</strong>
-            <span className="analytics-delta">{ops.length} logged items</span>
-          </button>
-        </div>
-      </section>
-
-      {error ? <p className="field-error">{error}</p> : null}
-      {message ? <p className="muted">{message}</p> : null}
-
-      <div className="admin-tabs-bar">
-        <div className="admin-tabs" role="tablist">
-          {(
-            [
-              ["overview", "Overview"],
-              ["saas", "SaaS billing"],
-              ["collections", "Collections"],
-              ["ops", "Payment desk"],
-              ["upi", "UPI QR"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              className={tab === id ? "active" : ""}
-              onClick={() => selectTab(id)}
-            >
-              {label}
-              {id === "ops" && pendingOps.length ? ` (${pendingOps.length})` : ""}
-              {id === "upi" && pendingSummary.upiClaims ? ` (${pendingSummary.upiClaims})` : ""}
-            </button>
-          ))}
-        </div>
-        <div className="admin-tabs-actions">
-          <button
-            type="button"
-            className={tab === "upi" || tab === "ops" ? "btn btn-primary" : "btn btn-secondary"}
+    <AdminPage
+      title="Payments"
+      sub="SaaS billing · collections (AR/AP) · payment desk"
+      toolbar={
+        <>
+          <Badge auto tone={pendingSummary.total ? "amber" : "emerald"}>
+            {pendingSummary.total ? `${pendingSummary.total} pending` : "All clear"}
+          </Badge>
+          <AdminTabs
+            aria-label="Payments section"
+            options={tabOptions}
+            value={tab}
+            onChange={(next) => selectTab(next)}
+          />
+          <Button
+            variant={tab === "upi" || tab === "ops" ? "primary" : "secondary"}
+            size="sm"
+            icon={tab === "upi" || tab === "ops" ? undefined : "download"}
             disabled={Boolean(tabPrimaryDisabled)}
             onClick={() => void runTabPrimary()}
           >
             {tabPrimaryLabel}
-          </button>
-        </div>
+          </Button>
+          <Button variant="ghost" size="sm" icon="refresh" onClick={() => void load(days)} disabled={loading}>
+            {loading ? "Refreshing…" : "Refresh"}
+          </Button>
+        </>
+      }
+    >
+      <div className="admin-cc-filters">
+        <AdminTabs
+          aria-label="Billing window"
+          options={RANGES.map((r) => ({ value: String(r.value), label: r.label }))}
+          value={String(days)}
+          onChange={(v) => setDays(Number(v))}
+        />
+        <Link href={adminDeepLink.gateways()}>
+          <Button variant="secondary" size="sm">
+            Gateways
+          </Button>
+        </Link>
+        <Link href={adminDeepLink.subscriptions()}>
+          <Button variant="secondary" size="sm">
+            Plans
+          </Button>
+        </Link>
       </div>
 
-      <div className="admin-page-scroll">
-      {loading && !saas ? <p className="muted">Loading payments…</p> : null}
+      <Grid cols={4} min={140} gap={12}>
+        {kpi({
+          label: `Collected (${days}d)`,
+          value: inr(saas?.summary.collectedInr ?? 0),
+          delta: `${saas?.summary.successCount ?? 0} successful charges`,
+          deltaTone: "muted",
+          chip: { color: "mint", glyph: "₹" },
+          selected: tab === "saas" && txnStatus !== "failed",
+          onClick: () => selectTab("saas"),
+        })}
+        {kpi({
+          label: "Failure rate",
+          value: pct(saas?.summary.failureRate ?? 0),
+          delta: `${saas?.summary.failedCount ?? 0} failed — click to review`,
+          deltaTone: (saas?.summary.failedCount ?? 0) > 0 ? "down" : "up",
+          chip: { color: "rose", glyph: "!" },
+          selected: tab === "saas" && txnStatus === "failed",
+          onClick: () => {
+            setTxnStatus("failed");
+            selectTab("saas");
+          },
+        })}
+        {kpi({
+          label: "Receivable",
+          value: inr(ar),
+          delta: `Pending ${inr(collections?.summary.pendingReceivable ?? 0)}`,
+          deltaTone: "muted",
+          chip: { color: "blue", glyph: "◎" },
+          selected: tab === "collections",
+          onClick: () => selectTab("collections"),
+        })}
+        {kpi({
+          label: "Overdue",
+          value: inr(collections?.summary.overdueReceivable ?? 0),
+          delta: `AMC renewals ${collections?.summary.amcRenewalsNext30d ?? 0}`,
+          deltaTone: (collections?.summary.overdueReceivable ?? 0) > 0 ? "down" : "muted",
+          chip: { color: "amber", glyph: "◈" },
+          selected: tab === "collections",
+          onClick: () => selectTab("collections"),
+        })}
+        {kpi({
+          label: "Net position",
+          value: inr(collections?.summary.netPosition ?? 0),
+          delta: `Payables ${inr(ap)}`,
+          deltaTone: "muted",
+          chip: { color: "lavender", glyph: "▣" },
+          selected: tab === "collections",
+          onClick: () => selectTab("collections"),
+        })}
+        {kpi({
+          label: "UPI pending",
+          value: pendingSummary.upiClaims,
+          delta: `${inr(pendingSummary.upiAmountInr)} awaiting verify`,
+          deltaTone: pendingSummary.upiClaims ? "warn" : "muted",
+          chip: { color: "sage", glyph: "◈" },
+          selected: tab === "upi",
+          onClick: () => selectTab("upi"),
+        })}
+        {kpi({
+          label: "Desk pending",
+          value: pendingOps.length || pendingSummary.deskOps,
+          delta: `${ops.length} logged items`,
+          deltaTone: pendingOps.length || pendingSummary.deskOps ? "warn" : "muted",
+          chip: { color: "amber", glyph: "◈" },
+          selected: tab === "ops",
+          onClick: () => {
+            setOpsFilter("pending");
+            selectTab("ops");
+          },
+        })}
+      </Grid>
+
+      {error ? <AdminErrorState title="Refresh failed" message={error} onRetry={() => void load(days)} /> : null}
+      {message ? <Alert tone={messageTone === "error" ? "coral" : "emerald"} title={message} /> : null}
 
       {upiReady ? (
-        <div hidden={tab !== "upi"} className={tab === "upi" ? undefined : "payments-tab-park"}>
+        <div hidden={tab !== "upi"} className="admin-cc-hidden">
           <UpiPaymentsPanel
             ref={upiSaveRef}
             initialStatus={searchParams.get("status") || "pending"}
@@ -575,446 +719,398 @@ function AdminPaymentsInner() {
       ) : null}
 
       {tab === "overview" && saas && collections ? (
-        <div className="admin-split payments-split">
-          <div className="admin-pane-stack">
-            <section className="panel admin-card">
-              <h2>Subscription health</h2>
+        <div className="admin-cc-two">
+          <div className="admin-cc-split-stack">
+            <AdminSection title="Subscription health">
               {saas.subscription ? (
                 <>
-                  <ul className="admin-kv">
-                    <li>
-                      <span>Plan</span>
-                      <strong>{saas.subscription.planId}</strong>
-                    </li>
-                    <li>
-                      <span>Status</span>
-                      <span className={statusPill(saas.subscription.status)}>{saas.subscription.status}</span>
-                    </li>
-                    <li>
-                      <span>MRR</span>
-                      <strong>{inr(saas.subscription.mrrInr)}</strong>
-                    </li>
-                    <li>
-                      <span>Period</span>
-                      <strong>
+                  <ul className="admin-cc-kv">
+                    {kvItem("Plan", saas.subscription.planId)}
+                    {kvItem(
+                      "Status",
+                      <Badge auto tone={statusTone(saas.subscription.status)}>
+                        {saas.subscription.status}
+                      </Badge>,
+                    )}
+                    {kvItem("MRR", inr(saas.subscription.mrrInr))}
+                    {kvItem(
+                      "Period",
+                      <>
                         {fmtDate(saas.subscription.currentPeriodStart)} → {fmtDate(saas.subscription.currentPeriodEnd)}
-                      </strong>
-                    </li>
-                    <li>
-                      <span>Provider</span>
-                      <strong>{saas.subscription.provider || "—"}</strong>
-                    </li>
+                      </>,
+                    )}
+                    {kvItem("Provider", saas.subscription.provider || "—")}
                   </ul>
                   {(saas.billingItems?.length ?? 0) > 0 ? (
-                    <div className="billing-lines" style={{ marginTop: 12 }}>
-                      <p className="muted">Line items</p>
-                      <ul className="billing-line-list">
+                    <>
+                      <div className="admin-cc-subhead">Line items</div>
+                      <ul className="admin-cc-verify-list">
                         {saas.billingItems!.map((item) => (
                           <li key={item.toolId}>
                             <strong>{item.name}</strong>
-                            <span>
+                            <span className="admin-cc-cell-sub">
                               {inr(item.unitPriceInr)}/mo
                               {item.periodEnd ? ` · ${item.periodEnd.slice(0, 10)}` : ""}
                             </span>
                           </li>
                         ))}
                       </ul>
-                    </div>
+                    </>
                   ) : null}
-                  <div className="pay-meter">
-                    <div className="pay-meter-head">
-                      <span>Charge success</span>
-                      <strong>{pct(1 - saas.summary.failureRate)}</strong>
-                    </div>
-                    <div className="usage-bar">
-                      <span style={{ width: `${Math.max(4, (1 - saas.summary.failureRate) * 100)}%` }} />
-                    </div>
-                  </div>
+                  <div className="admin-cc-subhead">Charge success · {pct(1 - saas.summary.failureRate)}</div>
+                  <ProgressBar
+                    value={Math.max(4, (1 - saas.summary.failureRate) * 100)}
+                    tone="emerald"
+                    label="Charge success"
+                  />
                 </>
               ) : (
-                <p className="muted">No active subscription. Configure plans under Subscriptions.</p>
+                <AdminEmpty title="No active subscription" icon="wallet">
+                  Configure plans under Subscriptions.
+                </AdminEmpty>
               )}
-            </section>
+            </AdminSection>
 
-            <section className="panel admin-card">
-              <h2>Cash mix</h2>
-              <p className="muted">Receivables vs payables from Payment Tracker.</p>
-              <div className="pay-mix" aria-hidden>
-                <span className="pay-mix-ar" style={{ flex: ar || 1 }} />
-                <span className="pay-mix-ap" style={{ flex: ap || 1 }} />
-              </div>
-              <div className="chart-legend">
-                <span>
-                  <i className="seg-create" /> AR {inr(ar)} ({Math.round((ar / cashTotal) * 100)}%)
-                </span>
-                <span>
-                  <i className="seg-export" /> AP {inr(ap)} ({Math.round((ap / cashTotal) * 100)}%)
-                </span>
-              </div>
-            </section>
+            <AdminSection title="Cash mix" description="Receivables vs payables from Payment Tracker.">
+              {mixBar}
+            </AdminSection>
           </div>
 
-          <div className="admin-pane-stack">
-            <section className="panel admin-card">
-              <h2>Receivable aging</h2>
+          <div className="admin-cc-split-stack">
+            <AdminSection
+              title="Receivable aging"
+              actions={
+                <Link href="/tools/paymenttracker">
+                  <Button variant="ghost" size="sm">
+                    Payment Tracker →
+                  </Button>
+                </Link>
+              }
+            >
               {collections.aging.every((b) => b.count === 0) ? (
-                <p className="muted">No open receivables in aging buckets.</p>
+                <AdminEmpty title="No open receivables" icon="check">
+                  No open receivables in aging buckets.
+                </AdminEmpty>
               ) : (
-                <ul className="funnel">
-                  {collections.aging.map((b) => (
-                    <li key={b.label}>
-                      <span>{b.label}</span>
-                      <em>{b.count} items</em>
-                      <strong>{inr(b.amount)}</strong>
-                      <div className="funnel-bar" style={{ width: `${Math.max(6, (b.amount / agingMax) * 100)}%` }} />
-                    </li>
-                  ))}
-                </ul>
+                agingRows(collections.aging)
               )}
-              <p className="muted">
-                Source: <Link href="/tools/paymenttracker">Payment Tracker</Link>
-              </p>
-            </section>
+            </AdminSection>
 
-            <section className="panel admin-card">
-              <h2>Needs attention</h2>
-              <ul className="admin-kv">
-                <li>
-                  <span>UPI claims</span>
-                  <strong>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => selectTab("upi")}>
-                      {pendingSummary.upiClaims} · {inr(pendingSummary.upiAmountInr)}
-                    </button>
-                  </strong>
+            <AdminSection title="Needs attention">
+              <ul className="admin-cc-attention-list">
+                <li className="admin-cc-attention-item">
+                  <div className="admin-cc-attention-main">
+                    <div>
+                      <strong>UPI claims</strong>
+                      <p>{inr(pendingSummary.upiAmountInr)} awaiting verification</p>
+                    </div>
+                  </div>
+                  <span className="admin-cc-attention-count">{pendingSummary.upiClaims}</span>
+                  <Button variant="secondary" size="sm" onClick={() => selectTab("upi")}>
+                    Review
+                  </Button>
                 </li>
-                <li>
-                  <span>Payment desk</span>
-                  <strong>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => selectTab("ops")}>
-                      {pendingOps.length || pendingSummary.deskOps} pending
-                    </button>
-                  </strong>
+                <li className="admin-cc-attention-item">
+                  <div className="admin-cc-attention-main">
+                    <div>
+                      <strong>Payment desk</strong>
+                      <p>Logged receivables and payables awaiting approval</p>
+                    </div>
+                  </div>
+                  <span className="admin-cc-attention-count">{pendingOps.length || pendingSummary.deskOps}</span>
+                  <Button variant="secondary" size="sm" onClick={() => selectTab("ops")}>
+                    Review
+                  </Button>
                 </li>
               </ul>
               {pendingOps.length === 0 ? (
-                <p className="muted">No pending desk approvals.</p>
+                <p className="admin-cc-note">No pending desk approvals.</p>
               ) : (
-                <div className="tracker-list">
+                <div className="admin-cc-dir-list" style={{ maxHeight: 320 }}>
                   {pendingOps.slice(0, 6).map((op) => (
                     <button
                       type="button"
                       key={op.id}
-                      className="tracker-row admin-member-row"
+                      className="admin-cc-row"
                       onClick={() => {
                         setSelectedOpId(op.id);
                         selectTab("ops");
                       }}
                     >
-                      <div>
-                        <strong>{op.party}</strong>
-                        <span className="muted">
+                      <div className="admin-cc-row-main">
+                        <div className="admin-cc-cell-title">{op.party}</div>
+                        <div className="admin-cc-cell-sub">
                           {op.kind} · due {op.dueDate ?? "—"}
-                        </span>
+                        </div>
                       </div>
                       <strong>{inr(op.amountInr)}</strong>
                     </button>
                   ))}
                 </div>
               )}
-            </section>
+            </AdminSection>
           </div>
         </div>
       ) : null}
 
       {tab === "saas" && saas ? (
-        <div className="admin-split payments-split">
-          <section className="panel admin-card admin-pane">
-            <h2>Charges</h2>
-            <div className="admin-form-row">
-              <input
-                value={txnQuery}
-                onChange={(e) => setTxnQuery(e.target.value)}
-                placeholder="Search type, provider, error"
-                aria-label="Search transactions"
-              />
-              <div className="admin-tabs">
-                {(["all", "success", "failed", "pending"] as TxnStatus[]).map((s) => (
-                  <button key={s} type="button" className={txnStatus === s ? "active" : ""} onClick={() => setTxnStatus(s)}>
-                    {s}
-                  </button>
-                ))}
+        <div className="admin-cc-two">
+          <AdminSection title="Charges" description={`${filteredTxns.length} of ${saas.transactions.length} in this window`}>
+            <div className="admin-cc-stack">
+              <div className="admin-cc-filters">
+                <SearchInput
+                  value={txnQuery}
+                  onChange={(e) => setTxnQuery(e.target.value)}
+                  placeholder="Search type, provider, error"
+                  aria-label="Search transactions"
+                />
+                <AdminTabs
+                  aria-label="Charge status"
+                  options={TXN_STATUSES.map((s) => ({ value: s, label: cap(s) }))}
+                  value={txnStatus}
+                  onChange={setTxnStatus}
+                />
               </div>
-            </div>
-            <div className="tracker-list">
               {filteredTxns.length === 0 ? (
-                <p className="muted">No transactions in this window.</p>
+                <AdminEmpty title="No transactions" icon="receipt">
+                  No transactions in this window.
+                </AdminEmpty>
               ) : (
-                filteredTxns.map((t) => (
-                  <div key={t.id} className="tracker-row">
-                    <div>
-                      <strong>
-                        {t.type.replace(/_/g, " ")} · {inr(t.amountInr)}
-                      </strong>
-                      <span className="muted">
-                        {fmtWhen(t.occurredAt)} · {t.provider}
-                      </span>
-                      {t.errorMessage ? (
-                        <span className="field-error">
-                          {t.errorCode ? `${t.errorCode}: ` : ""}
-                          {t.errorMessage}
-                        </span>
-                      ) : null}
-                    </div>
-                    <span className={statusPill(t.status)}>{t.status}</span>
-                  </div>
-                ))
+                <div className="admin-cc-scroll" style={{ maxHeight: 640 }}>
+                  <DataTable
+                    caption="SaaS charges"
+                    columns={txnColumns}
+                    rows={filteredTxns}
+                    rowKey={(t) => String(t.id)}
+                  />
+                </div>
               )}
             </div>
-          </section>
+          </AdminSection>
 
-          <div className="admin-pane-stack">
-            <section className="panel admin-card">
-              <h2>Plan</h2>
+          <div className="admin-cc-split-stack">
+            <AdminSection
+              title="Plan"
+              actions={
+                <Link href={adminDeepLink.subscriptions()}>
+                  <Button variant="ghost" size="sm">
+                    Plans &amp; entitlements →
+                  </Button>
+                </Link>
+              }
+            >
               {saas.subscription ? (
-                <ul className="admin-kv">
-                  <li>
-                    <span>Plan</span>
-                    <strong>{saas.subscription.planId}</strong>
-                  </li>
-                  <li>
-                    <span>Status</span>
-                    <span className={statusPill(saas.subscription.status)}>{saas.subscription.status}</span>
-                  </li>
-                  <li>
-                    <span>MRR</span>
-                    <strong>{inr(saas.subscription.mrrInr)}</strong>
-                  </li>
-                  <li>
-                    <span>Collected</span>
-                    <strong>{inr(saas.summary.collectedInr)}</strong>
-                  </li>
+                <ul className="admin-cc-kv">
+                  {kvItem("Plan", saas.subscription.planId)}
+                  {kvItem(
+                    "Status",
+                    <Badge auto tone={statusTone(saas.subscription.status)}>
+                      {saas.subscription.status}
+                    </Badge>,
+                  )}
+                  {kvItem("MRR", inr(saas.subscription.mrrInr))}
+                  {kvItem("Collected", inr(saas.summary.collectedInr))}
                 </ul>
               ) : (
-                <p className="muted">No subscription</p>
+                <AdminEmpty title="No subscription" icon="wallet" />
               )}
-              <p className="muted">
-                Manage plans in <Link href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>.
-              </p>
-            </section>
-            <section className="panel admin-card">
-              <h2>Invoices</h2>
+            </AdminSection>
+
+            <AdminSection title="Invoices">
               {saas.invoices.length === 0 ? (
-                <p className="muted">No billing invoices yet.</p>
+                <AdminEmpty title="No billing invoices yet" icon="receipt" />
               ) : (
-                <ul className="admin-list">
-                  {saas.invoices.map((inv) => (
-                    <li key={inv.invoiceNo}>
-                      <span>
-                        {inv.invoiceNo}
-                        <em className="muted">
-                          {" "}
-                          {fmtDate(inv.periodStart)} – {fmtDate(inv.periodEnd)}
-                        </em>
-                      </span>
-                      <span>
-                        {inr(inv.amountInr)} <span className={statusPill(inv.status)}>{inv.status}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="admin-cc-scroll" style={{ maxHeight: 420 }}>
+                  <DataTable
+                    compact
+                    caption="Billing invoices"
+                    columns={invoiceColumns}
+                    rows={saas.invoices}
+                    rowKey={(inv) => inv.invoiceNo}
+                  />
+                </div>
               )}
-            </section>
+            </AdminSection>
           </div>
         </div>
       ) : null}
 
       {tab === "collections" && collections ? (
-        <div className="admin-split payments-split">
-          <section className="panel admin-card admin-pane">
-            <h2>AR / AP</h2>
-            <div className="result-grid">
-              <div className="result-card">
-                <span>Receivable</span>
-                <strong>{inr(collections.summary.totalReceivable)}</strong>
-              </div>
-              <div className="result-card">
-                <span>Payable</span>
-                <strong>{inr(collections.summary.totalPayable)}</strong>
-              </div>
-              <div className="result-card">
-                <span>Overdue</span>
-                <strong>{inr(collections.summary.overdueReceivable)}</strong>
-              </div>
-              <div className="result-card">
-                <span>Invoiced</span>
-                <strong>{inr(collections.summary.invoicedTotal)}</strong>
-              </div>
-            </div>
-            <div className="pay-mix" style={{ marginTop: 16 }}>
-              <span className="pay-mix-ar" style={{ flex: ar || 1 }} />
-              <span className="pay-mix-ap" style={{ flex: ap || 1 }} />
-            </div>
-            <p className="muted">
-              Net {inr(collections.summary.netPosition)} · pending receipts {inr(collections.summary.pendingReceivable)} · AMC
-              renewals in 30d: {collections.summary.amcRenewalsNext30d}
+        <div className="admin-cc-two">
+          <AdminSection
+            title="AR / AP"
+            actions={
+              <Link href="/tools/paymenttracker">
+                <Button variant="ghost" size="sm">
+                  Payment Tracker →
+                </Button>
+              </Link>
+            }
+          >
+            <Grid cols={2} min={140} gap={12}>
+              <KpiCard interactive={false} label="Receivable" value={inr(collections.summary.totalReceivable)} />
+              <KpiCard interactive={false} label="Payable" value={inr(collections.summary.totalPayable)} />
+              <KpiCard
+                interactive={false}
+                label="Overdue"
+                value={inr(collections.summary.overdueReceivable)}
+                valueTone={collections.summary.overdueReceivable > 0 ? "coral" : undefined}
+              />
+              <KpiCard interactive={false} label="Invoiced" value={inr(collections.summary.invoicedTotal)} />
+            </Grid>
+            <div style={{ marginTop: 16 }}>{mixBar}</div>
+            <p className="admin-cc-note">
+              Net {inr(collections.summary.netPosition)} · pending receipts {inr(collections.summary.pendingReceivable)} ·
+              AMC renewals in 30d: {collections.summary.amcRenewalsNext30d}
             </p>
-            <p className="muted">
-              Edit source records in <Link href="/tools/paymenttracker">Payment Tracker</Link>.
+            <p className="admin-cc-note">
+              Edit source records in{" "}
+              <Link className="admin-cc-link" href="/tools/paymenttracker">
+                Payment Tracker
+              </Link>
+              .
             </p>
-          </section>
-          <section className="panel admin-card admin-pane">
-            <h2>Aging (open receivables)</h2>
-            <ul className="funnel">
-              {collections.aging.map((b) => (
-                <li key={b.label}>
-                  <span>{b.label}</span>
-                  <em>{b.count} items</em>
-                  <strong>{inr(b.amount)}</strong>
-                  <div className="funnel-bar" style={{ width: `${Math.max(6, (b.amount / agingMax) * 100)}%` }} />
-                </li>
-              ))}
-            </ul>
-          </section>
+          </AdminSection>
+
+          <AdminSection title="Aging (open receivables)">{agingRows(collections.aging)}</AdminSection>
         </div>
       ) : null}
 
       {tab === "ops" ? (
-        <div className="admin-split payments-split">
-          <section className="panel admin-card admin-pane">
-            <h2>Queue</h2>
-            <div className="admin-form-row">
-              <input
+        <div className="admin-cc-split">
+          <AdminSection title="Queue" description={`${filteredOps.length} of ${ops.length} items`}>
+            <div className="admin-cc-stack">
+              <SearchInput
                 value={opsQuery}
                 onChange={(e) => setOpsQuery(e.target.value)}
                 placeholder="Search party, reference, notes"
                 aria-label="Search payment desk"
               />
-              <div className="admin-tabs">
-                {(["all", "pending", "approved", "rejected"] as OpsFilter[]).map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    className={opsFilter === f ? "active" : ""}
-                    onClick={() => {
-                      setOpsFilter(f);
-                      selectTab("ops", { filter: f, op: selectedOpId });
-                    }}
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
+              <AdminTabs
+                aria-label="Approval filter"
+                options={OPS_FILTERS.map((f) => ({ value: f, label: cap(f) }))}
+                value={opsFilter}
+                onChange={(f) => {
+                  setOpsFilter(f);
+                  selectTab("ops", { filter: f, op: selectedOpId });
+                }}
+              />
             </div>
-            <div className="tracker-list">
+            <div className="admin-cc-dir-list">
               {filteredOps.length === 0 ? (
-                <p className="muted">Nothing in this filter.</p>
+                <AdminEmpty title="Nothing in this filter" icon="check" />
               ) : (
-                filteredOps.map((op) => (
-                  <button
-                    type="button"
-                    key={op.id}
-                    className={`tracker-row admin-member-row ${selectedOpId === op.id ? "is-selected" : ""}`}
-                    onClick={() => setSelectedOpId(op.id)}
-                  >
-                    <div>
-                      <strong>{op.party}</strong>
-                      <span className="muted">
-                        {op.kind} · {op.status} · due {op.dueDate ?? "—"}
-                      </span>
-                    </div>
-                    <div className="admin-form-row">
-                      <strong>{inr(op.amountInr)}</strong>
-                      <span className={statusPill(op.approvalStatus)}>{op.approvalStatus}</span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </section>
-
-          <div className="admin-pane-stack">
-            {selectedOp ? (
-              <section className="panel admin-card">
-                <h2>{selectedOp.party}</h2>
-                <ul className="admin-kv">
-                  <li>
-                    <span>Kind</span>
-                    <strong>{selectedOp.kind}</strong>
-                  </li>
-                  <li>
-                    <span>Amount</span>
-                    <strong>{inr(selectedOp.amountInr)}</strong>
-                  </li>
-                  <li>
-                    <span>Status</span>
-                    <span className={statusPill(selectedOp.status)}>{selectedOp.status}</span>
-                  </li>
-                  <li>
-                    <span>Approval</span>
-                    <span className={statusPill(selectedOp.approvalStatus)}>{selectedOp.approvalStatus}</span>
-                  </li>
-                  <li>
-                    <span>Due</span>
-                    <strong>{selectedOp.dueDate ?? "—"}</strong>
-                  </li>
-                  <li>
-                    <span>Reference</span>
-                    <strong>{selectedOp.reference || "—"}</strong>
-                  </li>
-                </ul>
-                {selectedOp.notes ? <p className="muted">{selectedOp.notes}</p> : null}
-                {selectedOp.approvalStatus === "pending" ? (
-                  <div className="admin-form-row" style={{ marginTop: 12 }}>
+                filteredOps.map((op) => {
+                  const active = selectedOpId === op.id;
+                  return (
                     <button
                       type="button"
-                      className="btn btn-primary"
+                      key={op.id}
+                      className={cx("admin-cc-row", active && "is-selected")}
+                      aria-pressed={active}
+                      onClick={() => setSelectedOpId(op.id)}
+                    >
+                      <div className="admin-cc-row-main">
+                        <div className="admin-cc-cell-title">{op.party}</div>
+                        <div className="admin-cc-cell-sub">
+                          {op.kind} · {op.status} · due {op.dueDate ?? "—"}
+                        </div>
+                      </div>
+                      <div className="admin-cc-row-badges">
+                        <Badge auto tone="neutral">
+                          {inr(op.amountInr)}
+                        </Badge>
+                        <Badge auto tone={statusTone(op.approvalStatus)}>
+                          {op.approvalStatus}
+                        </Badge>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </AdminSection>
+
+          <div className="admin-cc-split-stack">
+            {selectedOp ? (
+              <AdminSection
+                title={selectedOp.party}
+                actions={
+                  <Badge auto tone={statusTone(selectedOp.approvalStatus)}>
+                    {selectedOp.approvalStatus}
+                  </Badge>
+                }
+              >
+                <ul className="admin-cc-kv">
+                  {kvItem("Kind", selectedOp.kind)}
+                  {kvItem("Amount", inr(selectedOp.amountInr))}
+                  {kvItem(
+                    "Status",
+                    <Badge auto tone={statusTone(selectedOp.status)}>
+                      {selectedOp.status}
+                    </Badge>,
+                  )}
+                  {kvItem(
+                    "Approval",
+                    <Badge auto tone={statusTone(selectedOp.approvalStatus)}>
+                      {selectedOp.approvalStatus}
+                    </Badge>,
+                  )}
+                  {kvItem("Due", selectedOp.dueDate ?? "—")}
+                  {kvItem("Reference", selectedOp.reference || "—")}
+                </ul>
+                {selectedOp.notes ? <p className="admin-cc-note-text">{selectedOp.notes}</p> : null}
+                {selectedOp.approvalStatus === "pending" ? (
+                  <div className="admin-cc-form-actions" style={{ marginTop: 12 }}>
+                    <Button
+                      variant="primary"
                       disabled={busyId === selectedOp.id}
                       onClick={() => void reviewOp(selectedOp.id, "approve")}
                     >
                       Approve
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-destructive"
+                    </Button>
+                    <Button
+                      variant="destructive"
                       disabled={busyId === selectedOp.id}
                       onClick={() => void reviewOp(selectedOp.id, "reject")}
                     >
                       Reject
-                    </button>
+                    </Button>
                   </div>
                 ) : (
-                  <p className="muted">This item is already {selectedOp.approvalStatus}.</p>
+                  <p className="admin-cc-note-text" style={{ marginTop: 12 }}>
+                    This item is already {selectedOp.approvalStatus}.
+                  </p>
                 )}
-              </section>
+              </AdminSection>
             ) : (
-              <section className="panel admin-card">
-                <h2>Review</h2>
-                <p className="muted">Select a logged payment to approve payouts or collections.</p>
-              </section>
+              <AdminSection title="Review">
+                <AdminEmpty title="Nothing selected" icon="receipt">
+                  Select a logged payment to approve payouts or collections.
+                </AdminEmpty>
+              </AdminSection>
             )}
 
-            <section className="panel admin-card">
-              <h2>Log payment</h2>
-              <p className="muted">Fill the fields, then use Log payment in the tab bar (creates a pending desk item).</p>
-              <form ref={opFormRef} className="admin-form-grid" onSubmit={createOp} id="payment-desk-log-form">
-                <div style={{ gridColumn: "1 / -1" }}>
+            <AdminSection
+              title="Log payment"
+              description="Fill the fields, then use Log payment in the toolbar (creates a pending desk item)."
+            >
+              <form ref={opFormRef} className="admin-cc-form" onSubmit={createOp} id="payment-desk-log-form">
+                <FormGrid>
                   <AdminOrgSelect
+                    full
                     value={opForm.organizationId}
                     onChange={(organizationId) => setOpForm({ ...opForm, organizationId })}
                   />
-                </div>
-                <label className="field">
-                  <span>Party</span>
-                  <input
+                  <TextField
+                    label="Party"
                     value={opForm.party}
                     onChange={(e) => setOpForm({ ...opForm, party: e.target.value })}
                     required
                     placeholder="Customer or vendor"
                   />
-                </label>
-                <label className="field">
-                  <span>Amount (INR)</span>
-                  <input
+                  <TextField
+                    label="Amount (INR)"
                     type="number"
                     min={0}
                     step="0.01"
@@ -1022,45 +1118,39 @@ function AdminPaymentsInner() {
                     onChange={(e) => setOpForm({ ...opForm, amountInr: e.target.value })}
                     required
                   />
-                </label>
-                <label className="field">
-                  <span>Kind</span>
-                  <select value={opForm.kind} onChange={(e) => setOpForm({ ...opForm, kind: e.target.value })}>
+                  <SelectField
+                    label="Kind"
+                    value={opForm.kind}
+                    onChange={(e) => setOpForm({ ...opForm, kind: e.target.value })}
+                  >
                     <option value="receivable">Receivable</option>
                     <option value="payable">Payable</option>
                     <option value="saas">SaaS</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Due date</span>
-                  <input
+                  </SelectField>
+                  <TextField
+                    label="Due date"
                     type="date"
                     value={opForm.dueDate}
                     onChange={(e) => setOpForm({ ...opForm, dueDate: e.target.value })}
                   />
-                </label>
-                <label className="field">
-                  <span>Reference</span>
-                  <input
+                  <TextField
+                    label="Reference"
                     value={opForm.reference}
                     onChange={(e) => setOpForm({ ...opForm, reference: e.target.value })}
                     placeholder="Invoice / UTR"
                   />
-                </label>
-                <label className="field">
-                  <span>Notes</span>
-                  <input
+                  <TextField
+                    label="Notes"
                     value={opForm.notes}
                     onChange={(e) => setOpForm({ ...opForm, notes: e.target.value })}
                     placeholder="Optional"
                   />
-                </label>
+                </FormGrid>
               </form>
-            </section>
+            </AdminSection>
           </div>
         </div>
       ) : null}
-      </div>
-    </div>
+    </AdminPage>
   );
 }

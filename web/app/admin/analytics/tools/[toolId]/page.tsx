@@ -4,6 +4,24 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
+  Badge,
+  BarChart,
+  Button,
+  ChartCard,
+  DataTable,
+  Grid,
+  GroupedBarChart,
+  KpiCard,
+  type BosColumn,
+} from "@/components/bos";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPage,
+  AdminPageSkeleton,
+  AdminSection,
+} from "@/components/admin/ui";
+import {
   AnalyticsRangePills,
   analyticsRangeLabel,
   formatAnalyticsBucket,
@@ -37,10 +55,12 @@ export default function AdminToolAnalyticsPage() {
   const params = useParams();
   const toolId = String(params.toolId ?? "");
   const name = toolTitle(toolId);
+
   const [days, setDays] = useState(30);
   const [grain, setGrain] = useState<Grain>("day");
   const [series, setSeries] = useState<SeriesRow[]>([]);
   const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
     if (!toolId) return;
@@ -53,6 +73,8 @@ export default function AdminToolAnalyticsPage() {
       setGrain(d.grain ?? "day");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load analytics");
+    } finally {
+      setLoaded(true);
     }
   }, [toolId, days]);
 
@@ -71,79 +93,120 @@ export default function AdminToolAnalyticsPage() {
     { opens: 0, creates: 0, updates: 0, exports: 0, prints: 0, calcRuns: 0, limitBlocks: 0 },
   );
 
-  const max = useMemo(
-    () => Math.max(1, ...series.map((r) => r.opens + r.creates + r.exports)),
-    [series],
+  const recent = useMemo(() => series.slice(-6), [series]);
+  const groupedUsage = useMemo(
+    () => recent.map((r) => ({ label: formatAnalyticsBucket(r.date, grain), a: r.opens, b: r.creates })),
+    [recent, grain],
+  );
+  const totalUsage = useMemo(
+    () =>
+      recent.map((r) => ({
+        label: formatAnalyticsBucket(r.date, grain),
+        value: r.opens + r.creates + r.exports,
+      })),
+    [recent, grain],
   );
 
   const mixLabel = grain === "month" ? "Monthly mix" : grain === "week" ? "Weekly mix" : "Daily mix";
   const listLabel = grain === "month" ? "By month" : grain === "week" ? "By week" : "By day";
+  const subtitle = `${toolId === "_app" ? "Events not tied to a specific tool" : toolId} · ${analyticsRangeLabel(days)}`;
+  const conversion = totals.opens ? Math.round((totals.creates / totals.opens) * 100) : 0;
+
+  const toolbar = (
+    <>
+      <Link href={adminDeepLink.analytics()}>
+        <Button variant="ghost" size="sm">
+          ← All tools
+        </Button>
+      </Link>
+      <AnalyticsRangePills value={days} onChange={setDays} />
+    </>
+  );
+
+  if (!loaded) return <AdminPageSkeleton cards={4} />;
+
+  if (error && series.length === 0) {
+    return (
+      <AdminPage title={name} sub={subtitle} toolbar={toolbar}>
+        <AdminErrorState message={error} onRetry={() => void load()} />
+      </AdminPage>
+    );
+  }
+
+  const columns: ReadonlyArray<BosColumn<SeriesRow>> = [
+    { key: "date", header: "Period", cell: (row) => formatAnalyticsBucket(row.date, grain) },
+    { key: "opens", header: "Opens", align: "right", cell: (row) => row.opens.toLocaleString() },
+    { key: "creates", header: "Creates", align: "right", cell: (row) => row.creates.toLocaleString() },
+    { key: "updates", header: "Edits", align: "right", cell: (row) => row.updates.toLocaleString() },
+    { key: "exports", header: "Exports", align: "right", cell: (row) => row.exports.toLocaleString() },
+    {
+      key: "limitBlocks",
+      header: "Blocked",
+      align: "right",
+      cell: (row) => (row.limitBlocks ? <Badge auto tone="amber">{row.limitBlocks} blocked</Badge> : "—"),
+    },
+  ];
 
   return (
-    <div className="admin-page">
-      <div className="admin-stack analytics-page admin-page-scroll">
-      <section className="panel admin-card">
-        <div className="analytics-toolbar">
-          <div>
-            <Link href={adminDeepLink.analytics()} className="btn btn-ghost btn-sm">← All tools</Link>
-            <h2>{name}</h2>
-            <p className="muted">
-              {toolId === "_app"
-                ? "Events that were not tied to a specific tool"
-                : toolId}{" "}
-              · {analyticsRangeLabel(days)}
-            </p>
-          </div>
-        </div>
-        <AnalyticsRangePills value={days} onChange={setDays} />
-        {error ? <p className="field-error">{error}</p> : null}
-        <div className="analytics-kpis">
-          <div className="result-card"><span>Opens</span><strong>{totals.opens.toLocaleString()}</strong></div>
-          <div className="result-card"><span>Creates</span><strong>{totals.creates.toLocaleString()}</strong></div>
-          <div className="result-card"><span>Updates</span><strong>{totals.updates.toLocaleString()}</strong></div>
-          <div className="result-card"><span>Exports</span><strong>{totals.exports.toLocaleString()}</strong></div>
-          <div className="result-card"><span>Prints</span><strong>{totals.prints.toLocaleString()}</strong></div>
-          <div className="result-card"><span>Calc runs</span><strong>{totals.calcRuns.toLocaleString()}</strong></div>
-        </div>
-      </section>
+    <AdminPage title={name} sub={subtitle} toolbar={toolbar}>
+      {error ? <AdminErrorState message={error} onRetry={() => void load()} /> : null}
 
-      <section className="panel admin-card">
-        <h2>{mixLabel}</h2>
-        <p className="muted">Longer ranges roll up so the chart stays readable.</p>
-        <div className="chart-bars">
-          {series.map((row) => {
-            const total = row.opens + row.creates + row.exports;
-            return (
-              <div key={row.date} className="chart-col" title={formatAnalyticsBucket(row.date, grain)}>
-                <div className="chart-stack" style={{ height: `${Math.max(4, (total / max) * 100)}%` }}>
-                  <span className="seg seg-open" style={{ flexGrow: row.opens || 0.01 }} />
-                  <span className="seg seg-create" style={{ flexGrow: row.creates || 0.01 }} />
-                  <span className="seg seg-export" style={{ flexGrow: row.exports || 0.01 }} />
-                </div>
-                <span className="chart-label">{formatAnalyticsBucket(row.date, grain)}</span>
-              </div>
-            );
-          })}
-        </div>
-        {series.length === 0 ? <p className="muted">No activity in this range.</p> : null}
-      </section>
+      <Grid cols={4} min={150} gap={12}>
+        <KpiCard label="Opens" value={totals.opens.toLocaleString()} chip={{ color: "mint", glyph: "◎" }} interactive={false} />
+        <KpiCard
+          label="Creates"
+          value={totals.creates.toLocaleString()}
+          chip={{ color: "lavender", glyph: "＋" }}
+          interactive={false}
+          delta={`${conversion}% open → create`}
+          deltaTone="muted"
+        />
+        <KpiCard label="Updates" value={totals.updates.toLocaleString()} chip={{ color: "blue", glyph: "✎" }} interactive={false} />
+        <KpiCard label="Exports" value={totals.exports.toLocaleString()} chip={{ color: "rose", glyph: "⇩" }} interactive={false} />
+        <KpiCard label="Prints" value={totals.prints.toLocaleString()} chip={{ color: "sage", glyph: "▤" }} interactive={false} />
+        <KpiCard label="Calc runs" value={totals.calcRuns.toLocaleString()} chip={{ color: "blue", glyph: "∑" }} interactive={false} />
+        <KpiCard
+          label="Limit blocks"
+          value={totals.limitBlocks.toLocaleString()}
+          chip={{ color: "amber", glyph: "▣" }}
+          interactive={false}
+          delta={totals.limitBlocks ? "Freemium friction" : "No limit hits"}
+          deltaTone={totals.limitBlocks ? "warn" : "muted"}
+        />
+      </Grid>
 
-      <section className="panel admin-card">
-        <h2>{listLabel}</h2>
-        <div className="tracker-list admin-scroll-list">
-          {series.map((row) => (
-            <div key={row.date} className="tracker-row">
-              <strong>{formatAnalyticsBucket(row.date, grain)}</strong>
-              <span className="muted">
-                {row.opens} opens · {row.creates} creates · {row.updates} edits · {row.exports} exports
-                {row.limitBlocks ? ` · ${row.limitBlocks} blocked` : ""}
-              </span>
-            </div>
-          ))}
-          {series.length === 0 ? <p className="muted">No rollup rows for this tool yet.</p> : null}
+      <AdminSection title={mixLabel} description="Longer ranges roll up so the chart stays readable. Charts show the latest 6 buckets.">
+        {series.length === 0 ? (
+          <AdminEmpty title="No activity in this range" icon="trend" />
+        ) : (
+          <Grid cols={2} min={260} gap={12}>
+            <ChartCard
+              title="Opens vs creates"
+              legend={[
+                { label: "Opens", tone: "emerald" },
+                { label: "Creates", tone: "coral" },
+              ]}
+            >
+              <GroupedBarChart data={groupedUsage} ariaLabel={`${name} opens versus creates`} series={["Opens", "Creates"]} />
+            </ChartCard>
+            <ChartCard title="Total volume (opens + creates + exports)">
+              <BarChart data={totalUsage} ariaLabel={`${name} total activity`} />
+            </ChartCard>
+          </Grid>
+        )}
+      </AdminSection>
+
+      <AdminSection title={listLabel} description={`${series.length} buckets in range.`}>
+        <div className="admin-cc-scroll">
+          <DataTable
+            caption={listLabel}
+            columns={columns}
+            rows={series}
+            rowKey={(row) => row.date}
+            empty="No rollup rows for this tool yet."
+          />
         </div>
-      </section>
-      </div>
-    </div>
+      </AdminSection>
+    </AdminPage>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Alert, Badge, Switch } from "@/components/bos";
+import { AdminEmpty, AdminSection } from "@/components/admin/ui";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { api } from "@/lib/api";
 
@@ -47,26 +49,25 @@ export function FeatureSwitchesPanel({
   const mine = switches?.filter((s) => s.tool === toolId) ?? [];
   if (businessProfileId == null) {
     return (
-      <section className="panel admin-card tm-pane" style={{ marginTop: 16 }} aria-label={`${toolName} switches`}>
-        <h2>Switches</h2>
-        <p className="muted">Select a Business Profile above to manage org feature switches.</p>
-      </section>
+      <AdminSection title="Switches" description="Select a Business Profile above to manage org feature switches.">
+        <AdminEmpty title="No Business Profile selected" icon="search" />
+      </AdminSection>
     );
   }
   if (switches == null) {
     return (
-      <section className="panel admin-card tm-pane" style={{ marginTop: 16 }} aria-label={`${toolName} switches`}>
-        <h2>Switches</h2>
-        <p className="muted">Loading feature switches…</p>
-      </section>
+      <AdminSection title="Switches" description="Loading feature switches…">
+        <div aria-busy="true" aria-label="Loading feature switches" className="bos-text-muted">
+          Loading…
+        </div>
+      </AdminSection>
     );
   }
   if (!mine.length) {
     return (
-      <section className="panel admin-card tm-pane" style={{ marginTop: 16 }} aria-label={`${toolName} switches`}>
-        <h2>Switches</h2>
-        <p className="muted">No feature switches registered for {toolName}.</p>
-      </section>
+      <AdminSection title="Switches" description={`No feature switches registered for ${toolName}.`}>
+        <AdminEmpty title="No switches for this tool" />
+      </AdminSection>
     );
   }
 
@@ -90,24 +91,37 @@ export function FeatureSwitchesPanel({
   }
 
   return (
-    <section className="panel admin-card tm-pane" style={{ marginTop: 16 }} aria-label={`${toolName} switches`}>
-      <h2>Switches</h2>
-      <p className="muted">
-        Optional changes to screens your team already uses. Everything starts off — turn a switch on when this organization is ready. Each switch saves as soon as you flip it.
-      </p>
-      {toolLive ? null : <p className="muted small">These take effect once {toolName} is Live (Visible on home → Live, then Save placement).</p>}
-      <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+    <AdminSection
+      title="Switches"
+      description="Optional changes to screens your team already uses. Everything starts off — turn a switch on when this organization is ready. Each switch saves as soon as you flip it."
+      actions={
+        <Badge auto tone={mine.some((s) => s.enabled) ? "emerald" : "neutral"}>
+          {mine.filter((s) => s.enabled).length}/{mine.length} on
+        </Badge>
+      }
+    >
+      <div aria-label={`${toolName} switches`} className="admin-cc-stack">
+        {toolLive ? null : (
+          <Alert tone="amber" title={`${toolName} is not Live yet`}>
+            These take effect once {toolName} is Live (Visible on home → Live, then Save placement).
+          </Alert>
+        )}
         {mine.map((s) => (
-          <label key={s.key} className="integ-switch">
-            <input type="checkbox" checked={s.enabled} disabled={busyKey !== null} onChange={(e) => void toggle(s, e.target.checked)} />
-            <span className="integ-switch-copy">
-              <strong>{s.label}</strong>
-              <span>{s.description}</span>
-            </span>
-          </label>
+          <div key={s.key} className="admin-cc-row" style={{ cursor: "default" }}>
+            <div className="admin-cc-row-main">
+              <div className="admin-cc-cell-title">{s.label}</div>
+              <div className="admin-cc-cell-sub">{s.description}</div>
+            </div>
+            <Switch
+              checked={s.enabled}
+              disabled={busyKey !== null}
+              onChange={(next) => void toggle(s, next)}
+              aria-label={`${s.label} (${s.enabled ? "on" : "off"})`}
+            />
+          </div>
         ))}
+        {message ? <Alert tone="blue" title={message} /> : null}
       </div>
-      {message ? <p className="muted small">{message}</p> : null}
-    </section>
+    </AdminSection>
   );
 }

@@ -4,6 +4,28 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { ProductPacksPanel } from "@/components/admin/ProductPacksPanel";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPage,
+  AdminPageSkeleton,
+  AdminSection,
+  AdminTabs,
+} from "@/components/admin/ui";
+import { SelectField, TextField, TextareaField } from "@/components/admin/ui/AdminFields";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  FormGrid,
+  Grid,
+  KpiCard,
+  SearchInput,
+  cx,
+  type BosColumn,
+} from "@/components/bos";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -81,12 +103,24 @@ type RenewalCandidate = {
   mrrInr: number;
 };
 
+type Tab = "tenants" | "packs" | "modes" | "renewals" | "notices";
+
+const TAB_VALUES: ReadonlyArray<Tab> = ["tenants", "packs", "modes", "renewals", "notices"];
+
+/** Hash deep links: `#renewals` (dashboard KPI) plus the legacy `#plan-editor` anchor. */
+function tabFromHash(hash: string): Tab | null {
+  const h = hash.replace(/^#/, "");
+  if (h === "plan-editor") return "modes";
+  return (TAB_VALUES as ReadonlyArray<string>).includes(h) ? (h as Tab) : null;
+}
+
 function featureList(features: unknown): string[] {
   if (Array.isArray(features)) return features.map(String);
   return [];
 }
 
 export default function AdminSubscriptionsPage() {
+  const [tab, setTab] = useState<Tab>("tenants");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [active, setActive] = useState<Active | null>(null);
   const [tenants, setTenants] = useState<TenantSub[]>([]);
@@ -117,6 +151,8 @@ export default function AdminSubscriptionsPage() {
   const [noticeOrgId, setNoticeOrgId] = useState<number | null>(null);
   const [assignOrgId, setAssignOrgId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const limited = plans.find((p) => p.accessMode === "limited" || p.id === "free");
@@ -152,27 +188,50 @@ export default function AdminSubscriptionsPage() {
   }, []);
 
   const didInitEdit = useRef(false);
-  useLiveRefresh(async () => {
+  const refresh = useCallback(async () => {
     try {
       const list = await reload();
+      setError("");
+      setLoaded(true);
       if (!didInitEdit.current && list.length) {
         didInitEdit.current = true;
         const first = list.find((x) => x.id === "free") ?? list[0];
         if (first) startEdit(first);
       }
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Failed to load subscriptions");
+      setError(e instanceof Error ? e.message : "Failed to load subscriptions");
     }
-  }, { intervalMs: 45_000 });
+  }, [reload]);
 
+  useLiveRefresh(refresh, { intervalMs: 45_000 });
+
+  // Deep links (#renewals) select the matching pane on load and on hash changes.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const hash = window.location.hash.replace(/^#/, "");
-    if (hash !== "renewals") return;
+    const apply = () => {
+      const next = tabFromHash(window.location.hash);
+      if (next) setTab(next);
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, []);
+
+  useEffect(() => {
+    if (!loaded || typeof window === "undefined") return;
+    if (tabFromHash(window.location.hash) !== "renewals" || tab !== "renewals") return;
     const el = document.getElementById("renewals");
     if (!el) return;
     requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
-  }, [renewals]);
+  }, [loaded, tab]);
+
+  function selectTab(next: Tab) {
+    setTab(next);
+    if (typeof window !== "undefined") {
+      const url = `${window.location.pathname}${window.location.search}${next === "tenants" ? "" : `#${next}`}`;
+      window.history.replaceState(null, "", url);
+    }
+  }
 
   function startEdit(plan: Plan) {
     setEditingId(plan.id);
@@ -189,6 +248,7 @@ export default function AdminSubscriptionsPage() {
       tierLabel: plan.tierLabel ?? "",
     });
     setMessage("");
+    setError("");
   }
 
   async function savePlan(e: React.FormEvent) {
@@ -196,6 +256,7 @@ export default function AdminSubscriptionsPage() {
     if (!editingId) return;
     setSaving(true);
     setMessage("");
+    setError("");
     const isPaid = editingId === "pro";
     try {
       await api(`/admin/subscriptions/plans/${editingId}`, {
@@ -234,7 +295,7 @@ export default function AdminSubscriptionsPage() {
       }
       setMessage("Saved. Operator app picks this up on the next usage check (within seconds).");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Save failed");
+      setError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
@@ -243,11 +304,12 @@ export default function AdminSubscriptionsPage() {
   async function assign(planId: string, organizationId?: number) {
     const orgId = organizationId ?? assignOrgId;
     if (orgId == null) {
-      setMessage("Select an organization before assigning a plan");
+      setError("Select an organization before assigning a plan");
       return;
     }
     setSaving(true);
     setMessage("");
+    setError("");
     try {
       await api("/admin/subscriptions/assign", {
         method: "POST",
@@ -257,7 +319,7 @@ export default function AdminSubscriptionsPage() {
       await reload();
       invalidateAdminData("admin-subscriptions");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Assign failed");
+      setError(err instanceof Error ? err.message : "Assign failed");
     } finally {
       setSaving(false);
     }
@@ -266,6 +328,7 @@ export default function AdminSubscriptionsPage() {
   async function runRenewals() {
     setSaving(true);
     setMessage("");
+    setError("");
     try {
       const r = await api<{ scanned: number; created: number; skipped: number; autoSent: number }>(
         "/admin/subscriptions/renewals/run",
@@ -277,10 +340,51 @@ export default function AdminSubscriptionsPage() {
       await reload();
       invalidateAdminData("admin-subscriptions");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Renewal run failed");
+      setError(err instanceof Error ? err.message : "Renewal run failed");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function scheduleNotice(e: React.FormEvent) {
+    e.preventDefault();
+    if (noticeOrgId == null) {
+      setError("Select an organization for the notice");
+      return;
+    }
+    setError("");
+    try {
+      await api("/admin/subscriptions/notices", {
+        method: "POST",
+        body: JSON.stringify({ ...notice, organizationId: noticeOrgId }),
+      });
+      setNotice({ title: "", body: "", kind: "renewal", dueAt: "" });
+      await reload();
+      setMessage("Notice scheduled.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not schedule notice");
+    }
+  }
+
+  async function markSent(n: Notice) {
+    setError("");
+    try {
+      await api(`/admin/subscriptions/notices/${n.id}/send`, { method: "POST" });
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not mark notice sent");
+    }
+  }
+
+  if (!loaded) {
+    if (error) {
+      return (
+        <AdminPage title="Operator access" sub="Plans · packs · renewals">
+          <AdminErrorState message={error} onRetry={() => void refresh()} />
+        </AdminPage>
+      );
+    }
+    return <AdminPageSkeleton cards={4} />;
   }
 
   const unlimitedEdit = editing?.accessMode === "unlimited" || editingId === "pro";
@@ -289,351 +393,399 @@ export default function AdminSubscriptionsPage() {
     if (!q) return true;
     return `${t.organizationName} ${t.planName} ${t.status} ${t.organizationId}`.toLowerCase().includes(q);
   });
+  const queuedNotices = notices.filter((n) => !n.sentAt).length;
+
+  const tabOptions: ReadonlyArray<{ value: Tab; label: string }> = [
+    { value: "tenants", label: `Tenants (${tenantSummary.total})` },
+    { value: "packs", label: "Product packs" },
+    { value: "modes", label: "Platform modes" },
+    { value: "renewals", label: `Renewals (${renewals.length})` },
+    { value: "notices", label: queuedNotices ? `Notices (${queuedNotices} queued)` : "Notices" },
+  ];
+
+  const tenantColumns: ReadonlyArray<BosColumn<TenantSub>> = [
+    {
+      key: "org",
+      header: "Organization",
+      cell: (t) => (
+        <div>
+          <div className="admin-cc-cell-title">{t.organizationName || `Org ${t.organizationId}`}</div>
+          <div className="admin-cc-cell-sub">
+            {t.planName} · {t.status}
+            {t.periodEnd ? ` · ends ${t.periodEnd}` : ""}
+            {t.daysLeft != null ? ` · ${t.daysLeft}d left` : ""}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "mode",
+      header: "Mode",
+      cell: (t) => (
+        <Badge auto tone={t.accessMode === "unlimited" ? "emerald" : "amber"}>
+          {t.accessMode === "unlimited" ? "All Tools Pack" : "Freemium"}
+        </Badge>
+      ),
+    },
+    { key: "mrr", header: "MRR", align: "right", mono: true, cell: (t) => inr(t.mrrInr) },
+    {
+      key: "actions",
+      header: "Quick assign",
+      align: "right",
+      cell: (t) => (
+        <div className="admin-cc-actions">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={saving || t.planId === "free"}
+            onClick={() => void assign("free", t.organizationId)}
+          >
+            → Freemium
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={saving || t.planId === "pro"}
+            onClick={() => void assign("pro", t.organizationId)}
+          >
+            → All Tools Pack
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  const renewalColumns: ReadonlyArray<BosColumn<RenewalCandidate>> = [
+    {
+      key: "org",
+      header: "Organization",
+      cell: (c) => (
+        <div>
+          <div className="admin-cc-cell-title">{c.organizationName || `Org ${c.organizationId}`}</div>
+          <div className="admin-cc-cell-sub">
+            {c.planName} · ends {c.periodEnd} · {c.daysLeft}d left
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "days",
+      header: "Due",
+      cell: (c) => (
+        <Badge auto tone={c.daysLeft <= 3 ? "coral" : "amber"}>
+          {c.daysLeft}d
+        </Badge>
+      ),
+    },
+    { key: "mrr", header: "MRR", align: "right", mono: true, cell: (c) => inr(c.mrrInr) },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (c) => (
+        <div className="admin-cc-actions">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={saving}
+            onClick={() => {
+              setNoticeOrgId(c.organizationId);
+              setNotice({
+                title: `Renewal: ${c.planName}`,
+                body: `${c.organizationName || `Org ${c.organizationId}`} renews on ${c.periodEnd}.`,
+                kind: "renewal",
+                dueAt: "",
+              });
+              setError("");
+              setMessage(`Prefilled notice for ${c.organizationName || c.organizationId}.`);
+              selectTab("notices");
+            }}
+          >
+            Prefill notice
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={saving || c.planId === "pro"}
+            onClick={() => void assign("pro", c.organizationId)}
+          >
+            → All Tools Pack
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  const noticeColumns: ReadonlyArray<BosColumn<Notice>> = [
+    {
+      key: "title",
+      header: "Notice",
+      cell: (n) => (
+        <div>
+          <div className="admin-cc-cell-title">{n.title}</div>
+          <div className="admin-cc-cell-sub">
+            {n.kind} · {n.channel}
+            {n.dueAt ? ` · due ${n.dueAt.slice(0, 16).replace("T", " ")}` : ""}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "state",
+      header: "State",
+      cell: (n) => (
+        <Badge auto tone={n.sentAt ? "emerald" : "amber"}>
+          {n.sentAt ? "sent" : "queued"}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (n) =>
+        !n.sentAt ? (
+          <div className="admin-cc-actions">
+            <Button variant="ghost" size="sm" onClick={() => void markSent(n)}>
+              Mark sent
+            </Button>
+          </div>
+        ) : null,
+    },
+  ];
 
   return (
-    <div className="admin-page">
-      <section className="panel admin-card admin-page-head">
-        <div className="analytics-toolbar">
-          <div>
-            <h2>Operator access</h2>
-            <p className="muted">
-              Platform freemium (record cap) plus product packs. Per-tool subscriptions live in{" "}
-              <Link href={adminDeepLink.toolsPricing()}>Catalog &amp; products → Product</Link>. Assigning All
-              Tools Pack grants every paid SKU license; Freemium revokes those licenses. Profile grants:{" "}
-              <Link href={adminDeepLink.profileAccess(undefined, "fabric")}>Access Fabric</Link>. UPI verify:{" "}
-              <Link href={adminDeepLink.upi()}>UPI</Link>.
-            </p>
-          </div>
-          <div className="admin-form-row">
-            <Link href={adminDeepLink.toolsPricing()} className="btn btn-primary btn-sm">
+    <AdminPage
+      title="Operator access"
+      sub="Platform freemium · product packs · renewals"
+      toolbar={
+        <>
+          <Badge auto tone={tenantSummary.renewingSoon ? "amber" : "emerald"}>
+            {tenantSummary.renewingSoon ? `${tenantSummary.renewingSoon} renewing ≤14d` : "No renewals due"}
+          </Badge>
+          <AdminTabs aria-label="Operator access section" options={tabOptions} value={tab} onChange={selectTab} />
+          <Link href={adminDeepLink.toolsPricing()}>
+            <Button variant="primary" size="sm">
               Tool products
-            </Link>
-            <Link href={adminDeepLink.profileAccess(undefined, "fabric")} className="btn btn-secondary btn-sm">
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.profileAccess(undefined, "fabric")}>
+            <Button variant="secondary" size="sm">
               Access Fabric
-            </Link>
-          </div>
-        </div>
-        <div className="analytics-kpis">
-          <div className="result-card">
-            <span>Current mode</span>
-            <strong>{active?.planName ?? "—"}</strong>
-            <span className="analytics-delta">{active?.accessMode ?? active?.planId ?? ""}</span>
-          </div>
-          <div className="result-card">
-            <span>Tenants</span>
-            <strong>{tenantSummary.total}</strong>
-            <span className="analytics-delta">
-              {tenantSummary.unlimited} All Tools Pack · {tenantSummary.limited} Freemium
-            </span>
-          </div>
-          <div className="result-card">
-            <span>Renewing ≤14d</span>
-            <strong>{tenantSummary.renewingSoon}</strong>
-          </div>
-          <div className="result-card">
-            <span>Platform MRR</span>
-            <strong>{inr(tenantSummary.totalMrr || active?.mrrInr || 0)}</strong>
-            <span className="analytics-delta">Renews {active?.periodEnd?.slice(0, 10) ?? "—"}</span>
-          </div>
-        </div>
-        {message ? <p className="muted">{message}</p> : null}
-      </section>
+            </Button>
+          </Link>
+          <Button variant="ghost" size="sm" icon="refresh" onClick={() => void refresh()}>
+            Refresh
+          </Button>
+        </>
+      }
+    >
+      <Alert tone="blue" title="How operator access works">
+        Platform freemium (record cap) plus product packs. Per-tool subscriptions live in{" "}
+        <Link className="admin-cc-link" href={adminDeepLink.toolsPricing()}>
+          Catalog &amp; products → Product
+        </Link>
+        . Assigning All Tools Pack grants every paid SKU license; Freemium revokes those licenses. Profile grants:{" "}
+        <Link className="admin-cc-link" href={adminDeepLink.profileAccess(undefined, "fabric")}>
+          Access Fabric
+        </Link>
+        . UPI verify:{" "}
+        <Link className="admin-cc-link" href={adminDeepLink.upi()}>
+          UPI
+        </Link>
+        .
+      </Alert>
 
-      <div className="admin-page-scroll">
-      <section className="panel admin-card">
-        <div className="analytics-toolbar">
-          <div>
-            <h2>Tenant subscriptions</h2>
-            <p className="muted">All orgs in scope with plan, period, and quick assign.</p>
-          </div>
-          <input
-            value={tenantQuery}
-            onChange={(e) => setTenantQuery(e.target.value)}
-            placeholder="Filter tenants…"
-            aria-label="Filter tenants"
+      <Grid cols={4} min={140} gap={12}>
+        <KpiCard
+          interactive={false}
+          label="Current mode"
+          value={active?.planName ?? "—"}
+          chip={{ color: "blue", glyph: "◎" }}
+          delta={active?.accessMode ?? active?.planId ?? "—"}
+          deltaTone="muted"
+        />
+        <button type="button" className="admin-cc-kpi-btn" onClick={() => selectTab("tenants")}>
+          <KpiCard
+            label="Tenants"
+            value={tenantSummary.total}
+            chip={{ color: "lavender", glyph: "▣" }}
+            delta={`${tenantSummary.unlimited} All Tools Pack · ${tenantSummary.limited} Freemium`}
+            deltaTone="muted"
           />
-        </div>
-        <div className="tracker-list admin-scroll-list">
+        </button>
+        <button type="button" className="admin-cc-kpi-btn" onClick={() => selectTab("renewals")}>
+          <KpiCard
+            label="Renewing ≤14d"
+            value={tenantSummary.renewingSoon}
+            chip={{ color: "amber", glyph: "◈" }}
+            delta={tenantSummary.renewingSoon ? "Review renewals" : "Clear"}
+            deltaTone={tenantSummary.renewingSoon ? "warn" : "muted"}
+          />
+        </button>
+        <KpiCard
+          interactive={false}
+          label="Platform MRR"
+          value={inr(tenantSummary.totalMrr || active?.mrrInr || 0)}
+          chip={{ color: "mint", glyph: "₹" }}
+          delta={`Renews ${active?.periodEnd?.slice(0, 10) ?? "—"}`}
+          deltaTone="muted"
+        />
+      </Grid>
+
+      {error ? <AdminErrorState title="Action or refresh failed" message={error} onRetry={() => void refresh()} /> : null}
+      {message ? <Alert tone="emerald" title={message} /> : null}
+
+      {tab === "tenants" ? (
+        <AdminSection
+          title="Tenant subscriptions"
+          description="All orgs in scope with plan, period, and quick assign."
+          actions={
+            <SearchInput
+              value={tenantQuery}
+              onChange={(e) => setTenantQuery(e.target.value)}
+              placeholder="Filter tenants…"
+              aria-label="Filter tenants"
+            />
+          }
+        >
           {visibleTenants.length === 0 ? (
-            <p className="muted">No subscriptions in scope.</p>
+            <AdminEmpty title="No subscriptions in scope" icon="search">
+              {tenantQuery ? "No tenants match this filter." : "Tenants appear here once organizations subscribe."}
+            </AdminEmpty>
           ) : (
-            visibleTenants.map((t) => (
-              <div key={t.organizationId} className="tracker-row">
-                <div className="tracker-row-main">
-                  <span className="tracker-row-title">
-                    {t.organizationName || `Org ${t.organizationId}`}
-                  </span>
-                  <span className="tracker-row-sub">
-                    {t.planName} · {t.status}
-                    {t.periodEnd ? ` · ends ${t.periodEnd}` : ""}
-                    {t.daysLeft != null ? ` · ${t.daysLeft}d left` : ""}
-                  </span>
-                </div>
-                <div className="tracker-row-meta">
-                  <span>
-                    <span className="m-lbl">MRR</span>
-                    <span className="m-val">{inr(t.mrrInr)}</span>
-                  </span>
-                  <span className={t.accessMode === "unlimited" ? "pill pill-success" : "pill pill-warning"}>
-                    {t.accessMode === "unlimited" ? "All Tools Pack" : "Freemium"}
-                  </span>
-                </div>
-                <div className="tracker-actions">
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    disabled={saving || t.planId === "free"}
-                    onClick={() => void assign("free", t.organizationId)}
-                  >
-                    → Freemium
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={saving || t.planId === "pro"}
-                    onClick={() => void assign("pro", t.organizationId)}
-                  >
-                    → All Tools Pack
-                  </button>
-                </div>
-              </div>
-            ))
+            <div className="admin-cc-scroll" style={{ maxHeight: 640 }}>
+              <DataTable
+                caption="Tenant subscriptions"
+                columns={tenantColumns}
+                rows={visibleTenants}
+                rowKey={(t) => String(t.organizationId)}
+              />
+            </div>
           )}
-        </div>
-      </section>
+        </AdminSection>
+      ) : null}
 
-      <ProductPacksPanel onMessage={setMessage} />
+      {tab === "packs" ? (
+        <ProductPacksPanel
+          onMessage={(m) => {
+            setError("");
+            setMessage(m);
+          }}
+          onError={(m) => {
+            setMessage("");
+            setError(m);
+          }}
+        />
+      ) : null}
 
-      <div className="admin-split sub-workspace">
-        <div className="admin-pane-stack">
-          <section className="panel admin-card admin-pane">
-            <h2>Platform modes</h2>
-            <div className="sub-mode-list">
+      {tab === "modes" ? (
+        <div className="admin-cc-split" id="plan-editor">
+          <AdminSection title="Platform modes" description="Select a mode to edit it; assign it to an organization.">
+            <div className="admin-cc-mode-list">
               {[limited, paid].filter(Boolean).map((p) => {
                 const plan = p as Plan;
                 const unlimited = plan.accessMode === "unlimited";
                 const selected = editingId === plan.id;
                 return (
-                  <article
+                  <Card
                     key={plan.id}
-                    className={`admin-plan-card sub-mode-card ${unlimited ? "is-highlight" : ""} ${selected ? "is-editing" : ""}`}
+                    flat
+                    className={cx("admin-cc-mode-card", selected && "is-editing")}
                     onClick={() => startEdit(plan)}
                   >
-                    <header>
-                      <h3>{plan.name}</h3>
-                      <span className={unlimited ? "pill pill-success" : "pill pill-warning"}>
+                    <div className="admin-cc-mode-head">
+                      <h4>{plan.name}</h4>
+                      <Badge auto tone={unlimited ? "emerald" : "amber"}>
                         {unlimited ? "All tools pack" : "Freemium"}
-                      </span>
-                      {plan.available === false ? <span className="pill pill-danger">Hidden</span> : null}
-                    </header>
-                    <p className="muted">{plan.tagline}</p>
-                    <p className="admin-plan-price">
+                      </Badge>
+                      {plan.available === false ? (
+                        <Badge auto tone="coral">
+                          Hidden
+                        </Badge>
+                      ) : null}
+                    </div>
+                    {plan.tagline ? <p className="admin-cc-note-text">{plan.tagline}</p> : null}
+                    <p className="admin-cc-price">
                       {inr(plan.priceInr)}
                       <span>/{plan.billingInterval}</span>
                     </p>
-                    <p className="muted">
+                    <p className="admin-cc-note-text">
                       {unlimited
                         ? "No record cap · export enabled"
                         : `${plan.recordLimit ?? 28} records / tool · export locked`}
                       {plan.tierLabel ? ` · ${plan.tierLabel}` : ""}
                       {plan.trialDays && plan.trialDays > 0 ? ` · ${plan.trialDays}-day trial` : ""}
                     </p>
-                    <div className="admin-form-row" onClick={(e) => e.stopPropagation()}>
+                    <div className="admin-cc-inline" onClick={(e) => e.stopPropagation()}>
                       <AdminOrgSelect
                         value={assignOrgId}
                         onChange={setAssignOrgId}
                         label="Assign to organization"
                         emptyLabel="Select organization…"
                       />
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
+                      <Button
+                        variant="primary"
+                        size="sm"
                         disabled={saving || assignOrgId == null}
                         onClick={() => void assign(plan.id)}
                       >
                         Assign mode
-                      </button>
+                      </Button>
+                      <Button variant={selected ? "secondary" : "ghost"} size="sm" onClick={() => startEdit(plan)}>
+                        {selected ? "Editing" : "Edit"}
+                      </Button>
                     </div>
-                  </article>
+                  </Card>
                 );
               })}
             </div>
-          </section>
+          </AdminSection>
 
-          <section id="renewals" className="panel admin-card">
-            <div className="analytics-toolbar">
-              <div>
-                <h2>Renewals due ≤14d</h2>
-                <p className="muted">Live candidates from org subscriptions approaching period end.</p>
-              </div>
-              <button type="button" className="btn btn-secondary btn-sm" disabled={saving} onClick={() => void runRenewals()}>
-                Run renewal job
-              </button>
-            </div>
-            <div className="tracker-list admin-scroll-list">
-              {renewals.length === 0 ? (
-                <p className="muted">No renewals in the next 14 days.</p>
-              ) : (
-                renewals.map((c) => (
-                  <div key={c.organizationId} className="tracker-row">
-                    <div className="tracker-row-main">
-                      <span className="tracker-row-title">
-                        {c.organizationName || `Org ${c.organizationId}`}
-                      </span>
-                      <span className="tracker-row-sub">
-                        {c.planName} · ends {c.periodEnd} · {c.daysLeft}d left
-                      </span>
-                    </div>
-                    <div className="tracker-row-meta">
-                      <span>
-                        <span className="m-lbl">MRR</span>
-                        <span className="m-val">{inr(c.mrrInr)}</span>
-                      </span>
-                      <span className={c.daysLeft <= 3 ? "pill pill-danger" : "pill pill-warning"}>
-                        {c.daysLeft}d
-                      </span>
-                    </div>
-                    <div className="tracker-actions">
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        disabled={saving}
-                        onClick={() => {
-                          setNoticeOrgId(c.organizationId);
-                          setNotice({
-                            title: `Renewal: ${c.planName}`,
-                            body: `${c.organizationName || `Org ${c.organizationId}`} renews on ${c.periodEnd}.`,
-                            kind: "renewal",
-                            dueAt: "",
-                          });
-                          setMessage(`Prefilled notice for ${c.organizationName || c.organizationId}.`);
-                        }}
-                      >
-                        Prefill notice
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        disabled={saving || c.planId === "pro"}
-                        onClick={() => void assign("pro", c.organizationId)}
-                      >
-                        → All Tools Pack
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-
-          <section className="panel admin-card">
-            <div className="analytics-toolbar">
-              <div>
-                <h2>Renewal notifications</h2>
-                <p className="muted">Queue notices for periods ending within 14 days, or create one manually.</p>
-              </div>
-            </div>
-            <form
-              className="admin-form-grid"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (noticeOrgId == null) {
-                  setMessage("Select an organization for the notice");
-                  return;
-                }
-                await api("/admin/subscriptions/notices", {
-                  method: "POST",
-                  body: JSON.stringify({ ...notice, organizationId: noticeOrgId }),
-                });
-                setNotice({ title: "", body: "", kind: "renewal", dueAt: "" });
-                await reload();
-              }}
-            >
-              <AdminOrgSelect value={noticeOrgId} onChange={setNoticeOrgId} />
-              <label className="field">
-                <span>Title</span>
-                <input value={notice.title} onChange={(e) => setNotice({ ...notice, title: e.target.value })} required />
-              </label>
-              <label className="field">
-                <span>Due</span>
-                <input type="datetime-local" value={notice.dueAt} onChange={(e) => setNotice({ ...notice, dueAt: e.target.value })} />
-              </label>
-              <label className="field" style={{ gridColumn: "1 / -1" }}>
-                <span>Message</span>
-                <textarea rows={2} value={notice.body} onChange={(e) => setNotice({ ...notice, body: e.target.value })} required />
-              </label>
-              <button type="submit" className="btn btn-primary">Schedule notice</button>
-            </form>
-            <div className="tracker-list admin-scroll-list">
-              {notices.map((n) => (
-                <div key={n.id} className="tracker-row">
-                  <div>
-                    <strong>{n.title}</strong>
-                    <span className="muted">{n.kind} · {n.sentAt ? "sent" : "queued"}</span>
-                  </div>
-                  {!n.sentAt ? (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={async () => {
-                        await api(`/admin/subscriptions/notices/${n.id}/send`, { method: "POST" });
-                        await reload();
-                      }}
-                    >
-                      Mark sent
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <section className="panel admin-card admin-pane" id="plan-editor">
           {editing ? (
-            <>
-              <div className="analytics-toolbar">
-                <div>
-                  <h2>Edit {unlimitedEdit ? "unlimited" : "limited"} mode</h2>
-                  <p className="muted">
-                    {unlimitedEdit
-                      ? "Price and copy for paid checkout. Records stay unlimited."
-                      : "Record cap is enforced on the operator app as soon as you save."}
-                  </p>
-                </div>
-                <div className="admin-form-row">
-                  <span className={unlimitedEdit ? "pill pill-success" : "pill pill-warning"}>
+            <AdminSection
+              title={`Edit ${unlimitedEdit ? "unlimited" : "limited"} mode`}
+              description={
+                unlimitedEdit
+                  ? "Price and copy for paid checkout. Records stay unlimited."
+                  : "Record cap is enforced on the operator app as soon as you save."
+              }
+              actions={
+                <>
+                  <Badge auto tone={unlimitedEdit ? "emerald" : "amber"}>
                     {unlimitedEdit ? "Unlimited" : "Limited"}
-                  </span>
-                  <button type="submit" form="subscription-plan-form" className="btn btn-primary" disabled={saving}>
+                  </Badge>
+                  <Button type="submit" form="subscription-plan-form" variant="primary" size="sm" disabled={saving}>
                     {saving ? "Saving…" : "Save mode"}
-                  </button>
-                </div>
-              </div>
-              <form id="subscription-plan-form" className="admin-form-grid sub-editor-form" onSubmit={savePlan}>
-                <label className="field">
-                  <span>Display name</span>
-                  <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-                </label>
-                <label className="field">
-                  <span>Tagline</span>
-                  <input value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} />
-                </label>
-                {!unlimitedEdit ? (
-                  <label className="field">
-                    <span>Records per tool (enforced live)</span>
-                    <input
+                  </Button>
+                </>
+              }
+            >
+              <form id="subscription-plan-form" className="admin-cc-form" onSubmit={savePlan}>
+                <FormGrid>
+                  <TextField
+                    label="Display name"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    required
+                  />
+                  <TextField
+                    label="Tagline"
+                    value={form.tagline}
+                    onChange={(e) => setForm({ ...form, tagline: e.target.value })}
+                  />
+                  {!unlimitedEdit ? (
+                    <TextField
+                      label="Records per tool (enforced live)"
                       type="number"
                       min={1}
                       value={form.recordLimit}
                       onChange={(e) => setForm({ ...form, recordLimit: e.target.value })}
                       required
                     />
-                  </label>
-                ) : null}
-                <label className="field">
-                  <span>Price (INR)</span>
-                  <input
+                  ) : null}
+                  <TextField
+                    label="Price (INR)"
                     type="number"
                     min={0}
                     step="1"
@@ -641,67 +793,150 @@ export default function AdminSubscriptionsPage() {
                     onChange={(e) => setForm({ ...form, priceInr: e.target.value })}
                     required={unlimitedEdit}
                   />
-                </label>
-                <label className="field">
-                  <span>Billing interval</span>
-                  <select value={form.billingInterval} onChange={(e) => setForm({ ...form, billingInterval: e.target.value })}>
+                  <SelectField
+                    label="Billing interval"
+                    value={form.billingInterval}
+                    onChange={(e) => setForm({ ...form, billingInterval: e.target.value })}
+                  >
                     <option value="month">Monthly</option>
                     <option value="year">Yearly</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Tier label</span>
-                  <input
+                  </SelectField>
+                  <TextField
+                    label="Tier label"
                     value={form.tierLabel}
                     onChange={(e) => setForm({ ...form, tierLabel: e.target.value })}
                     placeholder={unlimitedEdit ? "Growth" : "Starter"}
                   />
-                </label>
-                {unlimitedEdit ? (
-                  <label className="field">
-                    <span>Trial days (on assign)</span>
-                    <input
+                  {unlimitedEdit ? (
+                    <TextField
+                      label="Trial days (on assign)"
                       type="number"
                       min={0}
                       max={365}
                       value={form.trialDays}
                       onChange={(e) => setForm({ ...form, trialDays: e.target.value })}
                     />
-                  </label>
-                ) : null}
-                <label className="field" style={{ gridColumn: "1 / -1" }}>
-                  <span>Description</span>
-                  <textarea rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-                </label>
-                <label className="field" style={{ gridColumn: "1 / -1" }}>
-                  <span>Marketing bullets (comma separated — display only)</span>
-                  <textarea
+                  ) : null}
+                  <TextareaField
+                    full
+                    label="Description"
+                    rows={4}
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  />
+                  <TextareaField
+                    full
+                    label="Marketing bullets (comma separated — display only)"
                     rows={3}
                     value={form.features}
                     onChange={(e) => setForm({ ...form, features: e.target.value })}
                   />
-                </label>
-                <label className="field">
-                  <span>Available on operator checkout</span>
-                  <select
+                  <SelectField
+                    label="Available on operator checkout"
                     value={form.available ? "yes" : "no"}
                     onChange={(e) => setForm({ ...form, available: e.target.value === "yes" })}
                   >
                     <option value="yes">Yes — listed</option>
                     <option value="no">No — hidden</option>
-                  </select>
-                </label>
+                  </SelectField>
+                </FormGrid>
               </form>
-            </>
+            </AdminSection>
           ) : (
-            <>
-              <h2>Editor</h2>
-              <p className="muted">Select a mode on the left to configure it here.</p>
-            </>
+            <AdminSection title="Editor">
+              <AdminEmpty title="Select a mode" icon="settings">
+                Select a mode on the left to configure it here.
+              </AdminEmpty>
+            </AdminSection>
           )}
-        </section>
-      </div>
-      </div>
-    </div>
+        </div>
+      ) : null}
+
+      {tab === "renewals" ? (
+        <div id="renewals">
+          <AdminSection
+            title="Renewals due ≤14d"
+            description="Live candidates from org subscriptions approaching period end."
+            actions={
+              <Button variant="secondary" size="sm" disabled={saving} onClick={() => void runRenewals()}>
+                Run renewal job
+              </Button>
+            }
+          >
+            {renewals.length === 0 ? (
+              <AdminEmpty title="No renewals in the next 14 days" icon="check">
+                Nothing is approaching its period end.
+              </AdminEmpty>
+            ) : (
+              <div className="admin-cc-scroll" style={{ maxHeight: 640 }}>
+                <DataTable
+                  caption="Renewals due within 14 days"
+                  columns={renewalColumns}
+                  rows={renewals}
+                  rowKey={(c) => String(c.organizationId)}
+                />
+              </div>
+            )}
+          </AdminSection>
+        </div>
+      ) : null}
+
+      {tab === "notices" ? (
+        <div className="admin-cc-two">
+          <AdminSection
+            title="Schedule notice"
+            description="Queue notices for periods ending within 14 days, or create one manually."
+          >
+            <form className="admin-cc-form" onSubmit={(e) => void scheduleNotice(e)}>
+              <FormGrid>
+                <AdminOrgSelect full value={noticeOrgId} onChange={setNoticeOrgId} />
+                <TextField
+                  label="Title"
+                  value={notice.title}
+                  onChange={(e) => setNotice({ ...notice, title: e.target.value })}
+                  required
+                />
+                <TextField
+                  label="Due"
+                  type="datetime-local"
+                  value={notice.dueAt}
+                  onChange={(e) => setNotice({ ...notice, dueAt: e.target.value })}
+                />
+                <TextareaField
+                  full
+                  label="Message"
+                  rows={3}
+                  value={notice.body}
+                  onChange={(e) => setNotice({ ...notice, body: e.target.value })}
+                  required
+                />
+              </FormGrid>
+              <div className="admin-cc-form-actions">
+                <Button type="submit" variant="primary">
+                  Schedule notice
+                </Button>
+              </div>
+            </form>
+          </AdminSection>
+
+          <AdminSection title="Renewal notifications" description={`${notices.length} notices · ${queuedNotices} queued`}>
+            {notices.length === 0 ? (
+              <AdminEmpty title="No notices yet" icon="bell">
+                Scheduled notices appear here.
+              </AdminEmpty>
+            ) : (
+              <div className="admin-cc-scroll" style={{ maxHeight: 520 }}>
+                <DataTable
+                  caption="Renewal notices"
+                  columns={noticeColumns}
+                  rows={notices}
+                  rowKey={(n) => String(n.id)}
+                />
+              </div>
+            )}
+          </AdminSection>
+        </div>
+      ) : null}
+    </AdminPage>
   );
 }

@@ -10,6 +10,14 @@ import {
   type SetStateAction,
 } from "react";
 import { BRAND_DEFAULTS } from "@jbt/shared";
+import { Alert, Badge, Button, FormGrid, Input, Select, Switch, Textarea } from "@/components/bos";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPageSkeleton,
+  AdminSection,
+} from "@/components/admin/ui";
+import { SelectField, TextareaField, TextField } from "@/components/admin/ui/AdminFields";
 import { api } from "@/lib/api";
 import type { ExperienceSaveHandle } from "@/components/admin/experience-save";
 import { invalidateAdminData } from "@/hooks/useLiveRefresh";
@@ -49,10 +57,8 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="admin-field" style={{ display: "grid", gap: "0.35rem" }}>
-      <span className="muted" style={{ fontSize: "0.82rem" }}>
-        {label}
-      </span>
+    <label className="bos-field">
+      <span className="bos-field-label">{label}</span>
       {children}
     </label>
   );
@@ -68,8 +74,7 @@ function TextInput({
   placeholder?: string;
 }) {
   return (
-    <input
-      className="input"
+    <Input
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
@@ -87,8 +92,7 @@ function TextArea({
   rows?: number;
 }) {
   return (
-    <textarea
-      className="input"
+    <Textarea
       rows={rows}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -107,8 +111,8 @@ function MediaEditor({
 }) {
   return (
     <div
-      className="panel"
-      style={{ padding: "0.75rem", display: "grid", gap: "0.55rem", background: "var(--glass-1)" }}
+      className="bos-card bos-card-flat"
+      style={{ padding: "0.75rem", display: "grid", gap: "0.55rem" }}
     >
       <strong style={{ fontSize: "0.85rem" }}>{label}</strong>
       <div
@@ -119,8 +123,7 @@ function MediaEditor({
         }}
       >
         <Field label="Kind">
-          <select
-            className="input"
+          <Select
             value={value.kind}
             onChange={(e) =>
               onChange({ ...value, kind: e.target.value as MediaRef["kind"] })
@@ -130,11 +133,10 @@ function MediaEditor({
             <option value="image">Image</option>
             <option value="svg">SVG</option>
             <option value="video">Video</option>
-          </select>
+          </Select>
         </Field>
         <Field label="Object fit">
-          <select
-            className="input"
+          <Select
             value={value.objectFit}
             onChange={(e) =>
               onChange({
@@ -145,7 +147,7 @@ function MediaEditor({
           >
             <option value="cover">Cover</option>
             <option value="contain">Contain</option>
-          </select>
+          </Select>
         </Field>
       </div>
       <Field label="URL or paste">
@@ -166,7 +168,7 @@ function MediaEditor({
           />
         </Field>
       ) : null}
-      <p className="muted" style={{ fontSize: "0.78rem", margin: 0 }}>
+      <p className="admin-cc-note-text">
         Upload PNG/JPEG/WebP/GIF (max 2 MB). For video or SVG, paste a URL above.
       </p>
       <input
@@ -187,7 +189,7 @@ function MediaEditor({
         }}
       />
       {value.url ? (
-        <div style={{ fontSize: "0.75rem" }} className="muted">
+        <div className="admin-cc-note-text">
           Preview:{" "}
           {value.kind === "video" ? (
             <span>video set</span>
@@ -224,8 +226,7 @@ function StyleEditor({
           }}
         >
           <Field label="Background type">
-            <select
-              className="input"
+            <Select
               value={value.backgroundType}
               onChange={(e) =>
                 onChange({
@@ -239,11 +240,10 @@ function StyleEditor({
               <option value="gradient">Gradient</option>
               <option value="image">Image</option>
               <option value="video">Video</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Text align">
-            <select
-              className="input"
+            <Select
               value={value.textAlign}
               onChange={(e) =>
                 onChange({
@@ -255,7 +255,7 @@ function StyleEditor({
               <option value="left">Left</option>
               <option value="center">Center</option>
               <option value="right">Right</option>
-            </select>
+            </Select>
           </Field>
         </div>
         <Field label="Background value (color / CSS gradient / media URL)">
@@ -359,24 +359,20 @@ function NavListEditor({
             }}
             placeholder="/path or #anchor"
           />
-          <button
-            type="button"
-            className="btn"
+          <Button variant="secondary" size="sm" aria-label="Remove"
             onClick={() => onChange(items.filter((_, i) => i !== index))}
           >
             ✕
-          </button>
+          </Button>
         </div>
       ))}
-      <button
-        type="button"
-        className="btn"
+      <Button variant="secondary" size="sm"
         onClick={() =>
           onChange([...items, { id: uid("nav"), label: "New link", href: "#", openInNewTab: false }])
         }
       >
         Add link
-      </button>
+      </Button>
     </div>
   );
 }
@@ -415,16 +411,13 @@ function CtaListEditor({
                 onChange(next);
               }}
             />
-            <button
-              type="button"
-              className="btn"
+            <Button variant="secondary" size="sm" aria-label="Remove"
               onClick={() => onChange(items.filter((_, i) => i !== index))}
             >
               ✕
-            </button>
+            </Button>
           </div>
-          <select
-            className="input"
+          <Select
             value={item.variant}
             onChange={(e) => {
               const next = [...items];
@@ -436,12 +429,10 @@ function CtaListEditor({
             <option value="secondary">Secondary</option>
             <option value="ghost">Ghost</option>
             <option value="link">Link</option>
-          </select>
+          </Select>
         </div>
       ))}
-      <button
-        type="button"
-        className="btn"
+      <Button variant="secondary" size="sm"
         onClick={() =>
           onChange([
             ...items,
@@ -450,7 +441,7 @@ function CtaListEditor({
         }
       >
         Add button
-      </button>
+      </Button>
     </div>
   );
 }
@@ -465,25 +456,23 @@ function HeroSlidesEditor({
   return (
     <div style={{ display: "grid", gap: "0.65rem" }}>
       <strong style={{ fontSize: "0.85rem" }}>Hero slides (cinematic mode)</strong>
-      <p className="muted" style={{ margin: 0, fontSize: "0.78rem" }}>
+      <p className="admin-cc-note-text">
         When slides exist, the hero uses full-bleed backgrounds and rotates copy. Upload image/video
         per slide from Admin.
       </p>
       {slides.map((slide, index) => (
         <div
           key={slide.id}
-          className="panel"
-          style={{ padding: "0.75rem", display: "grid", gap: "0.5rem", background: "var(--glass-1)" }}
+          className="bos-card bos-card-flat"
+          style={{ padding: "0.75rem", display: "grid", gap: "0.5rem" }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
             <strong style={{ fontSize: "0.82rem" }}>Slide {index + 1}</strong>
-            <button
-              type="button"
-              className="btn"
+            <Button variant="secondary" size="sm"
               onClick={() => onChange(slides.filter((_, i) => i !== index))}
             >
               Remove
-            </button>
+            </Button>
           </div>
           <Field label="Eyebrow">
             <TextInput
@@ -552,9 +541,7 @@ function HeroSlidesEditor({
           </Field>
         </div>
       ))}
-      <button
-        type="button"
-        className="btn"
+      <Button variant="secondary" size="sm"
         onClick={() =>
           onChange([
             ...slides,
@@ -571,7 +558,7 @@ function HeroSlidesEditor({
         }
       >
         Add slide
-      </button>
+      </Button>
     </div>
   );
 }
@@ -588,8 +575,8 @@ function StatsItemsEditor({
       {items.map((item, index) => (
         <div
           key={item.id}
-          className="panel"
-          style={{ padding: "0.75rem", display: "grid", gap: "0.5rem", background: "var(--glass-1)" }}
+          className="bos-card bos-card-flat"
+          style={{ padding: "0.75rem", display: "grid", gap: "0.5rem" }}
         >
           <div
             style={{
@@ -616,13 +603,11 @@ function StatsItemsEditor({
               }}
               placeholder="Icon glyph"
             />
-            <button
-              type="button"
-              className="btn"
+            <Button variant="secondary" size="sm" aria-label="Remove"
               onClick={() => onChange(items.filter((_, i) => i !== index))}
             >
               ✕
-            </button>
+            </Button>
           </div>
           <Field label="Label (use \\n for line break)">
             <TextArea
@@ -646,9 +631,7 @@ function StatsItemsEditor({
           />
         </div>
       ))}
-      <button
-        type="button"
-        className="btn"
+      <Button variant="secondary" size="sm"
         onClick={() =>
           onChange([
             ...items,
@@ -663,7 +646,7 @@ function StatsItemsEditor({
         }
       >
         Add stat
-      </button>
+      </Button>
     </div>
   );
 }
@@ -681,18 +664,16 @@ function PillarsItemsEditor({
       {items.map((item, index) => (
         <div
           key={item.id}
-          className="panel"
-          style={{ padding: "0.75rem", display: "grid", gap: "0.5rem", background: "var(--glass-1)" }}
+          className="bos-card bos-card-flat"
+          style={{ padding: "0.75rem", display: "grid", gap: "0.5rem" }}
         >
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <strong style={{ fontSize: "0.82rem" }}>Pillar {index + 1}</strong>
-            <button
-              type="button"
-              className="btn"
+            <Button variant="secondary" size="sm"
               onClick={() => onChange(items.filter((_, i) => i !== index))}
             >
               Remove
-            </button>
+            </Button>
           </div>
           <div
             style={{
@@ -807,9 +788,7 @@ function PillarsItemsEditor({
           />
         </div>
       ))}
-      <button
-        type="button"
-        className="btn"
+      <Button variant="secondary" size="sm"
         onClick={() =>
           onChange([
             ...items,
@@ -829,7 +808,7 @@ function PillarsItemsEditor({
         }
       >
         Add pillar
-      </button>
+      </Button>
     </div>
   );
 }
@@ -874,7 +853,7 @@ function SectionEditor({
   };
 
   return (
-    <details className="panel admin-card" style={{ padding: "0.85rem 1rem", overflow: "visible" }}>
+    <details className="bos-widget" style={{ padding: "0.85rem 1rem", overflow: "visible" }}>
       <summary
         style={{
           cursor: "pointer",
@@ -886,27 +865,25 @@ function SectionEditor({
         }}
       >
         <strong style={{ textTransform: "capitalize" }}>{section.type}</strong>
-        <span className="muted">#{section.id}</span>
+        <span className="bos-text-muted">#{section.id}</span>
         <label style={{ marginLeft: "auto", display: "inline-flex", gap: "0.35rem", alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-          <input
-            type="checkbox"
+          <Switch
             checked={section.enabled}
-            onChange={(e) => updateSection(setConfig, section.id, { enabled: e.target.checked })}
+            onChange={(enabled) => updateSection(setConfig, section.id, { enabled })}
+            aria-label={`Section ${section.id} enabled`}
           />
           Enabled
         </label>
       </summary>
 
       <div style={{ display: "flex", gap: "0.4rem", margin: "0.75rem 0" }}>
-        <button type="button" className="btn" disabled={index === 0} onClick={() => move(-1)}>
+        <Button variant="secondary" size="sm" disabled={index === 0} onClick={() => move(-1)}>
           ↑
-        </button>
-        <button type="button" className="btn" disabled={index >= total - 1} onClick={() => move(1)}>
+        </Button>
+        <Button variant="secondary" size="sm" disabled={index >= total - 1} onClick={() => move(1)}>
           ↓
-        </button>
-        <button
-          type="button"
-          className="btn"
+        </Button>
+        <Button variant="secondary" size="sm"
           onClick={() =>
             setConfig((cfg) =>
               cfg ? { ...cfg, sections: cfg.sections.filter((s) => s.id !== section.id) } : cfg,
@@ -914,16 +891,16 @@ function SectionEditor({
           }
         >
           Remove section
-        </button>
+        </Button>
       </div>
 
       {section.type === "header" ? (
         <div style={{ display: "grid", gap: "0.65rem" }}>
-          <label style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center" }}>
-            <input
-              type="checkbox"
+          <label className="admin-cc-switch-row" style={{ paddingBottom: 0 }}>
+            <Switch
               checked={section.sticky}
-              onChange={(e) => updateSection(setConfig, section.id, { sticky: e.target.checked })}
+              onChange={(sticky) => updateSection(setConfig, section.id, { sticky })}
+              aria-label="Sticky header"
             />
             Sticky header
           </label>
@@ -993,8 +970,7 @@ function SectionEditor({
             }}
           >
             <Field label="Media position (legacy / no slides)">
-              <select
-                className="input"
+              <Select
                 value={section.mediaPosition}
                 onChange={(e) =>
                   updateSection(setConfig, section.id, {
@@ -1006,7 +982,7 @@ function SectionEditor({
                 <option value="left">Left</option>
                 <option value="bottom">Bottom</option>
                 <option value="background">Background</option>
-              </select>
+              </Select>
             </Field>
             <Field label="Slide autoplay (sec, 0 = off)">
               <TextInput
@@ -1107,8 +1083,7 @@ function SectionEditor({
             />
           </Field>
           <Field label="Source">
-            <select
-              className="input"
+            <Select
               value={section.source}
               onChange={(e) =>
                 updateSection(setConfig, section.id, {
@@ -1118,7 +1093,7 @@ function SectionEditor({
             >
               <option value="catalog">Tool catalog</option>
               <option value="custom">Custom items</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Tool IDs (comma-separated, catalog mode)">
             <TextInput
@@ -1147,8 +1122,7 @@ function SectionEditor({
               />
             </Field>
             <Field label="Direction">
-              <select
-                className="input"
+              <Select
                 value={section.direction}
                 onChange={(e) =>
                   updateSection(setConfig, section.id, {
@@ -1158,15 +1132,13 @@ function SectionEditor({
               >
                 <option value="left">Left</option>
                 <option value="right">Right</option>
-              </select>
+              </Select>
             </Field>
-            <label style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center", minHeight: "2.5rem" }}>
-              <input
-                type="checkbox"
+            <label className="admin-cc-switch-row">
+              <Switch
                 checked={section.pauseOnHover}
-                onChange={(e) =>
-                  updateSection(setConfig, section.id, { pauseOnHover: e.target.checked })
-                }
+                onChange={(pauseOnHover) => updateSection(setConfig, section.id, { pauseOnHover })}
+                aria-label="Pause on hover"
               />
               Pause on hover
             </label>
@@ -1195,8 +1167,7 @@ function SectionEditor({
             />
           </Field>
           <Field label="Layout">
-            <select
-              className="input"
+            <Select
               value={section.layout}
               onChange={(e) =>
                 updateSection(setConfig, section.id, {
@@ -1207,11 +1178,10 @@ function SectionEditor({
               <option value="grid">Grid</option>
               <option value="list">List</option>
               <option value="featured">Featured</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Source">
-            <select
-              className="input"
+            <Select
               value={section.source}
               onChange={(e) =>
                 updateSection(setConfig, section.id, {
@@ -1221,10 +1191,10 @@ function SectionEditor({
             >
               <option value="custom">Custom tool cards</option>
               <option value="catalog">Tool catalog</option>
-            </select>
+            </Select>
           </Field>
           {section.tools.map((tool, ti) => (
-            <div key={tool.id} className="panel" style={{ padding: "0.75rem", display: "grid", gap: "0.45rem" }}>
+            <div key={tool.id} className="bos-card bos-card-flat" style={{ padding: "0.75rem", display: "grid", gap: "0.45rem" }}>
               <strong>Tool card {ti + 1}</strong>
               <TextInput
                 value={tool.name}
@@ -1263,9 +1233,7 @@ function SectionEditor({
                   updateSection(setConfig, section.id, { tools });
                 }}
               />
-              <button
-                type="button"
-                className="btn"
+              <Button variant="secondary" size="sm"
                 onClick={() =>
                   updateSection(setConfig, section.id, {
                     tools: section.tools.filter((_, i) => i !== ti),
@@ -1273,12 +1241,10 @@ function SectionEditor({
                 }
               >
                 Remove card
-              </button>
+              </Button>
             </div>
           ))}
-          <button
-            type="button"
-            className="btn"
+          <Button variant="secondary" size="sm"
             onClick={() =>
               updateSection(setConfig, section.id, {
                 tools: [
@@ -1300,7 +1266,7 @@ function SectionEditor({
             }
           >
             Add tool card
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -1319,7 +1285,7 @@ function SectionEditor({
             />
           </Field>
           {section.items.map((item, ii) => (
-            <div key={item.id} className="panel" style={{ padding: "0.75rem", display: "grid", gap: "0.45rem" }}>
+            <div key={item.id} className="bos-card bos-card-flat" style={{ padding: "0.75rem", display: "grid", gap: "0.45rem" }}>
               <TextInput
                 value={item.title}
                 onChange={(title) => {
@@ -1397,7 +1363,7 @@ function SectionEditor({
             />
           </Field>
           {section.columns.map((col, ci) => (
-            <div key={col.id} className="panel" style={{ padding: "0.75rem", display: "grid", gap: "0.45rem" }}>
+            <div key={col.id} className="bos-card bos-card-flat" style={{ padding: "0.75rem", display: "grid", gap: "0.45rem" }}>
               <TextInput
                 value={col.title}
                 onChange={(title) => {
@@ -1583,179 +1549,201 @@ export const PublicHomePanel = forwardRef<ExperienceSaveHandle>(function PublicH
   );
 
   if (!config) {
-    return <p className="muted">Loading public home…</p>;
+    if (message) {
+      return (
+        <AdminErrorState
+          message={message}
+          onRetry={() => {
+            setMessage("");
+            reload().catch((e: Error) => setMessage(e.message));
+          }}
+        />
+      );
+    }
+    return <AdminPageSkeleton cards={3} />;
   }
 
+  const themeFields = [
+    ["bg0", "Background"],
+    ["bg1", "Surface"],
+    ["accent", "Accent"],
+    ["accentStrong", "Accent strong"],
+    ["textHi", "Text"],
+    ["textMid", "Muted text"],
+    ["radius", "Radius"],
+  ] as const;
+
+  const sectionTypes = [
+    "header",
+    "hero",
+    "stats",
+    "pillars",
+    "marquee",
+    "toolsShowcase",
+    "features",
+    "cta",
+    "footer",
+  ] as const;
+
   return (
-    <div className="admin-public-home" style={{ display: "grid", gap: "1rem", minWidth: 0 }}>
-      <section className="panel admin-card" style={{ padding: "1rem", display: "grid", gap: "0.75rem" }}>
-        <div style={{ display: "flex", gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
-          <label style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center" }}>
-            <input
-              type="checkbox"
+    <div className="admin-public-home admin-cc-split-stack">
+      {message ? <Alert tone="blue" title={message} /> : null}
+
+      <AdminSection
+        title="Guest public home"
+        description="Guests see this at `/` when enabled. Use preview to view the guest page while signed in as platform (skips the Operator enter gate)."
+        actions={
+          <>
+            <Badge auto tone={config.enabled ? "emerald" : "neutral"}>
+              {config.enabled ? "Enabled" : "Disabled"}
+            </Badge>
+            <a href={withBasePath("/?preview=public")} target="_blank" rel="noreferrer">
+              <Button variant="secondary" size="sm">
+                Open public home
+              </Button>
+            </a>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={saving}
+              onClick={() => {
+                void (async () => {
+                  setSaving(true);
+                  try {
+                    const d = await api<{ publicHome: PublicHomeConfig }>(
+                      "/admin/config/public-home",
+                      { method: "PUT", body: JSON.stringify({ reset: true }) },
+                    );
+                    setConfig(d.publicHome);
+                    setMessage(`Reset to ${BRAND_DEFAULTS.appName} marketing defaults.`);
+                  } catch (e) {
+                    setMessage(e instanceof Error ? e.message : "Reset failed");
+                  } finally {
+                    setSaving(false);
+                  }
+                })();
+              }}
+            >
+              Reset defaults
+            </Button>
+          </>
+        }
+      >
+        <div className="admin-cc-form">
+          <span className="admin-cc-switch-row" style={{ paddingBottom: 0 }}>
+            <Switch
               checked={config.enabled}
-              onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
+              onChange={(enabled) => setConfig({ ...config, enabled })}
+              aria-label="Enabled for guests at /"
             />
             Enabled for guests at `/`
-          </label>
-          <span className="muted" style={{ fontSize: "0.82rem" }}>
-            Guests see this at `/` when enabled. Use preview to view the guest page while signed in
-            as platform (skips the Operator enter gate).
           </span>
-          <a
-            className="btn"
-            href={withBasePath("/?preview=public")}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open public home
-          </a>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              void (async () => {
-                setSaving(true);
-                try {
-                  const d = await api<{ publicHome: PublicHomeConfig }>(
-                    "/admin/config/public-home",
-                    { method: "PUT", body: JSON.stringify({ reset: true }) },
-                  );
-                  setConfig(d.publicHome);
-                  setMessage(`Reset to ${BRAND_DEFAULTS.appName} marketing defaults.`);
-                } catch (e) {
-                  setMessage(e instanceof Error ? e.message : "Reset failed");
-                } finally {
-                  setSaving(false);
-                }
-              })();
-            }}
-          >
-            Reset defaults
-          </button>
+          <FormGrid>
+            <TextField
+              full
+              label="SEO title"
+              value={config.seo.title}
+              onChange={(e) => setConfig({ ...config, seo: { ...config.seo, title: e.target.value } })}
+            />
+            <TextareaField
+              full
+              label="SEO description"
+              rows={3}
+              value={config.seo.description}
+              onChange={(e) =>
+                setConfig({ ...config, seo: { ...config.seo, description: e.target.value } })
+              }
+            />
+          </FormGrid>
         </div>
-        <Field label="SEO title">
-          <TextInput
-            value={config.seo.title}
-            onChange={(title) => setConfig({ ...config, seo: { ...config.seo, title } })}
-          />
-        </Field>
-        <Field label="SEO description">
-          <TextArea
-            value={config.seo.description}
-            onChange={(description) =>
-              setConfig({ ...config, seo: { ...config.seo, description } })
-            }
-          />
-        </Field>
-      </section>
+      </AdminSection>
 
-      <section className="panel admin-card" style={{ padding: "1rem", display: "grid", gap: "0.65rem" }}>
-        <h3 style={{ margin: 0 }}>Page theme</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "0.55rem" }}>
-          {(
-            [
-              ["bg0", "Background"],
-              ["bg1", "Surface"],
-              ["accent", "Accent"],
-              ["accentStrong", "Accent strong"],
-              ["textHi", "Text"],
-              ["textMid", "Muted text"],
-              ["radius", "Radius"],
-            ] as const
-          ).map(([key, label]) => (
-            <Field key={key} label={label}>
-              <TextInput
+      <AdminSection title="Page theme" description="Colors, fonts, and scheme for the guest page.">
+        <div className="admin-cc-form">
+          <FormGrid>
+            {themeFields.map(([key, label]) => (
+              <TextField
+                key={key}
+                label={label}
                 value={config.theme[key]}
-                onChange={(v) => setConfig({ ...config, theme: { ...config.theme, [key]: v } })}
+                onChange={(e) =>
+                  setConfig({ ...config, theme: { ...config.theme, [key]: e.target.value } })
+                }
               />
-            </Field>
-          ))}
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
-            gap: "0.55rem",
-          }}
-        >
-          <Field label="Body font CSS">
-            <TextInput
+            ))}
+            <TextField
+              label="Body font CSS"
               value={config.theme.fontSans}
-              onChange={(fontSans) =>
-                setConfig({ ...config, theme: { ...config.theme, fontSans } })
+              onChange={(e) =>
+                setConfig({ ...config, theme: { ...config.theme, fontSans: e.target.value } })
               }
             />
-          </Field>
-          <Field label="Display font CSS">
-            <TextInput
+            <TextField
+              label="Display font CSS"
               value={config.theme.fontDisplay}
-              onChange={(fontDisplay) =>
-                setConfig({ ...config, theme: { ...config.theme, fontDisplay } })
+              onChange={(e) =>
+                setConfig({ ...config, theme: { ...config.theme, fontDisplay: e.target.value } })
               }
             />
-          </Field>
-        </div>
-        <Field label="Color scheme">
-          <select
-            className="input"
-            value={config.theme.colorScheme}
-            onChange={(e) =>
-              setConfig({
-                ...config,
-                theme: {
-                  ...config.theme,
-                  colorScheme: e.target.value === "light" ? "light" : "dark",
-                },
-              })
-            }
-          >
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </Field>
-      </section>
-
-      <section style={{ display: "grid", gap: "0.75rem" }}>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-          <h3 style={{ margin: 0, flex: 1 }}>Sections</h3>
-          {(
-            [
-              "header",
-              "hero",
-              "stats",
-              "pillars",
-              "marquee",
-              "toolsShowcase",
-              "features",
-              "cta",
-              "footer",
-            ] as const
-          ).map((type) => (
-            <button
-              key={type}
-              type="button"
-              className="btn"
-              onClick={() =>
-                setConfig({ ...config, sections: [...config.sections, newSection(type)] })
+            <SelectField
+              label="Color scheme"
+              value={config.theme.colorScheme}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  theme: {
+                    ...config.theme,
+                    colorScheme: e.target.value === "light" ? "light" : "dark",
+                  },
+                })
               }
             >
-              + {type}
-            </button>
-          ))}
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </SelectField>
+          </FormGrid>
         </div>
-        {config.sections.map((section, index) => (
-          <SectionEditor
-            key={section.id}
-            section={section}
-            setConfig={setConfig}
-            index={index}
-            total={config.sections.length}
-          />
-        ))}
-      </section>
+      </AdminSection>
 
-      {message ? <p className="muted">{message}</p> : null}
+      <AdminSection
+        title="Sections"
+        description={`${config.sections.length} section${config.sections.length === 1 ? "" : "s"} · add a block, then expand to edit.`}
+        actions={
+          <div className="admin-cc-actions">
+            {sectionTypes.map((type) => (
+              <Button
+                key={type}
+                variant="secondary"
+                size="sm"
+                icon="plus"
+                onClick={() =>
+                  setConfig({ ...config, sections: [...config.sections, newSection(type)] })
+                }
+              >
+                {type}
+              </Button>
+            ))}
+          </div>
+        }
+      >
+        {config.sections.length === 0 ? (
+          <AdminEmpty title="No sections yet" icon="layers">
+            Add a header, hero, or footer to get started.
+          </AdminEmpty>
+        ) : (
+          <div className="admin-cc-stack">
+            {config.sections.map((section, index) => (
+              <SectionEditor
+                key={section.id}
+                section={section}
+                setConfig={setConfig}
+                index={index}
+                total={config.sections.length}
+              />
+            ))}
+          </div>
+        )}
+      </AdminSection>
     </div>
   );
 });

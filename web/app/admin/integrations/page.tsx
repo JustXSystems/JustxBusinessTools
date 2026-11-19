@@ -1,7 +1,27 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useId, useState, type ReactNode } from "react";
 import Link from "next/link";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  FormGrid,
+  Grid,
+  Switch,
+  type BosBadgeTone,
+} from "@/components/bos";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPage,
+  AdminPageSkeleton,
+  AdminSection,
+  AdminTabs,
+} from "@/components/admin/ui";
+import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
@@ -55,12 +75,21 @@ type HubResponse = {
   };
 };
 
-function statusPill(status: string) {
-  if (status === "active") return "pill pill-success";
-  if (status === "error") return "pill pill-danger";
-  if (status === "disabled" || status === "warning") return "pill pill-warning";
-  if (status === "info") return "pill";
-  return "pill";
+const PANE_OPTIONS = [
+  { value: "overview", label: "Overview" },
+  { value: "google_oauth", label: "Google" },
+  { value: "email_webhook", label: "Email" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "sms_otp", label: "SMS / OTP" },
+  { value: "error_webhook", label: "Errors" },
+] as const;
+
+function statusTone(status: string): BosBadgeTone {
+  if (status === "active") return "emerald";
+  if (status === "error") return "coral";
+  if (status === "disabled" || status === "warning") return "amber";
+  if (status === "info") return "blue";
+  return "neutral";
 }
 
 function statusLabel(status: string) {
@@ -73,13 +102,11 @@ function statusLabel(status: string) {
   return status;
 }
 
-function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+function StatusBadge({ status, label }: { status: string; label?: string }) {
   return (
-    <div className="integ-field">
-      <label className="integ-label">{label}</label>
-      {children}
-      {hint ? <p className="integ-hint">{hint}</p> : null}
-    </div>
+    <Badge auto tone={statusTone(status)}>
+      {label ?? statusLabel(status)}
+    </Badge>
   );
 }
 
@@ -94,23 +121,61 @@ function SwitchRow({
   title: string;
   description: string;
 }) {
+  const id = useId();
   return (
-    <label className="integ-switch">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span className="integ-switch-copy">
+    <div className="admin-cc-switch-card">
+      <Switch id={id} checked={checked} onChange={onChange} aria-label={title} />
+      <label htmlFor={id} className="admin-cc-switch-copy">
         <strong>{title}</strong>
         <span>{description}</span>
-      </span>
-    </label>
+      </label>
+    </div>
   );
 }
 
-function HelpDetails({ summary, children }: { summary: string; children: ReactNode }) {
+/** One editable integration: header + status, switch/fields (children), action row. */
+function IntegrationPanel({
+  title,
+  description,
+  status,
+  children,
+  actions,
+}: {
+  title: ReactNode;
+  description: ReactNode;
+  status: string;
+  children: ReactNode;
+  actions: ReactNode;
+}) {
   return (
-    <details className="integ-help">
-      <summary>{summary}</summary>
-      <div className="integ-help-body">{children}</div>
-    </details>
+    <AdminSection title={title} description={description} actions={<StatusBadge status={status} />}>
+      <div className="admin-cc-form">{children}</div>
+      <div className="admin-cc-actions admin-cc-actions-start">{actions}</div>
+    </AdminSection>
+  );
+}
+
+function HubStatic({ card }: { card: HubCard }) {
+  return (
+    <Card>
+      <div className="admin-cc-hub">
+        <div className="admin-cc-hub-top">
+          <strong>{card.label}</strong>
+          <StatusBadge status={card.status} label={card.statusLabel} />
+        </div>
+        <p className="admin-cc-hub-desc">{card.description}</p>
+        {card.detail ? <span className="admin-cc-hub-meta">{card.detail}</span> : null}
+        {card.manageHref ? (
+          <div>
+            <Link href={card.manageHref}>
+              <Button variant="ghost" size="sm">
+                Open
+              </Button>
+            </Link>
+          </div>
+        ) : null}
+      </div>
+    </Card>
   );
 }
 
@@ -122,6 +187,7 @@ export default function AdminIntegrationsPage() {
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const [googleForm, setGoogleForm] = useState({
     enabled: false,
@@ -256,606 +322,541 @@ export default function AdminIntegrationsPage() {
 
   if (!isPlatform) {
     return (
-      <div className="admin-page">
-        <section className="panel admin-card">
-          <h2>Integrations</h2>
-          <p className="muted">Platform configuration is available to Justxsystems platform admins only.</p>
-        </section>
-      </div>
+      <AdminPage title="Integrations" sub="Platform configuration">
+        <AdminEmpty title="Platform admins only" icon="lock">
+          Platform configuration is available to Justxsystems platform admins only.
+        </AdminEmpty>
+      </AdminPage>
     );
   }
 
-  if (error && !data) return <p className="field-error">{error}</p>;
-  if (!data) return <p className="muted">Loading system configuration…</p>;
+  if (error && !data) {
+    return (
+      <AdminPage title="Integrations" sub="Platform configuration">
+        <AdminErrorState message={error} onRetry={load} />
+      </AdminPage>
+    );
+  }
+  if (!data) return <AdminPageSkeleton cards={4} />;
 
   const byId = Object.fromEntries(data.integrations.map((i) => [i.id, i]));
+  const anyBusy = Boolean(busy);
+
+  /** Save / Test button pair with in-flight labels. */
+  function saveButton(path: string, onSave: () => void) {
+    return (
+      <Button variant="primary" disabled={anyBusy} onClick={onSave}>
+        {busy === `save:${path}` ? "Saving…" : "Save"}
+      </Button>
+    );
+  }
+  function testButton(path: string, label: string) {
+    return (
+      <Button variant="secondary" disabled={anyBusy} onClick={() => void test(path)}>
+        {busy === `test:${path}` ? "Testing…" : label}
+      </Button>
+    );
+  }
+
+  const statusOf = (id: Exclude<Pane, "overview">) => byId[id]?.status ?? "not_configured";
 
   return (
-    <div className="admin-page integ-page">
-      <section className="panel admin-card admin-page-head">
-        <div className="analytics-toolbar">
-          <div>
-            <h2>Integrations</h2>
-            <p className="muted">
-              One-stop view of platform configuration — status, tests, and editable optional services.
-            </p>
-          </div>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={Boolean(busy)} onClick={() => void load()}>
+    <AdminPage
+      title="Integrations"
+      sub="One-stop view of platform configuration — status, tests, and editable optional services."
+      toolbar={
+        <>
+          <Badge auto tone="blue">
+            {data.integrations.filter((i) => i.status === "active").length}/{data.integrations.length} active
+          </Badge>
+          <Button variant="ghost" size="sm" icon="refresh" disabled={anyBusy} onClick={() => void load()}>
             Refresh
-          </button>
-        </div>
-        <p className="muted small" style={{ marginTop: 8 }}>
-          {data.hints.migrateNote}
-        </p>
-      </section>
+          </Button>
+        </>
+      }
+    >
+      <p className="admin-cc-note-text">{data.hints.migrateNote}</p>
 
-      {(msg || error) && <div className={`integ-banner${error ? " is-error" : ""}`}>{error || msg}</div>}
+      {error ? (
+        <Alert tone="coral" title="Something went wrong">
+          {error}
+        </Alert>
+      ) : msg ? (
+        <Alert tone="emerald" title="Done">
+          {msg}
+        </Alert>
+      ) : null}
 
-      <div className="admin-tabs-bar">
-        <div className="admin-tabs">
-          {(
-            [
-              ["overview", "Overview"],
-              ["google_oauth", "Google"],
-              ["email_webhook", "Email"],
-              ["whatsapp", "WhatsApp"],
-              ["sms_otp", "SMS / OTP"],
-              ["error_webhook", "Errors"],
-            ] as const
-          ).map(([id, label]) => (
-            <button key={id} type="button" className={pane === id ? "active" : ""} onClick={() => setPane(id)}>
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <AdminTabs aria-label="Integration sections" options={PANE_OPTIONS} value={pane} onChange={setPane} />
 
-      <div className="admin-page-scroll">
-        {pane === "overview" ? (
-          <div className="integ-overview">
-            <section className="panel admin-card">
-              <h3>Editable integrations</h3>
-              <p className="muted small">Saved here override .env. Each has Save + Test.</p>
-              <div className="integ-card-grid">
-                {data.integrations.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="integ-hub-card"
-                    onClick={() => setPane(item.id)}
-                  >
-                    <div className="integ-hub-card-top">
-                      <strong>{item.label}</strong>
-                      <span className={statusPill(item.status)}>{statusLabel(item.status)}</span>
-                    </div>
-                    <p>{item.description}</p>
-                    <span className="integ-hub-meta">
-                      {item.source ? `Source · ${item.source}` : "Not set"}
-                      {item.statusDetail ? ` · ${item.statusDetail}` : ""}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="panel admin-card">
-              <h3>Managed elsewhere</h3>
-              <p className="muted small">Open the dedicated Admin screen — not duplicated here.</p>
-              <div className="integ-card-grid">
-                {data.linked.map((card) => (
-                  <div key={card.id} className="integ-hub-card is-static">
-                    <div className="integ-hub-card-top">
-                      <strong>{card.label}</strong>
-                      <span className={statusPill(card.status)}>{card.statusLabel}</span>
-                    </div>
-                    <p>{card.description}</p>
-                    {card.detail ? <span className="integ-hub-meta">{card.detail}</span> : null}
-                    {card.manageHref ? (
-                      <Link href={card.manageHref} className="btn btn-ghost btn-sm" style={{ marginTop: 10 }}>
-                        Open
-                      </Link>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="panel admin-card">
-              <h3>Bootstrap & runtime (read-only)</h3>
-              <p className="muted small">Stay in <code>server/.env</code> — shown for ops visibility only.</p>
-              <div className="integ-card-grid">
-                {data.bootstrap.map((card) => (
-                  <div key={card.id} className="integ-hub-card is-static">
-                    <div className="integ-hub-card-top">
-                      <strong>{card.label}</strong>
-                      <span className={statusPill(card.status)}>{card.statusLabel}</span>
-                    </div>
-                    <p>{card.description}</p>
-                    {card.detail ? <span className="integ-hub-meta">{card.detail}</span> : null}
-                  </div>
-                ))}
-              </div>
-              <HelpDetails summary="What never moves into Admin">
-                <ul>
-                  {data.hints.neverMove.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              </HelpDetails>
-            </section>
-          </div>
-        ) : null}
-
-        {pane === "google_oauth" ? (
-          <section className="panel admin-card integ-panel">
-            <header className="integ-panel-head">
-              <div>
-                <h3>Google OAuth</h3>
-                <p>Sign in with Google + Company Drive. Optional — skip for webhook/UNC/email-only stacks.</p>
-              </div>
-              <span className={statusPill(byId.google_oauth?.status ?? "not_configured")}>
-                {statusLabel(byId.google_oauth?.status ?? "not_configured")}
-              </span>
-            </header>
-            <SwitchRow
-              checked={googleForm.enabled}
-              onChange={(enabled) => setGoogleForm((f) => ({ ...f, enabled }))}
-              title="Enable Google OAuth"
-              description="Platform-wide login + Drive connect client."
-            />
-            <div className="integ-form">
-              <Field label="Client ID" hint="OAuth Web client ID from Google Cloud Console.">
-                <input
-                  value={googleForm.clientId}
-                  onChange={(e) => setGoogleForm((f) => ({ ...f, clientId: e.target.value }))}
-                  placeholder="….apps.googleusercontent.com"
-                  autoComplete="off"
-                />
-              </Field>
-              <Field label="Client secret" hint="Leave blank to keep the stored secret.">
-                <input
-                  type="password"
-                  value={googleForm.clientSecret}
-                  onChange={(e) => setGoogleForm((f) => ({ ...f, clientSecret: e.target.value }))}
-                  placeholder="GOCSPX-…"
-                  autoComplete="new-password"
-                />
-              </Field>
-              <Field label="Project owner email" hint="Ops note only — not used at runtime.">
-                <input
-                  value={googleForm.supportEmail}
-                  onChange={(e) => setGoogleForm((f) => ({ ...f, supportEmail: e.target.value }))}
-                  placeholder="justxsystems@gmail.com"
-                />
-              </Field>
-            </div>
-            <div className="integ-uri-block">
-              <div className="integ-uri-head">
-                <h4>Authorized redirect URIs</h4>
-                <p>Paste both into Google Cloud exactly.</p>
-              </div>
-              <div className="integ-uri-list">
-                <div className="integ-uri-row">
-                  <div>
-                    <span className="integ-uri-label">Sign-in</span>
-                    <code>{data.hints.redirectUriLogin}</code>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => void copyText("sign-in URI", data.hints.redirectUriLogin)}
-                  >
-                    Copy
-                  </button>
-                </div>
-                <div className="integ-uri-row">
-                  <div>
-                    <span className="integ-uri-label">Drive</span>
-                    <code>{data.hints.redirectUriDrive}</code>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => void copyText("Drive URI", data.hints.redirectUriDrive)}
-                  >
-                    Copy
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="integ-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={Boolean(busy)}
-                onClick={() =>
-                  void save(
-                    "google_oauth",
-                    {
-                      enabled: googleForm.enabled,
-                      clientId: googleForm.clientId.trim(),
-                      clientSecret: googleForm.clientSecret.startsWith("••••")
-                        ? ""
-                        : googleForm.clientSecret.trim(),
-                      supportEmail: googleForm.supportEmail.trim() || null,
-                    },
-                    "Google OAuth saved.",
-                  )
-                }
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={Boolean(busy)}
-                onClick={() => void test("google_oauth")}
-              >
-                Test credentials
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {pane === "email_webhook" ? (
-          <section className="panel admin-card integ-panel">
-            <header className="integ-panel-head">
-              <div>
-                <h3>Email webhook (Path A) — platform fallback</h3>
-                <p>
-                  Optional platform-wide HTTPS inbound hook when a Business Profile has{" "}
-                  <strong>no</strong> per-company email webhook. Prefer{" "}
-                  <strong>Business Profile → Send Via → Email → Email webhook URL</strong> for each
-                  GSTIN / company mailbox (Power Automate). Not SMTP / SendGrid keys. Not the Profile
-                  artifact webhook (PDF files).
-                </p>
-              </div>
-              <span className={statusPill(byId.email_webhook?.status ?? "not_configured")}>
-                {statusLabel(byId.email_webhook?.status ?? "not_configured")}
-              </span>
-            </header>
-            <SwitchRow
-              checked={emailForm.enabled}
-              onChange={(enabled) => setEmailForm((f) => ({ ...f, enabled }))}
-              title="Enable email webhook"
-              description="Quotation / site survey / Email Outbox auto-send."
-            />
-            <div className="integ-form">
-              <Field
-                label="Webhook URL"
-                hint="Fallback only. Per-company URL lives on Business Profile. n8n / Make / Power Automate production HTTPS URL."
-              >
-                <input
-                  value={emailForm.url}
-                  onChange={(e) => setEmailForm((f) => ({ ...f, url: e.target.value }))}
-                  placeholder="https://hook….make.com/…"
-                  autoComplete="off"
-                />
-              </Field>
-            </div>
-            <div className="integ-note-grid">
-              <article>
-                <h4>Skip Path A</h4>
-                <p>
-                  Use mailto or Outlook via <Link href="/sync">Sync Center</Link> — no webhook needed.
-                </p>
-              </article>
-              <article>
-                <h4>Staff queue</h4>
-                <p>
-                  Monitor sends in <Link href="/email-outbox">Email Outbox</Link>.
-                </p>
-              </article>
-            </div>
-            <div className="integ-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={Boolean(busy)}
-                onClick={() =>
-                  void save(
-                    "email_webhook",
-                    { enabled: emailForm.enabled, url: emailForm.url.trim() },
-                    "Email webhook saved.",
-                  )
-                }
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={Boolean(busy)}
-                onClick={() => void test("email_webhook")}
-              >
-                Send test POST
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {pane === "whatsapp" ? (
-          <section className="panel admin-card integ-panel">
-            <header className="integ-panel-head">
-              <div>
-                <h3>WhatsApp</h3>
-                <p>Cloud API and/or webhook for quotation / survey PDF delivery.</p>
-              </div>
-              <span className={statusPill(byId.whatsapp?.status ?? "not_configured")}>
-                {statusLabel(byId.whatsapp?.status ?? "not_configured")}
-              </span>
-            </header>
-            <SwitchRow
-              checked={waForm.enabled}
-              onChange={(enabled) => setWaForm((f) => ({ ...f, enabled }))}
-              title="Enable WhatsApp"
-              description="Requires webhook URL and/or Cloud API phone number ID + token."
-            />
-            <div className="integ-form">
-              <Field label="Webhook URL (optional)" hint="Automation that sends WhatsApp with PDF payload.">
-                <input
-                  value={waForm.webhookUrl}
-                  onChange={(e) => setWaForm((f) => ({ ...f, webhookUrl: e.target.value }))}
-                  placeholder="https://…"
-                  autoComplete="off"
-                />
-              </Field>
-              <Field label="Phone number ID (Cloud API)" hint="Meta WhatsApp Business phone number ID.">
-                <input
-                  value={waForm.phoneNumberId}
-                  onChange={(e) => setWaForm((f) => ({ ...f, phoneNumberId: e.target.value }))}
-                  autoComplete="off"
-                />
-              </Field>
-              <Field label="Access token (Cloud API)" hint="Leave blank to keep stored token.">
-                <input
-                  type="password"
-                  value={waForm.accessToken}
-                  onChange={(e) => setWaForm((f) => ({ ...f, accessToken: e.target.value }))}
-                  autoComplete="new-password"
-                />
-              </Field>
-              <Field label="API version" hint="Default v21.0.">
-                <input
-                  value={waForm.apiVersion}
-                  onChange={(e) => setWaForm((f) => ({ ...f, apiVersion: e.target.value }))}
-                />
-              </Field>
-            </div>
-            <div className="integ-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={Boolean(busy)}
-                onClick={() =>
-                  void save(
-                    "whatsapp",
-                    {
-                      enabled: waForm.enabled,
-                      webhookUrl: waForm.webhookUrl.trim(),
-                      phoneNumberId: waForm.phoneNumberId.trim(),
-                      apiVersion: waForm.apiVersion.trim() || "v21.0",
-                      accessToken: waForm.accessToken.startsWith("••••") ? "" : waForm.accessToken.trim(),
-                    },
-                    "WhatsApp saved.",
-                  )
-                }
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={Boolean(busy)}
-                onClick={() => void test("whatsapp")}
-              >
-                Test
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {pane === "sms_otp" ? (
-          <section className="panel admin-card integ-panel">
-            <header className="integ-panel-head">
-              <div>
-                <h3>SMS / Phone OTP</h3>
-                <p>Optional login method. Console logs OTP in API logs (dev only).</p>
-              </div>
-              <span className={statusPill(byId.sms_otp?.status ?? "not_configured")}>
-                {statusLabel(byId.sms_otp?.status ?? "not_configured")}
-              </span>
-            </header>
-            <SwitchRow
-              checked={smsForm.enabled}
-              onChange={(enabled) => setSmsForm((f) => ({ ...f, enabled }))}
-              title="Enable SMS integration"
-              description="When off, Phone OTP is hidden even if env still has SMS_* keys."
-            />
-            <div className="integ-form">
-              <Field label="Provider">
-                <select
-                  value={smsForm.provider}
-                  onChange={(e) => setSmsForm((f) => ({ ...f, provider: e.target.value }))}
+      {pane === "overview" ? (
+        <>
+          <AdminSection
+            title="Editable integrations"
+            description="Saved here override .env. Each has Save + Test."
+          >
+            <Grid cols={3} min={240} gap={12}>
+              {data.integrations.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="admin-cc-kpi-btn"
+                  onClick={() => setPane(item.id)}
                 >
-                  <option value="console">console (dev)</option>
-                  <option value="twilio">twilio</option>
-                  <option value="msg91">msg91</option>
-                  <option value="http">http gateway</option>
-                </select>
-              </Field>
-              <label className="integ-switch" style={{ margin: 0 }}>
-                <input
-                  type="checkbox"
-                  checked={smsForm.phoneOtpEnabled}
-                  onChange={(e) => setSmsForm((f) => ({ ...f, phoneOtpEnabled: e.target.checked }))}
-                />
-                <span className="integ-switch-copy">
-                  <strong>Show Phone OTP on login</strong>
-                  <span>Requires a working provider when enabled in production.</span>
-                </span>
-              </label>
-              {smsForm.provider === "twilio" ? (
-                <>
-                  <Field label="Twilio Account SID">
-                    <input
-                      value={smsForm.twilioAccountSid}
-                      onChange={(e) => setSmsForm((f) => ({ ...f, twilioAccountSid: e.target.value }))}
-                    />
-                  </Field>
-                  <Field label="Twilio Auth Token">
-                    <input
-                      type="password"
-                      value={smsForm.twilioAuthToken}
-                      onChange={(e) => setSmsForm((f) => ({ ...f, twilioAuthToken: e.target.value }))}
-                      autoComplete="new-password"
-                    />
-                  </Field>
-                  <Field label="Twilio From number">
-                    <input
-                      value={smsForm.twilioFromNumber}
-                      onChange={(e) => setSmsForm((f) => ({ ...f, twilioFromNumber: e.target.value }))}
-                      placeholder="+91…"
-                    />
-                  </Field>
-                </>
-              ) : null}
-              {smsForm.provider === "msg91" ? (
-                <>
-                  <Field label="MSG91 Auth key">
-                    <input
-                      type="password"
-                      value={smsForm.msg91AuthKey}
-                      onChange={(e) => setSmsForm((f) => ({ ...f, msg91AuthKey: e.target.value }))}
-                      autoComplete="new-password"
-                    />
-                  </Field>
-                  <Field label="MSG91 Template ID">
-                    <input
-                      value={smsForm.msg91TemplateId}
-                      onChange={(e) => setSmsForm((f) => ({ ...f, msg91TemplateId: e.target.value }))}
-                    />
-                  </Field>
-                </>
-              ) : null}
-              {smsForm.provider === "http" ? (
-                <>
-                  <Field label="SMS API URL">
-                    <input
-                      value={smsForm.smsApiUrl}
-                      onChange={(e) => setSmsForm((f) => ({ ...f, smsApiUrl: e.target.value }))}
-                    />
-                  </Field>
-                  <Field label="SMS API key (optional)">
-                    <input
-                      type="password"
-                      value={smsForm.smsApiKey}
-                      onChange={(e) => setSmsForm((f) => ({ ...f, smsApiKey: e.target.value }))}
-                      autoComplete="new-password"
-                    />
-                  </Field>
-                </>
-              ) : null}
-            </div>
-            <div className="integ-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={Boolean(busy)}
-                onClick={() =>
-                  void save(
-                    "sms_otp",
-                    {
-                      enabled: smsForm.enabled,
-                      phoneOtpEnabled: smsForm.phoneOtpEnabled,
-                      provider: smsForm.provider,
-                      twilioAccountSid: smsForm.twilioAccountSid.trim(),
-                      twilioFromNumber: smsForm.twilioFromNumber.trim(),
-                      twilioAuthToken: smsForm.twilioAuthToken.startsWith("••••")
-                        ? ""
-                        : smsForm.twilioAuthToken.trim(),
-                      msg91TemplateId: smsForm.msg91TemplateId.trim(),
-                      msg91AuthKey: smsForm.msg91AuthKey.startsWith("••••")
-                        ? ""
-                        : smsForm.msg91AuthKey.trim(),
-                      smsApiUrl: smsForm.smsApiUrl.trim(),
-                      smsApiKey: smsForm.smsApiKey.startsWith("••••") ? "" : smsForm.smsApiKey.trim(),
-                    },
-                    "SMS / OTP saved.",
-                  )
-                }
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={Boolean(busy)}
-                onClick={() => void test("sms_otp")}
-              >
-                Test provider
-              </button>
-            </div>
-          </section>
-        ) : null}
+                  <Card interactive className="admin-cc-hub-card">
+                    <div className="admin-cc-hub">
+                      <div className="admin-cc-hub-top">
+                        <strong>{item.label}</strong>
+                        <StatusBadge status={item.status} />
+                      </div>
+                      <p className="admin-cc-hub-desc">{item.description}</p>
+                      <span className="admin-cc-hub-meta">
+                        {item.source ? `Source · ${item.source}` : "Not set"}
+                        {item.statusDetail ? ` · ${item.statusDetail}` : ""}
+                      </span>
+                    </div>
+                  </Card>
+                </button>
+              ))}
+            </Grid>
+          </AdminSection>
 
-        {pane === "error_webhook" ? (
-          <section className="panel admin-card integ-panel">
-            <header className="integ-panel-head">
-              <div>
-                <h3>Error webhook</h3>
-                <p>Optional Slack/Discord/ops POST for API failures. Sentry DSN stays in .env.</p>
-              </div>
-              <span className={statusPill(byId.error_webhook?.status ?? "not_configured")}>
-                {statusLabel(byId.error_webhook?.status ?? "not_configured")}
-              </span>
-            </header>
-            <SwitchRow
-              checked={errorForm.enabled}
-              onChange={(enabled) => setErrorForm((f) => ({ ...f, enabled }))}
-              title="Enable error webhook"
-              description="Posts JSON when the API reports an error."
+          <AdminSection
+            title="Managed elsewhere"
+            description="Open the dedicated Admin screen — not duplicated here."
+          >
+            {data.linked.length === 0 ? (
+              <AdminEmpty title="Nothing linked" />
+            ) : (
+              <Grid cols={3} min={240} gap={12}>
+                {data.linked.map((card) => (
+                  <HubStatic key={card.id} card={card} />
+                ))}
+              </Grid>
+            )}
+          </AdminSection>
+
+          <AdminSection
+            title="Bootstrap & runtime (read-only)"
+            description={
+              <>
+                Stay in <code className="admin-cc-code">server/.env</code> — shown for ops visibility only.
+              </>
+            }
+            actions={
+              <Button variant="ghost" size="sm" onClick={() => setHelpOpen(true)}>
+                What never moves into Admin
+              </Button>
+            }
+          >
+            {data.bootstrap.length === 0 ? (
+              <AdminEmpty title="No bootstrap items" />
+            ) : (
+              <Grid cols={3} min={240} gap={12}>
+                {data.bootstrap.map((card) => (
+                  <HubStatic key={card.id} card={{ ...card, manageHref: null }} />
+                ))}
+              </Grid>
+            )}
+          </AdminSection>
+
+          <Dialog
+            open={helpOpen}
+            onClose={() => setHelpOpen(false)}
+            title="What never moves into Admin"
+            description="These stay in server/.env and are never editable from this console."
+            actions={
+              <Button variant="primary" onClick={() => setHelpOpen(false)}>
+                Close
+              </Button>
+            }
+          >
+            <ul className="admin-cc-help-list">
+              {data.hints.neverMove.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </Dialog>
+        </>
+      ) : null}
+
+      {pane === "google_oauth" ? (
+        <IntegrationPanel
+          title="Google OAuth"
+          description="Sign in with Google + Company Drive. Optional — skip for webhook/UNC/email-only stacks."
+          status={statusOf("google_oauth")}
+          actions={
+            <>
+              {saveButton("google_oauth", () =>
+                void save(
+                  "google_oauth",
+                  {
+                    enabled: googleForm.enabled,
+                    clientId: googleForm.clientId.trim(),
+                    clientSecret: googleForm.clientSecret.startsWith("••••")
+                      ? ""
+                      : googleForm.clientSecret.trim(),
+                    supportEmail: googleForm.supportEmail.trim() || null,
+                  },
+                  "Google OAuth saved.",
+                ),
+              )}
+              {testButton("google_oauth", "Test credentials")}
+            </>
+          }
+        >
+          <SwitchRow
+            checked={googleForm.enabled}
+            onChange={(enabled) => setGoogleForm((f) => ({ ...f, enabled }))}
+            title="Enable Google OAuth"
+            description="Platform-wide login + Drive connect client."
+          />
+          <FormGrid>
+            <TextField
+              label="Client ID"
+              hint="OAuth Web client ID from Google Cloud Console."
+              value={googleForm.clientId}
+              onChange={(e) => setGoogleForm((f) => ({ ...f, clientId: e.target.value }))}
+              placeholder="….apps.googleusercontent.com"
+              autoComplete="off"
+              full
             />
-            <div className="integ-form">
-              <Field label="Webhook URL" hint="Incoming webhook URL for your ops channel.">
-                <input
-                  value={errorForm.url}
-                  onChange={(e) => setErrorForm((f) => ({ ...f, url: e.target.value }))}
-                  placeholder="https://hooks.slack.com/…"
-                  autoComplete="off"
+            <TextField
+              label="Client secret"
+              hint="Leave blank to keep the stored secret."
+              type="password"
+              value={googleForm.clientSecret}
+              onChange={(e) => setGoogleForm((f) => ({ ...f, clientSecret: e.target.value }))}
+              placeholder="GOCSPX-…"
+              autoComplete="new-password"
+            />
+            <TextField
+              label="Project owner email"
+              hint="Ops note only — not used at runtime."
+              value={googleForm.supportEmail}
+              onChange={(e) => setGoogleForm((f) => ({ ...f, supportEmail: e.target.value }))}
+              placeholder="justxsystems@gmail.com"
+            />
+          </FormGrid>
+          <Card flat>
+            <div className="admin-cc-detail-head">
+              <div>
+                <h4 className="admin-cc-detail-title">Authorized redirect URIs</h4>
+                <p className="admin-cc-detail-sub">Paste both into Google Cloud exactly.</p>
+              </div>
+            </div>
+            <ul className="admin-cc-verify-list">
+              <li>
+                <div>
+                  <strong>Sign-in</strong>
+                  <code className="admin-cc-code">{data.hints.redirectUriLogin}</code>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void copyText("sign-in URI", data.hints.redirectUriLogin)}
+                >
+                  Copy
+                </Button>
+              </li>
+              <li>
+                <div>
+                  <strong>Drive</strong>
+                  <code className="admin-cc-code">{data.hints.redirectUriDrive}</code>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void copyText("Drive URI", data.hints.redirectUriDrive)}
+                >
+                  Copy
+                </Button>
+              </li>
+            </ul>
+          </Card>
+        </IntegrationPanel>
+      ) : null}
+
+      {pane === "email_webhook" ? (
+        <IntegrationPanel
+          title="Email webhook (Path A) — platform fallback"
+          description={
+            <>
+              Optional platform-wide HTTPS inbound hook when a Business Profile has <strong>no</strong> per-company
+              email webhook. Prefer <strong>Business Profile → Send Via → Email → Email webhook URL</strong> for each
+              GSTIN / company mailbox (Power Automate). Not SMTP / SendGrid keys. Not the Profile artifact webhook
+              (PDF files).
+            </>
+          }
+          status={statusOf("email_webhook")}
+          actions={
+            <>
+              {saveButton("email_webhook", () =>
+                void save(
+                  "email_webhook",
+                  { enabled: emailForm.enabled, url: emailForm.url.trim() },
+                  "Email webhook saved.",
+                ),
+              )}
+              {testButton("email_webhook", "Send test POST")}
+            </>
+          }
+        >
+          <SwitchRow
+            checked={emailForm.enabled}
+            onChange={(enabled) => setEmailForm((f) => ({ ...f, enabled }))}
+            title="Enable email webhook"
+            description="Quotation / site survey / Email Outbox auto-send."
+          />
+          <FormGrid>
+            <TextField
+              label="Webhook URL"
+              hint="Fallback only. Per-company URL lives on Business Profile. n8n / Make / Power Automate production HTTPS URL."
+              value={emailForm.url}
+              onChange={(e) => setEmailForm((f) => ({ ...f, url: e.target.value }))}
+              placeholder="https://hook….make.com/…"
+              autoComplete="off"
+              full
+            />
+          </FormGrid>
+          <Grid cols={2} min={240} gap={12}>
+            <Card flat>
+              <h4 className="admin-cc-detail-title">Skip Path A</h4>
+              <p className="admin-cc-note-text">
+                Use mailto or Outlook via <Link href="/sync">Sync Center</Link> — no webhook needed.
+              </p>
+            </Card>
+            <Card flat>
+              <h4 className="admin-cc-detail-title">Staff queue</h4>
+              <p className="admin-cc-note-text">
+                Monitor sends in <Link href="/email-outbox">Email Outbox</Link>.
+              </p>
+            </Card>
+          </Grid>
+        </IntegrationPanel>
+      ) : null}
+
+      {pane === "whatsapp" ? (
+        <IntegrationPanel
+          title="WhatsApp"
+          description="Cloud API and/or webhook for quotation / survey PDF delivery."
+          status={statusOf("whatsapp")}
+          actions={
+            <>
+              {saveButton("whatsapp", () =>
+                void save(
+                  "whatsapp",
+                  {
+                    enabled: waForm.enabled,
+                    webhookUrl: waForm.webhookUrl.trim(),
+                    phoneNumberId: waForm.phoneNumberId.trim(),
+                    apiVersion: waForm.apiVersion.trim() || "v21.0",
+                    accessToken: waForm.accessToken.startsWith("••••") ? "" : waForm.accessToken.trim(),
+                  },
+                  "WhatsApp saved.",
+                ),
+              )}
+              {testButton("whatsapp", "Test")}
+            </>
+          }
+        >
+          <SwitchRow
+            checked={waForm.enabled}
+            onChange={(enabled) => setWaForm((f) => ({ ...f, enabled }))}
+            title="Enable WhatsApp"
+            description="Requires webhook URL and/or Cloud API phone number ID + token."
+          />
+          <FormGrid>
+            <TextField
+              label="Webhook URL (optional)"
+              hint="Automation that sends WhatsApp with PDF payload."
+              value={waForm.webhookUrl}
+              onChange={(e) => setWaForm((f) => ({ ...f, webhookUrl: e.target.value }))}
+              placeholder="https://…"
+              autoComplete="off"
+              full
+            />
+            <TextField
+              label="Phone number ID (Cloud API)"
+              hint="Meta WhatsApp Business phone number ID."
+              value={waForm.phoneNumberId}
+              onChange={(e) => setWaForm((f) => ({ ...f, phoneNumberId: e.target.value }))}
+              autoComplete="off"
+            />
+            <TextField
+              label="Access token (Cloud API)"
+              hint="Leave blank to keep stored token."
+              type="password"
+              value={waForm.accessToken}
+              onChange={(e) => setWaForm((f) => ({ ...f, accessToken: e.target.value }))}
+              autoComplete="new-password"
+            />
+            <TextField
+              label="API version"
+              hint="Default v21.0."
+              value={waForm.apiVersion}
+              onChange={(e) => setWaForm((f) => ({ ...f, apiVersion: e.target.value }))}
+            />
+          </FormGrid>
+        </IntegrationPanel>
+      ) : null}
+
+      {pane === "sms_otp" ? (
+        <IntegrationPanel
+          title="SMS / Phone OTP"
+          description="Optional login method. Console logs OTP in API logs (dev only)."
+          status={statusOf("sms_otp")}
+          actions={
+            <>
+              {saveButton("sms_otp", () =>
+                void save(
+                  "sms_otp",
+                  {
+                    enabled: smsForm.enabled,
+                    phoneOtpEnabled: smsForm.phoneOtpEnabled,
+                    provider: smsForm.provider,
+                    twilioAccountSid: smsForm.twilioAccountSid.trim(),
+                    twilioFromNumber: smsForm.twilioFromNumber.trim(),
+                    twilioAuthToken: smsForm.twilioAuthToken.startsWith("••••")
+                      ? ""
+                      : smsForm.twilioAuthToken.trim(),
+                    msg91TemplateId: smsForm.msg91TemplateId.trim(),
+                    msg91AuthKey: smsForm.msg91AuthKey.startsWith("••••")
+                      ? ""
+                      : smsForm.msg91AuthKey.trim(),
+                    smsApiUrl: smsForm.smsApiUrl.trim(),
+                    smsApiKey: smsForm.smsApiKey.startsWith("••••") ? "" : smsForm.smsApiKey.trim(),
+                  },
+                  "SMS / OTP saved.",
+                ),
+              )}
+              {testButton("sms_otp", "Test provider")}
+            </>
+          }
+        >
+          <SwitchRow
+            checked={smsForm.enabled}
+            onChange={(enabled) => setSmsForm((f) => ({ ...f, enabled }))}
+            title="Enable SMS integration"
+            description="When off, Phone OTP is hidden even if env still has SMS_* keys."
+          />
+          <SwitchRow
+            checked={smsForm.phoneOtpEnabled}
+            onChange={(phoneOtpEnabled) => setSmsForm((f) => ({ ...f, phoneOtpEnabled }))}
+            title="Show Phone OTP on login"
+            description="Requires a working provider when enabled in production."
+          />
+          <FormGrid>
+            <SelectField
+              label="Provider"
+              value={smsForm.provider}
+              onChange={(e) => setSmsForm((f) => ({ ...f, provider: e.target.value }))}
+              full
+            >
+              <option value="console">console (dev)</option>
+              <option value="twilio">twilio</option>
+              <option value="msg91">msg91</option>
+              <option value="http">http gateway</option>
+            </SelectField>
+            {smsForm.provider === "twilio" ? (
+              <>
+                <TextField
+                  label="Twilio Account SID"
+                  value={smsForm.twilioAccountSid}
+                  onChange={(e) => setSmsForm((f) => ({ ...f, twilioAccountSid: e.target.value }))}
                 />
-              </Field>
-            </div>
-            <div className="integ-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={Boolean(busy)}
-                onClick={() =>
-                  void save(
-                    "error_webhook",
-                    { enabled: errorForm.enabled, url: errorForm.url.trim() },
-                    "Error webhook saved.",
-                  )
-                }
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={Boolean(busy)}
-                onClick={() => void test("error_webhook")}
-              >
-                Send test POST
-              </button>
-              <Link href={adminDeepLink.ops()} className="btn btn-ghost">
-                Operations
+                <TextField
+                  label="Twilio Auth Token"
+                  type="password"
+                  value={smsForm.twilioAuthToken}
+                  onChange={(e) => setSmsForm((f) => ({ ...f, twilioAuthToken: e.target.value }))}
+                  autoComplete="new-password"
+                />
+                <TextField
+                  label="Twilio From number"
+                  value={smsForm.twilioFromNumber}
+                  onChange={(e) => setSmsForm((f) => ({ ...f, twilioFromNumber: e.target.value }))}
+                  placeholder="+91…"
+                />
+              </>
+            ) : null}
+            {smsForm.provider === "msg91" ? (
+              <>
+                <TextField
+                  label="MSG91 Auth key"
+                  type="password"
+                  value={smsForm.msg91AuthKey}
+                  onChange={(e) => setSmsForm((f) => ({ ...f, msg91AuthKey: e.target.value }))}
+                  autoComplete="new-password"
+                />
+                <TextField
+                  label="MSG91 Template ID"
+                  value={smsForm.msg91TemplateId}
+                  onChange={(e) => setSmsForm((f) => ({ ...f, msg91TemplateId: e.target.value }))}
+                />
+              </>
+            ) : null}
+            {smsForm.provider === "http" ? (
+              <>
+                <TextField
+                  label="SMS API URL"
+                  value={smsForm.smsApiUrl}
+                  onChange={(e) => setSmsForm((f) => ({ ...f, smsApiUrl: e.target.value }))}
+                  full
+                />
+                <TextField
+                  label="SMS API key (optional)"
+                  type="password"
+                  value={smsForm.smsApiKey}
+                  onChange={(e) => setSmsForm((f) => ({ ...f, smsApiKey: e.target.value }))}
+                  autoComplete="new-password"
+                />
+              </>
+            ) : null}
+          </FormGrid>
+        </IntegrationPanel>
+      ) : null}
+
+      {pane === "error_webhook" ? (
+        <IntegrationPanel
+          title="Error webhook"
+          description="Optional Slack/Discord/ops POST for API failures. Sentry DSN stays in .env."
+          status={statusOf("error_webhook")}
+          actions={
+            <>
+              {saveButton("error_webhook", () =>
+                void save(
+                  "error_webhook",
+                  { enabled: errorForm.enabled, url: errorForm.url.trim() },
+                  "Error webhook saved.",
+                ),
+              )}
+              {testButton("error_webhook", "Send test POST")}
+              <Link href={adminDeepLink.ops()}>
+                <Button variant="ghost">Operations</Button>
               </Link>
-            </div>
-          </section>
-        ) : null}
-      </div>
-    </div>
+            </>
+          }
+        >
+          <SwitchRow
+            checked={errorForm.enabled}
+            onChange={(enabled) => setErrorForm((f) => ({ ...f, enabled }))}
+            title="Enable error webhook"
+            description="Posts JSON when the API reports an error."
+          />
+          <FormGrid>
+            <TextField
+              label="Webhook URL"
+              hint="Incoming webhook URL for your ops channel."
+              value={errorForm.url}
+              onChange={(e) => setErrorForm((f) => ({ ...f, url: e.target.value }))}
+              placeholder="https://hooks.slack.com/…"
+              autoComplete="off"
+              full
+            />
+          </FormGrid>
+        </IntegrationPanel>
+      ) : null}
+    </AdminPage>
   );
 }

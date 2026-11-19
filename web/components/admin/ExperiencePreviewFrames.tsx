@@ -3,9 +3,16 @@
 import type { CSSProperties } from "react";
 import type { PlatformBranding } from "@/components/branding/BrandingProvider";
 import { DEFAULT_BRANDING } from "@/components/branding/BrandingProvider";
+import { AdminSection, AdminTabs } from "@/components/admin/ui";
 import { themeTokensToCssVars, type ThemeTokens } from "@/lib/theme";
 
 type FrameId = "splash" | "login" | "home";
+
+const FRAME_OPTIONS: ReadonlyArray<{ value: FrameId; label: string }> = [
+  { value: "splash", label: "Splash" },
+  { value: "login", label: "Login" },
+  { value: "home", label: "Home" },
+];
 
 type Props = {
   tokens: ThemeTokens;
@@ -24,35 +31,19 @@ export function ExperiencePreviewFrames({
   const vars = themeTokensToCssVars(tokens) as CSSProperties;
 
   return (
-    <section className="panel admin-card xp-preview">
-      <div className="analytics-toolbar preview-pane-toolbar">
-        <div>
-          <span className="preview-pane-title">Live preview</span>
-          <p className="muted preview-pane-sub" style={{ margin: "2px 0 0" }}>
-            Draft tokens — not saved until you activate
-          </p>
-        </div>
-        <div className="admin-tabs xp-preview-tabs" role="tablist">
-          {(
-            [
-              ["splash", "Splash"],
-              ["login", "Login"],
-              ["home", "Home"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              className={activeFrame === id ? "active" : ""}
-              onClick={() => onFrameChange?.(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
+    <AdminSection
+      className="xp-preview"
+      title="Live preview"
+      description="Draft tokens — not saved until you activate"
+      actions={
+        <AdminTabs
+          aria-label="Preview frame"
+          options={FRAME_OPTIONS}
+          value={activeFrame}
+          onChange={(id) => onFrameChange?.(id)}
+        />
+      }
+    >
       <div className="xp-preview-stage">
         <div className="xp-phone" style={vars} data-pack={tokens.pack?.trim() || "default"}>
           <div className="xp-phone-notch" aria-hidden />
@@ -134,6 +125,6 @@ export function ExperiencePreviewFrames({
           </div>
         </div>
       </div>
-    </section>
+    </AdminSection>
   );
 }

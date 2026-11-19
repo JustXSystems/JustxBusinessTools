@@ -2,6 +2,34 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  Dialog,
+  Field,
+  FormGrid,
+  Grid,
+  Input,
+  KpiCard,
+  ProgressBar,
+  SearchInput,
+  cx,
+  type BosBadgeTone,
+  type BosColumn,
+} from "@/components/bos";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPage,
+  AdminPageSkeleton,
+  AdminSection,
+  AdminTabs,
+} from "@/components/admin/ui";
+import { SelectField, TextareaField, TextField } from "@/components/admin/ui/AdminFields";
 import { AccessFabricPane } from "@/components/admin/AccessFabricPane";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
 import { QuotationEmailTemplatePicker } from "@/components/profile/QuotationEmailTemplatePicker";
@@ -19,7 +47,6 @@ import { withBasePath } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { useRevealWhenStacked } from "@/hooks/useRevealWhenStacked";
-import Link from "next/link";
 
 type Profile = {
   id: number;
@@ -86,6 +113,14 @@ const PROFILE_TABS: Array<{ id: Tab; label: string }> = [
   { id: "lifecycle", label: "Lifecycle" },
 ];
 
+const FILTER_OPTIONS: ReadonlyArray<{ value: Filter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "archived", label: "Archived" },
+  { value: "incomplete", label: "Incomplete" },
+];
+
 function normalizeTab(raw: string | null): Tab | null {
   if (!raw) return null;
   if (raw === "licenses") return "fabric";
@@ -131,11 +166,11 @@ const emptyForm = {
   emailTemplateId: DEFAULT_QUOTATION_EMAIL_TEMPLATE as QuotationEmailTemplateId,
 };
 
-function statusClass(status: string) {
-  if (status === "approved") return "pill pill-success";
-  if (status === "pending") return "pill pill-warning";
-  if (status === "rejected" || status === "archived") return "pill pill-danger";
-  return "pill";
+function statusTone(status: string): BosBadgeTone {
+  if (status === "approved") return "emerald";
+  if (status === "pending") return "amber";
+  if (status === "rejected" || status === "archived") return "coral";
+  return "neutral";
 }
 
 function fromProfile(p: Profile) {
@@ -162,13 +197,7 @@ function fromProfile(p: Profile) {
 
 export default function AdminProfilesPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="admin-page">
-          <p className="muted">Loading profiles…</p>
-        </div>
-      }
-    >
+    <Suspense fallback={<AdminPageSkeleton cards={4} />}>
       <AdminProfilesInner />
     </Suspense>
   );
@@ -200,6 +229,7 @@ function AdminProfilesInner() {
     [platformTools],
   );
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [summary, setSummary] = useState({ total: 0, pending: 0, approved: 0, archived: 0, incomplete: 0 });
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>(initialFilter);
@@ -215,6 +245,7 @@ function AdminProfilesInner() {
   const [rejectNote, setRejectNote] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const openSeq = useRef(0);
   const appliedFocus = useRef<number | null>(null);
   const previousSelectedId = useRef<number | null>(null);
@@ -239,6 +270,7 @@ function AdminProfilesInner() {
       setProfiles(data.profiles);
       setSummary(data.summary);
       setError("");
+      setLoaded(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load profiles");
     }
@@ -360,323 +392,465 @@ function AdminProfilesInner() {
     });
   }
 
-  return (
-    <div className="admin-page">
-      <section className="panel admin-card admin-page-head">
-        <div className="analytics-toolbar">
-          <div>
-            <h2>Access Fabric</h2>
-            <p className="muted">
-              Profile-first command center: select a Business Profile, assign tools, then tune each
-              product&apos;s capabilities (module ceilings). Pack provisioning, tool lattice, home
-              surface, and people reach live here. Catalog Live/Hidden and SKU pricing stay under{" "}
-              <Link href={adminDeepLink.tools()}>Catalog &amp; products</Link>; packs under{" "}
-              <Link href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>. Org Owners and org
-              Admins manage day-to-day team access in operator Business Profile → Team.
-            </p>
-          </div>
-          <div className="admin-form-row">
-            <Link href={adminDeepLink.tools()} className="btn btn-secondary btn-sm">
-              Catalog &amp; products
-            </Link>
-            <Link href={adminDeepLink.subscriptions()} className="btn btn-secondary btn-sm">
-              Packs &amp; plans
-            </Link>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              previousSelectedId.current = selectedId;
-              setCreating(true);
-              setSelectedId(null);
-              setForm(emptyForm);
-              setHomeToolIds(catalogIds);
-              setPeople([]);
-              setCreateOrgId(orgOptions[0]?.id ?? null);
-              setTab("identity");
-              setMessage("");
-              appliedFocus.current = null;
-            }}
-          >
-            Add profile
-          </button>
-          </div>
-        </div>
-        <div className="result-grid">
-          {([
-            ["all", "Total", summary.total],
-            ["pending", "Pending", summary.pending],
-            ["approved", "Approved", summary.approved],
-            ["incomplete", "Incomplete", summary.incomplete],
-          ] as Array<[Filter, string, number]>).map(([key, label, n]) => (
-            <button
-              key={key}
-              type="button"
-              className={`result-card ${filter === key ? "is-selected" : ""}`}
-              onClick={() => setFilter(key)}
-            >
-              <span>{label}</span><strong>{n}</strong>
-            </button>
-          ))}
-        </div>
-      </section>
+  function startCreate() {
+    previousSelectedId.current = selectedId;
+    setCreating(true);
+    setSelectedId(null);
+    setForm(emptyForm);
+    setHomeToolIds(catalogIds);
+    setPeople([]);
+    setCreateOrgId(orgOptions[0]?.id ?? null);
+    setTab("identity");
+    setMessage("");
+    appliedFocus.current = null;
+  }
 
-      <div className="admin-page-scroll">
-      <div className="team-workspace">
-        <section className="panel admin-card admin-dir-panel">
-          <h2>Profiles</h2>
-          <div className="admin-form-row admin-dir-filters">
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search business, GSTIN, org, state" aria-label="Search profiles" />
-            <div className="admin-tabs admin-tabs-scroll" role="tablist" aria-label="Profile filter">
-              {(["all", "pending", "approved", "archived", "incomplete"] as Filter[]).map((f) => (
-                <button key={f} type="button" className={filter === f ? "active" : ""} onClick={() => setFilter(f)}>{f}</button>
-              ))}
+  function cancelCreate() {
+    setCreating(false);
+    setCreateOrgId(null);
+    setForm(emptyForm);
+    const restoreId = previousSelectedId.current;
+    if (restoreId) {
+      appliedFocus.current = restoreId;
+      void openProfile(restoreId, "fabric");
+    }
+  }
+
+  if (!loaded) {
+    if (error) {
+      return (
+        <AdminPage title="Organizations" sub="Access Fabric">
+          <AdminErrorState message={error} onRetry={reload} />
+        </AdminPage>
+      );
+    }
+    return <AdminPageSkeleton cards={4} />;
+  }
+
+  const showSaveTab =
+    tab === "identity" || tab === "address" || tab === "bank" || tab === "branding" || tab === "home";
+
+  const tabOptions = PROFILE_TABS.filter(
+    (t) => !(creating && (t.id === "fabric" || t.id === "people" || t.id === "lifecycle")),
+  ).map((t) => ({ value: t.id, label: t.label }));
+
+  const peopleColumns: ReadonlyArray<BosColumn<Person>> = selected
+    ? [
+        {
+          key: "person",
+          header: "Person",
+          cell: (person) => (
+            <div>
+              <div className="admin-cc-cell-title">{person.name || person.email}</div>
+              <div className="admin-cc-cell-sub">{person.email}</div>
             </div>
-          </div>
-          <div className="tracker-list admin-dir-list">
-            {visible.map((p) => (
-              <button
-                type="button"
-                key={p.id}
-                className={`tracker-row admin-member-row ${selectedId === p.id && !creating ? "is-selected" : ""}`}
-                onClick={() => {
-                  appliedFocus.current = p.id;
-                  void openProfile(p.id, "fabric");
-                  revealDetail();
-                }}
-              >
-                <div className="tracker-row-main">
-                  <span className="tracker-row-title">{p.businessName}</span>
-                  <span className="tracker-row-sub">
-                    {p.organizationName ? `${p.organizationName} · ` : ""}
-                    {p.gstin || "No GSTIN"} · {p.state || "No state"}
-                  </span>
-                  <div className="usage-bar" aria-hidden>
-                    <span style={{ width: `${p.completeness}%` }} />
-                  </div>
-                </div>
-                <div className="admin-form-row">
-                  {p.isDefault ? <span className="pill pill-success">Default</span> : null}
-                  <span className={statusClass(p.approvalStatus)}>{p.approvalStatus}</span>
-                  <span className="pill">{p.completeness}%</span>
-                </div>
-              </button>
-            ))}
-            {visible.length === 0 ? <p className="muted">No profiles match this filter.</p> : null}
-          </div>
-        </section>
+          ),
+        },
+        {
+          key: "role",
+          header: "Role",
+          cell: (person) => (
+            <Badge auto tone="neutral">
+              {person.role}
+            </Badge>
+          ),
+        },
+        {
+          key: "reach",
+          header: "Reach",
+          cell: (person) =>
+            person.implicit ? (
+              <Badge auto tone="emerald">
+                all profiles
+              </Badge>
+            ) : person.access ? (
+              <Badge auto tone="blue">
+                granted
+              </Badge>
+            ) : (
+              <Badge auto tone="neutral">
+                no access
+              </Badge>
+            ),
+        },
+        {
+          key: "actions",
+          header: "Actions",
+          align: "right",
+          cell: (person) =>
+            person.implicit ? null : (
+              <div className="admin-cc-actions">
+                <Button
+                  variant={person.access ? "ghost" : "secondary"}
+                  size="sm"
+                  onClick={() =>
+                    void run(person.access ? "Access revoked." : "Access granted.", async () => {
+                      if (person.access) {
+                        await api(`/admin/profiles/${selected.id}/access/${person.userId}`, {
+                          method: "DELETE",
+                        });
+                      } else {
+                        await api(`/admin/profiles/${selected.id}/access`, {
+                          method: "POST",
+                          body: JSON.stringify({ userId: person.userId }),
+                        });
+                      }
+                    })
+                  }
+                >
+                  {person.access ? "Revoke" : "Grant"}
+                </Button>
+              </div>
+            ),
+        },
+      ]
+    : [];
 
-        <section ref={detailRef} className="panel admin-card admin-detail-panel">
+  const kpi = (
+    key: Filter,
+    label: string,
+    value: number,
+    chip: { color: "blue" | "amber" | "mint" | "lavender" | "rose" | "sage"; glyph: string },
+    warn?: boolean,
+  ) => (
+    <button
+      type="button"
+      className={cx("admin-cc-kpi-btn", filter === key && "is-selected")}
+      aria-pressed={filter === key}
+      onClick={() => setFilter(key)}
+    >
+      <KpiCard
+        label={label}
+        value={value}
+        chip={chip}
+        delta={warn && value ? "Needs review" : "Filter directory"}
+        deltaTone={warn && value ? "warn" : "muted"}
+      />
+    </button>
+  );
+
+  return (
+    <AdminPage
+      title="Organizations"
+      sub="Access Fabric · profiles · tools · reach"
+      toolbar={
+        <>
+          <Badge auto tone={summary.pending ? "amber" : "emerald"}>
+            {summary.pending ? `${summary.pending} pending` : "No pending"}
+          </Badge>
+          <Link href={adminDeepLink.tools()}>
+            <Button variant="secondary" size="sm">
+              Catalog &amp; products
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.subscriptions()}>
+            <Button variant="secondary" size="sm">
+              Packs &amp; plans
+            </Button>
+          </Link>
+          <Button variant="primary" size="sm" icon="plus" onClick={startCreate}>
+            Add profile
+          </Button>
+        </>
+      }
+    >
+      <Alert tone="blue" title="Profile-first command center">
+        Select a Business Profile, assign tools, then tune each product&apos;s capabilities (module ceilings). Pack
+        provisioning, tool lattice, home surface, and people reach live here. Catalog Live/Hidden and SKU pricing stay
+        under <Link className="admin-cc-link" href={adminDeepLink.tools()}>Catalog &amp; products</Link>; packs under{" "}
+        <Link className="admin-cc-link" href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>. Org Owners
+        and org Admins manage day-to-day team access in operator Business Profile → Team.
+      </Alert>
+
+      <Grid cols={4} min={140} gap={12}>
+        {kpi("all", "Total", summary.total, { color: "blue", glyph: "◎" })}
+        {kpi("pending", "Pending", summary.pending, { color: "amber", glyph: "◈" }, true)}
+        {kpi("approved", "Approved", summary.approved, { color: "mint", glyph: "✓" })}
+        {kpi("incomplete", "Incomplete", summary.incomplete, { color: "rose", glyph: "▣" }, true)}
+      </Grid>
+
+      {error ? <AdminErrorState title="Action or refresh failed" message={error} onRetry={reload} /> : null}
+      {message ? <Alert tone="emerald" title={message} /> : null}
+
+      <div className="admin-cc-split">
+        <AdminSection
+          title="Profiles"
+          description={`${visible.length} of ${profiles.length} shown`}
+        >
+          <div className="admin-cc-stack">
+            <SearchInput
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search business, GSTIN, org, state"
+              aria-label="Search profiles"
+            />
+            <AdminTabs
+              aria-label="Profile filter"
+              options={FILTER_OPTIONS}
+              value={filter}
+              onChange={setFilter}
+            />
+          </div>
+          <div className="admin-cc-dir-list">
+            {visible.map((p) => {
+              const active = selectedId === p.id && !creating;
+              return (
+                <button
+                  type="button"
+                  key={p.id}
+                  className={cx("admin-cc-row", active && "is-selected")}
+                  aria-pressed={active}
+                  onClick={() => {
+                    appliedFocus.current = p.id;
+                    void openProfile(p.id, "fabric");
+                    revealDetail();
+                  }}
+                >
+                  <div className="admin-cc-row-main">
+                    <div className="admin-cc-cell-title">{p.businessName}</div>
+                    <div className="admin-cc-cell-sub">
+                      {p.organizationName ? `${p.organizationName} · ` : ""}
+                      {p.gstin || "No GSTIN"} · {p.state || "No state"}
+                    </div>
+                    <div className="admin-cc-cell-bar">
+                      <ProgressBar
+                        value={p.completeness}
+                        tone={p.completeness >= 75 ? "emerald" : "amber"}
+                        label={`Completeness ${p.completeness}%`}
+                      />
+                    </div>
+                  </div>
+                  <div className="admin-cc-row-badges">
+                    {p.isDefault ? (
+                      <Badge auto tone="emerald">
+                        Default
+                      </Badge>
+                    ) : null}
+                    <Badge auto tone={statusTone(p.approvalStatus)}>
+                      {p.approvalStatus}
+                    </Badge>
+                    <Badge auto tone="neutral">
+                      {p.completeness}%
+                    </Badge>
+                  </div>
+                </button>
+              );
+            })}
+            {visible.length === 0 ? (
+              <AdminEmpty title="No profiles match" icon="search">
+                No profiles match this filter.
+              </AdminEmpty>
+            ) : null}
+          </div>
+        </AdminSection>
+
+        <section ref={detailRef} className="bos-widget admin-cc-section" style={{ minWidth: 0 }}>
           {creating || selected ? (
             <>
-              <h2>{creating ? "New Business Profile" : selected?.businessName}</h2>
-              {!creating && selected ? (
-                <>
-                  <p className="muted">
-                    {selected.organizationName ? `${selected.organizationName} · ` : ""}
-                    {selected.planId} plan · {selected.recordCount} records · {selected.documentCount}{" "}
-                    documents · {selected.staffCount} people grants
-                  </p>
-                  <div className="admin-form-row">
-                    <Link
-                      href={adminDeepLink.enterAs(selected.id, "owner")}
-                      className="btn btn-secondary btn-sm"
-                    >
-                      Enter as…
+              <div className="admin-cc-detail-head">
+                <div>
+                  <h3 className="admin-cc-detail-title">
+                    {creating ? "New Business Profile" : selected?.businessName}
+                  </h3>
+                  {!creating && selected ? (
+                    <p className="admin-cc-detail-sub">
+                      {selected.organizationName ? `${selected.organizationName} · ` : ""}
+                      {selected.planId} plan · {selected.recordCount} records · {selected.documentCount} documents ·{" "}
+                      {selected.staffCount} people grants
+                    </p>
+                  ) : (
+                    <p className="admin-cc-detail-sub">New profiles stay pending until approved.</p>
+                  )}
+                </div>
+                {!creating && selected ? (
+                  <div className="admin-cc-actions">
+                    <Badge auto tone={statusTone(selected.approvalStatus)}>
+                      {selected.approvalStatus}
+                    </Badge>
+                    <Link href={adminDeepLink.enterAs(selected.id, "owner")}>
+                      <Button variant="secondary" size="sm">
+                        Enter as…
+                      </Button>
                     </Link>
                   </div>
-                </>
-              ) : (
-                <p className="muted">New profiles stay pending until approved.</p>
-              )}
-              <div className="admin-tabs-bar">
-                <div className="admin-tabs admin-tabs-scroll" role="tablist">
-                  {PROFILE_TABS.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      role="tab"
-                      className={tab === t.id ? "active" : ""}
-                      onClick={() => setTab(t.id)}
-                      disabled={
-                        creating &&
-                        (t.id === "fabric" || t.id === "people" || t.id === "lifecycle")
-                      }
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="admin-tabs-actions">
-                  {tab === "identity" ||
-                  tab === "address" ||
-                  tab === "bank" ||
-                  tab === "branding" ||
-                  tab === "home" ? (
-                    <button type="submit" form="profile-save-form" className="btn btn-primary">
+                ) : null}
+              </div>
+
+              <div className="admin-cc-tabs-bar">
+                <AdminTabs aria-label="Profile section" options={tabOptions} value={tab} onChange={setTab} />
+                <div className="admin-cc-actions">
+                  {showSaveTab ? (
+                    <Button type="submit" form="profile-save-form" variant="primary">
                       {creating || !selectedId ? "Create (pending approval)" : "Save profile"}
-                    </button>
+                    </Button>
                   ) : null}
                   {creating ? (
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => {
-                        setCreating(false);
-                        setCreateOrgId(null);
-                        setForm(emptyForm);
-                        const restoreId = previousSelectedId.current;
-                        if (restoreId) {
-                          appliedFocus.current = restoreId;
-                          void openProfile(restoreId, "fabric");
-                        }
-                      }}
-                    >
+                    <Button variant="ghost" onClick={cancelCreate}>
                       Cancel
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               </div>
 
-              <div className="admin-detail-scroll">
-              <form id="profile-save-form" onSubmit={save} className="admin-stack">
+              <form id="profile-save-form" onSubmit={save} className="admin-cc-form">
                 {tab === "identity" ? (
-                  <div className="admin-form-grid">
+                  <FormGrid>
                     {creating ? (
-                      <label className="field" style={{ gridColumn: "1 / -1" }}>
-                        <span>Organization</span>
-                        <select
-                          value={createOrgId ?? ""}
-                          required
-                          onChange={(e) => {
-                            const v = Number(e.target.value);
-                            setCreateOrgId(Number.isInteger(v) && v > 0 ? v : null);
-                          }}
-                        >
-                          <option value="">
-                            {orgOptions.length === 0 ? "No organizations yet" : "Select organization…"}
+                      <SelectField
+                        full
+                        label="Organization"
+                        value={createOrgId ?? ""}
+                        required
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setCreateOrgId(Number.isInteger(v) && v > 0 ? v : null);
+                        }}
+                      >
+                        <option value="">
+                          {orgOptions.length === 0 ? "No organizations yet" : "Select organization…"}
+                        </option>
+                        {orgOptions.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name}
                           </option>
-                          {orgOptions.map((o) => (
-                            <option key={o.id} value={o.id}>
-                              {o.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                        ))}
+                      </SelectField>
                     ) : null}
-                    <label className="field"><span>Legal name</span>
-                      <input value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} required />
-                    </label>
-                    <label className="field"><span>GSTIN</span>
-                      <input value={form.gstin} onChange={(e) => applyGstin(e.target.value)} placeholder="29ABCDE1234F1Z5" maxLength={15} />
-                    </label>
-                    <label className="field"><span>PAN</span>
-                      <input value={form.pan} onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })} placeholder="ABCDE1234F" maxLength={10} />
-                    </label>
-                    <label className="field"><span>Phone</span>
-                      <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                    </label>
-                    <label className="field"><span>Email</span>
-                      <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                    </label>
-                  </div>
+                    <TextField
+                      label="Legal name"
+                      value={form.businessName}
+                      onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+                      required
+                    />
+                    <TextField
+                      label="GSTIN"
+                      value={form.gstin}
+                      onChange={(e) => applyGstin(e.target.value)}
+                      placeholder="29ABCDE1234F1Z5"
+                      maxLength={15}
+                    />
+                    <TextField
+                      label="PAN"
+                      value={form.pan}
+                      onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })}
+                      placeholder="ABCDE1234F"
+                      maxLength={10}
+                    />
+                    <TextField
+                      label="Phone"
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    />
+                    <TextField
+                      label="Email"
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    />
+                  </FormGrid>
                 ) : null}
 
                 {tab === "address" ? (
-                  <div className="admin-form-grid">
-                    <label className="field" style={{ gridColumn: "1 / -1" }}><span>Address line 1</span>
-                      <input value={form.addressLine1} onChange={(e) => setForm({ ...form, addressLine1: e.target.value })} />
-                    </label>
-                    <label className="field" style={{ gridColumn: "1 / -1" }}><span>Address line 2</span>
-                      <input value={form.addressLine2} onChange={(e) => setForm({ ...form, addressLine2: e.target.value })} />
-                    </label>
-                    <label className="field"><span>State</span>
-                      <select value={form.state} onChange={(e) => setStateName(e.target.value)}>
-                        <option value="">Select state</option>
-                        {INDIAN_STATES.map(([name, code]) => (
-                          <option key={`${name}-${code}`} value={name}>{name} ({code})</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field"><span>GST state code</span>
-                      <input value={form.stateCode} readOnly />
-                    </label>
-                  </div>
+                  <FormGrid>
+                    <TextField
+                      full
+                      label="Address line 1"
+                      value={form.addressLine1}
+                      onChange={(e) => setForm({ ...form, addressLine1: e.target.value })}
+                    />
+                    <TextField
+                      full
+                      label="Address line 2"
+                      value={form.addressLine2}
+                      onChange={(e) => setForm({ ...form, addressLine2: e.target.value })}
+                    />
+                    <SelectField label="State" value={form.state} onChange={(e) => setStateName(e.target.value)}>
+                      <option value="">Select state</option>
+                      {INDIAN_STATES.map(([name, code]) => (
+                        <option key={`${name}-${code}`} value={name}>
+                          {name} ({code})
+                        </option>
+                      ))}
+                    </SelectField>
+                    <TextField label="GST state code" value={form.stateCode} readOnly />
+                  </FormGrid>
                 ) : null}
 
                 {tab === "bank" ? (
-                  <div className="admin-form-grid">
-                    <label className="field"><span>Bank name</span>
-                      <input value={form.bankName} onChange={(e) => setForm({ ...form, bankName: e.target.value })} />
-                    </label>
-                    <label className="field"><span>Branch</span>
-                      <input value={form.bankBranch} onChange={(e) => setForm({ ...form, bankBranch: e.target.value })} />
-                    </label>
-                    <label className="field"><span>Account number</span>
-                      <input value={form.bankAccount} onChange={(e) => setForm({ ...form, bankAccount: e.target.value })} />
-                    </label>
-                    <label className="field"><span>IFSC</span>
-                      <input value={form.bankIfsc} onChange={(e) => setForm({ ...form, bankIfsc: e.target.value.toUpperCase() })} placeholder="HDFC0001234" />
-                    </label>
-                    <label className="field"><span>UPI</span>
-                      <input value={form.bankUpi} onChange={(e) => setForm({ ...form, bankUpi: e.target.value })} placeholder="name@upi" />
-                    </label>
-                    <label className="field" style={{ gridColumn: "1 / -1" }}><span>Invoice terms</span>
-                      <textarea value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} rows={4} />
-                    </label>
-                  </div>
+                  <FormGrid>
+                    <TextField
+                      label="Bank name"
+                      value={form.bankName}
+                      onChange={(e) => setForm({ ...form, bankName: e.target.value })}
+                    />
+                    <TextField
+                      label="Branch"
+                      value={form.bankBranch}
+                      onChange={(e) => setForm({ ...form, bankBranch: e.target.value })}
+                    />
+                    <TextField
+                      label="Account number"
+                      value={form.bankAccount}
+                      onChange={(e) => setForm({ ...form, bankAccount: e.target.value })}
+                    />
+                    <TextField
+                      label="IFSC"
+                      value={form.bankIfsc}
+                      onChange={(e) => setForm({ ...form, bankIfsc: e.target.value.toUpperCase() })}
+                      placeholder="HDFC0001234"
+                    />
+                    <TextField
+                      label="UPI"
+                      value={form.bankUpi}
+                      onChange={(e) => setForm({ ...form, bankUpi: e.target.value })}
+                      placeholder="name@upi"
+                    />
+                    <TextareaField
+                      full
+                      label="Invoice terms"
+                      value={form.terms}
+                      onChange={(e) => setForm({ ...form, terms: e.target.value })}
+                      rows={4}
+                    />
+                  </FormGrid>
                 ) : null}
 
                 {tab === "branding" ? (
-                  <div className="admin-stack">
-                    <p className="section-note">
-                      Document accent colors quotation sheets / PDFs. Quotation email template controls the
-                      branded HTML layout used when staff send quotations.
+                  <>
+                    <p className="admin-cc-note-text">
+                      Document accent colors quotation sheets / PDFs. Quotation email template controls the branded
+                      HTML layout used when staff send quotations.
                     </p>
-                    <div className="profile-accent-field">
-                      <label className="label" htmlFor="adminDocumentAccentColor">
-                        Document accent color
-                      </label>
-                      <div className="flex-row-wrap" style={{ alignItems: "center", gap: 10 }}>
-                        <input
-                          id="adminDocumentAccentColor"
-                          type="color"
-                          value={normalizeDocumentAccentColor(form.documentAccentColor)}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              documentAccentColor: normalizeDocumentAccentColor(e.target.value),
-                            })
-                          }
-                          aria-label="Document accent color"
-                          style={{
-                            width: 48,
-                            height: 36,
-                            padding: 2,
-                            borderRadius: 8,
-                            border: "1px solid var(--border-hair)",
-                            background: "transparent",
-                            cursor: "pointer",
-                          }}
-                        />
-                        <input
-                          className="mono"
-                          value={normalizeDocumentAccentColor(form.documentAccentColor)}
-                          onChange={(e) =>
-                            setForm({ ...form, documentAccentColor: e.target.value })
-                          }
-                          onBlur={() =>
-                            setForm((f) => ({
-                              ...f,
-                              documentAccentColor: normalizeDocumentAccentColor(f.documentAccentColor),
-                            }))
-                          }
-                          placeholder="#0f3d3e"
-                          style={{ maxWidth: 120 }}
-                          aria-label="Document accent color hex"
-                        />
-                      </div>
-                    </div>
+                    <Field label="Document accent color">
+                      {({ id }) => (
+                        <div className="admin-cc-color-row">
+                          <input
+                            id={id}
+                            type="color"
+                            value={normalizeDocumentAccentColor(form.documentAccentColor)}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                documentAccentColor: normalizeDocumentAccentColor(e.target.value),
+                              })
+                            }
+                            aria-label="Document accent color"
+                          />
+                          <Input
+                            value={normalizeDocumentAccentColor(form.documentAccentColor)}
+                            onChange={(e) => setForm({ ...form, documentAccentColor: e.target.value })}
+                            onBlur={() =>
+                              setForm((f) => ({
+                                ...f,
+                                documentAccentColor: normalizeDocumentAccentColor(f.documentAccentColor),
+                              }))
+                            }
+                            placeholder="#0f3d3e"
+                            aria-label="Document accent color hex"
+                          />
+                        </div>
+                      )}
+                    </Field>
                     <QuotationEmailTemplatePicker
                       templateId={normalizeQuotationEmailTemplateId(form.emailTemplateId)}
                       plainMessage={DEFAULT_SEND_SETTINGS.email.message}
@@ -686,25 +860,22 @@ function AdminProfilesInner() {
                       companyPhone={form.phone}
                       companyEmail={form.email}
                       messageDisabled
-                      onChangeTemplateId={(emailTemplateId) =>
-                        setForm({ ...form, emailTemplateId })
-                      }
+                      onChangeTemplateId={(emailTemplateId) => setForm({ ...form, emailTemplateId })}
                       onChangePlainMessage={() => {}}
                       onChangeCorporateMessage={() => {}}
                     />
-                    <p className="section-note">
-                      Plain / Corporate message templates and Reply-To are edited on Business Profile →
-                      Send Via for this branch. See <code>docs/EMAIL_WEBHOOK.md</code> for HTML delivery.
+                    <p className="admin-cc-note-text">
+                      Plain / Corporate message templates and Reply-To are edited on Business Profile → Send Via for
+                      this branch. See <code className="admin-cc-code">docs/EMAIL_WEBHOOK.md</code> for HTML delivery.
                     </p>
-                  </div>
+                  </>
                 ) : null}
 
                 {tab === "home" ? (
-                  <div className="admin-stack">
-                    <p className="section-note">
-                      Which tools appear on this profile&apos;s operator home. Commercial
-                      entitlements and pack provisioning live on Access Fabric; org Live/Hidden and
-                      SKU pricing stay under{" "}
+                  <>
+                    <p className="admin-cc-note-text">
+                      Which tools appear on this profile&apos;s operator home. Commercial entitlements and pack
+                      provisioning live on Access Fabric; org Live/Hidden and SKU pricing stay under{" "}
                       <Link href={adminDeepLink.tools()}>Catalog &amp; products</Link>.
                     </p>
                     <HomeToolPicker
@@ -712,7 +883,7 @@ function AdminProfilesInner() {
                       onChange={setHomeToolIds}
                       platformTools={platformTools}
                     />
-                  </div>
+                  </>
                 ) : null}
               </form>
 
@@ -740,134 +911,161 @@ function AdminProfilesInner() {
               ) : null}
 
               {tab === "people" && selected ? (
-                <div className="admin-stack">
-                  <p className="section-note">
-                    Who may switch into this Business Profile. Owners and org Admins always have
-                    access. For day-to-day role changes, Owner/org Admin use operator Business
-                    Profile → Team.
+                <div className="admin-cc-form">
+                  <p className="admin-cc-note-text">
+                    Who may switch into this Business Profile. Owners and org Admins always have access. For
+                    day-to-day role changes, Owner/org Admin use operator Business Profile → Team.
                   </p>
-                  <ul className="admin-list">
-                    {people.map((person) => (
-                      <li key={person.userId}>
-                        <span>
-                          {person.name || person.email}
-                          <span className="muted"> · {person.role}</span>
-                        </span>
-                        {person.implicit ? (
-                          <span className="pill pill-success">all profiles</span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            onClick={() =>
-                              run(person.access ? "Access revoked." : "Access granted.", async () => {
-                                if (person.access) {
-                                  await api(`/admin/profiles/${selected.id}/access/${person.userId}`, {
-                                    method: "DELETE",
-                                  });
-                                } else {
-                                  await api(`/admin/profiles/${selected.id}/access`, {
-                                    method: "POST",
-                                    body: JSON.stringify({ userId: person.userId }),
-                                  });
-                                }
-                              })
-                            }
-                          >
-                            {person.access ? "Revoke" : "Grant"}
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                  <DataTable
+                    caption="People reach"
+                    columns={peopleColumns}
+                    rows={people}
+                    rowKey={(person) => String(person.userId)}
+                    empty="No people on this organization yet."
+                  />
                 </div>
               ) : null}
 
               {tab === "lifecycle" && selected ? (
-                <div className="admin-stack">
-                  {selected.reviewNote ? <p className="muted">Review note: {selected.reviewNote}</p> : null}
-                  <div className="admin-form-row">
+                <div className="admin-cc-form">
+                  {selected.reviewNote ? (
+                    <Alert tone="amber" title="Review note">
+                      {selected.reviewNote}
+                    </Alert>
+                  ) : null}
+                  <div className="admin-cc-actions" style={{ justifyContent: "flex-start" }}>
                     {selected.approvalStatus === "pending" || selected.approvalStatus === "rejected" ? (
-                      <button type="button" className="btn btn-primary" onClick={() => run("Branch approved.", () => api(`/admin/profiles/${selected.id}/approve`, { method: "POST" }).then(() => undefined))}>
+                      <Button
+                        variant="primary"
+                        onClick={() =>
+                          void run("Branch approved.", () =>
+                            api(`/admin/profiles/${selected.id}/approve`, { method: "POST" }).then(() => undefined),
+                          )
+                        }
+                      >
                         Approve
-                      </button>
-                    ) : null}
-                    {selected.approvalStatus === "pending" ? (
-                      <>
-                        <input value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} placeholder="Rejection note" />
-                        <button
-                          type="button"
-                          className="btn btn-destructive"
-                          onClick={() =>
-                            run(
-                              "Business rejected. If you are a Justxsystems admin, all org users were suspended and logged out.",
-                              () =>
-                                api(`/admin/profiles/${selected.id}/reject`, {
-                                  method: "POST",
-                                  body: JSON.stringify({ note: rejectNote || "Rejected" }),
-                                }).then(() => undefined),
-                            )
-                          }
-                        >
-                          Reject
-                        </button>
-                        <p className="muted">
-                          Justxsystems admin reject suspends every user on this business and ends all their sessions immediately.
-                        </p>
-                      </>
+                      </Button>
                     ) : null}
                     {!selected.isDefault && selected.approvalStatus === "approved" ? (
-                      <button type="button" className="btn btn-secondary" onClick={() => run("Default branch updated.", () => api(`/admin/profiles/${selected.id}/default`, { method: "POST" }).then(() => undefined))}>
-                        Make default
-                      </button>
-                    ) : null}
-                    <button type="button" className="btn btn-ghost" onClick={() => run("Copy created as pending.", async () => {
-                      const copy = await api<{ id: number }>(`/admin/profiles/${selected.id}/duplicate`, { method: "POST" });
-                      return copy.id;
-                    })}>Duplicate</button>
-                    {selected.approvalStatus === "archived" ? (
-                      <button type="button" className="btn btn-primary" onClick={() => run("Branch restored.", () => api(`/admin/profiles/${selected.id}/unarchive`, { method: "POST" }).then(() => undefined))}>
-                        Restore
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-destructive"
-                        onClick={() => {
-                          const warn = selected.isDefault
-                            ? `Archive default branch “${selected.businessName}”? It will leave the active directory. Another branch becomes default if one exists.`
-                            : `Archive ${selected.businessName}?`;
-                          if (!window.confirm(warn)) return;
-                          void run("Branch archived.", () =>
-                            api(`/admin/profiles/${selected.id}`, { method: "DELETE" }).then(() => undefined),
-                          );
-                        }}
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          void run("Default branch updated.", () =>
+                            api(`/admin/profiles/${selected.id}/default`, { method: "POST" }).then(() => undefined),
+                          )
+                        }
                       >
+                        Make default
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        void run("Copy created as pending.", async () => {
+                          const copy = await api<{ id: number }>(`/admin/profiles/${selected.id}/duplicate`, {
+                            method: "POST",
+                          });
+                          return copy.id;
+                        })
+                      }
+                    >
+                      Duplicate
+                    </Button>
+                    {selected.approvalStatus === "archived" ? (
+                      <Button
+                        variant="primary"
+                        onClick={() =>
+                          void run("Branch restored.", () =>
+                            api(`/admin/profiles/${selected.id}/unarchive`, { method: "POST" }).then(() => undefined),
+                          )
+                        }
+                      >
+                        Restore
+                      </Button>
+                    ) : (
+                      <Button variant="destructive" onClick={() => setArchiveOpen(true)}>
                         Archive
-                      </button>
+                      </Button>
                     )}
-                    <p className="muted">
-                      Archive hides the branch from normal use. Use the <strong>archived</strong> filter to find it later, then Restore.
-                    </p>
                   </div>
+                  <p className="admin-cc-note-text">
+                    Archive hides the branch from normal use. Use the <strong>archived</strong> filter to find it
+                    later, then Restore.
+                  </p>
+
+                  {selected.approvalStatus === "pending" ? (
+                    <Card className="admin-cc-pad">
+                      <div className="admin-cc-form">
+                        <div className="admin-cc-inline">
+                          <TextField
+                            label="Rejection note"
+                            value={rejectNote}
+                            onChange={(e) => setRejectNote(e.target.value)}
+                            placeholder="Rejection note"
+                          />
+                          <Button
+                            variant="destructive"
+                            onClick={() =>
+                              void run(
+                                "Business rejected. If you are a Justxsystems admin, all org users were suspended and logged out.",
+                                () =>
+                                  api(`/admin/profiles/${selected.id}/reject`, {
+                                    method: "POST",
+                                    body: JSON.stringify({ note: rejectNote || "Rejected" }),
+                                  }).then(() => undefined),
+                              )
+                            }
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                        <p className="admin-cc-note-text">
+                          Justxsystems admin reject suspends every user on this business and ends all their sessions
+                          immediately.
+                        </p>
+                      </div>
+                    </Card>
+                  ) : null}
+
+                  <Dialog
+                    open={archiveOpen}
+                    onClose={() => setArchiveOpen(false)}
+                    title={selected.isDefault ? "Archive default branch?" : "Archive profile?"}
+                    description={
+                      selected.isDefault
+                        ? `Archive default branch “${selected.businessName}”? It will leave the active directory. Another branch becomes default if one exists.`
+                        : `Archive ${selected.businessName}?`
+                    }
+                    icon={{ tone: "coral" }}
+                    actions={
+                      <>
+                        <Button variant="ghost" onClick={() => setArchiveOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => {
+                            setArchiveOpen(false);
+                            void run("Branch archived.", () =>
+                              api(`/admin/profiles/${selected.id}`, { method: "DELETE" }).then(() => undefined),
+                            );
+                          }}
+                        >
+                          Archive
+                        </Button>
+                      </>
+                    }
+                  />
                 </div>
               ) : null}
-              </div>
-
-              {message ? <p className="muted">{message}</p> : null}
-              {error ? <p className="field-error">{error}</p> : null}
             </>
           ) : (
-            <>
-              <h2>Select a Business Profile</h2>
-              <p className="muted">
-                Choose a profile to open its Access Fabric — readiness, packs, lattice, and reach.
-              </p>
-            </>
+            <AdminEmpty title="Select a Business Profile" icon="sparkle">
+              Choose a profile to open its Access Fabric — readiness, packs, lattice, and reach.
+            </AdminEmpty>
           )}
         </section>
       </div>
-      </div>
-    </div>
+    </AdminPage>
   );
 }

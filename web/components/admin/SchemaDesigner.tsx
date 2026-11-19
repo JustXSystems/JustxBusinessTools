@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { TrackerField } from "@/config/tools.config";
 import { TRACKER_CONFIGS } from "@/config/tools.config";
+import { BlockLabel, Button, Card, FormGrid } from "@/components/bos";
+import { AdminEmpty } from "@/components/admin/ui";
+import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
 import { evaluateFormula, validateFormula } from "@jbt/shared";
 
 type TrackerDefinition = {
@@ -153,153 +156,154 @@ export function TrackerSchemaDesigner({ toolId, jsonText, onChange }: Props) {
     setTestMsg(result.ok ? `Result: ${result.value}` : result.error);
   }
 
+  const otherNumberKeys = numberKeys.filter((k) => k !== draft.key.trim());
+
   return (
-    <div className="schema-designer">
-      <p className="muted">
+    <div className="admin-cc-form">
+      <p className="admin-cc-note-text">
         Visual editor for tracker fields. Use type <strong>computed</strong> with formulas like{" "}
-        <code>qty * rate * (1 + gst / 100)</code>. Functions: abs, min, max, round.
+        <code className="admin-cc-code">qty * rate * (1 + gst / 100)</code>. Functions: abs, min, max, round.
       </p>
 
-      <ul className="schema-field-list">
-        {def.fields.map((field, idx) => (
-          <li key={`${field.key}-${idx}`} className="schema-field-row">
-            <div>
-              <strong>{field.label}</strong>
-              <span className="muted">
-                {field.key} · {field.type}
-                {field.required ? " · required" : ""}
-                {field.type === "computed" && field.formula ? ` · ${field.formula}` : ""}
-              </span>
-            </div>
-            <div className="admin-form-row">
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => editField(idx)}>
-                Edit
-              </button>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeField(idx)}>
-                Remove
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {def.fields.length === 0 ? (
+        <AdminEmpty title="No fields yet" icon="layers">
+          Add a field below to start building this tracker form.
+        </AdminEmpty>
+      ) : (
+        <ul className="admin-cc-stack admin-cc-scroll-list" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {def.fields.map((field, idx) => (
+            <li key={`${field.key}-${idx}`} className="admin-cc-row" style={{ cursor: "default" }}>
+              <div className="admin-cc-row-main">
+                <div className="admin-cc-cell-title">{field.label}</div>
+                <div className="admin-cc-cell-sub">
+                  {field.key} · {field.type}
+                  {field.required ? " · required" : ""}
+                  {field.type === "computed" && field.formula ? ` · ${field.formula}` : ""}
+                </div>
+              </div>
+              <div className="admin-cc-actions">
+                <Button variant="ghost" size="sm" onClick={() => editField(idx)}>
+                  Edit
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => removeField(idx)}>
+                  Remove
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
-      <div className="panel schema-field-editor">
-        <h3>{editIdx != null ? "Edit field" : "Add field"}</h3>
-        <div className="admin-form-grid">
-          <label className="field">
-            <span>Key</span>
-            <input
-              value={draft.key}
-              onChange={(e) => setDraft({ ...draft, key: e.target.value })}
-              placeholder="e.g. amount"
-            />
-          </label>
-          <label className="field">
-            <span>Label</span>
-            <input
-              value={draft.label}
-              onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-              placeholder="Display label"
-            />
-          </label>
-          <label className="field">
-            <span>Type</span>
-            <select
-              value={draft.type}
-              onChange={(e) => {
-                const type = e.target.value as TrackerField["type"];
-                setDraft({
-                  ...draft,
-                  type,
-                  required: type === "computed" ? false : draft.required,
-                  formula: type === "computed" ? draft.formula ?? "qty * rate" : undefined,
-                });
-              }}
-            >
-              {FIELD_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
+      <Card flat className="admin-cc-form">
+        <BlockLabel>{editIdx != null ? "Edit field" : "Add field"}</BlockLabel>
+        <FormGrid>
+          <TextField
+            label="Key"
+            value={draft.key}
+            onChange={(e) => setDraft({ ...draft, key: e.target.value })}
+            placeholder="e.g. amount"
+          />
+          <TextField
+            label="Label"
+            value={draft.label}
+            onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+            placeholder="Display label"
+          />
+          <SelectField
+            label="Type"
+            value={draft.type}
+            onChange={(e) => {
+              const type = e.target.value as TrackerField["type"];
+              setDraft({
+                ...draft,
+                type,
+                required: type === "computed" ? false : draft.required,
+                formula: type === "computed" ? draft.formula ?? "qty * rate" : undefined,
+              });
+            }}
+          >
+            {FIELD_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </SelectField>
           {draft.type !== "computed" ? (
-            <label className="field">
-              <span>Required</span>
-              <select
-                value={draft.required ? "yes" : "no"}
-                onChange={(e) => setDraft({ ...draft, required: e.target.value === "yes" })}
-              >
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-              </select>
-            </label>
+            <SelectField
+              label="Required"
+              value={draft.required ? "yes" : "no"}
+              onChange={(e) => setDraft({ ...draft, required: e.target.value === "yes" })}
+            >
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </SelectField>
           ) : null}
           {draft.type === "select" ? (
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>Options (comma-separated)</span>
-              <input
-                value={(draft.options ?? []).join(", ")}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    options: e.target.value
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  })
-                }
-              />
-            </label>
+            <TextField
+              full
+              label="Options (comma-separated)"
+              value={(draft.options ?? []).join(", ")}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  options: e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+            />
           ) : null}
           {draft.type === "computed" ? (
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>Formula</span>
-              <input
-                value={draft.formula ?? ""}
-                onChange={(e) => setDraft({ ...draft, formula: e.target.value })}
-                placeholder="qty * rate * (1 + gst / 100)"
-              />
-            </label>
+            <TextField
+              full
+              label="Formula"
+              value={draft.formula ?? ""}
+              onChange={(e) => setDraft({ ...draft, formula: e.target.value })}
+              placeholder="qty * rate * (1 + gst / 100)"
+            />
           ) : null}
-        </div>
+        </FormGrid>
 
         {draft.type === "computed" ? (
-          <div className="admin-stack" style={{ marginTop: 12 }}>
-            <h4>Test harness</h4>
-            <p className="muted">Sample values for number/computed siblings.</p>
-            <div className="admin-form-grid">
-              {numberKeys
-                .filter((k) => k !== draft.key.trim())
-                .map((k) => (
-                  <label key={k} className="field">
-                    <span>{k}</span>
-                    <input
-                      type="number"
-                      value={testVars[k] ?? ""}
-                      onChange={(e) => setTestVars({ ...testVars, [k]: e.target.value })}
-                      placeholder="0"
-                    />
-                  </label>
+          <div className="admin-cc-form">
+            <BlockLabel>Test harness</BlockLabel>
+            <p className="admin-cc-note-text">Sample values for number/computed siblings.</p>
+            {otherNumberKeys.length > 0 ? (
+              <FormGrid>
+                {otherNumberKeys.map((k) => (
+                  <TextField
+                    key={k}
+                    label={k}
+                    type="number"
+                    value={testVars[k] ?? ""}
+                    onChange={(e) => setTestVars({ ...testVars, [k]: e.target.value })}
+                    placeholder="0"
+                  />
                 ))}
-            </div>
-            <div className="admin-form-row">
-              <button type="button" className="btn btn-secondary btn-sm" onClick={runFormulaTest}>
+              </FormGrid>
+            ) : null}
+            <div className="admin-cc-actions" style={{ justifyContent: "flex-start" }}>
+              <Button variant="secondary" size="sm" onClick={runFormulaTest}>
                 Test formula
-              </button>
-              {testMsg ? <span className="muted">{testMsg}</span> : null}
+              </Button>
+              {testMsg ? (
+                <span className="admin-cc-note-text" role="status">
+                  {testMsg}
+                </span>
+              ) : null}
             </div>
           </div>
         ) : null}
 
-        <div className="admin-form-row" style={{ marginTop: 12 }}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={saveField}>
+        <div className="admin-cc-actions" style={{ justifyContent: "flex-start" }}>
+          <Button variant="secondary" size="sm" onClick={saveField}>
             {editIdx != null ? "Update field" : "Add field"}
-          </button>
+          </Button>
           {editIdx != null ? (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setEditIdx(null);
                 setDraft(emptyField());
@@ -307,25 +311,23 @@ export function TrackerSchemaDesigner({ toolId, jsonText, onChange }: Props) {
               }}
             >
               Cancel edit
-            </button>
+            </Button>
           ) : null}
         </div>
-      </div>
+      </Card>
 
-      <label className="field">
-        <span>Title field key</span>
-        <input
+      <FormGrid>
+        <TextField
+          label="Title field key"
           value={def.titleField ?? ""}
           onChange={(e) => emit({ ...def, titleField: e.target.value })}
         />
-      </label>
-      <label className="field">
-        <span>Status field key</span>
-        <input
+        <TextField
+          label="Status field key"
           value={def.statusField ?? ""}
           onChange={(e) => emit({ ...def, statusField: e.target.value || null })}
         />
-      </label>
+      </FormGrid>
     </div>
   );
 }

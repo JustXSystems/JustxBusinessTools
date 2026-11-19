@@ -1,17 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { AdminRedirect } from "@/components/admin/AdminRedirect";
 
 /** Legacy Branding page → Experience Branding tab */
 export default function AdminConfigRedirectPage() {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace("/admin/experience?tab=branding");
-  }, [router]);
   return (
-    <div className="admin-page">
-      <p className="muted">Redirecting to Experience → Branding…</p>
-    </div>
+    <AdminRedirect href="/admin/experience?tab=branding" label="Redirecting to Experience → Branding…" />
   );
 }

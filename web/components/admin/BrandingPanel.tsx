@@ -39,6 +39,9 @@ import {
   type SplashIntensity,
 } from "@/lib/splash-animation";
 import { publicAssetUrl } from "@/lib/base-path";
+import { Alert, Button, Field, FormGrid, Grid, Segmented, Switch } from "@/components/bos";
+import { AdminSection, AdminTabs } from "@/components/admin/ui";
+import { SelectField, TextareaField, TextField } from "@/components/admin/ui/AdminFields";
 
 type PlatformConfig = {
   powered_by?: PoweredByConfig;
@@ -294,80 +297,71 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
     publishSiteFavicon,
   };
 
+  const bump = () => setPreviewKey((k) => k + 1);
+
   return (
-    <div className="preview-workspace">
-      <div className="preview-editor">
-        <section className="panel admin-card">
-          <h2>Platform branding</h2>
-          <p className="muted">
-            Single source for brand copy across operator, admin, public home defaults, UPI, and emails.
-            Change names here once — surfaces read these fields at runtime.
-          </p>
-          {message ? <p className="muted">{message}</p> : null}
-          <div className="admin-form-grid">
-            <label className="field">
-              <span>App name</span>
-              <input
+    <Grid template="minmax(0, 1.05fr) minmax(320px, 0.95fr)" min={320} gap={14}>
+      <div className="admin-cc-split-stack">
+        {message ? <Alert tone="blue" title={message} /> : null}
+
+        <AdminSection
+          title="Platform branding"
+          description="Single source for brand copy across operator, admin, public home defaults, UPI, and emails. Change names here once — surfaces read these fields at runtime."
+        >
+          <div className="admin-cc-form">
+            <FormGrid>
+              <TextField
+                label="App name"
                 value={form.appName}
                 onChange={(e) => {
                   setForm({ ...form, appName: e.target.value });
-                  setPreviewKey((k) => k + 1);
+                  bump();
                 }}
                 placeholder={BRAND_DEFAULTS.appName}
               />
-            </label>
-            <label className="field">
-              <span>Tagline</span>
-              <input
+              <TextField
+                label="Tagline"
                 value={form.tagline}
                 onChange={(e) => {
                   setForm({ ...form, tagline: e.target.value });
-                  setPreviewKey((k) => k + 1);
+                  bump();
                 }}
               />
-            </label>
-            <label className="field">
-              <span>Legal name (LLP / copyright / UPI payee fallback)</span>
-              <input
+              <TextField
+                label="Legal name (LLP / copyright / UPI payee fallback)"
                 value={form.legalName}
                 onChange={(e) => {
                   setForm({ ...form, legalName: e.target.value });
-                  setPreviewKey((k) => k + 1);
+                  bump();
                 }}
                 placeholder={BRAND_DEFAULTS.legalName}
               />
-            </label>
-            <label className="field">
-              <span>Product name (marketing title)</span>
-              <input
+              <TextField
+                label="Product name (marketing title)"
                 value={form.productName}
                 onChange={(e) => {
                   setForm({ ...form, productName: e.target.value });
-                  setPreviewKey((k) => k + 1);
+                  bump();
                 }}
                 placeholder={BRAND_DEFAULTS.productName}
               />
-            </label>
-            <label className="field">
-              <span>Splash duration (ms)</span>
-              <input
+              <TextField
+                label="Splash duration (ms)"
                 type="number"
                 min={0}
                 max={15000}
                 value={form.splashDurationMs}
                 onChange={(e) => {
                   setForm({ ...form, splashDurationMs: e.target.value });
-                  setPreviewKey((k) => k + 1);
+                  bump();
                 }}
               />
-            </label>
-            <label className="field">
-              <span>Splash animation</span>
-              <select
+              <SelectField
+                label="Splash animation"
                 value={form.splashAnimation}
                 onChange={(e) => {
                   setForm({ ...form, splashAnimation: e.target.value as SplashAnimation });
-                  setPreviewKey((k) => k + 1);
+                  bump();
                   setPreviewMode("splash");
                 }}
               >
@@ -376,15 +370,13 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
                     {SPLASH_ANIMATION_LABELS[id]}
                   </option>
                 ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Splash intensity</span>
-              <select
+              </SelectField>
+              <SelectField
+                label="Splash intensity"
                 value={form.splashIntensity}
                 onChange={(e) => {
                   setForm({ ...form, splashIntensity: e.target.value as SplashIntensity });
-                  setPreviewKey((k) => k + 1);
+                  bump();
                   setPreviewMode("splash");
                 }}
               >
@@ -393,267 +385,260 @@ export const BrandingPanel = forwardRef<ExperienceSaveHandle>(function BrandingP
                     {SPLASH_INTENSITY_LABELS[id]}
                   </option>
                 ))}
-              </select>
-            </label>
-            <label className="field" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={form.splashShowProgress}
-                onChange={(e) => {
-                  setForm({ ...form, splashShowProgress: e.target.checked });
-                  setPreviewKey((k) => k + 1);
-                }}
-              />
-              <span>Show splash progress bar</span>
-            </label>
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>Logo upload</span>
-              <input type="file" accept="image/*" onChange={(e) => void onLogoFile(e.target.files?.[0] ?? null)} />
-            </label>
+              </SelectField>
+              <Field label="Splash progress bar">
+                {({ id }) => (
+                  <span className="admin-cc-switch-row" style={{ paddingBottom: 0 }}>
+                    <Switch
+                      id={id}
+                      checked={form.splashShowProgress}
+                      onChange={(checked) => {
+                        setForm({ ...form, splashShowProgress: checked });
+                        bump();
+                      }}
+                      aria-label="Show splash progress bar"
+                    />
+                    Show splash progress bar
+                  </span>
+                )}
+              </Field>
+              <Field full label="Logo upload">
+                {({ id }) => (
+                  <input
+                    id={id}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => void onLogoFile(e.target.files?.[0] ?? null)}
+                  />
+                )}
+              </Field>
+            </FormGrid>
+            <div className="admin-cc-actions" style={{ justifyContent: "flex-start" }}>
+              <Button variant="secondary" size="sm" disabled={saving} onClick={() => void saveAll({ clearLogo: true })}>
+                Reset logo to default
+              </Button>
+            </div>
           </div>
-          <div className="admin-form-row">
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              disabled={saving}
-              onClick={() => void saveAll({ clearLogo: true })}
-            >
-              Reset logo to default
-            </button>
-          </div>
-        </section>
+        </AdminSection>
 
-        <section className="panel admin-card" style={{ marginTop: 16 }}>
-          <h2>Favicon &amp; install icon</h2>
-          <p className="muted">
-            Browser tab favicon, PWA / desktop install icon, and apple touch icon. Choose the official brand mark,
-            match your platform logo, or upload a custom square PNG.
-          </p>
-          <div className="admin-form-grid">
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>Install name</span>
-              <input
+        <AdminSection
+          title="Favicon & install icon"
+          description="Browser tab favicon, PWA / desktop install icon, and apple touch icon. Choose the official brand mark, match your platform logo, or upload a custom square PNG."
+        >
+          <div className="admin-cc-form">
+            <FormGrid>
+              <TextField
+                full
+                label="Install name"
                 maxLength={40}
                 placeholder={form.appName || BRAND_DEFAULTS.appName}
                 value={form.installName}
                 onChange={(e) => {
                   setForm({ ...form, installName: e.target.value });
-                  setPreviewKey((k) => k + 1);
+                  bump();
                   setPreviewMode("install");
                 }}
               />
-            </label>
-            <fieldset className="field" style={{ gridColumn: "1 / -1", border: "none", padding: 0, margin: 0 }}>
-              <legend className="label" style={{ marginBottom: 8 }}>
-                Icon source
-              </legend>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {(
-                  [
-                    ["justx", "Official Justxsystems logo"],
-                    ["logo", "Same as platform logo"],
-                    ["custom", "Custom upload"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <label key={id} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <Field full label="Icon source">
+                {() => (
+                  <Segmented
+                    role="radio"
+                    wrap
+                    aria-label="Icon source"
+                    options={ICON_SOURCE_OPTIONS}
+                    value={iconSource}
+                    onChange={(id) => {
+                      setIconSource(id);
+                      if (id !== "custom") setIconDraft(null);
+                      bump();
+                      setPreviewMode("install");
+                    }}
+                  />
+                )}
+              </Field>
+              {iconSource === "custom" ? (
+                <Field full label="Upload favicon / install icon">
+                  {({ id }) => (
                     <input
-                      type="radio"
-                      name="icon-source"
-                      checked={iconSource === id}
-                      onChange={() => {
-                        setIconSource(id);
-                        if (id !== "custom") setIconDraft(null);
-                        setPreviewKey((k) => k + 1);
-                        setPreviewMode("install");
-                      }}
+                      id={id}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => void onIconFile(e.target.files?.[0] ?? null)}
                     />
-                    <span>{label}</span>
-                  </label>
-                ))}
+                  )}
+                </Field>
+              ) : null}
+            </FormGrid>
+            <div className="install-icon-custom-banner">
+              <span className="install-icon-thumb install-icon-checker">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={previewInstallIcon} alt="" />
+              </span>
+              <div>
+                <strong>
+                  {iconSource === "justx"
+                    ? "Official Justxsystems logo"
+                    : iconSource === "logo"
+                      ? "Platform logo"
+                      : "Custom icon"}
+                </strong>
+                <p className="admin-cc-note-text">Used for browser favicon and install shortcuts after you save.</p>
               </div>
-            </fieldset>
-            {iconSource === "custom" ? (
-              <label className="field" style={{ gridColumn: "1 / -1" }}>
-                <span>Upload favicon / install icon</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(e) => void onIconFile(e.target.files?.[0] ?? null)}
-                />
-              </label>
-            ) : null}
-          </div>
-          <div className="install-icon-custom-banner">
-            <span className="install-icon-thumb install-icon-checker">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewInstallIcon} alt="" />
-            </span>
-            <div>
-              <strong>
-                {iconSource === "justx"
-                  ? "Official Justxsystems logo"
-                  : iconSource === "logo"
-                    ? "Platform logo"
-                    : "Custom icon"}
-              </strong>
-              <p className="muted" style={{ margin: "2px 0 0" }}>
-                Used for browser favicon and install shortcuts after you save.
-              </p>
             </div>
           </div>
-        </section>
+        </AdminSection>
 
-        <section className="panel admin-card" style={{ marginTop: 16 }}>
-          <h2>Marketing homepage favicon</h2>
-          <p className="muted">
-            The marketing site at justxsystems.com is separate from JBT, but you can publish the same icon above to a
-            public URL and (with a one-time nginx snippet) serve it as{" "}
-            <code>https://justxsystems.com/favicon.ico</code>.
-          </p>
-          <label className="field" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={publishSiteFavicon}
-              onChange={(e) => setPublishSiteFavicon(e.target.checked)}
-            />
-            <span>Publish this favicon for justxsystems.com</span>
-          </label>
-          <p className="muted" style={{ marginTop: 10 }}>
-            Public URL (always available):{" "}
-            <code>{publicAssetUrl("/api/config/favicon.png")}</code>
-          </p>
-          <p className="muted">
-            Optional HTML on the marketing homepage:{" "}
-            <code>{`<link rel="icon" href="${publicAssetUrl("/api/config/favicon.png")}" type="image/png" />`}</code>
-          </p>
-          <p className="muted">
-            Preferred VPS setup: add the <code>/favicon.ico</code> proxy from{" "}
-            <code>deploy/nginx-jbt.conf.example</code>, then reload nginx. After that, saving branding here updates the
-            root site tab icon.
-          </p>
-        </section>
-
-        <section className="panel admin-card" style={{ marginTop: 16 }}>
-          <h2>Registration screen copy</h2>
-          <p className="muted">
-            Join-request screens still show after someone registers against an existing GSTIN. New-GSTIN Owners sign in
-            immediately (these Owner fields are fallbacks only). Use <code>{"{{email}}"}</code> in detail lines.
-          </p>
-          <div className="admin-form-grid">
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>New GSTIN (Owner) — title (unused when auto-login succeeds)</span>
-              <input
-                value={regCopy.pendingOwnerTitle}
-                onChange={(e) => setRegCopy({ ...regCopy, pendingOwnerTitle: e.target.value })}
+        <AdminSection
+          title="Marketing homepage favicon"
+          description={
+            <>
+              The marketing site at justxsystems.com is separate from JBT, but you can publish the same icon above to a
+              public URL and (with a one-time nginx snippet) serve it as{" "}
+              <code className="admin-cc-code">https://justxsystems.com/favicon.ico</code>.
+            </>
+          }
+        >
+          <div className="admin-cc-form">
+            <span className="admin-cc-switch-row" style={{ paddingBottom: 0 }}>
+              <Switch
+                checked={publishSiteFavicon}
+                onChange={setPublishSiteFavicon}
+                aria-label="Publish this favicon for justxsystems.com"
               />
-            </label>
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>New GSTIN (Owner) — message</span>
-              <textarea
-                rows={2}
-                value={regCopy.pendingOwnerMessage}
-                onChange={(e) => setRegCopy({ ...regCopy, pendingOwnerMessage: e.target.value })}
-              />
-            </label>
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>New GSTIN (Owner) — detail</span>
-              <textarea
-                rows={2}
-                value={regCopy.pendingOwnerDetail}
-                onChange={(e) => setRegCopy({ ...regCopy, pendingOwnerDetail: e.target.value })}
-              />
-            </label>
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>Join existing GSTIN — title</span>
-              <input
-                value={regCopy.pendingJoinTitle}
-                onChange={(e) => setRegCopy({ ...regCopy, pendingJoinTitle: e.target.value })}
-              />
-            </label>
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>Join existing GSTIN — message</span>
-              <textarea
-                rows={2}
-                value={regCopy.pendingJoinMessage}
-                onChange={(e) => setRegCopy({ ...regCopy, pendingJoinMessage: e.target.value })}
-              />
-            </label>
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>Join existing GSTIN — detail</span>
-              <textarea
-                rows={2}
-                value={regCopy.pendingJoinDetail}
-                onChange={(e) => setRegCopy({ ...regCopy, pendingJoinDetail: e.target.value })}
-              />
-            </label>
+              Publish this favicon for justxsystems.com
+            </span>
+            <p className="admin-cc-note-text">
+              Public URL (always available): <code className="admin-cc-code">{publicAssetUrl("/api/config/favicon.png")}</code>
+            </p>
+            <p className="admin-cc-note-text">
+              Optional HTML on the marketing homepage:{" "}
+              <code className="admin-cc-code">{`<link rel="icon" href="${publicAssetUrl("/api/config/favicon.png")}" type="image/png" />`}</code>
+            </p>
+            <p className="admin-cc-note-text">
+              Preferred VPS setup: add the <code className="admin-cc-code">/favicon.ico</code> proxy from{" "}
+              <code className="admin-cc-code">deploy/nginx-jbt.conf.example</code>, then reload nginx. After that, saving
+              branding here updates the root site tab icon.
+            </p>
           </div>
-        </section>
+        </AdminSection>
 
-        <section className="panel admin-card" style={{ marginTop: 16 }}>
-          <h2>Operator footer</h2>
-          <p className="muted">Shown at the bottom of the operator app (Powered by…).</p>
-          <label className="field">
-            <span>Footer text</span>
-            <input value={footerText} onChange={(e) => setFooterText(e.target.value)} />
-          </label>
-        </section>
+        <AdminSection
+          title="Registration screen copy"
+          description={
+            <>
+              Join-request screens still show after someone registers against an existing GSTIN. New-GSTIN Owners sign in
+              immediately (these Owner fields are fallbacks only). Use <code className="admin-cc-code">{"{{email}}"}</code>{" "}
+              in detail lines.
+            </>
+          }
+        >
+          <FormGrid>
+            <TextField
+              full
+              label="New GSTIN (Owner) — title (unused when auto-login succeeds)"
+              value={regCopy.pendingOwnerTitle}
+              onChange={(e) => setRegCopy({ ...regCopy, pendingOwnerTitle: e.target.value })}
+            />
+            <TextareaField
+              full
+              label="New GSTIN (Owner) — message"
+              rows={2}
+              value={regCopy.pendingOwnerMessage}
+              onChange={(e) => setRegCopy({ ...regCopy, pendingOwnerMessage: e.target.value })}
+            />
+            <TextareaField
+              full
+              label="New GSTIN (Owner) — detail"
+              rows={2}
+              value={regCopy.pendingOwnerDetail}
+              onChange={(e) => setRegCopy({ ...regCopy, pendingOwnerDetail: e.target.value })}
+            />
+            <TextField
+              full
+              label="Join existing GSTIN — title"
+              value={regCopy.pendingJoinTitle}
+              onChange={(e) => setRegCopy({ ...regCopy, pendingJoinTitle: e.target.value })}
+            />
+            <TextareaField
+              full
+              label="Join existing GSTIN — message"
+              rows={2}
+              value={regCopy.pendingJoinMessage}
+              onChange={(e) => setRegCopy({ ...regCopy, pendingJoinMessage: e.target.value })}
+            />
+            <TextareaField
+              full
+              label="Join existing GSTIN — detail"
+              rows={2}
+              value={regCopy.pendingJoinDetail}
+              onChange={(e) => setRegCopy({ ...regCopy, pendingJoinDetail: e.target.value })}
+            />
+          </FormGrid>
+        </AdminSection>
+
+        <AdminSection title="Operator footer" description="Shown at the bottom of the operator app (Powered by…).">
+          <FormGrid>
+            <TextField full label="Footer text" value={footerText} onChange={(e) => setFooterText(e.target.value)} />
+          </FormGrid>
+        </AdminSection>
       </div>
 
-      <aside className="preview-pane" aria-label="Branding preview">
-        <div className="preview-pane-toolbar">
-          <div>
-            <strong>Live preview</strong>
-            <p className="muted">Updates as you edit — use Save changes to publish.</p>
-          </div>
-          <div className="preview-mode-tabs">
-            {(
-              [
-                ["splash", "Splash"],
-                ["mark", "Mark"],
-                ["install", "Install"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={`btn btn-sm${previewMode === id ? " btn-primary" : ""}`}
-                onClick={() => setPreviewMode(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="preview-pane-stage" key={`${previewMode}-${previewKey}`}>
-          {previewMode === "splash" ? <SplashMark branding={draftBranding} preview /> : null}
-          {previewMode === "mark" ? (
-            <div className="preview-install-stage">
-              <PlatformBrandMark
-                size="xl"
-                layout="stack"
-                showText
-                logoUrl={previewLogo}
-                appName={draftBranding.appName}
-                tagline={draftBranding.tagline}
-              />
-            </div>
-          ) : null}
-          {previewMode === "install" ? (
-            <div className="preview-install-stage">
-              <div className="preview-install-card">
-                <span className="preview-install-icon install-icon-checker">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={previewInstallIcon} alt="" style={{ objectFit: "contain" }} />
-                </span>
-                <div>
-                  <strong>{previewInstallName}</strong>
-                  <p>Install {previewInstallName || BRAND_DEFAULTS.appName}</p>
+      <aside aria-label="Branding preview" className="admin-cc-split-stack">
+        <AdminSection
+          title="Live preview"
+          description="Updates as you edit — use Save changes to publish."
+          actions={
+            <AdminTabs
+              aria-label="Preview mode"
+              options={PREVIEW_MODE_OPTIONS}
+              value={previewMode}
+              onChange={setPreviewMode}
+            />
+          }
+        >
+          <div className="preview-pane-stage" key={`${previewMode}-${previewKey}`}>
+            {previewMode === "splash" ? <SplashMark branding={draftBranding} preview /> : null}
+            {previewMode === "mark" ? (
+              <div className="preview-install-stage">
+                <PlatformBrandMark
+                  size="xl"
+                  layout="stack"
+                  showText
+                  logoUrl={previewLogo}
+                  appName={draftBranding.appName}
+                  tagline={draftBranding.tagline}
+                />
+              </div>
+            ) : null}
+            {previewMode === "install" ? (
+              <div className="preview-install-stage">
+                <div className="preview-install-card">
+                  <span className="preview-install-icon install-icon-checker">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={previewInstallIcon} alt="" style={{ objectFit: "contain" }} />
+                  </span>
+                  <div>
+                    <strong>{previewInstallName}</strong>
+                    <p>Install {previewInstallName || BRAND_DEFAULTS.appName}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
+        </AdminSection>
       </aside>
-    </div>
+    </Grid>
   );
 });
+
+const ICON_SOURCE_OPTIONS: ReadonlyArray<{ value: InstallIconSource; label: string }> = [
+  { value: "justx", label: "Official Justxsystems logo" },
+  { value: "logo", label: "Same as platform logo" },
+  { value: "custom", label: "Custom upload" },
+];
+
+const PREVIEW_MODE_OPTIONS: ReadonlyArray<{ value: "splash" | "mark" | "install"; label: string }> = [
+  { value: "splash", label: "Splash" },
+  { value: "mark", label: "Mark" },
+  { value: "install", label: "Install" },
+];

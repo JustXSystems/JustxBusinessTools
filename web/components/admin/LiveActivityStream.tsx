@@ -2,6 +2,17 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Grid,
+  KpiCard,
+  Select,
+  SearchInput,
+  type BosBadgeTone,
+} from "@/components/bos";
+import { AdminEmpty, AdminSection, AdminTabs } from "@/components/admin/ui";
 import { uniqueTools } from "@/config/tools.config";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 
@@ -126,12 +137,19 @@ function metaFor(type: string) {
   );
 }
 
-function tonePill(tone: Tone) {
-  if (tone === "success") return "pill pill-success";
-  if (tone === "warning") return "pill pill-warning";
-  if (tone === "danger") return "pill pill-danger";
-  if (tone === "info") return "pill";
-  return "pill";
+function badgeTone(tone: Tone): BosBadgeTone {
+  if (tone === "success") return "emerald";
+  if (tone === "warning") return "amber";
+  if (tone === "danger") return "coral";
+  if (tone === "info") return "blue";
+  return "neutral";
+}
+
+function avatarTone(tone: Tone): string | undefined {
+  if (tone === "success") return "var(--bos-emerald)";
+  if (tone === "warning") return "var(--bos-amber)";
+  if (tone === "danger") return "var(--bos-coral)";
+  return undefined;
 }
 
 function initials(name: string | null | undefined) {
@@ -338,251 +356,247 @@ export function LiveActivityStream({
     URL.revokeObjectURL(url);
   }
 
+
+  const aspectOptions = ASPECTS.map((a) => ({
+    value: a.id,
+    label: `${a.label}${aspectCounts[a.id] ? ` (${aspectCounts[a.id]})` : ""}`,
+  }));
+
   return (
-    <section className="panel admin-card analytics-live">
-      <div className="analytics-toolbar">
-        <div>
-          <h2>Live activity</h2>
-          <p className="muted">
-            Real operator usage across tools, people, devices, and conversion friction — filter by dimension.
-          </p>
-        </div>
-        <div className="admin-form-row">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={exportFiltered} disabled={!filtered.length}>
-            Export filtered
-          </button>
-        </div>
-      </div>
+    <AdminSection
+      title="Live activity"
+      description="Real operator usage across tools, people, devices, and conversion friction — filter by dimension."
+      actions={
+        <Button variant="secondary" size="sm" icon="download" onClick={exportFiltered} disabled={!filtered.length}>
+          Export filtered
+        </Button>
+      }
+    >
+      <div className="admin-cc-stack">
+        <Grid cols={5} min={140} gap={12}>
+          <KpiCard label="Last 15 min" value={stats.last15m} delta="events" deltaTone="muted" interactive={false} />
+          <KpiCard
+            label="Last hour"
+            value={stats.lastHour}
+            delta={`${stats.uniqueActors} people · ${stats.uniqueTools} tools`}
+            deltaTone="muted"
+            interactive={false}
+          />
+          <KpiCard
+            label="Blocks (1h)"
+            value={stats.blocks}
+            delta={stats.blocks ? "Freemium friction" : "No limit hits"}
+            deltaTone={stats.blocks ? "warn" : "muted"}
+            interactive={false}
+          />
+          <KpiCard
+            label="Upgrade prompts (1h)"
+            value={stats.upgrades}
+            delta="paywall visibility"
+            deltaTone="muted"
+            interactive={false}
+          />
+          <KpiCard
+            label="In view"
+            value={filtered.length}
+            delta={`of ${events.length} recent`}
+            deltaTone="muted"
+            interactive={false}
+          />
+        </Grid>
 
-      <div className="analytics-kpis analytics-live-kpis">
-        <article className="result-card">
-          <span>Last 15 min</span>
-          <strong>{stats.last15m}</strong>
-          <span className="muted">events</span>
-        </article>
-        <article className="result-card">
-          <span>Last hour</span>
-          <strong>{stats.lastHour}</strong>
-          <span className="muted">{stats.uniqueActors} people · {stats.uniqueTools} tools</span>
-        </article>
-        <article className="result-card">
-          <span>Blocks (1h)</span>
-          <strong>{stats.blocks}</strong>
-          <span className={stats.blocks ? "analytics-delta is-down" : "muted"}>
-            {stats.blocks ? "Freemium friction" : "No limit hits"}
-          </span>
-        </article>
-        <article className="result-card">
-          <span>Upgrade prompts (1h)</span>
-          <strong>{stats.upgrades}</strong>
-          <span className="muted">paywall visibility</span>
-        </article>
-        <article className="result-card">
-          <span>In view</span>
-          <strong>{filtered.length}</strong>
-          <span className="muted">of {events.length} recent</span>
-        </article>
-      </div>
-
-      <div className="analytics-live-filters" role="toolbar" aria-label="Live activity filters">
-        <div className="admin-tabs" role="tablist" aria-label="Activity aspect">
-          {ASPECTS.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              role="tab"
-              aria-selected={aspect === a.id}
-              className={aspect === a.id ? "active" : ""}
-              onClick={() => setAspect(a.id)}
-            >
-              {a.label}
-              {aspectCounts[a.id] ? ` (${aspectCounts[a.id]})` : ""}
-            </button>
-          ))}
+        <div className="admin-cc-filters" role="toolbar" aria-label="Live activity filters">
+          <AdminTabs options={aspectOptions} value={aspect} onChange={setAspect} aria-label="Activity aspect" />
         </div>
-        <div className="analytics-live-controls">
-          <input
+        <div className="admin-cc-filters">
+          <SearchInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search actor, tool, event, branch…"
             aria-label="Search live activity"
           />
-          <select value={toolFilter} onChange={(e) => setToolFilter(e.target.value)} aria-label="Filter by tool">
+          <Select size="sm" value={toolFilter} onChange={(e) => setToolFilter(e.target.value)} aria-label="Filter by tool">
             <option value="all">All tools</option>
             {tools.map(([id, name]) => (
               <option key={id} value={id}>
                 {name}
               </option>
             ))}
-          </select>
-          <select value={deviceFilter} onChange={(e) => setDeviceFilter(e.target.value)} aria-label="Filter by device">
+          </Select>
+          <Select size="sm" value={deviceFilter} onChange={(e) => setDeviceFilter(e.target.value)} aria-label="Filter by device">
             <option value="all">All devices</option>
             {devices.map((d) => (
               <option key={d} value={d}>
                 {deviceLabel(d)}
               </option>
             ))}
-          </select>
-          <select value={actorFilter} onChange={(e) => setActorFilter(e.target.value)} aria-label="Filter by person">
+          </Select>
+          <Select size="sm" value={actorFilter} onChange={(e) => setActorFilter(e.target.value)} aria-label="Filter by person">
             <option value="all">All people</option>
             {actors.map(([id, name]) => (
               <option key={id} value={id}>
                 {name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
-      </div>
 
-      {filtered.length === 0 ? (
-        <p className="muted">No events match these filters for the selected range.</p>
-      ) : (
-        <div className="analytics-live-timeline">
-          {groups.map(([day, rows]) => (
-            <div key={day} className="analytics-live-day">
-              <h3 className="analytics-live-day-label">
-                {day}
-                <span className="muted">{rows.length} events</span>
-              </h3>
-              <ol className="analytics-live-list">
-                {rows.map((ev) => {
-                  const meta = metaFor(ev.eventType);
-                  const open = expanded === ev.id;
-                  const propsText = propertyPreview(ev.properties);
-                  return (
-                    <li key={ev.id || `${ev.at}-${ev.eventType}-${ev.actor}`} className={`analytics-live-event tone-${meta.tone}${open ? " is-open" : ""}`}>
-                      <button
-                        type="button"
-                        className="analytics-live-main"
-                        onClick={() => setExpanded(open ? null : ev.id)}
-                        aria-expanded={open}
+        {filtered.length === 0 ? (
+          <AdminEmpty title="No matching events" icon="search">
+            No events match these filters for the selected range.
+          </AdminEmpty>
+        ) : (
+          <div>
+            {groups.map(([day, rows]) => (
+              <div key={day}>
+                <h4 className="admin-cc-live-day-label">
+                  <span>{day}</span>
+                  <span>{rows.length} events</span>
+                </h4>
+                <ol className="admin-cc-live-list">
+                  {rows.map((ev) => {
+                    const meta = metaFor(ev.eventType);
+                    const open = expanded === ev.id;
+                    const propsText = propertyPreview(ev.properties);
+                    return (
+                      <li
+                        key={ev.id || `${ev.at}-${ev.eventType}-${ev.actor}`}
+                        className={`admin-cc-live-event${open ? " is-open" : ""}`}
                       >
-                        <span className="analytics-live-avatar" aria-hidden>
-                          {initials(ev.actor)}
-                        </span>
-                        <span className="analytics-live-body">
-                          <span className="analytics-live-summary">
-                            <strong>{meta.label}</strong>
-                            <span className={tonePill(meta.tone)}>{ev.eventType}</span>
+                        <button
+                          type="button"
+                          className="admin-cc-live-main"
+                          onClick={() => setExpanded(open ? null : ev.id)}
+                          aria-expanded={open}
+                        >
+                          <Avatar size="sm" tone={avatarTone(meta.tone)}>
+                            {initials(ev.actor)}
+                          </Avatar>
+                          <span className="admin-cc-live-body">
+                            <span className="admin-cc-live-summary">
+                              <strong>{meta.label}</strong>
+                              <Badge auto tone={badgeTone(meta.tone)}>
+                                {ev.eventType}
+                              </Badge>
+                            </span>
+                            <span className="admin-cc-live-sub">
+                              <span>{ev.actor || "Anonymous"}</span>
+                              <span>·</span>
+                              <span>{toolName(ev.toolId)}</span>
+                              {ev.toolId ? (
+                                <>
+                                  <span>·</span>
+                                  <span className="bos-mono">{ev.toolId}</span>
+                                </>
+                              ) : null}
+                              <span>·</span>
+                              <span>{deviceLabel(ev.device)}</span>
+                              {ev.profileName ? (
+                                <>
+                                  <span>·</span>
+                                  <span>{ev.profileName}</span>
+                                </>
+                              ) : null}
+                            </span>
                           </span>
-                          <span className="analytics-live-sub">
-                            <span>{ev.actor || "Anonymous"}</span>
-                            <span>·</span>
-                            <span>{toolName(ev.toolId)}</span>
-                            {ev.toolId ? (
-                              <>
-                                <span>·</span>
-                                <span className="mono">{ev.toolId}</span>
-                              </>
-                            ) : null}
-                            <span>·</span>
-                            <span>{deviceLabel(ev.device)}</span>
-                            {ev.profileName ? (
-                              <>
-                                <span>·</span>
-                                <span>{ev.profileName}</span>
-                              </>
-                            ) : null}
+                          <span className="admin-cc-live-when" title={absoluteTime(ev.at)}>
+                            {relativeTime(ev.at)}
                           </span>
-                        </span>
-                        <span className="analytics-live-when" title={absoluteTime(ev.at)}>
-                          {relativeTime(ev.at)}
-                        </span>
-                      </button>
-                      {open ? (
-                        <div className="analytics-live-detail">
-                          <p className="muted">{meta.hint}</p>
-                          <ul className="admin-kv">
-                            <li>
-                              <span>When</span>
-                              <strong>{absoluteTime(ev.at)}</strong>
-                            </li>
-                            <li>
-                              <span>Person</span>
-                              <strong>
-                                {ev.actor || "Anonymous"}
-                                {ev.actorEmail ? ` · ${ev.actorEmail}` : ""}
-                              </strong>
-                            </li>
-                            <li>
-                              <span>Tool</span>
-                              <strong>
-                                {toolName(ev.toolId)}
-                                {ev.toolId ? ` (${ev.toolId})` : ""}
-                              </strong>
-                            </li>
-                            <li>
-                              <span>Device</span>
-                              <strong>
-                                {deviceLabel(ev.device)}
-                                {ev.appVersion ? ` · app ${ev.appVersion}` : ""}
-                              </strong>
-                            </li>
-                            {ev.organizationName ? (
+                        </button>
+                        {open ? (
+                          <div className="admin-cc-live-detail">
+                            <p className="admin-cc-note">{meta.hint}</p>
+                            <ul className="admin-cc-kv">
                               <li>
-                                <span>Organization</span>
-                                <strong>{ev.organizationName}</strong>
+                                <span>When</span>
+                                <strong>{absoluteTime(ev.at)}</strong>
                               </li>
-                            ) : null}
-                            {ev.profileName ? (
                               <li>
-                                <span>Branch</span>
-                                <strong>{ev.profileName}</strong>
+                                <span>Person</span>
+                                <strong>
+                                  {ev.actor || "Anonymous"}
+                                  {ev.actorEmail ? ` · ${ev.actorEmail}` : ""}
+                                </strong>
                               </li>
-                            ) : null}
-                            {ev.sessionId ? (
                               <li>
-                                <span>Session</span>
-                                <strong className="mono">{ev.sessionId}</strong>
+                                <span>Tool</span>
+                                <strong>
+                                  {toolName(ev.toolId)}
+                                  {ev.toolId ? ` (${ev.toolId})` : ""}
+                                </strong>
                               </li>
-                            ) : null}
-                            {propsText ? (
                               <li>
-                                <span>Properties</span>
-                                <strong className="mono">{propsText}</strong>
+                                <span>Device</span>
+                                <strong>
+                                  {deviceLabel(ev.device)}
+                                  {ev.appVersion ? ` · app ${ev.appVersion}` : ""}
+                                </strong>
                               </li>
-                            ) : null}
-                          </ul>
-                          <div className="admin-form-row">
-                            {ev.toolId ? (
-                              <Link
-                                href={adminDeepLink.analyticsTool(ev.toolId)}
-                                className="btn btn-ghost btn-sm"
-                              >
-                                Tool deep dive
-                              </Link>
-                            ) : null}
-                            {meta.aspect === "blocks" || meta.aspect === "upgrades" ? (
-                              <Link
-                                href={adminDeepLink.profileAccess(undefined, "fabric")}
-                                className="btn btn-secondary btn-sm"
-                              >
-                                Open Access Fabric
-                              </Link>
-                            ) : null}
-                            {ev.userId ? (
-                              <Link
-                                href={adminDeepLink.users(ev.userId)}
-                                className="btn btn-ghost btn-sm"
-                              >
-                                Open user
-                              </Link>
-                            ) : ev.actorEmail ? (
-                              <Link href={adminDeepLink.users()} className="btn btn-ghost btn-sm">
-                                Team directory
-                              </Link>
-                            ) : null}
+                              {ev.organizationName ? (
+                                <li>
+                                  <span>Organization</span>
+                                  <strong>{ev.organizationName}</strong>
+                                </li>
+                              ) : null}
+                              {ev.profileName ? (
+                                <li>
+                                  <span>Branch</span>
+                                  <strong>{ev.profileName}</strong>
+                                </li>
+                              ) : null}
+                              {ev.sessionId ? (
+                                <li>
+                                  <span>Session</span>
+                                  <strong className="bos-mono">{ev.sessionId}</strong>
+                                </li>
+                              ) : null}
+                              {propsText ? (
+                                <li>
+                                  <span>Properties</span>
+                                  <strong className="bos-mono">{propsText}</strong>
+                                </li>
+                              ) : null}
+                            </ul>
+                            <div className="admin-cc-link-row">
+                              {ev.toolId ? (
+                                <Link href={adminDeepLink.analyticsTool(ev.toolId)}>
+                                  <Button variant="ghost" size="sm">
+                                    Tool deep dive
+                                  </Button>
+                                </Link>
+                              ) : null}
+                              {meta.aspect === "blocks" || meta.aspect === "upgrades" ? (
+                                <Link href={adminDeepLink.profileAccess(undefined, "fabric")}>
+                                  <Button variant="secondary" size="sm">
+                                    Open Access Fabric
+                                  </Button>
+                                </Link>
+                              ) : null}
+                              {ev.userId ? (
+                                <Link href={adminDeepLink.users(ev.userId)}>
+                                  <Button variant="ghost" size="sm">
+                                    Open user
+                                  </Button>
+                                </Link>
+                              ) : ev.actorEmail ? (
+                                <Link href={adminDeepLink.users()}>
+                                  <Button variant="ghost" size="sm">
+                                    Team directory
+                                  </Button>
+                                </Link>
+                              ) : null}
+                            </div>
                           </div>
-                        </div>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </AdminSection>
   );
 }

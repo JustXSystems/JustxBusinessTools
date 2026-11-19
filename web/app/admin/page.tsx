@@ -2,6 +2,24 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
+import {
+  Badge,
+  BarChart,
+  Button,
+  Card,
+  ChartCard,
+  Grid,
+  GroupedBarChart,
+  KpiCard,
+  ProgressBar,
+} from "@/components/bos";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPage,
+  AdminPageSkeleton,
+  AdminSection,
+} from "@/components/admin/ui";
 import { formatAnalyticsBucket } from "@/components/admin/AnalyticsRangePills";
 import { uniqueTools } from "@/config/tools.config";
 import { adminDeepLink } from "@/lib/admin-deep-links";
@@ -66,11 +84,10 @@ function pct(part: number, whole: number) {
   return Math.round((part / whole) * 100);
 }
 
-function severityPill(sev: AttentionItem["severity"]) {
-  if (sev === "critical") return "pill pill-danger";
-  if (sev === "high") return "pill pill-warning";
-  if (sev === "medium") return "pill";
-  return "pill";
+function severityTone(sev: AttentionItem["severity"]): "coral" | "amber" | "blue" | "emerald" {
+  if (sev === "critical" || sev === "high") return "coral";
+  if (sev === "medium") return "amber";
+  return "blue";
 }
 
 export default function AdminDashboardPage() {
@@ -100,13 +117,14 @@ export default function AdminDashboardPage() {
     }));
   }, [data]);
 
-  const maxDaily = useMemo(
-    () => Math.max(1, ...daily.map((d) => d.opens + d.creates + d.exports)),
-    [daily],
-  );
-
-  if (error && !data) return <p className="field-error">{error}</p>;
-  if (!data) return <p className="muted">Loading dashboard…</p>;
+  if (error && !data) {
+    return (
+      <AdminPage title="Command center" sub="Platform pulse">
+        <AdminErrorState message={error} onRetry={load} />
+      </AdminPage>
+    );
+  }
+  if (!data) return <AdminPageSkeleton cards={5} />;
 
   const inbox = data.inbox ?? {
     profiles: 0,
@@ -134,325 +152,346 @@ export default function AdminDashboardPage() {
   const conversion = pct(t.creates, t.opens);
   const topMax = Math.max(1, ...data.analytics.topTools.map((row) => row.opens + row.creates));
 
+  const usageBars = daily.slice(-6).map((d) => ({
+    label: formatAnalyticsBucket(d.date, grain),
+    value: d.opens + d.creates + d.exports,
+  }));
+
+  const groupedUsage = daily.slice(-6).map((d) => ({
+    label: formatAnalyticsBucket(d.date, grain),
+    a: d.opens,
+    b: d.creates,
+  }));
+
   return (
-    <div className="admin-page">
-      <section className="panel admin-card admin-page-head">
-        <div className="analytics-toolbar">
-          <div>
-            <h2>Command center</h2>
-            <p className="muted">
-              What needs attention now — then health, usage pulse, and cash. Refreshes every 30s.
-            </p>
-          </div>
-          <span className="muted small">
+    <AdminPage
+      title="Command center"
+      sub="Attention · health · usage · cash"
+      toolbar={
+        <>
+          <Badge auto tone={inbox.total ? "amber" : "emerald"}>
             {pulse.last15m} events / 15m · {pulse.actorsHour} people / 1h
-          </span>
-        </div>
-        <div className="analytics-kpis">
-          <Link href={adminDeepLink.approvals()} className={`result-card${inbox.total ? " dash-kpi-alert" : ""}`}>
-            <span>Approvals inbox</span>
-            <strong>{inbox.total}</strong>
-            <span className="analytics-delta">
-              {inbox.profiles} branches · {inbox.users} users · {inbox.deskOps} desk · {inbox.upiClaims} UPI
-            </span>
-          </Link>
-          <Link
-            href={adminDeepLink.userPending()}
-            className={`result-card${inbox.users ? " dash-kpi-alert" : ""}`}
-          >
-            <span>Pending users</span>
-            <strong>{inbox.users}</strong>
-            <span className="analytics-delta">Users → pending filter</span>
-          </Link>
-          <Link href={adminDeepLink.upiClaimPending()} className={`result-card${inbox.upiClaims ? " dash-kpi-alert" : ""}`}>
-            <span>UPI pending</span>
-            <strong>{inbox.upiClaims}</strong>
-            <span className="analytics-delta">{inr(inbox.upiAmountInr)}</span>
-          </Link>
-          <Link href={adminDeepLink.subscriptionsRenewals()} className={`result-card${inbox.renewalsSoon ? " dash-kpi-warn" : ""}`}>
-            <span>Renewals ≤14d</span>
-            <strong>{inbox.renewalsSoon}</strong>
-            <span className="analytics-delta">Plans &amp; notice job</span>
-          </Link>
-          <Link href={adminDeepLink.analytics()} className={`result-card${t.limit_blocks ? " dash-kpi-warn" : ""}`}>
-            <span>Limit blocks (30d)</span>
-            <strong>{t.limit_blocks}</strong>
-            <span className="analytics-delta">{conversion}% open → create</span>
-          </Link>
-        </div>
-      </section>
+          </Badge>
+          <Button variant="ghost" size="sm" icon="refresh" onClick={load}>
+            Refresh
+          </Button>
+        </>
+      }
+    >
+      <Grid cols={5} min={140} gap={12}>
+        <Link href={adminDeepLink.approvals()} className="admin-cc-kpi-link">
+          <KpiCard
+            label="Approvals inbox"
+            value={inbox.total}
+            delta={`${inbox.profiles} orgs · ${inbox.users} users · ${inbox.deskOps} desk · ${inbox.upiClaims} UPI`}
+            deltaTone={inbox.total ? "warn" : "muted"}
+            chip={{ color: inbox.total ? "amber" : "mint", glyph: "◎" }}
+          />
+        </Link>
+        <Link href={adminDeepLink.userPending()} className="admin-cc-kpi-link">
+          <KpiCard
+            label="Pending users"
+            value={inbox.users}
+            delta="People → pending filter"
+            deltaTone={inbox.users ? "warn" : "muted"}
+            chip={{ color: "blue", glyph: "👤" }}
+          />
+        </Link>
+        <Link href={adminDeepLink.upiClaimPending()} className="admin-cc-kpi-link">
+          <KpiCard
+            label="UPI pending"
+            value={inbox.upiClaims}
+            delta={inr(inbox.upiAmountInr)}
+            deltaTone={inbox.upiClaims ? "warn" : "muted"}
+            chip={{ color: "lavender", glyph: "₹" }}
+          />
+        </Link>
+        <Link href={adminDeepLink.subscriptionsRenewals()} className="admin-cc-kpi-link">
+          <KpiCard
+            label="Renewals ≤14d"
+            value={inbox.renewalsSoon}
+            delta="Plans & notice job"
+            deltaTone={inbox.renewalsSoon ? "warn" : "muted"}
+            chip={{ color: "rose", glyph: "↻" }}
+          />
+        </Link>
+        <Link href={adminDeepLink.analytics()} className="admin-cc-kpi-link">
+          <KpiCard
+            label="Limit blocks (30d)"
+            value={t.limit_blocks}
+            delta={`${conversion}% open → create`}
+            deltaTone={t.limit_blocks ? "warn" : "up"}
+            chip={{ color: "sage", glyph: "▣" }}
+          />
+        </Link>
+      </Grid>
 
-      <div className="admin-page-scroll">
-        <section className="panel admin-card dash-attention">
-          <div className="analytics-toolbar">
-            <div>
-              <h2>Needs attention</h2>
-              <p className="muted">Ranked queue of pending work and risk signals.</p>
-            </div>
-            {attention.length ? (
-              <span className="pill pill-warning">{attention.length} open</span>
-            ) : (
-              <span className="pill pill-success">Clear</span>
-            )}
-          </div>
-          {attention.length === 0 ? (
-            <p className="muted">Nothing urgent. Approvals, UPI, renewals, and health look quiet.</p>
+      <AdminSection
+        title="Needs attention"
+        description="Ranked queue of pending work and risk signals."
+        actions={
+          attention.length ? (
+            <Badge tone="amber">{attention.length} open</Badge>
           ) : (
-            <ul className="dash-attention-list">
-              {attention.map((item) => (
-                <li key={item.id} className={`dash-attention-item severity-${item.severity}`}>
-                  <div className="dash-attention-main">
-                    <span className={severityPill(item.severity)}>{item.severity}</span>
-                    <div>
-                      <strong>{item.title}</strong>
-                      <p className="muted">{item.detail}</p>
-                    </div>
-                    <span className="dash-attention-count">{item.count}</span>
+            <Badge tone="emerald">Clear</Badge>
+          )
+        }
+      >
+        {attention.length === 0 ? (
+          <AdminEmpty title="Nothing urgent" icon="check">
+            Approvals, UPI, renewals, and health look quiet.
+          </AdminEmpty>
+        ) : (
+          <ul className="admin-cc-attention-list">
+            {attention.map((item) => (
+              <li key={item.id} className="admin-cc-attention-item">
+                <div className="admin-cc-attention-main">
+                  <Badge tone={severityTone(item.severity)}>{item.severity}</Badge>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.detail}</p>
                   </div>
-                  <Link href={item.href} className="btn btn-secondary btn-sm">
+                  <span className="admin-cc-attention-count">{item.count}</span>
+                </div>
+                <Link href={item.href}>
+                  <Button variant="secondary" size="sm">
                     Open
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+                  </Button>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </AdminSection>
 
-        <div className="admin-grid dash-health-grid">
-          <Link
-            href={health.gateways.unhealthy ? adminDeepLink.gateways("unhealthy") : adminDeepLink.gateways()}
-            className="panel admin-card dash-health-card"
-          >
-            <h2>Gateways</h2>
-            <strong>
+      <Grid cols={4} min={160} gap={12} className="admin-cc-health-grid">
+        <Link href={health.gateways.unhealthy ? adminDeepLink.gateways("unhealthy") : adminDeepLink.gateways()}>
+          <Card interactive>
+            <div className="bos-kpi-label">Gateways</div>
+            <div className="bos-kpi-value">
               {health.gateways.enabled}/{health.gateways.total || "—"} enabled
-            </strong>
-            <p className={health.gateways.unhealthy ? "analytics-delta is-down" : "muted"}>
+            </div>
+            <div className={`bos-kpi-delta${health.gateways.unhealthy ? " bos-kpi-delta-down" : ""}`}>
               {health.gateways.unhealthy
                 ? `${health.gateways.unhealthy} need a health check`
                 : "All enabled gateways look healthy"}
-            </p>
-          </Link>
-          <Link href={adminDeepLink.delivery()} className="panel admin-card dash-health-card">
-            <h2>Document delivery</h2>
-            <strong>{health.delivery.failed7d} failed</strong>
-            <p className={health.delivery.failed7d ? "analytics-delta is-down" : "muted"}>
+            </div>
+          </Card>
+        </Link>
+        <Link href={adminDeepLink.delivery()}>
+          <Card interactive>
+            <div className="bos-kpi-label">Document delivery</div>
+            <div className="bos-kpi-value">{health.delivery.failed7d} failed</div>
+            <div className={`bos-kpi-delta${health.delivery.failed7d ? " bos-kpi-delta-down" : ""}`}>
               {health.delivery.pending7d} pending · last 7 days
-            </p>
-          </Link>
-          <Link href={adminDeepLink.audit()} className="panel admin-card dash-health-card">
-            <h2>Audit risk</h2>
-            <strong>{health.audit.highRisk7d}</strong>
-            <p className={health.audit.highRisk7d ? "analytics-delta is-down" : "muted"}>
+            </div>
+          </Card>
+        </Link>
+        <Link href={adminDeepLink.audit()}>
+          <Card interactive>
+            <div className="bos-kpi-label">Audit risk</div>
+            <div className="bos-kpi-value">{health.audit.highRisk7d}</div>
+            <div className={`bos-kpi-delta${health.audit.highRisk7d ? " bos-kpi-delta-down" : ""}`}>
               High-risk events in 7 days
-            </p>
-          </Link>
-          <Link href={adminDeepLink.paymentSaas()} className="panel admin-card dash-health-card">
-            <h2>Payment failures</h2>
-            <strong>{health.payments.failedCount}</strong>
-            <p className={health.payments.failedCount ? "analytics-delta is-down" : "muted"}>
+            </div>
+          </Card>
+        </Link>
+        <Link href={adminDeepLink.paymentSaas()}>
+          <Card interactive>
+            <div className="bos-kpi-label">Payment failures</div>
+            <div className="bos-kpi-value">{health.payments.failedCount}</div>
+            <div className={`bos-kpi-delta${health.payments.failedCount ? " bos-kpi-delta-down" : ""}`}>
               {Math.round((health.payments.failureRate || 0) * 100)}% fail rate · {inr(health.payments.collectedInr)} collected
-            </p>
-          </Link>
-        </div>
+            </div>
+          </Card>
+        </Link>
+      </Grid>
 
-        <div className="analytics-grid">
-          <section className="panel admin-card">
-            <div className="analytics-toolbar">
-              <div>
-                <h2>Usage pulse (30d)</h2>
-                <p className="muted">Opens, creates, and exports by {grain === "month" ? "month" : grain === "week" ? "week" : "day"}.</p>
-              </div>
-              <Link href={adminDeepLink.analytics()} className="btn btn-ghost btn-sm">
+      <Grid cols={2} template="1.35fr 1fr" min={280} gap={14}>
+        <AdminSection
+          title="Usage pulse (30d)"
+          description={`Opens vs creates by ${grain === "month" ? "month" : grain === "week" ? "week" : "day"}.`}
+          actions={
+            <Link href={adminDeepLink.analytics()}>
+              <Button variant="ghost" size="sm">
                 Full analytics
-              </Link>
-            </div>
-            <div className="result-grid dash-usage-kpis">
-              <div className="result-card">
-                <span>Opens</span>
-                <strong>{t.opens.toLocaleString()}</strong>
-              </div>
-              <div className="result-card">
-                <span>Creates</span>
-                <strong>{t.creates.toLocaleString()}</strong>
-              </div>
-              <div className="result-card">
-                <span>Exports</span>
-                <strong>{t.exports.toLocaleString()}</strong>
-              </div>
-              <div className="result-card">
-                <span>Conversion</span>
-                <strong>{conversion}%</strong>
-              </div>
-            </div>
-            <div className="chart-bars" role="img" aria-label="Usage activity chart">
-              {daily.map((d) => {
-                const total = d.opens + d.creates + d.exports;
-                return (
-                  <div
-                    key={d.date}
-                    className="chart-col"
-                    title={`${formatAnalyticsBucket(d.date, grain)}: ${d.opens} opens, ${d.creates} creates, ${d.exports} exports`}
-                  >
-                    <div className="chart-stack" style={{ height: `${Math.max(4, (total / maxDaily) * 100)}%` }}>
-                      <span className="seg seg-open" style={{ flexGrow: d.opens || 0.01 }} />
-                      <span className="seg seg-create" style={{ flexGrow: d.creates || 0.01 }} />
-                      <span className="seg seg-export" style={{ flexGrow: d.exports || 0.01 }} />
-                    </div>
-                    <span className="chart-label">{formatAnalyticsBucket(d.date, grain)}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="chart-legend">
-              <span>
-                <i className="seg-open" /> Opens
-              </span>
-              <span>
-                <i className="seg-create" /> Creates
-              </span>
-              <span>
-                <i className="seg-export" /> Exports
-              </span>
-            </div>
-          </section>
-
-          <section className="panel admin-card">
-            <div className="analytics-toolbar">
-              <div>
-                <h2>Cash &amp; plan</h2>
-                <p className="muted">Collections health and SaaS billing.</p>
-              </div>
-              <div className="admin-form-row">
-                <Link href={adminDeepLink.payments()} className="btn btn-ghost btn-sm">
-                  Payments
-                </Link>
-                <Link href={adminDeepLink.subscriptions()} className="btn btn-ghost btn-sm">
-                  Plans
-                </Link>
-              </div>
-            </div>
-            <div className="result-grid">
-              <div className="result-card">
-                <span>Receivable</span>
-                <strong>{inr(data.collections.totalReceivable)}</strong>
-              </div>
-              <div className="result-card">
-                <span>Overdue</span>
-                <strong>{inr(data.collections.overdueReceivable)}</strong>
-              </div>
-              <div className="result-card">
-                <span>Net position</span>
-                <strong>{inr(data.collections.netPosition)}</strong>
-              </div>
-              <div className="result-card">
-                <span>AMC ≤30d</span>
-                <strong>{data.collections.amcRenewalsNext30d}</strong>
-              </div>
-            </div>
-            {data.subscription ? (
-              <ul className="admin-kv" style={{ marginTop: 12 }}>
-                <li>
-                  <span>Plan</span>
-                  <strong>{data.subscription.planId}</strong>
-                </li>
-                <li>
-                  <span>Status</span>
-                  <strong>{data.subscription.status}</strong>
-                </li>
-                <li>
-                  <span>MRR</span>
-                  <strong>{inr(data.subscription.mrrInr)}</strong>
-                </li>
-                <li>
-                  <span>Collected (90d)</span>
-                  <strong>{inr(data.payments.collectedInr)}</strong>
-                </li>
-              </ul>
-            ) : (
-              <p className="muted" style={{ marginTop: 12 }}>
-                No org subscription row yet.
-              </p>
-            )}
-          </section>
-        </div>
-
-        <section className="panel admin-card">
-          <div className="analytics-toolbar">
-            <div>
-              <h2>Top tools</h2>
-              <p className="muted">Most used tools in the last 30 days.</p>
-            </div>
-            <Link href={adminDeepLink.tools()} className="btn btn-ghost btn-sm">
-              Manage tools
+              </Button>
             </Link>
-          </div>
-          {data.analytics.topTools.length === 0 ? (
-            <p className="muted">No tool activity yet.</p>
+          }
+        >
+          <Grid cols={4} min={90} gap={8}>
+            <KpiCard label="Opens" value={t.opens.toLocaleString()} interactive={false} />
+            <KpiCard label="Creates" value={t.creates.toLocaleString()} interactive={false} />
+            <KpiCard label="Exports" value={t.exports.toLocaleString()} interactive={false} />
+            <KpiCard label="Conversion" value={`${conversion}%`} interactive={false} />
+          </Grid>
+          <div style={{ height: 12 }} />
+          <ChartCard
+            title="Activity"
+            legend={[
+              { label: "Opens", tone: "emerald" },
+              { label: "Creates", tone: "coral" },
+            ]}
+          >
+            {groupedUsage.length ? (
+              <GroupedBarChart data={groupedUsage} ariaLabel="Opens versus creates" series={["Opens", "Creates"]} />
+            ) : usageBars.length ? (
+              <BarChart data={usageBars} ariaLabel="Usage activity" />
+            ) : (
+              <AdminEmpty title="No usage yet" />
+            )}
+          </ChartCard>
+        </AdminSection>
+
+        <AdminSection
+          title="Cash & plan"
+          description="Collections health and SaaS billing."
+          actions={
+            <>
+              <Link href={adminDeepLink.payments()}>
+                <Button variant="ghost" size="sm">
+                  Payments
+                </Button>
+              </Link>
+              <Link href={adminDeepLink.subscriptions()}>
+                <Button variant="ghost" size="sm">
+                  Plans
+                </Button>
+              </Link>
+            </>
+          }
+        >
+          <Grid cols={2} min={120} gap={8}>
+            <KpiCard label="Receivable" value={inr(data.collections.totalReceivable)} interactive={false} />
+            <KpiCard
+              label="Overdue"
+              value={inr(data.collections.overdueReceivable)}
+              valueTone="coral"
+              interactive={false}
+            />
+            <KpiCard label="Net position" value={inr(data.collections.netPosition)} interactive={false} />
+            <KpiCard label="AMC ≤30d" value={data.collections.amcRenewalsNext30d} interactive={false} />
+          </Grid>
+          <div style={{ height: 12 }} />
+          {data.subscription ? (
+            <Card flat>
+              <Grid cols={2} min={120} gap={8}>
+                <div>
+                  <div className="bos-text-caption">Plan</div>
+                  <strong>{data.subscription.planId}</strong>
+                </div>
+                <div>
+                  <div className="bos-text-caption">Status</div>
+                  <strong>{data.subscription.status}</strong>
+                </div>
+                <div>
+                  <div className="bos-text-caption">MRR</div>
+                  <strong>{inr(data.subscription.mrrInr)}</strong>
+                </div>
+                <div>
+                  <div className="bos-text-caption">Collected (90d)</div>
+                  <strong>{inr(data.payments.collectedInr)}</strong>
+                </div>
+              </Grid>
+            </Card>
           ) : (
-            <div className="tracker-list">
-              {data.analytics.topTools.map((row) => {
-                const activity = row.opens + row.creates;
-                return (
-                  <div key={row.toolId} className="tracker-row analytics-tool-row">
-                    <div className="tracker-row-main">
-                      <span className="tracker-row-title">{toolName(row.toolId)}</span>
-                      <span className="tracker-row-sub">
+            <p className="bos-text-muted" style={{ margin: 0, fontSize: 13 }}>
+              No org subscription row yet.
+            </p>
+          )}
+        </AdminSection>
+      </Grid>
+
+      <AdminSection
+        title="Top tools"
+        description="Most used tools in the last 30 days."
+        actions={
+          <Link href={adminDeepLink.tools()}>
+            <Button variant="ghost" size="sm">
+              Manage catalog
+            </Button>
+          </Link>
+        }
+      >
+        {data.analytics.topTools.length === 0 ? (
+          <AdminEmpty title="No tool activity yet" />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {data.analytics.topTools.map((row) => {
+              const activity = row.opens + row.creates;
+              return (
+                <Card key={row.toolId} flat style={{ padding: "12px 14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <strong>{toolName(row.toolId)}</strong>
+                      <div className="bos-text-caption">
                         {row.toolId}
                         {row.uniqueUsers != null ? ` · ${row.uniqueUsers} people` : ""}
-                      </span>
-                      <div className="usage-bar" aria-hidden>
-                        <span style={{ width: `${(activity / topMax) * 100}%` }} />
+                      </div>
+                      <div style={{ marginTop: 6 }}>
+                        <ProgressBar value={(activity / topMax) * 100} tone="blue" label={`${toolName(row.toolId)} activity`} />
                       </div>
                     </div>
-                    <div className="analytics-tool-meta">
-                      <span>{row.opens} opens</span>
-                      <span>{row.creates} creates</span>
-                      <span>{pct(row.creates, row.opens)}% conv.</span>
-                    </div>
-                    <Link href={adminDeepLink.analyticsTool(row.toolId)} className="btn btn-ghost btn-sm">
-                      Deep dive
+                    <span className="bos-text-caption">{row.opens} opens</span>
+                    <span className="bos-text-caption">{row.creates} creates</span>
+                    <span className="bos-text-caption">{pct(row.creates, row.opens)}% conv.</span>
+                    <Link href={adminDeepLink.analyticsTool(row.toolId)}>
+                      <Button variant="ghost" size="sm">
+                        Deep dive
+                      </Button>
                     </Link>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        <section className="panel admin-card dash-quick-links">
-          <h2>Quick links</h2>
-          <div className="dash-link-row">
-            <Link href={adminDeepLink.users()} className="btn btn-primary btn-sm">
-              Team
-            </Link>
-            <Link href={adminDeepLink.profiles()} className="btn btn-secondary btn-sm">
-              Profiles
-            </Link>
-            <Link href={adminDeepLink.gateways()} className="btn btn-secondary btn-sm">
-              Gateways
-            </Link>
-            <Link href={adminDeepLink.audit()} className="btn btn-secondary btn-sm">
-              Audit
-            </Link>
-            <Link href={adminDeepLink.ops()} className="btn btn-secondary btn-sm">
-              Operations
-            </Link>
-            <Link href={adminDeepLink.experienceTheme()} className="btn btn-secondary btn-sm">
-              Theme
-            </Link>
-            <Link href={adminDeepLink.experiencePublicHome()} className="btn btn-secondary btn-sm">
-              Public home
-            </Link>
-            <Link href={adminDeepLink.experienceBranding()} className="btn btn-secondary btn-sm">
-              Experience
-            </Link>
-            <Link href={adminDeepLink.analytics()} className="btn btn-secondary btn-sm">
-              Analytics
-            </Link>
+                </Card>
+              );
+            })}
           </div>
-        </section>
-      </div>
-    </div>
+        )}
+      </AdminSection>
+
+      <AdminSection title="Quick links" description="Jump into the most used consoles.">
+        <div className="admin-cc-link-row">
+          <Link href={adminDeepLink.users()}>
+            <Button variant="primary" size="sm">
+              People
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.profiles()}>
+            <Button variant="secondary" size="sm">
+              Organizations
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.gateways()}>
+            <Button variant="secondary" size="sm">
+              Gateways
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.audit()}>
+            <Button variant="secondary" size="sm">
+              Audit
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.ops()}>
+            <Button variant="secondary" size="sm">
+              Operations
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.experienceTheme()}>
+            <Button variant="secondary" size="sm">
+              Theme
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.experiencePublicHome()}>
+            <Button variant="secondary" size="sm">
+              Public home
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.analytics()}>
+            <Button variant="secondary" size="sm">
+              Analytics
+            </Button>
+          </Link>
+        </div>
+      </AdminSection>
+    </AdminPage>
   );
 }

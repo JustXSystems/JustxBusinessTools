@@ -1,7 +1,10 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { AdminEmpty, AdminSection, AdminTabs } from "@/components/admin/ui";
+import { SwitchField, TextField, TextareaField } from "@/components/admin/ui/AdminFields";
 import type { PaymentsActionHandle } from "@/components/admin/payments-actions";
+import { Alert, Badge, Button, DataTable, FormGrid, cx, type BosBadgeTone, type BosColumn } from "@/components/bos";
 import { api } from "@/lib/api";
 import { useBrandCopy } from "@/lib/use-brand-copy";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -42,15 +45,17 @@ type Outbox = {
   createdAt: string;
 };
 
+const CLAIM_FILTERS = ["pending", "approved", "rejected", "all"] as const;
+
 function inr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 }
 
-function statusPill(status: string) {
-  if (status === "approved" || status === "sent") return "pill pill-success";
-  if (status === "pending") return "pill pill-warning";
-  if (status === "rejected" || status === "failed") return "pill pill-danger";
-  return "pill";
+function statusTone(status: string): BosBadgeTone {
+  if (status === "approved" || status === "sent") return "emerald";
+  if (status === "pending") return "amber";
+  if (status === "rejected" || status === "failed") return "coral";
+  return "neutral";
 }
 
 function snapshot(payee: Payee, notify: Notify) {
@@ -93,8 +98,14 @@ export const UpiPaymentsPanel = forwardRef<
   const [filter, setFilter] = useState(initialStatus || "pending");
   const [reviewNote, setReviewNote] = useState("");
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"ok" | "error">("ok");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const say = useCallback((text: string, tone: "ok" | "error" = "ok") => {
+    setMessageTone(tone);
+    setMessage(text);
+  }, []);
 
   const load = useCallback(async () => {
     const [cfg, cl, ob] = await Promise.all([
@@ -122,7 +133,7 @@ export const UpiPaymentsPanel = forwardRef<
     if (focusClaimId) setSelectedId(focusClaimId);
   }, [focusClaimId]);
 
-  useLiveRefresh(() => load().catch((e: Error) => setMessage(e.message)), {
+  useLiveRefresh(() => load().catch((e: Error) => say(e.message, "error")), {
     intervalMs: 20_000,
     deps: [filter],
   });
@@ -139,9 +150,9 @@ export const UpiPaymentsPanel = forwardRef<
         body: JSON.stringify({ payee, notify }),
       });
       savedSnap.current = snapshot(payee, notify);
-      setMessage("UPI account and notification templates saved.");
+      say("UPI account and notification templates saved.");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Save failed");
+      say(err instanceof Error ? err.message : "Save failed", "error");
       throw err;
     } finally {
       setBusy(false);
@@ -169,11 +180,11 @@ export const UpiPaymentsPanel = forwardRef<
         body: JSON.stringify({ reviewNote }),
       });
       setReviewNote("");
-      setMessage(action === "approve" ? "Approved — selected tools are now licensed." : "Rejected — no new licenses granted.");
+      say(action === "approve" ? "Approved — selected tools are now licensed." : "Rejected — no new licenses granted.");
       invalidateAdminData("admin-upi");
       await load();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Review failed");
+      say(err instanceof Error ? err.message : "Review failed", "error");
     } finally {
       setBusy(false);
     }
@@ -186,139 +197,197 @@ export const UpiPaymentsPanel = forwardRef<
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
-      setMessage("Could not copy UTR");
+      say("Could not copy UTR", "error");
     }
   }
 
-  return (
-    <div className="admin-split payments-split">
-      <div className="admin-pane-stack">
-        <section className="panel admin-card">
-          <div className="analytics-toolbar">
-            <div>
-              <h2>{appName} UPI account</h2>
-              <p className="muted">Default checkout is a UPI QR to this VPA. Gateways stay optional.</p>
-            </div>
-            {dirty ? <span className="pill pill-warning">Unsaved changes</span> : null}
+  const outboxColumns: ReadonlyArray<BosColumn<Outbox>> = [
+    {
+      key: "dest",
+      header: "Destination",
+      cell: (ev) => (
+        <div>
+          <div className="admin-cc-cell-title">
+            {ev.channel} · {ev.destination}
           </div>
+          <div className="admin-cc-cell-sub">{ev.kind}</div>
+        </div>
+      ),
+    },
+    { key: "createdAt", header: "When", mono: true, cell: (ev) => fmtWhen(ev.createdAt) },
+    {
+      key: "status",
+      header: "Status",
+      cell: (ev) => (
+        <Badge auto tone={statusTone(ev.status)}>
+          {ev.status}
+        </Badge>
+      ),
+    },
+  ];
+
+  return (
+    <div className="admin-cc-two">
+      <div className="admin-cc-split-stack">
+        <AdminSection
+          title={`${appName} UPI account`}
+          description="Default checkout is a UPI QR to this VPA. Gateways stay optional."
+          actions={
+            dirty ? (
+              <Badge auto tone="amber">
+                Unsaved changes
+              </Badge>
+            ) : null
+          }
+        >
           <form
-            className="admin-form-grid"
+            className="admin-cc-form"
             id="upi-settings-form"
             onSubmit={(e) => {
               e.preventDefault();
               void saveConfig();
             }}
           >
-            <label className="field">
-              <span>Enable UPI QR</span>
-              <select
-                value={payee.enabled ? "1" : "0"}
-                onChange={(e) => setPayee({ ...payee, enabled: e.target.value === "1" })}
-              >
-                <option value="1">On (default)</option>
-                <option value="0">Off</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Payee name</span>
-              <input value={payee.payeeName} onChange={(e) => setPayee({ ...payee, payeeName: e.target.value })} required />
-            </label>
-            <label className="field">
-              <span>UPI ID (VPA)</span>
-              <input value={payee.vpa} onChange={(e) => setPayee({ ...payee, vpa: e.target.value })} required placeholder="justx@okaxis" />
-            </label>
-            <label className="field">
-              <span>Merchant code (optional)</span>
-              <input value={payee.merchantCode} onChange={(e) => setPayee({ ...payee, merchantCode: e.target.value })} />
-            </label>
-            <h3 className="analytics-subhead" style={{ gridColumn: "1 / -1" }}>
-              Company alerts
-            </h3>
-            <label className="field">
-              <span>Email {appName}</span>
-              <select
-                value={notify.emailEnabled ? "1" : "0"}
-                onChange={(e) => setNotify({ ...notify, emailEnabled: e.target.value === "1" })}
-              >
-                <option value="1">On</option>
-                <option value="0">Off</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Alert email</span>
-              <input type="email" value={notify.emailTo} onChange={(e) => setNotify({ ...notify, emailTo: e.target.value })} />
-            </label>
-            <label className="field">
-              <span>WhatsApp alerts</span>
-              <select
-                value={notify.whatsappEnabled ? "1" : "0"}
-                onChange={(e) => setNotify({ ...notify, whatsappEnabled: e.target.value === "1" })}
-              >
-                <option value="1">On</option>
-                <option value="0">Off</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>WhatsApp number</span>
-              <input value={notify.whatsappTo} onChange={(e) => setNotify({ ...notify, whatsappTo: e.target.value })} placeholder="+91…" />
-            </label>
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>On submit — subject</span>
-              <input value={notify.submitSubject} onChange={(e) => setNotify({ ...notify, submitSubject: e.target.value })} />
-            </label>
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>On submit — body (placeholders: {"{{payerName}} {{utr}} {{amount}}"})</span>
-              <textarea rows={3} value={notify.submitBody} onChange={(e) => setNotify({ ...notify, submitBody: e.target.value })} />
-            </label>
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>On approve/reject — subject</span>
-              <input value={notify.decisionSubject} onChange={(e) => setNotify({ ...notify, decisionSubject: e.target.value })} />
-            </label>
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>On approve/reject — body</span>
-              <textarea rows={3} value={notify.decisionBody} onChange={(e) => setNotify({ ...notify, decisionBody: e.target.value })} />
-            </label>
+            <FormGrid>
+              <SwitchField
+                label="Enable UPI QR (default)"
+                checked={payee.enabled}
+                onChange={(enabled) => setPayee({ ...payee, enabled })}
+              />
+              <TextField
+                label="Payee name"
+                value={payee.payeeName}
+                onChange={(e) => setPayee({ ...payee, payeeName: e.target.value })}
+                required
+              />
+              <TextField
+                label="UPI ID (VPA)"
+                value={payee.vpa}
+                onChange={(e) => setPayee({ ...payee, vpa: e.target.value })}
+                required
+                placeholder="justx@okaxis"
+              />
+              <TextField
+                label="Merchant code (optional)"
+                value={payee.merchantCode}
+                onChange={(e) => setPayee({ ...payee, merchantCode: e.target.value })}
+              />
+              <div className="admin-cc-subhead bos-form-grid-full">Company alerts</div>
+              <SwitchField
+                label={`Email ${appName}`}
+                checked={notify.emailEnabled}
+                onChange={(emailEnabled) => setNotify({ ...notify, emailEnabled })}
+              />
+              <TextField
+                label="Alert email"
+                type="email"
+                value={notify.emailTo}
+                onChange={(e) => setNotify({ ...notify, emailTo: e.target.value })}
+              />
+              <SwitchField
+                label="WhatsApp alerts"
+                checked={notify.whatsappEnabled}
+                onChange={(whatsappEnabled) => setNotify({ ...notify, whatsappEnabled })}
+              />
+              <TextField
+                label="WhatsApp number"
+                value={notify.whatsappTo}
+                onChange={(e) => setNotify({ ...notify, whatsappTo: e.target.value })}
+                placeholder="+91…"
+              />
+              <TextField
+                full
+                label="On submit — subject"
+                value={notify.submitSubject}
+                onChange={(e) => setNotify({ ...notify, submitSubject: e.target.value })}
+              />
+              <TextareaField
+                full
+                label="On submit — body"
+                hint={<>Placeholders: {"{{payerName}} {{utr}} {{amount}}"}</>}
+                rows={3}
+                value={notify.submitBody}
+                onChange={(e) => setNotify({ ...notify, submitBody: e.target.value })}
+              />
+              <TextField
+                full
+                label="On approve/reject — subject"
+                value={notify.decisionSubject}
+                onChange={(e) => setNotify({ ...notify, decisionSubject: e.target.value })}
+              />
+              <TextareaField
+                full
+                label="On approve/reject — body"
+                rows={3}
+                value={notify.decisionBody}
+                onChange={(e) => setNotify({ ...notify, decisionBody: e.target.value })}
+              />
+            </FormGrid>
           </form>
-          {message ? <p className="muted">{message}</p> : null}
-        </section>
+          {message ? (
+            <div style={{ marginTop: 12 }}>
+              <Alert tone={messageTone === "error" ? "coral" : "emerald"} title={message} />
+            </div>
+          ) : null}
+        </AdminSection>
       </div>
 
-      <div className="admin-pane-stack">
-        <section className="panel admin-card">
-          <h2>UPI claims</h2>
-          <p className="muted">Verify bank UTR against the amount, then approve to grant tool licenses.</p>
-          <div className="admin-tabs" role="tablist" aria-label="Claim filter">
-            {["pending", "approved", "rejected", "all"].map((f) => (
-              <button key={f} type="button" className={filter === f ? "active" : ""} onClick={() => setFilter(f)}>
-                {f}
-              </button>
-            ))}
+      <div className="admin-cc-split-stack">
+        <AdminSection
+          title="UPI claims"
+          description="Verify bank UTR against the amount, then approve to grant tool licenses."
+        >
+          <div className="admin-cc-stack">
+            <AdminTabs
+              aria-label="Claim filter"
+              options={CLAIM_FILTERS.map((f) => ({ value: f, label: f[0].toUpperCase() + f.slice(1) }))}
+              value={(CLAIM_FILTERS as ReadonlyArray<string>).includes(filter) ? (filter as (typeof CLAIM_FILTERS)[number]) : "pending"}
+              onChange={setFilter}
+            />
+            <div className="admin-cc-dir-list" style={{ marginTop: 0, maxHeight: 360 }}>
+              {claims.map((c) => {
+                const active = selected?.id === c.id;
+                return (
+                  <button
+                    type="button"
+                    key={c.id}
+                    className={cx("admin-cc-row", active && "is-selected")}
+                    aria-pressed={active}
+                    onClick={() => setSelectedId(c.id)}
+                  >
+                    <div className="admin-cc-row-main">
+                      <div className="admin-cc-cell-title">{c.payerName}</div>
+                      <div className="admin-cc-cell-sub">
+                        {c.utr} · {inr(c.amountInr)} · {fmtWhen(c.createdAt)}
+                      </div>
+                    </div>
+                    <div className="admin-cc-row-badges">
+                      <Badge auto tone={statusTone(c.status)}>
+                        {c.status}
+                      </Badge>
+                    </div>
+                  </button>
+                );
+              })}
+              {claims.length === 0 ? (
+                <AdminEmpty title="No claims" icon="receipt">
+                  No claims in this filter.
+                </AdminEmpty>
+              ) : null}
+            </div>
           </div>
-          <div className="tracker-list">
-            {claims.map((c) => (
-              <button
-                type="button"
-                key={c.id}
-                className={`tracker-row admin-member-row ${selected?.id === c.id ? "is-selected" : ""}`}
-                onClick={() => setSelectedId(c.id)}
-              >
-                <div>
-                  <strong>{c.payerName}</strong>
-                  <span className="muted">
-                    {c.utr} · {inr(c.amountInr)} · {fmtWhen(c.createdAt)}
-                  </span>
-                </div>
-                <span className={statusPill(c.status)}>{c.status}</span>
-              </button>
-            ))}
-            {claims.length === 0 ? <p className="muted">No claims in this filter.</p> : null}
-          </div>
-        </section>
+        </AdminSection>
 
         {selected ? (
-          <section className="panel admin-card">
-            <h2>Verify #{selected.id}</h2>
-            <ul className="admin-kv">
+          <AdminSection
+            title={`Verify #${selected.id}`}
+            actions={
+              <Badge auto tone={statusTone(selected.status)}>
+                {selected.status}
+              </Badge>
+            }
+          >
+            <ul className="admin-cc-kv">
               <li>
                 <span>Payer</span>
                 <strong>{selected.payerName}</strong>
@@ -337,11 +406,11 @@ export const UpiPaymentsPanel = forwardRef<
               </li>
               <li>
                 <span>UTR</span>
-                <strong className="admin-form-row" style={{ gap: 8 }}>
-                  <span className="mono">{selected.utr}</span>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => void copyUtr()}>
+                <strong className="admin-cc-actions" style={{ justifyContent: "flex-start" }}>
+                  <span className="admin-cc-code">{selected.utr}</span>
+                  <Button variant="ghost" size="sm" onClick={() => void copyUtr()}>
                     {copied ? "Copied" : "Copy"}
-                  </button>
+                  </Button>
                 </strong>
               </li>
               <li>
@@ -357,48 +426,49 @@ export const UpiPaymentsPanel = forwardRef<
                 <strong>{selected.paidAt ? fmtWhen(selected.paidAt) : "—"}</strong>
               </li>
             </ul>
-            {selected.notes ? <p className="muted">{selected.notes}</p> : null}
+            {selected.notes ? <p className="admin-cc-note-text">{selected.notes}</p> : null}
             {selected.status === "pending" ? (
-              <>
-                <label className="field">
-                  <span>Review note (sent in the final notification)</span>
-                  <input value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} />
-                </label>
-                <div className="admin-form-row">
-                  <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void review("approve")}>
-                    Approve & license
-                  </button>
-                  <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void review("reject")}>
+              <div className="admin-cc-form" style={{ marginTop: 12 }}>
+                <TextField
+                  label="Review note"
+                  hint="Sent in the final notification."
+                  value={reviewNote}
+                  onChange={(e) => setReviewNote(e.target.value)}
+                />
+                <div className="admin-cc-form-actions">
+                  <Button variant="primary" disabled={busy} onClick={() => void review("approve")}>
+                    Approve &amp; license
+                  </Button>
+                  <Button variant="destructive" disabled={busy} onClick={() => void review("reject")}>
                     Reject
-                  </button>
+                  </Button>
                 </div>
-              </>
+              </div>
             ) : (
-              <p className="muted">
+              <p className="admin-cc-note-text" style={{ marginTop: 12 }}>
                 Already {selected.status}. {selected.reviewNote}
               </p>
             )}
-          </section>
+          </AdminSection>
         ) : null}
 
-        <section className="panel admin-card">
-          <h2>Notification log</h2>
-          <ul className="admin-list">
-            {outbox.slice(0, 12).map((ev) => (
-              <li key={ev.id}>
-                <span>
-                  {ev.channel} · {ev.destination}
-                  <em className="muted">
-                    {" "}
-                    {ev.kind} · {fmtWhen(ev.createdAt)}
-                  </em>
-                </span>
-                <span className={statusPill(ev.status)}>{ev.status}</span>
-              </li>
-            ))}
-            {outbox.length === 0 ? <li className="muted">No outbound notifications yet.</li> : null}
-          </ul>
-        </section>
+        <AdminSection title="Notification log" description="Most recent outbound alerts.">
+          {outbox.length === 0 ? (
+            <AdminEmpty title="No outbound notifications yet" icon="bell">
+              Alerts appear here once claims are submitted or reviewed.
+            </AdminEmpty>
+          ) : (
+            <div className="admin-cc-scroll" style={{ maxHeight: 360 }}>
+              <DataTable
+                compact
+                caption="UPI notification log"
+                columns={outboxColumns}
+                rows={outbox.slice(0, 12)}
+                rowKey={(ev) => String(ev.id)}
+              />
+            </div>
+          )}
+        </AdminSection>
       </div>
     </div>
   );

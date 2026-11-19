@@ -3,6 +3,23 @@
 import Link from "next/link";
 import { Suspense, useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Alert,
+  Badge,
+  Button,
+  DataTable,
+  Grid,
+  KpiCard,
+  type BosColumn,
+} from "@/components/bos";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPage,
+  AdminPageSkeleton,
+  AdminSection,
+  AdminTabs,
+} from "@/components/admin/ui";
 import { api } from "@/lib/api";
 import { adminDeepLink, type ApprovalsKind } from "@/lib/admin-deep-links";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -45,9 +62,16 @@ function parseKind(raw: string | null): ApprovalsKind | "all" {
   return "all";
 }
 
+function formatCreated(iso: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return iso;
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 export default function AdminApprovalsPage() {
   return (
-    <Suspense fallback={<div className="admin-page"><p className="muted">Loading approvals…</p></div>}>
+    <Suspense fallback={<AdminPageSkeleton cards={5} />}>
       <AdminApprovalsInner />
     </Suspense>
   );
@@ -69,6 +93,7 @@ function AdminApprovalsInner() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -76,6 +101,7 @@ function AdminApprovalsInner() {
       setItems(data.items);
       setSummary(data.summary);
       setError("");
+      setLoaded(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load inbox");
     }
@@ -132,120 +158,183 @@ function AdminApprovalsInner() {
     }
   }
 
+  if (!loaded) {
+    if (error) {
+      return (
+        <AdminPage title="Approvals inbox" sub="Pending reviews">
+          <AdminErrorState message={error} onRetry={reload} />
+        </AdminPage>
+      );
+    }
+    return <AdminPageSkeleton cards={5} />;
+  }
+
+  const tabOptions: ReadonlyArray<{ value: ApprovalsKind | "all"; label: string }> = [
+    { value: "all", label: `All (${summary.total})` },
+    { value: "profile", label: `Branches (${summary.profiles})` },
+    { value: "user", label: `Users (${summary.users})` },
+    { value: "payment_op", label: `Payment desk (${summary.paymentOps})` },
+    { value: "upi_claim", label: `UPI claims (${summary.upiClaims})` },
+  ];
+
+  const columns: ReadonlyArray<BosColumn<InboxItem>> = [
+    {
+      key: "item",
+      header: "Request",
+      cell: (item) => (
+        <div>
+          <div className="admin-cc-cell-title">{item.title}</div>
+          <div className="admin-cc-cell-sub">{item.subtitle}</div>
+        </div>
+      ),
+    },
+    {
+      key: "kind",
+      header: "Type",
+      cell: (item) => (
+        <Badge auto tone="blue">
+          {KIND_LABEL[item.kind]}
+        </Badge>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (item) => (
+        <Badge auto tone="amber">
+          {item.status}
+        </Badge>
+      ),
+    },
+    { key: "createdAt", header: "Submitted", mono: true, cell: (item) => formatCreated(item.createdAt) },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (item) => {
+        const approveKey = `${item.kind}:${item.id}:approve`;
+        const rejectKey = `${item.kind}:${item.id}:reject`;
+        return (
+          <div className="admin-cc-actions">
+            <Link href={item.href}>
+              <Button variant="secondary" size="sm">
+                Open
+              </Button>
+            </Link>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={busyKey === approveKey}
+              onClick={() => void act(item, "approve")}
+            >
+              Approve
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={busyKey === rejectKey}
+              onClick={() => void act(item, "reject")}
+            >
+              Reject
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
+
+  const kpiButton = (
+    kind: ApprovalsKind | "all",
+    label: string,
+    value: number,
+    chip: { color: "blue" | "amber" | "mint" | "lavender" | "rose" | "sage"; glyph: string },
+    sub?: string,
+  ) => (
+    <button
+      type="button"
+      className={`admin-cc-kpi-btn${kindFilter === kind ? " is-selected" : ""}`}
+      aria-pressed={kindFilter === kind}
+      onClick={() => setKind(kind)}
+    >
+      <KpiCard
+        label={label}
+        value={value}
+        chip={chip}
+        delta={sub ?? (value ? "Needs review" : "Clear")}
+        deltaTone={value ? "warn" : "muted"}
+      />
+    </button>
+  );
+
   return (
-    <div className="admin-page">
-      <section className="panel admin-card admin-page-head">
-        <h2>Approvals inbox</h2>
-        <p className="muted">
-          Pending branches (Justxsystems soft review — Owners can already use JBT), join requests, payment-desk items, and UPI
-          claims. Rejecting a business as Justxsystems admin suspends all users on that org and ends their sessions.
-        </p>
-      </section>
+    <AdminPage
+      title="Approvals inbox"
+      sub="Pending reviews"
+      toolbar={
+        <>
+          <Badge auto tone={summary.total ? "amber" : "emerald"}>
+            {summary.total ? `${summary.total} pending` : "All clear"}
+          </Badge>
+          <AdminTabs
+            aria-label="Approval type"
+            options={tabOptions}
+            value={kindFilter}
+            onChange={setKind}
+          />
+          <Button variant="ghost" size="sm" icon="refresh" onClick={() => void reload()}>
+            Refresh
+          </Button>
+        </>
+      }
+    >
+      <Alert tone="amber" title="Review policy">
+        Pending branches (Justxsystems soft review — Owners can already use JBT), join requests, payment-desk items, and UPI
+        claims. Rejecting a business as Justxsystems admin suspends all users on that org and ends their sessions.
+      </Alert>
 
-      <div className="analytics-kpis">
-        <button type="button" className={`result-card${kindFilter === "all" ? " is-selected" : ""}`} onClick={() => setKind("all")}>
-          <span>Total</span>
-          <strong>{summary.total}</strong>
-        </button>
-        <button
-          type="button"
-          className={`result-card${kindFilter === "profile" ? " is-selected" : ""}${summary.profiles ? " dash-kpi-alert" : ""}`}
-          onClick={() => setKind("profile")}
-        >
-          <span>Branches</span>
-          <strong>{summary.profiles}</strong>
-        </button>
-        <button
-          type="button"
-          className={`result-card${kindFilter === "user" ? " is-selected" : ""}${summary.users ? " dash-kpi-alert" : ""}`}
-          onClick={() => setKind("user")}
-        >
-          <span>Users</span>
-          <strong>{summary.users}</strong>
-          <span className="analytics-delta">Registrations &amp; joins</span>
-        </button>
-        <button
-          type="button"
-          className={`result-card${kindFilter === "payment_op" ? " is-selected" : ""}${summary.paymentOps ? " dash-kpi-alert" : ""}`}
-          onClick={() => setKind("payment_op")}
-        >
-          <span>Payment desk</span>
-          <strong>{summary.paymentOps}</strong>
-        </button>
-        <button
-          type="button"
-          className={`result-card${kindFilter === "upi_claim" ? " is-selected" : ""}${summary.upiClaims ? " dash-kpi-alert" : ""}`}
-          onClick={() => setKind("upi_claim")}
-        >
-          <span>UPI claims</span>
-          <strong>{summary.upiClaims}</strong>
-        </button>
-      </div>
+      <Grid cols={5} min={140} gap={12}>
+        {kpiButton("all", "Total", summary.total, { color: "blue", glyph: "◎" })}
+        {kpiButton("profile", "Branches", summary.profiles, { color: "lavender", glyph: "▣" })}
+        {kpiButton("user", "Users", summary.users, { color: "mint", glyph: "👤" }, summary.users ? "Registrations & joins" : "Clear")}
+        {kpiButton("payment_op", "Payment desk", summary.paymentOps, { color: "rose", glyph: "₹" })}
+        {kpiButton("upi_claim", "UPI claims", summary.upiClaims, { color: "amber", glyph: "◈" })}
+      </Grid>
 
-      {kindFilter !== "all" ? (
-        <p className="muted">
-          Showing {KIND_LABEL[kindFilter]} only.{" "}
-          <Link href={KIND_HUB[kindFilter]}>Open {KIND_LABEL[kindFilter].toLowerCase()} workspace →</Link>
-        </p>
-      ) : null}
+      {error ? <AdminErrorState title="Action or refresh failed" message={error} onRetry={reload} /> : null}
+      {message ? <Alert tone="emerald" title={message} /> : null}
 
-      {error ? <p className="field-error">{error}</p> : null}
-      {message ? <p className="muted">{message}</p> : null}
-
-      <div className="admin-page-scroll">
-        <section className="panel admin-card">
-          {visible.length === 0 ? (
-            <p className="muted">
-              {kindFilter === "all"
-                ? "Nothing pending. You're clear."
-                : `No pending ${KIND_LABEL[kindFilter].toLowerCase()} items.`}
-            </p>
-          ) : (
-            <div className="tracker-list admin-scroll-list">
-              {visible.map((item) => {
-                const approveKey = `${item.kind}:${item.id}:approve`;
-                const rejectKey = `${item.kind}:${item.id}:reject`;
-                return (
-                  <div key={`${item.kind}-${item.id}`} className="tracker-row">
-                    <div className="tracker-row-main">
-                      <span className="tracker-row-title">{item.title}</span>
-                      <span className="tracker-row-sub">{item.subtitle}</span>
-                    </div>
-                    <div className="tracker-row-meta">
-                      <span>
-                        <span className="m-lbl">Type</span>
-                        <span className="m-val">{KIND_LABEL[item.kind]}</span>
-                      </span>
-                      <span className="pill pill-warning">{item.status}</span>
-                    </div>
-                    <div className="tracker-actions">
-                      <Link href={item.href} className="btn btn-secondary btn-sm">
-                        Open
-                      </Link>
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        disabled={busyKey === approveKey}
-                        onClick={() => void act(item, "approve")}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-destructive btn-sm"
-                        disabled={busyKey === rejectKey}
-                        onClick={() => void act(item, "reject")}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      </div>
-    </div>
+      <AdminSection
+        title={kindFilter === "all" ? "Pending queue" : `${KIND_LABEL[kindFilter]} queue`}
+        description={
+          kindFilter === "all"
+            ? `${visible.length} items awaiting a decision.`
+            : `Showing ${KIND_LABEL[kindFilter]} only.`
+        }
+        actions={
+          kindFilter !== "all" ? (
+            <Link href={KIND_HUB[kindFilter]}>
+              <Button variant="ghost" size="sm">
+                Open {KIND_LABEL[kindFilter].toLowerCase()} workspace →
+              </Button>
+            </Link>
+          ) : null
+        }
+      >
+        {visible.length === 0 ? (
+          <AdminEmpty title={kindFilter === "all" ? "Nothing pending" : `No pending ${KIND_LABEL[kindFilter].toLowerCase()} items`} icon="check">
+            {kindFilter === "all" ? "You're clear." : "Try another approval type."}
+          </AdminEmpty>
+        ) : (
+          <div className="admin-cc-scroll" style={{ maxHeight: 640 }}>
+            <DataTable
+              caption="Pending approvals"
+              columns={columns}
+              rows={visible}
+              rowKey={(item) => `${item.kind}-${item.id}`}
+            />
+          </div>
+        )}
+      </AdminSection>
+    </AdminPage>
   );
 }

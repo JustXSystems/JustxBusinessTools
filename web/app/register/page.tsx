@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
+import { Alert, BosRoot, Button, Card, FormGrid, Input } from "@/components/bos";
+import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
+import { usePlatformBranding } from "@/components/branding/BrandingProvider";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
 import { api } from "@/lib/api";
 import { publicAssetUrl } from "@/lib/base-path";
 import { INDIAN_STATES } from "@/lib/types/business-profile";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
+import "@/components/admin/admin-console.css";
 
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i;
 
@@ -39,6 +44,14 @@ function stateFromGstin(gstin: string): [string, string] | null {
 export default function RegisterPage() {
   const { register } = useAuth();
   const router = useRouter();
+  const { branding } = usePlatformBranding();
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  // false during SSR/hydration, true on the client (BosRoot reads theme from storage).
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
   const [gstin, setGstin] = useState("");
   const [lookup, setLookup] = useState<"idle" | "loading" | "done">("idle");
   const [lookedGstin, setLookedGstin] = useState("");
@@ -218,38 +231,59 @@ export default function RegisterPage() {
     }
   }
 
+  if (!mounted) return <div className="login-page" />;
+
   if (pendingResult) {
     return (
-      <div className="login-page">
-        <div className="panel login-panel register-panel">
-          <h1>{pendingResult.title}</h1>
-          <p>{pendingResult.message}</p>
-          <p className="muted">{pendingResult.detail}</p>
-          <p className="muted login-hint">
-            <Link href="/login">Back to sign in</Link>
-          </p>
+      <BosRoot canvas className="admin-bos" defaultTheme="dark" skin="bos">
+        <div className="admin-cc-login">
+          <Card className="admin-cc-login-card">
+            <div className="admin-cc-login-brand">
+              <PlatformBrandMark size="lg" showText={false} />
+              <div>
+                <h1>{pendingResult.title}</h1>
+                <p>{branding.appName}</p>
+              </div>
+            </div>
+            <Alert tone={pendingResult.joinedExisting ? "blue" : "emerald"} title={pendingResult.message}>
+              {pendingResult.detail}
+            </Alert>
+            <div className="admin-cc-login-foot">
+              <Link href="/login">
+                <Button variant="primary" block>
+                  Back to sign in
+                </Button>
+              </Link>
+            </div>
+          </Card>
+          <PoweredByFooter />
         </div>
-        <PoweredByFooter />
-      </div>
+      </BosRoot>
     );
   }
 
   return (
-    <div className="login-page">
-      <div className="panel login-panel register-panel">
-        <h1>Register</h1>
-        <p className="muted">
-          Enter GSTIN and tab out to load an existing business. New GSTIN creates an Owner account you can use
-          immediately (Justxsystems may review the Business Profile later). Joining an existing GSTIN sends a request for the
-          Business Owner to approve as Staff or Viewer.
-        </p>
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="register-grid">
-            <fieldset className="register-fieldset">
-              <legend>Business profile</legend>
-              <label className="field">
-                <span>GSTIN</span>
-                <input
+    <BosRoot canvas className="admin-bos" defaultTheme="dark" skin="bos">
+      <div className="admin-cc-login admin-cc-register">
+        <Card className="admin-cc-login-card admin-cc-register-card">
+          <div className="admin-cc-login-brand">
+            <PlatformBrandMark size="lg" showText={false} />
+            <div>
+              <h1>Register</h1>
+              <p>{branding.appName}</p>
+            </div>
+          </div>
+          <p className="admin-cc-note-text">
+            Enter GSTIN and tab out to load an existing business. New GSTIN creates an Owner account you can use
+            immediately (Justxsystems may review the Business Profile later). Joining an existing GSTIN sends a request
+            for the Business Owner to approve as Staff or Viewer.
+          </p>
+          <form onSubmit={handleSubmit} className="admin-cc-login-form">
+            <div className="admin-cc-register-grid">
+              <fieldset className="admin-cc-register-fieldset">
+                <legend>Business profile</legend>
+                <TextField
+                  label="GSTIN"
                   value={gstin}
                   onChange={(e) => onGstinChange(e.target.value)}
                   onBlur={() => void lookupGstin()}
@@ -259,66 +293,77 @@ export default function RegisterPage() {
                   autoCapitalize="characters"
                   spellCheck={false}
                 />
-              </label>
-              {lookup === "loading" ? <p className="muted">Looking up GSTIN…</p> : null}
-              {locked ? (
-                <p className="muted">
-                  This GSTIN already has a business profile. Details below are read-only. Enter your user details to
-                  request access — the Business Profile Owner will approve you as Staff or Viewer.
-                </p>
-              ) : lookup === "done" && gstinValid ? (
-                <p className="muted">
-                  GSTIN not found. Enter the business profile details to create it. You will be signed in as Owner right
-                  away; Justxsystems can review the Business Profile later.
-                </p>
-              ) : null}
-              <div className="field">
-                <span>Company logo</span>
-                <div className="register-logo-row">
-                  <div
-                    className="logo-preview-lg"
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                  >
-                    {logo ? (
-                      <img src={publicAssetUrl(logo)} alt="Logo preview" />
-                    ) : (
-                      <span>🏢</span>
+                {lookup === "loading" ? <p className="admin-cc-note-text">Looking up GSTIN…</p> : null}
+                {locked ? (
+                  <Alert tone="blue" title="Existing business profile">
+                    This GSTIN already has a business profile. Details below are read-only. Enter your user details to
+                    request access — the Business Profile Owner will approve you as Staff or Viewer.
+                  </Alert>
+                ) : lookup === "done" && gstinValid ? (
+                  <Alert tone="emerald" title="New GSTIN">
+                    GSTIN not found. Enter the business profile details to create it. You will be signed in as Owner
+                    right away; Justxsystems can review the Business Profile later.
+                  </Alert>
+                ) : null}
+
+                <div className="bos-field">
+                  <span className="bos-field-label">Company logo</span>
+                  <div className="admin-cc-register-logo-row">
+                    <div className="admin-cc-register-logo" onDragOver={handleDragOver} onDrop={handleDrop}>
+                      {logo ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- tenant-supplied data URL / asset
+                        <img src={publicAssetUrl(logo)} alt="Logo preview" />
+                      ) : (
+                        <span aria-hidden>🏢</span>
+                      )}
+                    </div>
+                    {locked ? null : (
+                      <>
+                        <Button variant="secondary" size="sm" onClick={() => logoInputRef.current?.click()}>
+                          Upload logo
+                        </Button>
+                        <Input
+                          ref={logoInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          style={{ display: "none" }}
+                          aria-label="Upload logo file"
+                          onChange={handleLogoUpload}
+                        />
+                      </>
                     )}
                   </div>
-                  {locked ? null : (
-                    <label className="btn btn-secondary btn-sm">
-                      Upload logo
-                      <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={handleLogoUpload} />
-                    </label>
-                  )}
                 </div>
-              </div>
-              <label className="field">
-                <span>Business name</span>
-                <input
+
+                <TextField
+                  label="Business name"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   readOnly={locked}
                   required={!locked}
                   placeholder="Legal name as on GST certificate"
                 />
-              </label>
-              <label className="field">
-                <span>PAN</span>
-                <input value={pan} onChange={(e) => setPan(e.target.value.toUpperCase())} readOnly={locked} maxLength={10} />
-              </label>
-              <label className="field">
-                <span>Address</span>
-                <input value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} readOnly={locked} />
-              </label>
-              <label className="field">
-                <span>Address line 2</span>
-                <input value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} readOnly={locked} />
-              </label>
-              <label className="field">
-                <span>State</span>
-                <select
+                <TextField
+                  label="PAN"
+                  value={pan}
+                  onChange={(e) => setPan(e.target.value.toUpperCase())}
+                  readOnly={locked}
+                  maxLength={10}
+                />
+                <TextField
+                  label="Address"
+                  value={addressLine1}
+                  onChange={(e) => setAddressLine1(e.target.value)}
+                  readOnly={locked}
+                />
+                <TextField
+                  label="Address line 2"
+                  value={addressLine2}
+                  onChange={(e) => setAddressLine2(e.target.value)}
+                  readOnly={locked}
+                />
+                <SelectField
+                  label="State"
                   value={stateCode}
                   disabled={locked}
                   onChange={(e) => {
@@ -334,50 +379,58 @@ export default function RegisterPage() {
                       {label}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Business phone</span>
-                <input value={businessPhone} onChange={(e) => setBusinessPhone(e.target.value)} readOnly={locked} />
-              </label>
-              <label className="field">
-                <span>Business email</span>
-                <input type="email" value={businessEmail} onChange={(e) => setBusinessEmail(e.target.value)} readOnly={locked} />
-              </label>
-              {!locked ? (
-                <div className="field" style={{ gridColumn: "1 / -1" }}>
-                  <span>Tools on home</span>
-                  <p className="muted" style={{ margin: "4px 0 10px" }}>
-                    Only selected tools appear after login. Subscription billing still lists every tool.
-                  </p>
-                  <HomeToolPicker selectedIds={homeToolIds} onChange={setHomeToolIds} />
-                </div>
-              ) : null}
-            </fieldset>
+                </SelectField>
+                <FormGrid>
+                  <TextField
+                    label="Business phone"
+                    value={businessPhone}
+                    onChange={(e) => setBusinessPhone(e.target.value)}
+                    readOnly={locked}
+                  />
+                  <TextField
+                    label="Business email"
+                    type="email"
+                    value={businessEmail}
+                    onChange={(e) => setBusinessEmail(e.target.value)}
+                    readOnly={locked}
+                  />
+                </FormGrid>
+                {!locked ? (
+                  <div className="bos-field">
+                    <span className="bos-field-label">Tools on home</span>
+                    <p className="admin-cc-note-text">
+                      Only selected tools appear after login. Subscription billing still lists every tool.
+                    </p>
+                    <HomeToolPicker selectedIds={homeToolIds} onChange={setHomeToolIds} />
+                  </div>
+                ) : null}
+              </fieldset>
 
-            <fieldset className="register-fieldset">
-              <legend>Your user</legend>
-              <label className="field">
-                <span>Your name</span>
-                <input value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" />
-              </label>
-              <label className="field">
-                <span>Mobile</span>
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
-              </label>
-              <label className="field">
-                <span>Email</span>
-                <input
+              <fieldset className="admin-cc-register-fieldset">
+                <legend>Your user</legend>
+                <TextField
+                  label="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  autoComplete="name"
+                />
+                <TextField
+                  label="Mobile"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  autoComplete="tel"
+                />
+                <TextField
+                  label="Email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
                 />
-              </label>
-              <label className="field">
-                <span>Password (min 8 characters)</span>
-                <input
+                <TextField
+                  label="Password (min 8 characters)"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -385,19 +438,30 @@ export default function RegisterPage() {
                   minLength={8}
                   autoComplete="new-password"
                 />
-              </label>
-            </fieldset>
+              </fieldset>
+            </div>
+            {error ? (
+              <Alert tone="coral" title="Registration problem">
+                {error}
+              </Alert>
+            ) : null}
+            <Button type="submit" variant="primary" block disabled={loading || lookup === "loading"}>
+              {loading ? "Saving…" : locked ? "Request to join" : "Create account"}
+            </Button>
+          </form>
+          <div className="admin-cc-login-foot">
+            <p className="bos-text-muted" style={{ margin: 0, fontSize: 13 }}>
+              Already have an account?
+            </p>
+            <Link href="/login">
+              <Button variant="secondary" block>
+                Sign in
+              </Button>
+            </Link>
           </div>
-          {error ? <p className="field-error">{error}</p> : null}
-          <button type="submit" className="btn btn-primary" disabled={loading || lookup === "loading"}>
-            {loading ? "Saving…" : locked ? "Request to join" : "Create account"}
-          </button>
-        </form>
-        <p className="muted login-hint">
-          Already have an account? <Link href="/login">Sign in</Link>
-        </p>
+        </Card>
+        <PoweredByFooter />
       </div>
-      <PoweredByFooter />
-    </div>
+    </BosRoot>
   );
 }

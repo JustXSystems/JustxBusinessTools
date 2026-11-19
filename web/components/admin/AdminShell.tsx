@@ -1,214 +1,218 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useRef, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  AppShell,
+  BosRoot,
+  Button,
+  CommandPalette,
+  ThemeToggle,
+  useBosTheme,
+  useCommandHotkey,
+  type BosCommand,
+  type BosNavItem,
+} from "@/components/bos";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { ConfigProvider } from "@/components/config/ConfigProvider";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { NavIcon } from "@/components/layout/NavIcon";
-import { FloatingNavDock } from "@/components/layout/FloatingNavDock";
-import { SidebarAttachmentToggle } from "@/components/layout/SidebarAttachmentToggle";
-import { SidebarIdentityChip } from "@/components/layout/SidebarIdentityChip";
-import { SidebarLayoutProvider, useSidebarLayout } from "@/components/layout/SidebarLayoutProvider";
-import { SidebarResizeHandle } from "@/components/layout/SidebarResizeHandle";
-import { SidebarSessionFooter } from "@/components/layout/SidebarSessionFooter";
+import { usePlatformBranding } from "@/components/branding/BrandingProvider";
 import {
   adminNavigation,
   type AdminNavItem,
 } from "@/config/admin-navigation.config";
-import { ADMIN_SIDEBAR_KEY } from "@/lib/sidebar-layout";
+import "./admin-console.css";
 
-function isActive(pathname: string, item: AdminNavItem) {
-  return item.exact ? pathname === item.href : pathname.startsWith(item.href);
+/** Phones / touch-first screens: no keyboard hint, shorter nav search label. */
+const COMPACT_QUERY = "(max-width: 900px), (hover: none)";
+
+function subscribeCompact(onChange: () => void) {
+  const mq = window.matchMedia(COMPACT_QUERY);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
 }
 
-function AdminNavLink({
-  item,
-  active,
-  mini,
-}: {
-  item: AdminNavItem;
-  active: boolean;
-  badge?: ReactNode;
-  mini: boolean;
-}) {
-  return (
-    <Link
-      href={item.href}
-      className={`ds-nav-link${active ? " active" : ""}`}
-      aria-current={active ? "page" : undefined}
-      title={item.label}
-      aria-label={item.label}
-    >
-      <span className={`ds-nav-icon${active && mini ? " is-glow" : ""}`}>
-        <NavIcon id={item.icon} />
-      </span>
-      <span className="ds-nav-label">{item.label}</span>
-    </Link>
+function useCompactViewport(): boolean {
+  return useSyncExternalStore(
+    subscribeCompact,
+    () => window.matchMedia(COMPACT_QUERY).matches,
+    () => false,
   );
 }
 
-function AdminShellInner({ children }: { children: ReactNode }) {
+function flatAdminItems(): AdminNavItem[] {
+  return adminNavigation.flatMap((s) => s.items);
+}
+
+function matchActive(pathname: string, items: AdminNavItem[]): string {
+  const exact = items.find((i) => i.exact && pathname === i.href);
+  if (exact) return exact.href;
+  const ranked = items
+    .filter((i) => !i.exact && pathname.startsWith(i.href))
+    .sort((a, b) => b.href.length - a.href.length);
+  return ranked[0]?.href ?? "/admin";
+}
+
+function AdminShellChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
-  const { mode, density, width, dragging } = useSidebarLayout();
-  const mini = density === "mini";
-  const compact = density === "docked";
-  const floating = mode === "floating";
-  const navRef = useRef<HTMLElement>(null);
+  const { branding } = usePlatformBranding();
+  const { theme, setTheme } = useBosTheme();
+  const [collapsed, setCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const compact = useCompactViewport();
 
-  // Phones render the admin nav as a horizontal strip; keep the active item visible
-  // without scrolling the page itself.
-  useEffect(() => {
-    const nav = navRef.current;
-    if (!nav || nav.scrollWidth <= nav.clientWidth + 1) return;
-    const active = nav.querySelector<HTMLElement>(".ds-nav-link.active");
-    if (!active) return;
-    const navRect = nav.getBoundingClientRect();
-    const linkRect = active.getBoundingClientRect();
-    nav.scrollLeft += linkRect.left + linkRect.width / 2 - (navRect.left + navRect.width / 2);
-  }, [pathname, floating]);
+  const items = useMemo(() => flatAdminItems(), []);
+  const active = matchActive(pathname, items);
 
-  const roleLabel = "Platform super admin";
-
-  const floatItems = adminNavigation.flatMap((section) =>
-    section.items.map((item) => ({
-      href: item.href,
-      label: item.label,
-      icon: item.icon,
-      active: isActive(pathname, item),
-    })),
+  const navItems = useMemo<BosNavItem[]>(
+    () =>
+      adminNavigation.flatMap((section) =>
+        section.items.map((item, idx) => ({
+          key: item.href,
+          label: item.label,
+          section: idx === 0 ? section.label : undefined,
+          icon: <NavIcon id={item.icon} />,
+        })),
+      ),
+    [],
   );
 
-  return (
-    <div
-      className="admin-shell"
-      data-sidebar-mode={mode}
-      data-sidebar-density={density}
-      data-sidebar-dragging={dragging ? "1" : "0"}
-      style={floating ? undefined : { ["--sidebar-rail" as string]: `${width}px` }}
-    >
-      {floating ? (
-        <FloatingNavDock
-          homeHref="/admin"
-          items={floatItems}
-          footer={
-            <>
-              <Link
-                href="/enter"
-                className="float-dock-item"
-                aria-label="Enter Operator as…"
-                title="Enter Operator as…"
-              >
-                <span className="float-dock-icon">
-                  <NavIcon id="arrowLeft" />
-                </span>
-              </Link>
-              <button
-                type="button"
-                className="float-dock-item float-dock-logout"
-                aria-label="Log out"
-                title="Log out"
-                onClick={() => logout()}
-              >
-                <span className="float-dock-icon">
-                  <NavIcon id="logout" />
-                </span>
-              </button>
-            </>
-          }
-        />
-      ) : (
-        <aside
-          className={`admin-sidebar no-print sidebar-mode-${mode}`}
-          aria-label="Admin sidebar"
-          data-sidebar-mode={mode}
-          data-sidebar-density={density}
-        >
-          <SidebarResizeHandle variant="admin" />
+  const go = useCallback(
+    (href: string) => {
+      if (href !== pathname) router.push(href);
+    },
+    [pathname, router],
+  );
 
-          <div className="admin-brand">
-            <div className="admin-brand-panel">
-              <PlatformBrandMark
-                href="/admin"
-                size="md"
-                layout="row"
-                showText={!mini}
-                className="admin-brand-mark"
-              />
-              {!mini ? (
-                <div className="admin-brand-meta">
-                  {!compact ? <span className="admin-brand-eyebrow">Control center</span> : null}
-                  <div className="admin-brand-status">
-                    <span className="admin-brand-status-dot" aria-hidden="true" />
-                    <span className="admin-brand-pill">{roleLabel}</span>
-                  </div>
-                  {!compact ? (
-                    user?.organizationName && !user?.isPlatformAdmin ? (
-                      <span className="admin-brand-org">{user.organizationName}</span>
-                    ) : (
-                      <span className="admin-brand-org">Enterprise administration</span>
-                    )
-                  ) : null}
-                </div>
-              ) : null}
+  const commands = useMemo<BosCommand[]>(() => {
+    const navCmds: BosCommand[] = items.map((item) => ({
+      id: `nav-${item.href}`,
+      label: item.label,
+      section: "Navigate",
+      keywords: item.href,
+      icon: <NavIcon id={item.icon} />,
+      onSelect: () => go(item.href),
+    }));
+    return [
+      ...navCmds,
+      {
+        id: "enter-operator",
+        label: "Enter Operator as…",
+        section: "Session",
+        keywords: "impersonate act as",
+        onSelect: () => go("/enter"),
+      },
+      {
+        id: "logout",
+        label: "Log out",
+        section: "Session",
+        onSelect: () => logout(),
+      },
+    ];
+  }, [go, items, logout]);
 
-              <div className={`ds-brand-account${mini ? " is-mini" : ""}`}>
-                <div className="ds-brand-account-top">
-                  <SidebarIdentityChip
-                    name={user?.name}
-                    email={user?.email}
-                    role={user?.isPlatformAdmin ? "Platform admin" : user?.role}
-                    mini={mini}
-                  />
-                  <SidebarAttachmentToggle mini={mini} />
-                </div>
-              </div>
-            </div>
-          </div>
+  useCommandHotkey(() => setPaletteOpen(true));
 
-          <nav ref={navRef} className="admin-nav" aria-label="Admin">
-            {adminNavigation.map((section) => (
-              <div key={section.id} className="ds-nav-section">
-                {!mini && !compact ? (
-                  <p className="ds-nav-section-label">{section.label}</p>
-                ) : null}
-                {section.items.map((item) => (
-                  <AdminNavLink
-                    key={item.href}
-                    item={item}
-                    mini={mini}
-                    active={isActive(pathname, item)}
-                  />
-                ))}
-              </div>
-            ))}
-          </nav>
+  const appName = branding.appName || "Justxsystems";
 
-          <SidebarSessionFooter
-            mini={mini}
-            operatorHref="/enter"
-            onLogout={() => logout()}
-          />
-        </aside>
-      )}
+  const iconSession = (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        iconOnly
+        icon="palette"
+        aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+        title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        iconOnly
+        icon="login"
+        aria-label="Enter Operator"
+        title="Enter Operator"
+        onClick={() => go("/enter")}
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        iconOnly
+        icon="x"
+        aria-label="Log out"
+        title="Log out"
+        onClick={() => logout()}
+      />
+    </>
+  );
 
-      <div className="admin-main">
-        <div className="admin-content">{children}</div>
-        <PoweredByFooter variant="bar" />
+  /* Compact / collapsed: icon-only so the mobile pill strip and mini rail stay usable */
+  const footer =
+    compact || collapsed ? (
+      <div className="admin-cc-nav-foot">{iconSession}</div>
+    ) : (
+      <div className="admin-cc-nav-foot">
+        <ThemeToggle theme={theme} onChange={setTheme} />
+        <p className="admin-cc-session-meta" title={user?.email || undefined}>
+          {user?.name || user?.email || "Platform admin"}
+        </p>
+        <Button variant="ghost" size="sm" block icon="login" onClick={() => go("/enter")}>
+          Enter Operator
+        </Button>
+        <Button variant="ghost" size="sm" block onClick={() => logout()}>
+          Log out
+        </Button>
       </div>
-    </div>
+    );
+
+  return (
+    <>
+      <AppShell
+        size="fill"
+        collapsible
+        collapsed={collapsed}
+        onCollapsedChange={setCollapsed}
+        brand={
+          <div className="admin-cc-brand-wrap">
+            <PlatformBrandMark href="/admin" size="sm" showText={false} />
+            <span className="admin-cc-brand-name">{appName}</span>
+          </div>
+        }
+        items={navItems}
+        active={active}
+        onSelect={go}
+        onSearch={() => setPaletteOpen(true)}
+        searchLabel={compact ? "Search" : "Jump to… ⌘K"}
+        navLabel="Platform"
+        aria-label="Admin navigation"
+        footer={footer}
+      >
+        <div className="admin-cc-main-stack">
+          <div className="admin-cc-content">{children}</div>
+          <PoweredByFooter variant="bar" />
+        </div>
+      </AppShell>
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        commands={commands}
+        placeholder="Jump to a page or action…"
+      />
+    </>
   );
 }
 
 export function AdminShell({ children }: { children: ReactNode }) {
   return (
     <ConfigProvider>
-      <SidebarLayoutProvider storageKey={ADMIN_SIDEBAR_KEY}>
-        <AdminShellInner>{children}</AdminShellInner>
-      </SidebarLayoutProvider>
+      <BosRoot canvas className="admin-bos admin-bos-fill" defaultTheme="dark" skin="bos">
+        <AdminShellChrome>{children}</AdminShellChrome>
+      </BosRoot>
     </ConfigProvider>
   );
 }

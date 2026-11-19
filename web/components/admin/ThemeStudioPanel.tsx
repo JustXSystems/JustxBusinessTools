@@ -15,6 +15,9 @@ import {
   type ThemeTokens,
 } from "@/lib/theme";
 import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
+import { Alert, Badge, Button, Field, FormGrid, Grid } from "@/components/bos";
+import { AdminEmpty, AdminSection } from "@/components/admin/ui";
+import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
 
 type Theme = {
   id: number;
@@ -136,181 +139,196 @@ export const ThemeStudioPanel = forwardRef<ExperienceSaveHandle>(function ThemeS
   }
 
   return (
-    <div className="preview-workspace">
-      <div className="preview-editor">
-        {message ? <p className="muted">{message}</p> : null}
-        <div className="admin-pane-stack">
-          <section className="panel admin-card">
-            <h2>Organization</h2>
-            <p className="muted">
-              Admin Console themes are per organization. Operator Business Profile selection is ignored.
-            </p>
+    <Grid template="minmax(0, 1.05fr) minmax(320px, 0.95fr)" min={320} gap={14}>
+      <div className="admin-cc-split-stack">
+        {message ? <Alert tone="blue" title={message} /> : null}
+
+        <AdminSection
+          title="Organization"
+          description="Admin Console themes are per organization. Operator Business Profile selection is ignored."
+        >
+          <FormGrid>
             <AdminOrgSelect
               value={organizationId}
               onChange={setOrganizationId}
               emptyLabel="Select organization to edit themes…"
+              full
             />
-          </section>
-          <section className="panel admin-card">
-            <h2>Presets</h2>
-            <div className="admin-theme-presets">
-              {presets.map((p) => (
-                <button
-                  key={p.name}
-                  type="button"
-                  className="admin-theme-swatch"
-                  style={{
-                    background: `linear-gradient(135deg, ${p.tokens.bg1} 0%, ${p.tokens.bg2} 55%, ${p.tokens.accent} 100%)`,
-                    borderColor: p.tokens.accent,
-                  }}
-                  onClick={() => selectPreset(p)}
-                >
-                  <span style={{ color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.5)" }}>{p.name}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-          <section className="panel admin-card">
-            <h2>Saved themes</h2>
-            <div className="tracker-list">
-              {themes.length === 0 ? (
-                <p className="muted">No saved themes yet — save &amp; activate a preset to create one.</p>
-              ) : null}
+          </FormGrid>
+        </AdminSection>
+
+        <AdminSection title="Presets" description="Start from a preset, then tune tokens below.">
+          <div className="admin-theme-presets">
+            {presets.map((p) => (
+              <button
+                key={p.name}
+                type="button"
+                className="admin-theme-swatch"
+                style={{
+                  background: `linear-gradient(135deg, ${p.tokens.bg1} 0%, ${p.tokens.bg2} 55%, ${p.tokens.accent} 100%)`,
+                  borderColor: p.tokens.accent,
+                }}
+                onClick={() => selectPreset(p)}
+              >
+                <span style={{ color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.5)" }}>{p.name}</span>
+              </button>
+            ))}
+          </div>
+        </AdminSection>
+
+        <AdminSection title="Saved themes" description={`${themes.length} saved`}>
+          {themes.length === 0 ? (
+            <AdminEmpty title="No saved themes yet" icon="sparkle">
+              Save &amp; activate a preset to create one.
+            </AdminEmpty>
+          ) : (
+            <div className="admin-cc-stack">
               {themes.map((t) => (
-                <div key={t.id} className="tracker-row">
-                  <div>
-                    <strong>{t.name}</strong>
-                    {t.isActive ? <span className="pill pill-success">Active</span> : null}
-                    {t.organizationName ? (
-                      <span className="muted small"> · {t.organizationName}</span>
-                    ) : null}
+                <div key={t.id} className="admin-cc-row" style={{ cursor: "default" }}>
+                  <div className="admin-cc-row-main">
+                    <div className="admin-cc-cell-title">{t.name}</div>
+                    {t.organizationName ? <div className="admin-cc-cell-sub">{t.organizationName}</div> : null}
                   </div>
-                  <div className="admin-form-row">
-                    {!t.isActive ? (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={async () => {
-                          await api(`/admin/themes/${t.id}/activate`, { method: "POST" });
-                          applyThemeTokens(t.tokens);
-                          await refresh();
-                          await reload();
-                        }}
-                      >
-                        Activate
-                      </button>
-                    ) : null}
-                    {!t.isActive ? (
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={async () => {
-                          await api(`/admin/themes/${t.id}`, { method: "DELETE" });
-                          await reload();
-                        }}
-                      >
-                        Delete
-                      </button>
-                    ) : null}
+                  <div className="admin-cc-actions">
+                    {t.isActive ? (
+                      <Badge auto tone="emerald">
+                        Active
+                      </Badge>
+                    ) : (
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={async () => {
+                            await api(`/admin/themes/${t.id}/activate`, { method: "POST" });
+                            applyThemeTokens(t.tokens);
+                            await refresh();
+                            await reload();
+                          }}
+                        >
+                          Activate
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={async () => {
+                            await api(`/admin/themes/${t.id}`, { method: "DELETE" });
+                            await reload();
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
-          </section>
-          <section className="panel admin-card">
-            <h2>Tokens</h2>
-            <div className="admin-form-grid">
+          )}
+        </AdminSection>
+
+        <AdminSection title="Tokens" description="Colors, radius, font, and scheme apply live to the preview.">
+          <div className="admin-cc-form">
+            <FormGrid>
               {(["accent", "teal", "bg0", "bg1", "bg2"] as const).map((key) => (
-                <label key={key} className="field">
-                  <span>{key}</span>
-                  <input
-                    type="color"
-                    value={draft[key]}
-                    onChange={(e) => updateDraft({ ...draft, [key]: e.target.value })}
-                  />
-                </label>
+                <Field key={key} label={key}>
+                  {({ id, describedBy }) => (
+                    <div className="admin-cc-color-row">
+                      <input
+                        id={id}
+                        aria-describedby={describedBy}
+                        type="color"
+                        value={draft[key]}
+                        onChange={(e) => updateDraft({ ...draft, [key]: e.target.value })}
+                      />
+                      <code className="admin-cc-code">{draft[key]}</code>
+                    </div>
+                  )}
+                </Field>
               ))}
-              <label className="field">
-                <span>Accent strong (optional)</span>
-                <input
-                  type="color"
-                  value={draft.accentStrong || draft.accent}
-                  onChange={(e) => updateDraft({ ...draft, accentStrong: e.target.value })}
-                />
-              </label>
-              <label className="field">
-                <span>Radius</span>
-                <input value={draft.radius} onChange={(e) => updateDraft({ ...draft, radius: e.target.value })} />
-              </label>
-              <label className="field">
-                <span>Font</span>
-                <input value={draft.font} onChange={(e) => updateDraft({ ...draft, font: e.target.value })} />
-              </label>
-              <label className="field">
-                <span>Color scheme</span>
-                <select
-                  value={draft.scheme === "light" ? "light" : "dark"}
-                  onChange={(e) => {
-                    const scheme = e.target.value === "light" ? "light" : "dark";
-                    const base = scheme === "light" ? JUSTX_LIGHT : JUSTX_ELECTRIC;
-                    updateDraft({
-                      ...draft,
-                      scheme,
-                      bg0: base.bg0,
-                      bg1: base.bg1,
-                      bg2: base.bg2,
-                      accent: scheme === draft.scheme ? draft.accent : base.accent,
-                      teal: scheme === draft.scheme ? draft.teal : base.teal,
-                      accentStrong: scheme === draft.scheme ? draft.accentStrong : base.accentStrong,
-                    });
-                  }}
-                >
-                  <option value="dark">Dark</option>
-                  <option value="light">Light</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Theme name</span>
-                <input value={name} onChange={(e) => setName(e.target.value)} />
-              </label>
-            </div>
-            <div className="admin-form-row">
-              <button
-                type="button"
-                className="btn btn-secondary"
+              <Field label="Accent strong (optional)">
+                {({ id, describedBy }) => (
+                  <div className="admin-cc-color-row">
+                    <input
+                      id={id}
+                      aria-describedby={describedBy}
+                      type="color"
+                      value={draft.accentStrong || draft.accent}
+                      onChange={(e) => updateDraft({ ...draft, accentStrong: e.target.value })}
+                    />
+                    <code className="admin-cc-code">{draft.accentStrong || draft.accent}</code>
+                  </div>
+                )}
+              </Field>
+              <TextField
+                label="Radius"
+                value={draft.radius}
+                onChange={(e) => updateDraft({ ...draft, radius: e.target.value })}
+              />
+              <TextField
+                label="Font"
+                value={draft.font}
+                onChange={(e) => updateDraft({ ...draft, font: e.target.value })}
+              />
+              <SelectField
+                label="Color scheme"
+                value={draft.scheme === "light" ? "light" : "dark"}
+                onChange={(e) => {
+                  const scheme = e.target.value === "light" ? "light" : "dark";
+                  const base = scheme === "light" ? JUSTX_LIGHT : JUSTX_ELECTRIC;
+                  updateDraft({
+                    ...draft,
+                    scheme,
+                    bg0: base.bg0,
+                    bg1: base.bg1,
+                    bg2: base.bg2,
+                    accent: scheme === draft.scheme ? draft.accent : base.accent,
+                    teal: scheme === draft.scheme ? draft.teal : base.teal,
+                    accentStrong: scheme === draft.scheme ? draft.accentStrong : base.accentStrong,
+                  });
+                }}
+              >
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </SelectField>
+              <TextField label="Theme name" value={name} onChange={(e) => setName(e.target.value)} />
+            </FormGrid>
+            <div className="admin-cc-actions" style={{ justifyContent: "flex-start" }}>
+              <Button
+                variant="secondary"
                 onClick={() => selectPreset({ name: "Justxsystems Electric", tokens: JUSTX_ELECTRIC })}
               >
                 Reset Justxsystems Electric
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={() => selectPreset({ name: "Justxsystems Light", tokens: JUSTX_LIGHT })}
               >
                 Justxsystems Light
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={exportTheme}>
+              </Button>
+              <Button variant="ghost" onClick={exportTheme}>
                 Export JSON
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
+              </Button>
+              <Button variant="ghost" onClick={() => fileRef.current?.click()}>
                 Import JSON
-              </button>
+              </Button>
               <input
                 ref={fileRef}
                 type="file"
                 accept="application/json,.json"
                 hidden
+                aria-label="Import theme JSON"
                 onChange={(e) => {
                   onImportFile(e.target.files?.[0] ?? null);
                   e.target.value = "";
                 }}
               />
             </div>
-          </section>
-        </div>
+          </div>
+        </AdminSection>
       </div>
 
-      <aside className="preview-pane" aria-label="Theme live preview">
+      <aside aria-label="Theme live preview" className="admin-cc-split-stack">
         <ExperiencePreviewFrames
           tokens={draft}
           branding={branding}
@@ -318,6 +336,6 @@ export const ThemeStudioPanel = forwardRef<ExperienceSaveHandle>(function ThemeS
           onFrameChange={setPreviewFrame}
         />
       </aside>
-    </div>
+    </Grid>
   );
 });

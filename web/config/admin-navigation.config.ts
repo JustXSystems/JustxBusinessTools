@@ -18,7 +18,7 @@ export const adminNavigation: AdminNavSection[] = [
     id: "overview",
     label: "Overview",
     items: [
-      { href: "/admin", label: "Dashboard", icon: "dashboard", exact: true },
+      { href: "/admin", label: "Command center", icon: "dashboard", exact: true },
       { href: "/admin/analytics", label: "Analytics", icon: "analytics" },
       { href: "/admin/approvals", label: "Approvals", icon: "approvals" },
     ],
@@ -27,30 +27,30 @@ export const adminNavigation: AdminNavSection[] = [
     id: "directory",
     label: "Access",
     items: [
-      { href: "/admin/profiles", label: "Access Fabric", icon: "profile" },
-      { href: "/admin/team", label: "Users", icon: "users" },
+      { href: "/admin/profiles", label: "Organizations", icon: "profile" },
+      { href: "/admin/team", label: "People", icon: "users" },
     ],
   },
   {
     id: "catalog",
-    label: "Catalog",
+    label: "Product",
     items: [
-      { href: "/admin/tools", label: "Catalog & products", icon: "tools" },
+      { href: "/admin/tools", label: "Catalog", icon: "tools" },
       { href: "/admin/experience", label: "Experience", icon: "experience" },
     ],
   },
   {
     id: "billing",
-    label: "Billing",
+    label: "Revenue",
     items: [
-      { href: "/admin/subscriptions", label: "Plans & entitlements", icon: "subscription" },
+      { href: "/admin/subscriptions", label: "Plans", icon: "subscription" },
       { href: "/admin/payments", label: "Payments", icon: "payments" },
       { href: "/admin/gateways", label: "Gateways", icon: "gateways" },
     ],
   },
   {
     id: "security",
-    label: "Security",
+    label: "Platform",
     items: [
       { href: "/admin/integrations", label: "Integrations", icon: "integrations" },
       { href: "/admin/audit", label: "Audit", icon: "audit" },

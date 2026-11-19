@@ -3,6 +3,17 @@
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Alert,
+  BosRoot,
+  Button,
+  Card,
+  Checkbox,
+  Field,
+  SearchInput,
+  Segmented,
+  Skeleton,
+} from "@/components/bos";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
@@ -10,6 +21,7 @@ import { adminDeepLink } from "@/lib/admin-deep-links";
 import { isEnterableBranch, safeAppPath } from "@/lib/auth-access";
 import { withBasePath } from "@/lib/base-path";
 import type { SessionUser } from "@/lib/types/auth";
+import "@/components/admin/admin-console.css";
 
 type Branch = SessionUser["branches"][number];
 
@@ -60,6 +72,25 @@ function resolveInitialProfileId(
     return sessionProfileId;
   }
   return pool[0]?.id ?? null;
+}
+
+function EnterLoading({ label = "Loading…" }: { label?: string }) {
+  return (
+    <BosRoot canvas className="admin-bos" defaultTheme="dark" skin="bos">
+      <div className="admin-cc-login">
+        <Card className="admin-cc-login-card" style={{ width: "min(520px, 100%)" }}>
+          <Skeleton width="40%" height={18} radius={6} />
+          <div style={{ height: 12 }} />
+          <Skeleton width="100%" height={12} radius={4} />
+          <div style={{ height: 8 }} />
+          <Skeleton width="85%" height={12} radius={4} />
+          <p className="bos-text-muted" style={{ margin: "16px 0 0", fontSize: 13 }}>
+            {label}
+          </p>
+        </Card>
+      </div>
+    </BosRoot>
+  );
 }
 
 function EnterInner() {
@@ -134,7 +165,7 @@ function EnterInner() {
       if (prev != null && sourceBranches.some((b) => b.id === prev)) return prev;
       return resolveInitialProfileId(sourceBranches, preferProfileId, user.businessProfileId);
     });
-    setRole((prev) => prev || preferRole || user.actAsRole || "");
+    setRole((prev) => prev || preferRole || user.actAsRole || "owner");
     setHydrated(true);
   }, [
     loading,
@@ -154,11 +185,7 @@ function EnterInner() {
   }, [filtered, hydrated, profileId]);
 
   if (loading || !user || !isPlatformAdmin) {
-    return (
-      <div className="enter-page">
-        <p className="muted">{loading ? "Loading…" : "Redirecting…"}</p>
-      </div>
-    );
+    return <EnterLoading label={loading ? "Loading…" : "Redirecting…"} />;
   }
 
   const selectValue =
@@ -198,135 +225,153 @@ function EnterInner() {
   }
 
   return (
-    <div className="enter-page">
-      <div className="enter-card panel admin-card">
-        <PlatformBrandMark href="/admin" size="md" layout="row" showText />
-        <h1>Enter Operator as…</h1>
-        <p className="muted">
-          Pick a live Business Profile and org role to reproduce authorization the way that customer
-          sees it. This does not sign in as their password or MFA — it enacts their menus and
-          capability gates. Admin Console stays global and ignores this context.
-        </p>
+    <BosRoot canvas className="admin-bos" defaultTheme="dark" skin="bos">
+      <div className="admin-cc-login admin-cc-enter">
+        <Card className="admin-cc-login-card admin-cc-enter-card">
+          <div className="admin-cc-login-brand">
+            <PlatformBrandMark href="/admin" size="md" showText={false} />
+            <div>
+              <h1>Enter Operator as…</h1>
+              <p>Reproduce a customer’s menus and capability gates</p>
+            </div>
+          </div>
 
-        {noProfiles ? (
-          <p className="enter-error">
-            No Business Profiles exist yet.{" "}
-            <Link href={adminDeepLink.profiles()}>Create one in Access Fabric</Link>, approve it,
-            then return here.
+          <p className="bos-text-muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.45 }}>
+            Pick a live Business Profile and org role. This does not sign in as their password or MFA —
+            it enacts their menus and capability gates. Admin Console stays global and ignores this
+            context.
           </p>
-        ) : null}
 
-        {noLive ? (
-          <p className="enter-error">
-            No approved, non-archived profiles. Enable “Include pending &amp; archived” or{" "}
-            <Link href={adminDeepLink.profilePending()}>approve a pending profile</Link>.
-          </p>
-        ) : null}
+          {noProfiles ? (
+            <Alert
+              tone="coral"
+              title="No Business Profiles yet"
+              actions={
+                <Link href={adminDeepLink.profiles()}>
+                  <Button variant="secondary" size="sm">
+                    Create one
+                  </Button>
+                </Link>
+              }
+            >
+              Create a profile in Organizations, approve it, then return here.
+            </Alert>
+          ) : null}
 
-        {profileWarn ? <p className="enter-warn">{profileWarn}</p> : null}
+          {noLive ? (
+            <Alert
+              tone="amber"
+              title="No live profiles"
+              actions={
+                <Link href={adminDeepLink.profilePending()}>
+                  <Button variant="secondary" size="sm">
+                    Approvals
+                  </Button>
+                </Link>
+              }
+            >
+              Enable “Include pending &amp; archived” or approve a pending profile.
+            </Alert>
+          ) : null}
 
-        <label className="field">
-          <span>Search profiles</span>
-          <input
+          {profileWarn ? <Alert tone="amber" title="Profile notice">{profileWarn}</Alert> : null}
+
+          <SearchInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Organization, business name, or GSTIN"
             autoComplete="off"
             disabled={noProfiles}
+            aria-label="Search profiles"
           />
-        </label>
 
-        <label className="enter-toggle">
-          <input
-            type="checkbox"
-            checked={includeNonLive}
-            onChange={(e) => setIncludeNonLive(e.target.checked)}
-            disabled={noProfiles}
-          />
-          <span>Show pending &amp; archived (view only — cannot enter)</span>
-        </label>
+          <label className="admin-cc-enter-check">
+            <Checkbox
+              checked={includeNonLive}
+              onChange={setIncludeNonLive}
+              disabled={noProfiles}
+              aria-label="Show pending and archived profiles"
+            />
+            <span>Show pending &amp; archived (view only — cannot enter)</span>
+          </label>
 
-        <label className="field">
-          <span>Business Profile</span>
-          <select
-            value={selectValue}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setProfileId(Number.isInteger(v) && v > 0 ? v : null);
-              setProfileWarn("");
-            }}
-            required
-            size={Math.min(10, Math.max(4, filtered.length || 4))}
-            className="enter-profile-list"
-            aria-label="Business Profile"
-            disabled={noProfiles || filtered.length === 0}
-          >
-            {filtered.length === 0 ? (
-              <option value="">No matching profiles</option>
-            ) : (
-              filtered.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {branchLabel(b)}
-                </option>
-              ))
+          <Field label="Business Profile" full>
+            {({ id, describedBy, invalid }) => (
+              <select
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid || undefined}
+                value={selectValue}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setProfileId(Number.isInteger(v) && v > 0 ? v : null);
+                  setProfileWarn("");
+                }}
+                required
+                size={Math.min(10, Math.max(4, filtered.length || 4))}
+                className="bos-input admin-cc-enter-list"
+                aria-label="Business Profile"
+                disabled={noProfiles || filtered.length === 0}
+              >
+                {filtered.length === 0 ? (
+                  <option value="">No matching profiles</option>
+                ) : (
+                  filtered.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {branchLabel(b)}
+                    </option>
+                  ))
+                )}
+              </select>
             )}
-          </select>
-        </label>
+          </Field>
 
-        <fieldset className="enter-roles">
-          <legend>Act as role</legend>
-          <div className="enter-role-grid">
-            {ROLES.map((r) => (
-              <label key={r.id} className={`enter-role${role === r.id ? " is-selected" : ""}`}>
-                <input
-                  type="radio"
-                  name="actAsRole"
-                  value={r.id}
-                  checked={role === r.id}
-                  onChange={() => setRole(r.id)}
-                  disabled={noProfiles}
-                />
-                <span>
-                  <strong>{r.label}</strong>
-                  <span className="muted small">{r.hint}</span>
-                </span>
-              </label>
-            ))}
+          <div>
+            <div className="bos-field-label" style={{ marginBottom: 8 }}>
+              Act as role
+            </div>
+            <Segmented
+              role="radio"
+              block
+              wrap
+              aria-label="Act as role"
+              value={(role || "owner") as "owner" | "admin" | "staff" | "viewer"}
+              onChange={(v) => setRole(v)}
+              options={ROLES.map((r) => ({
+                value: r.id,
+                label: r.label,
+                ariaLabel: `${r.label}: ${r.hint}`,
+              }))}
+            />
+            <p className="bos-text-muted" style={{ margin: "8px 0 0", fontSize: 12.5 }}>
+              {ROLES.find((r) => r.id === (role || "owner"))?.hint}
+            </p>
           </div>
-        </fieldset>
 
-        {error ? <p className="enter-error">{error}</p> : null}
+          {error ? <Alert tone="coral" title="Could not enter">{error}</Alert> : null}
 
-        <div className="admin-form-row enter-actions">
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={
-              busy || effectiveProfileId == null || !role || noProfiles || !selectedIsLive
-            }
-            onClick={() => void continueAs()}
-          >
-            {busy ? "Entering…" : "Enter Operator"}
-          </button>
-          <Link href="/admin" className="btn btn-secondary">
-            Back to Admin Console
-          </Link>
-        </div>
+          <div className="admin-cc-link-row">
+            <Button
+              variant="primary"
+              disabled={busy || effectiveProfileId == null || !role || noProfiles || !selectedIsLive}
+              onClick={() => void continueAs()}
+            >
+              {busy ? "Entering…" : "Enter Operator"}
+            </Button>
+            <Link href="/admin">
+              <Button variant="secondary">Back to Admin Console</Button>
+            </Link>
+          </div>
+        </Card>
+        <PoweredByFooter />
       </div>
-      <PoweredByFooter />
-    </div>
+    </BosRoot>
   );
 }
 
 export default function EnterPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="enter-page">
-          <p className="muted">Loading…</p>
-        </div>
-      }
-    >
+    <Suspense fallback={<EnterLoading />}>
       <EnterInner />
     </Suspense>
   );

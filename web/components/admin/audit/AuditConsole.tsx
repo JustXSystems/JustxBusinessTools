@@ -2,6 +2,33 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  ChartLegend,
+  DataTable,
+  FilterChip,
+  Grid,
+  KpiCard,
+  PersonCell,
+  ProgressBar,
+  SearchInput,
+  Segmented,
+  Select,
+  type BosBadgeTone,
+  type BosColumn,
+} from "@/components/bos";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPage,
+  AdminPageSkeleton,
+  AdminSection,
+  AdminTabs,
+} from "@/components/admin/ui";
 import { AUDIT_CATEGORIES, type AuditCategory, type AuditSeverity } from "@/lib/audit-catalog";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-base";
@@ -112,6 +139,15 @@ const RANGES = [
   { value: 90, label: "90 days" },
 ] as const;
 
+const RANGE_OPTIONS = RANGES.map((r) => ({ value: String(r.value), label: r.label }));
+
+const VIEW_OPTIONS = [
+  { value: "timeline", label: "Investigation timeline" },
+  { value: "people", label: "By person" },
+  { value: "entities", label: "By entity" },
+  { value: "feed", label: "All events" },
+] as const;
+
 function formatWhen(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -156,6 +192,22 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
     q.set(k, String(v));
   }
   return q.toString();
+}
+
+function severityTone(sev: AuditSeverity): BosBadgeTone {
+  if (sev === "critical" || sev === "high") return "coral";
+  if (sev === "medium") return "amber";
+  return "neutral";
+}
+
+function severityAvatarTone(sev: AuditSeverity) {
+  if (sev === "critical" || sev === "high") return "var(--bos-coral)";
+  if (sev === "medium") return "var(--bos-amber)";
+  return undefined;
+}
+
+function categoryShort(id: AuditCategory) {
+  return AUDIT_CATEGORIES.find((c) => c.id === id)?.short ?? id;
 }
 
 export function AuditConsole() {
@@ -304,195 +356,433 @@ export function AuditConsole() {
     }
   }
 
-  if (error && !overview) return <p className="field-error">{error}</p>;
-  if (!overview) return <p className="muted">Loading audit intelligence…</p>;
+  if (error && !overview) {
+    return (
+      <AdminPage title="Audit & security" sub="Who changed what">
+        <AdminErrorState message={error} onRetry={load} />
+      </AdminPage>
+    );
+  }
+  if (!overview) return <AdminPageSkeleton cards={6} />;
 
   const t = overview.totals;
   const p = overview.previous;
+  const highRiskDelta = deltaPct(t.highRisk, p.highRisk);
+  const categoryMax = Math.max(1, ...overview.byCategory.map((x) => x.count));
 
-  return (
-    <div className="admin-page">
-      <div className="admin-stack audit-page admin-page-scroll">
-      <section className="panel admin-card">
-        <div className="analytics-toolbar">
-          <div>
-            <h2>Audit & security</h2>
-            <p className="muted">
-              Who changed what across sign-ins, team access, billing, and documents
-              {overview.platformWide ? " · platform-wide view" : ""}.
-            </p>
-          </div>
-          <div className="admin-form-row">
-            <button type="button" className="btn btn-secondary btn-sm" disabled={exporting} onClick={() => void downloadCsv()}>
-              {exporting ? "Exporting…" : "Export CSV"}
-            </button>
-          </div>
+  function pickCategory(id: AuditCategory) {
+    setCategory((c) => (c === id ? "" : id));
+    setTab("timeline");
+  }
+
+  const feedColumns: ReadonlyArray<BosColumn<AuditEvent>> = [
+    {
+      key: "when",
+      header: "When",
+      mono: true,
+      width: 130,
+      cell: (ev) => <time dateTime={ev.createdAt}>{formatWhen(ev.createdAt)}</time>,
+    },
+    {
+      key: "event",
+      header: "Event",
+      cell: (ev) => (
+        <div>
+          <div className="admin-cc-cell-title">{ev.label}</div>
+          <div className="admin-cc-cell-sub">{ev.summary}</div>
         </div>
+      ),
+    },
+    {
+      key: "severity",
+      header: "Severity",
+      cell: (ev) => (
+        <Badge auto tone={severityTone(ev.severity)}>
+          {ev.severity}
+        </Badge>
+      ),
+    },
+    { key: "ip", header: "IP", mono: true, cell: (ev) => ev.ip || "—" },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      cell: (ev) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setExpanded(ev.id);
+            setTab("timeline");
+          }}
+        >
+          Inspect
+        </Button>
+      ),
+    },
+  ];
 
-        <div className="analytics-range" role="tablist" aria-label="Audit range">
-          {RANGES.map((r) => (
-            <button
-              key={r.value}
-              type="button"
-              role="tab"
-              aria-selected={days === r.value}
-              className={days === r.value ? "active" : ""}
-              onClick={() => setDays(r.value)}
-            >
-              {r.label}
-            </button>
+  const actorColumns: ReadonlyArray<BosColumn<ActorPivot>> = [
+    {
+      key: "person",
+      header: "Person",
+      cell: (a) => (
+        <PersonCell
+          avatar={<Avatar size="sm">{initials(a.name, a.email)}</Avatar>}
+          name={a.name}
+          role={`${a.email || "No email"}${a.lastAt ? ` · last ${formatWhen(a.lastAt)}` : ""}`}
+        />
+      ),
+    },
+    {
+      key: "mix",
+      header: "Activity",
+      cell: (a) => (
+        <div className="admin-cc-badge-row" style={{ marginTop: 0 }}>
+          {AUDIT_CATEGORIES.filter((c) => (a.byCategory[c.id] ?? 0) > 0).map((c) => (
+            <Badge key={c.id} auto tone="neutral">
+              {c.short} {a.byCategory[c.id]}
+            </Badge>
           ))}
         </div>
-        {loading ? <p className="muted">Refreshing…</p> : null}
-        {error ? <p className="field-error">{error}</p> : null}
+      ),
+    },
+    { key: "count", header: "Events", align: "right", cell: (a) => a.count.toLocaleString() },
+    {
+      key: "risk",
+      header: "High-risk",
+      align: "right",
+      cell: (a) =>
+        a.highRisk ? (
+          <Badge auto tone="amber">
+            {a.highRisk}
+          </Badge>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      cell: (a) => (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            if (a.userId != null) setUserId(a.userId);
+            setTab("timeline");
+          }}
+        >
+          View timeline
+        </Button>
+      ),
+    },
+  ];
 
-        <div className="analytics-kpis audit-kpis">
-          <button type="button" className={`result-card audit-kpi${highRisk ? " is-active" : ""}`} onClick={() => { setHighRisk((v) => !v); setTab("timeline"); }}>
-            <span>High-risk</span>
-            <strong>{t.highRisk}</strong>
-            <span className={deltaPct(t.highRisk, p.highRisk) > 0 ? "analytics-delta is-up" : "analytics-delta"}>
-              {deltaPct(t.highRisk, p.highRisk) > 0 ? "+" : ""}
-              {deltaPct(t.highRisk, p.highRisk)}% vs prior
-            </span>
-          </button>
-          <button type="button" className={`result-card audit-kpi${category === "auth" ? " is-active" : ""}`} onClick={() => { setCategory((c) => (c === "auth" ? "" : "auth")); setTab("timeline"); }}>
-            <span>Auth</span>
-            <strong>{t.auth}</strong>
-            <span className="muted">Sign-in & MFA</span>
-          </button>
-          <button type="button" className={`result-card audit-kpi${category === "team" ? " is-active" : ""}`} onClick={() => { setCategory((c) => (c === "team" ? "" : "team")); setTab("timeline"); }}>
-            <span>Team</span>
-            <strong>{t.team}</strong>
-            <span className="muted">Access changes</span>
-          </button>
-          <button type="button" className={`result-card audit-kpi${category === "billing" ? " is-active" : ""}`} onClick={() => { setCategory((c) => (c === "billing" ? "" : "billing")); setTab("timeline"); }}>
-            <span>Billing</span>
-            <strong>{t.billing}</strong>
-            <span className="muted">Plans & payments</span>
-          </button>
-          <article className="result-card">
-            <span>People active</span>
-            <strong>{t.actors}</strong>
-            <span className="muted">{t.events.toLocaleString()} events</span>
-          </article>
-          <button type="button" className={`result-card audit-kpi${category === "documents" ? " is-active" : ""}`} onClick={() => { setCategory((c) => (c === "documents" ? "" : "documents")); setTab("timeline"); }}>
-            <span>Documents</span>
-            <strong>{t.documents}</strong>
-            <span className="muted">Quotes & records</span>
-          </button>
+  const entityColumns: ReadonlyArray<BosColumn<EntityPivot>> = [
+    {
+      key: "entity",
+      header: "Entity",
+      cell: (e) => (
+        <div>
+          <div className="admin-cc-cell-title">
+            {e.entityType.replace(/_/g, " ")} #{e.entityId}
+          </div>
+          <div className="admin-cc-cell-sub">
+            {e.lastAction || "—"}
+            {e.lastAt ? ` · ${formatWhen(e.lastAt)}` : ""}
+          </div>
         </div>
-      </section>
+      ),
+    },
+    { key: "count", header: "Events", align: "right", cell: (e) => e.count.toLocaleString() },
+    {
+      key: "risk",
+      header: "High-risk",
+      align: "right",
+      cell: (e) =>
+        e.highRisk ? (
+          <Badge auto tone="amber">
+            {e.highRisk}
+          </Badge>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      cell: (e) => (
+        <div className="admin-cc-actions">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setEntityType(e.entityType);
+              setEntityId(e.entityId);
+              setTab("timeline");
+            }}
+          >
+            History
+          </Button>
+          {e.href ? (
+            <Link href={e.href}>
+              <Button variant="ghost" size="sm">
+                Open
+              </Button>
+            </Link>
+          ) : null}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <AdminPage
+      title="Audit & security"
+      sub={`Who changed what across sign-ins, team access, billing, and documents${
+        overview.platformWide ? " · platform-wide view" : ""
+      }.`}
+      toolbar={
+        <>
+          <Segmented
+            role="radio"
+            size="sm"
+            scroll
+            aria-label="Audit range"
+            options={RANGE_OPTIONS}
+            value={String(days)}
+            onChange={(v) => setDays(Number(v))}
+          />
+          {loading ? (
+            <Badge auto tone="blue">
+              Refreshing…
+            </Badge>
+          ) : null}
+          <Button variant="ghost" size="sm" icon="refresh" onClick={() => void load()}>
+            Refresh
+          </Button>
+          <Button variant="secondary" size="sm" icon="download" disabled={exporting} onClick={() => void downloadCsv()}>
+            {exporting ? "Exporting…" : "Export CSV"}
+          </Button>
+        </>
+      }
+    >
+      {error ? <AdminErrorState title="Refresh failed" message={error} onRetry={load} /> : null}
+
+      <Grid cols={6} min={150} gap={12}>
+        <button
+          type="button"
+          className={`admin-cc-kpi-btn${highRisk ? " is-selected" : ""}`}
+          onClick={() => {
+            setHighRisk((v) => !v);
+            setTab("timeline");
+          }}
+        >
+          <KpiCard
+            label="High-risk"
+            value={t.highRisk}
+            chip={{ color: "rose", glyph: "!" }}
+            delta={`${highRiskDelta > 0 ? "+" : ""}${highRiskDelta}% vs prior`}
+            deltaTone={highRiskDelta > 0 ? "warn" : "muted"}
+          />
+        </button>
+        <button
+          type="button"
+          className={`admin-cc-kpi-btn${category === "auth" ? " is-selected" : ""}`}
+          onClick={() => pickCategory("auth")}
+        >
+          <KpiCard
+            label="Auth"
+            value={t.auth}
+            chip={{ color: "blue", glyph: "◎" }}
+            delta="Sign-in & MFA"
+            deltaTone="muted"
+          />
+        </button>
+        <button
+          type="button"
+          className={`admin-cc-kpi-btn${category === "team" ? " is-selected" : ""}`}
+          onClick={() => pickCategory("team")}
+        >
+          <KpiCard
+            label="Team"
+            value={t.team}
+            chip={{ color: "mint", glyph: "👤" }}
+            delta="Access changes"
+            deltaTone="muted"
+          />
+        </button>
+        <button
+          type="button"
+          className={`admin-cc-kpi-btn${category === "billing" ? " is-selected" : ""}`}
+          onClick={() => pickCategory("billing")}
+        >
+          <KpiCard
+            label="Billing"
+            value={t.billing}
+            chip={{ color: "amber", glyph: "₹" }}
+            delta="Plans & payments"
+            deltaTone="muted"
+          />
+        </button>
+        <KpiCard
+          label="People active"
+          value={t.actors}
+          chip={{ color: "lavender", glyph: "▣" }}
+          delta={`${t.events.toLocaleString()} events`}
+          deltaTone="muted"
+          interactive={false}
+        />
+        <button
+          type="button"
+          className={`admin-cc-kpi-btn${category === "documents" ? " is-selected" : ""}`}
+          onClick={() => pickCategory("documents")}
+        >
+          <KpiCard
+            label="Documents"
+            value={t.documents}
+            chip={{ color: "sage", glyph: "▤" }}
+            delta="Quotes & records"
+            deltaTone="muted"
+          />
+        </button>
+      </Grid>
 
       {overview.anomalies.length > 0 ? (
-        <section className="panel admin-card audit-radar">
-          <h2>Risk radar</h2>
-          <p className="muted">Signals worth a look for security, support, and finance — click to filter the timeline.</p>
-          <div className="audit-anomaly-grid">
+        <AdminSection
+          title="Risk radar"
+          description="Signals worth a look for security, support, and finance — click to filter the timeline."
+          actions={<Badge tone="amber">{overview.anomalies.length} signals</Badge>}
+        >
+          <Grid cols={3} min={240} gap={12}>
             {overview.anomalies.map((a) => (
               <button
                 key={a.id}
                 type="button"
-                className={`audit-anomaly severity-${a.severity}`}
+                className="admin-cc-kpi-btn"
                 onClick={() => applyAnomalyFilter(a.filter)}
               >
-                <span className="audit-anomaly-sev">{a.severity}</span>
-                <strong>{a.title}</strong>
-                <span>{a.body}</span>
-                {a.count != null ? <em>{a.count}</em> : null}
+                <Card interactive>
+                  <div className="admin-cc-hub">
+                    <div className="admin-cc-hub-top">
+                      <Badge auto tone={severityTone(a.severity)}>
+                        {a.severity}
+                      </Badge>
+                      {a.count != null ? <span className="admin-cc-attention-count">{a.count}</span> : null}
+                    </div>
+                    <strong>{a.title}</strong>
+                    <p className="admin-cc-hub-desc">{a.body}</p>
+                  </div>
+                </Card>
               </button>
             ))}
-          </div>
-        </section>
+          </Grid>
+        </AdminSection>
       ) : null}
 
-      <div className="analytics-grid">
-        <section className="panel admin-card">
-          <h2>Activity volume</h2>
-          <p className="muted">Daily audit events by family (IST days)</p>
-          <div className="chart-bars" role="img" aria-label="Audit volume chart">
-            {overview.daily.map((d) => (
-              <div
-                key={d.date}
-                className="chart-col"
-                title={`${d.date}: ${d.total} events (${d.highRisk} high-risk)`}
-              >
-                <div className="chart-stack" style={{ height: `${Math.max(4, (d.total / maxDaily) * 100)}%` }}>
-                  <span className="seg seg-open" style={{ flexGrow: d.auth || 0.01 }} />
-                  <span className="seg seg-create" style={{ flexGrow: d.team || 0.01 }} />
-                  <span className="seg seg-export" style={{ flexGrow: d.billing || 0.01 }} />
-                  <span className="seg seg-other" style={{ flexGrow: d.other || 0.01 }} />
-                </div>
-                <span className="chart-label">
-                  {new Date(`${d.date}T12:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                </span>
+      <Grid cols={2} template="1.35fr 1fr" min={280} gap={14}>
+        <AdminSection title="Activity volume" description="Daily audit events by family (IST days).">
+          {overview.daily.length === 0 ? (
+            <AdminEmpty title="No activity in this range" />
+          ) : (
+            <>
+              <div className="admin-cc-stackchart" role="img" aria-label="Audit volume chart">
+                {overview.daily.map((d) => (
+                  <div
+                    key={d.date}
+                    className="admin-cc-stackchart-col"
+                    title={`${d.date}: ${d.total} events (${d.highRisk} high-risk)`}
+                  >
+                    <div className="admin-cc-stackchart-track">
+                      <div
+                        className="admin-cc-stackchart-bar"
+                        style={{ height: `${Math.max(4, (d.total / maxDaily) * 100)}%` }}
+                      >
+                        <span className="is-auth" style={{ flexGrow: d.auth || 0.01 }} />
+                        <span className="is-team" style={{ flexGrow: d.team || 0.01 }} />
+                        <span className="is-billing" style={{ flexGrow: d.billing || 0.01 }} />
+                        <span className="is-other" style={{ flexGrow: d.other || 0.01 }} />
+                      </div>
+                    </div>
+                    <span className="admin-cc-stackchart-label">
+                      {new Date(`${d.date}T12:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="chart-legend">
-            <span><i className="seg-open" /> Auth</span>
-            <span><i className="seg-create" /> Team</span>
-            <span><i className="seg-export" /> Billing</span>
-            <span><i className="seg-other" /> Other</span>
-          </div>
-        </section>
+              <ChartLegend
+                items={[
+                  { label: "Auth", tone: "blue" },
+                  { label: "Team", tone: "emerald" },
+                  { label: "Billing", tone: "amber" },
+                  { label: "Other", tone: "faint" },
+                ]}
+              />
+            </>
+          )}
+        </AdminSection>
 
-        <section className="panel admin-card">
-          <h2>When activity happens</h2>
-          <p className="muted">UTC hour-of-day heat (useful for odd-hour admin changes)</p>
-          <div className="heat-grid">
+        <AdminSection
+          title="When activity happens"
+          description="UTC hour-of-day heat (useful for odd-hour admin changes)."
+        >
+          <div className="admin-cc-heat">
             {overview.hours.map((h) => (
               <div
                 key={h.hour}
-                className="heat-cell"
-                style={{ opacity: 0.15 + (h.count / maxHour) * 0.85 }}
+                className="admin-cc-heat-cell"
+                style={{
+                  background: `color-mix(in srgb, var(--bos-blue) ${Math.round(
+                    10 + (h.count / maxHour) * 80,
+                  )}%, transparent)`,
+                }}
                 title={`${h.hour}:00 UTC — ${h.count} events`}
               >
                 {h.hour}
               </div>
             ))}
           </div>
-          <h3 className="analytics-subhead">Top actions</h3>
-          <ul className="admin-list">
-            {overview.topActions.map((a) => (
-              <li key={a.action}>
-                <button type="button" className="audit-inline-link" onClick={() => { setAction(a.action); setTab("timeline"); }}>
-                  {a.label}
-                </button>
-                <span>{a.count}</span>
-              </li>
-            ))}
-            {overview.topActions.length === 0 ? <li className="muted">No actions in this range.</li> : null}
-          </ul>
-        </section>
-      </div>
+          <h4 className="admin-cc-subhead">Top actions</h4>
+          {overview.topActions.length === 0 ? (
+            <p className="admin-cc-note-text">No actions in this range.</p>
+          ) : (
+            <ul className="admin-cc-roster-list" style={{ maxHeight: 280 }}>
+              {overview.topActions.map((a) => (
+                <li key={a.action}>
+                  <button
+                    type="button"
+                    className="admin-cc-roster-row"
+                    onClick={() => {
+                      setAction(a.action);
+                      setTab("timeline");
+                    }}
+                  >
+                    <span>{a.label}</span>
+                    <Badge auto tone="neutral">
+                      {a.count}
+                    </Badge>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </AdminSection>
+      </Grid>
 
-      <section className="panel admin-card">
-        <div className="admin-tabs-bar">
-          <div className="admin-tabs" role="tablist">
-            {(
-              [
-                ["timeline", "Investigation timeline"],
-                ["people", "By person"],
-                ["entities", "By entity"],
-                ["feed", "All events"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                className={tab === id ? "active" : ""}
-                aria-selected={tab === id}
-                onClick={() => setTab(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+      <AdminSection
+        title="Investigation"
+        description="Filter by category, severity, person, IP, or entity — then drill into the timeline."
+        actions={hasFilters ? <Badge tone="blue">Filters on</Badge> : null}
+      >
+        <div className="admin-cc-tabs-bar">
+          <AdminTabs aria-label="Audit view" options={VIEW_OPTIONS} value={tab} onChange={setTab} />
         </div>
 
-        <div className="audit-filters">
-          <input
+        <div className="admin-cc-filters">
+          <SearchInput
             value={searchDraft}
             onChange={(e) => setSearchDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -501,252 +791,289 @@ export function AuditConsole() {
             placeholder="Search action, email, IP, entity…"
             aria-label="Search audit"
           />
-          <select value={category} onChange={(e) => setCategory(e.target.value as AuditCategory | "")} aria-label="Category">
+          <Select
+            size="sm"
+            value={category}
+            onChange={(e) => setCategory(e.target.value as AuditCategory | "")}
+            aria-label="Category"
+          >
             <option value="">All categories</option>
             {AUDIT_CATEGORIES.map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
             ))}
-          </select>
-          <select value={severity} onChange={(e) => setSeverity(e.target.value as AuditSeverity | "")} aria-label="Severity">
+          </Select>
+          <Select
+            size="sm"
+            value={severity}
+            onChange={(e) => setSeverity(e.target.value as AuditSeverity | "")}
+            aria-label="Severity"
+          >
             <option value="">All severities</option>
             <option value="critical">Critical</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
-          </select>
-          <label className="audit-check">
-            <input type="checkbox" checked={highRisk} onChange={(e) => setHighRisk(e.target.checked)} />
+          </Select>
+          <span className="admin-cc-switch-row" style={{ paddingBottom: 0 }}>
+            <Checkbox checked={highRisk} onChange={setHighRisk} aria-label="High-risk only" />
             High-risk only
-          </label>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setQ(searchDraft.trim())}>
+          </span>
+          <Button variant="secondary" size="sm" onClick={() => setQ(searchDraft.trim())}>
             Apply
-          </button>
+          </Button>
           {hasFilters ? (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
               Clear
-            </button>
+            </Button>
           ) : null}
         </div>
 
         {action || userId || ip || entityType ? (
-          <p className="audit-active-filters muted">
-            Focus:
-            {action ? <button type="button" className="pill" onClick={() => setAction("")}>{action} ×</button> : null}
-            {userId ? <button type="button" className="pill" onClick={() => setUserId("")}>user #{userId} ×</button> : null}
-            {ip ? <button type="button" className="pill" onClick={() => setIp("")}>{ip} ×</button> : null}
-            {entityType ? (
-              <button type="button" className="pill" onClick={() => { setEntityType(""); setEntityId(""); }}>
-                {entityType}{entityId ? ` #${entityId}` : ""} ×
-              </button>
+          <div className="admin-cc-filters" style={{ marginTop: 10 }}>
+            <span className="admin-cc-subhead" style={{ margin: 0 }}>
+              Focus
+            </span>
+            {action ? (
+              <FilterChip active onClick={() => setAction("")}>
+                {action} ×
+              </FilterChip>
             ) : null}
-          </p>
-        ) : null}
-
-        {tab === "timeline" || tab === "feed" ? (
-          <div className={tab === "timeline" ? "audit-timeline admin-scroll-list" : "tracker-list admin-scroll-list"}>
-            {events.length === 0 ? (
-              <p className="muted">No audit events match these filters.</p>
-            ) : tab === "timeline" ? (
-              timelineGroups.map(([key, rows]) => (
-                <div key={key} className="audit-day">
-                  <h3 className="audit-day-label">{dayLabel(key)}</h3>
-                  <ol className="audit-day-list">
-                    {rows.map((ev) => (
-                      <li key={ev.id} className={`audit-event severity-${ev.severity}${expanded === ev.id ? " is-open" : ""}`}>
-                        <button type="button" className="audit-event-main" onClick={() => setExpanded(expanded === ev.id ? null : ev.id)}>
-                          <span className="audit-avatar" aria-hidden>{initials(ev.actorName, ev.actorEmail)}</span>
-                          <span className="audit-event-body">
-                            <span className="audit-event-summary">{ev.summary}</span>
-                            <span className="audit-event-meta">
-                              <span className={`audit-sev-chip sev-${ev.severity}`}>{ev.severity}</span>
-                              <span className="pill">{AUDIT_CATEGORIES.find((c) => c.id === ev.category)?.short ?? ev.category}</span>
-                              <time dateTime={ev.createdAt}>{formatWhen(ev.createdAt)} IST</time>
-                              {ev.ip ? <span className="mono">{ev.ip}</span> : null}
-                              {ev.profileName ? <span>{ev.profileName}</span> : null}
-                            </span>
-                          </span>
-                        </button>
-                        {expanded === ev.id ? (
-                          <div className="audit-event-detail">
-                            <dl className="audit-dl">
-                              <div><dt>Action</dt><dd className="mono">{ev.action}</dd></div>
-                              <div><dt>Actor</dt><dd>{ev.actorName || "—"} {ev.actorEmail ? `(${ev.actorEmail})` : ""}</dd></div>
-                              <div><dt>Entity</dt><dd>{ev.entityType || "—"}{ev.entityId ? ` #${ev.entityId}` : ""}</dd></div>
-                              {overview.platformWide && ev.organizationName ? (
-                                <div><dt>Organization</dt><dd>{ev.organizationName}</dd></div>
-                              ) : null}
-                              <div><dt>IP</dt><dd className="mono">{ev.ip || "—"}</dd></div>
-                            </dl>
-                            {ev.diff ? (
-                              <pre className="audit-diff">{JSON.stringify(ev.diff, null, 2)}</pre>
-                            ) : (
-                              <p className="muted">No change payload stored for this event.</p>
-                            )}
-                            <div className="admin-form-row">
-                              {ev.entityHref ? (
-                                <Link href={ev.entityHref} className="btn btn-ghost btn-sm">Open related admin</Link>
-                              ) : null}
-                              {ev.userId != null ? (
-                                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setUserId(ev.userId!); setTab("people"); }}>
-                                  Focus this person
-                                </button>
-                              ) : null}
-                              {ev.entityType && ev.entityId ? (
-                                <button
-                                  type="button"
-                                  className="btn btn-ghost btn-sm"
-                                  onClick={() => {
-                                    setEntityType(ev.entityType!);
-                                    setEntityId(ev.entityId!);
-                                    setTab("entities");
-                                  }}
-                                >
-                                  Focus this entity
-                                </button>
-                              ) : null}
-                              {ev.ip ? (
-                                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setIp(ev.ip!); navigator.clipboard?.writeText(ev.ip!).catch(() => undefined); }}>
-                                  Filter IP
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              ))
-            ) : (
-              events.map((ev) => (
-                <div key={ev.id} className="tracker-row audit-feed-row">
-                  <div className="tracker-row-main">
-                    <span className="tracker-row-title">{ev.label}</span>
-                    <span className="tracker-row-sub">{ev.summary}</span>
-                  </div>
-                  <div className="audit-feed-meta">
-                    <span className={`audit-sev-chip sev-${ev.severity}`}>{ev.severity}</span>
-                    <span>{formatWhen(ev.createdAt)}</span>
-                    <span className="mono">{ev.ip || "—"}</span>
-                  </div>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setExpanded(ev.id); setTab("timeline"); }}>
-                    Inspect
-                  </button>
-                </div>
-              ))
-            )}
+            {userId ? (
+              <FilterChip active onClick={() => setUserId("")}>
+                user #{userId} ×
+              </FilterChip>
+            ) : null}
+            {ip ? (
+              <FilterChip active onClick={() => setIp("")}>
+                {ip} ×
+              </FilterChip>
+            ) : null}
+            {entityType ? (
+              <FilterChip
+                active
+                onClick={() => {
+                  setEntityType("");
+                  setEntityId("");
+                }}
+              >
+                {entityType}
+                {entityId ? ` #${entityId}` : ""} ×
+              </FilterChip>
+            ) : null}
           </div>
         ) : null}
 
-        {tab === "people" ? (
-          <div className="tracker-list admin-scroll-list">
-            {actors.length === 0 ? (
-              <p className="muted">No actors in this range.</p>
+        <div className="admin-cc-pad" style={{ padding: "14px 0 0" }}>
+          {tab === "timeline" ? (
+            events.length === 0 ? (
+              <AdminEmpty title="No audit events match these filters" icon="search">
+                Try a wider range or clear the filters.
+              </AdminEmpty>
             ) : (
-              actors.map((a) => (
-                <div key={String(a.userId ?? a.email ?? a.name)} className="tracker-row audit-actor-row">
-                  <span className="audit-avatar lg" aria-hidden>{initials(a.name, a.email)}</span>
-                  <div className="tracker-row-main">
-                    <span className="tracker-row-title">{a.name}</span>
-                    <span className="tracker-row-sub">
-                      {a.email || "No email"}
-                      {a.lastAt ? ` · last ${formatWhen(a.lastAt)}` : ""}
-                    </span>
-                    <div className="audit-cat-pills">
-                      {AUDIT_CATEGORIES.filter((c) => (a.byCategory[c.id] ?? 0) > 0).map((c) => (
-                        <span key={c.id} className="pill">{c.short} {a.byCategory[c.id]}</span>
-                      ))}
-                    </div>
+              <div className="admin-cc-scroll" style={{ maxHeight: 720 }}>
+                {timelineGroups.map(([key, rows]) => (
+                  <div key={key}>
+                    <h3 className="admin-cc-live-day-label">
+                      <span>{dayLabel(key)}</span>
+                      <span>{rows.length}</span>
+                    </h3>
+                    <ol className="admin-cc-live-list">
+                      {rows.map((ev) => {
+                        const open = expanded === ev.id;
+                        return (
+                          <li key={ev.id} className={`admin-cc-live-event${open ? " is-open" : ""}`}>
+                            <button
+                              type="button"
+                              className="admin-cc-live-main"
+                              aria-expanded={open}
+                              onClick={() => setExpanded(open ? null : ev.id)}
+                            >
+                              <Avatar size="sm" tone={severityAvatarTone(ev.severity)}>
+                                {initials(ev.actorName, ev.actorEmail)}
+                              </Avatar>
+                              <span className="admin-cc-live-body">
+                                <span className="admin-cc-live-summary">
+                                  {ev.summary}
+                                  <Badge auto tone={severityTone(ev.severity)}>
+                                    {ev.severity}
+                                  </Badge>
+                                  <Badge auto tone="neutral">
+                                    {categoryShort(ev.category)}
+                                  </Badge>
+                                </span>
+                                <span className="admin-cc-live-sub">
+                                  {ev.ip ? <span className="bos-mono">{ev.ip}</span> : null}
+                                  {ev.profileName ? <span>{ev.profileName}</span> : null}
+                                </span>
+                              </span>
+                              <time className="admin-cc-live-when" dateTime={ev.createdAt}>
+                                {formatWhen(ev.createdAt)} IST
+                              </time>
+                            </button>
+                            {open ? (
+                              <div className="admin-cc-live-detail">
+                                <ul className="admin-cc-kv">
+                                  <li>
+                                    <span>Action</span>
+                                    <strong className="bos-mono">{ev.action}</strong>
+                                  </li>
+                                  <li>
+                                    <span>Actor</span>
+                                    <strong>
+                                      {ev.actorName || "—"} {ev.actorEmail ? `(${ev.actorEmail})` : ""}
+                                    </strong>
+                                  </li>
+                                  <li>
+                                    <span>Entity</span>
+                                    <strong>
+                                      {ev.entityType || "—"}
+                                      {ev.entityId ? ` #${ev.entityId}` : ""}
+                                    </strong>
+                                  </li>
+                                  {overview.platformWide && ev.organizationName ? (
+                                    <li>
+                                      <span>Organization</span>
+                                      <strong>{ev.organizationName}</strong>
+                                    </li>
+                                  ) : null}
+                                  <li>
+                                    <span>IP</span>
+                                    <strong className="bos-mono">{ev.ip || "—"}</strong>
+                                  </li>
+                                </ul>
+                                {ev.diff ? (
+                                  <pre className="admin-cc-diff">{JSON.stringify(ev.diff, null, 2)}</pre>
+                                ) : (
+                                  <p className="admin-cc-note-text">No change payload stored for this event.</p>
+                                )}
+                                <div className="admin-cc-actions admin-cc-actions-start" style={{ marginTop: 10 }}>
+                                  {ev.entityHref ? (
+                                    <Link href={ev.entityHref}>
+                                      <Button variant="ghost" size="sm">
+                                        Open related admin
+                                      </Button>
+                                    </Link>
+                                  ) : null}
+                                  {ev.userId != null ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setUserId(ev.userId!);
+                                        setTab("people");
+                                      }}
+                                    >
+                                      Focus this person
+                                    </Button>
+                                  ) : null}
+                                  {ev.entityType && ev.entityId ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setEntityType(ev.entityType!);
+                                        setEntityId(ev.entityId!);
+                                        setTab("entities");
+                                      }}
+                                    >
+                                      Focus this entity
+                                    </Button>
+                                  ) : null}
+                                  {ev.ip ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setIp(ev.ip!);
+                                        navigator.clipboard?.writeText(ev.ip!).catch(() => undefined);
+                                      }}
+                                    >
+                                      Filter IP
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ol>
                   </div>
-                  <div className="audit-actor-stats">
-                    <strong>{a.count}</strong>
-                    <span className="muted">events</span>
-                    {a.highRisk ? <span className="pill pill-warning">{a.highRisk} high-risk</span> : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => {
-                      if (a.userId != null) setUserId(a.userId);
-                      setTab("timeline");
-                    }}
-                  >
-                    View timeline
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        ) : null}
+                ))}
+              </div>
+            )
+          ) : null}
 
-        {tab === "entities" ? (
-          <div className="tracker-list admin-scroll-list">
-            {entities.length === 0 ? (
-              <p className="muted">No entity-linked events in this range.</p>
-            ) : (
-              entities.map((e) => (
-                <div key={`${e.entityType}:${e.entityId}`} className="tracker-row">
-                  <div className="tracker-row-main">
-                    <span className="tracker-row-title">{e.entityType.replace(/_/g, " ")} #{e.entityId}</span>
-                    <span className="tracker-row-sub">
-                      {e.lastAction || "—"}
-                      {e.lastAt ? ` · ${formatWhen(e.lastAt)}` : ""}
-                    </span>
-                  </div>
-                  <div className="audit-actor-stats">
-                    <strong>{e.count}</strong>
-                    <span className="muted">events</span>
-                    {e.highRisk ? <span className="pill pill-warning">{e.highRisk} high-risk</span> : null}
-                  </div>
-                  <div className="admin-form-row">
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        setEntityType(e.entityType);
-                        setEntityId(e.entityId);
-                        setTab("timeline");
-                      }}
-                    >
-                      History
-                    </button>
-                    {e.href ? (
-                      <Link href={e.href} className="btn btn-ghost btn-sm">Open</Link>
-                    ) : null}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        ) : null}
-      </section>
+          {tab === "feed" ? (
+            <div className="admin-cc-scroll" style={{ maxHeight: 720 }}>
+              <DataTable
+                compact
+                caption="All audit events"
+                columns={feedColumns}
+                rows={events}
+                rowKey={(ev) => String(ev.id)}
+                empty="No audit events match these filters."
+              />
+            </div>
+          ) : null}
 
-      <section className="panel admin-card">
-        <h2>Category mix</h2>
-        <p className="muted">How audit volume breaks down for this window — click a bar to filter.</p>
-        <ul className="funnel audit-category-funnel">
-          {overview.byCategory.map((c) => {
-            const max = Math.max(1, ...overview.byCategory.map((x) => x.count));
-            return (
+          {tab === "people" ? (
+            <div className="admin-cc-scroll" style={{ maxHeight: 720 }}>
+              <DataTable
+                compact
+                caption="Audit activity by person"
+                columns={actorColumns}
+                rows={actors}
+                rowKey={(a) => String(a.userId ?? a.email ?? a.name)}
+                empty="No actors in this range."
+              />
+            </div>
+          ) : null}
+
+          {tab === "entities" ? (
+            <div className="admin-cc-scroll" style={{ maxHeight: 720 }}>
+              <DataTable
+                compact
+                caption="Audit activity by entity"
+                columns={entityColumns}
+                rows={entities}
+                rowKey={(e) => `${e.entityType}:${e.entityId}`}
+                empty="No entity-linked events in this range."
+              />
+            </div>
+          ) : null}
+        </div>
+      </AdminSection>
+
+      <AdminSection
+        title="Category mix"
+        description="How audit volume breaks down for this window — click a bar to filter."
+      >
+        {overview.byCategory.length === 0 ? (
+          <AdminEmpty title="No category data" />
+        ) : (
+          <ul className="admin-cc-verify-list admin-cc-mix-list">
+            {overview.byCategory.map((c) => (
               <li key={c.category}>
                 <button
                   type="button"
-                  className="audit-funnel-hit"
+                  className="admin-cc-mix-row"
                   onClick={() => {
                     setCategory(c.category);
                     setTab("timeline");
                   }}
                 >
-                  <div className="funnel-bar" style={{ width: `${Math.max(8, (c.count / max) * 100)}%` }} />
                   <span>{c.label}</span>
+                  <ProgressBar value={Math.max(4, (c.count / categoryMax) * 100)} tone="blue" label={`${c.label} share`} />
                   <strong>{c.count.toLocaleString()}</strong>
                 </button>
               </li>
-            );
-          })}
-        </ul>
-      </section>
-      </div>
-    </div>
+            ))}
+          </ul>
+        )}
+      </AdminSection>
+    </AdminPage>
   );
 }

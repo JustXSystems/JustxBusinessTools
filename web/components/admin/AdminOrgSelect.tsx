@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { SelectField } from "@/components/admin/ui/AdminFields";
 
 export type AdminOrgOption = { id: number; name: string };
 
@@ -13,6 +14,7 @@ export function AdminOrgSelect({
   label = "Organization",
   allowEmpty = true,
   emptyLabel = "Select organization…",
+  full,
 }: {
   value: number | null;
   onChange: (id: number | null) => void;
@@ -20,6 +22,8 @@ export function AdminOrgSelect({
   label?: string;
   allowEmpty?: boolean;
   emptyLabel?: string;
+  /** Span the full row inside a BOS `FormGrid`. */
+  full?: boolean;
 }) {
   const [orgs, setOrgs] = useState<AdminOrgOption[]>([]);
   const [error, setError] = useState("");
@@ -43,27 +47,25 @@ export function AdminOrgSelect({
   }, []);
 
   return (
-    <label className="field">
-      <span>{label}</span>
-      <select
-        value={value ?? ""}
-        required={required}
-        onChange={(e) => {
-          const v = Number(e.target.value);
-          onChange(Number.isInteger(v) && v > 0 ? v : null);
-        }}
-        aria-label={label}
-      >
-        {allowEmpty ? (
-          <option value="">{orgs.length === 0 ? "No organizations" : emptyLabel}</option>
-        ) : null}
-        {orgs.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.name}
-          </option>
-        ))}
-      </select>
-      {error ? <span className="muted small">{error}</span> : null}
-    </label>
+    <SelectField
+      label={label}
+      full={full}
+      error={error || undefined}
+      value={value ?? ""}
+      required={required}
+      onChange={(e) => {
+        const v = Number(e.target.value);
+        onChange(Number.isInteger(v) && v > 0 ? v : null);
+      }}
+    >
+      {allowEmpty ? (
+        <option value="">{orgs.length === 0 ? "No organizations" : emptyLabel}</option>
+      ) : null}
+      {orgs.map((o) => (
+        <option key={o.id} value={o.id}>
+          {o.name}
+        </option>
+      ))}
+    </SelectField>
   );
 }

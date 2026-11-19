@@ -2,6 +2,23 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import {
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  Grid,
+  KpiCard,
+  StatusLight,
+  type BosColumn,
+} from "@/components/bos";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPage,
+  AdminPageSkeleton,
+  AdminSection,
+} from "@/components/admin/ui";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -58,6 +75,8 @@ type OpsOverview = {
   };
 };
 
+type RecentError = OpsOverview["recentErrors"][number];
+
 function fmtUptime(sec: number) {
   if (sec < 60) return `${sec}s`;
   if (sec < 3600) return `${Math.floor(sec / 60)}m`;
@@ -76,6 +95,25 @@ function relativeTime(iso: string) {
   const hr = Math.round(min / 60);
   if (hr < 48) return `${hr}h ago`;
   return `${Math.round(hr / 24)}d ago`;
+}
+
+/** External link rendered as a BOS button. */
+function ExternalButton({
+  href,
+  variant = "secondary",
+  children,
+}: {
+  href: string;
+  variant?: "primary" | "secondary" | "ghost";
+  children: string;
+}) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer">
+      <Button variant={variant} size="sm">
+        {children}
+      </Button>
+    </a>
+  );
 }
 
 export default function AdminOpsPage() {
@@ -103,232 +141,277 @@ export default function AdminOpsPage() {
     requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
   }, [data]);
 
-  if (error && !data) return <p className="field-error">{error}</p>;
-  if (!data) return <p className="muted">Loading operations…</p>;
+  if (error && !data) {
+    return (
+      <AdminPage title="Operations" sub="Service health">
+        <AdminErrorState message={error} onRetry={load} />
+      </AdminPage>
+    );
+  }
+  if (!data) return <AdminPageSkeleton cards={4} />;
 
   const { runtime, signals, recentErrors, links, config } = data;
+  const healthy = runtime.api.ok && runtime.web.ok;
+
+  const errorColumns: ReadonlyArray<BosColumn<RecentError>> = [
+    {
+      key: "at",
+      header: "When",
+      mono: true,
+      width: 96,
+      cell: (ev) => <span title={ev.at}>{relativeTime(ev.at)}</span>,
+    },
+    {
+      key: "message",
+      header: "Error",
+      cell: (ev) => (
+        <div>
+          <div className="admin-cc-cell-title">{ev.message}</div>
+          <div className="admin-cc-cell-sub">
+            {ev.method || "—"} {ev.path || "—"}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "kind",
+      header: "Kind",
+      cell: (ev) =>
+        ev.kind ? (
+          <Badge auto tone="coral">
+            {ev.kind}
+          </Badge>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "requestId",
+      header: "Request id",
+      mono: true,
+      cell: (ev) => (ev.requestId ? <span className="bos-mono">{ev.requestId}</span> : "—"),
+    },
+  ];
 
   return (
-    <div className="admin-page">
-      <section className="panel admin-card admin-page-head">
-        <div className="analytics-toolbar">
-          <div>
-            <h2>Operations</h2>
-            <p className="muted">
-              Service health, error pulse, and deep links to Grafana / error tracking — not a full Dynatrace
-              clone. Refreshes every 20s.
-            </p>
-          </div>
-          <span className="muted small">Updated {relativeTime(data.generatedAt)}</span>
-        </div>
-        <div className="analytics-kpis">
-          <article className={`result-card${runtime.api.ok ? "" : " dash-kpi-alert"}`}>
-            <span>API</span>
-            <strong>{runtime.api.ok ? "Healthy" : "Degraded"}</strong>
-            <span className="analytics-delta">
-              DB {runtime.api.db} · {runtime.api.latencyMs}ms · {runtime.api.memoryMb} MB · up{" "}
-              {fmtUptime(runtime.api.uptimeSec)}
-            </span>
-          </article>
-          <article className={`result-card${runtime.web.ok ? "" : " dash-kpi-alert"}`}>
-            <span>Web</span>
-            <strong>{runtime.web.ok ? "Reachable" : "Unreachable"}</strong>
-            <span className="analytics-delta">
-              {runtime.web.status ?? "—"} · {runtime.web.latencyMs}ms
-            </span>
-          </article>
-          <Link
-            href={adminDeepLink.audit()}
-            className={`result-card${signals.auditHighRisk7d ? " dash-kpi-warn" : ""}`}
-          >
-            <span>Audit risk (7d)</span>
-            <strong>{signals.auditHighRisk7d}</strong>
-            <span className="analytics-delta">High-risk security events</span>
-          </Link>
-          <article className={`result-card${signals.recentErrorCount ? " dash-kpi-warn" : ""}`}>
-            <span>Error pulse</span>
-            <strong>{signals.recentErrorCount}</strong>
-            <span className="analytics-delta">In-memory since API start</span>
-          </article>
-        </div>
-      </section>
+    <AdminPage
+      title="Operations"
+      sub="Service health · error pulse · observability"
+      toolbar={
+        <>
+          <StatusLight state={healthy ? "on" : "warn"} pulse>
+            {healthy ? "Operational" : "Needs attention"}
+          </StatusLight>
+          <Badge auto tone="blue">
+            Updated {relativeTime(data.generatedAt)} · refreshes every 20s
+          </Badge>
+          <Button variant="ghost" size="sm" icon="refresh" onClick={() => void load()}>
+            Refresh
+          </Button>
+        </>
+      }
+    >
+      {error ? <AdminErrorState title="Refresh failed" message={error} onRetry={load} /> : null}
 
-      <div className="admin-page-scroll">
-        <div className="admin-grid dash-health-grid">
-          <Link
-            id="delivery"
-            href={adminDeepLink.integrations()}
-            className="panel admin-card dash-health-card"
-          >
-            <h2>Document delivery</h2>
-            <strong>{signals.deliveryFailed7d} failed</strong>
-            <p className={signals.deliveryFailed7d ? "analytics-delta is-down" : "muted"}>
+      <Grid cols={4} min={180} gap={12}>
+        <KpiCard
+          label="API"
+          value={runtime.api.ok ? "Healthy" : "Degraded"}
+          valueTone={runtime.api.ok ? undefined : "coral"}
+          chip={{ color: runtime.api.ok ? "mint" : "rose", glyph: "◉" }}
+          interactive={false}
+          delta={`DB ${runtime.api.db} · ${runtime.api.latencyMs}ms · ${runtime.api.memoryMb} MB · up ${fmtUptime(runtime.api.uptimeSec)}`}
+          deltaTone={runtime.api.ok ? "up" : "down"}
+        />
+        <KpiCard
+          label="Web"
+          value={runtime.web.ok ? "Reachable" : "Unreachable"}
+          valueTone={runtime.web.ok ? undefined : "coral"}
+          chip={{ color: runtime.web.ok ? "blue" : "rose", glyph: "◎" }}
+          interactive={false}
+          delta={`${runtime.web.status ?? "—"} · ${runtime.web.latencyMs}ms`}
+          deltaTone={runtime.web.ok ? "up" : "down"}
+        />
+        <Link href={adminDeepLink.audit()} className="admin-cc-kpi-link">
+          <KpiCard
+            label="Audit risk (7d)"
+            value={signals.auditHighRisk7d}
+            chip={{ color: "lavender", glyph: "▣" }}
+            delta="High-risk security events"
+            deltaTone={signals.auditHighRisk7d ? "warn" : "muted"}
+          />
+        </Link>
+        <KpiCard
+          label="Error pulse"
+          value={signals.recentErrorCount}
+          chip={{ color: "amber", glyph: "!" }}
+          interactive={false}
+          delta="In-memory since API start"
+          deltaTone={signals.recentErrorCount ? "warn" : "muted"}
+        />
+      </Grid>
+
+      <Grid cols={4} min={200} gap={12} className="admin-cc-health-grid">
+        <Link id="delivery" href={adminDeepLink.integrations()} className="admin-cc-card-link">
+          <Card interactive>
+            <div className="bos-kpi-label">Document delivery</div>
+            <div className="bos-kpi-value">{signals.deliveryFailed7d} failed</div>
+            <div className={`bos-kpi-delta${signals.deliveryFailed7d ? " bos-kpi-delta-down" : ""}`}>
               {signals.deliveryPending7d} pending · 7 days · check Drive / webhook integrations
-            </p>
-          </Link>
-          <a
-            href={links.healthPublic}
-            target="_blank"
-            rel="noreferrer"
-            className="panel admin-card dash-health-card"
-          >
-            <h2>Public health</h2>
-            <strong>/api/health</strong>
-            <p className="muted">Open probe endpoint</p>
-          </a>
-          <div className="panel admin-card dash-health-card">
-            <h2>Telemetry config</h2>
-            <strong>{config.logFormat}</strong>
-            <p className="muted">
-              Logs · OTel {config.otelConfigured ? "on" : "off"} · webhook{" "}
-              {config.webhookConfigured ? "on" : "off"} · Sentry/GlitchTip{" "}
-              {config.sentryConfigured ? "on" : "off"} · Grafana{" "}
-              {config.grafanaConfigured ? "linked" : "not set"}
-            </p>
-          </div>
-          <div className="panel admin-card dash-health-card">
-            <h2>Process</h2>
-            <strong>{runtime.api.role}</strong>
-            <p className="muted">{runtime.api.nodeEnv}</p>
-          </div>
-        </div>
-
-        <section className="panel admin-card">
-          <div className="analytics-toolbar">
-            <div>
-              <h2>Observability links</h2>
-              <p className="muted">
-                Full log search and dashboards live in Grafana. Configure{" "}
-                <code>GRAFANA_PUBLIC_URL</code> on the API.
-              </p>
             </div>
+          </Card>
+        </Link>
+        <a href={links.healthPublic} target="_blank" rel="noreferrer" className="admin-cc-card-link">
+          <Card interactive>
+            <div className="bos-kpi-label">Public health</div>
+            <div className="bos-kpi-value">/api/health</div>
+            <div className="bos-kpi-delta bos-kpi-delta-muted">Open probe endpoint</div>
+          </Card>
+        </a>
+        <Card>
+          <div className="bos-kpi-label">Telemetry config</div>
+          <div className="bos-kpi-value">{config.logFormat}</div>
+          <div className="admin-cc-badge-row">
+            <Badge auto tone={config.otelConfigured ? "emerald" : "neutral"}>
+              OTel {config.otelConfigured ? "on" : "off"}
+            </Badge>
+            <Badge auto tone={config.webhookConfigured ? "emerald" : "neutral"}>
+              Webhook {config.webhookConfigured ? "on" : "off"}
+            </Badge>
+            <Badge auto tone={config.sentryConfigured ? "emerald" : "neutral"}>
+              Sentry/GlitchTip {config.sentryConfigured ? "on" : "off"}
+            </Badge>
+            <Badge auto tone={config.grafanaConfigured ? "emerald" : "neutral"}>
+              Grafana {config.grafanaConfigured ? "linked" : "not set"}
+            </Badge>
           </div>
-          <div className="dash-link-row">
-            {links.grafana ? (
-              <a href={links.grafana} className="btn btn-primary btn-sm" target="_blank" rel="noreferrer">
-                Open Grafana
-              </a>
-            ) : (
-              <span className="btn btn-secondary btn-sm" aria-disabled>
-                Grafana not configured
-              </span>
-            )}
-            {links.grafanaExploreApi ? (
-              <a
-                href={links.grafanaExploreApi}
-                className="btn btn-secondary btn-sm"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Loki: API logs (1h)
-              </a>
-            ) : null}
-            {links.grafanaExploreErrors ? (
-              <a
-                href={links.grafanaExploreErrors}
-                className="btn btn-secondary btn-sm"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Loki: warn/error (1h)
-              </a>
-            ) : null}
-            {links.grafanaExploreTraces ? (
-              <a
-                href={links.grafanaExploreTraces}
-                className="btn btn-secondary btn-sm"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Tempo: traces
-              </a>
-            ) : null}
-            {links.grafanaExploreHost ? (
-              <a
-                href={links.grafanaExploreHost}
-                className="btn btn-secondary btn-sm"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Prometheus: host mem
-              </a>
-            ) : null}
-            {links.errorsUi ? (
-              <a href={links.errorsUi} className="btn btn-ghost btn-sm" target="_blank" rel="noreferrer">
-                Errors UI
-              </a>
-            ) : null}
-            <a href={links.observabilityDoc} className="btn btn-ghost btn-sm" target="_blank" rel="noreferrer">
-              Setup guide
-            </a>
-            <a href={links.runbook} className="btn btn-ghost btn-sm" target="_blank" rel="noreferrer">
-              Production runbook
-            </a>
-            <Link href="/admin" className="btn btn-ghost btn-sm">
-              Command center
-            </Link>
-          </div>
-        </section>
+        </Card>
+        <Card>
+          <div className="bos-kpi-label">Process</div>
+          <div className="bos-kpi-value">{runtime.api.role}</div>
+          <div className="bos-kpi-delta bos-kpi-delta-muted">{runtime.api.nodeEnv}</div>
+        </Card>
+      </Grid>
 
-        <section className="panel admin-card">
-          <div className="analytics-toolbar">
-            <div>
-              <h2>Recent errors</h2>
-              <p className="muted">
-                From this API process. Use request id in Grafana Explore:{" "}
-                <code>{`{service="justx-jbt-api"} |= "requestId"`}</code>
-              </p>
-            </div>
-          </div>
-          {recentErrors.length === 0 ? (
-            <p className="muted">No errors recorded since the last API restart.</p>
+      <AdminSection
+        title="Observability links"
+        description={
+          <>
+            Full log search and dashboards live in Grafana. Configure <code className="admin-cc-code">GRAFANA_PUBLIC_URL</code> on
+            the API.
+          </>
+        }
+      >
+        <div className="admin-cc-link-row">
+          {links.grafana ? (
+            <ExternalButton href={links.grafana} variant="primary">
+              Open Grafana
+            </ExternalButton>
           ) : (
-            <div className="tracker-list">
-              {recentErrors.map((ev) => (
-                <div key={ev.id} className="tracker-row">
-                  <div className="tracker-row-main">
-                    <span className="tracker-row-title">{ev.message}</span>
-                    <span className="tracker-row-sub">
-                      {ev.method || "—"} {ev.path || "—"}
-                      {ev.kind ? ` · ${ev.kind}` : ""}
-                      {ev.requestId ? (
-                        <>
-                          {" · "}
-                          <span className="mono">{ev.requestId}</span>
-                        </>
-                      ) : null}
-                    </span>
-                  </div>
-                  <span className="muted" title={ev.at}>
-                    {relativeTime(ev.at)}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <Button variant="secondary" size="sm" disabled aria-disabled>
+              Grafana not configured
+            </Button>
           )}
-        </section>
+          {links.grafanaExploreApi ? <ExternalButton href={links.grafanaExploreApi}>Loki: API logs (1h)</ExternalButton> : null}
+          {links.grafanaExploreErrors ? (
+            <ExternalButton href={links.grafanaExploreErrors}>Loki: warn/error (1h)</ExternalButton>
+          ) : null}
+          {links.grafanaExploreTraces ? <ExternalButton href={links.grafanaExploreTraces}>Tempo: traces</ExternalButton> : null}
+          {links.grafanaExploreHost ? (
+            <ExternalButton href={links.grafanaExploreHost}>Prometheus: host mem</ExternalButton>
+          ) : null}
+          {links.errorsUi ? (
+            <ExternalButton href={links.errorsUi} variant="ghost">
+              Errors UI
+            </ExternalButton>
+          ) : null}
+          <ExternalButton href={links.observabilityDoc} variant="ghost">
+            Setup guide
+          </ExternalButton>
+          <ExternalButton href={links.runbook} variant="ghost">
+            Production runbook
+          </ExternalButton>
+          <Link href="/admin">
+            <Button variant="ghost" size="sm">
+              Command center
+            </Button>
+          </Link>
+        </div>
+      </AdminSection>
 
-        <section className="panel admin-card">
-          <h2>On-call checklist</h2>
-          <ul className="admin-insights">
-            <li>
-              <strong>SEV-1 site down</strong>
-              <p>Check public health → PM2 status → nginx → MySQL. See production runbook §12.</p>
-            </li>
-            <li>
-              <strong>Correlate a user report</strong>
-              <p>Ask for time (IST) and any error id / request id from the UI, then search Loki.</p>
-            </li>
-            <li>
-              <strong>Ship the Grafana stack</strong>
-              <p>
-                On the VPS: <code>deploy/observability/docker-compose.yml</code> — see{" "}
-                <code>docs/OBSERVABILITY.md</code>.
-              </p>
-            </li>
-          </ul>
-        </section>
-      </div>
-    </div>
+      <AdminSection
+        title="Recent errors"
+        description={
+          <>
+            From this API process. Use request id in Grafana Explore:{" "}
+            <code className="admin-cc-code">{`{service="justx-jbt-api"} |= "requestId"`}</code>
+          </>
+        }
+        actions={
+          recentErrors.length ? (
+            <Badge tone="coral">{recentErrors.length} recent</Badge>
+          ) : (
+            <Badge tone="emerald">Clear</Badge>
+          )
+        }
+      >
+        {recentErrors.length === 0 ? (
+          <AdminEmpty title="No errors recorded" icon="check">
+            Nothing since the last API restart.
+          </AdminEmpty>
+        ) : (
+          <div className="admin-cc-scroll">
+            <DataTable
+              compact
+              caption="Recent API errors"
+              columns={errorColumns}
+              rows={recentErrors}
+              rowKey={(ev) => ev.id}
+            />
+          </div>
+        )}
+      </AdminSection>
+
+      <AdminSection title="On-call checklist" description="First moves when something looks wrong.">
+        <ul className="admin-cc-attention-list">
+          <li className="admin-cc-attention-item">
+            <div className="admin-cc-attention-main">
+              <Badge auto tone="coral">
+                SEV-1
+              </Badge>
+              <div>
+                <strong>Site down</strong>
+                <p>Check public health → PM2 status → nginx → MySQL. See production runbook §12.</p>
+              </div>
+            </div>
+          </li>
+          <li className="admin-cc-attention-item">
+            <div className="admin-cc-attention-main">
+              <Badge auto tone="blue">
+                Triage
+              </Badge>
+              <div>
+                <strong>Correlate a user report</strong>
+                <p>Ask for time (IST) and any error id / request id from the UI, then search Loki.</p>
+              </div>
+            </div>
+          </li>
+          <li className="admin-cc-attention-item">
+            <div className="admin-cc-attention-main">
+              <Badge auto tone="neutral">
+                Setup
+              </Badge>
+              <div>
+                <strong>Ship the Grafana stack</strong>
+                <p>
+                  On the VPS: <code className="admin-cc-code">deploy/observability/docker-compose.yml</code> — see{" "}
+                  <code className="admin-cc-code">docs/OBSERVABILITY.md</code>.
+                </p>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </AdminSection>
+    </AdminPage>
   );
 }

@@ -7,7 +7,17 @@ import { TrackerSchemaDesigner } from "@/components/admin/SchemaDesigner";
 import { TRACKER_CONFIGS } from "@/config/tools.config";
 import { api } from "@/lib/api";
 import { QR_TOOL_ID } from "@/lib/qr-generator/config";
+import { Alert, Badge } from "@/components/bos";
+import { AdminSection, AdminTabs } from "@/components/admin/ui";
+import { TextareaField } from "@/components/admin/ui/AdminFields";
 import { validateComputedFormulas, type TrackerFieldMeta } from "@jbt/shared";
+
+type SchemaMode = "visual" | "json";
+
+const MODE_OPTIONS: ReadonlyArray<{ value: SchemaMode; label: string }> = [
+  { value: "visual", label: "Visual" },
+  { value: "json", label: "JSON" },
+];
 
 function hydrateJson(
   toolId: string,
@@ -45,7 +55,7 @@ export const ToolSchemaPane = forwardRef<
   const isQr = toolId === QR_TOOL_ID;
   const isTracker = !isQr && (toolType === "tracker" || TRACKER_CONFIGS[toolId] != null);
   const hasVisual = isTracker || isQr;
-  const [mode, setMode] = useState<"visual" | "json">(hasVisual ? "visual" : "json");
+  const [mode, setMode] = useState<SchemaMode>(hasVisual ? "visual" : "json");
   const [jsonText, setJsonText] = useState(() => hydrateJson(toolId, toolType, definition));
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -110,51 +120,56 @@ export const ToolSchemaPane = forwardRef<
   );
 
   return (
-    <section className="panel admin-card tm-pane tm-schema-pane">
-      <div className="analytics-toolbar tm-pane-toolbar">
-        <div>
-          <h2>{isQr ? "QR generator settings" : "Schema"}</h2>
-          <p className="muted">
-            {isQr
-              ? "Brand kit, allowed QR types, company defaults, export formats and features for every operator in this organisation. Publish a revision to roll it out."
-              : isTracker
-                ? "Field-level layout for this tracker. Publish a revision when the operator form should change."
-                : "Calculator and document tools use JSON config (rates, copy). Runtime math stays in product code."}
-          </p>
-        </div>
-        <div className="admin-form-row">
-          {dirty ? <span className="pill pill-warning">Unsaved</span> : null}
-          {hasVisual ? (
-            <div className="admin-tabs">
-              <button type="button" className={mode === "visual" ? "active" : ""} onClick={() => setMode("visual")}>
-                Visual
-              </button>
-              <button type="button" className={mode === "json" ? "active" : ""} onClick={() => setMode("json")}>
-                JSON
-              </button>
-            </div>
+    <AdminSection
+      title={isQr ? "QR generator settings" : "Schema"}
+      description={
+        isQr
+          ? "Brand kit, allowed QR types, company defaults, export formats and features for every operator in this organisation. Publish a revision to roll it out."
+          : isTracker
+            ? "Field-level layout for this tracker. Publish a revision when the operator form should change."
+            : "Calculator and document tools use JSON config (rates, copy). Runtime math stays in product code."
+      }
+      actions={
+        <>
+          {dirty ? (
+            <Badge auto tone="amber">
+              Unsaved
+            </Badge>
           ) : null}
-        </div>
-      </div>
-
-      <div className="tm-pane-body">
+          {hasVisual ? (
+            <AdminTabs<SchemaMode>
+              aria-label="Schema editor mode"
+              options={MODE_OPTIONS}
+              value={mode}
+              onChange={setMode}
+            />
+          ) : null}
+        </>
+      }
+    >
+      <div className="admin-cc-form">
         {isTracker && mode === "visual" ? (
           <TrackerSchemaDesigner toolId={toolId} jsonText={jsonText} onChange={updateJson} />
         ) : null}
         {isQr && mode === "visual" ? <QrGeneratorConfigDesigner jsonText={jsonText} onChange={updateJson} /> : null}
         {mode === "json" || !hasVisual ? (
-          <label className="field">
-            <span>Definition JSON</span>
-            <textarea rows={16} value={jsonText} onChange={(e) => updateJson(e.target.value)} />
-          </label>
+          <TextareaField
+            full
+            label="Definition JSON"
+            className="admin-cc-json-area"
+            rows={16}
+            spellCheck={false}
+            value={jsonText}
+            onChange={(e) => updateJson(e.target.value)}
+          />
+        ) : null}
+
+        {localError ? (
+          <Alert tone="coral" title="Couldn’t publish schema">
+            {localError}
+          </Alert>
         ) : null}
       </div>
-
-      {localError ? (
-        <div className="tm-pane-footer">
-          <p className="field-error">{localError}</p>
-        </div>
-      ) : null}
-    </section>
+    </AdminSection>
   );
 });

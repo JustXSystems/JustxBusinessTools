@@ -4,6 +4,28 @@ import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPage,
+  AdminPageSkeleton,
+  AdminSection,
+  AdminTabs,
+} from "@/components/admin/ui";
+import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
+import {
+  Alert,
+  Badge,
+  Button,
+  Dialog,
+  Field,
+  FormGrid,
+  Grid,
+  KpiCard,
+  SearchInput,
+  cx,
+  type BosBadgeTone,
+} from "@/components/bos";
 import { api } from "@/lib/api";
 import { invalidateAdminData, useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { useRevealWhenStacked } from "@/hooks/useRevealWhenStacked";
@@ -42,6 +64,9 @@ const PROVIDERS = [
   { id: "mock", label: "Mock (dev)", hint: "Sandbox — no live charges" },
 ] as const;
 
+const FILTERS: ReadonlyArray<Filter> = ["all", "enabled", "off", "live", "test", "unhealthy"];
+const PANES: ReadonlyArray<Pane> = ["health", "config", "plans", "trace"];
+
 const emptyForm = {
   provider: "razorpay",
   displayName: "Razorpay",
@@ -52,11 +77,11 @@ const emptyForm = {
   mappedPlanIds: [] as string[],
 };
 
-function healthClass(health: string | null, enabled: boolean) {
-  if (!enabled) return "pill";
-  if (health === "ok" || health === "healthy") return "pill pill-success";
-  if (health === "fail" || health === "error" || health === "down") return "pill pill-danger";
-  return "pill pill-warning";
+function healthTone(health: string | null, enabled: boolean): BosBadgeTone {
+  if (!enabled) return "neutral";
+  if (health === "ok" || health === "healthy") return "emerald";
+  if (health === "fail" || health === "error" || health === "down") return "coral";
+  return "amber";
 }
 
 function healthLabel(g: Gateway) {
@@ -81,12 +106,12 @@ function relativeAgo(value: string | null) {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-function eventClass(type: string) {
-  if (type === "health_check" || type === "created" || type === "webhook.replay") return "pill-success";
-  if (type.startsWith("webhook.")) return "pill-warning";
-  if (type === "updated") return "pill-warning";
-  if (type.includes("fail") || type.includes("error")) return "pill-danger";
-  return "";
+function eventTone(type: string): BosBadgeTone {
+  if (type === "health_check" || type === "created" || type === "webhook.replay") return "emerald";
+  if (type.startsWith("webhook.")) return "amber";
+  if (type === "updated") return "amber";
+  if (type.includes("fail") || type.includes("error")) return "coral";
+  return "neutral";
 }
 
 function secretPlaceholder(config: Record<string, unknown> | undefined, key: string) {
@@ -101,9 +126,13 @@ function credentialLabels(provider: string) {
   return { keyId: "Key / client id", secret: "Secret" };
 }
 
+function cap(s: string) {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
 export default function AdminGatewaysPage() {
   return (
-    <Suspense fallback={<div className="admin-page"><p className="muted">Loading gateways…</p></div>}>
+    <Suspense fallback={<AdminPageSkeleton cards={4} />}>
       <AdminGatewaysInner />
     </Suspense>
   );
@@ -134,6 +163,7 @@ function AdminGatewaysInner() {
     mappedPlanIds: [] as string[],
   });
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -163,16 +193,19 @@ function AdminGatewaysInner() {
     setEvents(data.events);
   }, []);
 
-  useLiveRefresh(async () => {
+  const refresh = useCallback(async () => {
     try {
       const { nextId } = await load();
       if (nextId != null) await loadEvents(nextId);
+      setLoaded(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load gateways");
     } finally {
       setLoading(false);
     }
-  }, { intervalMs: 45_000 });
+  }, [load, loadEvents]);
+
+  useLiveRefresh(refresh, { intervalMs: 45_000 });
 
   const selected = gateways.find((g) => g.id === selectedId) ?? null;
   const editSeededFor = useRef<number | null>(null);
@@ -353,283 +386,232 @@ function AdminGatewaysInner() {
     });
   }
 
+  if (!loaded) {
+    if (error) {
+      return (
+        <AdminPage title="Gateways" sub="Payment providers per organization">
+          <AdminErrorState message={error} onRetry={() => void refresh()} />
+        </AdminPage>
+      );
+    }
+    return <AdminPageSkeleton cards={4} />;
+  }
+
   const labels = credentialLabels(selected?.provider ?? form.provider);
 
-  return (
-    <div className="admin-page">
-      <section className="panel admin-card admin-page-head">
-        <div className="analytics-toolbar">
-          <div>
-            <h2>Gateways</h2>
-            <p className="muted">
-              Connect Razorpay, Stripe, or Cashfree per organization. Operator Business Profile
-              selection is ignored — pick the org when adding a gateway.
-            </p>
-          </div>
-          <div className="admin-form-row">
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              disabled={loading || Boolean(busy)}
-              onClick={() =>
-                run("Refreshed.", async () => {
-                  const { nextId } = await load(selectedId);
-                  if (nextId != null) await loadEvents(nextId);
-                })
-              }
-            >
-              {loading ? "Loading…" : "Refresh"}
-            </button>
-            <Link href={adminDeepLink.upi()} className="btn btn-ghost btn-sm">
-              UPI QR (default)
-            </Link>
-            <Link href={adminDeepLink.payments()} className="btn btn-ghost btn-sm">
-              Payments
-            </Link>
-            <Link href={adminDeepLink.subscriptions()} className="btn btn-ghost btn-sm">
-              Plans
-            </Link>
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
-              Add gateway
-            </button>
-          </div>
-        </div>
-        <div className="analytics-kpis">
-          <button type="button" className={`result-card ${filter === "all" ? "is-selected" : ""}`} onClick={() => setFilter("all")}>
-            <span>Providers</span>
-            <strong>{summary.total}</strong>
-          </button>
-          <button type="button" className={`result-card ${filter === "enabled" ? "is-selected" : ""}`} onClick={() => setFilter("enabled")}>
-            <span>Enabled</span>
-            <strong>{summary.enabled}</strong>
-          </button>
-          <button type="button" className={`result-card ${filter === "live" ? "is-selected" : ""}`} onClick={() => setFilter("live")}>
-            <span>Live mode</span>
-            <strong>{summary.live}</strong>
-            <span className={`analytics-delta ${summary.live ? "is-down" : ""}`}>Real charges</span>
-          </button>
-          <button
-            type="button"
-            className={`result-card ${filter === "unhealthy" ? "is-selected" : ""}`}
-            onClick={() => setFilter("unhealthy")}
+  const filterOptions = FILTERS.map((f) => ({ value: f, label: cap(f) }));
+  const paneOptions = PANES.map((p) => ({
+    value: p,
+    label: p === "trace" ? `Trace (${events.length})` : cap(p),
+  }));
+
+  const kpi = (
+    key: Filter,
+    label: string,
+    value: number,
+    chip: { color: "blue" | "amber" | "mint" | "lavender" | "rose" | "sage"; glyph: string },
+    delta: string,
+    deltaTone: "up" | "down" | "warn" | "info" | "muted",
+  ) => (
+    <button
+      type="button"
+      className={cx("admin-cc-kpi-btn", filter === key && "is-selected")}
+      aria-pressed={filter === key}
+      onClick={() => setFilter(key)}
+    >
+      <KpiCard label={label} value={value} chip={chip} delta={delta} deltaTone={deltaTone} />
+    </button>
+  );
+
+  const planChips = (
+    selectedIds: string[],
+    toggle: (id: string, on: boolean) => void,
+    showOff: boolean,
+  ) => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {plans.map((p) => {
+        const on = selectedIds.includes(p.id);
+        return (
+          <Button
+            key={p.id}
+            size="sm"
+            variant={on ? "primary" : "secondary"}
+            aria-pressed={on}
+            onClick={() => toggle(p.id, on)}
           >
-            <span>Needs check</span>
-            <strong>{summary.unhealthy}</strong>
-            <span className={`analytics-delta ${summary.unhealthy ? "is-down" : "is-up"}`}>
-              Untested or failed
-            </span>
-          </button>
-        </div>
-      </section>
+            {p.name}
+            {showOff && !p.available ? " (off)" : ""}
+          </Button>
+        );
+      })}
+    </div>
+  );
 
-      {error ? <p className="field-error">{error}</p> : null}
-      {message ? <p className="muted">{message}</p> : null}
+  return (
+    <AdminPage
+      title="Gateways"
+      sub="Razorpay · Stripe · Cashfree per organization"
+      toolbar={
+        <>
+          <Badge auto tone={summary.unhealthy ? "amber" : "emerald"}>
+            {summary.unhealthy ? `${summary.unhealthy} need check` : "All healthy"}
+          </Badge>
+          <Link href={adminDeepLink.upi()}>
+            <Button variant="ghost" size="sm">
+              UPI QR (default)
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.payments()}>
+            <Button variant="ghost" size="sm">
+              Payments
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.subscriptions()}>
+            <Button variant="ghost" size="sm">
+              Plans
+            </Button>
+          </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="refresh"
+            disabled={loading || Boolean(busy)}
+            onClick={() =>
+              void run("Refreshed.", async () => {
+                const { nextId } = await load(selectedId);
+                if (nextId != null) await loadEvents(nextId);
+              })
+            }
+          >
+            {loading ? "Loading…" : "Refresh"}
+          </Button>
+          <Button variant="primary" size="sm" icon="plus" onClick={() => setShowAdd(true)}>
+            Add gateway
+          </Button>
+        </>
+      }
+    >
+      <Alert tone="blue" title="Per-organization gateways">
+        Connect Razorpay, Stripe, or Cashfree per organization. Operator Business Profile selection is ignored — pick the
+        org when adding a gateway.
+      </Alert>
 
-      <div className="admin-page-scroll">
-      <div className="admin-split payments-split">
-        <section className="panel admin-card admin-pane admin-dir-panel">
-          <h2>Directory</h2>
-          <div className="admin-form-row">
-            <input
+      <Grid cols={4} min={140} gap={12}>
+        {kpi("all", "Providers", summary.total, { color: "blue", glyph: "◎" }, "Show all", "muted")}
+        {kpi("enabled", "Enabled", summary.enabled, { color: "mint", glyph: "✓" }, "Taking checkouts", "muted")}
+        {kpi("live", "Live mode", summary.live, { color: "rose", glyph: "₹" }, "Real charges", summary.live ? "down" : "muted")}
+        {kpi(
+          "unhealthy",
+          "Needs check",
+          summary.unhealthy,
+          { color: "amber", glyph: "◈" },
+          "Untested or failed",
+          summary.unhealthy ? "warn" : "up",
+        )}
+      </Grid>
+
+      {error ? <AdminErrorState title="Action or refresh failed" message={error} onRetry={() => void refresh()} /> : null}
+      {message ? <Alert tone="emerald" title={message} /> : null}
+
+      <div className="admin-cc-split">
+        <AdminSection title="Directory" description={`${visible.length} of ${gateways.length} shown`}>
+          <div className="admin-cc-stack">
+            <SearchInput
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search name, provider, plan"
               aria-label="Search gateways"
             />
-            <div className="admin-tabs">
-              {(["all", "enabled", "off", "live", "test", "unhealthy"] as Filter[]).map((f) => (
-                <button key={f} type="button" className={filter === f ? "active" : ""} onClick={() => setFilter(f)}>
-                  {f}
-                </button>
-              ))}
-            </div>
+            <AdminTabs aria-label="Gateway filter" options={filterOptions} value={filter} onChange={setFilter} />
           </div>
-          <div className="tracker-list admin-dir-list">
-            {visible.map((g) => (
-              <button
-                type="button"
-                key={g.id}
-                className={`tracker-row admin-member-row ${selectedId === g.id ? "is-selected" : ""}`}
-                onClick={() => {
-                  void selectGateway(g.id);
-                  revealDetail();
-                }}
-              >
-                <div>
-                  <strong>{g.displayName}</strong>
-                  {g.organizationName ? (
-                    <span className="muted small"> · {g.organizationName}</span>
-                  ) : null}
-                  <span className="muted">
-                    {g.provider} · {g.mode} · {(g.mappedPlanIds ?? []).join(", ") || "no plans"}
-                  </span>
-                </div>
-                <div className="admin-form-row">
-                  <span className={g.enabled ? "pill pill-success" : "pill"}>{g.enabled ? "on" : "off"}</span>
-                  <span className={healthClass(g.lastHealth, g.enabled)}>{healthLabel(g)}</span>
-                </div>
-              </button>
-            ))}
-            {visible.length === 0 ? <p className="muted">No gateways match this filter.</p> : null}
-          </div>
-        </section>
-
-        <div className="admin-pane-stack">
-          {showAdd ? (
-            <section className="panel admin-card">
-              <h2>Add gateway</h2>
-              <p className="muted">Starts disabled. Run a health check before enabling live mode.</p>
-              <form className="admin-form-grid" onSubmit={createGateway}>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <AdminOrgSelect value={createOrgId} onChange={setCreateOrgId} />
-                </div>
-                <label className="field">
-                  <span>Provider</span>
-                  <select
-                    value={form.provider}
-                    onChange={(e) => {
-                      const provider = e.target.value;
-                      const meta = PROVIDERS.find((p) => p.id === provider);
-                      setForm({
-                        ...form,
-                        provider,
-                        displayName: meta?.label ?? provider,
-                      });
-                    }}
-                  >
-                    {PROVIDERS.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Display name</span>
-                  <input
-                    value={form.displayName}
-                    onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-                    required
-                  />
-                </label>
-                <label className="field">
-                  <span>Mode</span>
-                  <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
-                    <option value="test">Test</option>
-                    <option value="live">Live</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>{credentialLabels(form.provider).keyId}</span>
-                  <input value={form.keyId} onChange={(e) => setForm({ ...form, keyId: e.target.value })} autoComplete="off" />
-                </label>
-                <label className="field">
-                  <span>{credentialLabels(form.provider).secret}</span>
-                  <input
-                    type="password"
-                    value={form.keySecret}
-                    onChange={(e) => setForm({ ...form, keySecret: e.target.value })}
-                    autoComplete="new-password"
-                  />
-                </label>
-                <label className="field">
-                  <span>Webhook secret</span>
-                  <input
-                    type="password"
-                    value={form.webhookSecret}
-                    onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
-                    autoComplete="new-password"
-                  />
-                </label>
-                {plans.length > 0 ? (
-                  <div className="field gw-plan-field">
-                    <span>Map to plans</span>
-                    <div className="gw-plan-chips">
-                      {plans.map((p) => {
-                        const on = form.mappedPlanIds.includes(p.id);
-                        return (
-                          <button
-                            type="button"
-                            key={p.id}
-                            className={`pill ${on ? "pill-success" : ""}`}
-                            onClick={() =>
-                              setForm({
-                                ...form,
-                                mappedPlanIds: on
-                                  ? form.mappedPlanIds.filter((id) => id !== p.id)
-                                  : [...form.mappedPlanIds, p.id],
-                              })
-                            }
-                          >
-                            {p.name}
-                          </button>
-                        );
-                      })}
+          <div className="admin-cc-dir-list">
+            {visible.map((g) => {
+              const active = selectedId === g.id;
+              return (
+                <button
+                  type="button"
+                  key={g.id}
+                  className={cx("admin-cc-row", active && "is-selected")}
+                  aria-pressed={active}
+                  onClick={() => {
+                    void selectGateway(g.id);
+                    revealDetail();
+                  }}
+                >
+                  <div className="admin-cc-row-main">
+                    <div className="admin-cc-cell-title">
+                      {g.displayName}
+                      {g.organizationName ? <span className="admin-cc-cell-sub"> · {g.organizationName}</span> : null}
+                    </div>
+                    <div className="admin-cc-cell-sub">
+                      {g.provider} · {g.mode} · {(g.mappedPlanIds ?? []).join(", ") || "no plans"}
                     </div>
                   </div>
-                ) : null}
-                <div className="admin-form-row">
-                  <button type="submit" className="btn btn-primary" disabled={Boolean(busy)}>
-                    Save gateway
-                  </button>
-                  <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </section>
-          ) : selected ? (
-            <section ref={detailRef} className="panel admin-card admin-detail-panel">
-              <div className="analytics-toolbar">
+                  <div className="admin-cc-row-badges">
+                    <Badge auto tone={g.enabled ? "emerald" : "neutral"}>
+                      {g.enabled ? "on" : "off"}
+                    </Badge>
+                    <Badge auto tone={healthTone(g.lastHealth, g.enabled)}>
+                      {healthLabel(g)}
+                    </Badge>
+                  </div>
+                </button>
+              );
+            })}
+            {visible.length === 0 ? (
+              <AdminEmpty title="No gateways match" icon="search">
+                No gateways match this filter.
+              </AdminEmpty>
+            ) : null}
+          </div>
+        </AdminSection>
+
+        <section ref={detailRef} className="bos-widget admin-cc-section" style={{ minWidth: 0 }}>
+          {selected ? (
+            <>
+              <div className="admin-cc-detail-head">
                 <div>
-                  <h2>{selected.displayName}</h2>
-                  <p className="muted">
+                  <h3 className="admin-cc-detail-title">{selected.displayName}</h3>
+                  <p className="admin-cc-detail-sub">
                     {PROVIDERS.find((p) => p.id === selected.provider)?.hint ?? selected.provider}
                     {" · "}
                     last check {relativeAgo(selected.lastHealthAt)}
                   </p>
                 </div>
-                <div className="admin-form-row">
-                  <span className={selected.mode === "live" ? "pill pill-danger" : "pill pill-warning"}>{selected.mode}</span>
-                  <span className={healthClass(selected.lastHealth, selected.enabled)}>{healthLabel(selected)}</span>
+                <div className="admin-cc-actions">
+                  <Badge auto tone={selected.mode === "live" ? "coral" : "amber"}>
+                    {selected.mode}
+                  </Badge>
+                  <Badge auto tone={healthTone(selected.lastHealth, selected.enabled)}>
+                    {healthLabel(selected)}
+                  </Badge>
                 </div>
               </div>
-              <div className="admin-tabs-bar">
-                <div className="admin-tabs" role="tablist">
-                  {(["health", "config", "plans", "trace"] as Pane[]).map((t) => (
-                    <button key={t} type="button" role="tab" className={pane === t ? "active" : ""} onClick={() => setPane(t)}>
-                      {t === "trace" ? `Trace (${events.length})` : t[0].toUpperCase() + t.slice(1)}
-                    </button>
-                  ))}
-                </div>
-                <div className="admin-tabs-actions">
+
+              <div className="admin-cc-tabs-bar">
+                <AdminTabs aria-label="Gateway detail" options={paneOptions} value={pane} onChange={setPane} />
+                <div className="admin-cc-actions">
                   {pane === "health" ? (
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={Boolean(busy)}
-                      onClick={() => void testGateway(selected)}
-                    >
+                    <Button variant="primary" size="sm" disabled={Boolean(busy)} onClick={() => void testGateway(selected)}>
                       Run health check
-                    </button>
+                    </Button>
                   ) : null}
                   {pane === "config" ? (
-                    <button type="submit" form="gateway-config-form" className="btn btn-primary" disabled={Boolean(busy)}>
+                    <Button type="submit" form="gateway-config-form" variant="primary" size="sm" disabled={Boolean(busy)}>
                       Save config
-                    </button>
+                    </Button>
                   ) : null}
                   {pane === "plans" ? (
-                    <button type="button" className="btn btn-primary" disabled={Boolean(busy)} onClick={() => void savePlans()}>
+                    <Button variant="primary" size="sm" disabled={Boolean(busy)} onClick={() => void savePlans()}>
                       Save mapping
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               </div>
 
-              <div className="admin-detail-scroll">
               {pane === "health" ? (
-                <div className="admin-stack">
-                  <ul className="admin-kv">
+                <div className="admin-cc-form">
+                  <ul className="admin-cc-kv">
                     <li>
                       <span>Provider</span>
                       <strong>{selected.provider}</strong>
@@ -640,7 +622,11 @@ function AdminGatewaysInner() {
                     </li>
                     <li>
                       <span>Status</span>
-                      <span className={selected.enabled ? "pill pill-success" : "pill"}>{selected.enabled ? "enabled" : "disabled"}</span>
+                      <strong>
+                        <Badge auto tone={selected.enabled ? "emerald" : "neutral"}>
+                          {selected.enabled ? "enabled" : "disabled"}
+                        </Badge>
+                      </strong>
                     </li>
                     <li>
                       <span>Last health</span>
@@ -654,162 +640,234 @@ function AdminGatewaysInner() {
                     </li>
                   </ul>
                   {selected.mode === "live" && selected.enabled ? (
-                    <p className="field-error">Live + enabled: this provider can take real payments.</p>
+                    <Alert tone="coral" title="Live + enabled">
+                      This provider can take real payments.
+                    </Alert>
                   ) : null}
-                  <div className="admin-form-row">
-                    <button
-                      type="button"
-                      className={selected.enabled ? "btn btn-destructive" : "btn btn-secondary"}
+                  <div className="admin-cc-form-actions">
+                    <Button
+                      variant={selected.enabled ? "destructive" : "secondary"}
                       disabled={Boolean(busy)}
                       onClick={() => void toggleEnabled(selected)}
                     >
                       {selected.enabled ? "Disable" : "Enable"}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : null}
 
               {pane === "config" ? (
-                <form id="gateway-config-form" className="admin-form-grid" onSubmit={saveConfig}>
-                  <label className="field">
-                    <span>Display name</span>
-                    <input
+                <form id="gateway-config-form" className="admin-cc-form" onSubmit={saveConfig}>
+                  <FormGrid>
+                    <TextField
+                      label="Display name"
                       value={edit.displayName}
                       onChange={(e) => setEdit({ ...edit, displayName: e.target.value })}
                       required
                     />
-                  </label>
-                  <label className="field">
-                    <span>Mode</span>
-                    <select value={edit.mode} onChange={(e) => setEdit({ ...edit, mode: e.target.value })}>
+                    <SelectField
+                      label="Mode"
+                      value={edit.mode}
+                      onChange={(e) => setEdit({ ...edit, mode: e.target.value })}
+                    >
                       <option value="test">Test</option>
                       <option value="live">Live</option>
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>{labels.keyId}</span>
-                    <input
+                    </SelectField>
+                    <TextField
+                      label={labels.keyId}
                       value={edit.keyId}
                       onChange={(e) => setEdit({ ...edit, keyId: e.target.value })}
                       placeholder={secretPlaceholder(selected.config, "keyId") || "Leave blank to keep"}
                       autoComplete="off"
                     />
-                  </label>
-                  <label className="field">
-                    <span>{labels.secret}</span>
-                    <input
+                    <TextField
+                      label={labels.secret}
                       type="password"
                       value={edit.keySecret}
                       onChange={(e) => setEdit({ ...edit, keySecret: e.target.value })}
                       placeholder={secretPlaceholder(selected.config, "keySecret") || "Leave blank to keep"}
                       autoComplete="new-password"
                     />
-                  </label>
-                  <label className="field">
-                    <span>Webhook secret</span>
-                    <input
+                    <TextField
+                      label="Webhook secret"
                       type="password"
                       value={edit.webhookSecret}
                       onChange={(e) => setEdit({ ...edit, webhookSecret: e.target.value })}
                       placeholder={secretPlaceholder(selected.config, "webhookSecret") || "Optional"}
                       autoComplete="new-password"
                     />
-                  </label>
+                  </FormGrid>
                 </form>
               ) : null}
 
               {pane === "plans" ? (
-                <div className="admin-stack">
-                  <p className="muted">Checkout for these plans will use this gateway when it is enabled.</p>
+                <div className="admin-cc-form">
+                  <p className="admin-cc-note-text">
+                    Checkout for these plans will use this gateway when it is enabled.
+                  </p>
                   {plans.length === 0 ? (
-                    <p className="muted">
-                      No plans loaded. Create them under{" "}
-                      <Link href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>.
-                    </p>
+                    <AdminEmpty title="No plans loaded" icon="wallet">
+                      Create them under{" "}
+                      <Link className="admin-cc-link" href={adminDeepLink.subscriptions()}>
+                        Plans &amp; entitlements
+                      </Link>
+                      .
+                    </AdminEmpty>
                   ) : (
-                    <div className="gw-plan-chips">
-                      {plans.map((p) => {
-                        const on = edit.mappedPlanIds.includes(p.id);
-                        return (
-                          <button
-                            type="button"
-                            key={p.id}
-                            className={`pill ${on ? "pill-success" : ""}`}
-                            onClick={() =>
-                              setEdit({
-                                ...edit,
-                                mappedPlanIds: on
-                                  ? edit.mappedPlanIds.filter((id) => id !== p.id)
-                                  : [...edit.mappedPlanIds, p.id],
-                              })
-                            }
-                          >
-                            {p.name}
-                            {!p.available ? " (off)" : ""}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    planChips(
+                      edit.mappedPlanIds,
+                      (id, on) =>
+                        setEdit({
+                          ...edit,
+                          mappedPlanIds: on ? edit.mappedPlanIds.filter((x) => x !== id) : [...edit.mappedPlanIds, id],
+                        }),
+                      true,
+                    )
                   )}
                 </div>
               ) : null}
 
               {pane === "trace" ? (
-                <div>
-                  <div className="admin-form-row" style={{ marginBottom: 12 }}>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      disabled={Boolean(busy)}
-                      onClick={() => void injectSampleWebhook(selected)}
-                    >
+                <div className="admin-cc-form">
+                  <div className="admin-cc-form-actions">
+                    <Button variant="secondary" size="sm" disabled={Boolean(busy)} onClick={() => void injectSampleWebhook(selected)}>
                       Inject sample webhook
-                    </button>
-                    <p className="muted" style={{ margin: 0, fontSize: 12 }}>
-                      Replays skip signature checks. Use for mock / recovery only.
-                    </p>
+                    </Button>
+                    <span className="admin-cc-cell-sub">Replays skip signature checks. Use for mock / recovery only.</span>
                   </div>
-                  <ul className="gw-timeline">
-                    {events.length === 0 ? (
-                      <li className="muted">No events yet. Run a health check or inject a sample webhook.</li>
-                    ) : (
-                      events.map((ev) => (
+                  {events.length === 0 ? (
+                    <AdminEmpty title="No events yet" icon="clock">
+                      Run a health check or inject a sample webhook.
+                    </AdminEmpty>
+                  ) : (
+                    <ul className="admin-cc-timeline">
+                      {events.map((ev) => (
                         <li key={ev.id}>
-                          <span className={`pill ${eventClass(ev.eventType)}`}>{ev.eventType.replace(/_/g, " ")}</span>
+                          <Badge auto tone={eventTone(ev.eventType)}>
+                            {ev.eventType.replace(/_/g, " ")}
+                          </Badge>
                           <div>
-                            <strong>{ev.message || ev.eventType}</strong>
-                            <span className="muted">{fmtWhen(ev.createdAt)}</span>
+                            <div className="admin-cc-cell-title">{ev.message || ev.eventType}</div>
+                            <div className="admin-cc-cell-sub">{fmtWhen(ev.createdAt)}</div>
                           </div>
                           {ev.hasPayload ? (
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-sm"
-                              disabled={Boolean(busy)}
-                              onClick={() => void replayEvent(selected, ev)}
-                            >
+                            <Button variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => void replayEvent(selected, ev)}>
                               Replay
-                            </button>
-                          ) : null}
+                            </Button>
+                          ) : (
+                            <span />
+                          )}
                         </li>
-                      ))
-                    )}
-                  </ul>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               ) : null}
-              </div>
-            </section>
+            </>
           ) : (
-            <section className="panel admin-card">
-              <h2>No providers yet</h2>
-              <p className="muted">Add Razorpay, Stripe, Cashfree, or a mock gateway for local testing.</p>
-              <button type="button" className="btn btn-primary" onClick={() => setShowAdd(true)}>
-                Add gateway
-              </button>
-            </section>
+            <AdminEmpty
+              title="No providers yet"
+              icon="wallet"
+              actions={
+                <Button variant="primary" onClick={() => setShowAdd(true)}>
+                  Add gateway
+                </Button>
+              }
+            >
+              Add Razorpay, Stripe, Cashfree, or a mock gateway for local testing.
+            </AdminEmpty>
           )}
-        </div>
-        </div>
+        </section>
       </div>
-    </div>
+
+      <Dialog
+        wide
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        title="Add gateway"
+        description="Starts disabled. Run a health check before enabling live mode."
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => setShowAdd(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="gateway-create-form" variant="primary" disabled={Boolean(busy)}>
+              Save gateway
+            </Button>
+          </>
+        }
+      >
+        {/* Dialogs portal outside `.admin-bos`, so use BOS-only classes in here. */}
+        <form id="gateway-create-form" onSubmit={createGateway}>
+          <FormGrid>
+            <AdminOrgSelect full value={createOrgId} onChange={setCreateOrgId} />
+            <SelectField
+              label="Provider"
+              value={form.provider}
+              onChange={(e) => {
+                const provider = e.target.value;
+                const meta = PROVIDERS.find((p) => p.id === provider);
+                setForm({
+                  ...form,
+                  provider,
+                  displayName: meta?.label ?? provider,
+                });
+              }}
+            >
+              {PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </SelectField>
+            <TextField
+              label="Display name"
+              value={form.displayName}
+              onChange={(e) => setForm({ ...form, displayName: e.target.value })}
+              required
+            />
+            <SelectField label="Mode" value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
+              <option value="test">Test</option>
+              <option value="live">Live</option>
+            </SelectField>
+            <TextField
+              label={credentialLabels(form.provider).keyId}
+              value={form.keyId}
+              onChange={(e) => setForm({ ...form, keyId: e.target.value })}
+              autoComplete="off"
+            />
+            <TextField
+              label={credentialLabels(form.provider).secret}
+              type="password"
+              value={form.keySecret}
+              onChange={(e) => setForm({ ...form, keySecret: e.target.value })}
+              autoComplete="new-password"
+            />
+            <TextField
+              label="Webhook secret"
+              type="password"
+              value={form.webhookSecret}
+              onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
+              autoComplete="new-password"
+            />
+            {plans.length > 0 ? (
+              <Field label="Map to plans" full>
+                {() =>
+                  planChips(
+                    form.mappedPlanIds,
+                    (id, on) =>
+                      setForm({
+                        ...form,
+                        mappedPlanIds: on ? form.mappedPlanIds.filter((x) => x !== id) : [...form.mappedPlanIds, id],
+                      }),
+                    false,
+                  )
+                }
+              </Field>
+            ) : null}
+          </FormGrid>
+        </form>
+      </Dialog>
+    </AdminPage>
   );
 }

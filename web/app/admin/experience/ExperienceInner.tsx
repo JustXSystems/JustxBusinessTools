@@ -2,12 +2,26 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Alert, Badge, Button } from "@/components/bos";
+import { AdminPage, AdminTabs } from "@/components/admin/ui";
 import { BrandingPanel } from "@/components/admin/BrandingPanel";
 import { ThemeStudioPanel } from "@/components/admin/ThemeStudioPanel";
 import { PublicHomePanel } from "@/components/admin/PublicHomePanel";
 import type { ExperienceSaveHandle } from "@/components/admin/experience-save";
 
 type Tab = "theme" | "branding" | "public-home";
+
+const TAB_OPTIONS: ReadonlyArray<{ value: Tab; label: string }> = [
+  { value: "theme", label: "Theme" },
+  { value: "branding", label: "Branding" },
+  { value: "public-home", label: "Public home" },
+];
+
+const TAB_TITLE: Record<Tab, string> = {
+  theme: "Theme studio",
+  branding: "Platform branding",
+  "public-home": "Guest public home",
+};
 
 export default function ExperienceInner() {
   const search = useSearchParams();
@@ -55,62 +69,29 @@ export default function ExperienceInner() {
     tab === "theme" ? "Save & activate" : tab === "public-home" ? "Save public home" : "Save changes";
 
   return (
-    <div className="admin-page">
-      <section className="panel admin-card admin-page-head">
-        <h2>Experience</h2>
-        <p className="muted">
-          Theme tokens, platform branding, and the guest public home. Logged-in operators always keep
-          the normal tool home.
-        </p>
-      </section>
-
-      <div className="admin-tabs-bar">
-        <div className="admin-tabs" role="tablist">
-          {(
-            [
-              ["theme", "Theme"],
-              ["branding", "Branding"],
-              ["public-home", "Public home"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              className={tab === id ? "active" : ""}
-              onClick={() => select(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="admin-tabs-actions">
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={saving}
-            onClick={() => void saveActive()}
-          >
+    <AdminPage
+      title="Experience"
+      sub={`${TAB_TITLE[tab]} · theme · branding · public home`}
+      toolbar={
+        <>
+          <Badge auto tone="blue">
+            {TAB_TITLE[tab]}
+          </Badge>
+          <AdminTabs aria-label="Experience section" options={TAB_OPTIONS} value={tab} onChange={select} />
+          <Button variant="primary" size="sm" disabled={saving} onClick={() => void saveActive()}>
             {saving ? "Saving…" : saveLabel}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </>
+      }
+    >
+      <Alert tone="blue" title="Operators keep the normal tool home">
+        Theme tokens, platform branding, and the guest public home. Logged-in operators always keep the normal tool
+        home.
+      </Alert>
 
-      {tab === "theme" ? (
-        <div className="admin-page-body">
-          <ThemeStudioPanel ref={themeSaveRef} />
-        </div>
-      ) : null}
-      {tab === "branding" ? (
-        <div className="admin-page-body">
-          <BrandingPanel ref={brandingSaveRef} />
-        </div>
-      ) : null}
-      {tab === "public-home" ? (
-        <div className="admin-page-body">
-          <PublicHomePanel ref={publicHomeSaveRef} />
-        </div>
-      ) : null}
-    </div>
+      {tab === "theme" ? <ThemeStudioPanel ref={themeSaveRef} /> : null}
+      {tab === "branding" ? <BrandingPanel ref={brandingSaveRef} /> : null}
+      {tab === "public-home" ? <PublicHomePanel ref={publicHomeSaveRef} /> : null}
+    </AdminPage>
   );
 }

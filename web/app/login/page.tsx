@@ -1,6 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import {
+  Alert,
+  BosRoot,
+  Button,
+  Card,
+  Field,
+  Input,
+  Segmented,
+} from "@/components/bos";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { ApiHealthBanner } from "@/components/layout/ApiHealthBanner";
 import { SplashScreen } from "@/components/auth/SplashScreen";
@@ -9,7 +19,7 @@ import { usePlatformBranding } from "@/components/branding/BrandingProvider";
 import { apiUrl, withBasePath } from "@/lib/api-base";
 import { requestPhoneOtp } from "@/lib/api";
 import { flashAppError } from "@/lib/app-flash";
-import { safeAppPath } from "@/lib/auth-access";
+import "@/components/admin/admin-console.css";
 
 type AuthMethods = { password: boolean; phoneOtp: boolean; google: boolean; mfa: boolean };
 
@@ -58,21 +68,19 @@ export default function LoginPage() {
 
   function redirectAfterLogin(user?: { isPlatformAdmin?: boolean; role?: string }) {
     const params = new URLSearchParams(window.location.search);
-    const canAdmin = Boolean(user?.isPlatformAdmin);
-    const rawNext = params.get("next");
-    const next = rawNext
-      ? safeAppPath(rawNext, {
-          fallback: "",
-          denyPrefixes: ["/login", "/register"],
-        })
-      : "";
-    let dest: string;
-    if (next) {
-      const pathOnly = next.split("?")[0] ?? next;
-      dest = pathOnly.startsWith("/admin") && !canAdmin ? "/" : next;
-    } else {
-      dest = canAdmin ? "/admin" : "/";
-    }
+    const next = params.get("next");
+    const canAdmin = user?.isPlatformAdmin || user?.role === "admin";
+    const dest =
+      next &&
+      next.startsWith("/") &&
+      !next.startsWith("/login") &&
+      !next.startsWith("/register")
+        ? canAdmin || !next.startsWith("/admin")
+          ? next
+          : "/admin"
+        : canAdmin
+          ? "/admin"
+          : "/";
     window.location.assign(withBasePath(dest));
   }
 
@@ -184,159 +192,180 @@ export default function LoginPage() {
       {!mounted ? (
         <div className="login-page" />
       ) : (
-        <div className="login-page">
-          <ApiHealthBanner />
-          <div className="panel login-panel">
-            <div className="login-brand">
-              <PlatformBrandMark size="lg" showText={false} />
-              <div>
-                <h1>Sign in</h1>
-                <p className="muted">{branding.appName}</p>
+        <BosRoot canvas className="admin-bos" defaultTheme="dark" skin="bos">
+          <div className="admin-cc-login">
+            <ApiHealthBanner />
+            <Card className="admin-cc-login-card">
+              <div className="admin-cc-login-brand">
+                <PlatformBrandMark size="lg" showText={false} />
+                <div>
+                  <h1>Sign in</h1>
+                  <p>{branding.appName}</p>
+                </div>
               </div>
-            </div>
 
-            {mfaToken ? (
-              <form onSubmit={handleMfaSubmit} className="login-form" autoComplete="off">
-                <p className="muted">Enter the 6-digit code from your authenticator app.</p>
-                <label className="field" htmlFor="mfa-code">
-                  <span className="label">Authenticator code</span>
-                  <input
-                    id="mfa-code"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={mfaCode}
-                    onChange={(e) => setMfaCode(e.target.value)}
-                    required
-                    autoComplete="one-time-code"
-                  />
-                </label>
-                {error ? <p className="field-error">{error}</p> : null}
-                <button type="submit" className="btn btn-primary" disabled={loading}>
-                  {loading ? "Verifying…" : "Verify"}
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => {
-                    setMfaToken("");
-                    setMfaCode("");
-                  }}
-                >
-                  Back
-                </button>
-              </form>
-            ) : (
-              <>
-                {methods.phoneOtp ? (
-                  <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
-                    <button
-                      type="button"
-                      className={`btn ${mode === "password" ? "btn-primary" : ""}`}
-                      onClick={() => setMode("password")}
-                    >
-                      Password
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn ${mode === "phone" ? "btn-primary" : ""}`}
-                      onClick={() => setMode("phone")}
-                    >
-                      Phone OTP
-                    </button>
-                  </div>
-                ) : null}
-
-                {mode === "password" ? (
-                  <form
-                    onSubmit={handlePasswordSubmit}
-                    className="login-form"
-                    autoComplete="off"
-                    method="post"
+              {mfaToken ? (
+                <form onSubmit={handleMfaSubmit} className="admin-cc-login-form" autoComplete="off">
+                  <p className="bos-text-muted" style={{ margin: 0, fontSize: 13 }}>
+                    Enter the 6-digit code from your authenticator app.
+                  </p>
+                  <Field label="Authenticator code">
+                    {({ id, describedBy, invalid }) => (
+                      <Input
+                        id={id}
+                        aria-describedby={describedBy}
+                        aria-invalid={invalid || undefined}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={mfaCode}
+                        onChange={(e) => setMfaCode(e.target.value)}
+                        required
+                        autoComplete="one-time-code"
+                        autoFocus
+                      />
+                    )}
+                  </Field>
+                  {error ? <Alert tone="coral" title="Verification failed">{error}</Alert> : null}
+                  <Button type="submit" variant="primary" block disabled={loading}>
+                    {loading ? "Verifying…" : "Verify"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    block
+                    onClick={() => {
+                      setMfaToken("");
+                      setMfaCode("");
+                    }}
                   >
-                    <label className="field" htmlFor="login-username">
-                      <span className="label">Username</span>
-                      <input
-                        id="login-username"
-                        name="jbt-sign-in-user"
-                        type="text"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        onFocus={unlockFields}
-                        required
-                        readOnly={!fieldsUnlocked}
-                        autoComplete="off"
-                        autoCapitalize="none"
-                        spellCheck={false}
-                        inputMode="email"
-                      />
-                    </label>
-                    <label className="field" htmlFor="login-password">
-                      <span className="label">Password</span>
-                      <input
-                        id="login-password"
-                        name="jbt-sign-in-pass"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        onFocus={unlockFields}
-                        required
-                        readOnly={!fieldsUnlocked}
-                        autoComplete="off"
-                      />
-                    </label>
-                    {error ? <p className="field-error">{error}</p> : null}
-                    <button type="submit" className="btn btn-primary" disabled={loading}>
-                      {loading ? "Signing in…" : "Sign in"}
-                    </button>
-                  </form>
-                ) : (
-                  <form
-                    onSubmit={otpSent ? handleVerifyOtp : handleSendOtp}
-                    className="login-form"
-                    autoComplete="off"
-                  >
-                    <label className="field" htmlFor="login-phone">
-                      <span className="label">Phone</span>
-                      <input
-                        id="login-phone"
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        required
-                        placeholder="10-digit mobile"
-                      />
-                    </label>
-                    {otpSent ? (
-                      <label className="field" htmlFor="login-otp">
-                        <span className="label">OTP code</span>
-                        <input
-                          id="login-otp"
-                          inputMode="numeric"
-                          value={otpCode}
-                          onChange={(e) => setOtpCode(e.target.value)}
-                          required
-                          autoComplete="one-time-code"
-                        />
-                      </label>
-                    ) : null}
-                    {error ? <p className="field-error">{error}</p> : null}
-                    <button type="submit" className="btn btn-primary" disabled={loading}>
-                      {loading ? "Please wait…" : otpSent ? "Verify OTP" : "Send OTP"}
-                    </button>
-                  </form>
-                )}
-              </>
-            )}
+                    Back
+                  </Button>
+                </form>
+              ) : (
+                <>
+                  {methods.phoneOtp ? (
+                    <Segmented
+                      block
+                      role="tabs"
+                      aria-label="Sign-in method"
+                      value={mode}
+                      onChange={setMode}
+                      options={[
+                        { value: "password", label: "Password" },
+                        { value: "phone", label: "Phone OTP" },
+                      ]}
+                    />
+                  ) : null}
 
-            <div className="login-signup">
-              <p className="muted login-hint">No account yet?</p>
-              <a href={withBasePath("/register")} className="btn btn-secondary btn-block login-signup-cta">
-                Register with GSTIN
-              </a>
-            </div>
+                  {mode === "password" ? (
+                    <form
+                      onSubmit={handlePasswordSubmit}
+                      className="admin-cc-login-form"
+                      autoComplete="off"
+                      method="post"
+                    >
+                      <Field label="Username">
+                        {({ id, describedBy, invalid }) => (
+                          <Input
+                            id={id}
+                            aria-describedby={describedBy}
+                            aria-invalid={invalid || undefined}
+                            name="jbt-sign-in-user"
+                            type="text"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            onFocus={unlockFields}
+                            required
+                            readOnly={!fieldsUnlocked}
+                            autoComplete="off"
+                            autoCapitalize="none"
+                            spellCheck={false}
+                            inputMode="email"
+                            autoFocus
+                          />
+                        )}
+                      </Field>
+                      <Field label="Password">
+                        {({ id, describedBy, invalid }) => (
+                          <Input
+                            id={id}
+                            aria-describedby={describedBy}
+                            aria-invalid={invalid || undefined}
+                            name="jbt-sign-in-pass"
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            onFocus={unlockFields}
+                            required
+                            readOnly={!fieldsUnlocked}
+                            autoComplete="off"
+                          />
+                        )}
+                      </Field>
+                      {error ? <Alert tone="coral" title="Sign-in failed">{error}</Alert> : null}
+                      <Button type="submit" variant="primary" block disabled={loading}>
+                        {loading ? "Signing in…" : "Sign in"}
+                      </Button>
+                    </form>
+                  ) : (
+                    <form
+                      onSubmit={otpSent ? handleVerifyOtp : handleSendOtp}
+                      className="admin-cc-login-form"
+                      autoComplete="off"
+                    >
+                      <Field label="Phone">
+                        {({ id, describedBy, invalid }) => (
+                          <Input
+                            id={id}
+                            aria-describedby={describedBy}
+                            aria-invalid={invalid || undefined}
+                            type="tel"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            required
+                            placeholder="10-digit mobile"
+                            autoFocus={!otpSent}
+                          />
+                        )}
+                      </Field>
+                      {otpSent ? (
+                        <Field label="OTP code">
+                          {({ id, describedBy, invalid }) => (
+                            <Input
+                              id={id}
+                              aria-describedby={describedBy}
+                              aria-invalid={invalid || undefined}
+                              inputMode="numeric"
+                              value={otpCode}
+                              onChange={(e) => setOtpCode(e.target.value)}
+                              required
+                              autoComplete="one-time-code"
+                              autoFocus
+                            />
+                          )}
+                        </Field>
+                      ) : null}
+                      {error ? <Alert tone="coral" title="OTP failed">{error}</Alert> : null}
+                      <Button type="submit" variant="primary" block disabled={loading}>
+                        {loading ? "Please wait…" : otpSent ? "Verify OTP" : "Send OTP"}
+                      </Button>
+                    </form>
+                  )}
+                </>
+              )}
+
+              <div className="admin-cc-login-foot">
+                <p className="bos-text-muted" style={{ margin: 0, fontSize: 13 }}>
+                  No account yet?
+                </p>
+                <Link href="/register" className="bos-btn bos-btn-secondary bos-btn-block">
+                  Register with GSTIN
+                </Link>
+              </div>
+            </Card>
+            <PoweredByFooter />
           </div>
-          <PoweredByFooter />
-        </div>
+        </BosRoot>
       )}
     </SplashScreen>
   );

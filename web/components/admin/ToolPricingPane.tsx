@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { Alert, Badge, BlockLabel, Button, FormGrid, Grid, KpiCard, Switch } from "@/components/bos";
+import { AdminSection } from "@/components/admin/ui";
+import { SelectField, TextareaField, TextField } from "@/components/admin/ui/AdminFields";
 import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 import { ensureToolsOnHome } from "@/lib/admin-home-tools";
@@ -257,99 +260,111 @@ export const ToolPricingPane = forwardRef<
     [saving, dirty, sku, form, toolId, toolName, toolCategory],
   );
 
+  const licenseBadge = form.includedFree
+    ? "Included free"
+    : licensed
+      ? `Licensed here${periodEnd ? ` · ${periodEnd.slice(0, 10)}` : ""}`
+      : "Not licensed on selected profile";
+
   return (
-    <section className="panel admin-card tm-pane tm-product-pane">
-      <div className="tm-product-head">
-        <div>
-          <h2>Product & subscription</h2>
-          <p className="muted">
-            Each tool is a product with its own offer. Operators subscribe to tools; platform record caps apply only when
-            unlicensed. Packs live under{" "}
-            <Link href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>.
-          </p>
-        </div>
-        <div className="admin-form-row">
-          {dirty ? <span className="pill pill-warning">Unsaved</span> : null}
-          <span className={`pill ${form.includedFree ? "" : form.available ? "pill-success" : "pill-warning"}`}>
+    <AdminSection
+      title="Product & subscription"
+      description={
+        <>
+          Each tool is a product with its own offer. Operators subscribe to tools; platform record caps apply only when
+          unlicensed. Packs live under{" "}
+          <Link className="admin-cc-link" href={adminDeepLink.subscriptions()}>
+            Plans &amp; entitlements
+          </Link>
+          .
+        </>
+      }
+      actions={
+        <>
+          {dirty ? (
+            <Badge auto tone="amber">
+              Unsaved
+            </Badge>
+          ) : null}
+          <Badge auto tone={form.includedFree ? "neutral" : form.available ? "emerald" : "amber"}>
             {commercialMode}
-          </span>
-        </div>
-      </div>
+          </Badge>
+        </>
+      }
+    >
+      <div className="admin-cc-form">
+        {!sku ? (
+          <Alert tone="amber" title="No commercial offer yet">
+            Use Publish product in the tab bar to create this SKU.
+          </Alert>
+        ) : null}
 
-      {!sku ? (
-        <p className="muted tm-product-banner">
-          No commercial offer yet — use Publish product in the tab bar to create this SKU.
-        </p>
-      ) : null}
+        <Grid cols={4} min={120} gap={8}>
+          <KpiCard
+            label="List price"
+            value={form.includedFree ? "Included" : inr(Number(form.priceInr || 0))}
+            interactive={false}
+          />
+          <KpiCard
+            label="This operator"
+            value={
+              form.includedFree
+                ? "Included"
+                : licensed
+                  ? `Licensed${periodEnd ? ` · ${periodEnd.slice(0, 10)}` : ""}`
+                  : "Unlicensed"
+            }
+            valueTone={!form.includedFree && licensed ? "emerald" : undefined}
+            interactive={false}
+          />
+          <KpiCard
+            label="Access policy"
+            value={form.accessPolicy === "hard_lock" ? "Hard lock" : "Soft record cap"}
+            interactive={false}
+          />
+          <KpiCard
+            label="Trial"
+            value={Number(form.trialDays) > 0 ? `${form.trialDays} days` : "None"}
+            interactive={false}
+          />
+        </Grid>
 
-      <dl className="billing-dl billing-dl-row">
-        <div>
-          <dt>List price</dt>
-          <dd>{form.includedFree ? "Included" : inr(Number(form.priceInr || 0))}</dd>
-        </div>
-        <div>
-          <dt>This operator</dt>
-          <dd>
-            {form.includedFree
-              ? "Included"
-              : licensed
-                ? `Licensed${periodEnd ? ` · ${periodEnd.slice(0, 10)}` : ""}`
-                : "Unlicensed"}
-          </dd>
-        </div>
-        <div>
-          <dt>Access policy</dt>
-          <dd>{form.accessPolicy === "hard_lock" ? "Hard lock" : "Soft record cap"}</dd>
-        </div>
-        <div>
-          <dt>Trial</dt>
-          <dd>{Number(form.trialDays) > 0 ? `${form.trialDays} days` : "None"}</dd>
-        </div>
-      </dl>
-
-      <form className="tm-product-form" onSubmit={(e) => void saveProduct(e)}>
-        <h3 className="tm-section-title">Offer identity</h3>
-        <div className="admin-form-grid">
-          <label className="field">
-            <span>Product name</span>
-            <input
+        <form className="admin-cc-form" onSubmit={(e) => void saveProduct(e)}>
+          <BlockLabel>Offer identity</BlockLabel>
+          <FormGrid>
+            <TextField
+              label="Product name"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               required
             />
-          </label>
-          <label className="field">
-            <span>Category</span>
-            <input
+            <TextField
+              label="Category"
               value={form.category}
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
             />
-          </label>
-          <label className="field field-span-2">
-            <span>Tagline</span>
-            <input
+            <TextField
+              full
+              label="Tagline"
               value={form.tagline}
               onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))}
               placeholder="Short value line for cart / home"
               maxLength={160}
             />
-          </label>
-          <label className="field field-span-2">
-            <span>Description</span>
-            <textarea
+            <TextareaField
+              full
+              label="Description"
               rows={2}
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               placeholder="Internal / marketing notes"
             />
-          </label>
-        </div>
+          </FormGrid>
 
-        <h3 className="tm-section-title">Pricing</h3>
-        <div className="admin-form-grid">
-          <label className="field">
-            <span>Billing type</span>
-            <select
+          <BlockLabel>Pricing</BlockLabel>
+          <FormGrid>
+            <SelectField
+              label="Billing type"
               value={form.includedFree ? "1" : "0"}
               onChange={(e) =>
                 setForm((f) => ({
@@ -361,21 +376,17 @@ export const ToolPricingPane = forwardRef<
             >
               <option value="0">Paid subscription</option>
               <option value="1">Included (no charge)</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>Cart visibility</span>
-            <select
+            </SelectField>
+            <SelectField
+              label="Cart visibility"
               value={form.available ? "1" : "0"}
               onChange={(e) => setForm((f) => ({ ...f, available: e.target.value === "1" }))}
             >
               <option value="1">On sale</option>
               <option value="0">Hidden from cart</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>Billing interval</span>
-            <select
+            </SelectField>
+            <SelectField
+              label="Billing interval"
               value={form.billingInterval}
               disabled={form.includedFree}
               onChange={(e) =>
@@ -387,11 +398,9 @@ export const ToolPricingPane = forwardRef<
             >
               <option value="month">Monthly</option>
               <option value="year">Yearly</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>{form.billingInterval === "year" ? "Price (INR / year)" : "Price (INR / month)"}</span>
-            <input
+            </SelectField>
+            <TextField
+              label={form.billingInterval === "year" ? "Price (INR / year)" : "Price (INR / month)"}
               type="number"
               min={0}
               step="1"
@@ -399,10 +408,8 @@ export const ToolPricingPane = forwardRef<
               disabled={form.includedFree}
               onChange={(e) => setForm((f) => ({ ...f, priceInr: e.target.value }))}
             />
-          </label>
-          <label className="field">
-            <span>Annual price (optional)</span>
-            <input
+            <TextField
+              label="Annual price (optional)"
               type="number"
               min={0}
               step="1"
@@ -411,24 +418,20 @@ export const ToolPricingPane = forwardRef<
               placeholder="Leave blank if unused"
               onChange={(e) => setForm((f) => ({ ...f, annualPriceInr: e.target.value }))}
             />
-          </label>
-          <label className="field">
-            <span>Featured in catalog</span>
-            <select
+            <SelectField
+              label="Featured in catalog"
               value={form.featured ? "1" : "0"}
               onChange={(e) => setForm((f) => ({ ...f, featured: e.target.value === "1" }))}
             >
               <option value="0">No</option>
               <option value="1">Yes</option>
-            </select>
-          </label>
-        </div>
+            </SelectField>
+          </FormGrid>
 
-        <h3 className="tm-section-title">Entitlement controls</h3>
-        <div className="admin-form-grid">
-          <label className="field">
-            <span>Unlicensed access</span>
-            <select
+          <BlockLabel>Entitlement controls</BlockLabel>
+          <FormGrid>
+            <SelectField
+              label="Unlicensed access"
               value={form.accessPolicy}
               disabled={form.includedFree}
               onChange={(e) =>
@@ -440,11 +443,9 @@ export const ToolPricingPane = forwardRef<
             >
               <option value="soft_cap">Soft cap (freemium records)</option>
               <option value="hard_lock">Hard lock (no creates until licensed)</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>Per-tool record limit override</span>
-            <input
+            </SelectField>
+            <TextField
+              label="Per-tool record limit override"
               type="number"
               min={0}
               step="1"
@@ -453,10 +454,8 @@ export const ToolPricingPane = forwardRef<
               placeholder="Platform default"
               onChange={(e) => setForm((f) => ({ ...f, unlicensedRecordLimit: e.target.value }))}
             />
-          </label>
-          <label className="field">
-            <span>Self-serve trial (days)</span>
-            <input
+            <TextField
+              label="Self-serve trial (days)"
               type="number"
               min={0}
               max={365}
@@ -464,99 +463,90 @@ export const ToolPricingPane = forwardRef<
               disabled={form.includedFree}
               onChange={(e) => setForm((f) => ({ ...f, trialDays: e.target.value }))}
             />
-          </label>
-        </div>
-        <p className="muted tm-hint">
-          Soft cap uses the platform free limit (or override). Hard lock sets the effective limit to zero until a license
-          is active. Trial days are stored on the product for checkout / admin grants.
-        </p>
-      </form>
+          </FormGrid>
+          <p className="admin-cc-note-text">
+            Soft cap uses the platform free limit (or override). Hard lock sets the effective limit to zero until a license
+            is active. Trial days are stored on the product for checkout / admin grants.
+          </p>
+        </form>
 
-      <div className="tm-license-ops">
-        <h3 className="tm-section-title">Subscription for this Business Profile</h3>
-        <p className="muted">
-          Grant, trial, extend, or revoke this product for the selected profile without leaving Tools.
-          Packs and platform Freemium / All Tools modes live under{" "}
+        <BlockLabel>Subscription for this Business Profile</BlockLabel>
+        <p className="admin-cc-note-text">
+          Grant, trial, extend, or revoke this product for the selected profile without leaving Tools. Packs and platform
+          Freemium / All Tools modes live under{" "}
           <Link href={adminDeepLink.subscriptions()}>Plans &amp; entitlements</Link>.
           {seatCount != null && seatCount > 0
             ? ` This product currently has ${seatCount} licensed seat(s) across the org.`
             : ""}
         </p>
-        <div className="admin-form-grid">
-          <label className="field field-span-2">
-            <span>Business Profile</span>
-            <select
-              value={businessProfileId ?? ""}
-              disabled={profiles.length === 0}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                if (Number.isInteger(v) && v > 0) onBusinessProfileChange(v);
-              }}
-            >
-              <option value="">
-                {profiles.length === 0 ? "No profiles" : "Select a Business Profile…"}
+        <FormGrid>
+          <SelectField
+            full
+            label="Business Profile"
+            value={businessProfileId ?? ""}
+            disabled={profiles.length === 0}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (Number.isInteger(v) && v > 0) onBusinessProfileChange(v);
+            }}
+          >
+            <option value="">{profiles.length === 0 ? "No profiles" : "Select a Business Profile…"}</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.organizationName ? `${p.organizationName} — ` : ""}
+                {p.businessName}
+                {p.isDefault ? " (default)" : ""}
               </option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.organizationName ? `${p.organizationName} — ` : ""}
-                  {p.businessName}
-                  {p.isDefault ? " (default)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Grant / extend days</span>
-            <input
-              type="number"
-              min={1}
-              value={grantDays}
-              disabled={form.includedFree || businessProfileId == null}
-              onChange={(e) => setGrantDays(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Profile record-limit override</span>
-            <input
-              type="number"
-              min={0}
-              step="1"
-              value={profileLimit}
-              disabled={businessProfileId == null}
-              placeholder="Platform / SKU default"
-              onChange={(e) => setProfileLimit(e.target.value)}
-            />
-          </label>
-        </div>
-        <div className="admin-form-row">
-          <label className="ax-check ax-check-compact">
-            <input
-              type="checkbox"
+            ))}
+          </SelectField>
+          <TextField
+            label="Grant / extend days"
+            type="number"
+            min={1}
+            value={grantDays}
+            disabled={form.includedFree || businessProfileId == null}
+            onChange={(e) => setGrantDays(e.target.value)}
+          />
+          <TextField
+            label="Profile record-limit override"
+            type="number"
+            min={0}
+            step="1"
+            value={profileLimit}
+            disabled={businessProfileId == null}
+            placeholder="Platform / SKU default"
+            onChange={(e) => setProfileLimit(e.target.value)}
+          />
+        </FormGrid>
+        <div className="admin-cc-actions" style={{ justifyContent: "flex-start" }}>
+          <span className="admin-cc-switch-row" style={{ paddingBottom: 0 }}>
+            <Switch
               checked={syncHome}
               disabled={businessProfileId == null}
-              onChange={(e) => setSyncHome(e.target.checked)}
+              onChange={setSyncHome}
+              aria-label="Sync home on grant / trial"
             />
-            <span>Sync home on grant / trial</span>
-          </label>
-          <span className={`pill ${licensed ? "pill-success" : ""}`}>
-            {form.includedFree
-              ? "Included free"
-              : licensed
-                ? `Licensed here${periodEnd ? ` · ${periodEnd.slice(0, 10)}` : ""}`
-                : "Not licensed on selected profile"}
+            Sync home on grant / trial
           </span>
+          <Badge auto tone={form.includedFree ? "neutral" : licensed ? "emerald" : "neutral"}>
+            {licenseBadge}
+          </Badge>
           {recordLimitOverride != null ? (
-            <span className="pill">Override {recordLimitOverride} records</span>
+            <Badge auto tone="blue">
+              Override {recordLimitOverride} records
+            </Badge>
           ) : null}
         </div>
-        <div className="admin-form-row">
+        <div className="admin-cc-actions" style={{ justifyContent: "flex-start" }}>
           {form.includedFree ? (
-            <span className="pill">No license required</span>
+            <Badge auto tone="neutral">
+              No license required
+            </Badge>
           ) : licensed ? (
             <>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
+              <Button
+                variant="primary"
+                size="sm"
                 disabled={licenseBusy || businessProfileId == null}
                 onClick={() =>
                   void runLicense(`Extended ${toolName}.`, async (profileId) => {
@@ -572,10 +562,10 @@ export const ToolPricingPane = forwardRef<
                 }
               >
                 Extend
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
                 disabled={licenseBusy || businessProfileId == null}
                 onClick={() =>
                   void runLicense(`Revoked ${toolName}.`, async (profileId) => {
@@ -590,13 +580,13 @@ export const ToolPricingPane = forwardRef<
                 }
               >
                 Revoke
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
+              <Button
+                variant="primary"
+                size="sm"
                 disabled={licenseBusy || businessProfileId == null}
                 onClick={() =>
                   void runLicense(`Licensed ${toolName}.`, async (profileId) => {
@@ -613,10 +603,10 @@ export const ToolPricingPane = forwardRef<
                 }
               >
                 Grant
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 disabled={licenseBusy || businessProfileId == null}
                 onClick={() =>
                   void runLicense(`Trial started for ${toolName}.`, async (profileId) => {
@@ -634,45 +624,50 @@ export const ToolPricingPane = forwardRef<
                 }
               >
                 Start trial
-              </button>
+              </Button>
             </>
           )}
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
+          <Button
+            variant="secondary"
+            size="sm"
             disabled={licenseBusy || businessProfileId == null}
             onClick={() => void saveRecordLimit()}
           >
             Save record limit
-          </button>
-          <Link
-            href={adminDeepLink.toolCapabilities(businessProfileId ?? undefined, toolId)}
-            className="btn btn-ghost btn-sm"
-          >
-            Open in Access Fabric
+          </Button>
+          <Link href={adminDeepLink.toolCapabilities(businessProfileId ?? undefined, toolId)}>
+            <Button variant="ghost" size="sm">
+              Open in Access Fabric
+            </Button>
           </Link>
         </div>
-      </div>
 
-      {packsForTool.length > 0 ? (
-        <div className="tm-pack-refs">
-          <h3 className="tm-section-title">Included in packs</h3>
-          <ul className="tm-pack-list">
-            {packsForTool.map((b) => (
-              <li key={b.id}>
-                <strong>{b.name}</strong>
-                <span className="muted">
-                  {b.id === "all_tools" ? " · all paid tools" : ` · ${b.toolIds.length} tools`} · {inr(b.priceInr)}
-                  {b.listPriceInr > b.priceInr ? ` (list ${inr(b.listPriceInr)})` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <Link href={adminDeepLink.subscriptions()} className="btn btn-ghost btn-sm">
-            Manage packs
-          </Link>
-        </div>
-      ) : null}
-    </section>
+        {packsForTool.length > 0 ? (
+          <>
+            <BlockLabel>Included in packs</BlockLabel>
+            <div className="admin-cc-stack">
+              {packsForTool.map((b) => (
+                <div key={b.id} className="admin-cc-row" style={{ cursor: "default" }}>
+                  <div className="admin-cc-row-main">
+                    <div className="admin-cc-cell-title">{b.name}</div>
+                    <div className="admin-cc-cell-sub">
+                      {b.id === "all_tools" ? "All paid tools" : `${b.toolIds.length} tools`} · {inr(b.priceInr)}
+                      {b.listPriceInr > b.priceInr ? ` (list ${inr(b.listPriceInr)})` : ""}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div>
+              <Link href={adminDeepLink.subscriptions()}>
+                <Button variant="ghost" size="sm">
+                  Manage packs
+                </Button>
+              </Link>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </AdminSection>
   );
 });

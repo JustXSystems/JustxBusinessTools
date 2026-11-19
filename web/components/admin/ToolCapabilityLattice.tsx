@@ -9,9 +9,13 @@ import {
   useRef,
   useState,
 } from "react";
+import { Alert, Button, Input, Segmented, Skeleton, Switch, type BosSegmentOption } from "@/components/bos";
+import { AdminEmpty } from "@/components/admin/ui";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import type { FabricCapabilityTool } from "@/lib/access-fabric";
+
+type CapMode = "unrestricted" | "curated";
 
 export type CapabilitySummaryTool = FabricCapabilityTool & {
   enabledCount: number | null;
@@ -247,156 +251,170 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
 
     if (!selectedToolId) {
       return (
-        <div id="ax-capabilities" className="ax-cap-inspector ax-cap-inspector-empty">
-          <p className="muted">Select a tool to tune licenses or module ceilings.</p>
+        <div id="ax-capabilities" className="admin-cc-cap" aria-label="Tool capabilities">
+          <AdminEmpty title="No tool selected" icon="search">
+            Select a tool to tune licenses or module ceilings.
+          </AdminEmpty>
         </div>
       );
     }
 
+    const modeOptions: ReadonlyArray<BosSegmentOption<CapMode>> = [
+      { value: "unrestricted", label: "Unrestricted" },
+      {
+        value: "curated",
+        label: `Curated${detail?.coveragePct != null && !unrestricted ? ` · ${detail.coveragePct}%` : ""}`,
+      },
+    ];
+
+    function onModeChange(next: CapMode) {
+      if (!detail || busy) return;
+      if (next === "unrestricted") {
+        if (unrestricted) return;
+        setUnrestricted(true);
+        void persist(true, enabled, `Unrestricted modules for ${detail.name}.`);
+        return;
+      }
+      if (!unrestricted) return;
+      const nextEnabled = new Set(detail.enabled);
+      setUnrestricted(false);
+      setEnabled(nextEnabled);
+      void persist(false, nextEnabled, `Curated ceiling for ${detail.name}.`);
+    }
+
+    const filterOptions: ReadonlyArray<BosSegmentOption<"all" | "live" | "dim">> = [
+      { value: "all", label: "All" },
+      { value: "live", label: "Live" },
+      { value: "dim", label: "Dim" },
+    ];
+
     return (
-      <div id="ax-capabilities" className="ax-cap-inspector" aria-label="Tool capabilities">
-        {error ? <p className="field-error">{error}</p> : null}
-        {message ? <p className="muted ax-cap-flash">{message}</p> : null}
+      <div id="ax-capabilities" className="admin-cc-cap" aria-label="Tool capabilities" aria-busy={busy || undefined}>
+        {error ? <Alert tone="coral" title="Capabilities error">{error}</Alert> : null}
+        {message ? <Alert tone="emerald" title={message} /> : null}
 
         {!detail ? (
-          <p className="muted">Loading capabilities…</p>
+          error ? null : (
+            <div aria-busy="true" aria-label="Loading capabilities" style={{ display: "grid", gap: 8 }}>
+              <Skeleton width="40%" height={14} radius={6} />
+              <Skeleton width="100%" height={44} radius={10} />
+              <Skeleton width="100%" height={44} radius={10} />
+              <Skeleton width="100%" height={44} radius={10} />
+            </div>
+          )
         ) : !detail.entitled ? (
-          <div className="ax-cap-locked">
-            <div>
-              <strong>Not licensed</strong>
-              <p className="muted">Grant a license before module ceilings unlock.</p>
-            </div>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={granting || busy}
-              onClick={() => {
-                if (!onRequestGrant) return;
-                setGranting(true);
-                void Promise.resolve(onRequestGrant(detail.toolId)).finally(() => setGranting(false));
-              }}
-            >
-              {granting ? "Granting…" : "Grant license"}
-            </button>
-          </div>
+          <Alert
+            tone="amber"
+            title="Not licensed"
+            actions={
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={granting || busy}
+                onClick={() => {
+                  if (!onRequestGrant) return;
+                  setGranting(true);
+                  void Promise.resolve(onRequestGrant(detail.toolId)).finally(() => setGranting(false));
+                }}
+              >
+                {granting ? "Granting…" : "Grant license"}
+              </Button>
+            }
+          >
+            Grant a license before module ceilings unlock.
+          </Alert>
         ) : !detail.hasCeiling ? (
-          <div className="ax-cap-whole">
-            <strong>Whole-tool access</strong>
-            <p className="muted">
-              No module ceiling for <code>{detail.toolId}</code> — license is the unit of access.
-            </p>
-          </div>
+          <Alert tone="blue" title="Whole-tool access">
+            No module ceiling for <code className="admin-cc-code">{detail.toolId}</code> — license is the unit of
+            access.
+          </Alert>
         ) : (
-          <div className="ax-cap-detail">
-            <div className="ax-cap-mode ax-cap-mode-compact" role="group" aria-label="Capability mode">
-              <button
-                type="button"
-                className={`ax-cap-mode-btn${unrestricted ? " is-active" : ""}`}
-                disabled={busy}
-                onClick={() => {
-                  if (unrestricted) return;
-                  setUnrestricted(true);
-                  void persist(true, enabled, `Unrestricted modules for ${detail.name}.`);
-                }}
-              >
-                Unrestricted
-              </button>
-              <button
-                type="button"
-                className={`ax-cap-mode-btn${!unrestricted ? " is-active" : ""}`}
-                disabled={busy}
-                onClick={() => {
-                  if (!unrestricted) return;
-                  const next = new Set(detail.enabled);
-                  setUnrestricted(false);
-                  setEnabled(next);
-                  void persist(false, next, `Curated ceiling for ${detail.name}.`);
-                }}
-              >
-                Curated{detail.coveragePct != null && !unrestricted ? ` · ${detail.coveragePct}%` : ""}
-              </button>
-            </div>
+          <div className="admin-cc-cap">
+            <Segmented<CapMode>
+              role="radio"
+              size="sm"
+              aria-label="Capability mode"
+              options={modeOptions}
+              value={unrestricted ? "unrestricted" : "curated"}
+              onChange={onModeChange}
+            />
 
-            <div className="ax-cap-section-rail ax-cap-section-rail-compact" aria-label="Section coverage">
+            <div className="admin-cc-cap-chips" role="group" aria-label="Section coverage">
               {sectionCoverage.map(({ section, pct, optional }) => {
                 const allOn = unrestricted || optional.every((r) => enabled.has(r.key));
                 return (
                   <button
                     key={section}
                     type="button"
-                    className="ax-cap-section-chip"
+                    className="admin-cc-cap-chip"
                     disabled={busy || unrestricted || optional.length === 0}
                     title={optional.length ? `${section}: ${pct}%` : section}
                     onClick={() => selectSection(section, !allOn)}
                   >
-                    <span className="ax-cap-section-meter" aria-hidden>
-                      <i style={{ width: `${pct}%` }} />
-                    </span>
                     <strong>{section}</strong>
                     <em>{pct}%</em>
+                    <span className="admin-cc-cap-meter" aria-hidden>
+                      <i style={{ width: `${pct}%` }} />
+                    </span>
                   </button>
                 );
               })}
             </div>
 
-            <div className="ax-cap-scan admin-form-row">
-              <input
+            <div className="admin-cc-cap-scan">
+              <Input
+                size="sm"
                 value={moduleQuery}
                 onChange={(e) => setModuleQuery(e.target.value)}
                 placeholder="Filter modules…"
                 aria-label="Search modules"
                 disabled={unrestricted}
               />
-              <div className="admin-tabs ax-lattice-filters" role="tablist" aria-label="Module filter">
-                {(
-                  [
-                    ["all", "All"],
-                    ["live", "Live"],
-                    ["dim", "Dim"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    className={moduleFilter === id ? "active" : ""}
-                    disabled={unrestricted && id !== "all"}
-                    onClick={() => setModuleFilter(id)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <Segmented<"all" | "live" | "dim">
+                role="radio"
+                size="sm"
+                aria-label="Module filter"
+                options={filterOptions}
+                value={unrestricted ? "all" : moduleFilter}
+                onChange={(next) => {
+                  if (!unrestricted) setModuleFilter(next);
+                }}
+              />
             </div>
 
             <fieldset
               disabled={unrestricted || busy}
-              className="ax-cap-module-list"
+              className="admin-cc-cap-modules"
               style={{ opacity: unrestricted ? 0.5 : 1 }}
             >
-              <legend className="sr-only">Modules</legend>
+              <legend className="bos-sr-only">Modules</legend>
               {visibleModules.map(([section, rows]) => (
-                <div key={section} className="ax-cap-module-group">
-                  <h5>{section}</h5>
-                  <ul>
+                <div key={section} className="admin-cc-cap-group">
+                  <div className="admin-cc-subhead" style={{ margin: 0 }}>
+                    {section}
+                  </div>
+                  <ul className="admin-cc-stack" style={{ listStyle: "none", margin: 0, padding: 0, gap: 6 }}>
                     {rows.map((row) => {
                       const locked = alwaysOn.has(row.key);
                       const live = locked || unrestricted || enabled.has(row.key);
                       return (
-                        <li key={row.key} data-signal={locked ? "included" : live ? "licensed" : "dim"}>
-                          <div>
-                            <strong>{row.label}</strong>
-                            <span>{locked ? "Always on" : live ? "Live" : "Dimmed"}</span>
+                        <li
+                          key={row.key}
+                          className="admin-cc-row"
+                          style={{ cursor: "default", alignItems: "center" }}
+                          data-signal={locked ? "included" : live ? "licensed" : "dim"}
+                        >
+                          <div className="admin-cc-row-main">
+                            <div className="admin-cc-cell-title">{row.label}</div>
+                            <div className="admin-cc-cell-sub">{locked ? "Always on" : live ? "Live" : "Dimmed"}</div>
                           </div>
                           {locked ? null : (
-                            <button
-                              type="button"
-                              className={`btn btn-sm ${live ? "btn-ghost" : "btn-primary"}`}
+                            <Switch
+                              checked={live}
                               disabled={busy || unrestricted}
-                              onClick={() => toggleModule(row.key, !live)}
-                            >
-                              {live ? "Dim" : "On"}
-                            </button>
+                              onChange={(next) => toggleModule(row.key, next)}
+                              aria-label={`${row.label} (${live ? "live" : "dimmed"})`}
+                            />
                           )}
                         </li>
                       );
@@ -404,7 +422,11 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
                   </ul>
                 </div>
               ))}
-              {visibleModules.length === 0 ? <p className="muted">No modules match.</p> : null}
+              {visibleModules.length === 0 ? (
+                <AdminEmpty title="No modules match" icon="search">
+                  Adjust the search or filter.
+                </AdminEmpty>
+              ) : null}
             </fieldset>
           </div>
         )}

@@ -55,19 +55,24 @@ export function HomeToolPicker({ selectedIds, onChange, disabled, platformTools 
 
   return (
     <div className="home-tool-picker">
-      <div className="admin-form-row" style={{ marginBottom: 10 }}>
-        <span className="muted">
+      <div className="home-tool-picker-toolbar">
+        <span className="home-tool-picker-meta">
           {selectedIds.length} of {allTools.length} tools selected for home
         </span>
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="home-tool-picker-action"
           disabled={disabled}
           onClick={() => onChange(allTools.map((t) => t.id))}
         >
           Select all
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" disabled={disabled} onClick={() => onChange([])}>
+        <button
+          type="button"
+          className="home-tool-picker-action"
+          disabled={disabled}
+          onClick={() => onChange([])}
+        >
           Clear
         </button>
       </div>

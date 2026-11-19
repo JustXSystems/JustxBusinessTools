@@ -1,6 +1,9 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { Badge, Button, Field, FormGrid, Switch } from "@/components/bos";
+import { AdminSection } from "@/components/admin/ui";
+import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
 import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { ensureToolsOnHome, removeToolsFromHome } from "@/lib/admin-home-tools";
@@ -139,77 +142,86 @@ export const ToolPlacementPane = forwardRef<
   );
 
   return (
-    <section className="panel admin-card tm-pane">
-      <h2>Placement</h2>
-      <p className="muted">
-        Org catalog visibility on the operator home screen for the Business Profile selected above.
-        Setting Live also adds the tool to that org&apos;s branch home allowlists (when fixed).
-        {!businessProfileId ? " Select a Business Profile to edit Live/Hidden." : ""}
-        {isIms
-          ? " Per-profile IMS left-nav modules are managed on Access Fabric → Tool capabilities."
-          : ""}
-      </p>
-      <div className="admin-form-grid">
-        <label className="field">
-          <span>Home group</span>
-          <input value={groupName} onChange={(e) => onGroupName(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Visible on home</span>
-          <select value={available ? "1" : "0"} onChange={(e) => onAvailable(e.target.value === "1")}>
+    <AdminSection
+      title="Placement"
+      description={
+        <>
+          Org catalog visibility on the operator home screen for the Business Profile selected above. Setting Live also
+          adds the tool to that org&apos;s branch home allowlists (when fixed).
+          {!businessProfileId ? " Select a Business Profile to edit Live/Hidden." : ""}
+          {isIms
+            ? " Per-profile IMS left-nav modules are managed on Access Fabric → Tool capabilities."
+            : ""}
+        </>
+      }
+      actions={
+        <Badge auto tone={businessProfileId == null ? "amber" : available ? "emerald" : "neutral"}>
+          {businessProfileId == null ? "No profile" : available ? "Live" : "Hidden"}
+        </Badge>
+      }
+    >
+      <div className="admin-cc-form">
+        <FormGrid>
+          <TextField label="Home group" value={groupName} onChange={(e) => onGroupName(e.target.value)} />
+          <SelectField
+            label="Visible on home"
+            value={available ? "1" : "0"}
+            onChange={(e) => onAvailable(e.target.value === "1")}
+          >
             <option value="1">Live</option>
             <option value="0">Hidden</option>
-          </select>
-        </label>
-        {canStandalone ? (
-          <label className="field" style={{ gridColumn: "1 / -1" }}>
-            <span>Open as</span>
-            <select
+          </SelectField>
+          {canStandalone ? (
+            <SelectField
+              full
+              label="Open as"
               value={openStandalone ? "standalone" : "embedded"}
               onChange={(e) => onOpenStandalone(e.target.value === "standalone")}
+              hint={`Standalone opens ${toolId === "imsdealer" ? "/ims" : "/bos"} in its own window with its own chrome — the Justxsystems sidebar and header stay on the home tab.`}
             >
               <option value="standalone">Standalone app in a new window (no Justxsystems menu)</option>
               <option value="embedded">Inside Justxsystems Business Tools</option>
-            </select>
-            <span className="muted small" style={{ display: "block", marginTop: 6 }}>
-              Standalone opens {toolId === "imsdealer" ? "/ims" : "/bos"} in its own window with its own chrome —
-              the Justxsystems sidebar and header stay on the home tab.
-            </span>
-          </label>
-        ) : null}
-        {isIms ? (
-          <label className="field" style={{ gridColumn: "1 / -1" }}>
-            <span>Full-screen content width ({contentWidthPct}% of window)</span>
-            <input
-              type="range"
-              min={50}
-              max={100}
-              step={1}
-              value={contentWidthPct}
-              disabled={busy}
-              onChange={(e) => setContentWidthPct(clampWidthPct(e.target.value))}
-              aria-label="IMS full-screen content width percent"
+            </SelectField>
+          ) : null}
+          {isIms ? (
+            <Field
+              full
+              label={`Full-screen content width (${contentWidthPct}% of window)`}
+              hint="Org-wide chrome for `/ims` (not per profile). Default 90%."
+            >
+              {({ id, describedBy }) => (
+                <input
+                  id={id}
+                  aria-describedby={describedBy}
+                  type="range"
+                  min={50}
+                  max={100}
+                  step={1}
+                  value={contentWidthPct}
+                  disabled={busy}
+                  style={{ width: "100%" }}
+                  onChange={(e) => setContentWidthPct(clampWidthPct(e.target.value))}
+                  aria-label="IMS full-screen content width percent"
+                />
+              )}
+            </Field>
+          ) : null}
+        </FormGrid>
+        <div className="admin-cc-actions" style={{ justifyContent: "flex-start" }}>
+          <span className="admin-cc-switch-row" style={{ paddingBottom: 0 }}>
+            <Switch
+              checked={syncHome}
+              disabled={busy || businessProfileId == null}
+              onChange={setSyncHome}
+              aria-label="Sync home allowlist"
             />
-            <span className="muted small" style={{ display: "block", marginTop: 6 }}>
-              Org-wide chrome for `/ims` (not per profile). Default 90%.
-            </span>
-          </label>
-        ) : null}
+            Sync home allowlist
+          </span>
+          <Button variant="secondary" disabled={busy} onClick={() => void hide()}>
+            Hide from home
+          </Button>
+        </div>
       </div>
-      <div className="admin-form-row">
-        <label className="ax-check ax-check-compact">
-          <input
-            type="checkbox"
-            checked={syncHome}
-            disabled={busy || businessProfileId == null}
-            onChange={(e) => setSyncHome(e.target.checked)}
-          />
-          <span>Sync home allowlist</span>
-        </label>
-        <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void hide()}>
-          Hide from home
-        </button>
-      </div>
-    </section>
+    </AdminSection>
   );
 });

@@ -1,5 +1,7 @@
 "use client";
 
+import { Segmented } from "@/components/bos";
+
 export const ANALYTICS_RANGES = [
   { value: 7, label: "7 days" },
   { value: 15, label: "15 days" },
@@ -29,6 +31,8 @@ export function formatAnalyticsBucket(date: string, grain: "day" | "week" | "mon
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
+const RANGE_OPTIONS = ANALYTICS_RANGES.map((r) => ({ value: String(r.value), label: r.label }));
+
 export function AnalyticsRangePills({
   value,
   onChange,
@@ -37,19 +41,14 @@ export function AnalyticsRangePills({
   onChange: (days: number) => void;
 }) {
   return (
-    <div className="analytics-range" role="tablist" aria-label="Date range">
-      {ANALYTICS_RANGES.map((r) => (
-        <button
-          key={r.value}
-          type="button"
-          role="tab"
-          aria-selected={value === r.value}
-          className={value === r.value ? "active" : ""}
-          onClick={() => onChange(r.value)}
-        >
-          {r.label}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      role="radio"
+      size="sm"
+      scroll
+      aria-label="Date range"
+      options={RANGE_OPTIONS}
+      value={String(value)}
+      onChange={(next) => onChange(Number(next))}
+    />
   );
 }

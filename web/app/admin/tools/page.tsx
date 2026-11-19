@@ -2,6 +2,24 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Alert,
+  Badge,
+  Button,
+  Grid,
+  KpiCard,
+  SearchInput,
+  cx,
+} from "@/components/bos";
+import {
+  AdminEmpty,
+  AdminErrorState,
+  AdminPage,
+  AdminPageSkeleton,
+  AdminSection,
+  AdminTabs,
+} from "@/components/admin/ui";
+import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
 import { FeatureSwitchesPanel } from "@/components/admin/FeatureSwitchesPanel";
 import { ToolPlacementPane } from "@/components/admin/ToolPlacementPane";
 import {
@@ -91,6 +109,8 @@ export default function AdminToolsPage() {
   const [dirFilter, setDirFilter] = useState<DirFilter>("all");
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [available, setAvailable] = useState(true);
@@ -229,40 +249,42 @@ export default function AdminToolsPage() {
   const selected = directory.find((t) => t.id === selectedId) ?? filtered[0] ?? directory[0] ?? null;
 
   const didBootTools = useRef(false);
-  useLiveRefresh(
-    async () => {
-      try {
-        const loadedProfiles = await reload();
-        if (!didBootTools.current) {
-          didBootTools.current = true;
-          const params = new URLSearchParams(window.location.search);
-          const fromUrl = params.get("tool") || "";
-          if (fromUrl) setSelectedId(fromUrl);
-          const profileRaw = Number(params.get("profile") || params.get("businessProfileId"));
-          if (Number.isInteger(profileRaw) && profileRaw > 0) {
-            setBusinessProfileId(profileRaw);
-          } else {
-            const preferred = loadedProfiles.find((p) => p.isDefault) ?? loadedProfiles[0];
-            // Prefer default Business Profile so Live/Hidden KPIs are meaningful on first load.
-            if (preferred) setBusinessProfileId(preferred.id);
-          }
-          // Modules moved to Access Fabric (profile-first tool capabilities).
-          if (params.get("tab") === "modules") {
-            const href = adminDeepLink.toolCapabilities(
-              Number.isInteger(profileRaw) && profileRaw > 0 ? profileRaw : undefined,
-              fromUrl || "imsdealer",
-            );
-            window.location.replace(withBasePath(href));
-            return;
-          }
-          setTab(tabFromSearch(params.get("tab")));
+  const loadAll = async () => {
+    try {
+      const loadedProfiles = await reload();
+      setLoaded(true);
+      setLoadError("");
+      if (!didBootTools.current) {
+        didBootTools.current = true;
+        const params = new URLSearchParams(window.location.search);
+        const fromUrl = params.get("tool") || "";
+        if (fromUrl) setSelectedId(fromUrl);
+        const profileRaw = Number(params.get("profile") || params.get("businessProfileId"));
+        if (Number.isInteger(profileRaw) && profileRaw > 0) {
+          setBusinessProfileId(profileRaw);
+        } else {
+          const preferred = loadedProfiles.find((p) => p.isDefault) ?? loadedProfiles[0];
+          // Prefer default Business Profile so Live/Hidden KPIs are meaningful on first load.
+          if (preferred) setBusinessProfileId(preferred.id);
         }
-      } catch (e) {
-        setMessage(e instanceof Error ? e.message : "Failed to load tools");
+        // Modules moved to Access Fabric (profile-first tool capabilities).
+        if (params.get("tab") === "modules") {
+          const href = adminDeepLink.toolCapabilities(
+            Number.isInteger(profileRaw) && profileRaw > 0 ? profileRaw : undefined,
+            fromUrl || "imsdealer",
+          );
+          window.location.replace(withBasePath(href));
+          return;
+        }
+        setTab(tabFromSearch(params.get("tab")));
       }
-    },
-    { intervalMs: 60_000 },
-  );
+    } catch (e) {
+      const text = e instanceof Error ? e.message : "Failed to load tools";
+      if (loaded) setMessage(text);
+      else setLoadError(text);
+    }
+  };
+  useLiveRefresh(loadAll, { intervalMs: 60_000, deps: [businessProfileId] });
 
   useEffect(() => {
     if (!selected) return;
@@ -413,315 +435,315 @@ export default function AdminToolsPage() {
     [filtered, groupTools],
   );
 
-  return (
-    <div className="admin-page tm-page">
-      <section className="panel admin-card admin-page-head">
-        <div className="analytics-toolbar">
-          <div>
-            <h2>Catalog &amp; products</h2>
-            <p className="muted">
-              Create and configure tools, set Live/Hidden placement, publish product pricing, and
-              grant subscriptions for a Business Profile. Packs &amp; platform modes live under Plans
-              &amp; entitlements; module ceilings live on Access Fabric.
-            </p>
-          </div>
-          <div className="admin-form-row">
-            <label className="field" style={{ margin: 0, minWidth: 260 }}>
-              <span>Business Profile (for org placement / licenses)</span>
-              <select
-                value={businessProfileId ?? ""}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setBusinessProfileId(Number.isInteger(v) && v > 0 ? v : null);
-                }}
-                aria-label="Business Profile for catalog placement"
-              >
-                <option value="">
-                  {profiles.length === 0 ? "No profiles" : "Select a Business Profile…"}
-                </option>
-                {profiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.organizationName ? `${p.organizationName} — ` : ""}
-                    {p.businessName}
-                    {p.isDefault ? " (default)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field" style={{ margin: 0, minWidth: 220 }}>
-              <span>Tools / Products grouping</span>
-              <select
-                value={groupTools ? "on" : "off"}
-                disabled={groupingBusy}
-                onChange={(e) => void setToolGrouping(e.target.value === "on")}
-                aria-label="Tools and products grouping"
-              >
-                <option value="on">Grouped by category</option>
-                <option value="off">Flat list (no groups)</option>
-              </select>
-            </label>
-            <Link
-              href={adminDeepLink.toolCapabilities(businessProfileId ?? undefined, selectedId || undefined)}
-              className="btn btn-primary btn-sm"
-            >
-              Open Access Fabric
-            </Link>
-            <Link href={adminDeepLink.subscriptions()} className="btn btn-secondary btn-sm">
-              Packs &amp; entitlements
-            </Link>
-            <Link href={adminDeepLink.analytics()} className="btn btn-secondary btn-sm">
-              Usage analytics
-            </Link>
-          </div>
-          {needsOrganization ? (
-            <p className="muted tm-flash">
-              Select a Business Profile to see Live/Hidden placement and licensed counts for that org.
-              Product SKUs and schemas are still editable platform-wide.
-            </p>
-          ) : null}
-        </div>
-        <div className="analytics-kpis tm-kpis">
-          <button type="button" className={`result-card${dirFilter === "all" ? " is-selected" : ""}`} onClick={() => setDirFilter("all")}>
-            <span>Tools</span>
-            <strong>{stats.total}</strong>
-          </button>
-          <button
-            type="button"
-            className={`result-card${dirFilter === "live" ? " is-selected" : ""}`}
-            disabled={needsOrganization}
-            title={needsOrganization ? "Select a Business Profile" : undefined}
-            onClick={() => setDirFilter("live")}
-          >
-            <span>Live on home</span>
-            <strong>{needsOrganization ? "—" : stats.live}</strong>
-          </button>
-          <button
-            type="button"
-            className={`result-card${dirFilter === "hidden" ? " is-selected" : ""}`}
-            disabled={needsOrganization}
-            title={needsOrganization ? "Select a Business Profile" : undefined}
-            onClick={() => setDirFilter("hidden")}
-          >
-            <span>Hidden</span>
-            <strong>{needsOrganization ? "—" : stats.hidden}</strong>
-          </button>
-          <button type="button" className={`result-card${dirFilter === "paid" ? " is-selected" : ""}`} onClick={() => setDirFilter("paid")}>
-            <span>Paid products</span>
-            <strong>{stats.paid}</strong>
-          </button>
-          <button
-            type="button"
-            className={`result-card${dirFilter === "licensed" ? " is-selected" : ""}`}
-            disabled={needsOrganization}
-            title={needsOrganization ? "Select a Business Profile" : undefined}
-            onClick={() => setDirFilter("licensed")}
-          >
-            <span>Licensed here</span>
-            <strong>{needsOrganization ? "—" : stats.licensed}</strong>
-          </button>
-        </div>
-      </section>
+  if (!loaded) {
+    if (loadError) {
+      return (
+        <AdminPage title="Catalog & products" sub="Tools · placement · pricing · schema">
+          <AdminErrorState message={loadError} onRetry={() => void loadAll()} />
+        </AdminPage>
+      );
+    }
+    return <AdminPageSkeleton cards={5} />;
+  }
 
-      <div className="tm-workspace">
-        <aside className="panel admin-card tm-directory">
-          <div className="tm-directory-head">
-            <h2>Directory</h2>
-            <input
+  const dirOptions: ReadonlyArray<{ value: DirFilter; label: string }> = [
+    { value: "all", label: "All" },
+    { value: "live", label: "Live" },
+    { value: "hidden", label: "Hidden" },
+    { value: "paid", label: "Paid" },
+    { value: "licensed", label: "Licensed" },
+  ];
+
+  const tabOptions: ReadonlyArray<{ value: Tab; label: string }> = [
+    { value: "placement", label: "Placement" },
+    { value: "pricing", label: "Product" },
+    { value: "schema", label: "Schema" },
+  ];
+
+  const kpiButton = (
+    key: DirFilter,
+    label: string,
+    value: string | number,
+    chip: { color: "blue" | "amber" | "mint" | "lavender" | "rose" | "sage"; glyph: string },
+    orgOnly = false,
+  ) => {
+    const disabled = orgOnly && needsOrganization;
+    return (
+      <button
+        type="button"
+        className={cx("admin-cc-kpi-btn", dirFilter === key && "is-selected")}
+        aria-pressed={dirFilter === key}
+        disabled={disabled}
+        title={disabled ? "Select a Business Profile" : undefined}
+        style={disabled ? { opacity: 0.55, cursor: "not-allowed" } : undefined}
+        onClick={() => setDirFilter(key)}
+      >
+        <KpiCard
+          label={label}
+          value={value}
+          chip={chip}
+          delta={disabled ? "Needs a Business Profile" : "Filter directory"}
+          deltaTone="muted"
+          interactive={!disabled}
+        />
+      </button>
+    );
+  };
+
+  return (
+    <AdminPage
+      title="Catalog & products"
+      sub="Tools · placement · pricing · schema"
+      toolbar={
+        <>
+          <Badge auto tone={needsOrganization ? "amber" : "emerald"}>
+            {needsOrganization ? "Platform view" : "Org placement"}
+          </Badge>
+          <Link href={adminDeepLink.toolCapabilities(businessProfileId ?? undefined, selectedId || undefined)}>
+            <Button variant="primary" size="sm">
+              Open Access Fabric
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.subscriptions()}>
+            <Button variant="secondary" size="sm">
+              Packs &amp; entitlements
+            </Button>
+          </Link>
+          <Link href={adminDeepLink.analytics()}>
+            <Button variant="secondary" size="sm">
+              Usage analytics
+            </Button>
+          </Link>
+          <Button variant="ghost" size="sm" icon="refresh" onClick={() => void loadAll()}>
+            Refresh
+          </Button>
+        </>
+      }
+    >
+      <Alert tone="blue" title="Catalog workspace">
+        Create and configure tools, set Live/Hidden placement, publish product pricing, and grant subscriptions for a
+        Business Profile. Packs &amp; platform modes live under{" "}
+        <Link className="admin-cc-link" href={adminDeepLink.subscriptions()}>
+          Plans &amp; entitlements
+        </Link>
+        ; module ceilings live on Access Fabric.
+      </Alert>
+
+      <AdminSection title="Scope" description="Choose the Business Profile for org placement and licenses.">
+        <div className="admin-cc-inline">
+          <SelectField
+            label="Business Profile (for org placement / licenses)"
+            value={businessProfileId ?? ""}
+            aria-label="Business Profile for catalog placement"
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setBusinessProfileId(Number.isInteger(v) && v > 0 ? v : null);
+            }}
+          >
+            <option value="">{profiles.length === 0 ? "No profiles" : "Select a Business Profile…"}</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.organizationName ? `${p.organizationName} — ` : ""}
+                {p.businessName}
+                {p.isDefault ? " (default)" : ""}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            label="Tools / Products grouping"
+            value={groupTools ? "on" : "off"}
+            disabled={groupingBusy}
+            aria-label="Tools and products grouping"
+            onChange={(e) => void setToolGrouping(e.target.value === "on")}
+          >
+            <option value="on">Grouped by category</option>
+            <option value="off">Flat list (no groups)</option>
+          </SelectField>
+        </div>
+        {needsOrganization ? (
+          <p className="admin-cc-note-text" style={{ marginTop: 10 }}>
+            Select a Business Profile to see Live/Hidden placement and licensed counts for that org. Product SKUs and
+            schemas are still editable platform-wide.
+          </p>
+        ) : null}
+      </AdminSection>
+
+      <Grid cols={5} min={140} gap={12}>
+        {kpiButton("all", "Tools", stats.total, { color: "blue", glyph: "▣" })}
+        {kpiButton("live", "Live on home", needsOrganization ? "—" : stats.live, { color: "mint", glyph: "✓" }, true)}
+        {kpiButton("hidden", "Hidden", needsOrganization ? "—" : stats.hidden, { color: "lavender", glyph: "◌" }, true)}
+        {kpiButton("paid", "Paid products", stats.paid, { color: "amber", glyph: "₹" })}
+        {kpiButton("licensed", "Licensed here", needsOrganization ? "—" : stats.licensed, { color: "rose", glyph: "◈" }, true)}
+      </Grid>
+
+      {message ? <Alert tone="blue" title={message} /> : null}
+
+      <div className="admin-cc-split">
+        <AdminSection title="Directory" description={`${filtered.length} of ${directory.length} tools shown`}>
+          <div className="admin-cc-stack">
+            <SearchInput
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search tools…"
               aria-label="Search tools"
             />
+            <AdminTabs aria-label="Directory filter" options={dirOptions} value={dirFilter} onChange={setDirFilter} />
           </div>
-          <div className="admin-tabs tm-dir-filters" role="tablist" aria-label="Directory filter">
-            {(
-              [
-                ["all", "All"],
-                ["live", "Live"],
-                ["hidden", "Hidden"],
-                ["paid", "Paid"],
-                ["licensed", "Licensed"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                className={dirFilter === id ? "active" : ""}
-                onClick={() => setDirFilter(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="tm-directory-body">
+
+          <div className="admin-cc-dir-list">
             {groups.length === 0 ? (
-              <p className="muted">No tools match this filter.</p>
+              <AdminEmpty title="No tools match" icon="search">
+                No tools match this filter.
+              </AdminEmpty>
             ) : (
               groups.map(([group, rows]) => (
-                <div key={group} className="admin-tool-group">
-                  {groupTools ? <h3>{group}</h3> : null}
-                  {rows.map((t) => (
-                    <button
-                      type="button"
-                      key={t.id}
-                      className={`tm-dir-item${selected?.id === t.id ? " is-selected" : ""}`}
-                      onClick={() => {
-                        select(t.id);
-                        revealDetail();
-                      }}
-                    >
-                      <span className="tm-dir-name">
-                        <strong>{t.name}</strong>
-                        <em>{t.id}</em>
-                      </span>
-                      <span className="tm-dir-meta">
-                        <span
-                          className={
-                            needsOrganization
-                              ? "pill"
-                              : t.catalog?.available === false
-                                ? "pill"
-                                : "pill pill-success"
-                          }
-                        >
-                          {needsOrganization
-                            ? "Platform"
-                            : t.catalog?.available === false
-                              ? "Hidden"
-                              : "Live"}
-                        </span>
-                        {t.sku?.includedFree ? (
-                          <span className="pill">Incl.</span>
-                        ) : t.licensed ? (
-                          <span className="pill pill-success">Lic.</span>
-                        ) : t.sku?.accessPolicy === "hard_lock" ? (
-                          <span className="pill pill-danger">Lock</span>
-                        ) : t.sku ? (
-                          <span className="pill pill-warning">Paid</span>
-                        ) : null}
-                      </span>
-                    </button>
-                  ))}
+                <div key={group} className="admin-cc-stack">
+                  {groupTools ? <div className="bos-block-label">{group}</div> : null}
+                  {rows.map((t) => {
+                    const active = selected?.id === t.id;
+                    return (
+                      <button
+                        type="button"
+                        key={t.id}
+                        className={cx("admin-cc-row", active && "is-selected")}
+                        aria-pressed={active}
+                        onClick={() => {
+                          select(t.id);
+                          revealDetail();
+                        }}
+                      >
+                        <div className="admin-cc-row-main">
+                          <div className="admin-cc-cell-title">{t.name}</div>
+                          <div className="admin-cc-cell-sub">{t.id}</div>
+                        </div>
+                        <div className="admin-cc-row-badges">
+                          <Badge
+                            auto
+                            tone={needsOrganization ? "neutral" : t.catalog?.available === false ? "neutral" : "emerald"}
+                          >
+                            {needsOrganization ? "Platform" : t.catalog?.available === false ? "Hidden" : "Live"}
+                          </Badge>
+                          {t.sku?.includedFree ? (
+                            <Badge auto tone="neutral">
+                              Incl.
+                            </Badge>
+                          ) : t.licensed ? (
+                            <Badge auto tone="emerald">
+                              Lic.
+                            </Badge>
+                          ) : t.sku?.accessPolicy === "hard_lock" ? (
+                            <Badge auto tone="coral">
+                              Lock
+                            </Badge>
+                          ) : t.sku ? (
+                            <Badge auto tone="amber">
+                              Paid
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               ))
             )}
           </div>
 
           {creating ? (
-            <form className="tm-create" onSubmit={(e) => void createTool(e)}>
-              <h3>Create tool</h3>
-              <input
+            <form className="admin-cc-form" style={{ marginTop: 14 }} onSubmit={(e) => void createTool(e)}>
+              <div className="bos-block-label">Create tool</div>
+              <TextField
+                label="Tool id"
                 value={newId}
                 onChange={(e) => setNewId(e.target.value)}
                 placeholder="id e.g. leadtracker"
                 required
                 pattern="[a-z][a-z0-9_]*"
               />
-              <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title" required />
-              <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Short description" />
-              <input
+              <TextField label="Title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title" required />
+              <TextField
+                label="Description"
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+                placeholder="Short description"
+              />
+              <TextField
+                label="Group"
                 value={newGroup}
                 onChange={(e) => setNewGroup(e.target.value)}
                 placeholder="Group e.g. Sales"
                 required
               />
-              <label className="field">
-                <span>Starter schema</span>
-                <select
-                  value={newTemplate}
-                  onChange={(e) => setNewTemplate(e.target.value as "blank" | "line_items")}
-                >
-                  <option value="blank">Blank (name + notes)</option>
-                  <option value="line_items">Line items + amount formula</option>
-                </select>
-              </label>
-              <div className="admin-form-row">
-                <button type="submit" className="btn btn-primary btn-sm">
+              <SelectField
+                label="Starter schema"
+                value={newTemplate}
+                onChange={(e) => setNewTemplate(e.target.value as "blank" | "line_items")}
+              >
+                <option value="blank">Blank (name + notes)</option>
+                <option value="line_items">Line items + amount formula</option>
+              </SelectField>
+              <div className="admin-cc-actions" style={{ justifyContent: "flex-start" }}>
+                <Button type="submit" variant="primary" size="sm">
                   Create
-                </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setCreating(false)}>
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setCreating(false)}>
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           ) : (
-            <button type="button" className="btn btn-secondary btn-sm tm-create-btn" onClick={() => setCreating(true)}>
-              + New tool
-            </button>
+            <div style={{ marginTop: 14 }}>
+              <Button variant="secondary" size="sm" icon="plus" onClick={() => setCreating(true)}>
+                New tool
+              </Button>
+            </div>
           )}
-        </aside>
+        </AdminSection>
 
-        <div ref={detailRef} className="tm-detail">
+        <div ref={detailRef} className="admin-cc-split-stack">
           {selected ? (
             <>
-              <section className="panel admin-card tm-detail-head">
-                <div>
-                  <p className="card-label">{selected.toolType}</p>
-                  <h2>{selected.name}</h2>
-                  <p className="muted">{selected.id}</p>
+              <section className="bos-widget admin-cc-section">
+                <div className="admin-cc-detail-head">
+                  <div>
+                    <div style={{ marginBottom: 6 }}>
+                      <Badge auto tone="blue">
+                        {selected.toolType}
+                      </Badge>
+                    </div>
+                    <h3 className="admin-cc-detail-title">{selected.name}</h3>
+                    <p className="admin-cc-detail-sub">{selected.id}</p>
+                  </div>
+                  <div className="admin-cc-actions">
+                    <Link href={adminDeepLink.analyticsTool(selected.id)}>
+                      <Button variant="secondary" size="sm">
+                        Analytics
+                      </Button>
+                    </Link>
+                    <Button variant="ghost" size="sm" onClick={() => void move(selected.id, -1)}>
+                      Move up
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => void move(selected.id, 1)}>
+                      Move down
+                    </Button>
+                  </div>
                 </div>
-                <div className="tm-order-btns">
-                  <Link href={adminDeepLink.analyticsTool(selected.id)} className="btn btn-secondary btn-sm">
-                    Analytics
-                  </Link>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => void move(selected.id, -1)}>
-                    Move up
-                  </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => void move(selected.id, 1)}>
-                    Move down
-                  </button>
+
+                <div className="admin-cc-tabs-bar" style={{ marginBottom: 0 }}>
+                  <AdminTabs aria-label="Tool section" options={tabOptions} value={tab} onChange={goTab} />
+                  <div className="admin-cc-actions">
+                    <Link href={adminDeepLink.toolCapabilities(businessProfileId ?? undefined, selected.id)}>
+                      <Button variant="ghost">Capabilities</Button>
+                    </Link>
+                    <Button variant="primary" disabled={saving} onClick={() => void saveActive()}>
+                      {saving ? "Saving…" : saveLabel}
+                    </Button>
+                  </div>
                 </div>
               </section>
 
-              <div className="admin-tabs-bar">
-                <div className="admin-tabs tm-detail-tabs" role="tablist">
-                  <button
-                    type="button"
-                    role="tab"
-                    className={tab === "placement" ? "active" : ""}
-                    onClick={() => goTab("placement")}
-                  >
-                    Placement
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    className={tab === "pricing" ? "active" : ""}
-                    onClick={() => goTab("pricing")}
-                  >
-                    Product
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    className={tab === "schema" ? "active" : ""}
-                    onClick={() => goTab("schema")}
-                  >
-                    Schema
-                  </button>
-                  <Link
-                    href={adminDeepLink.toolCapabilities(businessProfileId ?? undefined, selected.id)}
-                    className="btn btn-ghost btn-sm"
-                  >
-                    Capabilities
-                  </Link>
-                </div>
-                <div className="admin-tabs-actions">
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={saving}
-                    onClick={() => void saveActive()}
-                  >
-                    {saving ? "Saving…" : saveLabel}
-                  </button>
-                </div>
-              </div>
-
-              {message ? <p className="muted tm-flash">{message}</p> : null}
-
-              <div hidden={tab !== "placement"} className={tab === "placement" ? undefined : "payments-tab-park"}>
+              <div hidden={tab !== "placement"}>
+                <div className="admin-cc-split-stack">
                 <ToolPlacementPane
                   ref={placementRef}
                   toolId={selected.id}
@@ -744,9 +766,10 @@ export default function AdminToolsPage() {
                   toolLive={selected.catalog?.available === true}
                   businessProfileId={businessProfileId}
                 />
+                </div>
               </div>
 
-              <div hidden={tab !== "pricing"} className={tab === "pricing" ? undefined : "payments-tab-park"}>
+              <div hidden={tab !== "pricing"}>
                 <ToolPricingPane
                   ref={pricingRef}
                   toolId={selected.id}
@@ -769,7 +792,7 @@ export default function AdminToolsPage() {
                 />
               </div>
 
-              <div hidden={tab !== "schema"} className={tab === "schema" ? undefined : "payments-tab-park"}>
+              <div hidden={tab !== "schema"}>
                 <ToolSchemaPane
                   ref={schemaRef}
                   toolId={selected.id}
@@ -782,15 +805,16 @@ export default function AdminToolsPage() {
                   }}
                 />
               </div>
-
             </>
           ) : (
-            <section className="panel admin-card">
-              <p className="muted">Loading tools…</p>
-            </section>
+            <AdminSection title="Tool detail">
+              <AdminEmpty title="No tool selected" icon="search">
+                Pick a tool from the directory.
+              </AdminEmpty>
+            </AdminSection>
           )}
         </div>
       </div>
-    </div>
+    </AdminPage>
   );
 }

@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { AdminEmpty, AdminSection } from "@/components/admin/ui";
+import { SelectField, SwitchField, TextField, TextareaField } from "@/components/admin/ui/AdminFields";
 import type { BundleState, SkuState } from "@/components/admin/ToolPricingPane";
+import { Badge, Button, Checkbox, Dialog, Field, FormGrid, cx } from "@/components/bos";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { bumpCommerceRevision } from "@/lib/commerce-revision";
@@ -17,9 +20,13 @@ function inr(n: number) {
 
 export function ProductPacksPanel({
   onMessage,
+  onError,
 }: {
   onMessage: (msg: string) => void;
+  /** Failure channel; falls back to `onMessage` when omitted. */
+  onError?: (msg: string) => void;
 }) {
+  const fail = onError ?? onMessage;
   const [bundles, setBundles] = useState<BundleState[]>([]);
   const [skus, setSkus] = useState<SkuState[]>([]);
   const [editingId, setEditingId] = useState<string | null>("all_tools");
@@ -36,6 +43,7 @@ export function ProductPacksPanel({
   });
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function reload() {
     const data = await api<{ skus: SkuState[]; bundles?: BundleState[] }>("/admin/skus");
@@ -50,7 +58,7 @@ export function ProductPacksPanel({
         const first = list.find((b) => b.id === "all_tools") ?? list[0];
         if (first) startEdit(first);
       })
-      .catch((e) => onMessage(e instanceof Error ? e.message : "Failed to load packs"));
+      .catch((e) => fail(e instanceof Error ? e.message : "Failed to load packs"));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- boot once
   }, []);
 
@@ -120,7 +128,7 @@ export function ProductPacksPanel({
       if (keep) startEdit(keep);
       setCreating(false);
     } catch (err) {
-      onMessage(err instanceof Error ? err.message : "Pack save failed");
+      fail(err instanceof Error ? err.message : "Pack save failed");
     } finally {
       setSaving(false);
     }
@@ -138,7 +146,7 @@ export function ProductPacksPanel({
       if (first) startEdit(first);
       else startCreate();
     } catch (err) {
-      onMessage(err instanceof Error ? err.message : "Delete failed");
+      fail(err instanceof Error ? err.message : "Delete failed");
     } finally {
       setSaving(false);
     }
@@ -152,80 +160,92 @@ export function ProductPacksPanel({
   }
 
   const editingAllTools = !creating && (editingId === "all_tools" || form.id === "all_tools");
+  const canDelete = !creating && Boolean(editingId) && editingId !== "all_tools";
+  const deleteName = bundles.find((b) => b.id === editingId)?.name ?? editingId ?? "this pack";
 
   return (
-    <section className="panel admin-card">
-      <div className="analytics-toolbar">
-        <div>
-          <h2>Product packs</h2>
-          <p className="muted">
-            Marketing bundles that expand to per-tool licenses. All Tools Pack grants every paid SKU.
-            Custom packs (e.g. Sales, Solar) select specific tools.
-          </p>
-        </div>
-        <div className="admin-form-row">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={startCreate}>
-            + New pack
-          </button>
-          <button type="submit" form="product-pack-form" className="btn btn-primary btn-sm" disabled={saving}>
-            {saving ? "Saving…" : creating ? "Create pack" : "Save pack"}
-          </button>
-        </div>
-      </div>
+    <>
+      <AdminSection
+        title="Product packs"
+        description="Marketing bundles that expand to per-tool licenses. All Tools Pack grants every paid SKU. Custom packs (e.g. Sales, Solar) select specific tools."
+        actions={
+          <>
+            <Button variant="secondary" size="sm" icon="plus" onClick={startCreate}>
+              New pack
+            </Button>
+            <Button type="submit" form="product-pack-form" variant="primary" size="sm" disabled={saving}>
+              {saving ? "Saving…" : creating ? "Create pack" : "Save pack"}
+            </Button>
+          </>
+        }
+      >
+        <div className="admin-cc-pack-layout">
+          <div className="admin-cc-dir-list" style={{ marginTop: 0 }}>
+            {bundles.length === 0 ? (
+              <AdminEmpty title="No packs yet" icon="box">
+                Create the first pack to bundle paid tools.
+              </AdminEmpty>
+            ) : null}
+            {bundles.map((b) => {
+              const active = editingId === b.id && !creating;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  className={cx("admin-cc-row", active && "is-selected")}
+                  aria-pressed={active}
+                  onClick={() => startEdit(b)}
+                >
+                  <div className="admin-cc-row-main">
+                    <div className="admin-cc-cell-title">{b.name}</div>
+                    <div className="admin-cc-cell-sub">{b.id}</div>
+                  </div>
+                  <div className="admin-cc-row-badges">
+                    <Badge auto tone="neutral">
+                      {inr(b.priceInr)}
+                    </Badge>
+                    {b.highlighted ? (
+                      <Badge auto tone="emerald">
+                        Featured
+                      </Badge>
+                    ) : null}
+                    {b.available === false ? (
+                      <Badge auto tone="coral">
+                        Hidden
+                      </Badge>
+                    ) : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
 
-      <div className="tm-packs-layout">
-        <div className="tm-packs-list admin-scroll-list">
-          {bundles.map((b) => (
-            <button
-              key={b.id}
-              type="button"
-              className={`tm-dir-item${editingId === b.id && !creating ? " is-selected" : ""}`}
-              onClick={() => startEdit(b)}
-            >
-              <span className="tm-dir-name">
-                <strong>{b.name}</strong>
-                <em>{b.id}</em>
-              </span>
-              <span className="tm-dir-meta">
-                <span className="pill">{inr(b.priceInr)}</span>
-                {b.highlighted ? <span className="pill pill-success">Featured</span> : null}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        <form id="product-pack-form" className="tm-packs-editor" onSubmit={(e) => void save(e)}>
-          {creating ? (
-            <label className="field">
-              <span>Pack id</span>
-              <input
-                value={form.id}
-                onChange={(e) => setForm({ ...form, id: e.target.value })}
-                placeholder="e.g. sales_pack"
-                pattern="[a-z][a-z0-9_]*"
-                required
-              />
-            </label>
-          ) : null}
-          <div className="admin-form-grid">
-            <label className="field">
-              <span>Name</span>
-              <input
+          <form id="product-pack-form" className="admin-cc-form" onSubmit={(e) => void save(e)}>
+            <FormGrid>
+              {creating ? (
+                <TextField
+                  full
+                  label="Pack id"
+                  value={form.id}
+                  onChange={(e) => setForm({ ...form, id: e.target.value })}
+                  placeholder="e.g. sales_pack"
+                  pattern="[a-z][a-z0-9_]*"
+                  required
+                />
+              ) : null}
+              <TextField
+                label="Name"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
               />
-            </label>
-            <label className="field">
-              <span>Tagline</span>
-              <input
+              <TextField
+                label="Tagline"
                 value={form.tagline}
                 onChange={(e) => setForm({ ...form, tagline: e.target.value })}
               />
-            </label>
-            <label className="field">
-              <span>Discount %</span>
-              <input
+              <TextField
+                label="Discount %"
                 type="number"
                 min={0}
                 max={100}
@@ -233,104 +253,118 @@ export function ProductPacksPanel({
                 disabled={form.fixedPriceInr.trim() !== ""}
                 onChange={(e) => setForm({ ...form, discountPct: e.target.value })}
               />
-            </label>
-            <label className="field">
-              <span>Fixed price (optional)</span>
-              <input
+              <TextField
+                label="Fixed price (optional)"
                 type="number"
                 min={0}
                 value={form.fixedPriceInr}
                 placeholder="Overrides sum − discount"
                 onChange={(e) => setForm({ ...form, fixedPriceInr: e.target.value })}
               />
-            </label>
-            <label className="field">
-              <span>Available</span>
-              <select
+              <SelectField
+                label="Available"
                 value={form.available ? "1" : "0"}
                 onChange={(e) => setForm({ ...form, available: e.target.value === "1" })}
               >
                 <option value="1">Yes</option>
                 <option value="0">No</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Highlighted</span>
-              <select
-                value={form.highlighted ? "1" : "0"}
-                onChange={(e) => setForm({ ...form, highlighted: e.target.value === "1" })}
-              >
-                <option value="0">No</option>
-                <option value="1">Yes</option>
-              </select>
-            </label>
-            <label className="field field-span-2">
-              <span>Description</span>
-              <textarea
+              </SelectField>
+              <SwitchField
+                label="Highlighted"
+                checked={form.highlighted}
+                onChange={(highlighted) => setForm({ ...form, highlighted })}
+              />
+              <TextareaField
+                full
+                label="Description"
                 rows={2}
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
-            </label>
-          </div>
+            </FormGrid>
 
-          {editingAllTools ? (
-            <p className="muted">
-              All Tools Pack always expands to every paid SKU at grant time. Tool checklist is not required.
+            {editingAllTools ? (
+              <p className="admin-cc-note-text">
+                All Tools Pack always expands to every paid SKU at grant time. Tool checklist is not required.
+              </p>
+            ) : (
+              <Field label="Tools in pack">
+                {() => (
+                  <div className="admin-cc-checklist">
+                    {skus.map((s) => (
+                      <label key={s.toolId} className="admin-cc-check">
+                        <Checkbox
+                          checked={form.toolIds.includes(s.toolId)}
+                          onChange={() => toggleTool(s.toolId)}
+                          aria-label={s.name}
+                        />
+                        <span>
+                          {s.name} <span className="admin-cc-cell-sub">{inr(s.priceInr)}</span>
+                        </span>
+                      </label>
+                    ))}
+                    {skus.length === 0 ? <span className="admin-cc-cell-sub">No paid SKUs available.</span> : null}
+                  </div>
+                )}
+              </Field>
+            )}
+
+            <p className="admin-cc-note-text">
+              Define pack membership here. Provision licenses to a Business Profile from{" "}
+              <Link href={adminDeepLink.profileAccess(undefined, "fabric")}>Access Fabric</Link> (profile-first pack
+              provisioner). Per-tool pricing lives under{" "}
+              <Link href={adminDeepLink.toolsPricing()}>Catalog &amp; products</Link>.
             </p>
-          ) : (
-            <div className="tm-pack-tools">
-              <span className="field-label">Tools in pack</span>
-              <div className="tm-pack-tool-grid">
-                {skus.map((s) => (
-                  <label key={s.toolId} className="tm-pack-tool">
-                    <input
-                      type="checkbox"
-                      checked={form.toolIds.includes(s.toolId)}
-                      onChange={() => toggleTool(s.toolId)}
-                    />
-                    <span>
-                      {s.name} <em>{inr(s.priceInr)}</em>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
 
-          <p className="muted">
-            Define pack membership here. Provision licenses to a Business Profile from{" "}
-            <Link href={adminDeepLink.profileAccess(undefined, "fabric")}>Access Fabric</Link>{" "}
-            (profile-first pack provisioner). Per-tool pricing lives under{" "}
-            <Link href={adminDeepLink.toolsPricing()}>Catalog &amp; products</Link>.
-          </p>
-          <div className="admin-form-row">
-            {!creating ? (
-              <Link
-                href={adminDeepLink.profileAccess(undefined, "fabric")}
-                className="btn btn-secondary btn-sm"
-              >
-                Open Access Fabric
-              </Link>
-            ) : null}
-            {!creating ? (
-              <Link href={adminDeepLink.toolsPricing()} className="btn btn-ghost btn-sm">
-                Tool products
-              </Link>
-            ) : null}
-            {!creating && editingId && editingId !== "all_tools" ? (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={saving}
-                onClick={() => void remove(editingId)}
-              >
-                Delete
-              </button>
-            ) : null}
-          </div>
-        </form>
-      </div>
-    </section>
+            <div className="admin-cc-form-actions">
+              {!creating ? (
+                <Link href={adminDeepLink.profileAccess(undefined, "fabric")}>
+                  <Button variant="secondary" size="sm">
+                    Open Access Fabric
+                  </Button>
+                </Link>
+              ) : null}
+              {!creating ? (
+                <Link href={adminDeepLink.toolsPricing()}>
+                  <Button variant="ghost" size="sm">
+                    Tool products
+                  </Button>
+                </Link>
+              ) : null}
+              {canDelete ? (
+                <Button variant="destructive" size="sm" disabled={saving} onClick={() => setConfirmDelete(true)}>
+                  Delete
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        </div>
+      </AdminSection>
+
+      <Dialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title={`Delete ${deleteName}?`}
+        description="This removes the pack from the catalog and cannot be undone."
+        icon={{ tone: "coral" }}
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={saving}
+              onClick={() => {
+                setConfirmDelete(false);
+                if (editingId) void remove(editingId);
+              }}
+            >
+              Delete pack
+            </Button>
+          </>
+        }
+      />
+    </>
   );
 }
