@@ -44,6 +44,20 @@ describe("parseBomDcIntent", () => {
     });
   });
 
+  it("opens the returns list or a single RTN document", () => {
+    expect(parseBomDcIntent("returns")).toEqual({ mode: "list" });
+    expect(parseBomDcIntent("return")).toEqual({ mode: "list" });
+    const id = "550e8400-e29b-41d4-a716-446655440000";
+    expect(parseBomDcIntent(`return:${id}`)).toEqual({ mode: "return", returnId: id });
+    expect(parseBomDcIntent(`open-return:${id}`)).toEqual({ mode: "return", returnId: id });
+  });
+
+  it("starts create-return pick or against a DC", () => {
+    expect(parseBomDcIntent("new-return")).toEqual({ mode: "pick-dc-return" });
+    const id = "550e8400-e29b-41d4-a716-446655440000";
+    expect(parseBomDcIntent(`new-return:${id}`)).toEqual({ mode: "create-return", dcId: id });
+  });
+
   it("ignores empty / unknown intents", () => {
     expect(parseBomDcIntent(null)).toBeNull();
     expect(parseBomDcIntent("")).toBeNull();

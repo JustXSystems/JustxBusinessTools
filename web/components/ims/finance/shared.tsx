@@ -393,7 +393,21 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
     { label: "Due date", value: inv.dueDate ? dateLabel(inv.dueDate) : "On receipt" },
     { label: "Place of supply", value: inv.placeOfSupply || session.settings.state || "—" },
   ];
-  if (inv.sourceRef) meta.push({ label: "Reference", value: inv.sourceRef });
+  // Business refs only — never print internal UUIDs as "Reference".
+  if (inv.sourceTool === "ims_bom" && inv.sourceLabel) {
+    meta.push({ label: "BOM no.", value: inv.sourceLabel });
+  } else if (inv.sourceTool === "pos" && (inv.sourceLabel || inv.sourceRef)) {
+    meta.push({ label: "POS bill", value: inv.sourceLabel || inv.sourceRef });
+  } else if (inv.sourceLabel) {
+    meta.push({ label: "Job / quotation", value: inv.sourceLabel });
+  }
+  const dcNos = (inv.dcLinks ?? []).map((d) => d.docNo).filter(Boolean);
+  if (dcNos.length) {
+    meta.push({
+      label: dcNos.length === 1 ? "Delivery challan" : "Delivery challans",
+      value: dcNos.join(", "),
+    });
+  }
   return (
     <DocumentPaper
       title={inv.status === "draft" ? "DRAFT INVOICE" : "TAX INVOICE"}

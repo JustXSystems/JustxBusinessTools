@@ -159,10 +159,13 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
         actions={
           inv?.sourceTool && inv.sourceTool !== "pos" ? (
             <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-              <Badge tag="lavender">{inv.sourceTool === "ims_bom" ? "From BOM" : "From Quotation"}</Badge>
+              <Badge tag="lavender">
+                {inv.sourceTool === "ims_bom" ? "From BOM" : "From Quotation"}
+                {inv.sourceLabel ? ` · ${inv.sourceLabel}` : ""}
+              </Badge>
               {inv.sourceTool === "ims_bom" && inv.sourceRef && can("bom") ? (
                 <Button size="sm" variant="ghost" onClick={() => navigate("bom", `open:${inv.sourceRef}`)}>
-                  Open BOM
+                  {inv.sourceLabel ? `Open ${inv.sourceLabel}` : "Open BOM"}
                 </Button>
               ) : null}
             </span>

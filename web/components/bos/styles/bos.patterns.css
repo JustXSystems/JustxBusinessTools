@@ -581,9 +581,22 @@
 /* The paper is always light — it is what prints. */
 .bos .bos-inv-paper { background: #ffffff; color: #1f2430; border: 1px solid var(--bos-border-soft); border-radius: var(--bos-r-xl); box-shadow: var(--bos-shadow-lg); padding: 36px; position: sticky; top: 88px; }
 .bos .bos-inv-paper-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 28px; }
+.bos .bos-inv-paper-top > :first-child { min-width: 0; flex: 1 1 auto; }
+.bos .bos-inv-paper-top > :last-child { flex: 0 0 auto; min-width: max-content; }
 .bos .bos-inv-paper-brand { font-family: var(--bos-font-display); font-weight: 700; font-size: 19px; color: #1f2430; overflow-wrap: anywhere; }
 .bos .bos-inv-paper-powered { font-size: 11px; color: #9aa0ac; margin-top: 4px; }
-.bos .bos-inv-paper-title { font-family: var(--bos-font-mono); font-size: 22px; font-weight: 700; letter-spacing: .04em; color: #c7cbd4; text-align: right; }
+.bos .bos-inv-paper-title {
+  font-family: var(--bos-font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #c7cbd4;
+  text-align: right;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow: visible;
+  flex-shrink: 0;
+}
 .bos .bos-inv-paper-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #ececef; }
 .bos .bos-inv-paper-label { font-family: var(--bos-font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #9aa0ac; font-weight: 650; margin-bottom: 3px; }
 .bos .bos-inv-paper-value { font-size: 13px; font-weight: 650; color: #1f2430; overflow-wrap: anywhere; }
@@ -606,6 +619,8 @@
   body.bos-printing .bos-inv-paper,
   body.bos-printing .bos-inv-paper * { visibility: visible !important; }
   body.bos-printing .bos-inv-paper { position: absolute !important; top: 0; left: 0; width: 100%; box-shadow: none !important; border: none !important; }
+  .bos .bos-inv-paper-title { white-space: nowrap !important; word-break: keep-all !important; overflow: visible !important; }
+  .bos .bos-inv-paper-top > :last-child { flex: 0 0 auto !important; min-width: max-content !important; }
 }
 
 /* ---------- Footer ---------- */

@@ -295,11 +295,12 @@ export type ImsDashboard = {
 export type ImsEvent = { id: number; actorName: string | null; type: string; entityType: string | null; entityId: string | null; summary: string; createdAt: string | null };
 
 export type ImsSearchResult = {
-  kind: "item" | "party" | "invoice" | "po" | "bill" | "bom" | "bom_package" | "bom_dc";
+  kind: "item" | "party" | "invoice" | "po" | "bill" | "bom" | "bom_package" | "bom_dc" | "bom_dc_return";
   id: string;
   title: string;
   sub: string;
   module: ImsModuleKey;
+  /** Bare entity id, or a prefixed intent (`return:<id>`, `new-return:<dcId>`). */
   open: string;
 };
 

@@ -85,7 +85,10 @@ export type ImsInvoice = {
   reminderCount: number;
   autoReminder: boolean;
   sourceTool: string | null;
+  /** Internal link id (BOM uuid etc.) — use for navigation, not display. */
   sourceRef: string | null;
+  /** Business document number for the source (e.g. BOM no.). */
+  sourceLabel: string | null;
   notes: string | null;
   terms: string | null;
   createdByName: string | null;

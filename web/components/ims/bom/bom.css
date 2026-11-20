@@ -1313,10 +1313,14 @@ body.is-bom-resizing {
 .bos .ims-bom-aether-docblock {
   text-align: right;
   min-width: max-content;
+  flex: 0 0 auto;
 }
 .bos .ims-bom-aether-docblock h1 {
   margin: 0;
   color: var(--bom-ink);
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow: visible;
 }
 .bos .ims-bom-status-pill,
 .bos .ims-bom-sheet-titleblock .ims-paper-stamp {
@@ -2854,4 +2858,44 @@ body.is-bom-resizing {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+}
+
+/* Clickable document refs (BOM / DC / RTN / invoice) */
+.ims-doc-ref {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: 0;
+}
+.ims-doc-ref:hover {
+  color: var(--bos-blue, #2563eb);
+  border-bottom-color: color-mix(in srgb, var(--bos-blue, #2563eb) 55%, transparent);
+}
+.ims-doc-ref:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--bos-blue, #2563eb) 45%, transparent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.ims-flow-crumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--bos-muted, #64748b);
+  margin-bottom: 10px;
+}
+.ims-flow-crumb-sep {
+  opacity: 0.45;
+  user-select: none;
 }

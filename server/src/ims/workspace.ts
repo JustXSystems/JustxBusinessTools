@@ -453,7 +453,7 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       return;
     }
     const params = { tenantId: actor.tenantId, q: likeOf(q), exact: q };
-    const [items, parties, invoices, pos, bills, boms, packages, dcs] = await Promise.all([
+    const [items, parties, invoices, pos, bills, boms, packages, dcs, returns] = await Promise.all([
       rows<{ id: string; name: string; sku: string | null; current_stock: string; unit: string }>(
         deps.db,
         `SELECT id, name, sku, current_stock, unit FROM ims_items WHERE tenant_id = :tenantId AND (name LIKE :q OR sku LIKE :q OR barcode = :exact) ORDER BY name LIMIT 8`,
@@ -502,6 +502,16 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
          ORDER BY d.doc_date DESC LIMIT 5`,
         params,
       ).catch(() => [] as Array<{ id: string; doc_no: string; status: string; bom_doc_no: string; customer_name: string | null }>),
+      rows<{ id: string; return_no: string; dc_doc_no: string; bom_doc_no: string; customer_name: string | null }>(
+        deps.db,
+        `SELECT r.id, r.return_no, d.doc_no AS dc_doc_no, b.doc_no AS bom_doc_no, b.customer_name
+         FROM ims_bom_dc_returns r
+         INNER JOIN ims_bom_dcs d ON d.id = r.dc_id AND d.tenant_id = r.tenant_id
+         INNER JOIN ims_bom_docs b ON b.id = r.bom_doc_id AND b.tenant_id = r.tenant_id
+         WHERE r.tenant_id = :tenantId AND (r.return_no LIKE :q OR d.doc_no LIKE :q OR b.doc_no LIKE :q OR IFNULL(b.customer_name,'') LIKE :q)
+         ORDER BY r.return_date DESC LIMIT 5`,
+        params,
+      ).catch(() => [] as Array<{ id: string; return_no: string; dc_doc_no: string; bom_doc_no: string; customer_name: string | null }>),
     ]);
     res.json({
       results: [
@@ -533,6 +543,14 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
           sub: `${d.customer_name || "No customer"} · BOM ${d.bom_doc_no} · ${d.status}`,
           module: "bomDc" as const,
           open: d.id,
+        })),
+        ...returns.map((r) => ({
+          kind: "bom_dc_return",
+          id: r.id,
+          title: r.return_no,
+          sub: `${r.customer_name || "No customer"} · DC ${r.dc_doc_no} · BOM ${r.bom_doc_no}`,
+          module: "bomDc" as const,
+          open: `return:${r.id}`,
         })),
       ],
     });

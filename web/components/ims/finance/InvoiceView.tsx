@@ -82,13 +82,13 @@ function InvoiceBody({
             </div>
             {inv.sourceTool && inv.sourceTool !== "pos" ? (
               <div style={{ marginBottom: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <Badge tag="lavender">
+                <Badge tag="lavender" title={inv.sourceTool === "ims_bom" ? "Created from Bill of Materials" : "Created from quotation"}>
                   {inv.sourceTool === "ims_bom" ? "From BOM" : "From Quotation"}
-                  {inv.sourceRef ? ` · ${inv.sourceRef.slice(0, 8)}` : ""}
+                  {inv.sourceLabel ? ` · ${inv.sourceLabel}` : ""}
                 </Badge>
                 {inv.sourceTool === "ims_bom" && inv.sourceRef && can("bom") ? (
                   <Button size="sm" variant="ghost" onClick={() => navigate("bom", `open:${inv.sourceRef}`)}>
-                    Open BOM
+                    {inv.sourceLabel ? `Open ${inv.sourceLabel}` : "Open BOM"}
                   </Button>
                 ) : null}
               </div>
@@ -104,6 +104,7 @@ function InvoiceBody({
               <KeyValues
                 rows={[
                   ["Customer", inv.customerName],
+                  ...(inv.sourceTool === "ims_bom" && inv.sourceLabel ? ([["BOM", inv.sourceLabel]] as Array<[string, string]>) : []),
                   ["Due", inv.status === "issued" ? `${dateLabel(inv.dueDate)}${inv.daysOverdue > 0 ? ` · ${inv.daysOverdue} days overdue` : ""}` : dateLabel(inv.dueDate)],
                   ["Tax", inv.intraState ? `CGST ${inrExact(inv.cgst)} + SGST ${inrExact(inv.sgst)}` : `IGST ${inrExact(inv.igst)}`],
                   [
@@ -218,7 +219,15 @@ function InvoiceBody({
                 {inv.dcLinks!.map((dc) => (
                   <div key={dc.id} className="ims-row" style={{ justifyContent: "space-between", gap: 8 }}>
                     <span style={{ fontSize: 13 }}>
-                      <b>{dc.docNo}</b>
+                      <button
+                        type="button"
+                        className="ims-doc-ref"
+                        style={{ fontWeight: 650 }}
+                        disabled={!can("bom")}
+                        onClick={() => can("bom") && navigate("bomDc", `open:${dc.id}`)}
+                      >
+                        {dc.docNo}
+                      </button>
                       {dc.status ? ` · ${dc.status}` : ""}
                     </span>
                     {can("bom") ? (
@@ -284,7 +293,11 @@ function InvoiceBody({
         open={dlg === "cancel"}
         onClose={() => setDlg(null)}
         title={`Cancel ${inv.invoiceNo}?`}
-        description="Stock on this invoice goes back into inventory and the invoice stops counting towards sales and dues. This can't be undone."
+        description={
+          inv.dcLinks?.length
+            ? "Stock stays on the linked delivery challans. The invoice stops counting towards sales and dues. This can’t be undone."
+            : "Stock on this invoice goes back into inventory and the invoice stops counting towards sales and dues. This can’t be undone."
+        }
         confirmLabel="Cancel invoice"
         destructive
         busy={busy === "cancel"}
@@ -374,11 +387,13 @@ function InvoiceBomDcLinks({
   const approvedIds = new Set(approved.map((d) => d.id));
   const orphanLinked = linkedIds.filter((id) => !approvedIds.has(id));
   const dirty = selected.slice().sort().join("|") !== linkedIds.slice().sort().join("|");
+  const linkable = approved.filter((dc) => !dc.invoiceLinked || linkedIds.includes(dc.id) || dc.invoiceId === invoiceId);
+  const blockedElsewhere = approved.filter((dc) => dc.invoiceLinked && !linkedIds.includes(dc.id) && dc.invoiceId !== invoiceId);
 
   return (
-    <WidgetCard title="Delivery challans" note={selected.length ? `${selected.length} linked` : "optional"}>
+    <WidgetCard title="Delivery challans" note={selected.length ? `${selected.length} linked` : "required if DCs own stock"}>
       <p className="fin-note" style={{ marginBottom: 8 }}>
-        Link approved DCs so issuing this invoice does not post stock again. Required when the BOM has live delivery challans.
+        Link every approved DC so issuing does not post stock again and returns stay blocked while this invoice is live.
       </p>
       {dcsState.loading && !dcsState.data ? (
         <span className="ims-muted" style={{ fontSize: 13 }}>
@@ -386,7 +401,7 @@ function InvoiceBomDcLinks({
         </span>
       ) : (
         <div style={{ display: "grid", gap: 6 }}>
-          {approved.map((dc) => (
+          {linkable.map((dc) => (
             <label key={dc.id} style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
               <input
                 type="checkbox"
@@ -400,6 +415,11 @@ function InvoiceBomDcLinks({
                 {(dc.lines ?? []).length ? ` · ${(dc.lines ?? []).reduce((s, l) => s + l.qty, 0)} units` : ""}
               </span>
             </label>
+          ))}
+          {blockedElsewhere.map((dc) => (
+            <div key={dc.id} style={{ fontSize: 13, opacity: 0.75 }}>
+              <b>{dc.docNo}</b> — already on {dc.invoiceNo || "another invoice"}; unlink there first
+            </div>
           ))}
           {orphanLinked.map((id) => {
             const dc = allDcs.find((d) => d.id === id);
@@ -423,6 +443,11 @@ function InvoiceBomDcLinks({
             <span className="ims-muted" style={{ fontSize: 13 }}>
               No approved delivery challans on this BOM yet. Create and approve DCs from the BOM, then link them here.
             </span>
+          ) : null}
+          {linkable.length > 0 && selected.filter((id) => approvedIds.has(id)).length < linkable.length ? (
+            <Alert tone="amber" title="Link all approved DCs">
+              Issue is blocked until every approved delivery challan on this BOM is linked (or cancel those DCs first).
+            </Alert>
           ) : null}
           {approved.length || orphanLinked.length || dirty ? (
             <Button

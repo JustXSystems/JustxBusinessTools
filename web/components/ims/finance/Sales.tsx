@@ -24,18 +24,18 @@ const STATUS_TABS: ReadonlyArray<{ value: "all" | InvoiceDisplayStatus; label: s
   { value: "cancelled", label: "Cancelled" },
 ];
 
-export const sourceBadge = (inv: Pick<ImsInvoice, "sourceTool">) => {
-  if (inv.sourceTool === "pos") return <Badge tag="mint">POS</Badge>;
+export const sourceBadge = (inv: Pick<ImsInvoice, "sourceTool" | "sourceLabel">) => {
+  if (inv.sourceTool === "pos") return <Badge tag="mint">{inv.sourceLabel ? `POS · ${inv.sourceLabel}` : "POS"}</Badge>;
   if (inv.sourceTool === "ims_bom")
     return (
       <Badge tag="lavender" title="Created from Bill of Materials">
-        From BOM
+        {inv.sourceLabel ? `BOM · ${inv.sourceLabel}` : "From BOM"}
       </Badge>
     );
   if (inv.sourceTool)
     return (
       <Badge tag="lavender" title={`Created from ${inv.sourceTool}`}>
-        From Quotation
+        {inv.sourceLabel ? `Quote · ${inv.sourceLabel}` : "From Quotation"}
       </Badge>
     );
   return null;

@@ -205,6 +205,8 @@ export type InvoiceRow = {
   round_to_rupee?: number;
   source_tool: string | null;
   source_ref: string | null;
+  /** Joined BOM doc_no (or other human label) when available. */
+  source_label?: string | null;
   notes: string | null;
   terms: string | null;
   created_by_name: string | null;
@@ -218,6 +220,19 @@ export type InvoiceRow = {
   party_state?: string | null;
   last_reminder_channel?: string | null;
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Business-facing source document number — never expose raw UUIDs on papers/UI. */
+function invoiceSourceLabel(r: Pick<InvoiceRow, "source_tool" | "source_ref" | "source_label">): string | null {
+  const joined = r.source_label?.trim() || null;
+  if (joined) return joined;
+  const ref = r.source_ref?.trim() || null;
+  if (!ref) return null;
+  if (r.source_tool === "pos") return ref;
+  if (UUID_RE.test(ref)) return null;
+  return ref;
+}
 
 export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
   const grandTotal = round2(money(r.grand_total));
@@ -274,6 +289,7 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     autoReminder: r.auto_reminder === undefined ? true : Boolean(r.auto_reminder),
     sourceTool: r.source_tool,
     sourceRef: r.source_ref,
+    sourceLabel: invoiceSourceLabel(r),
     notes: r.notes,
     terms: r.terms,
     createdByName: r.created_by_name,
@@ -294,8 +310,15 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
 
 export type ImsInvoice = ReturnType<typeof mapInvoice>;
 
-const INVOICE_SELECT = `SELECT i.*, p.mobile AS party_mobile, p.email AS party_email, p.state AS party_state
-  FROM ims_invoices i LEFT JOIN ims_parties p ON p.id = i.customer_id AND p.tenant_id = i.tenant_id`;
+const INVOICE_SELECT = `SELECT i.*, p.mobile AS party_mobile, p.email AS party_email, p.state AS party_state,
+  CASE
+    WHEN i.source_tool = 'ims_bom' THEN b.doc_no
+    WHEN i.source_tool = 'pos' THEN i.source_ref
+    ELSE NULL
+  END AS source_label
+  FROM ims_invoices i
+  LEFT JOIN ims_parties p ON p.id = i.customer_id AND p.tenant_id = i.tenant_id
+  LEFT JOIN ims_bom_docs b ON i.source_tool = 'ims_bom' AND b.id = i.source_ref AND b.tenant_id = i.tenant_id`;
 
 async function loadInvoiceRow(db: Queryable, tenantId: number, id: string, lock = false): Promise<InvoiceRow> {
   const r = lock
@@ -584,6 +607,19 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
       }
     }
     stockViaDc = true;
+  } else if (row.source_tool === "ims_bom" && row.source_ref) {
+    // Lump-sum (or unlinked) issue must not leave approved DCs returnable under a live invoice.
+    const approved = await one<{ n: number }>(
+      conn,
+      `SELECT COUNT(*) AS n FROM ims_bom_dcs
+       WHERE tenant_id = :tenantId AND bom_doc_id = :bomId AND status = 'approved' AND stock_posted = 1`,
+      { tenantId: actor.tenantId, bomId: row.source_ref },
+    );
+    if (Number(approved?.n ?? 0) > 0) {
+      throw conflict(
+        "This BOM has approved delivery challans. Link them on the invoice before issuing so stock stays on the DCs and return/reverse stay blocked while billed.",
+      );
+    }
   }
 
   // BOM explode invoices: refuse a second OUT and keep stock_issued_at in sync. Lump-sum never owns the BOM stock flag.
@@ -757,7 +793,9 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     else if (source === "quotation") where.push("i.source_tool IS NOT NULL AND i.source_tool <> 'pos' AND i.source_tool <> 'ims_bom'");
     const q = qstr(req.query.q);
     if (q) {
-      where.push("(i.invoice_no LIKE :q OR i.customer_name LIKE :q OR i.customer_gstin LIKE :q OR i.customer_mobile LIKE :q OR i.source_ref LIKE :q)");
+      where.push(
+        "(i.invoice_no LIKE :q OR i.customer_name LIKE :q OR i.customer_gstin LIKE :q OR i.customer_mobile LIKE :q OR b.doc_no LIKE :q OR (i.source_tool = 'pos' AND i.source_ref LIKE :q))",
+      );
       params.q = likeOf(q);
     }
     const list = (await rows<InvoiceRow>(deps.db, `${INVOICE_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.invoice_date DESC, i.created_at DESC LIMIT :limit`, params)).map((r) => mapInvoice(r, today));

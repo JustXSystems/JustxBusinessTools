@@ -178,6 +178,12 @@
 .bos .ims-map { width: 100%; height: 360px; border: 0; border-radius: var(--bos-r-lg); background: var(--ims-well); }
 
 /* Printable documents (PO, invoice, closing) reuse the kit's .bos-inv-paper */
+.bos .bos-inv-paper .bos-inv-paper-title {
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow: visible;
+  flex-shrink: 0;
+}
 .bos .ims-paper-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; font-size: 12px; margin: 16px 0; }
 .bos .ims-paper-meta b { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; margin-bottom: 3px; }
 /* Customer logo on papers — same placement language as Quotation `qgv1-qs-logo` */
@@ -287,6 +293,15 @@
 }
 @media print {
   .bos .ims-mnav { display: none !important; }
+  .bos .bos-inv-paper .bos-inv-paper-title {
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow: visible !important;
+  }
+  .bos .bos-inv-paper-top > :last-child {
+    flex: 0 0 auto !important;
+    min-width: max-content !important;
+  }
 }
 
 @media (max-width: 900px) {
@@ -308,4 +323,47 @@
   .bos .ims-page-actions { width: 100%; }
   .bos .ims-page-actions .bos-btn { flex: 1 1 auto; min-height: 44px; }
   .bos .ims-paper-meta { grid-template-columns: 1fr; }
+}
+
+/* Cross-module document deep-links (BOM / DC / RTN / invoice nos.) */
+.bos .ims-doc-ref {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+}
+.bos .ims-doc-ref:hover:not(:disabled) {
+  color: var(--bos-blue, #2563eb);
+  border-bottom-color: color-mix(in srgb, var(--bos-blue, #2563eb) 55%, transparent);
+}
+.bos .ims-doc-ref:disabled {
+  cursor: default;
+  border-bottom-color: transparent;
+  font-weight: 650;
+}
+.bos .ims-doc-ref:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--bos-blue, #2563eb) 45%, transparent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.bos .ims-flow-crumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--bos-muted, #64748b);
+  margin-bottom: 10px;
+}
+.bos .ims-flow-crumb-sep {
+  opacity: 0.45;
+  user-select: none;
 }

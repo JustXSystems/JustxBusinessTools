@@ -30,6 +30,7 @@ import { useOptionalPlatformConfig } from "@/components/config/ConfigProvider";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import { errorText, ims, ImsApiError, type ImsModuleKey, type ImsNotification, type ImsSearchResult, type ImsSession, type ImsSettings } from "@/lib/ims/api";
 import { isAssistantPage } from "@/lib/ims/assistant";
+import { applyIntentToSearchParams, intentFromOpenField, intentFromUrlQuery } from "@/lib/ims/deep-link";
 import { initialsOf, timeAgo } from "@/lib/ims/format";
 import { rememberModule } from "@/lib/ims/recent";
 import { PageAskAi } from "./AskAi";
@@ -82,30 +83,30 @@ function useAutohideTopbar() {
 
 type NavState = { module: ImsModuleKey; intent: { module: ImsModuleKey; value: string } | null; seq: number };
 
-/** `?m=receivables&open=<id>` — the same links IMS puts into JBT notifications. */
+/** `?m=receivables&open=<id>` or `?m=bomDc&intent=return:<id>` — shareable deep links. */
 function navFromUrl(): NavState {
   const base: NavState = { module: "dashboard", intent: null, seq: 0 };
   if (typeof window === "undefined") return base;
   const q = new URLSearchParams(window.location.search);
   const m = q.get("m");
   if (!m || !MODULE_KEYS.has(m)) return base;
-  const open = q.get("open");
-  return { module: m as ImsModuleKey, intent: open ? { module: m as ImsModuleKey, value: `open:${open}` } : null, seq: 0 };
+  const value = intentFromUrlQuery(q.get("open"), q.get("intent"));
+  return { module: m as ImsModuleKey, intent: value ? { module: m as ImsModuleKey, value } : null, seq: 0 };
 }
 
-function writeUrl(module: ImsModuleKey) {
+function writeUrl(module: ImsModuleKey, intent: string | null = null) {
   const url = new URL(window.location.href);
-  url.searchParams.delete("open");
   if (module === "dashboard") url.searchParams.delete("m");
   else url.searchParams.set("m", module);
+  applyIntentToSearchParams(url.searchParams, intent);
   if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url.href);
 }
 
-/** Full-screen app URL (`/ims`), keeping the current module / open deep-link. */
+/** Full-screen app URL (`/ims`), keeping the current module / deep-link intent. */
 function standaloneHref(module: ImsModuleKey, intent: string | null): string {
   const params = new URLSearchParams();
   if (module !== "dashboard") params.set("m", module);
-  if (intent?.startsWith("open:")) params.set("open", intent.slice(5));
+  applyIntentToSearchParams(params, intent);
   const qs = params.toString();
   return withBasePath(qs ? `/ims?${qs}` : "/ims");
 }
@@ -167,7 +168,17 @@ function SearchDialog({ open, onClose, onPick }: { open: boolean; onClose: () =>
     setResults(null);
     onClose();
   };
-  const KIND: Record<ImsSearchResult["kind"], string> = { item: "📦", party: "👤", invoice: "🧾", po: "🛒", bill: "📤", bom: "☰", bom_package: "⧉", bom_dc: "◫" };
+  const KIND: Record<ImsSearchResult["kind"], string> = {
+    item: "📦",
+    party: "👤",
+    invoice: "🧾",
+    po: "🛒",
+    bill: "📤",
+    bom: "☰",
+    bom_package: "⧉",
+    bom_dc: "◫",
+    bom_dc_return: "↺",
+  };
   const shown = q.trim().length >= 2 ? results : null;
 
   return (
@@ -297,9 +308,10 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
   const perms = useMemo(() => new Set(session.access.perms), [session.access.perms]);
 
   useEffect(() => {
-    writeUrl(current.key);
+    const intentValue = nav.intent?.module === current.key ? nav.intent.value : null;
+    writeUrl(current.key, intentValue);
     rememberModule(current.key);
-  }, [current.key]);
+  }, [current.key, nav.intent]);
 
   useEffect(() => {
     let alive = true;
@@ -315,13 +327,15 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
   const invalidate = useCallback(() => setVersion((v) => v + 1), []);
 
   const navigate = useCallback((module: ImsModuleKey, intent?: string) => {
+    const nextIntent = intent ? { module, value: intent } : null;
     setNav((n) => ({
       module,
-      intent: intent ? { module, value: intent } : null,
+      intent: nextIntent,
       // Bump seq on deep-links and when re-selecting the active module (e.g. sidebar
       // click while inside a DC workspace) so the screen remounts / returns to list.
       seq: intent || n.module === module ? n.seq + 1 : n.seq,
     }));
+    writeUrl(module, intent ?? null);
     setAskOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
@@ -365,7 +379,11 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
     ...(can("po") ? [{ id: "q-po", section: "Quick actions", label: "Create purchase order", icon: "🛒", keywords: "po buy", onSelect: go("purchase", "new") }] : []),
     ...(can("receivables") ? [{ id: "q-pay", section: "Quick actions", label: "Receive a payment", icon: "💰", keywords: "collection receipt", onSelect: go("receivables", "pay") }] : []),
     ...(can("bom") && modules.some((x) => x.key === "bomDc")
-      ? [{ id: "q-dc", section: "Quick actions", label: "New delivery challan", icon: "◫", keywords: "dc bom delivery challan return", onSelect: go("bomDc", "new") }]
+      ? [
+          { id: "q-dc", section: "Quick actions", label: "New delivery challan", icon: "◫", keywords: "dc bom delivery challan", onSelect: go("bomDc", "new") },
+          { id: "q-rtn", section: "Quick actions", label: "New material return", icon: "↺", keywords: "rtn return unused stock dc", onSelect: go("bomDc", "new-return") },
+          { id: "q-rtns", section: "Quick actions", label: "All material returns", icon: "↺", keywords: "rtn list zig-rtn returns", onSelect: go("bomDc", "returns") },
+        ]
       : []),
     ...(modules.some((x) => x.key === "scanner") ? [{ id: "q-scan", section: "Quick actions", label: "Scan stock (QR / barcode)", icon: "⌗", onSelect: go("scanner") }] : []),
     { id: "q-search", section: "Quick actions", label: "Search items, parties & documents", icon: "⌕", keywords: "find lookup", onSelect: () => setSearchOpen(true) },
@@ -502,14 +520,18 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
         {mode === "standalone" ? <MobileNav available={moduleKeys} active={current.key} onSelect={(k) => navigate(k)} /> : null}
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} placeholder="Type a command or module…" />
         {askPage ? <PageAskAi key={askPage} page={askPage} open={askOpen} onClose={() => setAskOpen(false)} /> : null}
-        <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} onPick={(r) => navigate(r.module, `open:${r.open}`)} />
+        <SearchDialog
+          open={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          onPick={(r) => navigate(r.module, intentFromOpenField(r.open))}
+        />
         <NotificationsDialog
           open={notesOpen}
           onClose={() => setNotesOpen(false)}
           notes={notes}
           onOpen={(n) => {
             setNotesOpen(false);
-            navigate(n.module, n.open ? `open:${n.open}` : undefined);
+            navigate(n.module, n.open ? intentFromOpenField(n.open) : undefined);
           }}
         />
       </div>

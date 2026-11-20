@@ -678,7 +678,14 @@ export const bom = {
     }>(`/bom/docs/${bomId}/dc-remaining`, excludeDcId ? { excludeDcId } : undefined),
   listDcs: (bomId: string) => get<{ dcs: BomDc[]; bomDocNo: string; quotationRef?: string | null }>(`/bom/docs/${bomId}/dcs`),
   /** Tenant-wide DC list (Bill of Materials → DC & Returns). */
-  listAllDcs: (params?: { q?: string; status?: string; linked?: boolean; limit?: number; offset?: number }) =>
+  listAllDcs: (params?: {
+    q?: string;
+    status?: string;
+    linked?: boolean;
+    returnable?: boolean;
+    limit?: number;
+    offset?: number;
+  }) =>
     get<{
       dcs: Array<BomDc & { lineCount?: number; deliveredUnits?: number; returnedUnits?: number; bomStatus?: string }>;
       total: number;
@@ -689,6 +696,7 @@ export const bom = {
       q: params?.q,
       status: params?.status,
       linked: params?.linked ? "1" : undefined,
+      returnable: params?.returnable ? "1" : undefined,
       limit: params?.limit,
       offset: params?.offset,
     }),
@@ -747,13 +755,7 @@ export const bom = {
   /** Tenant-wide unused-material returns (DC & Returns → Returns tab). */
   listAllDcReturns: (params?: { q?: string; limit?: number; offset?: number }) =>
     get<{
-      returns: Array<
-        BomDcReturn & {
-          bomDocNo?: string | null;
-          customerName?: string | null;
-          units?: number;
-        }
-      >;
+      returns: Array<BomDcReturnListRow>;
       total: number;
       limit: number;
       offset: number;
@@ -762,6 +764,16 @@ export const bom = {
       limit: params?.limit,
       offset: params?.offset,
     }),
+  getDcReturn: (id: string) => get<{ return: BomDcReturnListRow }>(`/bom/dc-returns/${id}`),
+  /** Maintain posted return paper (date, notes, line remarks — not quantities). */
+  updateDcReturn: (
+    id: string,
+    body: {
+      returnDate?: string;
+      notes?: string | null;
+      lines?: Array<{ id: string; remarks?: string | null }>;
+    },
+  ) => patch<{ return: BomDcReturnListRow }>(`/bom/dc-returns/${id}`, body),
   amendLineQty: (id: string, body: { lineId: string; qty: number }) =>
     post<{ doc: BomDoc; message: string }>(`/bom/docs/${id}/amend-line-qty`, body),
   quotationRefs: (q?: string) => get<{ refs: string[] }>("/bom/quotation-refs", q ? { q } : undefined),
@@ -818,6 +830,18 @@ export type BomDcReturn = {
   createdAt: string | null;
   lines: BomDcReturnLine[];
   dcDocNo?: string | null;
+};
+
+/** Tenant-wide / detail payload for an unused-material return (RTN). */
+export type BomDcReturnListRow = BomDcReturn & {
+  bomDocNo?: string | null;
+  customerName?: string | null;
+  quotationRef?: string | null;
+  location?: string | null;
+  projectRef?: string | null;
+  dcStatus?: string | null;
+  units?: number;
+  lineCount?: number;
 };
 
 export type BomDc = {

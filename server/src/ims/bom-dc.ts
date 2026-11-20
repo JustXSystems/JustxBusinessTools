@@ -205,11 +205,15 @@ function mapDc(
   };
 }
 
+/**
+ * Live commercial hold on a DC: direct invoice↔DC link, or the parent BOM’s draft/issued invoice.
+ * Either case must block return/reverse so billed stock can’t silently come back.
+ */
 async function loadDcInvoiceLink(
   db: Queryable,
   tenantId: number,
   dcId: string,
-): Promise<{ invoiceId: string; invoiceNo: string | null; invoiceStatus: string } | null> {
+): Promise<{ invoiceId: string; invoiceNo: string | null; invoiceStatus: string; via: "dc_link" | "bom_invoice" } | null> {
   const linked = await one<{ invoice_id: string; invoice_no: string | null; status: string }>(
     db,
     `SELECT i.id AS invoice_id, i.invoice_no, i.status FROM ims_invoice_dc_links l
@@ -219,8 +223,26 @@ async function loadDcInvoiceLink(
      LIMIT 1`,
     { tenantId, dcId },
   );
-  if (!linked) return null;
-  return { invoiceId: linked.invoice_id, invoiceNo: linked.invoice_no, invoiceStatus: linked.status };
+  if (linked) {
+    return { invoiceId: linked.invoice_id, invoiceNo: linked.invoice_no, invoiceStatus: linked.status, via: "dc_link" };
+  }
+  const bomInv = await one<{ invoice_id: string; invoice_no: string | null; status: string }>(
+    db,
+    `SELECT i.id AS invoice_id, i.invoice_no, i.status
+     FROM ims_bom_dcs d
+     INNER JOIN ims_bom_docs b ON b.id = d.bom_doc_id AND b.tenant_id = d.tenant_id
+     INNER JOIN ims_invoices i ON i.id = b.invoice_id AND i.tenant_id = b.tenant_id
+     WHERE d.tenant_id = :tenantId AND d.id = :dcId AND i.status IN ('draft','issued')
+     LIMIT 1`,
+    { tenantId, dcId },
+  );
+  if (!bomInv) return null;
+  return {
+    invoiceId: bomInv.invoice_id,
+    invoiceNo: bomInv.invoice_no,
+    invoiceStatus: bomInv.status,
+    via: "bom_invoice",
+  };
 }
 
 async function loadDcLines(db: Queryable, tenantId: number, dcId: string): Promise<BomDcLine[]> {
@@ -232,6 +254,112 @@ async function loadDcLines(db: Queryable, tenantId: number, dcId: string): Promi
     { tenantId, dcId },
   );
   return list.map(mapLine);
+}
+
+/** Full RTN row for paper / maintain workspace (includes BOM site context). */
+async function loadDcReturnDetail(
+  db: Queryable,
+  tenantId: number,
+  id: string,
+): Promise<{
+  id: string;
+  dcId: string;
+  bomDocId: string;
+  returnNo: string;
+  returnDate: string;
+  notes: string | null;
+  createdByName: string | null;
+  createdAt: string | null;
+  dcDocNo: string | null;
+  dcStatus: string | null;
+  bomDocNo: string | null;
+  customerName: string | null;
+  quotationRef: string | null;
+  location: string | null;
+  projectRef: string | null;
+  units: number;
+  lineCount: number;
+  lines: BomDcReturn["lines"];
+} | null> {
+  const h = await one<{
+    id: string;
+    dc_id: string;
+    bom_doc_id: string;
+    return_no: string;
+    return_date: unknown;
+    notes: string | null;
+    created_by_name: string | null;
+    created_at: unknown;
+    dc_doc_no: string;
+    dc_status: string;
+    bom_doc_no: string;
+    customer_name: string | null;
+    quotation_ref: string | null;
+    location: string | null;
+    project_ref: string | null;
+  }>(
+    db,
+    `SELECT r.id, r.dc_id, r.bom_doc_id, r.return_no, r.return_date, r.notes, r.created_by_name, r.created_at,
+            d.doc_no AS dc_doc_no, d.status AS dc_status, b.doc_no AS bom_doc_no, b.customer_name, b.quotation_ref,
+            b.location, b.project_ref
+     FROM ims_bom_dc_returns r
+     INNER JOIN ims_bom_dcs d ON d.id = r.dc_id AND d.tenant_id = r.tenant_id
+     INNER JOIN ims_bom_docs b ON b.id = r.bom_doc_id AND b.tenant_id = r.tenant_id
+     WHERE r.tenant_id = :tenantId AND r.id = :id
+     LIMIT 1`,
+    { tenantId, id },
+  );
+  if (!h) return null;
+  const lineRows = await rows<{
+    id: string;
+    return_id: string;
+    dc_id: string;
+    dc_line_id: string;
+    bom_line_id: string;
+    item_id: string | null;
+    description: string;
+    qty: string | number;
+    unit: string;
+    remarks: string | null;
+  }>(
+    db,
+    `SELECT id, return_id, dc_id, dc_line_id, bom_line_id, item_id, description, qty, unit, remarks
+     FROM ims_bom_dc_return_lines WHERE tenant_id = :tenantId AND return_id = :returnId
+     ORDER BY created_at ASC`,
+    { tenantId, returnId: id },
+  );
+  const lines = lineRows.map((l) => ({
+    id: l.id,
+    returnId: l.return_id,
+    dcId: l.dc_id,
+    dcLineId: l.dc_line_id,
+    bomLineId: l.bom_line_id,
+    itemId: l.item_id,
+    description: l.description,
+    qty: round3(money(l.qty)),
+    unit: l.unit,
+    remarks: l.remarks,
+  }));
+  return {
+    id: h.id,
+    dcId: h.dc_id,
+    bomDocId: h.bom_doc_id,
+    returnNo: h.return_no,
+    returnDate: isoOf(h.return_date),
+    notes: h.notes,
+    createdByName: h.created_by_name,
+    createdAt: tsOf(h.created_at),
+    dcDocNo: h.dc_doc_no,
+    dcStatus: h.dc_status,
+    bomDocNo: h.bom_doc_no,
+    customerName: h.customer_name,
+    quotationRef: h.quotation_ref,
+    location: h.location,
+    projectRef: h.project_ref,
+    units: round3(lines.reduce((s, l) => s + l.qty, 0)),
+    lineCount: lines.length,
+    lines,
+  };
 }
 
 async function loadDcReturns(db: Queryable, tenantId: number, dcId: string): Promise<BomDcReturn[]> {
@@ -723,10 +851,34 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
       params.status = status;
     }
     if (linkedOnly) {
-      where.push(`EXISTS (
+      where.push(`(
+        EXISTS (
+          SELECT 1 FROM ims_invoice_dc_links l
+          INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+          WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+        )
+        OR EXISTS (
+          SELECT 1 FROM ims_invoices i
+          WHERE i.tenant_id = d.tenant_id AND i.id = b.invoice_id AND i.status IN ('draft','issued')
+        )
+      )`);
+    }
+    const returnableOnly =
+      String(req.query.returnable ?? "") === "1" || String(req.query.returnable ?? "").toLowerCase() === "true";
+    if (returnableOnly) {
+      where.push(`d.status = 'approved' AND d.stock_posted = 1`);
+      where.push(`(
+        SELECT COALESCE(SUM(l.qty - COALESCE(l.returned_qty, 0)), 0)
+        FROM ims_bom_dc_lines l WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id
+      ) > 0`);
+      where.push(`NOT EXISTS (
         SELECT 1 FROM ims_invoice_dc_links l
         INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
         WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+      )`);
+      where.push(`NOT EXISTS (
+        SELECT 1 FROM ims_invoices i
+        WHERE i.tenant_id = d.tenant_id AND i.id = b.invoice_id AND i.status IN ('draft','issued')
       )`);
     }
     if (like) {
@@ -767,26 +919,47 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
               (SELECT COUNT(*) FROM ims_bom_dc_lines l WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id) AS line_count,
               (SELECT COALESCE(SUM(l.qty), 0) FROM ims_bom_dc_lines l WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id) AS delivered_units,
               (SELECT COALESCE(SUM(COALESCE(l.returned_qty, 0)), 0) FROM ims_bom_dc_lines l WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id) AS returned_units,
-              (
-                SELECT i.id FROM ims_invoice_dc_links l
-                INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
-                WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
-                ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
-                LIMIT 1
+              COALESCE(
+                (
+                  SELECT i.id FROM ims_invoice_dc_links l
+                  INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+                  WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+                  ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
+                  LIMIT 1
+                ),
+                (
+                  SELECT i.id FROM ims_invoices i
+                  WHERE i.tenant_id = d.tenant_id AND i.id = b.invoice_id AND i.status IN ('draft','issued')
+                  LIMIT 1
+                )
               ) AS linked_invoice_id,
-              (
-                SELECT i.invoice_no FROM ims_invoice_dc_links l
-                INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
-                WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
-                ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
-                LIMIT 1
+              COALESCE(
+                (
+                  SELECT i.invoice_no FROM ims_invoice_dc_links l
+                  INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+                  WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+                  ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
+                  LIMIT 1
+                ),
+                (
+                  SELECT i.invoice_no FROM ims_invoices i
+                  WHERE i.tenant_id = d.tenant_id AND i.id = b.invoice_id AND i.status IN ('draft','issued')
+                  LIMIT 1
+                )
               ) AS linked_invoice_no,
-              (
-                SELECT i.status FROM ims_invoice_dc_links l
-                INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
-                WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
-                ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
-                LIMIT 1
+              COALESCE(
+                (
+                  SELECT i.status FROM ims_invoice_dc_links l
+                  INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+                  WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+                  ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
+                  LIMIT 1
+                ),
+                (
+                  SELECT i.status FROM ims_invoices i
+                  WHERE i.tenant_id = d.tenant_id AND i.id = b.invoice_id AND i.status IN ('draft','issued')
+                  LIMIT 1
+                )
               ) AS linked_invoice_status
        FROM ims_bom_dcs d
        INNER JOIN ims_bom_docs b ON b.id = d.bom_doc_id AND b.tenant_id = d.tenant_id
@@ -809,10 +982,17 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     const linkedCountRow = await one<{ n: number }>(
       deps.db,
       `SELECT COUNT(*) AS n FROM ims_bom_dcs d
-       WHERE d.tenant_id = :tenantId AND EXISTS (
-         SELECT 1 FROM ims_invoice_dc_links l
-         INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
-         WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+       INNER JOIN ims_bom_docs b ON b.id = d.bom_doc_id AND b.tenant_id = d.tenant_id
+       WHERE d.tenant_id = :tenantId AND (
+         EXISTS (
+           SELECT 1 FROM ims_invoice_dc_links l
+           INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+           WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+         )
+         OR EXISTS (
+           SELECT 1 FROM ims_invoices i
+           WHERE i.tenant_id = d.tenant_id AND i.id = b.invoice_id AND i.status IN ('draft','issued')
+         )
        )`,
       { tenantId: actor.tenantId },
     );
@@ -1183,6 +1363,10 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     if (existing.status === "approved") {
       throw conflict("Approved delivery challans must be reversed to return stock");
     }
+    // Verified DCs sit in Approvals — only approvers (or owners via approvals perm) may reject them.
+    if (existing.status === "verified") {
+      requirePerm(res, "approvals", "Approvals permission is required to reject a verified delivery challan");
+    }
 
     await tx(deps.db, async (conn) => {
       const locked = await one<{ status: string; bom_doc_id: string }>(
@@ -1192,6 +1376,9 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
       );
       if (!locked || !["draft", "verified"].includes(locked.status)) {
         throw conflict("Only draft or verified delivery challans can be cancelled");
+      }
+      if (locked.status === "verified" && !can(res, "approvals")) {
+        throw forbidden("Approvals permission is required to reject a verified delivery challan");
       }
       await one(
         conn,
@@ -1384,10 +1571,10 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
 
     await recordEvent(deps, actor, {
       type: "bom.dc.returned",
-      entityType: "bom_dc",
-      entityId: id,
+      entityType: "bom_dc_return",
+      entityId: returnId,
       summary: `Returned unused materials on ${existing.docNo} (${outcome.returnNo})`,
-      payload: { returnId, returnNo: outcome.returnNo, count: outcome.movements.length },
+      payload: { dcId: id, returnId, returnNo: outcome.returnNo, count: outcome.movements.length },
     });
     const dc = await loadDc(deps.db, actor.tenantId, id);
     const rtn = dc?.returns?.find((r) => r.id === returnId) ?? null;
@@ -1418,7 +1605,7 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     const where: string[] = ["r.tenant_id = :tenantId"];
     if (like) {
       where.push(
-        `(r.return_no LIKE :like OR IFNULL(d.doc_no,'') LIKE :like OR IFNULL(b.doc_no,'') LIKE :like OR IFNULL(b.customer_name,'') LIKE :like)`,
+        `(r.return_no LIKE :like OR IFNULL(d.doc_no,'') LIKE :like OR IFNULL(b.doc_no,'') LIKE :like OR IFNULL(b.customer_name,'') LIKE :like OR IFNULL(r.notes,'') LIKE :like)`,
       );
       params.like = like;
     }
@@ -1442,14 +1629,17 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
       created_by_name: string | null;
       created_at: unknown;
       dc_doc_no: string;
+      dc_status: string;
       bom_doc_no: string;
       customer_name: string | null;
       units: string | number;
+      line_count: number;
     }>(
       deps.db,
       `SELECT r.id, r.dc_id, r.bom_doc_id, r.return_no, r.return_date, r.notes, r.created_by_name, r.created_at,
-              d.doc_no AS dc_doc_no, b.doc_no AS bom_doc_no, b.customer_name,
-              (SELECT COALESCE(SUM(l.qty), 0) FROM ims_bom_dc_return_lines l WHERE l.tenant_id = r.tenant_id AND l.return_id = r.id) AS units
+              d.doc_no AS dc_doc_no, d.status AS dc_status, b.doc_no AS bom_doc_no, b.customer_name,
+              (SELECT COALESCE(SUM(l.qty), 0) FROM ims_bom_dc_return_lines l WHERE l.tenant_id = r.tenant_id AND l.return_id = r.id) AS units,
+              (SELECT COUNT(*) FROM ims_bom_dc_return_lines l WHERE l.tenant_id = r.tenant_id AND l.return_id = r.id) AS line_count
        FROM ims_bom_dc_returns r
        INNER JOIN ims_bom_dcs d ON d.id = r.dc_id AND d.tenant_id = r.tenant_id
        INNER JOIN ims_bom_docs b ON b.id = r.bom_doc_id AND b.tenant_id = r.tenant_id
@@ -1488,9 +1678,11 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
         createdByName: h.created_by_name,
         createdAt: tsOf(h.created_at),
         dcDocNo: h.dc_doc_no,
+        dcStatus: h.dc_status,
         bomDocNo: h.bom_doc_no,
         customerName: h.customer_name,
         units: round3(money(h.units)),
+        lineCount: Number(h.line_count) || 0,
         lines: lineRows.map((l) => ({
           id: l.id,
           returnId: l.return_id,
@@ -1506,6 +1698,88 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
       });
     }
     res.json({ returns, total: Number(totalRow?.n ?? 0), limit, offset });
+  });
+
+  /** Single unused-material return (RTN doc) with DC / BOM context. */
+  router.get("/bom/dc-returns/:id", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const id = String(req.params.id);
+    const mapped = await loadDcReturnDetail(deps.db, actor.tenantId, id);
+    if (!mapped) throw notFound("Return not found");
+    res.json({ return: mapped });
+  });
+
+  /**
+   * Maintain a posted return paper: date, notes, and line remarks.
+   * Quantities stay fixed (stock already returned); amend by posting another return on the DC.
+   */
+  router.patch("/bom/dc-returns/:id", async (req, res) => {
+    requirePerm(res, "bom");
+    if (!can(res, "approvals") && !can(res, "stockOut")) {
+      throw forbidden("Approvals or Stock out permission is required to maintain a material return");
+    }
+    const actor = actorOf(res);
+    const id = String(req.params.id);
+    const body = parse(
+      z.object({
+        returnDate: isoDate.optional(),
+        notes: optText(2000),
+        lines: z
+          .array(
+            z.object({
+              id: z.string().uuid(),
+              remarks: optText(500),
+            }),
+          )
+          .max(500)
+          .optional(),
+      }),
+      req.body,
+    );
+    const existing = await loadDcReturnDetail(deps.db, actor.tenantId, id);
+    if (!existing) throw notFound("Return not found");
+    // Return date is frozen after stock RETURN_IN — changing it would desync the ledger / day close.
+    if (body.returnDate != null && body.returnDate !== existing.returnDate) {
+      throw conflict("Return date can’t be changed after stock was received. Notes and line remarks can still be updated.");
+    }
+
+    await tx(deps.db, async (conn) => {
+      const locked = await one<{ id: string }>(
+        conn,
+        `SELECT id FROM ims_bom_dc_returns WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        { tenantId: actor.tenantId, id },
+      );
+      if (!locked) throw notFound("Return not found");
+      if (body.notes !== undefined) {
+        await exec(
+          conn,
+          `UPDATE ims_bom_dc_returns SET notes = :notes WHERE tenant_id = :tenantId AND id = :id`,
+          { tenantId: actor.tenantId, id, notes: body.notes ?? null },
+        );
+      }
+      if (body.lines?.length) {
+        const allowed = new Set((existing.lines ?? []).map((l) => l.id));
+        for (const line of body.lines) {
+          if (!allowed.has(line.id)) throw badRequest("Return line does not belong to this return");
+          await exec(
+            conn,
+            `UPDATE ims_bom_dc_return_lines SET remarks = :remarks
+             WHERE tenant_id = :tenantId AND return_id = :returnId AND id = :lineId`,
+            { tenantId: actor.tenantId, returnId: id, lineId: line.id, remarks: line.remarks ?? null },
+          );
+        }
+      }
+    });
+
+    await recordEvent(deps, actor, {
+      type: "bom.dc.return.updated",
+      entityType: "bom_dc_return",
+      entityId: id,
+      summary: `Updated material return ${existing.returnNo}`,
+    });
+    const mapped = await loadDcReturnDetail(deps.db, actor.tenantId, id);
+    res.json({ return: mapped });
   });
 
   /** Reverse an approved DC: RETURN_IN remaining net stock and cancel. */
@@ -1633,29 +1907,44 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
   });
 }
 
-/** Block return/reverse while a live (draft/issued) invoice still references this DC. Cancelled links are history only. */
+/** Block return/reverse while a live draft/issued invoice holds this DC (direct link or BOM invoice). */
 async function assertDcFreeOfInvoiceLinks(db: Queryable, tenantId: number, dcId: string, action: string): Promise<void> {
-  const linked = await one<{ invoice_no: string | null; status: string }>(
-    db,
-    `SELECT i.invoice_no, i.status FROM ims_invoice_dc_links l
-     INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
-     WHERE l.tenant_id = :tenantId AND l.dc_id = :dcId AND i.status IN ('draft','issued')
-     ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
-     LIMIT 1`,
-    { tenantId, dcId },
-  );
-  if (!linked) return;
-  if (linked.status === "draft") {
+  const hold = await loadDcInvoiceLink(db, tenantId, dcId);
+  if (!hold) return;
+  if (hold.via === "bom_invoice") {
+    if (hold.invoiceStatus === "draft") {
+      throw conflict(
+        `This BOM already has a draft invoice${hold.invoiceNo ? ` (${hold.invoiceNo})` : ""}. Cancel or delete that invoice before you ${action}.`,
+      );
+    }
     throw conflict(
-      `This delivery challan is linked to a draft invoice${linked.invoice_no ? ` (${linked.invoice_no})` : ""}. Unlink it from the invoice (or delete the draft) before you ${action}.`,
+      `This BOM is billed on issued invoice ${hold.invoiceNo || ""}. Cancel that invoice before you ${action} (stock remains on the delivery challan).`
+        .replace(/\s+/g, " ")
+        .trim(),
+    );
+  }
+  if (hold.invoiceStatus === "draft") {
+    throw conflict(
+      `This delivery challan is linked to a draft invoice${hold.invoiceNo ? ` (${hold.invoiceNo})` : ""}. Unlink it from the invoice (or delete the draft) before you ${action}.`,
     );
   }
   throw conflict(
-    `This delivery challan is linked to issued invoice ${linked.invoice_no || ""}. Cancel that invoice before you ${action} (stock remains on the delivery challan).`.replace(
-      /\s+/g,
-      " ",
-    ).trim(),
+    `This delivery challan is linked to issued invoice ${hold.invoiceNo || ""}. Cancel that invoice before you ${action} (stock remains on the delivery challan).`
+      .replace(/\s+/g, " ")
+      .trim(),
   );
+}
+
+/** All approved + stock-posted DC ids on a BOM (for invoice link completeness). */
+export async function listApprovedPostedDcIds(db: Queryable, tenantId: number, bomDocId: string): Promise<string[]> {
+  const list = await rows<{ id: string }>(
+    db,
+    `SELECT id FROM ims_bom_dcs
+     WHERE tenant_id = :tenantId AND bom_doc_id = :bomDocId AND status = 'approved' AND stock_posted = 1
+     ORDER BY doc_date ASC, created_at ASC`,
+    { tenantId, bomDocId },
+  );
+  return list.map((r) => r.id);
 }
 
 /** True when any live DC exists for the BOM (blocks reopen / legacy stock issue). */

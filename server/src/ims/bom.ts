@@ -21,6 +21,7 @@ import {
   bomHasLiveDcs,
   committedDcQtyByBomLine,
   linkInvoiceDcs,
+  listApprovedPostedDcIds,
   registerBomDc,
   syncBomIssuedFromDcs,
 } from "./bom-dc.js";
@@ -1948,9 +1949,8 @@ export function registerBom(router: Router, deps: ImsDeps): void {
       }),
       req.body,
     );
-    const dcIds = body.dcIds ?? [];
-    const stockViaDc = dcIds.length > 0;
-    if (body.issue && body.mode === "explode_lines" && !stockViaDc) requirePerm(res, "stockOut");
+    let dcIds = [...(body.dcIds ?? [])];
+    if (body.issue && body.mode === "explode_lines" && !dcIds.length) requirePerm(res, "stockOut");
 
     const doc = await loadDoc(deps.db, actor.tenantId, id);
     if (!doc) throw notFound("BOM document not found");
@@ -1958,6 +1958,22 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     if (doc.invoiceId) throw conflict("This BOM already has an invoice. Open it from Sales.");
     if (!doc.customerName.trim()) throw conflict("Customer name is required");
     if (!doc.lines?.length) throw conflict("BOM has no lines");
+
+    const approvedDcIds = await listApprovedPostedDcIds(deps.db, actor.tenantId, id);
+    // When approved DCs own stock, invoice must reference them so return/reverse stay blocked while billed.
+    if (approvedDcIds.length) {
+      if (!dcIds.length) {
+        dcIds = approvedDcIds;
+      } else {
+        const missing = approvedDcIds.filter((x) => !dcIds.includes(x));
+        if (missing.length) {
+          throw conflict(
+            "Link every approved delivery challan on this BOM before creating the invoice (stock is already out on those DCs).",
+          );
+        }
+      }
+    }
+    const stockViaDc = dcIds.length > 0;
     if (stockViaDc) await assertDcsLinkable(deps.db, actor.tenantId, id, dcIds);
     // Explode invoices must either link approved DCs (stock already on DCs) or run only when no live DCs exist.
     if (body.mode === "explode_lines" && !stockViaDc && (await bomHasLiveDcs(deps.db, actor.tenantId, id))) {

@@ -23,6 +23,9 @@ const DECISION_TYPES = new Set([
   "check.returned",
   "bom.dc.approved",
   "bom.dc.cancelled",
+  "bom.dc.returned",
+  "bom.dc.reversed",
+  "bom.dc.verified",
 ]);
 
 const DECISION_VIEW: Record<string, { label: string; tone: "emerald" | "coral" | "amber" }> = {
@@ -31,6 +34,9 @@ const DECISION_VIEW: Record<string, { label: string; tone: "emerald" | "coral" |
   cancelled: { label: "REJECTED", tone: "coral" },
   held: { label: "ON HOLD", tone: "amber" },
   returned: { label: "RETURNED", tone: "amber" },
+  reversed: { label: "REVERSED", tone: "coral" },
+  verified: { label: "VERIFIED", tone: "amber" },
+  updated: { label: "UPDATED", tone: "amber" },
 };
 
 export function ApprovalsModule() {
@@ -600,7 +606,7 @@ function History() {
       ["approved", "rejected", "held", "returned", "cancelled", "bom.dc"].map((q) => ims.events({ q, limit: 100 })),
     );
     const byId = new Map<number, ImsEvent>();
-    for (const l of lists) for (const e of l.events) if (DECISION_TYPES.has(e.type)) byId.set(e.id, e);
+    for (const l of lists) for (const e of l.events) if (DECISION_TYPES.has(e.type) || e.type.startsWith("bom.dc.")) byId.set(e.id, e);
     return [...byId.values()].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
   }, []);
 
@@ -609,6 +615,7 @@ function History() {
     if (e.entityType === "po") navigate("purchase", `open:${e.entityId}`);
     else if (e.entityType === "bill") navigate("payables", `open:${e.entityId}`);
     else if (e.entityType === "check") navigate("checks", `open:${e.entityId}`);
+    else if (e.entityType === "bom_dc_return") navigate("bomDc", `return:${e.entityId}`);
     else if (e.entityType === "bom_dc") navigate("bomDc", `open:${e.entityId}`);
   };
 

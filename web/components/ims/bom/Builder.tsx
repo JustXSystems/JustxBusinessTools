@@ -211,7 +211,13 @@ function BomViewer({
     availability.reload();
     dcsProbe.reload();
   };
+  const linkedInvoiceStatus = state.data?.linkedInvoice?.status ?? null;
+  const invoiceLinksEditable = !invoiceId || linkedInvoiceStatus === "draft";
   const toggleInvoiceDc = async (dcId: string) => {
+    if (invoiceId && !invoiceLinksEditable) {
+      window.alert("Delivery challan links can only be changed on a draft invoice. Open the invoice to cancel it first if you need to unlink.");
+      return;
+    }
     const next = linkDcIds.includes(dcId) ? linkDcIds.filter((x) => x !== dcId) : [...linkDcIds, dcId];
     if (invoiceId) {
       const out = await run("dc-links", () => bom.setInvoiceDcLinks(invoiceId, next), {
@@ -521,6 +527,8 @@ function BomViewer({
             reloadAll();
           }}
           onRefresh={reloadAll}
+          onOpenReturn={(returnId) => navigate("bomDc", `return:${returnId}`)}
+          onCreateReturn={(dcId) => navigate("bomDc", `new-return:${dcId}`)}
         />
       ) : (
       <BomSplitLayout
@@ -676,6 +684,7 @@ function BomViewer({
                 manageOnly={!confirmed}
                 selectedDcIds={linkDcIds}
                 onToggleDc={(dcId) => void toggleInvoiceDc(dcId)}
+                invoiceLinkEditable={invoiceLinksEditable}
                 onOpenWorkspace={setDcWorkspace}
               />
 
