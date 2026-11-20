@@ -528,6 +528,14 @@ export const ims = {
 
   settings: () => get<ImsSettingsMeta>("/settings"),
   saveSettings: (input: Partial<Omit<ImsSettings, "exciseActive">>) => put<{ settings: ImsSettings }>("/settings", input),
+  /** JBT Super Admin only — wipe Stock / BOM / DC / Invoice / Return / PO for a fresh dataset. */
+  clearOperational: (confirmName: string) =>
+    post<{
+      businessName: string;
+      deleted: Record<string, number>;
+      itemsStockReset: number;
+      sequencesCleared: number;
+    }>("/settings/clear-operational", { confirmName }),
   team: () => get<{ members: ImsMember[]; canManage: boolean }>("/team"),
   saveMember: (userId: number, input: { imsRole?: Exclude<ImsRole, "owner">; phone?: string | null; displayName?: string | null; isAccountManager?: boolean; active?: boolean }) =>
     put<{ members: ImsMember[] }>(`/team/${userId}`, input),

@@ -1,8 +1,9 @@
 import type { Router } from "express";
 import { z } from "zod";
+import { isPlatformAdmin } from "../lib/platform-admin.js";
 import { accessOf, actorOf, optText, parse, recordEvent, requirePerm, type ImsAccess, type ImsDeps } from "./context.js";
-import { exec, json, money, one, type Queryable } from "./db.js";
-import type { ImsActor } from "./host.js";
+import { exec, json, money, one, tx, type Queryable } from "./db.js";
+import { badRequest, forbidden, type ImsActor } from "./host.js";
 import {
   BUSINESS_TYPES,
   DEFAULT_PERMISSIONS,
@@ -448,6 +449,114 @@ const MemberInput = z.object({
   active: z.boolean().optional(),
 });
 
+const ClearOperationalInput = z.object({
+  /** Must match the tenant business name (case-insensitive). */
+  confirmName: z.string().trim().min(1).max(200),
+});
+
+/** Document-number sequences reset when operational docs are wiped. */
+const CLEAR_SEQ_KEYS = ["po", "invoice", "bill", "return", "check", "bom", "bom_dc", "bom_dc_rtn", "payrun"] as const;
+
+/**
+ * Tables wiped for a fresh Stock / BOM / DC / Invoice / Return / PO load.
+ * Preserves settings, team, parties, item catalogue (stock zeroed), BOM packages, integrations.
+ */
+const CLEAR_TABLES: ReadonlyArray<{ key: string; sql: string }> = [
+  { key: "bomDcReturnLines", sql: "DELETE FROM ims_bom_dc_return_lines WHERE tenant_id = :tenantId" },
+  { key: "bomDcReturns", sql: "DELETE FROM ims_bom_dc_returns WHERE tenant_id = :tenantId" },
+  { key: "invoiceDcLinks", sql: "DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId" },
+  { key: "bomDcLines", sql: "DELETE FROM ims_bom_dc_lines WHERE tenant_id = :tenantId" },
+  { key: "bomDcs", sql: "DELETE FROM ims_bom_dcs WHERE tenant_id = :tenantId" },
+  { key: "bomDocLines", sql: "DELETE FROM ims_bom_doc_lines WHERE tenant_id = :tenantId" },
+  { key: "bomRevisions", sql: "DELETE FROM ims_bom_revisions WHERE tenant_id = :tenantId" },
+  { key: "bomPdfBlobs", sql: "DELETE FROM ims_bom_pdf_blobs WHERE tenant_id = :tenantId" },
+  { key: "bomDocs", sql: "DELETE FROM ims_bom_docs WHERE tenant_id = :tenantId" },
+  { key: "arActivity", sql: "DELETE FROM ims_ar_activity WHERE tenant_id = :tenantId" },
+  { key: "paymentRuns", sql: "DELETE FROM ims_payment_runs WHERE tenant_id = :tenantId" },
+  { key: "payments", sql: "DELETE FROM ims_payments WHERE tenant_id = :tenantId" },
+  { key: "ledgerEntries", sql: "DELETE FROM ims_ledger_entries WHERE tenant_id = :tenantId" },
+  { key: "invoices", sql: "DELETE FROM ims_invoices WHERE tenant_id = :tenantId" },
+  { key: "bills", sql: "DELETE FROM ims_bills WHERE tenant_id = :tenantId" },
+  { key: "returns", sql: "DELETE FROM ims_returns WHERE tenant_id = :tenantId" },
+  { key: "purchaseOrders", sql: "DELETE FROM ims_purchase_orders WHERE tenant_id = :tenantId" },
+  { key: "stockChecks", sql: "DELETE FROM ims_stock_checks WHERE tenant_id = :tenantId" },
+  { key: "movements", sql: "DELETE FROM ims_movements WHERE tenant_id = :tenantId" },
+  {
+    key: "importLinks",
+    sql: `DELETE FROM ims_links WHERE tenant_id = :tenantId AND target_type IN ('invoice', 'bill', 'return')`,
+  },
+  { key: "syncLog", sql: "DELETE FROM ims_sync_log WHERE tenant_id = :tenantId" },
+];
+
+export type ClearOperationalResult = {
+  businessName: string;
+  deleted: Record<string, number>;
+  itemsStockReset: number;
+  sequencesCleared: number;
+};
+
+/** Platform-admin wipe of transactional IMS data for the active business profile. */
+export async function clearOperationalData(deps: ImsDeps, actor: ImsActor, confirmName: string): Promise<ClearOperationalResult> {
+  if (!isPlatformAdmin()) throw forbidden("Only a JBT Super Admin can clear IMS operational data");
+  const settings = await getSettings(deps, actor.tenantId);
+  const expected = settings.businessName.trim().toLowerCase();
+  if (!expected || confirmName.trim().toLowerCase() !== expected) {
+    throw badRequest(`Type the business name exactly to confirm (currently “${settings.businessName || "—"}”)`);
+  }
+
+  const deleted: Record<string, number> = {};
+  const result = await tx(deps.db, async (conn) => {
+    for (const step of CLEAR_TABLES) {
+      try {
+        const res = await exec(conn, step.sql, { tenantId: actor.tenantId });
+        deleted[step.key] = Number(res.affectedRows ?? 0);
+      } catch (err) {
+        // Older deploys may lack BOM/DC tables — skip missing relations.
+        const e = err as { code?: string; errno?: number };
+        if (e.code === "ER_NO_SUCH_TABLE" || e.errno === 1146) {
+          deleted[step.key] = 0;
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    const stockRes = await exec(
+      conn,
+      `UPDATE ims_items SET current_stock = 0, damaged_stock = 0, last_movement_at = NULL
+       WHERE tenant_id = :tenantId AND (current_stock <> 0 OR damaged_stock <> 0 OR last_movement_at IS NOT NULL)`,
+      { tenantId: actor.tenantId },
+    );
+    const itemsStockReset = Number(stockRes.affectedRows ?? 0);
+
+    const seqPlaceholders = CLEAR_SEQ_KEYS.map((_, i) => `:k${i}`).join(", ");
+    const seqParams = Object.fromEntries(CLEAR_SEQ_KEYS.map((k, i) => [`k${i}`, k]));
+    const seqRes = await exec(
+      conn,
+      `DELETE FROM ims_sequences WHERE tenant_id = :tenantId AND seq_key IN (${seqPlaceholders})`,
+      { tenantId: actor.tenantId, ...seqParams },
+    );
+
+    return {
+      businessName: settings.businessName,
+      deleted,
+      itemsStockReset,
+      sequencesCleared: Number(seqRes.affectedRows ?? 0),
+    };
+  });
+
+  await recordEvent(deps, actor, {
+    type: "settings.clear_operational",
+    entityType: "settings",
+    entityId: String(actor.tenantId),
+    summary: `Cleared Stock, BOM, DC, Invoice, Return and PO data for ${result.businessName}`,
+    payload: result,
+  });
+  await deps.host.audit(actor, "settings.clear_operational", "tenant", String(actor.tenantId), result).catch(() => undefined);
+
+  return result;
+}
+
 export function registerSettings(router: Router, deps: ImsDeps): void {
   router.get("/settings", async (_req, res) => {
     const actor = actorOf(res);
@@ -458,6 +567,13 @@ export function registerSettings(router: Router, deps: ImsDeps): void {
     const actor = actorOf(res);
     requirePerm(res, "settings");
     res.json({ settings: await updateSettings(deps, actor, req.body) });
+  });
+
+  router.post("/settings/clear-operational", async (req, res) => {
+    const actor = actorOf(res);
+    if (!isPlatformAdmin()) throw forbidden("Only a JBT Super Admin can clear IMS operational data");
+    const input = parse(ClearOperationalInput, req.body);
+    res.json(await clearOperationalData(deps, actor, input.confirmName));
   });
 
   router.get("/team", async (_req, res) => {

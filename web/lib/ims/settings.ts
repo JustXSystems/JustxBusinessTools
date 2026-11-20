@@ -8,6 +8,7 @@ import { ims, type ImsRole, type ImsSettings, type ReminderRuleKey, type Taxonom
 export const settingsApi = {
   meta: ims.settings,
   save: ims.saveSettings,
+  clearOperational: ims.clearOperational,
   team: ims.team,
   saveMember: ims.saveMember,
 };
