@@ -540,7 +540,12 @@ function BomViewer({
                     ) : null}
                     {!stockViaDc && doc.stockIssuedAt && convertMode === "explode_lines" ? (
                       <Alert tone="amber" title="Stock already issued">
-                        Explode + issue is blocked unless you link approved delivery challans. Create a draft explode invoice, switch to lump-sum, or tick DCs below.
+                        Explode invoices need approved delivery challans linked (tick DCs below), or switch to lump-sum billing. Invoice issue will not post stock again when DCs are linked.
+                      </Alert>
+                    ) : null}
+                    {!stockViaDc && !doc.stockIssuedAt && convertMode === "explode_lines" && (doc.stockIssueCount ?? 0) > 0 ? (
+                      <Alert tone="amber" title="Delivery challans on this BOM">
+                        Link the approved DCs below before creating an explode invoice, or use lump-sum billing.
                       </Alert>
                     ) : null}
                     {issueOnCreate && convertMode === "explode_lines" && !stockViaDc && !can("stockOut") ? (
@@ -573,7 +578,8 @@ function BomViewer({
                       <Button
                         disabled={
                           Boolean(busy) ||
-                          (issueOnCreate && convertMode === "explode_lines" && !stockViaDc && Boolean(doc.stockIssuedAt)) ||
+                          (convertMode === "explode_lines" && !stockViaDc && Boolean(doc.stockIssuedAt)) ||
+                          (convertMode === "explode_lines" && !stockViaDc && (doc.stockIssueCount ?? 0) > 0) ||
                           (issueOnCreate && convertMode === "explode_lines" && !stockViaDc && !can("stockOut")) ||
                           (issueOnCreate && convertMode === "explode_lines" && !stockViaDc && blockOnShortfall)
                         }

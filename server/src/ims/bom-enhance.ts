@@ -661,9 +661,11 @@ export function remainingIssueQty(soldQty: number, issuedQty: number): number {
  * Qty still available to put on a Delivery Challan for one BOM line.
  * - `committedQty` = live DC drafts/verified/approved (reserves capacity).
  * - `issuedQty` = stock already posted (approved DCs or invoice explode).
+ * - Consumed = max(committed, issued): for DC-only flows committed ≥ issued;
+ *   for invoice-explode, issued covers the line while committed may be 0.
  * - When `stockIssuedAt` is set but neither committed nor issued qty is recorded
- *   (legacy / invoice-explode path), treat the full BOM qty as consumed so a DC
- *   cannot post a second stock OUT.
+ *   (legacy explode path), treat the full BOM qty as consumed so a DC cannot
+ *   post a second stock OUT.
  */
 export function availableDcQty(
   bomQty: number,
@@ -677,6 +679,45 @@ export function availableDcQty(
     issued = round3(Math.max(0, bomQty));
   }
   return remainingIssueQty(bomQty, Math.max(committed, issued));
+}
+
+/**
+ * Pure planner for BOM issued_qty / stock_issued_at after DC approve or reverse.
+ * `approvedByLine` = SUM of qty on approved+stock_posted DCs per BOM line id.
+ */
+export function planBomIssuedSync(
+  stockLines: ReadonlyArray<{ id: string; qty: number }>,
+  approvedByLine: ReadonlyMap<string, number> | Readonly<Record<string, number>>,
+  approvedDcCount: number,
+): {
+  lineIssued: Array<{ lineId: string; issued: number }>;
+  anyIssued: boolean;
+  fullyCovered: boolean;
+  stockIssueCount: number;
+  /** `set` only when every stock line is fully delivered; otherwise `clear`. */
+  stockIssuedAt: "set" | "clear";
+} {
+  const read = (id: string): number => {
+    if (approvedByLine instanceof Map) return round3(Math.max(0, approvedByLine.get(id) ?? 0));
+    return round3(Math.max(0, Number((approvedByLine as Record<string, number>)[id] ?? 0)));
+  };
+  const lineIssued: Array<{ lineId: string; issued: number }> = [];
+  let anyIssued = false;
+  let fullyCovered = stockLines.length > 0;
+  for (const line of stockLines) {
+    const issued = read(line.id);
+    lineIssued.push({ lineId: line.id, issued });
+    if (issued > 0) anyIssued = true;
+    if (remainingIssueQty(line.qty, issued) > 0) fullyCovered = false;
+  }
+  const stockIssueCount = anyIssued ? Math.max(0, Math.floor(approvedDcCount)) : 0;
+  return {
+    lineIssued,
+    anyIssued,
+    fullyCovered: fullyCovered && anyIssued,
+    stockIssueCount,
+    stockIssuedAt: fullyCovered && anyIssued ? "set" : "clear",
+  };
 }
 
 export const SERIAL_NOTES_MAX = 500;

@@ -19,6 +19,7 @@ import {
   planProposalShare,
   proposalWhatsAppUrl,
   availableDcQty,
+  planBomIssuedSync,
   remainingIssueQty,
   rotateAlternates,
   selectedOptionKeys,
@@ -173,11 +174,95 @@ describe("as-built and partial issue", () => {
     expect(availableDcQty(10, 0, 0, "2026-01-01")).toBe(0);
     // Invoice explode that also wrote issued_qty
     expect(availableDcQty(10, 0, 10, "2026-01-01")).toBe(0);
-    // Partial issued via DCs still leaves remainder
+    // Partial issued via DCs still leaves remainder (stock_issued_at alone must not zero other lines)
+    expect(availableDcQty(10, 0, 0, null)).toBe(10);
+    expect(availableDcQty(10, 3, 3, null)).toBe(7);
     expect(availableDcQty(10, 3, 3, "2026-01-01")).toBe(7);
     // Over-commit: requested qty must not exceed remaining (verify/approve re-check)
     expect(8 > availableDcQty(10, 4, 0, null) + 1e-9).toBe(true);
     expect(6 <= availableDcQty(10, 4, 0, null) + 1e-9).toBe(true);
+  });
+
+  it("isLegacyFullIssue distinguishes invoice/BOM explode from DC-backed issue", () => {
+    expect(isLegacyFullIssue("2026-01-01", [{ issuedQty: 0 }, { issuedQty: 0 }])).toBe(true);
+    expect(isLegacyFullIssue("2026-01-01", [{ issuedQty: 4 }, { issuedQty: 0 }])).toBe(false);
+    expect(isLegacyFullIssue(null, [{ issuedQty: 0 }])).toBe(false);
+  });
+
+  it("planBomIssuedSync handles partial / multi-DC / reverse / full coverage", () => {
+    const lines = [
+      { id: "a", qty: 10 },
+      { id: "b", qty: 5 },
+    ];
+
+    // DC1 approves A=4 only — partial across BOM
+    const p1 = planBomIssuedSync(lines, new Map([["a", 4]]), 1);
+    expect(p1.lineIssued).toEqual([
+      { lineId: "a", issued: 4 },
+      { lineId: "b", issued: 0 },
+    ]);
+    expect(p1.anyIssued).toBe(true);
+    expect(p1.fullyCovered).toBe(false);
+    expect(p1.stockIssuedAt).toBe("clear");
+    expect(p1.stockIssueCount).toBe(1);
+    expect(availableDcQty(10, 4, 4, null)).toBe(6);
+    expect(availableDcQty(5, 0, 0, null)).toBe(5);
+
+    // DC2 approves A=3 + B=2 — still partial (B has 3 left)
+    const p2 = planBomIssuedSync(lines, { a: 7, b: 2 }, 2);
+    expect(p2.lineIssued).toEqual([
+      { lineId: "a", issued: 7 },
+      { lineId: "b", issued: 2 },
+    ]);
+    expect(p2.fullyCovered).toBe(false);
+    expect(p2.stockIssuedAt).toBe("clear");
+    expect(p2.stockIssueCount).toBe(2);
+    expect(availableDcQty(10, 7, 7, null)).toBe(3);
+    expect(availableDcQty(5, 2, 2, null)).toBe(3);
+
+    // DC3 finishes both lines
+    const p3 = planBomIssuedSync(lines, { a: 10, b: 5 }, 3);
+    expect(p3.fullyCovered).toBe(true);
+    expect(p3.stockIssuedAt).toBe("set");
+    expect(p3.stockIssueCount).toBe(3);
+    expect(availableDcQty(10, 10, 10, "2026-01-01")).toBe(0);
+    expect(availableDcQty(5, 5, 5, "2026-01-01")).toBe(0);
+
+    // Reverse DC2-equivalent — back to A=4 only (as if one approved DC remains)
+    const p4 = planBomIssuedSync(lines, { a: 4 }, 1);
+    expect(p4.stockIssuedAt).toBe("clear");
+    expect(p4.stockIssueCount).toBe(1);
+    expect(p4.lineIssued.find((x) => x.lineId === "b")?.issued).toBe(0);
+
+    // Reverse last DC — empty
+    const p5 = planBomIssuedSync(lines, {}, 0);
+    expect(p5.anyIssued).toBe(false);
+    expect(p5.stockIssuedAt).toBe("clear");
+    expect(p5.stockIssueCount).toBe(0);
+    expect(p5.lineIssued.every((x) => x.issued === 0)).toBe(true);
+
+    // Fractional accumulation on one line
+    const frac = planBomIssuedSync([{ id: "a", qty: 5 }], { a: 2.5 }, 1);
+    expect(frac.lineIssued[0]?.issued).toBe(2.5);
+    expect(frac.fullyCovered).toBe(false);
+    expect(availableDcQty(5, 2.5, 2.5, null)).toBe(2.5);
+    const fracDone = planBomIssuedSync([{ id: "a", qty: 5 }], { a: 5 }, 2);
+    expect(fracDone.fullyCovered).toBe(true);
+
+    // Same item split across two BOM lines — tracked per line, not merged
+    const split = planBomIssuedSync(
+      [
+        { id: "l1", qty: 5 },
+        { id: "l2", qty: 3 },
+      ],
+      { l1: 2, l2: 1 },
+      1,
+    );
+    expect(split.lineIssued).toEqual([
+      { lineId: "l1", issued: 2 },
+      { lineId: "l2", issued: 1 },
+    ]);
+    expect(split.fullyCovered).toBe(false);
   });
 });
 

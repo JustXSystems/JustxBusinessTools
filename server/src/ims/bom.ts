@@ -1750,11 +1750,12 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     if (!doc.customerName.trim()) throw conflict("Customer name is required");
     if (!doc.lines?.length) throw conflict("BOM has no lines");
     if (stockViaDc) await assertDcsLinkable(deps.db, actor.tenantId, id, dcIds);
-    if (body.issue && body.mode === "explode_lines" && !stockViaDc && (await bomHasLiveDcs(deps.db, actor.tenantId, id))) {
-      throw conflict("This BOM has delivery challans. Link approved DCs on create, or cancel open DCs before issuing stock from the invoice.");
+    // Explode invoices must either link approved DCs (stock already on DCs) or run only when no live DCs exist.
+    if (body.mode === "explode_lines" && !stockViaDc && (await bomHasLiveDcs(deps.db, actor.tenantId, id))) {
+      throw conflict("This BOM has delivery challans. Link approved DCs on create, or cancel open DCs before creating an explode invoice.");
     }
     if (body.issue && body.mode === "explode_lines" && !stockViaDc && doc.stockIssuedAt) {
-      throw conflict("Materials were already issued from this BOM. Link approved delivery challans, create a draft explode invoice, or use lump-sum billing.");
+      throw conflict("Materials were already issued from this BOM. Link approved delivery challans, or use lump-sum billing.");
     }
 
     const settings = await getSettings(deps, actor.tenantId);

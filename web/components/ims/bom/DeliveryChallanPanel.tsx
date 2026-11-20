@@ -15,7 +15,12 @@ type RemainingLine = {
   unit: string;
   remainingQty: number;
   issuedQty: number;
+  bomQty?: number;
 };
+
+function roundQty(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
 
 /** Client-side BOM→DC qty/date guards (server re-checks on create/patch/verify/approve). */
 function validateDcDraft(input: {
@@ -33,7 +38,7 @@ function validateDcDraft(input: {
     if (line.qty > line.remainingQty + 1e-9) {
       return line.remainingQty <= 0
         ? `No remaining quantity for “${line.description}” — already on a DC or issued from the BOM/invoice.`
-        : `Only ${line.remainingQty} ${line.unit} remaining for “${line.description}”.`;
+        : `Only ${roundQty(line.remainingQty)} ${line.unit} remaining for “${line.description}”.`;
     }
   }
   return null;
@@ -64,12 +69,17 @@ export function DeliveryChallanPanel({
   onToggleDc: (id: string) => void;
   onOpenWorkspace: (workspace: DcWorkspace) => void;
 }) {
-  const dcsState = useImsData(() => bom.listDcs(doc.id), [doc.id, doc.updatedAt, doc.stockIssuedAt]);
-  const remainingState = useImsData(() => bom.dcRemaining(doc.id), [doc.id, doc.updatedAt, doc.stockIssuedAt, dcsState.data?.dcs?.length]);
+  const dcsState = useImsData(() => bom.listDcs(doc.id), [doc.id, doc.updatedAt, doc.stockIssuedAt, doc.stockIssueCount]);
+  const remainingState = useImsData(
+    () => bom.dcRemaining(doc.id),
+    [doc.id, doc.updatedAt, doc.stockIssuedAt, doc.stockIssueCount, dcsState.data?.dcs?.length],
+  );
   const remainingLines = remainingState.data?.lines ?? [];
   const openRemaining = remainingLines.filter((l) => l.remainingQty > 0);
   const dcs = dcsState.data?.dcs ?? [];
   const bomDocNo = dcsState.data?.bomDocNo ?? doc.docNo;
+  const deliveredUnits = remainingLines.reduce((s, l) => s + (Number(l.issuedQty) || 0), 0);
+  const bomUnits = remainingLines.reduce((s, l) => s + (Number(l.bomQty) || 0), 0);
 
   return (
     <Card className="ims-bom-action-card">
@@ -82,6 +92,15 @@ export function DeliveryChallanPanel({
             {doc.stockIssueCount > 0
               ? `Stock fully covered · ${doc.stockIssueCount} DC${doc.stockIssueCount === 1 ? "" : "s"} · ${doc.stockIssuedAt}`
               : `Stock issued (invoice/BOM) · ${doc.stockIssuedAt}`}
+          </Badge>
+        </div>
+      ) : deliveredUnits > 0 ? (
+        <div style={{ marginBottom: 10 }}>
+          <Badge tone="blue">
+            {(() => {
+              const n = doc.stockIssueCount || dcs.filter((d) => d.status === "approved").length;
+              return `Partial delivery · ${deliveredUnits}${bomUnits > 0 ? ` / ${bomUnits}` : ""} units · ${n} DC${n === 1 ? "" : "s"}`;
+            })()}
           </Badge>
         </div>
       ) : null}
@@ -191,7 +210,10 @@ export function DeliveryChallanWorkspace({
 }) {
   const print = usePrint();
   const excludeDcId = workspace.kind === "manage" ? workspace.dcId : undefined;
-  const remainingState = useImsData(() => bom.dcRemaining(doc.id, excludeDcId), [doc.id, doc.updatedAt, doc.stockIssuedAt, excludeDcId]);
+  const remainingState = useImsData(
+    () => bom.dcRemaining(doc.id, excludeDcId),
+    [doc.id, doc.updatedAt, doc.stockIssuedAt, doc.stockIssueCount, excludeDcId],
+  );
   const remainingLines = remainingState.data?.lines ?? [];
   const openRemaining = remainingLines.filter((l) => l.remainingQty > 0);
   const bomDocNo = doc.docNo;
@@ -204,7 +226,9 @@ export function DeliveryChallanWorkspace({
       return (
         <Card className="ims-bom-action-card">
           <Alert tone="amber" title="Nothing left to deliver">
-            All BOM stock quantities are already on live delivery challans.{" "}
+            {doc.stockIssuedAt
+              ? "Materials for this BOM are already fully issued (delivery challans or invoice). Reverse stock or cancel open DCs before creating another challan."
+              : "All BOM stock quantities are already on live delivery challans."}{" "}
             <Button size="sm" variant="ghost" onClick={onBack}>
               Back to BOM
             </Button>
@@ -558,13 +582,15 @@ function DcManagerForm({
   const editableLines = useMemo(() => {
     return (dc.lines ?? []).map((l) => {
       const rem = remById.get(l.bomLineId);
+      // remaining API already excludes this DC, so remainingQty is the max this draft may keep/raise to.
       const available = rem ? rem.remainingQty : l.qty;
       return {
         bomLineId: l.bomLineId,
         description: l.description,
         makeText: l.makeText,
         unit: l.unit,
-        remainingQty: Math.max(available, l.qty),
+        // Keep current qty editable even if concurrent commits temporarily shrink remaining.
+        remainingQty: roundQty(Math.max(available, l.qty)),
         issuedQty: rem?.issuedQty ?? 0,
       };
     });
