@@ -37,6 +37,7 @@ import { requireOperatorActAs } from "./middleware/require-operator-act-as.js";
 import { startAnalyticsRollupScheduler } from "./jobs/analytics-rollup.js";
 import { startRenewalNoticeScheduler } from "./jobs/renewal-notices.js";
 import { startFollowUpReminderScheduler } from "./jobs/quotation-followup-reminders.js";
+import { startTallySyncScheduler } from "./jobs/tally-sync.js";
 import { initSmsProvider } from "./lib/auth/init-sms.js";
 import { ensureArtifactDeliverySchema } from "./lib/artifact-delivery.js";
 import { ensureEmailOutboxSchema } from "./lib/email-outbox.js";
@@ -216,6 +217,7 @@ app.listen(port, () => {
     startAnalyticsRollupScheduler();
     startRenewalNoticeScheduler();
     startFollowUpReminderScheduler();
+    startTallySyncScheduler();
   } else {
     log.info("jobs_deferred_to_worker");
   }

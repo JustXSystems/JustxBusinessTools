@@ -401,7 +401,7 @@ async function loadCheck(deps: ImsDeps, tenantId: number, id: string): Promise<C
 
 /* ---------- Returns ---------- */
 
-type ReturnLine = { itemId: string; name: string; unit: string | null; qty: number; rate: number; amount: number };
+type ReturnLine = { itemId: string | null; name: string; unit: string | null; qty: number; rate: number; amount: number };
 
 type ReturnRow = {
   id: string;
@@ -1377,6 +1377,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       const type: MovementType = row.kind === "customer" ? "RETURN_OUT" : "RETURN_IN";
       const damaged = row.disposition === "damaged";
       for (const l of json<ReturnLine[]>(row.lines, [])) {
+        if (!l.itemId) continue; // Tally credit-note mirrors may be free-text (no stock)
         await postMovement(
           conn,
           actor,

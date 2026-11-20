@@ -15,7 +15,15 @@ export type TallySyncMode = "export" | "two_way" | "import";
 export type TallyFrequency = "realtime" | "15m" | "hourly" | "daily" | "manual";
 export type TallyConfig = { host: string; port: number; company: string; product: TallyProduct; syncMode: TallySyncMode };
 export type TallySync = { ledgers: boolean; stockItems: boolean; salesVouchers: boolean; purchaseVouchers: boolean; receipts: boolean; notes: boolean; frequency: TallyFrequency };
-export type TallyView = { enabled: boolean; config: TallyConfig | null; sync: TallySync; lastSyncAt: string | null; lastStatus: string | null };
+export type TallyView = {
+  enabled: boolean;
+  config: TallyConfig | null;
+  sync: TallySync;
+  lastSyncAt: string | null;
+  lastStatus: string | null;
+  syncDue?: boolean;
+  syncDueMessage?: string | null;
+};
 
 export type PosFrequency = "realtime" | "15m" | "hourly" | "daily";
 export type PosConfigView = { provider: string; storeId: string | null; syncFrequency: PosFrequency; ratesIncludeTax: boolean; customerName: string; hasApiKey: boolean; apiKeyHint: string | null };
@@ -44,6 +52,37 @@ export type IntegrationsOverview = {
 export type TallyTestResult = { reachable: boolean; latencyMs: number; message: string; companies: string[]; companyFound: boolean | null; httpStatus?: number };
 export type TallySyncResult = { status: SyncStatus; steps: Array<{ entity: string; status: SyncStatus; records: number; message: string }>; tally: TallyView };
 export type TallyExportType = "masters" | "sales" | "purchases" | "notes" | "receipts" | "all";
+
+export type TallyImportAction = "create" | "skip_matched" | "conflict";
+export type TallyImportRow = {
+  key: string;
+  kind?: "Sales" | "Purchase" | "Credit Note" | "Debit Note";
+  action: TallyImportAction;
+  invoiceNo: string;
+  invoiceDate: string;
+  customerName: string;
+  customerGstin: string | null;
+  taxable: number;
+  tax: number;
+  grandTotal: number;
+  lineCount: number;
+  existingId: string | null;
+  existingNo: string | null;
+  existingTotal: number | null;
+  note: string;
+};
+export type TallyImportPreview = { counts: Record<TallyImportAction, number>; rows: TallyImportRow[]; parties?: number; stockItems?: number };
+export type TallyImportCommitResult = {
+  created: Array<{ id: string; invoiceNo: string; status: string }>;
+  bills?: Array<{ id: string; billNo: string; supplierBillNo: string }>;
+  creditNotes?: Array<{ id: string; returnNo: string }>;
+  debitNotes?: Array<{ id: string; returnNo: string }>;
+  parties?: { created: number; updated: number };
+  items?: { created: number; updated: number };
+  skipped: number;
+  conflicts: number;
+  rows: TallyImportRow[];
+};
 
 /* ---------- Excise ---------- */
 
@@ -500,6 +539,9 @@ export const imsSystem = {
   testTally: (input: Partial<Pick<TallyConfig, "host" | "port" | "company">> = {}) => post<TallyTestResult>("/integrations/tally/test", input),
   syncTally: () => post<TallySyncResult>("/integrations/tally/sync-now"),
   exportTally: (type: TallyExportType, range: RangeParams = {}) => download(`/integrations/tally/export${qs({ type, ...range })}`, `Tally_${type}.xml`),
+  exportInvoiceTally: (invoiceId: string) => download(`/integrations/tally/invoice/${encodeURIComponent(invoiceId)}.xml`, `Tally_Invoice.xml`),
+  previewTallyImport: (input: { xml?: string; csv?: string }) => post<TallyImportPreview>("/integrations/tally/import/preview", input),
+  commitTallyImport: (input: { xml?: string; csv?: string; keys?: string[]; asDraft?: boolean }) => post<TallyImportCommitResult>("/integrations/tally/import/commit", input),
   savePos: (input: PosConfigInput) => put<{ pos: PosView }>("/integrations/pos", input),
   disconnectPos: () => post<{ pos: PosView }>("/integrations/pos/disconnect"),
   posSale: (input: PosSaleInput) => post<{ sale: PosSaleResult }>("/integrations/pos/sale", input),

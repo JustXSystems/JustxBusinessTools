@@ -4,19 +4,32 @@ import {
   appendThread,
   auditHealth,
   autoMatchBank,
+  canonicalContentHash,
+  canonicalFromTallyVoucher,
   editsAfterApproval,
   exciseBottles,
   exciseBulkLitres,
   exciseClosing,
   findDuplicateGroups,
+  imsLinesFromCanonical,
   invoiceGstIssues,
   isTallyHost,
+  isTallySyncDue,
+  matchCatalogItem,
+  resolveTallyVoucherKind,
   mobileKey,
+  normInvoiceNo,
   normalizeBankRows,
   parseBankAmount,
   parseBankDate,
   parseTallyCompanies,
+  parseTallyDate,
+  parseTallyLedgersXml,
   parseTallyResponse,
+  parseTallySalesCsv,
+  parseTallySalesXml,
+  parseTallyStockItemsXml,
+  planTallyImport,
   posExclusiveRate,
   scoreBankMatch,
   stockLedgerGap,
@@ -25,9 +38,12 @@ import {
   tallyCashVoucherXml,
   tallyDate,
   tallyEnvelope,
+  tallyExportMastersEnvelope,
+  tallyExportVouchersEnvelope,
   tallyLedgerXml,
   tallyStockItemXml,
   tallyVoucherBalance,
+  tallyVoucherFromCanonical,
   tallyVoucherXml,
   xmlEscape,
   type AuditInvoice,
@@ -149,6 +165,208 @@ describe("Tally XML", () => {
     expect(isTallyHost("user@host")).toBe(false);
     expect(isTallyHost("host/path")).toBe(false);
     expect(isTallyHost("")).toBe(false);
+  });
+});
+
+describe("Tally ↔ IMS canonical invoice", () => {
+  /** Golden fixture from Sales_ZT_2026_27_1944 (Zigma → Back Bench Ventures). */
+  const ztSale: TallyVoucher = {
+    kind: "Sales",
+    number: "ZT/2026/27/1944",
+    date: "2026-11-17",
+    partyName: "Back Bench Ventures",
+    partyGstin: "29ABBFB0371R1Z3",
+    placeOfSupply: "Karnataka",
+    lines: [{ name: "Sale of Greaves DG Set", unit: "Nos", qty: 1, amount: 700000, stock: true, hsn: "85021100", gstRate: 18 }],
+    taxable: 700000,
+    cgst: 63000,
+    sgst: 63000,
+    igst: 0,
+    roundOff: 0,
+    total: 826000,
+  };
+
+  it("normalizes invoice numbers and Tally dates", () => {
+    expect(normInvoiceNo("ZT/2026/27/1944")).toBe("ZT2026271944");
+    expect(normInvoiceNo("zt-2026-27-1944")).toBe("ZT2026271944");
+    expect(parseTallyDate("20261117")).toBe("2026-11-17");
+    expect(parseTallyDate("17-Nov-26")).toBe("2026-11-17");
+    expect(parseTallyDate("2026-11-17")).toBe("2026-11-17");
+  });
+
+  it("maps the ZT sample into canonical form and round-trips through XML", () => {
+    const canon = canonicalFromTallyVoucher(ztSale, { source: "tally", externalKey: "ZT/2026/27/1944" });
+    expect(canon).toMatchObject({
+      invoiceNo: "ZT/2026/27/1944",
+      invoiceDate: "2026-11-17",
+      customerName: "Back Bench Ventures",
+      customerGstin: "29ABBFB0371R1Z3",
+      taxable: 700000,
+      cgst: 63000,
+      sgst: 63000,
+      grandTotal: 826000,
+      intraState: true,
+    });
+    expect(canon.lines[0]).toMatchObject({ name: "Sale of Greaves DG Set", hsn: "85021100", qty: 1, rate: 700000, gstRate: 18 });
+    expect(imsLinesFromCanonical(canon)[0].gstRate).toBe(18);
+
+    const xml = tallyVoucherXml(tallyVoucherFromCanonical(canon));
+    expect(xml).toContain("<VOUCHERNUMBER>ZT/2026/27/1944</VOUCHERNUMBER>");
+    expect(xml).toContain("<HSNCODE>85021100</HSNCODE>");
+    expect(xml).toContain("<PARTYGSTIN>29ABBFB0371R1Z3</PARTYGSTIN>");
+
+    const parsed = parseTallySalesXml(tallyEnvelope("ZIGMA TECHNOLOGIES", "Vouchers", [xml]));
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({
+      invoiceNo: "ZT/2026/27/1944",
+      invoiceDate: "2026-11-17",
+      customerName: "Back Bench Ventures",
+      customerGstin: "29ABBFB0371R1Z3",
+      taxable: 700000,
+      cgst: 63000,
+      sgst: 63000,
+      grandTotal: 826000,
+    });
+    expect(parsed[0].lines[0].hsn).toBe("85021100");
+  });
+
+  it("parses a CSV sales register and plans create/skip/conflict", () => {
+    const csv = [
+      "InvoiceNo,Date,Customer,GSTIN,Item,HSN,Qty,Unit,Rate,GstRate,Cgst,Sgst,Igst,GrandTotal",
+      "ZT/2026/27/1944,17-Nov-26,Back Bench Ventures,29ABBFB0371R1Z3,Sale of Greaves DG Set,85021100,1,Nos,700000,18,63000,63000,0,826000",
+      "INV-2,2026-11-18,Acme,27ABCDE1234F1Z5,Widget,8471,2,pcs,500,18,90,90,0,1180",
+    ].join("\n");
+    const list = parseTallySalesCsv(csv);
+    expect(list).toHaveLength(2);
+    expect(list[0].grandTotal).toBe(826000);
+
+    const plan = planTallyImport(list, [
+      { id: "a", invoiceNo: "ZT/2026/27/1944", sourceTool: "tally", sourceRef: "ZT/2026/27/1944", grandTotal: 826000 },
+      { id: "b", invoiceNo: "INV-2", sourceTool: null, sourceRef: null, grandTotal: 1000 },
+    ]);
+    expect(plan.map((p) => p.action)).toEqual(["skip_matched", "conflict"]);
+  });
+
+  it("builds a voucher export request and a stable content hash", () => {
+    const env = tallyExportVouchersEnvelope("ZIGMA TECHNOLOGIES", "2026-04-01", "2026-11-17");
+    expect(env).toContain("<ID>Vouchers</ID>");
+    expect(env).toContain("<SVFROMDATE>20260401</SVFROMDATE>");
+    expect(env).toContain("<SVTODATE>20261117</SVTODATE>");
+    expect(env).toContain("ZIGMA TECHNOLOGIES");
+    const a = canonicalFromTallyVoucher(ztSale);
+    const b = canonicalFromTallyVoucher(ztSale);
+    expect(canonicalContentHash(a)).toBe(canonicalContentHash(b));
+    expect(canonicalContentHash({ ...a, grandTotal: 826001 })).not.toBe(canonicalContentHash(a));
+  });
+
+  it("matches catalog items by name or unique HSN", () => {
+    const catalog = [
+      { id: "1", name: "Sale of Greaves DG Set", hsn: "85021100" },
+      { id: "2", name: "Widget", hsn: "8471" },
+      { id: "3", name: "Other widget", hsn: "8471" },
+    ];
+    expect(matchCatalogItem({ name: "Sale of Greaves DG Set", hsn: "85021100" }, catalog)).toBe("1");
+    expect(matchCatalogItem({ name: "Unknown", hsn: "85021100" }, catalog)).toBe("1");
+    expect(matchCatalogItem({ name: "Unknown", hsn: "8471" }, catalog)).toBeNull();
+    expect(matchCatalogItem({ name: "Widget", hsn: null }, catalog)).toBe("2");
+    const linked = imsLinesFromCanonical(canonicalFromTallyVoucher(ztSale), ["1"]);
+    expect(linked[0].itemId).toBe("1");
+  });
+
+  it("parses party ledgers, stock items, credit/debit notes, masters export, and sync-due", () => {
+    const masters = tallyEnvelope("ZIGMA", "All Masters", [
+      tallyLedgerXml({ name: "Back Bench Ventures", parent: TALLY_LEDGERS.debtors, gstin: "29ABBFB0371R1Z3", state: "Karnataka" }),
+      tallyLedgerXml({ name: "Steel Supplier", parent: TALLY_LEDGERS.creditors, gstin: "29AAAAA0000A1Z5" }),
+      tallyLedgerXml({ name: TALLY_LEDGERS.sales, parent: "Sales Accounts" }),
+      tallyStockItemXml({ name: "Greaves DG Set", unit: "Nos", hsn: "85021100", gstRate: 18, sku: "DG-1", category: "Generators" }),
+    ]);
+    const parties = parseTallyLedgersXml(masters);
+    expect(parties).toHaveLength(2);
+    expect(parties.find((p) => p.name === "Back Bench Ventures")).toMatchObject({ kind: "customer", gstin: "29ABBFB0371R1Z3" });
+    expect(parties.find((p) => p.name === "Steel Supplier")?.kind).toBe("supplier");
+
+    const items = parseTallyStockItemsXml(masters);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ name: "Greaves DG Set", unit: "Nos", hsn: "85021100", gstRate: 18, sku: "DG-1", category: "Generators" });
+
+    const cnXml = tallyVoucherXml({ ...ztSale, kind: "Credit Note", number: "CN/1944", total: 826000 });
+    const dnXml = tallyVoucherXml({
+      ...ztSale,
+      kind: "Debit Note",
+      number: "DN/12",
+      partyName: "Steel Supplier",
+      lines: [],
+      taxable: 1000,
+      cgst: 0,
+      sgst: 0,
+      igst: 180,
+      total: 1180,
+    });
+    const parsed = parseTallySalesXml(tallyEnvelope("ZIGMA", "Vouchers", [cnXml, dnXml]));
+    expect(parsed.map((p) => p.kind)).toEqual(["Credit Note", "Debit Note"]);
+    expect(parsed[0].invoiceNo).toBe("CN/1944");
+    expect(parsed[1]).toMatchObject({ invoiceNo: "DN/12", customerName: "Steel Supplier", taxable: 1000, igst: 180, grandTotal: 1180 });
+
+    expect(tallyExportMastersEnvelope("ZIGMA")).toContain("<ID>All Masters</ID>");
+    expect(isTallySyncDue("manual", null).due).toBe(false);
+    expect(isTallySyncDue("hourly", null).due).toBe(true);
+    expect(isTallySyncDue("hourly", new Date(Date.now() - 30 * 60_000).toISOString()).due).toBe(false);
+    expect(isTallySyncDue("hourly", new Date(Date.now() - 2 * 3_600_000).toISOString()).due).toBe(true);
+    expect(isTallySyncDue("hourly", new Date().toISOString(), Date.now(), "failed").due).toBe(true);
+    expect(isTallySyncDue("hourly", new Date().toISOString(), Date.now(), "partial").due).toBe(true);
+  });
+
+  it("maps Indian voucher type aliases", () => {
+    expect(resolveTallyVoucherKind("Tax Invoice")).toBe("Sales");
+    expect(resolveTallyVoucherKind("GST Sales")).toBe("Sales");
+    expect(resolveTallyVoucherKind("Sales Return")).toBe("Credit Note");
+    expect(resolveTallyVoucherKind("Purchase Return")).toBe("Debit Note");
+    expect(resolveTallyVoucherKind("Sales Order")).toBeNull();
+    const taxInv = parseTallySalesXml(`<VOUCHER VCHTYPE="Tax Invoice"><DATE>20261101</DATE><VOUCHERNUMBER>TI-1</VOUCHERNUMBER><PARTYLEDGERNAME>Acme</PARTYLEDGERNAME>
+      <LEDGERENTRIES.LIST><LEDGERNAME>Acme</LEDGERNAME><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-118</AMOUNT></LEDGERENTRIES.LIST>
+      <LEDGERENTRIES.LIST><LEDGERNAME>${TALLY_LEDGERS.sales}</LEDGERNAME><AMOUNT>100</AMOUNT></LEDGERENTRIES.LIST>
+      <LEDGERENTRIES.LIST><LEDGERNAME>${TALLY_LEDGERS.outputIgst}</LEDGERNAME><AMOUNT>18</AMOUNT></LEDGERENTRIES.LIST></VOUCHER>`);
+    expect(taxInv[0]?.kind).toBe("Sales");
+  });
+
+  it("parses ALLLEDGERENTRIES purchase vouchers and ignores sales orders", () => {
+    const purchaseXml = `
+      <VOUCHER VCHTYPE="Purchase" ACTION="Create">
+        <DATE>20261101</DATE>
+        <VOUCHERNUMBER>12</VOUCHERNUMBER>
+        <REFERENCE>SUP/778</REFERENCE>
+        <PARTYLEDGERNAME>Steel Supplier</PARTYLEDGERNAME>
+        <PARTYGSTIN>29AAAAA0000A1Z5</PARTYGSTIN>
+        <ALLLEDGERENTRIES.LIST><LEDGERNAME>Steel Supplier</LEDGERNAME><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-1180.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+        <ALLLEDGERENTRIES.LIST><LEDGERNAME>${TALLY_LEDGERS.purchase}</LEDGERNAME><AMOUNT>1000.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+        <ALLLEDGERENTRIES.LIST><LEDGERNAME>${TALLY_LEDGERS.inputIgst}</LEDGERNAME><AMOUNT>180.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+      </VOUCHER>`;
+    const orderXml = `<VOUCHER VCHTYPE="Sales Order"><DATE>20261101</DATE><VOUCHERNUMBER>SO-1</VOUCHERNUMBER><PARTYLEDGERNAME>X</PARTYLEDGERNAME></VOUCHER>`;
+    const parsed = parseTallySalesXml(`<ENVELOPE>${purchaseXml}${orderXml}</ENVELOPE>`);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({
+      kind: "Purchase",
+      invoiceNo: "SUP/778",
+      reference: "12",
+      customerName: "Steel Supplier",
+      taxable: 1000,
+      igst: 180,
+      grandTotal: 1180,
+    });
+
+    const roundTrip = parseTallySalesXml(
+      tallyEnvelope("ZIGMA", "Vouchers", [
+        tallyVoucherXml({ ...ztSale, kind: "Purchase", number: "SUP/778", reference: "BILL-001", partyName: "Steel Supplier" }),
+      ]),
+    );
+    expect(roundTrip[0]).toMatchObject({ kind: "Purchase", invoiceNo: "SUP/778", reference: "BILL-001" });
+  });
+
+  it("plans create notes by document kind and matches catalog by SKU", () => {
+    const purchase = canonicalFromTallyVoucher({ ...ztSale, kind: "Purchase", number: "B-1", partyName: "Steel", total: 826000 });
+    const plan = planTallyImport([purchase], []);
+    expect(plan[0].note).toBe("New bill");
+    expect(matchCatalogItem({ name: "Anything", sku: "DG-1" }, [{ id: "9", name: "Greaves", hsn: null, sku: "DG-1" }])).toBe("9");
   });
 });
 

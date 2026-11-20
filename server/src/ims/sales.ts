@@ -582,7 +582,26 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
   if (!row.customer_name.trim()) throw badRequest("Pick a customer before issuing");
   const invoiceDate = isoOf(row.invoice_date);
   await assertDayOpen(conn, actor.tenantId, invoiceDate);
-  const invoiceNo = await nextDocNo(conn, actor.tenantId, "invoice", settings.invoicePrefix, invoiceDate, settings.businessName);
+  /** Tally drafts keep the original voucher number (source_ref, or parsed from notes if an older import stored a GUID). */
+  let invoiceNo: string | null = null;
+  if (row.source_tool === "tally") {
+    let tallyNo = row.source_ref?.trim() || null;
+    if (tallyNo && (UUID_RE.test(tallyNo) || tallyNo.length > 48)) tallyNo = null;
+    if (!tallyNo && row.notes) {
+      const fromNotes = /Tally invoice\s+([^·\n]+)/i.exec(row.notes);
+      if (fromNotes) tallyNo = fromNotes[1].trim().slice(0, 48) || null;
+    }
+    if (tallyNo) {
+      const taken = await one<{ id: string; invoice_no: string }>(
+        conn,
+        `SELECT id, invoice_no FROM ims_invoices WHERE tenant_id = :tenantId AND invoice_no = :no AND id <> :id LIMIT 1`,
+        { tenantId: actor.tenantId, no: tallyNo, id },
+      );
+      if (taken) throw conflict(`Tally voucher number ${tallyNo} is already used by another IMS invoice — resolve the duplicate before issuing`);
+      invoiceNo = tallyNo;
+    }
+  }
+  if (!invoiceNo) invoiceNo = await nextDocNo(conn, actor.tenantId, "invoice", settings.invoicePrefix, invoiceDate, settings.businessName);
 
   const dcIds = await listInvoiceDcIds(conn, actor.tenantId, id);
   let stockViaDc = false;
@@ -622,11 +641,15 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
     }
   }
 
+  /** Tally imports are an accounting mirror — stock already moved in Tally (or not tracked here). */
+  const tallyImport = row.source_tool === "tally";
+  const skipStock = stockViaDc || tallyImport;
+
   // BOM explode invoices: refuse a second OUT and keep stock_issued_at in sync. Lump-sum never owns the BOM stock flag.
   // Skip when DCs already own stock movements.
-  const bomStockItems = !stockViaDc && row.source_tool === "ims_bom" && row.source_ref ? [...new Set(lines.filter((l) => l.itemId && l.qty > 0).map((l) => l.itemId!))] : [];
+  const bomStockItems = !skipStock && row.source_tool === "ims_bom" && row.source_ref ? [...new Set(lines.filter((l) => l.itemId && l.qty > 0).map((l) => l.itemId!))] : [];
   let bomExplode = false;
-  if (!stockViaDc && row.source_tool === "ims_bom" && row.source_ref && bomStockItems.length) {
+  if (!skipStock && row.source_tool === "ims_bom" && row.source_ref && bomStockItems.length) {
     if (await bomHasLiveDcsLocal(conn, actor.tenantId, row.source_ref)) {
       throw conflict(
         "This BOM has delivery challans. Link approved DCs to the invoice (so stock stays on the DCs), or cancel open DCs before issuing stock from the invoice.",
@@ -643,7 +666,7 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
     }
   }
 
-  if (!stockViaDc) {
+  if (!skipStock) {
     for (const l of lines) {
       if (!l.itemId || !(l.qty > 0)) continue;
       try {
@@ -670,13 +693,14 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
       }
     }
   }
-  // stock_posted=1 when invoice moved stock, or when linked DCs already covered stock.
-  await exec(conn, `UPDATE ims_invoices SET status = 'issued', invoice_no = :invoiceNo, stock_posted = 1, issued_at = CURRENT_TIMESTAMP WHERE tenant_id = :tenantId AND id = :id`, {
+  // stock_posted=1 when invoice moved stock, or when linked DCs already covered stock. Tally imports stay 0.
+  await exec(conn, `UPDATE ims_invoices SET status = 'issued', invoice_no = :invoiceNo, stock_posted = :stockPosted, issued_at = CURRENT_TIMESTAMP WHERE tenant_id = :tenantId AND id = :id`, {
     tenantId: actor.tenantId,
     id,
     invoiceNo,
+    stockPosted: tallyImport ? 0 : 1,
   });
-  if (!stockViaDc && row.source_tool === "ims_bom" && row.source_ref && bomExplode && bomStockItems.length) {
+  if (!skipStock && row.source_tool === "ims_bom" && row.source_ref && bomExplode && bomStockItems.length) {
     await exec(
       conn,
       `UPDATE ims_bom_docs SET stock_issued_at = CURRENT_TIMESTAMP, stock_issue_count = :n
@@ -790,7 +814,8 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     const source = qstr(req.query.source, 20);
     if (source === "pos") where.push("i.source_tool = 'pos'");
     else if (source === "bom") where.push("i.source_tool = 'ims_bom'");
-    else if (source === "quotation") where.push("i.source_tool IS NOT NULL AND i.source_tool <> 'pos' AND i.source_tool <> 'ims_bom'");
+    else if (source === "tally") where.push("i.source_tool = 'tally'");
+    else if (source === "quotation") where.push("i.source_tool IS NOT NULL AND i.source_tool NOT IN ('pos', 'ims_bom', 'tally')");
     const q = qstr(req.query.q);
     if (q) {
       where.push(

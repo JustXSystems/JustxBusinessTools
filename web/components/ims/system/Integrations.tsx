@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Card, DataTable, Dialog, EmptyState, Field, FilterChip, FormGrid, Grid, Input, KpiCard, Segmented, Select, StatusLight, Switch, type BosColumn } from "@/components/bos";
 import { apiUrl } from "@/lib/api-base";
 import type { Period } from "@/lib/ims/api";
@@ -19,6 +19,8 @@ import {
   type TallyConfig,
   type TallyExportType,
   type TallyFrequency,
+  type TallyImportPreview,
+  type TallyImportRow,
   type TallySync,
   type TallySyncResult,
   type TallyTestResult,
@@ -45,11 +47,12 @@ export function IntegrationsModule() {
   const { takeIntent } = useIms();
   const [intent] = useState(() => takeIntent("integrations"));
   const [tab, setTab] = useState<Tab>(intent === "pos" ? "pos" : intent === "log" ? "log" : "tally");
+  const focusImport = intent === "import";
   const state = useImsData(() => imsSystem.integrations(), []);
   return (
     <RequirePerm perm={["integrations", "audit"]} what="Tally & POS integrations">
       <Stack>
-        <PageHeader title="Tally & POS" sub="Push masters and vouchers to Tally, export Tally XML, and pull bills from your point-of-sale counter." />
+        <PageHeader title="Tally & POS" sub="Push masters and vouchers to Tally, import Tally sales into IMS, and pull bills from your point-of-sale counter." />
         <SubTabs
           label="Integrations"
           value={tab}
@@ -61,7 +64,7 @@ export function IntegrationsModule() {
           ]}
         />
         <Loaded state={state}>
-          {(d) => (tab === "tally" ? <TallyTab data={d} /> : tab === "pos" ? <PosTab data={d} /> : <LogTab log={d.log} />)}
+          {(d) => (tab === "tally" ? <TallyTab data={d} focusImport={focusImport} /> : tab === "pos" ? <PosTab data={d} /> : <LogTab log={d.log} />)}
         </Loaded>
       </Stack>
     </RequirePerm>
@@ -71,14 +74,16 @@ export function IntegrationsModule() {
 /* ---------- Tally ---------- */
 
 function syncDue(t: TallyView): string | null {
+  if (!t.enabled) return null;
+  if (t.syncDueMessage) return t.syncDueMessage;
   const hours = FREQ_HOURS[t.sync.frequency];
-  if (!t.enabled || hours === null) return null;
+  if (hours === null) return null;
   if (!t.lastSyncAt) return "Never synced — run your first sync.";
   const age = (Date.now() - Date.parse(t.lastSyncAt)) / 3_600_000;
   return age > hours ? `Last sync ${timeAgo(t.lastSyncAt)} — a sync is due (${FREQ_LABEL[t.sync.frequency].toLowerCase()}).` : null;
 }
 
-function TallyTab({ data }: { data: IntegrationsOverview }) {
+function TallyTab({ data, focusImport = false }: { data: IntegrationsOverview; focusImport?: boolean }) {
   const { can } = useIms();
   const editable = can("integrations");
   const { run, isBusy } = useImsAction();
@@ -92,6 +97,21 @@ function TallyTab({ data }: { data: IntegrationsOverview }) {
   const dirty = JSON.stringify(form) !== JSON.stringify(t.config);
   const syncDirty = JSON.stringify(sync) !== JSON.stringify(t.sync);
   const set = <K extends keyof TallyConfig>(k: K, v: TallyConfig[K]) => setForm((f) => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    if (!editable || !t.enabled || !due || t.sync.frequency === "manual") return;
+    const key = `ims-tally-autosync:${t.config?.company ?? "default"}`;
+    try {
+      const last = Number(sessionStorage.getItem(key) || 0);
+      if (Date.now() - last < 5 * 60_000) return;
+      sessionStorage.setItem(key, String(Date.now()));
+    } catch {
+      return;
+    }
+    void run("sync", () => imsSystem.syncTally(), { success: "Scheduled Tally sync finished", refresh: true }).then((r) => {
+      if (r) setResult(r);
+    });
+  }, [editable, t.enabled, t.sync.frequency, t.config?.company, due]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runTest = async () => {
     const r = await run("test", () => imsSystem.testTally({ host: form.host.trim(), port: form.port, company: form.company.trim() || undefined }), { refresh: true });
@@ -147,8 +167,8 @@ function TallyTab({ data }: { data: IntegrationsOverview }) {
               {({ id }) => (
                 <Select id={id} value={form.syncMode} disabled={!editable} onChange={(e) => set("syncMode", e.target.value === "two_way" ? "two_way" : e.target.value === "import" ? "import" : "export")}>
                   <option value="export">IMS → Tally</option>
-                  <option value="two_way">Two-way (IMS is master)</option>
-                  <option value="import">Tally → IMS (masters)</option>
+                  <option value="two_way">Two-way (shared invoices)</option>
+                  <option value="import">Tally → IMS</option>
                 </Select>
               )}
             </Field>
@@ -244,6 +264,7 @@ function TallyTab({ data }: { data: IntegrationsOverview }) {
       ) : null}
 
       <XmlExport counts={data.counts} />
+      {editable ? <XmlImport autofocus={focusImport} /> : null}
 
       <ConfirmDialog
         open={confirmOff}
@@ -377,6 +398,220 @@ function XmlExport({ counts }: { counts: IntegrationsOverview["counts"] }) {
           </Button>
           <span className="ims-sys-mini">Import masters before vouchers the first time, so ledgers and stock items exist.</span>
         </div>
+      </Stack>
+    </Card>
+  );
+}
+
+function XmlImport({ autofocus = false }: { autofocus?: boolean }) {
+  const { run, isBusy } = useImsAction();
+  const { navigate } = useIms();
+  const [preview, setPreview] = useState<TallyImportPreview | null>(null);
+  const [payload, setPayload] = useState<{ xml?: string; csv?: string } | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [asDraft, setAsDraft] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!autofocus) return;
+    document.getElementById("tally-import")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [autofocus]);
+
+  const creatable = preview?.rows.filter((r) => r.action === "create") ?? [];
+  const hasMasters = Boolean(preview && ((preview.parties ?? 0) > 0 || (preview.stockItems ?? 0) > 0));
+  const mastersOnly = Boolean(preview && !creatable.length && hasMasters);
+  const canImport = creatable.length > 0 || hasMasters;
+
+  const onFile = async (file: File | null) => {
+    if (!file) return;
+    const text = await file.text();
+    const lower = file.name.toLowerCase();
+    const next = lower.endsWith(".csv") || lower.endsWith(".tsv") || lower.endsWith(".txt") ? { csv: text } : { xml: text };
+    setFileName(file.name);
+    setPayload(next);
+    const r = await run("preview", () => imsSystem.previewTallyImport(next), { success: "Preview ready" });
+    if (r) {
+      setPreview(r);
+      setSelected(new Set(r.rows.filter((row) => row.action === "create").map((row) => row.key)));
+    }
+  };
+
+  const voucherKindLabel = (kind?: TallyImportRow["kind"]) => {
+    if (kind === "Credit Note") return "Credit note → customer return";
+    if (kind === "Debit Note") return "Debit note → supplier return";
+    if (kind === "Purchase") return "Purchase → supplier bill";
+    return "Sales → invoice";
+  };
+
+  const columns: BosColumn<TallyImportRow>[] = [
+    {
+      key: "pick",
+      header: "",
+      width: 36,
+      cell: (r) =>
+        r.action === "create" ? (
+          <input
+            type="checkbox"
+            checked={selected.has(r.key)}
+            aria-label={`Import ${r.invoiceNo}`}
+            onChange={(e) =>
+              setSelected((prev) => {
+                const next = new Set(prev);
+                if (e.target.checked) next.add(r.key);
+                else next.delete(r.key);
+                return next;
+              })
+            }
+          />
+        ) : null,
+    },
+    {
+      key: "invoiceNo",
+      header: "Voucher",
+      cell: (r) => (
+        <span className="ims-cell-stack">
+          <b>{r.invoiceNo}</b>
+          <small>{voucherKindLabel(r.kind)}</small>
+        </span>
+      ),
+    },
+    { key: "invoiceDate", header: "Date", mono: true, cell: (r) => dateLabel(r.invoiceDate) },
+    { key: "customerName", header: "Party", cell: (r) => r.customerName },
+    { key: "grandTotal", header: "Total", align: "right", mono: true, cell: (r) => inr(r.grandTotal) },
+    {
+      key: "action",
+      header: "Status",
+      cell: (r) => (
+        <Badge tone={r.action === "create" ? "emerald" : r.action === "conflict" ? "coral" : "neutral"}>
+          {r.action === "create" ? "New" : r.action === "conflict" ? "Conflict" : "Matched"}
+        </Badge>
+      ),
+    },
+    {
+      key: "note",
+      header: "Note",
+      cell: (r) => (
+        <span className="ims-row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <span className="ims-muted">{r.note}</span>
+          {r.existingId ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                navigate(
+                  r.kind === "Purchase" ? "payables" : r.kind === "Credit Note" || r.kind === "Debit Note" ? "returns" : "sales",
+                  `open:${r.existingId}`,
+                )
+              }
+            >
+              Open IMS
+            </Button>
+          ) : null}
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <Card interactive={false} id="tally-import" style={autofocus ? { outline: "2px solid var(--bos-blue, #3b82f6)", outlineOffset: 2 } : undefined}>
+      <Stack gap={12}>
+        <ToolHead
+          glyph="⬆"
+          title="Import Tally into IMS"
+          sub="Export Sales / Purchase / Credit / Debit Notes (or All Masters) as XML from Tally. Sales → invoices; purchases → bills; credit notes → customer returns; debit notes → supplier returns; ledgers → parties; stock items → catalog. Matched numbers are skipped; conflicts are never overwritten."
+        />
+        <div className="ims-row" style={{ flexWrap: "wrap", gap: 10 }}>
+          <Button
+            variant={autofocus ? "primary" : undefined}
+            icon="file"
+            disabled={isBusy("preview")}
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = ".xml,.csv,.tsv,.txt,text/xml,text/csv";
+              input.onchange = () => void onFile(input.files?.[0] ?? null);
+              input.click();
+            }}
+          >
+            {isBusy("preview") ? "Reading…" : "Choose Tally XML / CSV"}
+          </Button>
+          {fileName ? (
+            <span className="ims-sys-mini">
+              File: <b>{fileName}</b>
+            </span>
+          ) : null}
+        </div>
+        {preview ? (
+          <>
+            <Grid cols={5} min={110}>
+              <KpiCard interactive={false} label="New" value={preview.counts.create} />
+              <KpiCard interactive={false} label="Already matched" value={preview.counts.skip_matched} />
+              <KpiCard interactive={false} label="Conflicts" value={preview.counts.conflict} />
+              <KpiCard interactive={false} label="Party ledgers" value={preview.parties ?? 0} />
+              <KpiCard interactive={false} label="Stock items" value={preview.stockItems ?? 0} />
+            </Grid>
+            {preview.rows.length ? <DataTable rows={preview.rows} columns={columns} rowKey={(r) => r.key} empty="No vouchers in that file" /> : null}
+            {mastersOnly ? (
+              <Alert tone="emerald" title={preview.rows.length ? "Masters still available" : "Masters only"}>
+                {(preview.parties ?? 0) > 0 ? `${preview.parties} party ledger${preview.parties === 1 ? "" : "s"}` : null}
+                {(preview.parties ?? 0) > 0 && (preview.stockItems ?? 0) > 0 ? " and " : null}
+                {(preview.stockItems ?? 0) > 0 ? `${preview.stockItems} stock item${preview.stockItems === 1 ? "" : "s"}` : null}
+                {preview.rows.length
+                  ? " can still be imported — vouchers in this file are already matched or need conflict review."
+                  : " — no vouchers. Import will upsert parties and catalog items."}
+              </Alert>
+            ) : null}
+            {canImport ? (
+              <div className="ims-row" style={{ flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                {creatable.length ? (
+                  <label className="ims-row" style={{ gap: 8 }}>
+                    <Switch checked={asDraft} onChange={setAsDraft} aria-label="Import sales as drafts" />
+                    <span className="ims-sys-mini">Import sales as drafts (review in Sales before issuing)</span>
+                  </label>
+                ) : null}
+                <Button
+                  variant="primary"
+                  icon="check"
+                  disabled={(creatable.length > 0 && !selected.size) || isBusy("commit") || !payload}
+                  onClick={() =>
+                    void run(
+                      "commit",
+                      () =>
+                        imsSystem.commitTallyImport({
+                          ...payload!,
+                          // Empty keys = no voucher creates; masters still upsert. Selected keys = those vouchers + masters.
+                          keys: creatable.length ? [...selected] : [],
+                          asDraft,
+                        }),
+                      {
+                        success: mastersOnly ? "Masters imported from Tally" : asDraft ? "Draft invoices created" : "Imported from Tally",
+                        refresh: true,
+                      },
+                    ).then((r) => {
+                      if (!r) return;
+                      setPreview(null);
+                      setPayload(null);
+                      setFileName(null);
+                      setSelected(new Set());
+                      if (r.created[0]) navigate("sales", `open:${r.created[0].id}`);
+                      else if (r.bills?.[0]) navigate("payables", `open:${r.bills[0].id}`);
+                    })
+                  }
+                >
+                  {isBusy("commit")
+                    ? "Importing…"
+                    : mastersOnly
+                      ? "Import masters"
+                      : `Import ${selected.size} voucher${selected.size === 1 ? "" : "s"}`}
+                </Button>
+              </div>
+            ) : (
+              <Alert tone="amber" title="Nothing new to import">
+                Every voucher matched an existing IMS document, or needs a manual conflict review. Use <b>Open IMS</b> on a conflict row to compare totals — we never overwrite automatically.
+              </Alert>
+            )}
+          </>
+        ) : null}
       </Stack>
     </Card>
   );

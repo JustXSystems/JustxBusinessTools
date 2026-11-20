@@ -4,6 +4,8 @@
  * identical everywhere.
  */
 
+import { createHash } from "node:crypto";
+
 export const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 export const round3 = (n: number): number => Math.round((n + Number.EPSILON) * 1000) / 1000;
 
@@ -1516,6 +1518,8 @@ export type TallyVoucherLine = {
   amount: number;
   /** False for free-text lines with no stock item in Tally; they post to the sales / purchase ledger instead. */
   stock: boolean;
+  hsn?: string | null;
+  gstRate?: number | null;
 };
 
 export type TallyVoucher = {
@@ -1565,6 +1569,7 @@ export function tallyVoucherXml(v: TallyVoucher): string {
       `<AMOUNT>${tallyAmount(amount)}</AMOUNT>`,
       `<ACTUALQTY>${xmlEscape(tallyQty(l.qty, l.unit))}</ACTUALQTY>`,
       `<BILLEDQTY>${xmlEscape(tallyQty(l.qty, l.unit))}</BILLEDQTY>`,
+      l.hsn ? `<GSTHSNNAME>${xmlEscape(l.hsn)}</GSTHSNNAME><HSNCODE>${xmlEscape(l.hsn)}</HSNCODE>` : "",
       tallyEntry("ACCOUNTINGALLOCATIONS.LIST", goodsLedger, amount),
       "</ALLINVENTORYENTRIES.LIST>",
     ].join("");
@@ -1668,6 +1673,175 @@ export function tallyPingEnvelope(): string {
   return '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>List of Companies</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>';
 }
 
+/**
+ * Ask Tally's XML server for vouchers in a date range (Sales Day Book style export).
+ * Response is parsed with `parseTallySalesXml`.
+ */
+export function tallyExportVouchersEnvelope(company: string, fromISO: string, toISO: string): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    "<ENVELOPE>",
+    "<HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Vouchers</ID></HEADER>",
+    "<BODY><DESC>",
+    "<STATICVARIABLES>",
+    "<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>",
+    company ? `<SVCURRENTCOMPANY>${xmlEscape(company)}</SVCURRENTCOMPANY>` : "",
+    `<SVFROMDATE>${tallyDate(fromISO)}</SVFROMDATE>`,
+    `<SVTODATE>${tallyDate(toISO)}</SVTODATE>`,
+    "</STATICVARIABLES>",
+    "</DESC></BODY>",
+    "</ENVELOPE>",
+  ].join("");
+}
+
+/** Ask Tally for All Masters (ledgers / stock) as XML. */
+export function tallyExportMastersEnvelope(company: string): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    "<ENVELOPE>",
+    "<HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>All Masters</ID></HEADER>",
+    "<BODY><DESC>",
+    "<STATICVARIABLES>",
+    "<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>",
+    company ? `<SVCURRENTCOMPANY>${xmlEscape(company)}</SVCURRENTCOMPANY>` : "",
+    "</STATICVARIABLES>",
+    "</DESC></BODY>",
+    "</ENVELOPE>",
+  ].join("");
+}
+
+export const TALLY_SYNC_HOURS: Record<"realtime" | "15m" | "hourly" | "daily" | "manual", number | null> = {
+  realtime: 0.25,
+  "15m": 0.25,
+  hourly: 1,
+  daily: 24,
+  manual: null,
+};
+
+/** Whether a scheduled Tally sync is overdue given last success time (failed/partial runs stay due). */
+export function isTallySyncDue(
+  frequency: keyof typeof TALLY_SYNC_HOURS,
+  lastSyncAt: string | null | undefined,
+  nowMs = Date.now(),
+  lastStatus?: string | null,
+): { due: boolean; message: string | null } {
+  const hours = TALLY_SYNC_HOURS[frequency] ?? null;
+  if (hours === null) return { due: false, message: null };
+  if (lastStatus === "failed" || lastStatus === "partial") {
+    return { due: true, message: `Last sync ${lastStatus} — run Sync now to retry.` };
+  }
+  if (!lastSyncAt) return { due: true, message: "Never synced — run your first sync." };
+  const ageH = (nowMs - Date.parse(lastSyncAt)) / 3_600_000;
+  if (!Number.isFinite(ageH) || ageH > hours) {
+    return { due: true, message: `Last sync was more than ${hours < 1 ? `${Math.round(hours * 60)} minutes` : `${hours} hour${hours === 1 ? "" : "s"}`} ago — a sync is due.` };
+  }
+  return { due: false, message: null };
+}
+
+export type CanonicalTallyParty = {
+  name: string;
+  kind: "customer" | "supplier";
+  gstin: string | null;
+  state: string | null;
+  address: string | null;
+  mobile: string | null;
+  email: string | null;
+};
+
+export type CanonicalTallyStockItem = {
+  name: string;
+  unit: string;
+  hsn: string | null;
+  gstRate: number;
+  sku: string | null;
+  category: string | null;
+};
+
+/**
+ * Party ledgers from a Tally masters export (Sundry Debtors → customer, Sundry Creditors → supplier).
+ * Tax / cash / sales ledgers are ignored.
+ */
+export function parseTallyLedgersXml(xml: string): CanonicalTallyParty[] {
+  const text = String(xml ?? "");
+  if (!text.trim()) return [];
+  const blocks = [...text.matchAll(/<LEDGER\b[^>]*>[\s\S]*?<\/LEDGER>/gi)].map((m) => m[0]);
+  const out: CanonicalTallyParty[] = [];
+  const seen = new Set<string>();
+  for (const block of blocks) {
+    const name = xmlUnescape(xmlAttr(block, "NAME") || xmlTag(block, "NAME") || "").trim();
+    const parent = xmlUnescape(xmlTag(block, "PARENT") || "").trim();
+    if (!name || !parent) continue;
+    const parentKey = parent.toLowerCase();
+    let kind: CanonicalTallyParty["kind"] | null = null;
+    if (parentKey.includes("debtor") || parentKey === TALLY_LEDGERS.debtors.toLowerCase()) kind = "customer";
+    else if (parentKey.includes("creditor") || parentKey === TALLY_LEDGERS.creditors.toLowerCase()) kind = "supplier";
+    if (!kind) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const gstin = (xmlTag(block, "PARTYGSTIN") || "").trim().toUpperCase() || null;
+    const state = xmlUnescape(xmlTag(block, "LEDSTATENAME") || xmlTag(block, "STATENAME") || "") || null;
+    const address = xmlUnescape(xmlTag(block, "ADDRESS") || "") || null;
+    const mobile = xmlUnescape(xmlTag(block, "LEDGERMOBILE") || xmlTag(block, "LEDGERPHONE") || "") || null;
+    const email = xmlUnescape(xmlTag(block, "EMAIL") || "") || null;
+    out.push({ name: name.slice(0, 200), kind, gstin, state, address: address ? address.slice(0, 500) : null, mobile: mobile ? mobile.slice(0, 40) : null, email: email ? email.slice(0, 180) : null });
+  }
+  return out;
+}
+
+function parseStockItemGstRate(block: string): number {
+  const rateBlocks = [...block.matchAll(/<RATEDETAILS\.LIST\b[^>]*>([\s\S]*?)<\/RATEDETAILS\.LIST>/gi)].map((m) => m[1]);
+  let igst = 0;
+  let cgst = 0;
+  let sgst = 0;
+  for (const rb of rateBlocks) {
+    const head = (xmlTag(rb, "GSTRATEDUTYHEAD") || "").toLowerCase();
+    const rate = Math.abs(num(xmlTag(rb, "GSTRATE")));
+    if (!(rate > 0)) continue;
+    if (/integrated/.test(head) || head === "igst") igst = Math.max(igst, rate);
+    else if (/central/.test(head) || head === "cgst") cgst = Math.max(cgst, rate);
+    else if (/state|utgst/.test(head) || head === "sgst") sgst = Math.max(sgst, rate);
+  }
+  if (igst > 0) return round2(Math.min(100, igst));
+  const sum = round2(cgst + sgst);
+  return sum > 0 ? Math.min(100, sum) : 0;
+}
+
+/**
+ * Stock items from a Tally masters export (HSN, base unit, GST rate, optional alias/SKU).
+ */
+export function parseTallyStockItemsXml(xml: string): CanonicalTallyStockItem[] {
+  const text = String(xml ?? "");
+  if (!text.trim()) return [];
+  const blocks = [...text.matchAll(/<STOCKITEM\b[^>]*>[\s\S]*?<\/STOCKITEM>/gi)].map((m) => m[0]);
+  const out: CanonicalTallyStockItem[] = [];
+  const seen = new Set<string>();
+  for (const block of blocks) {
+    const name = xmlUnescape(xmlAttr(block, "NAME") || xmlTag(block, "NAME") || "").trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const nameList = [...block.matchAll(/<NAME\.LIST\b[^>]*>([\s\S]*?)<\/NAME\.LIST>/gi)].map((m) => m[1])[0] ?? "";
+    const aliases = [...nameList.matchAll(/<NAME\b[^>]*>([\s\S]*?)<\/NAME>/gi)]
+      .map((m) => xmlUnescape(m[1].replace(/<[^>]+>/g, "").trim()))
+      .filter((n) => n && n.toLowerCase() !== key);
+    const sku = (xmlTag(block, "PARTNUMBER") || aliases[0] || "").trim().slice(0, 64) || null;
+    const unit = xmlUnescape(xmlTag(block, "BASEUNITS") || xmlTag(block, "ADDITIONALUNITS") || "") || "Nos";
+    const hsn = (xmlTag(block, "HSNCODE") || xmlTag(block, "GSTHSNNAME") || "").trim().slice(0, 20) || null;
+    const category = xmlUnescape(xmlTag(block, "PARENT") || "") || null;
+    out.push({
+      name: name.slice(0, 200),
+      unit: unit.slice(0, 20) || "Nos",
+      hsn,
+      gstRate: parseStockItemGstRate(block),
+      sku,
+      category: category ? category.slice(0, 80) : null,
+    });
+  }
+  return out;
+}
+
 export function parseTallyCompanies(xml: string): string[] {
   const names = new Set<string>();
   for (const m of String(xml ?? "").matchAll(/<COMPANY\b[^>]*\bNAME="([^"]+)"/gi)) names.add(m[1].trim());
@@ -1693,6 +1867,706 @@ export function isTallyHost(host: unknown): boolean {
   if (!h || h.length > 253) return false;
   if (/^\[?[0-9a-f:]+\]?$/i.test(h) && h.includes(":")) return true;
   return /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i.test(h);
+}
+
+/* ---------- Canonical GST invoice (Tally ↔ IMS interchange) ---------- */
+
+/** "ZT/2026/27/1944" and "zt-2026-27-1944" compare equal. */
+export const normInvoiceNo = (s: string | null | undefined) =>
+  String(s ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .replace(/(^|[A-Z])0+(?=\d)/g, "$1");
+
+export type CanonicalGstInvoiceLine = {
+  name: string;
+  hsn: string | null;
+  unit: string | null;
+  qty: number;
+  /** Pre-tax unit rate. */
+  rate: number;
+  discountPct: number;
+  gstRate: number;
+  taxable: number;
+  stock: boolean;
+};
+
+export type CanonicalGstInvoice = {
+  schemaVersion: 1;
+  /** Purchase → IMS supplier bill; Debit Note → supplier return; Credit Note → customer return. */
+  kind: "Sales" | "Purchase" | "Credit Note" | "Debit Note";
+  invoiceNo: string;
+  invoiceDate: string;
+  customerName: string;
+  customerGstin: string | null;
+  customerAddress: string | null;
+  placeOfSupply: string | null;
+  intraState: boolean;
+  lines: CanonicalGstInvoiceLine[];
+  taxable: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  roundOff: number;
+  grandTotal: number;
+  notes: string | null;
+  reference: string | null;
+  source: "tally" | "ims";
+  /** Stable external id (Tally MASTERID / GUID / voucher number). */
+  externalKey: string | null;
+};
+
+export type CanonicalImportAction = "create" | "skip_matched" | "conflict";
+
+export type CanonicalImportRow = {
+  action: CanonicalImportAction;
+  invoice: CanonicalGstInvoice;
+  existingId: string | null;
+  existingNo: string | null;
+  existingTotal: number | null;
+  note: string;
+};
+
+const TAX_LEDGER_HINTS = {
+  cgst: /cgst|central\s*tax/i,
+  sgst: /sgst|utgst|state\s*tax/i,
+  igst: /igst|integrated\s*tax/i,
+  roundOff: /round\s*off/i,
+  sales: /sales|sale\s+of/i,
+  purchase: /purchase|purchases/i,
+};
+
+function xmlTag(block: string, tag: string): string | null {
+  const m = block.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, "i"));
+  if (!m) return null;
+  return m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, "").trim() || null;
+}
+
+function xmlAttr(block: string, attr: string): string | null {
+  const m = block.match(new RegExp(`\\b${attr}\\s*=\\s*"([^"]*)"`, "i"));
+  return m ? m[1].trim() || null : null;
+}
+
+function xmlUnescape(s: string): string {
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#4;/g, "")
+    .replace(/&amp;/g, "&");
+}
+
+/** Tally `YYYYMMDD` or already-ISO → `YYYY-MM-DD`. */
+export function parseTallyDate(raw: string | null | undefined): string | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return isISODate(s) ? s : null;
+  const compact = /^(\d{4})(\d{2})(\d{2})$/.exec(s);
+  if (compact) {
+    const iso = `${compact[1]}-${compact[2]}-${compact[3]}`;
+    return isISODate(iso) ? iso : null;
+  }
+  const dmy = /^(\d{1,2})[-\/]([A-Za-z]{3}|\d{1,2})[-\/](\d{2,4})$/.exec(s);
+  if (!dmy) return null;
+  const months: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+  const mon = months[dmy[2].toLowerCase()] ?? (dmy[2].length <= 2 ? dmy[2].padStart(2, "0") : null);
+  if (!mon) return null;
+  const year = dmy[3].length === 2 ? `20${dmy[3]}` : dmy[3];
+  const iso = `${year}-${mon}-${dmy[1].padStart(2, "0")}`;
+  return isISODate(iso) ? iso : null;
+}
+
+function parseTallyQty(raw: string | null): { qty: number; unit: string } {
+  const s = String(raw ?? "").trim();
+  if (!s) return { qty: 0, unit: "Nos" };
+  const m = s.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+  if (!m) return { qty: 0, unit: "Nos" };
+  return { qty: Math.abs(num(m[1])), unit: m[2].replace(/=.*/, "").trim() || "Nos" };
+}
+
+function parseTallyRate(raw: string | null): { rate: number; unit: string | null } {
+  const s = String(raw ?? "").trim();
+  if (!s) return { rate: 0, unit: null };
+  const m = s.match(/^(-?\d+(?:\.\d+)?)\s*\/?\s*(.*)$/);
+  if (!m) return { rate: Math.abs(num(s)), unit: null };
+  return { rate: Math.abs(num(m[1])), unit: m[2].trim() || null };
+}
+
+function inferGstRate(taxable: number, cgst: number, sgst: number, igst: number): number {
+  if (!(taxable > 0)) return 0;
+  return round2(((Math.abs(cgst) + Math.abs(sgst) + Math.abs(igst)) / taxable) * 100);
+}
+
+function ledgerAbs(amount: string | null): number {
+  return round2(Math.abs(num(amount)));
+}
+
+/**
+ * Map a Tally sales/credit voucher into the canonical GST invoice used for IMS import/export.
+ * Tax heads are taken from ledger entries; inventory lines become invoice lines.
+ */
+export function canonicalFromTallyVoucher(v: TallyVoucher, opts: { source?: "tally" | "ims"; externalKey?: string | null; address?: string | null } = {}): CanonicalGstInvoice {
+  const tax = round2(v.cgst + v.sgst + v.igst);
+  const taxable = v.lines.length ? round2(v.lines.reduce((s, l) => s + l.amount, 0)) : round2(v.taxable);
+  const gstRate = inferGstRate(taxable, v.cgst, v.sgst, v.igst);
+  const lines: CanonicalGstInvoiceLine[] = v.lines.length
+    ? v.lines.map((l) => {
+        const qty = l.qty > 0 ? l.qty : 1;
+        const rate = l.qty > 0 ? round2(l.amount / l.qty) : round2(l.amount);
+        return {
+          name: l.name,
+          hsn: l.hsn ?? null,
+          unit: l.unit || null,
+          qty,
+          rate,
+          discountPct: 0,
+          gstRate: l.gstRate != null && l.gstRate >= 0 ? round2(l.gstRate) : gstRate,
+          taxable: round2(l.amount),
+          stock: Boolean(l.stock),
+        };
+      })
+    : taxable
+      ? [
+          {
+            name:
+              v.kind === "Credit Note"
+                ? "Credit note"
+                : v.kind === "Debit Note"
+                  ? "Debit note"
+                  : v.kind === "Purchase"
+                    ? "Purchase"
+                    : "Sales",
+            hsn: null,
+            unit: "Nos",
+            qty: 1,
+            rate: taxable,
+            discountPct: 0,
+            gstRate,
+            taxable,
+            stock: false,
+          },
+        ]
+      : [];
+  const kind: CanonicalGstInvoice["kind"] =
+    v.kind === "Credit Note" || v.kind === "Debit Note" || v.kind === "Purchase" ? v.kind : "Sales";
+  return {
+    schemaVersion: 1,
+    kind,
+    invoiceNo: v.number.trim(),
+    invoiceDate: v.date,
+    customerName: v.partyName.trim(),
+    customerGstin: v.partyGstin?.trim().toUpperCase() || null,
+    customerAddress: opts.address ?? null,
+    placeOfSupply: v.placeOfSupply?.trim() || null,
+    intraState: !(v.igst > 0),
+    lines,
+    taxable,
+    cgst: round2(v.cgst),
+    sgst: round2(v.sgst),
+    igst: round2(v.igst),
+    roundOff: round2(v.roundOff),
+    grandTotal: round2(v.total),
+    notes: v.narration ?? null,
+    reference: v.reference ?? null,
+    source: opts.source ?? "tally",
+    externalKey: opts.externalKey ?? v.number.trim(),
+  };
+}
+
+/** Canonical → Tally voucher for export / round-trip. */
+export function tallyVoucherFromCanonical(c: CanonicalGstInvoice): TallyVoucher {
+  return {
+    kind: c.kind,
+    number: c.invoiceNo,
+    date: c.invoiceDate,
+    partyName: c.customerName,
+    partyGstin: c.customerGstin,
+    placeOfSupply: c.placeOfSupply,
+    reference: c.reference,
+    narration: c.notes,
+    lines: c.lines.map((l) => ({
+      name: l.name,
+      unit: l.unit || "Nos",
+      qty: l.qty,
+      amount: l.taxable,
+      stock: l.stock,
+      hsn: l.hsn,
+      gstRate: l.gstRate,
+    })),
+    taxable: c.taxable,
+    cgst: c.cgst,
+    sgst: c.sgst,
+    igst: c.igst,
+    roundOff: c.roundOff,
+    total: c.grandTotal,
+  };
+}
+
+/** Lines ready for `computeTotals` / `insertImsInvoice`. */
+export function imsLinesFromCanonical(c: CanonicalGstInvoice, itemIds?: ReadonlyArray<string | null>): ImsLineInput[] {
+  return c.lines.map((l, i) => ({
+    itemId: itemIds?.[i] ?? null,
+    name: l.name.slice(0, 200) || "Item",
+    sku: null,
+    hsn: l.hsn,
+    unit: l.unit,
+    qty: l.qty > 0 ? l.qty : 1,
+    rate: l.rate,
+    discountPct: l.discountPct || 0,
+    gstRate: l.gstRate,
+  }));
+}
+
+export type CatalogItemRef = { id: string; name: string; hsn: string | null; sku?: string | null };
+
+const catalogNameKey = (value: unknown): string =>
+  String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/**
+ * Link a Tally line to an IMS catalog item: exact name, else unique HSN, else name+HSN.
+ * Returns null when ambiguous or missing — import still works as a free-text line.
+ */
+export function matchCatalogItem(line: { name: string; hsn?: string | null; sku?: string | null }, catalog: ReadonlyArray<CatalogItemRef>): string | null {
+  const sku = String(line.sku ?? "")
+    .trim()
+    .toLowerCase();
+  if (sku) {
+    const bySku = catalog.filter((c) => (c.sku ?? "").trim().toLowerCase() === sku);
+    if (bySku.length === 1) return bySku[0].id;
+  }
+  const wantName = catalogNameKey(line.name);
+  if (!wantName && !line.hsn) return null;
+  const byName = wantName ? catalog.filter((c) => catalogNameKey(c.name) === wantName) : [];
+  if (byName.length === 1) return byName[0].id;
+  const hsn = String(line.hsn ?? "")
+    .trim()
+    .toUpperCase();
+  if (hsn) {
+    const namedHsn = byName.filter((c) => (c.hsn ?? "").trim().toUpperCase() === hsn);
+    if (namedHsn.length === 1) return namedHsn[0].id;
+    if (byName.length > 1) return null;
+    const byHsn = catalog.filter((c) => (c.hsn ?? "").trim().toUpperCase() === hsn);
+    if (byHsn.length === 1) return byHsn[0].id;
+  }
+  return null;
+}
+
+export function matchCanonicalLineItems(c: CanonicalGstInvoice, catalog: ReadonlyArray<CatalogItemRef>): Array<string | null> {
+  return c.lines.map((l) => matchCatalogItem(l, catalog));
+}
+
+function collectTallyLedgerBlocks(block: string): string[] {
+  // Invoice view uses LEDGERENTRIES; accounting view often uses ALLLEDGERENTRIES.
+  // Do not fold ACCOUNTINGALLOCATIONS here — those are per-inventory goods lines and would double-count.
+  const tags = ["LEDGERENTRIES.LIST", "ALLLEDGERENTRIES.LIST"];
+  const out: string[] = [];
+  for (const tag of tags) {
+    for (const m of block.matchAll(new RegExp(`<${tag.replace(".", "\\.")}\\b[^>]*>([\\s\\S]*?)</${tag.replace(".", "\\.")}>`, "gi"))) {
+      out.push(m[1]);
+    }
+  }
+  return out;
+}
+
+/** Map common Indian / custom Tally voucher type names onto canonical kinds. */
+export function resolveTallyVoucherKind(vchType: string): CanonicalGstInvoice["kind"] | null {
+  const k = vchType.trim().toLowerCase();
+  if (!k) return null;
+  if (/order|quotation|delivery|challan|receipt|payment|journal|contra|stock\s*journal/.test(k)) return null;
+  if (k.includes("sales return") || k.includes("sale return") || k === "credit note" || (k.includes("credit") && !k.includes("debit"))) return "Credit Note";
+  if (k.includes("purchase return") || k === "debit note" || (k.includes("debit") && !k.includes("credit"))) return "Debit Note";
+  if (k === "purchase" || (k.includes("purchase") && !k.includes("return"))) return "Purchase";
+  if (
+    k === "sales" ||
+    k.includes("tax invoice") ||
+    k.includes("gst sales") ||
+    k.includes("gst invoice") ||
+    k.includes("retail invoice") ||
+    (k.includes("sales") && !k.includes("return"))
+  ) {
+    return "Sales";
+  }
+  return null;
+}
+
+function parseOneTallyVoucherBlock(block: string): CanonicalGstInvoice | null {
+  const vchType = (xmlAttr(block, "VCHTYPE") || xmlTag(block, "VOUCHERTYPENAME") || "").trim();
+  const kind = resolveTallyVoucherKind(vchType);
+  if (!kind) return null;
+
+  const vchNo = xmlUnescape(xmlTag(block, "VOUCHERNUMBER") || "").trim();
+  const refNo = xmlUnescape(xmlTag(block, "REFERENCE") || "").trim();
+  // Purchases: when Tally auto-numbers the voucher and the supplier invoice sits in REFERENCE, prefer REFERENCE.
+  // Round-trip of our own export keeps supplier_bill_no as VOUCHERNUMBER (often alphanumeric).
+  let number = vchNo || refNo;
+  let reference: string | null = refNo || null;
+  if (kind === "Purchase" && vchNo && refNo && vchNo !== refNo) {
+    const vchAuto = /^\d{1,6}$/.test(vchNo);
+    const refLooksBill = /[A-Za-z/\-]/.test(refNo) || refNo.length >= 4;
+    if (vchAuto && refLooksBill) {
+      number = refNo;
+      reference = vchNo;
+    } else {
+      number = vchNo;
+      reference = refNo;
+    }
+  }
+  const date = parseTallyDate(xmlTag(block, "DATE") || xmlTag(block, "EFFECTIVEDATE"));
+  let partyName = xmlUnescape(xmlTag(block, "PARTYLEDGERNAME") || xmlTag(block, "PARTYNAME") || "").trim();
+  if (!number || !date) return null;
+
+  const gstin = (xmlTag(block, "PARTYGSTIN") || xmlTag(block, "PARTYGSTIN/UIN") || "").trim().toUpperCase() || null;
+  const place = xmlUnescape(xmlTag(block, "PLACEOFSUPPLY") || xmlTag(block, "STATENAME") || xmlTag(block, "COUNTRYOFRESIDENCE") || "") || null;
+  const narration = xmlUnescape(xmlTag(block, "NARRATION") || "") || null;
+  const externalKey = xmlAttr(block, "REMOTEID") || xmlTag(block, "GUID") || xmlTag(block, "MASTERID") || number;
+
+  let cgst = 0;
+  let sgst = 0;
+  let igst = 0;
+  let roundOff = 0;
+  let partyTotal = 0;
+  let ledgerTaxable = 0;
+  let inferredParty = "";
+  const ledgerBlocks = collectTallyLedgerBlocks(block);
+  for (const lb of ledgerBlocks) {
+    const name = xmlUnescape(xmlTag(lb, "LEDGERNAME") || "");
+    const amount = ledgerAbs(xmlTag(lb, "AMOUNT"));
+    if (!name || !(amount > 0)) continue;
+    const isParty = /ISPARTYLEDGER>\s*Yes/i.test(lb) || (partyName && name.trim().toLowerCase() === partyName.trim().toLowerCase());
+    if (TAX_LEDGER_HINTS.cgst.test(name)) cgst = round2(cgst + amount);
+    else if (TAX_LEDGER_HINTS.sgst.test(name)) sgst = round2(sgst + amount);
+    else if (TAX_LEDGER_HINTS.igst.test(name)) igst = round2(igst + amount);
+    else if (TAX_LEDGER_HINTS.roundOff.test(name)) roundOff = round2(roundOff + amount * (num(xmlTag(lb, "AMOUNT")) < 0 ? -1 : 1));
+    else if (isParty) {
+      partyTotal = round2(Math.max(partyTotal, amount));
+      if (!inferredParty) inferredParty = name;
+    } else if (/^(cash|bank|tds|tcs)\b/i.test(name) || /cash[- ]?in[- ]?hand|bank accounts/i.test(name)) {
+      /* settlement ledgers — ignore for taxable */
+    } else if (/discount/i.test(name)) {
+      ledgerTaxable = round2(ledgerTaxable - amount);
+    } else {
+      // Sales/Purchase/"Trading"/freight/packing and other residual income/expense ledgers
+      ledgerTaxable = round2(ledgerTaxable + amount);
+    }
+  }
+  if (!partyName) partyName = inferredParty.trim();
+  if (!partyName) return null;
+
+  const invBlocks = [
+    ...block.matchAll(/<ALLINVENTORYENTRIES\.LIST\b[^>]*>([\s\S]*?)<\/ALLINVENTORYENTRIES\.LIST>/gi),
+    ...block.matchAll(/<INVENTORYENTRIES\.LIST\b[^>]*>([\s\S]*?)<\/INVENTORYENTRIES\.LIST>/gi),
+  ].map((m) => m[1]);
+  const lines: CanonicalGstInvoiceLine[] = [];
+  for (const ib of invBlocks) {
+    const name = xmlUnescape(xmlTag(ib, "STOCKITEMNAME") || "");
+    if (!name) continue;
+    const amount = ledgerAbs(xmlTag(ib, "AMOUNT"));
+    const qtyParsed = parseTallyQty(xmlTag(ib, "BILLEDQTY") || xmlTag(ib, "ACTUALQTY"));
+    const rateParsed = parseTallyRate(xmlTag(ib, "RATE"));
+    const qty = qtyParsed.qty > 0 ? qtyParsed.qty : 1;
+    const rate = rateParsed.rate > 0 ? rateParsed.rate : round2(amount / qty);
+    const hsn = xmlTag(ib, "HSNCODE") || xmlTag(ib, "GSTHSNNAME") || null;
+    lines.push({
+      name,
+      hsn,
+      unit: rateParsed.unit || qtyParsed.unit || "Nos",
+      qty,
+      rate,
+      discountPct: 0,
+      gstRate: 0,
+      taxable: amount,
+      stock: true,
+    });
+  }
+
+  const taxable = lines.length ? round2(lines.reduce((s, l) => s + l.taxable, 0)) : round2(ledgerTaxable);
+  const gstRate = inferGstRate(taxable, cgst, sgst, igst);
+  for (const l of lines) l.gstRate = gstRate;
+  if (!lines.length && taxable > 0) {
+    const fallback =
+      kind === "Credit Note" ? "Credit note" : kind === "Debit Note" ? "Debit note" : kind === "Purchase" ? "Purchase" : "Sales";
+    lines.push({ name: fallback, hsn: null, unit: "Nos", qty: 1, rate: taxable, discountPct: 0, gstRate, taxable, stock: false });
+  }
+  if (!lines.length) return null;
+
+  const grandTotal = partyTotal > 0 ? partyTotal : round2(taxable + cgst + sgst + igst + roundOff);
+  const placeOfSupply = place || (gstin ? gstStateName(gstin) : null);
+  return {
+    schemaVersion: 1,
+    kind,
+    invoiceNo: number.slice(0, 48),
+    invoiceDate: date,
+    customerName: partyName.slice(0, 200),
+    customerGstin: gstin,
+    customerAddress: null,
+    placeOfSupply,
+    intraState: !(igst > 0),
+    lines,
+    taxable,
+    cgst,
+    sgst,
+    igst,
+    roundOff,
+    grandTotal,
+    notes: narration,
+    reference,
+    source: "tally",
+    externalKey: String(externalKey).slice(0, 64),
+  };
+}
+
+/**
+ * Parse Tally Sales / Purchase / Credit Note / Debit Note vouchers from Export Data XML (or our export envelope).
+ * Other voucher types are ignored.
+ */
+export function parseTallySalesXml(xml: string): CanonicalGstInvoice[] {
+  const text = String(xml ?? "");
+  if (!text.trim()) return [];
+  const blocks = [...text.matchAll(/<VOUCHER\b[^>]*>[\s\S]*?<\/VOUCHER>/gi)].map((m) => m[0]);
+  const out: CanonicalGstInvoice[] = [];
+  const seen = new Set<string>();
+  for (const block of blocks) {
+    const inv = parseOneTallyVoucherBlock(block);
+    if (!inv) continue;
+    const key = `${inv.kind}|${normInvoiceNo(inv.invoiceNo)}|${inv.invoiceDate}|${inv.grandTotal}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(inv);
+  }
+  return out;
+}
+
+/**
+ * Flat sales-register CSV/TSV (Excel "Save As CSV"):
+ * InvoiceNo,Date,Customer,GSTIN,PlaceOfSupply,Item,HSN,Qty,Unit,Rate,GstRate,Cgst,Sgst,Igst,RoundOff,GrandTotal,Notes
+ * Multiple item rows for the same InvoiceNo are grouped.
+ */
+export function parseTallySalesCsv(text: string): CanonicalGstInvoice[] {
+  const raw = String(text ?? "").replace(/^\uFEFF/, "").trim();
+  if (!raw) return [];
+  const lines = raw.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const delim = lines[0].includes("\t") ? "\t" : ",";
+  const split = (row: string) => {
+    const cells: string[] = [];
+    let cur = "";
+    let q = false;
+    for (let i = 0; i < row.length; i++) {
+      const ch = row[i];
+      if (ch === '"') {
+        if (q && row[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else q = !q;
+      } else if (ch === delim && !q) {
+        cells.push(cur.trim());
+        cur = "";
+      } else cur += ch;
+    }
+    cells.push(cur.trim());
+    return cells;
+  };
+  const header = split(lines[0]).map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const idx = (...names: string[]) => {
+    for (const n of names) {
+      const i = header.indexOf(n);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const iNo = idx("invoiceno", "voucherno", "number", "billno", "supplierbillno");
+  const iDate = idx("date", "invoicedate", "billdate");
+  const iCust = idx("customer", "party", "partyname", "customername", "supplier", "suppliername");
+  const iGstin = idx("gstin", "partygstin", "customergstin", "suppliergstin");
+  const iPos = idx("placeofsupply", "state");
+  const iItem = idx("item", "stockitem", "description", "particulars");
+  const iHsn = idx("hsn", "hsnsac");
+  const iQty = idx("qty", "quantity");
+  const iUnit = idx("unit", "uom");
+  const iRate = idx("rate", "price");
+  const iGst = idx("gstrate", "gst", "taxrate");
+  const iCgst = idx("cgst");
+  const iSgst = idx("sgst", "utgst");
+  const iIgst = idx("igst");
+  const iRound = idx("roundoff", "round");
+  const iTotal = idx("grandtotal", "total", "amount");
+  const iNotes = idx("notes", "narration");
+  const iKind = idx("vouchertype", "type", "kind", "vchtype");
+  if (iNo < 0 || iDate < 0 || iCust < 0 || iItem < 0) return [];
+
+  const kindOf = (raw: string): CanonicalGstInvoice["kind"] => {
+    const k = raw.trim().toLowerCase();
+    if (!k) return "Sales";
+    if (k.includes("credit")) return "Credit Note";
+    if (k.includes("debit")) return "Debit Note";
+    if (k.includes("purchase")) return "Purchase";
+    return "Sales";
+  };
+
+  type Acc = CanonicalGstInvoice & { _cgstSet: boolean };
+  const map = new Map<string, Acc>();
+  for (const row of lines.slice(1)) {
+    const c = split(row);
+    if (!c.some(Boolean)) continue;
+    const invoiceNo = (c[iNo] || "").slice(0, 48);
+    const invoiceDate = parseTallyDate(c[iDate]);
+    const customerName = (c[iCust] || "").slice(0, 200);
+    if (!invoiceNo || !invoiceDate || !customerName) continue;
+    const key = `${normInvoiceNo(invoiceNo)}|${invoiceDate}`;
+    let inv = map.get(key);
+    if (!inv) {
+      inv = {
+        schemaVersion: 1,
+        kind: iKind >= 0 ? kindOf(c[iKind] || "") : "Sales",
+        invoiceNo,
+        invoiceDate,
+        customerName,
+        customerGstin: iGstin >= 0 ? (c[iGstin] || "").trim().toUpperCase() || null : null,
+        customerAddress: null,
+        placeOfSupply: iPos >= 0 ? c[iPos] || null : null,
+        intraState: true,
+        lines: [],
+        taxable: 0,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        roundOff: 0,
+        grandTotal: 0,
+        notes: iNotes >= 0 ? c[iNotes] || null : null,
+        reference: null,
+        source: "tally",
+        externalKey: invoiceNo,
+        _cgstSet: false,
+      };
+      map.set(key, inv);
+    }
+    const qty = Math.max(0, num(iQty >= 0 ? c[iQty] : 1)) || 1;
+    const rate = Math.max(0, num(iRate >= 0 ? c[iRate] : 0));
+    const gstRate = clamp(num(iGst >= 0 ? c[iGst] : 0), 0, 100);
+    const taxable = round2(qty * rate);
+    inv.lines.push({
+      name: (c[iItem] || "Item").slice(0, 200),
+      hsn: iHsn >= 0 ? c[iHsn] || null : null,
+      unit: iUnit >= 0 ? c[iUnit] || "Nos" : "Nos",
+      qty,
+      rate,
+      discountPct: 0,
+      gstRate,
+      taxable,
+      stock: true,
+    });
+    if (!inv._cgstSet && (iCgst >= 0 || iSgst >= 0 || iIgst >= 0)) {
+      inv.cgst = round2(num(iCgst >= 0 ? c[iCgst] : 0));
+      inv.sgst = round2(num(iSgst >= 0 ? c[iSgst] : 0));
+      inv.igst = round2(num(iIgst >= 0 ? c[iIgst] : 0));
+      inv.roundOff = round2(num(iRound >= 0 ? c[iRound] : 0));
+      inv.grandTotal = round2(num(iTotal >= 0 ? c[iTotal] : 0));
+      inv._cgstSet = true;
+    }
+  }
+
+  const out: CanonicalGstInvoice[] = [];
+  for (const inv of map.values()) {
+    const { _cgstSet, ...rest } = inv;
+    rest.taxable = round2(rest.lines.reduce((s, l) => s + l.taxable, 0));
+    if (!_cgstSet) {
+      const rate = rest.lines[0]?.gstRate || 0;
+      const tax = round2(rest.taxable * (rate / 100));
+      rest.cgst = round2(tax / 2);
+      rest.sgst = round2(tax - rest.cgst);
+      rest.igst = 0;
+      rest.grandTotal = round2(rest.taxable + rest.cgst + rest.sgst + rest.roundOff);
+    }
+    if (!rest.grandTotal) rest.grandTotal = round2(rest.taxable + rest.cgst + rest.sgst + rest.igst + rest.roundOff);
+    rest.intraState = !(rest.igst > 0);
+    if (!rest.placeOfSupply && rest.customerGstin) rest.placeOfSupply = gstStateName(rest.customerGstin);
+    const gstRate = inferGstRate(rest.taxable, rest.cgst, rest.sgst, rest.igst);
+    for (const l of rest.lines) if (!(l.gstRate > 0) && gstRate > 0) l.gstRate = gstRate;
+    out.push(rest);
+  }
+  return out;
+}
+
+/** Stable fingerprint for dual-write idempotency (number + date + tax heads + line shape). */
+export function canonicalContentHash(c: Pick<CanonicalGstInvoice, "invoiceNo" | "invoiceDate" | "taxable" | "cgst" | "sgst" | "igst" | "roundOff" | "grandTotal" | "lines">): string {
+  const lines = c.lines
+    .map((l) => `${l.name.trim().toLowerCase()}|${l.qty}|${round2(l.taxable)}|${l.hsn ?? ""}`)
+    .sort()
+    .join(";");
+  const raw = [
+    normInvoiceNo(c.invoiceNo),
+    c.invoiceDate,
+    round2(c.taxable).toFixed(2),
+    round2(c.cgst).toFixed(2),
+    round2(c.sgst).toFixed(2),
+    round2(c.igst).toFixed(2),
+    round2(c.roundOff).toFixed(2),
+    round2(c.grandTotal).toFixed(2),
+    lines,
+  ].join("|");
+  return createHash("sha256").update(raw).digest("hex").slice(0, 32);
+}
+
+/** Decide create / skip / conflict against existing IMS invoices (by source_ref, hash, or normalized number). */
+export function planTallyImport(
+  incoming: ReadonlyArray<CanonicalGstInvoice>,
+  existing: ReadonlyArray<{
+    id: string;
+    invoiceNo: string;
+    sourceTool: string | null;
+    sourceRef: string | null;
+    grandTotal: number;
+    contentHash?: string | null;
+    taxable?: number;
+    cgst?: number;
+    sgst?: number;
+    igst?: number;
+  }>,
+  tolerance = 1,
+): CanonicalImportRow[] {
+  const byRef = new Map<string, (typeof existing)[number]>();
+  const byHash = new Map<string, (typeof existing)[number]>();
+  const byNo = new Map<string, (typeof existing)[number]>();
+  for (const e of existing) {
+    if (e.sourceTool === "tally" && e.sourceRef) byRef.set(e.sourceRef, e);
+    if (e.contentHash) byHash.set(e.contentHash, e);
+    const n = normInvoiceNo(e.invoiceNo);
+    if (n) byNo.set(n, e);
+  }
+  return incoming.map((invoice) => {
+    const hash = canonicalContentHash(invoice);
+    const hit =
+      (invoice.externalKey && byRef.get(invoice.externalKey)) ||
+      byHash.get(hash) ||
+      byNo.get(normInvoiceNo(invoice.invoiceNo)) ||
+      null;
+    const docLabel =
+      invoice.kind === "Purchase" ? "bill" : invoice.kind === "Credit Note" || invoice.kind === "Debit Note" ? "return" : "invoice";
+    if (!hit) return { action: "create" as const, invoice, existingId: null, existingNo: null, existingTotal: null, note: `New ${docLabel}` };
+    if (hit.contentHash && hit.contentHash === hash) {
+      return { action: "skip_matched", invoice, existingId: hit.id, existingNo: hit.invoiceNo, existingTotal: hit.grandTotal, note: `Already in IMS as ${hit.invoiceNo}` };
+    }
+    const diff = Math.abs(round2(hit.grandTotal) - round2(invoice.grandTotal));
+    const taxDiff =
+      hit.cgst != null
+        ? Math.abs(round2((hit.cgst ?? 0) + (hit.sgst ?? 0) + (hit.igst ?? 0)) - round2(invoice.cgst + invoice.sgst + invoice.igst))
+        : 0;
+    if (diff <= tolerance && taxDiff <= tolerance) {
+      return { action: "skip_matched", invoice, existingId: hit.id, existingNo: hit.invoiceNo, existingTotal: hit.grandTotal, note: `Already in IMS as ${hit.invoiceNo}` };
+    }
+    return {
+      action: "conflict",
+      invoice,
+      existingId: hit.id,
+      existingNo: hit.invoiceNo,
+      existingTotal: hit.grandTotal,
+      note: `Totals differ (IMS ${hit.grandTotal.toFixed(2)} vs Tally ${invoice.grandTotal.toFixed(2)})`,
+    };
+  });
 }
 
 /* POS */

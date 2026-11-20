@@ -48,6 +48,12 @@ export async function loadReturnNotes(db: Queryable, tenantId: number, settings:
      FROM ims_returns r LEFT JOIN ims_parties p ON p.tenant_id = r.tenant_id AND p.id = r.party_id
      WHERE r.tenant_id = :tenantId AND r.status = 'completed' AND r.refund_status = 'credit_note' AND r.return_date <= :to
        ${range.from ? "AND r.return_date >= :from" : ""} ${range.since ? "AND r.updated_at >= :since" : ""}
+       AND NOT EXISTS (
+         SELECT 1 FROM ims_links l
+         WHERE l.tenant_id = r.tenant_id AND l.source_tool = 'tally' AND l.target_type = 'return' AND l.target_id = r.id
+       )
+       AND (r.reason IS NULL OR r.reason NOT LIKE 'Tally %')
+       AND (r.notes IS NULL OR r.notes NOT LIKE '%Imported from Tally%')
      ORDER BY r.return_date, r.return_no LIMIT 5000`,
     { tenantId, from: range.from ?? null, to: range.to, since: range.since ?? null },
   );

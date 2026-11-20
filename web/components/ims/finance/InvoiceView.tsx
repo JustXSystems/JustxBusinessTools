@@ -5,6 +5,7 @@ import { Alert, Badge, Button, Card, Dialog, WidgetCard } from "@/components/bos
 import { bom, type BomDc } from "@/lib/ims/bom";
 import { finance, INVOICE_BADGE, invoiceShareText, methodLabel, whatsappShareLink, type InvoiceDetail } from "@/lib/ims/finance";
 import { dateLabel, inrExact, stampLabel } from "@/lib/ims/format";
+import { imsSystem, saveBlob } from "@/lib/ims/system";
 import { Loaded, Stack, StatusBadge, useIms, useImsAction, useImsData, usePrint } from "../core";
 import { DocRefLink } from "../bom/DocRefLink";
 import { activityTone, BackLink, ConfirmDialog, InvoicePaper, KeyValues, PaymentDialog, ReasonDialog, Stats, Timeline, type TimelineItem } from "./shared";
@@ -83,8 +84,11 @@ function InvoiceBody({
             </div>
             {inv.sourceTool && inv.sourceTool !== "pos" ? (
               <div style={{ marginBottom: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <Badge tag="lavender" title={inv.sourceTool === "ims_bom" ? "Created from Bill of Materials" : "Created from quotation"}>
-                  {inv.sourceTool === "ims_bom" ? "From BOM" : "From Quotation"}
+                <Badge
+                  tag={inv.sourceTool === "tally" ? "blue" : "lavender"}
+                  title={inv.sourceTool === "ims_bom" ? "Created from Bill of Materials" : inv.sourceTool === "tally" ? "Imported from Tally" : "Created from quotation"}
+                >
+                  {inv.sourceTool === "ims_bom" ? "From BOM" : inv.sourceTool === "tally" ? "From Tally" : "From Quotation"}
                 </Badge>
                 {inv.sourceTool === "ims_bom" && inv.sourceLabel ? (
                   <DocRefLink module="bom" intent={inv.sourceRef ? `open:${inv.sourceRef}` : undefined} enabled={can("bom") && Boolean(inv.sourceRef)}>
@@ -177,6 +181,25 @@ function InvoiceBody({
               <Button icon="sparkle" onClick={() => setDlg("share")}>
                 WhatsApp
               </Button>
+              {isIssued && inv.sourceTool !== "tally" && (canWrite || can("integrations") || can("audit")) ? (
+                <Button
+                  icon="download"
+                  disabled={busy === "tally-xml"}
+                  onClick={() =>
+                    void run(
+                      "tally-xml",
+                      async () => {
+                        const file = await imsSystem.exportInvoiceTally(inv.id);
+                        saveBlob(file);
+                        return file;
+                      },
+                      { success: "Tally XML downloaded", description: "Import it in Tally: Gateway of Tally → Import → Transactions.", refresh: false },
+                    )
+                  }
+                >
+                  {busy === "tally-xml" ? "Preparing…" : "Tally XML"}
+                </Button>
+              ) : null}
             </div>
             <div className="ims-row" style={{ marginTop: 8 }}>
               {canWrite ? (
@@ -190,6 +213,11 @@ function InvoiceBody({
                   }}
                 >
                   Duplicate
+                </Button>
+              ) : null}
+              {inv.sourceTool === "tally" ? (
+                <Button size="sm" variant="ghost" onClick={() => navigate("integrations", "import")}>
+                  Tally import
                 </Button>
               ) : null}
               {isIssued && can("receivables") ? (

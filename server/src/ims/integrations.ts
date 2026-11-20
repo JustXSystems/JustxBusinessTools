@@ -2,25 +2,39 @@ import type { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { loadReturnNotes } from "./books.js";
-import { insertImsInvoice } from "./connect.js";
+import { draftInvoiceNo, insertImsInvoice, upsertParty } from "./connect.js";
 import { actorName, actorOf, isoDate, parse, qint, qstr, recordEvent, requireAnyPerm, requirePerm, type ImsDeps } from "./context.js";
 import { exec, isoOf, json, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
-import { ImsError, badRequest, conflict, type ImsActor } from "./host.js";
+import { ImsError, badRequest, conflict, notFound, type ImsActor } from "./host.js";
+import { nextDocNo } from "./stock.js";
 import {
   TALLY_LEDGERS,
   addDaysISO,
+  canonicalContentHash,
   computeTotals,
+  dueDateFor,
+  imsLinesFromCanonical,
+  intraStateFor,
   isISODate,
   isIntraState,
   isTallyHost,
+  isTallySyncDue,
+  matchCanonicalLineItems,
   parseTallyCompanies,
+  parseTallyLedgersXml,
   parseTallyResponse,
+  parseTallySalesCsv,
+  parseTallySalesXml,
+  parseTallyStockItemsXml,
   periodRange,
+  planTallyImport,
   posExclusiveRate,
   round2,
   round3,
   tallyCashVoucherXml,
   tallyEnvelope,
+  tallyExportMastersEnvelope,
+  tallyExportVouchersEnvelope,
   tallyLedgerXml,
   tallyPingEnvelope,
   tallyStockGroupXml,
@@ -28,6 +42,10 @@ import {
   tallyUnitXml,
   tallyVoucherXml,
   todayISO,
+  type CanonicalGstInvoice,
+  type CanonicalImportRow,
+  type CanonicalTallyParty,
+  type CanonicalTallyStockItem,
   type ImsLineInput,
   type TallyCashVoucher,
   type TallyImportResult,
@@ -87,13 +105,19 @@ const DEFAULT_TALLY_SYNC: TallySyncT = TallySync.parse({});
 function tallyView(row: IntegrationRow | null) {
   const cfg = TallyConfig.partial().safeParse(json<Record<string, unknown>>(row?.config, {}));
   const sync = TallySync.safeParse(json<Record<string, unknown>>(row?.sync, {}));
+  const syncData = sync.success ? sync.data : DEFAULT_TALLY_SYNC;
   const config = cfg.success && cfg.data.host && cfg.data.company ? { host: cfg.data.host, port: cfg.data.port ?? 9000, company: cfg.data.company, product: cfg.data.product ?? "prime", syncMode: cfg.data.syncMode ?? "export" } : null;
+  const lastSyncAt = tsOf(row?.last_sync_at);
+  const lastStatus = row?.last_status ?? null;
+  const due = isTallySyncDue(syncData.frequency, lastSyncAt, Date.now(), lastStatus);
   return {
     enabled: Boolean(row?.enabled) && config !== null,
     config,
-    sync: sync.success ? sync.data : DEFAULT_TALLY_SYNC,
-    lastSyncAt: tsOf(row?.last_sync_at),
-    lastStatus: row?.last_status ?? null,
+    sync: syncData,
+    lastSyncAt,
+    lastStatus,
+    syncDue: due.due,
+    syncDueMessage: due.message,
   };
 }
 
@@ -148,11 +172,21 @@ async function saveIntegration(db: Queryable, actor: ImsActor, provider: Integra
   );
 }
 
+/** Record sync outcome. Only a full success advances `last_sync_at` (so failed runs stay "due"). */
 async function touchIntegration(db: Queryable, tenantId: number, provider: IntegrationProvider, status: SyncStatus): Promise<void> {
+  if (status === "success") {
+    await exec(
+      db,
+      `INSERT INTO ims_integrations (tenant_id, provider, enabled, last_sync_at, last_status) VALUES (:tenantId, :provider, 0, CURRENT_TIMESTAMP, :status)
+       ON DUPLICATE KEY UPDATE last_sync_at = CURRENT_TIMESTAMP, last_status = :status`,
+      { tenantId, provider, status },
+    );
+    return;
+  }
   await exec(
     db,
-    `INSERT INTO ims_integrations (tenant_id, provider, enabled, last_sync_at, last_status) VALUES (:tenantId, :provider, 0, CURRENT_TIMESTAMP, :status)
-     ON DUPLICATE KEY UPDATE last_sync_at = CURRENT_TIMESTAMP, last_status = :status`,
+    `INSERT INTO ims_integrations (tenant_id, provider, enabled, last_status) VALUES (:tenantId, :provider, 0, :status)
+     ON DUPLICATE KEY UPDATE last_status = :status`,
     { tenantId, provider, status },
   );
 }
@@ -271,7 +305,7 @@ async function buildMasters(db: Queryable, tenantId: number, settings: ImsSettin
   return { messages, counts };
 }
 
-type VoucherSource = { from: string; to: string; since?: string | null };
+type VoucherSource = { from: string; to: string; since?: string | null; invoiceId?: string | null };
 
 async function buildSalesVouchers(db: Queryable, tenantId: number, range: VoucherSource): Promise<TallyVoucher[]> {
   const list = await rows<{
@@ -293,9 +327,13 @@ async function buildSalesVouchers(db: Queryable, tenantId: number, range: Vouche
   }>(
     db,
     `SELECT id, invoice_no, invoice_date, customer_name, customer_gstin, place_of_supply, intra_state, \`lines\`, cgst, sgst, igst, round_off, notes, source_tool, source_ref
-     FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND invoice_date BETWEEN :from AND :to ${range.since ? "AND updated_at >= :since" : ""}
+     FROM ims_invoices
+     WHERE tenant_id = :tenantId AND status = 'issued'
+       ${range.invoiceId ? "AND id = :invoiceId" : "AND invoice_date BETWEEN :from AND :to"}
+       ${range.since ? "AND updated_at >= :since" : ""}
+       AND (source_tool IS NULL OR source_tool <> 'tally')
      ORDER BY invoice_date, invoice_no LIMIT 5000`,
-    { tenantId, from: range.from, to: range.to, since: range.since ?? null },
+    { tenantId, from: range.from, to: range.to, since: range.since ?? null, invoiceId: range.invoiceId ?? null },
   );
   const names = await itemNames(db, tenantId);
   return list.map((inv) => voucherFrom("Sales", inv.invoice_no, isoOf(inv.invoice_date), inv.customer_name, inv.customer_gstin, inv.place_of_supply, Boolean(inv.intra_state), inv.lines, names, {
@@ -330,7 +368,7 @@ function voucherFrom(
   const totals = computeTotals(lines, intraState);
   const vLines = totals.lines.map((l) => {
     const item = l.itemId ? names.get(l.itemId) : undefined;
-    return { name: item?.name ?? l.name, unit: item?.unit ?? l.unit ?? "pcs", qty: l.qty, amount: l.taxable, stock: Boolean(item) };
+    return { name: item?.name ?? l.name, unit: item?.unit ?? l.unit ?? "pcs", qty: l.qty, amount: l.taxable, stock: Boolean(item), hsn: l.hsn ?? null, gstRate: l.gstRate };
   });
   const taxable = lines.length ? totals.taxable : round2(extra.taxable ?? 0);
   const total = round2(taxable + extra.cgst + extra.sgst + extra.igst + extra.roundOff);
@@ -355,6 +393,11 @@ async function buildPurchaseVouchers(db: Queryable, tenantId: number, settings: 
     `SELECT b.bill_no, b.supplier_bill_no, b.bill_date, b.supplier_name, p.gstin, p.state, b.lines, b.subtotal, b.tax_total, b.grand_total, b.notes
      FROM ims_bills b LEFT JOIN ims_parties p ON p.tenant_id = b.tenant_id AND p.id = b.supplier_id
      WHERE b.tenant_id = :tenantId AND b.status <> 'cancelled' AND b.bill_date BETWEEN :from AND :to ${range.since ? "AND b.updated_at >= :since" : ""}
+       AND NOT EXISTS (
+         SELECT 1 FROM ims_links l
+         WHERE l.tenant_id = b.tenant_id AND l.source_tool = 'tally' AND l.target_type = 'bill' AND l.target_id = b.id
+       )
+       AND (b.notes IS NULL OR b.notes NOT LIKE '%Imported from Tally%')
      ORDER BY b.bill_date, b.bill_no LIMIT 5000`,
     { tenantId, from: range.from, to: range.to, since: range.since ?? null },
   );
@@ -465,7 +508,12 @@ async function postToTally(cfg: { host: string; port: number }, body: string, ti
       redirect: "manual",
     });
     const text = (await res.text()).slice(0, 200_000);
-    return { ok: true, status: res.status, text, ms: Date.now() - started };
+    const ms = Date.now() - started;
+    if (res.status >= 400) return { ok: false, reason: `Tally HTTP ${res.status}${text ? `: ${text.slice(0, 120)}` : ""}`, ms };
+    if (text && !/<RESPONSE\b|<CREATED\b|<ERRORS\b|<LINEERROR\b|<ENVELOPE\b|<TALLYMESSAGE\b|TALLY/i.test(text)) {
+      return { ok: false, reason: `${cfg.host}:${cfg.port} answered but the body doesn't look like Tally XML`, ms };
+    }
+    return { ok: true, status: res.status, text, ms };
   } catch (err) {
     return { ok: false, reason: networkReason(err, cfg, timeoutMs), ms: Date.now() - started };
   }
@@ -478,6 +526,746 @@ function summarizeImport(r: TallyImportResult): { status: SyncStatus; message: s
   if (bad) parts.push(`${bad} rejected`);
   const msg = `${parts.join(", ")}${r.lineErrors.length ? ` — ${r.lineErrors.slice(0, 2).join("; ")}` : ""}`;
   return { status: bad ? (r.created + r.altered ? "partial" : "failed") : "success", message: msg };
+}
+
+/* ---------- Tally → IMS import ---------- */
+
+const TallyImportPreviewInput = z
+  .object({
+    xml: z.string().max(8_000_000).optional(),
+    csv: z.string().max(4_000_000).optional(),
+  })
+  .refine((v) => Boolean(v.xml?.trim() || v.csv?.trim()), { message: "Paste Tally Sales XML or a CSV sales register" });
+
+const TallyImportCommitInput = TallyImportPreviewInput.extend({
+  /** When set, only these `invoiceNo|date` keys are created. */
+  keys: z.array(z.string().trim().min(1).max(80)).max(2000).optional(),
+  asDraft: z.boolean().optional().default(false),
+});
+
+function parseTallyImportPayload(body: { xml?: string; csv?: string }): CanonicalGstInvoice[] {
+  return body.xml?.trim() ? parseTallySalesXml(body.xml) : body.csv?.trim() ? parseTallySalesCsv(body.csv) : [];
+}
+
+/** Stable UI/select key — kind-prefixed so Sales / Purchase / CN / DN never collide on the same number. */
+export function importRowKey(inv: CanonicalGstInvoice): string {
+  const prefix = inv.kind === "Purchase" ? "PU:" : inv.kind === "Credit Note" ? "CN:" : inv.kind === "Debit Note" ? "DN:" : "";
+  return `${prefix}${inv.invoiceNo}|${inv.invoiceDate}`;
+}
+
+function mapImportRow(r: CanonicalImportRow) {
+  return {
+    key: importRowKey(r.invoice),
+    kind: r.invoice.kind,
+    action: r.action,
+    invoiceNo: r.invoice.invoiceNo,
+    invoiceDate: r.invoice.invoiceDate,
+    customerName: r.invoice.customerName,
+    customerGstin: r.invoice.customerGstin,
+    taxable: r.invoice.taxable,
+    tax: round2(r.invoice.cgst + r.invoice.sgst + r.invoice.igst),
+    grandTotal: r.invoice.grandTotal,
+    lineCount: r.invoice.lines.length,
+    existingId: r.existingId,
+    existingNo: r.existingNo,
+    existingTotal: r.existingTotal,
+    note: r.note,
+  };
+}
+
+async function loadTallyImportExisting(db: Queryable, tenantId: number, invoices: ReadonlyArray<CanonicalGstInvoice>) {
+  if (!invoices.length) return [];
+  const refs = [
+    ...new Set(
+      invoices
+        .flatMap((i) => [i.externalKey, i.invoiceNo])
+        .map((v) => String(v ?? "").trim().slice(0, 64))
+        .filter(Boolean),
+    ),
+  ];
+  const nos = [...new Set(invoices.map((i) => i.invoiceNo.trim()).filter(Boolean))];
+  const list = await rows<{
+    id: string;
+    invoice_no: string;
+    invoice_date: string;
+    source_tool: string | null;
+    source_ref: string | null;
+    grand_total: string;
+    taxable?: string;
+    subtotal: string;
+    discount_total: string;
+    cgst: string;
+    sgst: string;
+    igst: string;
+    round_off: string;
+    lines: unknown;
+  }>(
+    db,
+    `SELECT id, invoice_no, invoice_date, source_tool, source_ref, grand_total, subtotal, discount_total, cgst, sgst, igst, round_off, \`lines\`
+     FROM ims_invoices
+     WHERE tenant_id = :tenantId AND status <> 'cancelled'
+       AND (
+         (source_tool = 'tally' AND source_ref IN (:refs))
+         OR invoice_no IN (:nos)
+       )
+     LIMIT 5000`,
+    { tenantId, refs: refs.length ? refs : [""], nos: nos.length ? nos : [""] },
+  );
+  return list.map((r) => {
+    const lines = json<ImsLineInput[]>(r.lines, []);
+    const taxable = round2(money(r.subtotal) - money(r.discount_total));
+    const canon = {
+      invoiceNo: r.invoice_no,
+      invoiceDate: isoOf(r.invoice_date),
+      taxable,
+      cgst: money(r.cgst),
+      sgst: money(r.sgst),
+      igst: money(r.igst),
+      roundOff: money(r.round_off),
+      grandTotal: money(r.grand_total),
+      lines: lines.map((l) => ({
+        name: l.name,
+        hsn: l.hsn ?? null,
+        unit: l.unit ?? null,
+        qty: l.qty,
+        rate: l.rate,
+        discountPct: l.discountPct ?? 0,
+        gstRate: l.gstRate,
+        taxable: round2((l.qty || 0) * (l.rate || 0) * (1 - (l.discountPct ?? 0) / 100)),
+        stock: Boolean(l.itemId),
+      })),
+    };
+    return {
+      id: r.id,
+      invoiceNo: r.invoice_no,
+      sourceTool: r.source_tool,
+      sourceRef: r.source_ref,
+      grandTotal: money(r.grand_total),
+      taxable,
+      cgst: money(r.cgst),
+      sgst: money(r.sgst),
+      igst: money(r.igst),
+      contentHash: canonicalContentHash(canon),
+    };
+  });
+}
+
+async function commitTallyInvoices(
+  deps: ImsDeps,
+  actor: ImsActor,
+  settings: ImsSettings,
+  invoices: CanonicalGstInvoice[],
+  opts: { keys?: string[]; asDraft?: boolean } = {},
+): Promise<{ created: Array<{ id: string; invoiceNo: string; status: string }>; planned: CanonicalImportRow[] }> {
+  const salesOnly = invoices.filter((i) => i.kind === "Sales");
+  const existing = await loadTallyImportExisting(deps.db, actor.tenantId, salesOnly);
+  const planned = planTallyImport(salesOnly, existing);
+  const keyFilter = opts.keys;
+  const selected = new Set((keyFilter ?? []).map((k) => k.trim()).filter(Boolean));
+  // undefined keys = sync-now (all creates); [] = masters-only file import (no vouchers); else selected keys only.
+  const toCreate = planned.filter((r) => r.action === "create" && (keyFilter === undefined || selected.has(importRowKey(r.invoice))));
+  const created: Array<{ id: string; invoiceNo: string; status: string }> = [];
+  if (!toCreate.length) return { created, planned };
+
+  const catalog = await rows<{ id: string; name: string; hsn: string | null; sku: string | null }>(
+    deps.db,
+    `SELECT id, name, hsn, sku FROM ims_items WHERE tenant_id = :tenantId AND active = 1 LIMIT 20000`,
+    { tenantId: actor.tenantId },
+  );
+
+  await tx(deps.db, async (conn) => {
+    for (const row of toCreate) {
+      const inv = row.invoice;
+      const party = await upsertParty(conn, actor, {
+        kind: "customer",
+        name: inv.customerName,
+        gstin: inv.customerGstin,
+        address: inv.customerAddress,
+        state: inv.placeOfSupply,
+      });
+      const placeOfSupply = inv.placeOfSupply || settings.state || null;
+      const intra = inv.igst > 0 ? false : intraStateFor(settings, placeOfSupply);
+      const itemIds = matchCanonicalLineItems(inv, catalog);
+      const lineInputs = imsLinesFromCanonical(inv, itemIds);
+      const totals = computeTotals(lineInputs, intra, false);
+      if (Math.abs(totals.taxable - inv.taxable) <= 1 && Math.abs(totals.grandTotal - inv.grandTotal) > 1) {
+        const tax = round2(inv.cgst + inv.sgst + inv.igst);
+        totals.cgst = inv.cgst;
+        totals.sgst = inv.sgst;
+        totals.igst = inv.igst;
+        totals.taxTotal = tax;
+        totals.roundOff = inv.roundOff;
+        totals.grandTotal = inv.grandTotal;
+      }
+      const id = randomUUID();
+      const asDraft = Boolean(opts.asDraft);
+      const invoiceNo = asDraft ? draftInvoiceNo(id) : inv.invoiceNo;
+      const notes = [inv.notes, asDraft ? `Tally invoice ${inv.invoiceNo}` : null].filter(Boolean).join(" · ") || null;
+      const dueDate = dueDateFor(inv.invoiceDate, null, settings.paymentTermsDays);
+      try {
+        await insertImsInvoice(conn, actor, {
+          id,
+          status: asDraft ? "draft" : "issued",
+          invoiceNo,
+          customerId: party.id,
+          customerName: party.name,
+          customerGstin: inv.customerGstin,
+          customerAddress: inv.customerAddress,
+          customerMobile: null,
+          placeOfSupply,
+          intraState: intra,
+          invoiceDate: inv.invoiceDate,
+          dueDate,
+          totals,
+          amountPaid: 0,
+          payMode: null,
+          stockPosted: false,
+          sourceTool: "tally",
+          // Always the Tally voucher number — drafts keep this on Issue (GUIDs go in ims_links only).
+          sourceRef: inv.invoiceNo.slice(0, 64),
+          notes,
+          terms: settings.terms ?? null,
+        });
+      } catch (err) {
+        if ((err as { code?: string }).code === "ER_DUP_ENTRY") throw conflict(`Invoice number ${invoiceNo} already exists in IMS`);
+        throw err;
+      }
+      if (!asDraft) {
+        await exec(conn, `UPDATE ims_invoices SET issued_at = CURRENT_TIMESTAMP WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id });
+      }
+      try {
+        await exec(
+          conn,
+          `INSERT INTO ims_links (tenant_id, source_tool, source_ref, target_type, target_id)
+           VALUES (:tenantId, 'tally', :ref, 'invoice', :id)
+           ON DUPLICATE KEY UPDATE target_id = VALUES(target_id)`,
+          { tenantId: actor.tenantId, ref: (inv.externalKey || inv.invoiceNo).slice(0, 64), id },
+        );
+      } catch {
+        /* links table optional mid-migration */
+      }
+      created.push({ id, invoiceNo, status: asDraft ? "draft" : "issued" });
+    }
+  });
+  return { created, planned };
+}
+
+/** Purchase vouchers → approved supplier bills (no stock movement). */
+async function commitTallyPurchases(
+  deps: ImsDeps,
+  actor: ImsActor,
+  settings: ImsSettings,
+  purchases: CanonicalGstInvoice[],
+  opts: { keys?: string[] } = {},
+): Promise<{ created: Array<{ id: string; billNo: string; supplierBillNo: string }>; planned: CanonicalImportRow[] }> {
+  const list = purchases.filter((p) => p.kind === "Purchase");
+  const nos = list.map((p) => p.invoiceNo.trim()).filter(Boolean);
+  const existingRows = nos.length
+    ? await rows<{ id: string; bill_no: string; supplier_bill_no: string | null; grand_total: string }>(
+        deps.db,
+        `SELECT id, bill_no, supplier_bill_no, grand_total FROM ims_bills
+         WHERE tenant_id = :tenantId AND status <> 'cancelled'
+           AND (supplier_bill_no IN (:nos) OR bill_no IN (:nos))
+         LIMIT 5000`,
+        { tenantId: actor.tenantId, nos },
+      )
+    : [];
+  const existing = existingRows.map((r) => ({
+    id: r.id,
+    invoiceNo: (r.supplier_bill_no || r.bill_no).trim(),
+    sourceTool: "tally" as string | null,
+    sourceRef: (r.supplier_bill_no || r.bill_no).trim(),
+    grandTotal: money(r.grand_total),
+  }));
+  const planned = planTallyImport(list, existing);
+  const keyFilter = opts.keys;
+  const selected = new Set((keyFilter ?? []).map((k) => k.trim()).filter(Boolean));
+  const toCreate = planned.filter((r) => r.action === "create" && (keyFilter === undefined || selected.has(importRowKey(r.invoice))));
+  const created: Array<{ id: string; billNo: string; supplierBillNo: string }> = [];
+  if (!toCreate.length) return { created, planned };
+
+  const catalog = await rows<{ id: string; name: string; hsn: string | null; sku: string | null }>(
+    deps.db,
+    `SELECT id, name, hsn, sku FROM ims_items WHERE tenant_id = :tenantId AND active = 1 LIMIT 20000`,
+    { tenantId: actor.tenantId },
+  );
+
+  await tx(deps.db, async (conn) => {
+    for (const row of toCreate) {
+      const inv = row.invoice;
+      const party = await upsertParty(conn, actor, {
+        kind: "supplier",
+        name: inv.customerName,
+        gstin: inv.customerGstin,
+        address: inv.customerAddress,
+        state: inv.placeOfSupply,
+      });
+      const itemIds = matchCanonicalLineItems(inv, catalog);
+      const lineInputs = imsLinesFromCanonical(inv, itemIds);
+      const intra = inv.igst > 0 ? false : intraStateFor(settings, inv.placeOfSupply || settings.state);
+      const totals = computeTotals(lineInputs, intra, false);
+      const tax = round2(inv.cgst + inv.sgst + inv.igst);
+      if (Math.abs(totals.taxable - inv.taxable) <= 1) {
+        totals.cgst = inv.cgst;
+        totals.sgst = inv.sgst;
+        totals.igst = inv.igst;
+        totals.taxTotal = tax;
+        totals.roundOff = inv.roundOff;
+        totals.grandTotal = inv.grandTotal;
+      }
+      const id = randomUUID();
+      const supplierBillNo = inv.invoiceNo.slice(0, 64);
+      const billNo = await nextDocNo(conn, actor.tenantId, "bill", settings.billPrefix, inv.invoiceDate, settings.businessName);
+      const dueDate = dueDateFor(inv.invoiceDate, null, settings.paymentTermsDays);
+      const notesText = [inv.notes, inv.reference ? `Ref ${inv.reference}` : null, "Imported from Tally purchase"].filter(Boolean).join(" · ");
+      try {
+        await exec(
+          conn,
+          `INSERT INTO ims_bills (id, tenant_id, bill_no, supplier_bill_no, status, supplier_id, supplier_name, bill_date, due_date, \`lines\`, subtotal, tax_total, grand_total,
+             notes, decided_by, decided_by_name, decided_at, created_by, created_by_name)
+           VALUES (:id, :tenantId, :billNo, :supplierBillNo, 'approved', :supplierId, :supplierName, :billDate, :dueDate, :lines, :subtotal, :taxTotal, :grandTotal,
+             :notes, :userId, :userName, CURRENT_TIMESTAMP, :userId, :userName)`,
+          {
+            id,
+            tenantId: actor.tenantId,
+            billNo,
+            supplierBillNo,
+            supplierId: party.id,
+            supplierName: party.name,
+            billDate: inv.invoiceDate,
+            dueDate,
+            lines: JSON.stringify(totals.lines),
+            subtotal: totals.taxable,
+            taxTotal: totals.taxTotal,
+            grandTotal: inv.grandTotal > 0 ? inv.grandTotal : totals.grandTotal,
+            notes: notesText.slice(0, 2000),
+            userId: actor.userId,
+            userName: actorName(actor),
+          },
+        );
+      } catch (err) {
+        if ((err as { code?: string }).code === "ER_DUP_ENTRY") throw conflict(`Bill ${supplierBillNo} already exists in IMS`);
+        throw err;
+      }
+      try {
+        await exec(
+          conn,
+          `INSERT INTO ims_links (tenant_id, source_tool, source_ref, target_type, target_id)
+           VALUES (:tenantId, 'tally', :ref, 'bill', :id)
+           ON DUPLICATE KEY UPDATE target_id = VALUES(target_id)`,
+          { tenantId: actor.tenantId, ref: (inv.externalKey || inv.invoiceNo).slice(0, 64), id },
+        );
+      } catch {
+        /* optional */
+      }
+      created.push({ id, billNo, supplierBillNo });
+    }
+  });
+  return { created, planned };
+}
+
+/** Credit / debit notes → completed returns (credit_note refund), no stock movement. */
+async function commitTallyNotes(
+  deps: ImsDeps,
+  actor: ImsActor,
+  notes: CanonicalGstInvoice[],
+  kind: "Credit Note" | "Debit Note",
+  opts: { keys?: string[] } = {},
+): Promise<{ created: Array<{ id: string; returnNo: string }>; planned: CanonicalImportRow[] }> {
+  const list = notes.filter((n) => n.kind === kind);
+  const returnKind = kind === "Credit Note" ? "customer" : "supplier";
+  const partyKind = kind === "Credit Note" ? "customer" : "supplier";
+  const label = kind === "Credit Note" ? "credit note" : "debit note";
+  const nos = list.map((n) => n.invoiceNo.trim()).filter(Boolean);
+  const existingRows = nos.length
+    ? await rows<{ id: string; return_no: string; total: string }>(
+        deps.db,
+        `SELECT id, return_no, total FROM ims_returns WHERE tenant_id = :tenantId AND status <> 'cancelled' AND return_no IN (:nos) LIMIT 5000`,
+        { tenantId: actor.tenantId, nos },
+      )
+    : [];
+  const existing = existingRows.map((r) => ({
+    id: r.id,
+    invoiceNo: r.return_no,
+    sourceTool: "tally" as string | null,
+    sourceRef: r.return_no,
+    grandTotal: money(r.total),
+  }));
+  const planned = planTallyImport(list, existing);
+  const keyFilter = opts.keys;
+  const selected = new Set((keyFilter ?? []).map((k) => k.trim()).filter(Boolean));
+  const toCreate = planned.filter((r) => r.action === "create" && (keyFilter === undefined || selected.has(importRowKey(r.invoice))));
+  const created: Array<{ id: string; returnNo: string }> = [];
+  if (!toCreate.length) return { created, planned };
+
+  const catalog = await rows<{ id: string; name: string; hsn: string | null; sku: string | null }>(
+    deps.db,
+    `SELECT id, name, hsn, sku FROM ims_items WHERE tenant_id = :tenantId AND active = 1 LIMIT 20000`,
+    { tenantId: actor.tenantId },
+  );
+
+  await tx(deps.db, async (conn) => {
+    for (const row of toCreate) {
+      const cn = row.invoice;
+      const party = await upsertParty(conn, actor, {
+        kind: partyKind,
+        name: cn.customerName,
+        gstin: cn.customerGstin,
+        address: cn.customerAddress,
+        state: cn.placeOfSupply,
+      });
+      const itemIds = matchCanonicalLineItems(cn, catalog);
+      const lines = cn.lines.map((l, i) => ({
+        itemId: itemIds[i],
+        name: l.name.slice(0, 200),
+        unit: l.unit,
+        qty: round3(l.qty > 0 ? l.qty : 1),
+        rate: round2(l.rate),
+        amount: round2(l.taxable),
+      }));
+      const id = randomUUID();
+      const returnNo = cn.invoiceNo.slice(0, 48);
+      const notesText = [cn.notes, cn.reference ? `Against ${cn.reference}` : null, `Imported from Tally ${label}`].filter(Boolean).join(" · ");
+      try {
+        await exec(
+          conn,
+          `INSERT INTO ims_returns (id, tenant_id, return_no, kind, status, party_id, party_name, ref_doc_id, ref_doc_no, return_date, \`lines\`, total, reason, disposition, refund_status, refund_amount, notes, created_by, created_by_name)
+           VALUES (:id, :tenantId, :returnNo, :returnKind, 'completed', :partyId, :partyName, NULL, :refDocNo, :date, :lines, :total, :reason, 'restock', 'credit_note', :refundAmount, :notes, :userId, :userName)`,
+          {
+            id,
+            tenantId: actor.tenantId,
+            returnNo,
+            returnKind,
+            partyId: party.id,
+            partyName: party.name,
+            refDocNo: cn.reference?.slice(0, 64) ?? null,
+            date: cn.invoiceDate,
+            lines: JSON.stringify(lines),
+            total: cn.grandTotal,
+            reason: `Tally ${label}`,
+            refundAmount: cn.grandTotal,
+            notes: notesText.slice(0, 2000),
+            userId: actor.userId,
+            userName: actorName(actor),
+          },
+        );
+      } catch (err) {
+        if ((err as { code?: string }).code === "ER_DUP_ENTRY") throw conflict(`Return number ${returnNo} already exists in IMS`);
+        throw err;
+      }
+      try {
+        await exec(
+          conn,
+          `INSERT INTO ims_links (tenant_id, source_tool, source_ref, target_type, target_id)
+           VALUES (:tenantId, 'tally', :ref, 'return', :id)
+           ON DUPLICATE KEY UPDATE target_id = VALUES(target_id)`,
+          { tenantId: actor.tenantId, ref: (cn.externalKey || cn.invoiceNo).slice(0, 64), id },
+        );
+      } catch {
+        /* optional */
+      }
+      created.push({ id, returnNo });
+    }
+  });
+  return { created, planned };
+}
+
+const commitTallyCreditNotes = (deps: ImsDeps, actor: ImsActor, notes: CanonicalGstInvoice[], opts: { keys?: string[] } = {}) =>
+  commitTallyNotes(deps, actor, notes, "Credit Note", opts);
+
+const commitTallyDebitNotes = (deps: ImsDeps, actor: ImsActor, notes: CanonicalGstInvoice[], opts: { keys?: string[] } = {}) =>
+  commitTallyNotes(deps, actor, notes, "Debit Note", opts);
+
+async function commitTallyParties(
+  deps: ImsDeps,
+  actor: ImsActor,
+  parties: CanonicalTallyParty[],
+): Promise<{ created: number; updated: number }> {
+  let created = 0;
+  let updated = 0;
+  await tx(deps.db, async (conn) => {
+    for (const p of parties) {
+      const out = await upsertParty(conn, actor, {
+        kind: p.kind,
+        name: p.name,
+        gstin: p.gstin,
+        address: p.address,
+        state: p.state,
+        mobile: p.mobile,
+        email: p.email,
+      });
+      if (out.created) created += 1;
+      else updated += 1;
+    }
+  });
+  return { created, updated };
+}
+
+async function commitTallyStockItems(
+  deps: ImsDeps,
+  actor: ImsActor,
+  items: CanonicalTallyStockItem[],
+  settings: ImsSettings,
+): Promise<{ created: number; updated: number }> {
+  let created = 0;
+  let updated = 0;
+  await tx(deps.db, async (conn) => {
+    for (const item of items) {
+      const name = item.name.trim().slice(0, 200) || "Item";
+      const sku = item.sku?.trim().slice(0, 64) || null;
+      const match =
+        (sku
+          ? await one<{ id: string; hsn: string | null; unit: string; gst_rate: string }>(
+              conn,
+              `SELECT id, hsn, unit, gst_rate FROM ims_items WHERE tenant_id = :tenantId AND sku = :sku LIMIT 1`,
+              { tenantId: actor.tenantId, sku },
+            )
+          : null) ??
+        (await one<{ id: string; hsn: string | null; unit: string; gst_rate: string }>(
+          conn,
+          `SELECT id, hsn, unit, gst_rate FROM ims_items WHERE tenant_id = :tenantId AND LOWER(name) = LOWER(:name) ORDER BY active DESC LIMIT 1`,
+          { tenantId: actor.tenantId, name },
+        ));
+      const gstRate = item.gstRate > 0 ? Math.min(100, item.gstRate) : settings.defaultGstRate;
+      const unit = (item.unit || "pcs").slice(0, 20);
+      const hsn = item.hsn?.slice(0, 20) || null;
+      if (match) {
+        await exec(
+          conn,
+          `UPDATE ims_items SET
+             hsn = COALESCE(NULLIF(hsn, ''), :hsn),
+             sku = COALESCE(NULLIF(sku, ''), :sku),
+             unit = IF(unit IS NULL OR unit = '' OR unit = 'pcs', :unit, unit),
+             gst_rate = IF(gst_rate = 0 AND :gstRate > 0, :gstRate, gst_rate),
+             category = COALESCE(NULLIF(category, ''), :category)
+           WHERE tenant_id = :tenantId AND id = :id`,
+          {
+            tenantId: actor.tenantId,
+            id: match.id,
+            hsn,
+            sku,
+            unit,
+            gstRate,
+            category: item.category,
+          },
+        );
+        updated += 1;
+      } else {
+        const id = randomUUID();
+        await exec(
+          conn,
+          `INSERT INTO ims_items (id, tenant_id, name, sku, unit, hsn, gst_rate, category, selling_price, notes, created_by)
+           VALUES (:id, :tenantId, :name, :sku, :unit, :hsn, :gstRate, :category, 0, :notes, :userId)`,
+          {
+            id,
+            tenantId: actor.tenantId,
+            name,
+            sku,
+            unit,
+            hsn,
+            gstRate,
+            category: item.category,
+            notes: "Imported from Tally stock item",
+            userId: actor.userId,
+          },
+        );
+        created += 1;
+      }
+    }
+  });
+  return { created, updated };
+}
+
+type TallySyncStep = { entity: string; status: SyncStatus; records: number; message: string };
+type TallySyncNowResult = { status: SyncStatus; steps: TallySyncStep[]; tally: ReturnType<typeof tallyView> };
+
+/** Run one Tally sync for a tenant (used by Sync now + background scheduler). */
+export async function runTallySyncNow(deps: ImsDeps, actor: ImsActor, opts: { ip?: string } = {}): Promise<TallySyncNowResult> {
+  const view = tallyView(await loadIntegration(deps.db, actor.tenantId, "tally"));
+  if (!view.enabled || !view.config) throw badRequest("Connect Tally first (host, port and company)");
+  const cfg = view.config;
+  const mode = cfg.syncMode;
+  const doExport = mode === "export" || mode === "two_way";
+  const doImport = mode === "import" || mode === "two_way";
+  const settings = await getSettings(deps, actor.tenantId);
+  const today = todayISO();
+  const fy = periodRange("fytd", today, settings.fiscalYearStart);
+  const since = view.lastSyncAt && view.lastStatus === "success" ? view.lastSyncAt : null;
+  const steps: TallySyncStep[] = [];
+  const push = async (entity: string, report: "All Masters" | "Vouchers", messages: string[], records: number) => {
+    if (!messages.length) {
+      steps.push({ entity, status: "success", records: 0, message: "Nothing new to send" });
+      return true;
+    }
+    const r = await postToTally(cfg, tallyEnvelope(cfg.company, report, messages), 30_000);
+    if (!r.ok) {
+      steps.push({ entity, status: "failed", records: 0, message: r.reason });
+      await logSync(deps.db, actor, { provider: "tally", direction: "export", entity, status: "failed", records: 0, message: r.reason });
+      return false;
+    }
+    const sum = summarizeImport(parseTallyResponse(r.text));
+    steps.push({ entity, status: sum.status, records, message: sum.message });
+    await logSync(deps.db, actor, { provider: "tally", direction: "export", entity, status: sum.status, records, message: sum.message });
+    return true;
+  };
+  let reachable = true;
+  if (doExport) {
+    if (view.sync.ledgers || view.sync.stockItems) {
+      const m = await buildMasters(deps.db, actor.tenantId, settings, { ledgers: view.sync.ledgers, stockItems: view.sync.stockItems });
+      reachable = await push("masters", "All Masters", m.messages, m.counts.ledgers + m.counts.stockItems);
+    }
+    if (reachable && view.sync.salesVouchers) {
+      const v = await buildSalesVouchers(deps.db, actor.tenantId, { ...fy, since });
+      reachable = await push("sales", "Vouchers", v.map(tallyVoucherXml), v.length);
+    }
+    if (reachable && view.sync.purchaseVouchers) {
+      const v = await buildPurchaseVouchers(deps.db, actor.tenantId, settings, { ...fy, since });
+      reachable = await push("purchases", "Vouchers", v.map(tallyVoucherXml), v.length);
+    }
+    if (reachable && view.sync.notes) {
+      const v = await buildNoteVouchers(deps.db, actor.tenantId, settings, { ...fy, since });
+      reachable = await push("notes", "Vouchers", v.map(tallyVoucherXml), v.length);
+    }
+    if (reachable && view.sync.receipts) {
+      const v = await buildCashVouchers(deps.db, actor.tenantId, { ...fy, since });
+      await push("receipts", "Vouchers", v.map(tallyCashVoucherXml), v.length);
+    }
+  }
+  if (doImport && (view.sync.ledgers || view.sync.stockItems)) {
+    const pullM = await postToTally(cfg, tallyExportMastersEnvelope(cfg.company), 60_000);
+    if (!pullM.ok) {
+      steps.push({ entity: "pull-masters", status: "failed", records: 0, message: pullM.reason });
+      await logSync(deps.db, actor, { provider: "tally", direction: "import", entity: "masters", status: "failed", records: 0, message: pullM.reason });
+    } else {
+      const parties = view.sync.ledgers ? parseTallyLedgersXml(pullM.text) : [];
+      const stockItems = view.sync.stockItems ? parseTallyStockItemsXml(pullM.text) : [];
+      if (!parties.length && !stockItems.length) {
+        const hasLedger = /<LEDGER\b/i.test(pullM.text);
+        const hasStock = /<STOCKITEM\b/i.test(pullM.text);
+        const message =
+          hasLedger || hasStock
+            ? "No matching party ledgers / stock items in export"
+            : "Tally answered but returned no masters XML — use file import";
+        steps.push({ entity: "pull-masters", status: "success", records: 0, message });
+        await logSync(deps.db, actor, { provider: "tally", direction: "import", entity: "masters", status: "success", records: 0, message });
+      } else {
+        try {
+          const partyOut = parties.length ? await commitTallyParties(deps, actor, parties) : { created: 0, updated: 0 };
+          const itemOut = stockItems.length ? await commitTallyStockItems(deps, actor, stockItems, settings) : { created: 0, updated: 0 };
+          const records = partyOut.created + partyOut.updated + itemOut.created + itemOut.updated;
+          const message = [
+            parties.length ? `Parties: ${partyOut.created} new, ${partyOut.updated} updated` : null,
+            stockItems.length ? `Items: ${itemOut.created} new, ${itemOut.updated} updated` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          steps.push({ entity: "pull-masters", status: "success", records, message });
+          await logSync(deps.db, actor, { provider: "tally", direction: "import", entity: "masters", status: "success", records, message });
+        } catch (err) {
+          const message = err instanceof ImsError ? err.message : err instanceof Error ? err.message : "Masters import failed";
+          steps.push({ entity: "pull-masters", status: "failed", records: 0, message });
+          await logSync(deps.db, actor, { provider: "tally", direction: "import", entity: "masters", status: "failed", records: 0, message });
+        }
+      }
+    }
+  }
+  if (doImport && (view.sync.salesVouchers || view.sync.purchaseVouchers || view.sync.notes)) {
+    const pull = await postToTally(cfg, tallyExportVouchersEnvelope(cfg.company, fy.from, fy.to), 60_000);
+    if (!pull.ok) {
+      steps.push({ entity: "pull-vouchers", status: "failed", records: 0, message: pull.reason });
+      await logSync(deps.db, actor, { provider: "tally", direction: "import", entity: "vouchers", status: "failed", records: 0, message: pull.reason });
+    } else {
+      const parsed = parseTallySalesXml(pull.text);
+      const sales = view.sync.salesVouchers ? parsed.filter((i) => i.kind === "Sales") : [];
+      const purchases = view.sync.purchaseVouchers ? parsed.filter((i) => i.kind === "Purchase") : [];
+      const notes = view.sync.notes ? parsed.filter((i) => i.kind === "Credit Note" || i.kind === "Debit Note") : [];
+      if (!sales.length && !purchases.length && !notes.length) {
+        steps.push({
+          entity: "pull-vouchers",
+          status: "success",
+          records: 0,
+          message: /<VOUCHER\b/i.test(pull.text)
+            ? "No new Sales / Purchase / Credit / Debit Note vouchers in range"
+            : "Tally answered but returned no voucher XML — use file import if Export Data is restricted",
+        });
+        await logSync(deps.db, actor, { provider: "tally", direction: "import", entity: "vouchers", status: "success", records: 0, message: steps[steps.length - 1].message });
+      } else {
+        try {
+          const invOut = sales.length ? await commitTallyInvoices(deps, actor, settings, sales) : { created: [], planned: [] as CanonicalImportRow[] };
+          const billOut = purchases.length ? await commitTallyPurchases(deps, actor, settings, purchases) : { created: [], planned: [] as CanonicalImportRow[] };
+          const cnOut = notes.some((n) => n.kind === "Credit Note") ? await commitTallyCreditNotes(deps, actor, notes) : { created: [], planned: [] as CanonicalImportRow[] };
+          const dnOut = notes.some((n) => n.kind === "Debit Note") ? await commitTallyDebitNotes(deps, actor, notes) : { created: [], planned: [] as CanonicalImportRow[] };
+          const planned = [...invOut.planned, ...billOut.planned, ...cnOut.planned, ...dnOut.planned];
+          const conflicts = planned.filter((r) => r.action === "conflict").length;
+          const skipped = planned.filter((r) => r.action === "skip_matched").length;
+          const n = invOut.created.length + billOut.created.length + cnOut.created.length + dnOut.created.length;
+          const status: SyncStatus = conflicts ? "partial" : "success";
+          const message = `Pulled ${sales.length + purchases.length + notes.length}: ${invOut.created.length} sales, ${billOut.created.length} purchases, ${cnOut.created.length} credit notes, ${dnOut.created.length} debit notes, ${skipped} matched, ${conflicts} conflict${conflicts === 1 ? "" : "s"}`;
+          steps.push({ entity: "pull-vouchers", status, records: n, message });
+          await logSync(deps.db, actor, { provider: "tally", direction: "import", entity: "vouchers", status, records: n, message });
+        } catch (err) {
+          const message = err instanceof ImsError ? err.message : err instanceof Error ? err.message : "Import failed";
+          steps.push({ entity: "pull-vouchers", status: "failed", records: 0, message });
+          await logSync(deps.db, actor, { provider: "tally", direction: "import", entity: "vouchers", status: "failed", records: 0, message });
+        }
+      }
+    }
+  }
+  if (!doExport && !doImport) {
+    steps.push({ entity: "sync", status: "failed", records: 0, message: "Pick a sync direction (IMS → Tally, Tally → IMS, or two-way)" });
+  }
+  const overall: SyncStatus = !steps.length ? "success" : steps.every((s) => s.status === "success") ? "success" : steps.some((s) => s.status !== "failed") ? "partial" : "failed";
+  await touchIntegration(deps.db, actor.tenantId, "tally", overall);
+  await recordEvent(deps, actor, {
+    type: "integration.tally.sync",
+    entityType: "integration",
+    entityId: "tally",
+    summary: `Tally sync ${overall}: ${steps.map((s) => `${s.entity} ${s.records}`).join(", ") || "nothing to sync"}`,
+    payload: { steps, mode },
+    ip: opts.ip,
+  });
+  return { status: overall, steps, tally: tallyView(await loadIntegration(deps.db, actor.tenantId, "tally")) };
+}
+
+/** Background tick: sync every enabled Tally tenant whose frequency says it is due. */
+export async function runDueTallySyncs(deps: ImsDeps): Promise<{ scanned: number; ran: number; results: Array<{ tenantId: number; status: SyncStatus | "skipped"; message?: string }> }> {
+  const list = await rows<{ tenant_id: number; enabled: number; config: unknown; sync: unknown; last_sync_at: string | null; last_status: string | null; updated_at: string | null }>(
+    deps.db,
+    `SELECT tenant_id, enabled, config, sync, last_sync_at, last_status, updated_at FROM ims_integrations WHERE provider = 'tally' AND enabled = 1 LIMIT 500`,
+  );
+  const results: Array<{ tenantId: number; status: SyncStatus | "skipped"; message?: string }> = [];
+  let ran = 0;
+  for (const row of list) {
+    const view = tallyView({
+      provider: "tally",
+      enabled: row.enabled,
+      config: row.config,
+      sync: row.sync,
+      last_sync_at: row.last_sync_at,
+      last_status: row.last_status,
+      updated_at: row.updated_at,
+    });
+    if (!view.enabled || !view.config) {
+      results.push({ tenantId: row.tenant_id, status: "skipped", message: "incomplete config" });
+      continue;
+    }
+    if (!view.syncDue) {
+      results.push({ tenantId: row.tenant_id, status: "skipped", message: "not due" });
+      continue;
+    }
+    const actor: ImsActor = { tenantId: row.tenant_id, userId: null, role: "owner", name: "Tally scheduler", email: null };
+    try {
+      const out = await runTallySyncNow(deps, actor);
+      ran += 1;
+      results.push({ tenantId: row.tenant_id, status: out.status });
+    } catch (err) {
+      ran += 1;
+      const message = err instanceof Error ? err.message : "Sync failed";
+      await touchIntegration(deps.db, row.tenant_id, "tally", "failed").catch(() => undefined);
+      results.push({ tenantId: row.tenant_id, status: "failed", message });
+    }
+  }
+  return { scanned: list.length, ran, results };
 }
 
 /* ---------- POS ingest ---------- */
@@ -739,66 +1527,12 @@ export function registerIntegrations(router: Router, deps: ImsDeps): void {
     res.json({ reachable: true, latencyMs: r.ms, message, companies, companyFound, httpStatus: r.status });
   });
 
-  /** Push masters and vouchers straight into Tally over its XML server, logging each batch. */
+  /** Push and/or pull over Tally's XML server, depending on syncMode (export / import / two_way). */
   router.post("/integrations/tally/sync-now", async (req, res) => {
     const actor = actorOf(res);
     requirePerm(res, "integrations");
-    const view = tallyView(await loadIntegration(deps.db, actor.tenantId, "tally"));
-    if (!view.enabled || !view.config) throw badRequest("Connect Tally first (host, port and company)");
-    const cfg = view.config;
-    const settings = await getSettings(deps, actor.tenantId);
-    const today = todayISO();
-    const fy = periodRange("fytd", today, settings.fiscalYearStart);
-    const since = view.lastSyncAt && view.lastStatus === "success" ? view.lastSyncAt : null;
-    const steps: Array<{ entity: string; status: SyncStatus; records: number; message: string }> = [];
-    const push = async (entity: string, report: "All Masters" | "Vouchers", messages: string[], records: number) => {
-      if (!messages.length) {
-        steps.push({ entity, status: "success", records: 0, message: "Nothing new to send" });
-        return true;
-      }
-      const r = await postToTally(cfg, tallyEnvelope(cfg.company, report, messages), 30_000);
-      if (!r.ok) {
-        steps.push({ entity, status: "failed", records: 0, message: r.reason });
-        await logSync(deps.db, actor, { provider: "tally", direction: "export", entity, status: "failed", records: 0, message: r.reason });
-        return false;
-      }
-      const sum = summarizeImport(parseTallyResponse(r.text));
-      steps.push({ entity, status: sum.status, records, message: sum.message });
-      await logSync(deps.db, actor, { provider: "tally", direction: "export", entity, status: sum.status, records, message: sum.message });
-      return true;
-    };
-    let reachable = true;
-    if (view.sync.ledgers || view.sync.stockItems) {
-      const m = await buildMasters(deps.db, actor.tenantId, settings, { ledgers: view.sync.ledgers, stockItems: view.sync.stockItems });
-      reachable = await push("masters", "All Masters", m.messages, m.counts.ledgers + m.counts.stockItems);
-    }
-    if (reachable && view.sync.salesVouchers) {
-      const v = await buildSalesVouchers(deps.db, actor.tenantId, { ...fy, since });
-      reachable = await push("sales", "Vouchers", v.map(tallyVoucherXml), v.length);
-    }
-    if (reachable && view.sync.purchaseVouchers) {
-      const v = await buildPurchaseVouchers(deps.db, actor.tenantId, settings, { ...fy, since });
-      reachable = await push("purchases", "Vouchers", v.map(tallyVoucherXml), v.length);
-    }
-    if (reachable && view.sync.notes) {
-      const v = await buildNoteVouchers(deps.db, actor.tenantId, settings, { ...fy, since });
-      reachable = await push("notes", "Vouchers", v.map(tallyVoucherXml), v.length);
-    }
-    if (reachable && view.sync.receipts) {
-      const v = await buildCashVouchers(deps.db, actor.tenantId, { ...fy, since });
-      await push("receipts", "Vouchers", v.map(tallyCashVoucherXml), v.length);
-    }
-    const overall: SyncStatus = steps.every((s) => s.status === "success") ? "success" : steps.some((s) => s.status !== "failed") ? "partial" : "failed";
-    await touchIntegration(deps.db, actor.tenantId, "tally", overall);
-    await recordEvent(deps, actor, {
-      type: "integration.tally.sync",
-      entityType: "integration",
-      entityId: "tally",
-      summary: `Tally sync ${overall}: ${steps.map((s) => `${s.entity} ${s.records}`).join(", ") || "nothing to send"}`,
-      payload: { steps },
-      ip: req.ip,
-    });
-    res.json({ status: overall, steps, tally: tallyView(await loadIntegration(deps.db, actor.tenantId, "tally")) });
+    const out = await runTallySyncNow(deps, actor, { ip: req.ip });
+    res.json(out);
   });
 
   /** Always-works fallback: a Tally import file the user loads via Gateway of Tally → Import Data. */
@@ -814,36 +1548,43 @@ export function registerIntegrations(router: Router, deps: ImsDeps): void {
     const toQ = qstr(req.query.to, 10);
     const range = isISODate(fromQ) && isISODate(toQ) && fromQ <= toQ ? { from: fromQ, to: toQ } : periodRange(qstr(req.query.period) || "fytd", today, settings.fiscalYearStart);
     const company = tallyView(await loadIntegration(deps.db, actor.tenantId, "tally")).config?.company ?? settings.businessName ?? "";
-    const parts: string[] = [];
+    const masterParts: string[] = [];
+    const voucherParts: string[] = [];
     let records = 0;
-    let report: "All Masters" | "Vouchers" = "Vouchers";
     if (type === "masters" || type === "all") {
       const m = await buildMasters(deps.db, actor.tenantId, settings, { ledgers: true, stockItems: true });
-      parts.push(...m.messages);
+      masterParts.push(...m.messages);
       records += m.counts.ledgers + m.counts.stockItems;
-      if (type === "masters") report = "All Masters";
     }
     if (type === "sales" || type === "all") {
       const v = await buildSalesVouchers(deps.db, actor.tenantId, range);
-      parts.push(...v.map(tallyVoucherXml));
+      voucherParts.push(...v.map(tallyVoucherXml));
       records += v.length;
     }
     if (type === "purchases" || type === "all") {
       const v = await buildPurchaseVouchers(deps.db, actor.tenantId, settings, range);
-      parts.push(...v.map(tallyVoucherXml));
+      voucherParts.push(...v.map(tallyVoucherXml));
       records += v.length;
     }
     if (type === "notes" || type === "all") {
       const v = await buildNoteVouchers(deps.db, actor.tenantId, settings, range);
-      parts.push(...v.map(tallyVoucherXml));
+      voucherParts.push(...v.map(tallyVoucherXml));
       records += v.length;
     }
     if (type === "receipts" || type === "all") {
       const v = await buildCashVouchers(deps.db, actor.tenantId, range);
-      parts.push(...v.map(tallyCashVoucherXml));
+      voucherParts.push(...v.map(tallyCashVoucherXml));
       records += v.length;
     }
-    const xml = tallyEnvelope(company, report, parts);
+    // Tally Gateway needs the correct REPORTNAME — never mix masters into a Vouchers envelope.
+    const xml =
+      type === "all"
+        ? [masterParts.length ? tallyEnvelope(company, "All Masters", masterParts) : "", voucherParts.length ? tallyEnvelope(company, "Vouchers", voucherParts) : ""]
+            .filter(Boolean)
+            .join("\n")
+        : type === "masters"
+          ? tallyEnvelope(company, "All Masters", masterParts)
+          : tallyEnvelope(company, "Vouchers", voucherParts);
     await logSync(deps.db, actor, {
       provider: "tally",
       direction: "export",
@@ -856,6 +1597,156 @@ export function registerIntegrations(router: Router, deps: ImsDeps): void {
     res.setHeader("Content-Type", "application/xml; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${name}"`);
     res.setHeader("X-Record-Count", String(records));
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, X-Record-Count");
+    res.send(xml);
+  });
+
+  /** Parse Tally voucher / masters XML (or CSV) into a preview (no writes). */
+  router.post("/integrations/tally/import/preview", async (req, res) => {
+    const actor = actorOf(res);
+    requireAnyPerm(res, ["integrations", "sales"]);
+    const body = parse(TallyImportPreviewInput, req.body);
+    const vouchers = parseTallyImportPayload(body);
+    const parties = body.xml?.trim() ? parseTallyLedgersXml(body.xml) : [];
+    const stockItems = body.xml?.trim() ? parseTallyStockItemsXml(body.xml) : [];
+    if (!vouchers.length && !parties.length && !stockItems.length) {
+      throw badRequest("No Sales / Purchase / Credit / Debit Note vouchers, party ledgers, or stock items found. Export vouchers or masters from Tally as XML.");
+    }
+    if (vouchers.length > 2000) throw badRequest("Cap is 2,000 vouchers per import — split the file and try again");
+    const sales = vouchers.filter((v) => v.kind === "Sales");
+    const purchases = vouchers.filter((v) => v.kind === "Purchase");
+    const notes = vouchers.filter((v) => v.kind === "Credit Note" || v.kind === "Debit Note");
+    const salesExisting = await loadTallyImportExisting(deps.db, actor.tenantId, sales);
+    const salesPlan = planTallyImport(sales, salesExisting);
+    const purchaseNos = purchases.map((p) => p.invoiceNo.trim()).filter(Boolean);
+    const purchaseExistingRows = purchaseNos.length
+      ? await rows<{ id: string; bill_no: string; supplier_bill_no: string | null; grand_total: string }>(
+          deps.db,
+          `SELECT id, bill_no, supplier_bill_no, grand_total FROM ims_bills
+           WHERE tenant_id = :tenantId AND status <> 'cancelled' AND (supplier_bill_no IN (:nos) OR bill_no IN (:nos)) LIMIT 5000`,
+          { tenantId: actor.tenantId, nos: purchaseNos },
+        )
+      : [];
+    const purchasePlan = planTallyImport(
+      purchases,
+      purchaseExistingRows.map((r) => ({
+        id: r.id,
+        invoiceNo: (r.supplier_bill_no || r.bill_no).trim(),
+        sourceTool: "tally",
+        sourceRef: (r.supplier_bill_no || r.bill_no).trim(),
+        grandTotal: money(r.grand_total),
+      })),
+    );
+    const noteNos = notes.map((n) => n.invoiceNo.trim()).filter(Boolean);
+    const noteExistingRows = noteNos.length
+      ? await rows<{ id: string; return_no: string; total: string }>(
+          deps.db,
+          `SELECT id, return_no, total FROM ims_returns WHERE tenant_id = :tenantId AND status <> 'cancelled' AND return_no IN (:nos) LIMIT 5000`,
+          { tenantId: actor.tenantId, nos: noteNos },
+        )
+      : [];
+    const notesPlan = planTallyImport(
+      notes,
+      noteExistingRows.map((r) => ({ id: r.id, invoiceNo: r.return_no, sourceTool: "tally", sourceRef: r.return_no, grandTotal: money(r.total) })),
+    );
+    const planned = [...salesPlan, ...purchasePlan, ...notesPlan];
+    const counts = { create: 0, skip_matched: 0, conflict: 0 };
+    for (const r of planned) counts[r.action] += 1;
+    res.json({
+      counts,
+      parties: parties.length,
+      stockItems: stockItems.length,
+      rows: planned.map(mapImportRow),
+    });
+  });
+
+  /**
+   * Commit selected Tally vouchers into IMS.
+   * Sales → invoices; Purchase → bills; Credit notes → customer returns; Debit notes → supplier returns (no stock).
+   * Masters XML also upserts parties and stock items.
+   */
+  router.post("/integrations/tally/import/commit", async (req, res) => {
+    const actor = actorOf(res);
+    requireAnyPerm(res, ["integrations", "sales"]);
+    const body = parse(TallyImportCommitInput, req.body);
+    const vouchers = parseTallyImportPayload(body);
+    const parties = body.xml?.trim() ? parseTallyLedgersXml(body.xml) : [];
+    const stockItems = body.xml?.trim() ? parseTallyStockItemsXml(body.xml) : [];
+    if (!vouchers.length && !parties.length && !stockItems.length) throw badRequest("No vouchers, party ledgers, or stock items found in that file");
+    if (vouchers.length > 2000) throw badRequest("Cap is 2,000 vouchers per import — split the file and try again");
+    const settings = await getSettings(deps, actor.tenantId);
+    // Masters first so voucher lines can match newly imported catalog items / parties.
+    const partyOut = parties.length ? await commitTallyParties(deps, actor, parties) : { created: 0, updated: 0 };
+    const itemOut = stockItems.length ? await commitTallyStockItems(deps, actor, stockItems, settings) : { created: 0, updated: 0 };
+    const sales = vouchers.filter((v) => v.kind === "Sales");
+    const purchases = vouchers.filter((v) => v.kind === "Purchase");
+    const creditNotes = vouchers.filter((v) => v.kind === "Credit Note");
+    const debitNotes = vouchers.filter((v) => v.kind === "Debit Note");
+    const invOut = await commitTallyInvoices(deps, actor, settings, sales, { keys: body.keys, asDraft: body.asDraft });
+    const billOut = await commitTallyPurchases(deps, actor, settings, purchases, { keys: body.keys });
+    const cnOut = await commitTallyCreditNotes(deps, actor, creditNotes, { keys: body.keys });
+    const dnOut = await commitTallyDebitNotes(deps, actor, debitNotes, { keys: body.keys });
+    const createdN = invOut.created.length + billOut.created.length + cnOut.created.length + dnOut.created.length + partyOut.created + itemOut.created;
+    if (!createdN && !partyOut.updated && !itemOut.updated) {
+      throw badRequest(body.keys?.length ? "None of the selected rows are new — nothing to import" : "Nothing new to import (all matched or conflicted)");
+    }
+
+    const planned = [...invOut.planned, ...billOut.planned, ...cnOut.planned, ...dnOut.planned];
+    const voucherRecords = invOut.created.length + billOut.created.length + cnOut.created.length + dnOut.created.length;
+    await logSync(deps.db, actor, {
+      provider: "tally",
+      direction: "import",
+      entity: "vouchers",
+      status: "success",
+      records: voucherRecords,
+      message: `Imported ${invOut.created.length} sales, ${billOut.created.length} purchases, ${cnOut.created.length} credit notes, ${dnOut.created.length} debit notes, ${partyOut.created + partyOut.updated} parties, ${itemOut.created + itemOut.updated} items`,
+    });
+    await touchIntegration(deps.db, actor.tenantId, "tally", "success");
+    await recordEvent(deps, actor, {
+      type: "integration.tally.import",
+      entityType: "integration",
+      entityId: "tally",
+      summary: `Imported from Tally: ${invOut.created.length} invoices, ${billOut.created.length} bills, ${cnOut.created.length} credit notes, ${dnOut.created.length} debit notes, ${partyOut.created} parties, ${itemOut.created} items`,
+      payload: { invoices: invOut.created.length, bills: billOut.created.length, creditNotes: cnOut.created.length, debitNotes: dnOut.created.length, parties: partyOut, items: itemOut },
+      ip: req.ip,
+    });
+    res.json({
+      created: invOut.created,
+      bills: billOut.created,
+      creditNotes: cnOut.created,
+      debitNotes: dnOut.created,
+      parties: partyOut,
+      items: itemOut,
+      skipped: planned.filter((r) => r.action === "skip_matched").length,
+      conflicts: planned.filter((r) => r.action === "conflict").length,
+      rows: planned.map(mapImportRow),
+    });
+  });
+
+  /** One issued invoice as a Tally import file (Gateway of Tally → Import → Transactions). */
+  router.get("/integrations/tally/invoice/:id.xml", async (req, res) => {
+    const actor = actorOf(res);
+    requireAnyPerm(res, ["integrations", "sales", "audit"]);
+    const id = String(req.params.id || "");
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw badRequest("Invalid invoice id");
+    const settings = await getSettings(deps, actor.tenantId);
+    const company = tallyView(await loadIntegration(deps.db, actor.tenantId, "tally")).config?.company ?? settings.businessName ?? "";
+    const vouchers = await buildSalesVouchers(deps.db, actor.tenantId, { from: "1900-01-01", to: "2999-12-31", invoiceId: id });
+    if (!vouchers.length) {
+      const row = await one<{ id: string; status: string; source_tool: string | null }>(
+        deps.db,
+        `SELECT id, status, source_tool FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id LIMIT 1`,
+        { tenantId: actor.tenantId, id },
+      );
+      if (!row) throw notFound("Invoice");
+      if (row.status !== "issued") throw badRequest("Only issued invoices can be exported to Tally");
+      throw badRequest("This invoice came from Tally — export is for IMS-origin invoices only");
+    }
+    const xml = tallyEnvelope(company, "Vouchers", vouchers.map(tallyVoucherXml));
+    const safeNo = vouchers[0].number.replace(/[^\w.-]+/g, "_").slice(0, 40);
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="Tally_Invoice_${safeNo}.xml"`);
+    res.setHeader("X-Record-Count", "1");
     res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, X-Record-Count");
     res.send(xml);
   });
