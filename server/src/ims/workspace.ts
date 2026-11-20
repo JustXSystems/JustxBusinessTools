@@ -268,9 +268,9 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       { tenantId, ...range },
     );
 
-    const recent = await rows<{ id: string; item_id: string; item_name: string; type: string; qty: string; after_qty: string; ref_no: string | null; party_name: string | null; actor_name: string | null; created_at: string }>(
+    const recent = await rows<{ id: string; item_id: string; item_name: string; type: string; qty: string; after_qty: string; ref_type: string | null; ref_no: string | null; party_name: string | null; actor_name: string | null; created_at: string }>(
       deps.db,
-      `SELECT id, item_id, item_name, type, qty, after_qty, ref_no, party_name, actor_name, created_at FROM ims_movements
+      `SELECT id, item_id, item_name, type, qty, after_qty, ref_type, ref_no, party_name, actor_name, created_at FROM ims_movements
        WHERE tenant_id = :tenantId ORDER BY created_at DESC LIMIT 8`,
       { tenantId },
     );
@@ -342,7 +342,7 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       categories: [...byCategory.values()].map((c) => ({ ...c, units: round3(c.units), value: round2(c.value) })).sort((a, b) => b.value - a.value),
       series: fullSeries,
       topMovers: topMovers.map((m) => ({ itemId: m.item_id, name: m.item_name, qty: round3(money(m.qty)), value: round2(money(m.value)) })),
-      recent: recent.map((m) => ({ id: m.id, itemId: m.item_id, itemName: m.item_name, type: m.type, qty: round3(money(m.qty)), after: round3(money(m.after_qty)), refNo: m.ref_no, partyName: m.party_name, actorName: m.actor_name, createdAt: tsOf(m.created_at) })),
+      recent: recent.map((m) => ({ id: m.id, itemId: m.item_id, itemName: m.item_name, type: m.type, qty: round3(money(m.qty)), after: round3(money(m.after_qty)), refType: m.ref_type, refNo: m.ref_no, partyName: m.party_name, actorName: m.actor_name, createdAt: tsOf(m.created_at) })),
       notifications: await notifications(deps, tenantId, access.perms, enabledModulesOf(res) as ImsModuleKey[] | null),
       insights: {
         totalUnits: round3(totalUnits),

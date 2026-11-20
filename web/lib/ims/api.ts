@@ -287,7 +287,7 @@ export type ImsDashboard = {
   categories: Array<{ category: string; items: number; units: number; value: number }>;
   series: Array<{ date: string; in: number; out: number }>;
   topMovers: Array<{ itemId: string; name: string; qty: number; value: number }>;
-  recent: Array<{ id: string; itemId: string; itemName: string; type: MovementType; qty: number; after: number; refNo: string | null; partyName: string | null; actorName: string | null; createdAt: string | null }>;
+  recent: Array<{ id: string; itemId: string; itemName: string; type: MovementType; qty: number; after: number; refType: string | null; refNo: string | null; partyName: string | null; actorName: string | null; createdAt: string | null }>;
   notifications: ImsNotification[];
 };
 
