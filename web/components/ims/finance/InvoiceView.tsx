@@ -218,7 +218,8 @@ function InvoiceBody({
                 {inv.dcLinks!.map((dc) => (
                   <div key={dc.id} className="ims-row" style={{ justifyContent: "space-between", gap: 8 }}>
                     <span style={{ fontSize: 13 }}>
-                      <b>{dc.docNo}</b> · {dc.docDate}
+                      <b>{dc.docNo}</b>
+                      {dc.status ? ` · ${dc.status}` : ""}
                     </span>
                     {can("bom") ? (
                       <Button size="sm" variant="ghost" onClick={() => navigate("bomDc", `open:${dc.id}`)}>
