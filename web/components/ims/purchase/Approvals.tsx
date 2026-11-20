@@ -7,6 +7,7 @@ import { ims, type ImsEvent, type ImsStockCheck } from "@/lib/ims/api";
 import { dateLabel, inr, inrCompact, inrExact, qtyText, stampLabel, timeAgo } from "@/lib/ims/format";
 import { bom, type BomDc } from "@/lib/ims/bom";
 import { purchase, type ApprovalBill, type PurchaseOrder } from "@/lib/ims/purchase";
+import { DocRefLink } from "../bom/DocRefLink";
 import { ErrorBlock, LoadingBlock, Loaded, PageHeader, PersonAvatar, RequirePerm, Stack, SubTabs, useIms, useImsAction, useImsData } from "../core";
 import { KeyValues, ReasonDialog } from "./ui";
 
@@ -542,18 +543,34 @@ function DcQueue({ dcs }: { dcs: Array<BomDc & { bomStatus?: string }> }) {
             </span>
             <div style={{ minWidth: 0 }}>
               <div className="ims-approval-title">
-                {dc.docNo} · {dc.customerName || "No customer"}
+                <DocRefLink module="bomDc" intent={`open:${dc.id}`}>
+                  {dc.docNo}
+                </DocRefLink>
+                {" · "}
+                {dc.customerName || "No customer"}
               </div>
               <div className="ims-approval-meta">
                 {[
-                  dc.bomDocNo ? `BOM ${dc.bomDocNo}` : null,
+                  dc.bomDocNo ? (
+                    <span key="bom">
+                      BOM{" "}
+                      <DocRefLink module="bom" intent={dc.bomDocId ? `open:${dc.bomDocId}` : undefined} enabled={Boolean(dc.bomDocId)}>
+                        {dc.bomDocNo}
+                      </DocRefLink>
+                    </span>
+                  ) : null,
                   `dated ${dateLabel(dc.docDate)}`,
                   dc.verifiedByName ? `verified by ${dc.verifiedByName}` : null,
                   !canApproveBom ? "BOM not confirmed" : null,
                   dc.updatedAt ? timeAgo(dc.updatedAt) : null,
                 ]
                   .filter(Boolean)
-                  .join(" · ")}
+                  .map((part, i, arr) => (
+                    <span key={i}>
+                      {part}
+                      {i < arr.length - 1 ? " · " : null}
+                    </span>
+                  ))}
               </div>
             </div>
             <div className="ims-approval-actions">

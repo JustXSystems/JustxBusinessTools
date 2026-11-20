@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Alert, Badge, Button, Card, Dialog, WidgetCard } from "@/components/bos";
 import { bom, type BomDc } from "@/lib/ims/bom";
 import { finance, INVOICE_BADGE, invoiceShareText, methodLabel, whatsappShareLink, type InvoiceDetail } from "@/lib/ims/finance";
 import { dateLabel, inrExact, stampLabel } from "@/lib/ims/format";
 import { Loaded, Stack, StatusBadge, useIms, useImsAction, useImsData, usePrint } from "../core";
+import { DocRefLink } from "../bom/DocRefLink";
 import { activityTone, BackLink, ConfirmDialog, InvoicePaper, KeyValues, PaymentDialog, ReasonDialog, Stats, Timeline, type TimelineItem } from "./shared";
 
 type Dlg = null | "pay" | "cancel" | "delete" | "share" | { voidId: string; amount: number };
@@ -84,12 +85,11 @@ function InvoiceBody({
               <div style={{ marginBottom: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <Badge tag="lavender" title={inv.sourceTool === "ims_bom" ? "Created from Bill of Materials" : "Created from quotation"}>
                   {inv.sourceTool === "ims_bom" ? "From BOM" : "From Quotation"}
-                  {inv.sourceLabel ? ` · ${inv.sourceLabel}` : ""}
                 </Badge>
-                {inv.sourceTool === "ims_bom" && inv.sourceRef && can("bom") ? (
-                  <Button size="sm" variant="ghost" onClick={() => navigate("bom", `open:${inv.sourceRef}`)}>
-                    {inv.sourceLabel ? `Open ${inv.sourceLabel}` : "Open BOM"}
-                  </Button>
+                {inv.sourceTool === "ims_bom" && inv.sourceLabel ? (
+                  <DocRefLink module="bom" intent={inv.sourceRef ? `open:${inv.sourceRef}` : undefined} enabled={can("bom") && Boolean(inv.sourceRef)}>
+                    {inv.sourceLabel}
+                  </DocRefLink>
                 ) : null}
               </div>
             ) : null}
@@ -104,25 +104,44 @@ function InvoiceBody({
               <KeyValues
                 rows={[
                   ["Customer", inv.customerName],
-                  ...(inv.sourceTool === "ims_bom" && inv.sourceLabel ? ([["BOM", inv.sourceLabel]] as Array<[string, string]>) : []),
+                  ...(inv.sourceTool === "ims_bom" && inv.sourceLabel
+                    ? ([
+                        [
+                          "BOM",
+                          <DocRefLink key="bom" module="bom" intent={inv.sourceRef ? `open:${inv.sourceRef}` : undefined} enabled={can("bom") && Boolean(inv.sourceRef)}>
+                            {inv.sourceLabel}
+                          </DocRefLink>,
+                        ],
+                      ] as Array<[string, ReactNode]>)
+                    : []),
                   ["Due", inv.status === "issued" ? `${dateLabel(inv.dueDate)}${inv.daysOverdue > 0 ? ` · ${inv.daysOverdue} days overdue` : ""}` : dateLabel(inv.dueDate)],
                   ["Tax", inv.intraState ? `CGST ${inrExact(inv.cgst)} + SGST ${inrExact(inv.sgst)}` : `IGST ${inrExact(inv.igst)}`],
                   [
                     "Stock",
-                    inv.dcLinks?.length
-                      ? inv.stockPosted
-                        ? `Via ${inv.dcLinks.length} DC${inv.dcLinks.length === 1 ? "" : "s"} (${inv.dcLinks.map((d) => d.docNo).join(", ")})`
-                        : `DC linked · ${inv.dcLinks.map((d) => d.docNo).join(", ")}`
-                      : inv.stockPosted
-                        ? "Moved out"
-                        : isDraft
-                          ? "Moves when issued"
-                          : detail.activity.some((a) => /stock remains on delivery challan/i.test(String(a.message ?? "")))
-                            ? "Remained on delivery challans"
-                            : "Returned",
+                    inv.dcLinks?.length ? (
+                      <span>
+                        {inv.stockPosted ? `Via ${inv.dcLinks.length} DC${inv.dcLinks.length === 1 ? "" : "s"} · ` : "DC linked · "}
+                        {inv.dcLinks.map((d, i) => (
+                          <span key={d.id}>
+                            <DocRefLink module="bomDc" intent={`open:${d.id}`} enabled={can("bom")}>
+                              {d.docNo}
+                            </DocRefLink>
+                            {i < inv.dcLinks!.length - 1 ? ", " : ""}
+                          </span>
+                        ))}
+                      </span>
+                    ) : inv.stockPosted ? (
+                      "Moved out"
+                    ) : isDraft ? (
+                      "Moves when issued"
+                    ) : detail.activity.some((a) => /stock remains on delivery challan/i.test(String(a.message ?? ""))) ? (
+                      "Remained on delivery challans"
+                    ) : (
+                      "Returned"
+                    ),
                   ],
-                  ...(inv.promiseDate ? ([["Promise", `${inrExact(inv.promiseAmount ?? inv.balance)} by ${dateLabel(inv.promiseDate)}`]] as Array<[string, string]>) : []),
-                  ...(inv.disputed ? ([["Dispute", inv.disputeReason ?? "Disputed"]] as Array<[string, string]>) : []),
+                  ...(inv.promiseDate ? ([["Promise", `${inrExact(inv.promiseAmount ?? inv.balance)} by ${dateLabel(inv.promiseDate)}`]] as Array<[string, ReactNode]>) : []),
+                  ...(inv.disputed ? ([["Dispute", inv.disputeReason ?? "Disputed"]] as Array<[string, ReactNode]>) : []),
                 ]}
               />
             </div>
@@ -219,22 +238,12 @@ function InvoiceBody({
                 {inv.dcLinks!.map((dc) => (
                   <div key={dc.id} className="ims-row" style={{ justifyContent: "space-between", gap: 8 }}>
                     <span style={{ fontSize: 13 }}>
-                      <button
-                        type="button"
-                        className="ims-doc-ref"
-                        style={{ fontWeight: 650 }}
-                        disabled={!can("bom")}
-                        onClick={() => can("bom") && navigate("bomDc", `open:${dc.id}`)}
-                      >
+                      <DocRefLink module="bomDc" intent={`open:${dc.id}`} enabled={can("bom")}>
                         {dc.docNo}
-                      </button>
+                      </DocRefLink>
                       {dc.status ? ` · ${dc.status}` : ""}
+                      {dc.stockPosted ? " · stock out" : ""}
                     </span>
-                    {can("bom") ? (
-                      <Button size="sm" variant="ghost" onClick={() => navigate("bomDc", `open:${dc.id}`)}>
-                        Open DC
-                      </Button>
-                    ) : null}
                   </div>
                 ))}
               </div>

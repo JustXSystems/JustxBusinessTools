@@ -51,6 +51,7 @@ import { BomPaper, mergePaperOptions, modelFromDoc, type BomPaperModel } from ".
 import { BomActivityStrip, BomList, canDeleteBomDoc } from "./BomList";
 import { BomSplitLayout } from "./BomSplitLayout";
 import { DeliveryChallanPanel, DeliveryChallanWorkspace, type DcWorkspace } from "./DeliveryChallanPanel";
+import { DocRefLink } from "./DocRefLink";
 
 type View =
   | { mode: "list" }
@@ -548,12 +549,13 @@ function BomViewer({
                 </Alert>
                 {doc.invoiceId ? (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <Badge tone="emerald">Invoice linked · {doc.invoiceConvertMode ? BOM_INVOICE_CONVERT_LABEL[doc.invoiceConvertMode] : "—"}</Badge>
-                    {can("sales") ? (
-                      <Button size="sm" onClick={() => navigate("sales", `open:${doc.invoiceId}`)}>
-                        Open invoice
-                      </Button>
-                    ) : null}
+                    <Badge tone="emerald">
+                      Invoice linked
+                      {doc.invoiceConvertMode ? ` · ${BOM_INVOICE_CONVERT_LABEL[doc.invoiceConvertMode]}` : ""}
+                    </Badge>
+                    <DocRefLink module="sales" intent={`open:${doc.invoiceId}`} enabled={can("sales")}>
+                      {doc.invoiceNo || "Open invoice"}
+                    </DocRefLink>
                   </div>
                 ) : can("sales") ? (
                   <>

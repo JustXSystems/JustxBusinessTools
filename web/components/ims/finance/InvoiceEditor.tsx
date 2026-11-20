@@ -5,6 +5,7 @@ import { Alert, Badge, Button, Card, Field, FormGrid, Input, Select, Switch, Tex
 import type { PartyOption } from "@/lib/ims/api";
 import { finance, gstStateName, GST_STATES, intraStateFor, type InvoiceDetail, type InvoiceInput } from "@/lib/ims/finance";
 import { addDaysISO, computeTotals, dateLabel, inrExact, qtyText, round2 } from "@/lib/ims/format";
+import { DocRefLink } from "../bom/DocRefLink";
 import { ErrorBlock, LoadingBlock, PageHeader, Stack, useIms, useImsAction, useImsData } from "../core";
 import { blankLine, lineKey, LineEditor, toLineInputs, type EditableLine } from "../shared/LineEditor";
 import { PartySelect, useItemCatalog } from "../shared/pickers";
@@ -33,7 +34,7 @@ export function InvoiceEditor({ id, onClose }: { id: string | null; onClose: (id
 }
 
 function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: (id: string | null) => void }) {
-  const { session, navigate, can } = useIms();
+  const { session, can } = useIms();
   const settings = session.settings;
   const { run, busy } = useImsAction();
   const catalog = useItemCatalog();
@@ -158,15 +159,12 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
         }
         actions={
           inv?.sourceTool && inv.sourceTool !== "pos" ? (
-            <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-              <Badge tag="lavender">
-                {inv.sourceTool === "ims_bom" ? "From BOM" : "From Quotation"}
-                {inv.sourceLabel ? ` · ${inv.sourceLabel}` : ""}
-              </Badge>
-              {inv.sourceTool === "ims_bom" && inv.sourceRef && can("bom") ? (
-                <Button size="sm" variant="ghost" onClick={() => navigate("bom", `open:${inv.sourceRef}`)}>
-                  {inv.sourceLabel ? `Open ${inv.sourceLabel}` : "Open BOM"}
-                </Button>
+            <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <Badge tag="lavender">{inv.sourceTool === "ims_bom" ? "From BOM" : "From Quotation"}</Badge>
+              {inv.sourceTool === "ims_bom" && inv.sourceLabel ? (
+                <DocRefLink module="bom" intent={inv.sourceRef ? `open:${inv.sourceRef}` : undefined} enabled={can("bom") && Boolean(inv.sourceRef)}>
+                  {inv.sourceLabel}
+                </DocRefLink>
               ) : null}
             </span>
           ) : null
@@ -175,8 +173,22 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
 
       {stockViaDc ? (
         <Alert tone="blue" title="Delivery challans linked">
-          {(inv?.dcLinks ?? []).map((d) => d.docNo).join(", ") || `${inv?.dcIds?.length ?? 0} DC(s)`} — stock stays on those DCs.
-          Item lines are locked while links remain; manage links on the invoice view.
+          {(inv?.dcLinks ?? []).length ? (
+            <>
+              {(inv?.dcLinks ?? []).map((d, i) => (
+                <span key={d.id}>
+                  <DocRefLink module="bomDc" intent={`open:${d.id}`} enabled={can("bom")}>
+                    {d.docNo}
+                  </DocRefLink>
+                  {i < (inv?.dcLinks?.length ?? 0) - 1 ? ", " : ""}
+                </span>
+              ))}
+              {" — "}
+            </>
+          ) : (
+            `${inv?.dcIds?.length ?? 0} DC(s) — `
+          )}
+          stock stays on those DCs. Item lines are locked while links remain; manage links on the invoice view.
         </Alert>
       ) : null}
 

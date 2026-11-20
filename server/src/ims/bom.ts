@@ -102,6 +102,8 @@ type DocRow = {
   prepared_by: string | null;
   invoice_id: string | null;
   invoice_convert_mode: string | null;
+  /** Joined from ims_invoices when present. */
+  invoice_no?: string | null;
   stock_issued_at: string | null;
   stock_issue_count: number;
   created_by_name: string | null;
@@ -344,6 +346,7 @@ export function mapDoc(r: DocRow, lines?: BomDocLine[]) {
     exclusions: ext.exclusions ?? null,
     paper: parseJsonObject(ext.paper_json),
     invoiceId: r.invoice_id,
+    invoiceNo: r.invoice_no?.trim() || null,
     /** Set when converting to invoice. Both modes are supported. */
     invoiceConvertMode: convertModeOf(r.invoice_convert_mode),
     invoiceConvertModes: BOM_INVOICE_CONVERT_MODES,
@@ -626,7 +629,15 @@ export async function loadDocLines(db: Queryable, tenantId: number, docId: strin
 }
 
 export async function loadDoc(db: Queryable, tenantId: number, id: string): Promise<BomDoc | null> {
-  const r = await one<DocRow>(db, `SELECT * FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1`, { tenantId, id });
+  const r = await one<DocRow>(
+    db,
+    `SELECT d.*, inv.invoice_no AS invoice_no
+     FROM ims_bom_docs d
+     LEFT JOIN ims_invoices inv ON inv.tenant_id = d.tenant_id AND inv.id = d.invoice_id
+     WHERE d.tenant_id = :tenantId AND d.id = :id
+     LIMIT 1`,
+    { tenantId, id },
+  );
   if (!r) return null;
   return mapDoc(r, await loadDocLines(db, tenantId, id));
 }

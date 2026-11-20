@@ -183,6 +183,8 @@ export type BomDoc = {
   exclusions?: string | null;
   paper?: BomDocPaperOverride | null;
   invoiceId: string | null;
+  /** Linked tax invoice number when invoiceId is set. */
+  invoiceNo?: string | null;
   invoiceConvertMode: BomInvoiceConvertMode | null;
   invoiceConvertModes: ReadonlyArray<BomInvoiceConvertMode>;
   stockIssuedAt: string | null;

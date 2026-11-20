@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button, Dialog } from "@/components/bos";
 import { finance, STATEMENT_KIND_LABEL, type Statement } from "@/lib/ims/finance";
 import { dateLabel, downloadCsv, inrExact } from "@/lib/ims/format";
+import { DocRefLink } from "../bom/DocRefLink";
 import { Loaded, useIms, useImsData, usePrint } from "../core";
 import { PaperBrandHead, sellerDetail } from "../shared/DocumentPaper";
 import { PeriodSelect, sellerOf, type PeriodOrAll } from "./shared";
@@ -12,9 +13,23 @@ import { PeriodSelect, sellerOf, type PeriodOrAll } from "./shared";
 export const balanceText = (n: number): string => (Math.abs(n) < 0.005 ? inrExact(0) : `${inrExact(Math.abs(n))} ${n > 0 ? "Dr" : "Cr"}`);
 
 export function StatementPaper({ data }: { data: Statement }) {
-  const { session } = useIms();
+  const { session, can } = useIms();
   const seller = sellerOf(session);
   const p = data.party;
+  const refCell = (r: Statement["rows"][number]) => {
+    if (!r.ref) return "—";
+    if (!r.module || !r.open) return r.ref;
+    const allowed =
+      (r.module === "sales" && can("sales")) ||
+      (r.module === "payables" && can("payables")) ||
+      (r.module === "returns" && (can("damage") || can("stockIn") || can("stockOut"))) ||
+      (r.module === "ledger" && can("ledger"));
+    return (
+      <DocRefLink module={r.module} intent={`open:${r.open}`} enabled={allowed}>
+        {r.ref}
+      </DocRefLink>
+    );
+  };
   return (
     <article className="bos-inv-paper" aria-label={`Statement of account — ${p.name}`} style={{ position: "static" }}>
       <div className="bos-inv-paper-top">
@@ -76,7 +91,7 @@ export function StatementPaper({ data }: { data: Statement }) {
                 {r.description}
                 <small>{STATEMENT_KIND_LABEL[r.kind]}</small>
               </td>
-              <td>{r.ref || "—"}</td>
+              <td>{refCell(r)}</td>
               <td className="fin-paper-num">{r.debit ? inrExact(r.debit) : "—"}</td>
               <td className="fin-paper-num">{r.credit ? inrExact(r.credit) : "—"}</td>
               <td className="fin-paper-num">{balanceText(r.balance)}</td>

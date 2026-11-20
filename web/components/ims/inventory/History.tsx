@@ -481,8 +481,8 @@ function ActivityTab({ initialEntity }: { initialEntity: string }) {
                             <div className="ims-cell-stack" style={{ alignItems: "flex-end", gap: 4 }}>
                               <span className="ims-faint">{timeAgo(e.createdAt)}</span>
                               {linkable && target ? (
-                                <button type="button" className="ims-b-link" style={{ fontSize: 12.5 }} onClick={() => navigate(target, `open:${e.entityId}`)}>
-                                  Open
+                                <button type="button" className="ims-b-link" style={{ fontSize: 12.5 }} onClick={() => navigate(target, `open:${e.entityId}`)} title={e.summary}>
+                                  Open {e.entityType === "bom_doc" ? "BOM" : e.entityType === "bom_dc" ? "DC" : e.entityType === "bom_dc_return" ? "return" : e.entityType === "invoice" ? "invoice" : "record"}
                                 </button>
                               ) : e.entityType === "movement" ? (
                                 <span className="ims-faint">Stock</span>

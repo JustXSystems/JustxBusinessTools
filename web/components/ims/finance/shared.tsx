@@ -6,7 +6,9 @@ import { Button, Dialog, Field, FormGrid, Input, Segmented, Select, Textarea } f
 import type { ImsSession, Period } from "@/lib/ims/api";
 import { INVOICE_STAMP, PAY_METHOD_LABEL, PAY_METHODS, type InvoiceDetail, type PayMethod, type PaymentInput } from "@/lib/ims/finance";
 import { computeTotals, dateLabel, inrExact, num, PERIOD_OPTIONS, qtyText, round2 } from "@/lib/ims/format";
+import { DocRefLink } from "../bom/DocRefLink";
 import { DocumentPaper, type PaperParty } from "../shared/DocumentPaper";
+import { useIms } from "../core";
 
 /* ---------- Layout bits ---------- */
 
@@ -384,6 +386,7 @@ export function sellerOf(session: ImsSession): PaperParty {
 
 /** Printable GST tax invoice with HSN summary, payment status stamp and terms. */
 export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; session: ImsSession }) {
+  const { can } = useIms();
   const inv = detail.invoice;
   const totals = computeTotals(inv.lines, inv.intraState, inv.roundToRupee);
   const stamp = INVOICE_STAMP[inv.displayStatus] ?? (inv.displayStatus === "partial" ? { text: "PART PAID", color: "#D98A1F" } : null);
@@ -395,17 +398,35 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
   ];
   // Business refs only — never print internal UUIDs as "Reference".
   if (inv.sourceTool === "ims_bom" && inv.sourceLabel) {
-    meta.push({ label: "BOM no.", value: inv.sourceLabel });
+    meta.push({
+      label: "BOM no.",
+      value: (
+        <DocRefLink module="bom" intent={inv.sourceRef ? `open:${inv.sourceRef}` : undefined} enabled={can("bom") && Boolean(inv.sourceRef)}>
+          {inv.sourceLabel}
+        </DocRefLink>
+      ),
+    });
   } else if (inv.sourceTool === "pos" && (inv.sourceLabel || inv.sourceRef)) {
     meta.push({ label: "POS bill", value: inv.sourceLabel || inv.sourceRef });
   } else if (inv.sourceLabel) {
     meta.push({ label: "Job / quotation", value: inv.sourceLabel });
   }
-  const dcNos = (inv.dcLinks ?? []).map((d) => d.docNo).filter(Boolean);
-  if (dcNos.length) {
+  const dcs = inv.dcLinks ?? [];
+  if (dcs.length) {
     meta.push({
-      label: dcNos.length === 1 ? "Delivery challan" : "Delivery challans",
-      value: dcNos.join(", "),
+      label: dcs.length === 1 ? "Delivery challan" : "Delivery challans",
+      value: (
+        <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "0 6px", justifyContent: "flex-end" }}>
+          {dcs.map((d, i) => (
+            <span key={d.id}>
+              <DocRefLink module="bomDc" intent={`open:${d.id}`} enabled={can("bom")}>
+                {d.docNo}
+              </DocRefLink>
+              {i < dcs.length - 1 ? "," : null}
+            </span>
+          ))}
+        </span>
+      ),
     });
   }
   return (

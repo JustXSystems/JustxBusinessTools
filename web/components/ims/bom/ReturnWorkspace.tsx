@@ -91,13 +91,13 @@ export function CreateReturnWorkspace({ dcId, onBack, onPosted }: CreateProps) {
         </Alert>
         <div className="ims-row" style={{ gap: 8, marginTop: 10, flexWrap: "wrap" }}>
           {dc.invoiceId ? (
-            <Button size="sm" variant="primary" onClick={() => navigate("sales", `open:${dc.invoiceId}`)}>
-              Open invoice
-            </Button>
+            <DocRefLink module="sales" intent={`open:${dc.invoiceId}`}>
+              {dc.invoiceNo || "Open invoice"}
+            </DocRefLink>
           ) : null}
-          <Button size="sm" variant="ghost" onClick={() => navigate("bomDc", `open:${dc.id}`)}>
-            Open DC
-          </Button>
+          <DocRefLink module="bomDc" intent={`open:${dc.id}`}>
+            {dc.docNo}
+          </DocRefLink>
           <Button size="sm" variant="ghost" onClick={onBack}>
             Back to returns
           </Button>
@@ -232,9 +232,9 @@ export function CreateReturnWorkspace({ dcId, onBack, onPosted }: CreateProps) {
                     ? `Cancel issued invoice ${dc.invoiceNo || ""} before returning.`
                     : "Unlink this DC from the draft invoice before returning."}
                   {dc.invoiceId ? (
-                    <Button size="sm" variant="ghost" onClick={() => navigate("sales", `open:${dc.invoiceId}`)}>
-                      Open invoice
-                    </Button>
+                    <DocRefLink module="sales" intent={`open:${dc.invoiceId}`}>
+                      {dc.invoiceNo || "Open invoice"}
+                    </DocRefLink>
                   ) : null}
                 </Alert>
               ) : null}

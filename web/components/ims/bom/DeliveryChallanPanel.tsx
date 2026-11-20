@@ -751,7 +751,11 @@ function DcEditorForm({
           <div className="ims-bom-dc-compose">
             <Card className="ims-bom-action-card">
               <Alert tone="blue" title="Composer">
-                Edit quantities and dispatch details. Live Preview updates on the invoice paper template — BOM reference {bomDocNo} prints on the sheet; Verified by fills when you verify.
+                Edit quantities and dispatch details. Live Preview updates on the invoice paper template — BOM reference{" "}
+                <DocRefLink module="bom" intent={`open:${doc.id}`}>
+                  {bomDocNo}
+                </DocRefLink>{" "}
+                prints on the sheet; Verified by fills when you verify.
               </Alert>
               <FormGrid>
                 <Field label="Challan date">
@@ -1060,9 +1064,9 @@ function DcManagerForm({
                   : `Linked to draft invoice${dc.invoiceNo ? ` ${dc.invoiceNo}` : ""} — unlink before return/reverse`
                 : "Untick “Link on invoice” before return/reverse"}
               {dc.invoiceId ? (
-                <Button size="sm" variant="ghost" onClick={() => navigate("sales", `open:${dc.invoiceId}`)}>
-                  Open invoice
-                </Button>
+                <DocRefLink module="sales" intent={`open:${dc.invoiceId}`} enabled={can("sales")}>
+                  {dc.invoiceNo || "Open invoice"}
+                </DocRefLink>
               ) : null}
             </span>
           ) : !canReturnStock ? (
@@ -1174,7 +1178,21 @@ function DcManagerForm({
           </Badge>
           {dc.invoiceLinked ? (
             <Badge tone="amber">
-              Linked {dc.invoiceNo ? `· ${dc.invoiceNo}` : dc.invoiceStatus === "draft" ? "· draft" : ""}
+              Linked{" "}
+              {dc.invoiceId ? (
+                <>
+                  ·{" "}
+                  <DocRefLink module="sales" intent={`open:${dc.invoiceId}`} enabled={can("sales")}>
+                    {dc.invoiceNo || (dc.invoiceStatus === "draft" ? "draft invoice" : "invoice")}
+                  </DocRefLink>
+                </>
+              ) : dc.invoiceNo ? (
+                `· ${dc.invoiceNo}`
+              ) : dc.invoiceStatus === "draft" ? (
+                "· draft"
+              ) : (
+                ""
+              )}
             </Badge>
           ) : null}
           {fullyReturned ? <Badge tone="amber">Fully returned</Badge> : null}
@@ -1189,7 +1207,10 @@ function DcManagerForm({
           <div className="ims-bom-dc-compose">
             <Card className="ims-bom-action-card">
               <Alert tone="blue" title="Composer">
-                BOM reference <b>{dc.bomDocNo ?? bomDocNo}</b>
+                BOM reference{" "}
+                <DocRefLink module="bom" intent={`open:${doc.id}`}>
+                  {dc.bomDocNo ?? bomDocNo}
+                </DocRefLink>
                 {dc.verifiedByName ? (
                   <>
                     {" "}
@@ -1261,13 +1282,27 @@ function DcManagerForm({
                         <>
                           {dc.invoiceStatus === "issued" ? (
                             <>
-                              This challan is linked to issued invoice <b>{dc.invoiceNo || "—"}</b>. Cancel that invoice first (stock stays on
-                              the DC), then return unused materials or reverse.
+                              This challan is linked to issued invoice{" "}
+                              {dc.invoiceId ? (
+                                <DocRefLink module="sales" intent={`open:${dc.invoiceId}`} enabled={can("sales")}>
+                                  {dc.invoiceNo || "invoice"}
+                                </DocRefLink>
+                              ) : (
+                                <b>{dc.invoiceNo || "—"}</b>
+                              )}
+                              . Cancel that invoice first (stock stays on the DC), then return unused materials or reverse.
                             </>
                           ) : (
                             <>
                               Unlink this delivery challan from the draft invoice
-                              {dc.invoiceNo ? (
+                              {dc.invoiceId ? (
+                                <>
+                                  {" "}
+                                  <DocRefLink module="sales" intent={`open:${dc.invoiceId}`} enabled={can("sales")}>
+                                    {dc.invoiceNo || "draft"}
+                                  </DocRefLink>
+                                </>
+                              ) : dc.invoiceNo ? (
                                 <>
                                   {" "}
                                   <b>{dc.invoiceNo}</b>
@@ -1276,14 +1311,6 @@ function DcManagerForm({
                               before returning unused stock or reversing.
                             </>
                           )}
-                          {dc.invoiceId ? (
-                            <>
-                              {" "}
-                              <Button size="sm" variant="ghost" onClick={() => navigate("sales", `open:${dc.invoiceId}`)}>
-                                Open invoice
-                              </Button>
-                            </>
-                          ) : null}
                         </>
                       ) : (
                         <>Untick “Link on invoice” in the toolbar before returning unused stock or reversing.</>

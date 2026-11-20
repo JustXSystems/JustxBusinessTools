@@ -354,6 +354,13 @@
   outline-offset: 2px;
   border-radius: 3px;
 }
+@media print {
+  .bos .ims-doc-ref {
+    border-bottom: none !important;
+    color: inherit !important;
+    cursor: default;
+  }
+}
 .bos .ims-flow-crumb {
   display: flex;
   flex-wrap: wrap;
