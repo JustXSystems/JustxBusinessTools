@@ -23,7 +23,7 @@ export function StatementPaper({ data }: { data: Statement }) {
       (r.module === "sales" && can("sales")) ||
       (r.module === "payables" && can("payables")) ||
       (r.module === "returns" && (can("damage") || can("stockIn") || can("stockOut"))) ||
-      (r.module === "ledger" && can("ledger"));
+      (r.module === "ledger" && (can("receivables") || can("payables") || can("reports")));
     return (
       <DocRefLink module={r.module} intent={`open:${r.open}`} enabled={allowed}>
         {r.ref}
