@@ -76,7 +76,7 @@ function AttentionRow({ icon, tone, title, body, meta, onClick }: { icon: string
   );
 }
 
-const NOTE_ICON: Partial<Record<ImsModuleKey, string>> = { lowstock: "⚠", approvals: "🛡", checks: "☑", receivables: "💰", payables: "📤" };
+const NOTE_ICON: Partial<Record<ImsModuleKey, string>> = { lowstock: "⚠", approvals: "🛡", checks: "☑", receivables: "💰", payables: "📤", bomDc: "◫", bom: "☰" };
 
 const MOVE_ICON: Record<MovementType, string> = { OPENING: "✦", IN: "⬇", OUT: "⬆", DAMAGE: "🔧", ADJUSTMENT: "⚖", RETURN_IN: "↩", RETURN_OUT: "↪", WRITE_OFF: "✕" };
 const MOVE_TONE: Record<MovementType, string> = { OPENING: "blue", IN: "emerald", OUT: "blue", DAMAGE: "coral", ADJUSTMENT: "amber", RETURN_IN: "amber", RETURN_OUT: "amber", WRITE_OFF: "coral" };
@@ -271,7 +271,9 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
           value: pendingApprovals,
           valueTone: pendingApprovals ? "blue" : undefined,
           chip: { color: "amber", glyph: "🛡" },
-          delta: pendingApprovals ? `${pending.po} PO · ${pending.bills} bills · ${pending.checks} checks` : "You're all caught up",
+          delta: pendingApprovals
+            ? `${pending.po} PO · ${pending.bills} bills · ${pending.checks} checks${pending.dcs ? ` · ${pending.dcs} DC` : ""}`
+            : "You're all caught up",
           deltaTone: pendingApprovals ? "info" : "up",
           onClick: () => navigate("approvals"),
         }
@@ -463,6 +465,12 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
               <WidgetRow label="Purchase orders awaiting approval" value={String(pending.po)} valueTone={pending.po ? "blue" : "faint"} onClick={() => navigate("approvals")} />
               <WidgetRow label="Supplier bills awaiting approval" value={String(pending.bills)} valueTone={pending.bills ? "blue" : "faint"} onClick={() => navigate("approvals")} />
               <WidgetRow label="Stock checks awaiting approval" value={String(pending.checks)} valueTone={pending.checks ? "blue" : "faint"} onClick={() => navigate("checks")} />
+              <WidgetRow
+                label="Delivery challans awaiting approval"
+                value={String(pending.dcs ?? 0)}
+                valueTone={pending.dcs ? "blue" : "faint"}
+                onClick={() => navigate("approvals", "dcs")}
+              />
             </div>
           ) : null}
         </WidgetCard>

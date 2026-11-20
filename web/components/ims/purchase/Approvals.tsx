@@ -5,19 +5,30 @@ import { useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, DataTable, Dialog, EmptyState, Grid, KpiCard, type BosColumn } from "@/components/bos";
 import { ims, type ImsEvent, type ImsStockCheck } from "@/lib/ims/api";
 import { dateLabel, inr, inrCompact, inrExact, qtyText, stampLabel, timeAgo } from "@/lib/ims/format";
+import { bom, type BomDc } from "@/lib/ims/bom";
 import { purchase, type ApprovalBill, type PurchaseOrder } from "@/lib/ims/purchase";
 import { ErrorBlock, LoadingBlock, Loaded, PageHeader, PersonAvatar, RequirePerm, Stack, SubTabs, useIms, useImsAction, useImsData } from "../core";
 import { KeyValues, ReasonDialog } from "./ui";
 
-type Tab = "pos" | "bills" | "checks" | "history";
+type Tab = "pos" | "bills" | "checks" | "dcs" | "history";
 
 const PO_REJECT_REASONS = ["Price too high — renegotiate", "Quantity too large", "Wrong supplier", "Not needed now"];
 const CHECK_REJECT_REASONS = ["Recount the mismatched items", "Variance too high — recheck", "Count looks incomplete"];
-const DECISION_TYPES = new Set(["po.approved", "po.rejected", "bill.approved", "bill.held", "check.approved", "check.returned"]);
+const DECISION_TYPES = new Set([
+  "po.approved",
+  "po.rejected",
+  "bill.approved",
+  "bill.held",
+  "check.approved",
+  "check.returned",
+  "bom.dc.approved",
+  "bom.dc.cancelled",
+]);
 
 const DECISION_VIEW: Record<string, { label: string; tone: "emerald" | "coral" | "amber" }> = {
   approved: { label: "APPROVED", tone: "emerald" },
   rejected: { label: "REJECTED", tone: "coral" },
+  cancelled: { label: "REJECTED", tone: "coral" },
   held: { label: "ON HOLD", tone: "amber" },
   returned: { label: "RETURNED", tone: "amber" },
 };
@@ -31,31 +42,49 @@ export function ApprovalsModule() {
 }
 
 function Inbox() {
-  const { takeIntent } = useIms();
+  const { takeIntent, can } = useIms();
   const [intent] = useState(() => takeIntent("approvals"));
-  const [tab, setTab] = useState<Tab>(() => (intent === "bills" || intent === "checks" || intent === "history" ? intent : "pos"));
+  const [tab, setTab] = useState<Tab>(() =>
+    intent === "bills" || intent === "checks" || intent === "dcs" || intent === "history" ? intent : "pos",
+  );
   const [reviewId, setReviewId] = useState<string | null>(() => (intent?.startsWith("open:") ? intent.slice(5) : null));
 
   const pos = useImsData(() => purchase.orders({ status: "pending_approval" }), []);
   const bills = useImsData(async () => ({ list: await purchase.pendingBills() }), []);
   const checks = useImsData(async () => (await ims.checks()).checks.filter((c) => c.status === "submitted"), []);
+  const hasBom = can("bom");
+  const dcs = useImsData(
+    () =>
+      hasBom
+        ? bom.listAllDcs({ status: "verified", limit: 100 })
+        : Promise.resolve({
+            dcs: [] as BomDc[],
+            total: 0,
+            limit: 100,
+            offset: 0,
+            counts: { all: 0, draft: 0, verified: 0, approved: 0, cancelled: 0 },
+          }),
+    [hasBom],
+  );
 
   const billList = bills.data?.list;
   const billsUnavailable = billList === null;
   const poCount = pos.data?.orders.length ?? 0;
   const billCount = billList?.length ?? 0;
   const checkCount = checks.data?.length ?? 0;
-  const loading = !pos.data || !bills.data || !checks.data;
-  const total = poCount + billCount + checkCount;
+  const dcCount = dcs.data?.dcs.length ?? 0;
+  const loading = !pos.data || !bills.data || !checks.data || (hasBom && !dcs.data);
+  const total = poCount + billCount + checkCount + dcCount;
 
   return (
     <Stack>
       <PageHeader title="Approvals" sub={loading ? "Loading what needs your sign-off…" : total ? `${total} item${total === 1 ? "" : "s"} waiting for your decision` : "You're all caught up"} />
 
-      <Grid cols={4} min={150}>
+      <Grid cols={5} min={140}>
         <KpiCard label="Purchase orders" value={poCount} chip={{ color: "blue", glyph: "🛒" }} delta={poCount ? inrCompact(pos.data?.summary.awaitingValue ?? 0) : "None pending"} deltaTone={poCount ? "warn" : "muted"} />
         <KpiCard label="Supplier bills" value={billsUnavailable ? "—" : billCount} chip={{ color: "rose", glyph: "₹" }} delta={billsUnavailable ? "Not available yet" : billCount ? inrCompact((billList ?? []).reduce((t, b) => t + b.grandTotal, 0)) : "None pending"} deltaTone={billCount ? "warn" : "muted"} />
         <KpiCard label="Stock checks" value={checkCount} chip={{ color: "mint", glyph: "✓" }} delta={checkCount ? `${(checks.data ?? []).reduce((t, c) => t + c.mismatchCount, 0)} mismatches` : "None submitted"} deltaTone={checkCount ? "warn" : "muted"} />
+        <KpiCard label="Delivery challans" value={hasBom ? dcCount : "—"} chip={{ color: "blue", glyph: "◫" }} delta={hasBom ? (dcCount ? "Verified — stock out on approve" : "None verified") : "BOM not enabled"} deltaTone={dcCount ? "warn" : "muted"} />
         <KpiCard label="Approval limit" value={inrCompact(pos.data?.approvalLimit ?? 0)} chip={{ color: "lavender", glyph: "🛡" }} delta="POs at or above need sign-off" deltaTone="muted" />
       </Grid>
 
@@ -67,6 +96,7 @@ function Inbox() {
           { value: "pos", label: `Purchase orders${poCount ? ` · ${poCount}` : ""}` },
           { value: "bills", label: `Bills${billCount ? ` · ${billCount}` : ""}` },
           { value: "checks", label: `Stock checks${checkCount ? ` · ${checkCount}` : ""}` },
+          ...(hasBom ? [{ value: "dcs" as const, label: `Delivery challans${dcCount ? ` · ${dcCount}` : ""}` }] : []),
           { value: "history", label: "History" },
         ]}
       />
@@ -92,6 +122,10 @@ function Inbox() {
       ) : tab === "checks" ? (
         <Loaded state={checks} rows={3}>
           {(list) => <CheckQueue checks={list} />}
+        </Loaded>
+      ) : tab === "dcs" ? (
+        <Loaded state={dcs} rows={3}>
+          {(d) => <DcQueue dcs={d.dcs} />}
         </Loaded>
       ) : (
         <History />
@@ -475,12 +509,96 @@ function CheckQueue({ checks }: { checks: ImsStockCheck[] }) {
   );
 }
 
+/* ---------- Delivery challans ---------- */
+
+function DcQueue({ dcs }: { dcs: Array<BomDc & { bomStatus?: string }> }) {
+  const { navigate } = useIms();
+  const { run, busy } = useImsAction();
+
+  if (!dcs.length)
+    return (
+      <Card interactive={false}>
+        <EmptyState icon="check" title="No delivery challans waiting">
+          Verified DCs appear here. Approving posts stock out; rejecting cancels without moving stock.
+        </EmptyState>
+      </Card>
+    );
+
+  return (
+    <div>
+      {dcs.map((dc) => {
+        // When bomStatus is missing (older payloads), allow approve and let the server gate.
+        const canApproveBom = dc.bomStatus == null || dc.bomStatus === "confirmed";
+        return (
+          <div key={dc.id} className="ims-approval">
+            <span className="ims-approval-ic" aria-hidden="true">
+              ◫
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div className="ims-approval-title">
+                {dc.docNo} · {dc.customerName || "No customer"}
+              </div>
+              <div className="ims-approval-meta">
+                {[
+                  dc.bomDocNo ? `BOM ${dc.bomDocNo}` : null,
+                  `dated ${dateLabel(dc.docDate)}`,
+                  dc.verifiedByName ? `verified by ${dc.verifiedByName}` : null,
+                  !canApproveBom ? "BOM not confirmed" : null,
+                  dc.updatedAt ? timeAgo(dc.updatedAt) : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+            </div>
+            <div className="ims-approval-actions">
+              <Button size="sm" variant="ghost" onClick={() => navigate("bomDc", `open:${dc.id}`)}>
+                View
+              </Button>
+              <Button
+                size="sm"
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  if (!window.confirm(`Reject ${dc.docNo}? It will cancel without posting stock.`)) return;
+                  await run(`dc-reject-${dc.id}`, () => bom.rejectDc(dc.id), {
+                    success: "Delivery challan rejected",
+                    description: dc.docNo,
+                    tone: "amber",
+                  });
+                }}
+              >
+                Reject
+              </Button>
+              <Button
+                size="sm"
+                variant="success"
+                icon="check"
+                disabled={Boolean(busy) || !canApproveBom}
+                title={!canApproveBom ? "Confirm the BOM before approving" : undefined}
+                onClick={() =>
+                  run(`dc-approve-${dc.id}`, () => bom.approveDc(dc.id), {
+                    success: "DC approved — stock out posted",
+                    description: dc.docNo,
+                  })
+                }
+              >
+                Approve
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ---------- History ---------- */
 
 function History() {
   const { navigate } = useIms();
   const state = useImsData(async () => {
-    const lists = await Promise.all(["approved", "rejected", "held", "returned"].map((q) => ims.events({ q, limit: 100 })));
+    const lists = await Promise.all(
+      ["approved", "rejected", "held", "returned", "cancelled", "bom.dc"].map((q) => ims.events({ q, limit: 100 })),
+    );
     const byId = new Map<number, ImsEvent>();
     for (const l of lists) for (const e of l.events) if (DECISION_TYPES.has(e.type)) byId.set(e.id, e);
     return [...byId.values()].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
@@ -491,6 +609,7 @@ function History() {
     if (e.entityType === "po") navigate("purchase", `open:${e.entityId}`);
     else if (e.entityType === "bill") navigate("payables", `open:${e.entityId}`);
     else if (e.entityType === "check") navigate("checks", `open:${e.entityId}`);
+    else if (e.entityType === "bom_dc") navigate("bomDc", `open:${e.entityId}`);
   };
 
   return (
@@ -506,7 +625,7 @@ function History() {
           <Card interactive={false}>
             <div className="ims-list">
               {events.map((e) => {
-                const verb = e.type.split(".")[1] ?? "";
+                const verb = e.type.split(".").pop() ?? "";
                 const view = DECISION_VIEW[verb];
                 return (
                   <button key={e.id} type="button" className="ims-list-row" onClick={() => open(e)} disabled={!e.entityId}>

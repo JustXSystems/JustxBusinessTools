@@ -19,6 +19,7 @@ const SCREENS: ReadonlyArray<{ key: string; load: () => Promise<{ default: unkno
   { key: "bomPackages", load: () => import("./bom/Packages") },
   { key: "bomRateCards", load: () => import("./bom/RateCards") },
   { key: "bomCompare", load: () => import("./bom/Compare") },
+  { key: "bomDc", load: () => import("./bom/DcReturns") },
   { key: "bom", load: () => import("./bom/Builder") },
   { key: "receivables", load: () => import("./finance/Receivables") },
   { key: "payables", load: () => import("./finance/Payables") },

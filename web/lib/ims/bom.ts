@@ -677,7 +677,24 @@ export const bom = {
       }>;
     }>(`/bom/docs/${bomId}/dc-remaining`, excludeDcId ? { excludeDcId } : undefined),
   listDcs: (bomId: string) => get<{ dcs: BomDc[]; bomDocNo: string; quotationRef?: string | null }>(`/bom/docs/${bomId}/dcs`),
+  /** Tenant-wide DC list (Bill of Materials → DC & Returns). */
+  listAllDcs: (params?: { q?: string; status?: string; linked?: boolean; limit?: number; offset?: number }) =>
+    get<{
+      dcs: Array<BomDc & { lineCount?: number; deliveredUnits?: number; returnedUnits?: number; bomStatus?: string }>;
+      total: number;
+      limit: number;
+      offset: number;
+      counts: { all: number; draft: number; verified: number; approved: number; cancelled: number; linked?: number };
+    }>("/bom/dcs", {
+      q: params?.q,
+      status: params?.status,
+      linked: params?.linked ? "1" : undefined,
+      limit: params?.limit,
+      offset: params?.offset,
+    }),
   getDc: (id: string) => get<{ dc: BomDc }>(`/bom/dcs/${id}`),
+  /** Reject a verified (or draft) DC — same as cancel before stock is posted. */
+  rejectDc: (id: string) => post<{ dc: BomDc }>(`/bom/dcs/${id}/cancel`),
   createDc: (
     bomId: string,
     body: {
@@ -727,6 +744,24 @@ export const bom = {
       doc: BomDoc;
     }>(`/bom/dcs/${id}/returns`, body),
   listDcReturns: (id: string) => get<{ returns: BomDcReturn[]; dcDocNo: string }>(`/bom/dcs/${id}/returns`),
+  /** Tenant-wide unused-material returns (DC & Returns → Returns tab). */
+  listAllDcReturns: (params?: { q?: string; limit?: number; offset?: number }) =>
+    get<{
+      returns: Array<
+        BomDcReturn & {
+          bomDocNo?: string | null;
+          customerName?: string | null;
+          units?: number;
+        }
+      >;
+      total: number;
+      limit: number;
+      offset: number;
+    }>("/bom/dc-returns", {
+      q: params?.q,
+      limit: params?.limit,
+      offset: params?.offset,
+    }),
   amendLineQty: (id: string, body: { lineId: string; qty: number }) =>
     post<{ doc: BomDoc; message: string }>(`/bom/docs/${id}/amend-line-qty`, body),
   quotationRefs: (q?: string) => get<{ refs: string[] }>("/bom/quotation-refs", q ? { q } : undefined),
@@ -810,4 +845,9 @@ export type BomDc = {
   bomDocNo?: string | null;
   customerName?: string | null;
   quotationRef?: string | null;
+  /** Live draft/issued invoice still references this DC (blocks return/reverse). */
+  invoiceLinked?: boolean;
+  invoiceId?: string | null;
+  invoiceNo?: string | null;
+  invoiceStatus?: string | null;
 };

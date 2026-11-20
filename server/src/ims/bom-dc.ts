@@ -130,6 +130,11 @@ export type BomDc = {
   bomDocNo?: string | null;
   customerName?: string | null;
   quotationRef?: string | null;
+  /** Live draft/issued invoice still references this DC (blocks return/reverse). */
+  invoiceLinked?: boolean;
+  invoiceId?: string | null;
+  invoiceNo?: string | null;
+  invoiceStatus?: string | null;
 };
 
 const statusOf = (v: string): BomDcStatus => ((BOM_DC_STATUSES as readonly string[]).includes(v) ? (v as BomDcStatus) : "draft");
@@ -157,7 +162,16 @@ function mapLine(r: DcLineRow): BomDcLine {
 function mapDc(
   r: DcRow,
   lines?: BomDcLine[],
-  extra?: { bomDocNo?: string | null; customerName?: string | null; quotationRef?: string | null; returns?: BomDcReturn[] },
+  extra?: {
+    bomDocNo?: string | null;
+    customerName?: string | null;
+    quotationRef?: string | null;
+    returns?: BomDcReturn[];
+    invoiceLinked?: boolean;
+    invoiceId?: string | null;
+    invoiceNo?: string | null;
+    invoiceStatus?: string | null;
+  },
 ): BomDc {
   return {
     id: r.id,
@@ -184,7 +198,29 @@ function mapDc(
     bomDocNo: extra?.bomDocNo ?? null,
     customerName: extra?.customerName ?? null,
     quotationRef: extra?.quotationRef ?? null,
+    invoiceLinked: extra?.invoiceLinked ?? false,
+    invoiceId: extra?.invoiceId ?? null,
+    invoiceNo: extra?.invoiceNo ?? null,
+    invoiceStatus: extra?.invoiceStatus ?? null,
   };
+}
+
+async function loadDcInvoiceLink(
+  db: Queryable,
+  tenantId: number,
+  dcId: string,
+): Promise<{ invoiceId: string; invoiceNo: string | null; invoiceStatus: string } | null> {
+  const linked = await one<{ invoice_id: string; invoice_no: string | null; status: string }>(
+    db,
+    `SELECT i.id AS invoice_id, i.invoice_no, i.status FROM ims_invoice_dc_links l
+     INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+     WHERE l.tenant_id = :tenantId AND l.dc_id = :dcId AND i.status IN ('draft','issued')
+     ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
+     LIMIT 1`,
+    { tenantId, dcId },
+  );
+  if (!linked) return null;
+  return { invoiceId: linked.invoice_id, invoiceNo: linked.invoice_no, invoiceStatus: linked.status };
 }
 
 async function loadDcLines(db: Queryable, tenantId: number, dcId: string): Promise<BomDcLine[]> {
@@ -273,11 +309,16 @@ export async function loadDc(db: Queryable, tenantId: number, id: string): Promi
   if (!r) return null;
   const lines = await loadDcLines(db, tenantId, id);
   const returns = await loadDcReturns(db, tenantId, id);
+  const inv = await loadDcInvoiceLink(db, tenantId, id);
   return mapDc(r, lines, {
     bomDocNo: r.bom_doc_no ?? null,
     customerName: r.customer_name ?? null,
     quotationRef: r.quotation_ref ?? null,
     returns,
+    invoiceLinked: Boolean(inv),
+    invoiceId: inv?.invoiceId ?? null,
+    invoiceNo: inv?.invoiceNo ?? null,
+    invoiceStatus: inv?.invoiceStatus ?? null,
   });
 }
 
@@ -648,15 +689,150 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     );
     const dcs = [];
     for (const r of list) {
+      const inv = await loadDcInvoiceLink(deps.db, actor.tenantId, r.id);
       dcs.push(
         mapDc(r, await loadDcLines(deps.db, actor.tenantId, r.id), {
           bomDocNo: doc.docNo,
           customerName: doc.customerName,
           quotationRef: doc.quotationRef ?? null,
+          invoiceLinked: Boolean(inv),
+          invoiceId: inv?.invoiceId ?? null,
+          invoiceNo: inv?.invoiceNo ?? null,
+          invoiceStatus: inv?.invoiceStatus ?? null,
         }),
       );
     }
     res.json({ dcs, bomDocNo: doc.docNo, quotationRef: doc.quotationRef ?? null });
+  });
+
+  /** Tenant-wide DC list for the Bill of Materials → DC & Returns submodule. */
+  router.get("/bom/dcs", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const q = qstr(req.query.q, 80);
+    const statusRaw = qstr(req.query.status, 24);
+    const status = (BOM_DC_STATUSES as readonly string[]).includes(statusRaw) ? statusRaw : "";
+    const linkedOnly = String(req.query.linked ?? "") === "1" || String(req.query.linked ?? "").toLowerCase() === "true";
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+    const offset = Math.min(10_000, Math.max(0, Number(req.query.offset) || 0));
+    const like = q ? `%${q.replace(/[%_]/g, "")}%` : "";
+    const params: Record<string, unknown> = { tenantId: actor.tenantId };
+    const where: string[] = ["d.tenant_id = :tenantId"];
+    if (status) {
+      where.push("d.status = :status");
+      params.status = status;
+    }
+    if (linkedOnly) {
+      where.push(`EXISTS (
+        SELECT 1 FROM ims_invoice_dc_links l
+        INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+        WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+      )`);
+    }
+    if (like) {
+      where.push(
+        `(d.doc_no LIKE :like OR IFNULL(b.doc_no,'') LIKE :like OR IFNULL(b.customer_name,'') LIKE :like OR IFNULL(b.quotation_ref,'') LIKE :like OR IFNULL(d.vehicle_no,'') LIKE :like)`,
+      );
+      params.like = like;
+    }
+    const whereSql = where.join(" AND ");
+    const totalRow = await one<{ n: number }>(
+      deps.db,
+      `SELECT COUNT(*) AS n
+       FROM ims_bom_dcs d
+       INNER JOIN ims_bom_docs b ON b.id = d.bom_doc_id AND b.tenant_id = d.tenant_id
+       WHERE ${whereSql}`,
+      params,
+    );
+    const list = await rows<
+      DcRow & {
+        bom_doc_no: string;
+        bom_status: string;
+        customer_name: string | null;
+        quotation_ref: string | null;
+        line_count: number;
+        returned_units: string | number;
+        delivered_units: string | number;
+        linked_invoice_id: string | null;
+        linked_invoice_no: string | null;
+        linked_invoice_status: string | null;
+      }
+    >(
+      deps.db,
+      `SELECT d.*,
+              b.doc_no AS bom_doc_no,
+              b.status AS bom_status,
+              b.customer_name,
+              b.quotation_ref,
+              (SELECT COUNT(*) FROM ims_bom_dc_lines l WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id) AS line_count,
+              (SELECT COALESCE(SUM(l.qty), 0) FROM ims_bom_dc_lines l WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id) AS delivered_units,
+              (SELECT COALESCE(SUM(COALESCE(l.returned_qty, 0)), 0) FROM ims_bom_dc_lines l WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id) AS returned_units,
+              (
+                SELECT i.id FROM ims_invoice_dc_links l
+                INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+                WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+                ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
+                LIMIT 1
+              ) AS linked_invoice_id,
+              (
+                SELECT i.invoice_no FROM ims_invoice_dc_links l
+                INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+                WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+                ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
+                LIMIT 1
+              ) AS linked_invoice_no,
+              (
+                SELECT i.status FROM ims_invoice_dc_links l
+                INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+                WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+                ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
+                LIMIT 1
+              ) AS linked_invoice_status
+       FROM ims_bom_dcs d
+       INNER JOIN ims_bom_docs b ON b.id = d.bom_doc_id AND b.tenant_id = d.tenant_id
+       WHERE ${whereSql}
+       ORDER BY d.doc_date DESC, d.created_at DESC
+       LIMIT ${limit} OFFSET ${offset}`,
+      params,
+    );
+    const countRows = await rows<{ status: string; n: number }>(
+      deps.db,
+      `SELECT status, COUNT(*) AS n FROM ims_bom_dcs WHERE tenant_id = :tenantId GROUP BY status`,
+      { tenantId: actor.tenantId },
+    );
+    const counts: Record<string, number> = { all: 0, draft: 0, verified: 0, approved: 0, cancelled: 0 };
+    for (const r of countRows) {
+      const n = Number(r.n) || 0;
+      counts.all += n;
+      if (r.status in counts) counts[r.status] = n;
+    }
+    const linkedCountRow = await one<{ n: number }>(
+      deps.db,
+      `SELECT COUNT(*) AS n FROM ims_bom_dcs d
+       WHERE d.tenant_id = :tenantId AND EXISTS (
+         SELECT 1 FROM ims_invoice_dc_links l
+         INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+         WHERE l.tenant_id = d.tenant_id AND l.dc_id = d.id AND i.status IN ('draft','issued')
+       )`,
+      { tenantId: actor.tenantId },
+    );
+    counts.linked = Number(linkedCountRow?.n ?? 0);
+    const dcs = list.map((r) => ({
+      ...mapDc(r, undefined, {
+        bomDocNo: r.bom_doc_no,
+        customerName: r.customer_name,
+        quotationRef: r.quotation_ref,
+        invoiceLinked: Boolean(r.linked_invoice_id),
+        invoiceId: r.linked_invoice_id,
+        invoiceNo: r.linked_invoice_no,
+        invoiceStatus: r.linked_invoice_status,
+      }),
+      bomStatus: r.bom_status,
+      lineCount: Number(r.line_count) || 0,
+      deliveredUnits: round3(money(r.delivered_units)),
+      returnedUnits: round3(money(r.returned_units)),
+    }));
+    res.json({ dcs, total: Number(totalRow?.n ?? 0), limit, offset, counts });
   });
 
   router.get("/bom/dcs/:id", async (req, res) => {
@@ -1230,6 +1406,108 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     res.json({ returns: dc.returns ?? [], dcDocNo: dc.docNo });
   });
 
+  /** Tenant-wide unused-material returns (Bill of Materials → DC & Returns → Returns). */
+  router.get("/bom/dc-returns", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const q = qstr(req.query.q, 80);
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+    const offset = Math.min(10_000, Math.max(0, Number(req.query.offset) || 0));
+    const like = q ? `%${q.replace(/[%_]/g, "")}%` : "";
+    const params: Record<string, unknown> = { tenantId: actor.tenantId };
+    const where: string[] = ["r.tenant_id = :tenantId"];
+    if (like) {
+      where.push(
+        `(r.return_no LIKE :like OR IFNULL(d.doc_no,'') LIKE :like OR IFNULL(b.doc_no,'') LIKE :like OR IFNULL(b.customer_name,'') LIKE :like)`,
+      );
+      params.like = like;
+    }
+    const whereSql = where.join(" AND ");
+    const totalRow = await one<{ n: number }>(
+      deps.db,
+      `SELECT COUNT(*) AS n
+       FROM ims_bom_dc_returns r
+       INNER JOIN ims_bom_dcs d ON d.id = r.dc_id AND d.tenant_id = r.tenant_id
+       INNER JOIN ims_bom_docs b ON b.id = r.bom_doc_id AND b.tenant_id = r.tenant_id
+       WHERE ${whereSql}`,
+      params,
+    );
+    const headers = await rows<{
+      id: string;
+      dc_id: string;
+      bom_doc_id: string;
+      return_no: string;
+      return_date: unknown;
+      notes: string | null;
+      created_by_name: string | null;
+      created_at: unknown;
+      dc_doc_no: string;
+      bom_doc_no: string;
+      customer_name: string | null;
+      units: string | number;
+    }>(
+      deps.db,
+      `SELECT r.id, r.dc_id, r.bom_doc_id, r.return_no, r.return_date, r.notes, r.created_by_name, r.created_at,
+              d.doc_no AS dc_doc_no, b.doc_no AS bom_doc_no, b.customer_name,
+              (SELECT COALESCE(SUM(l.qty), 0) FROM ims_bom_dc_return_lines l WHERE l.tenant_id = r.tenant_id AND l.return_id = r.id) AS units
+       FROM ims_bom_dc_returns r
+       INNER JOIN ims_bom_dcs d ON d.id = r.dc_id AND d.tenant_id = r.tenant_id
+       INNER JOIN ims_bom_docs b ON b.id = r.bom_doc_id AND b.tenant_id = r.tenant_id
+       WHERE ${whereSql}
+       ORDER BY r.return_date DESC, r.created_at DESC
+       LIMIT ${limit} OFFSET ${offset}`,
+      params,
+    );
+    const returns = [];
+    for (const h of headers) {
+      const lineRows = await rows<{
+        id: string;
+        return_id: string;
+        dc_id: string;
+        dc_line_id: string;
+        bom_line_id: string;
+        item_id: string | null;
+        description: string;
+        qty: string | number;
+        unit: string;
+        remarks: string | null;
+      }>(
+        deps.db,
+        `SELECT id, return_id, dc_id, dc_line_id, bom_line_id, item_id, description, qty, unit, remarks
+         FROM ims_bom_dc_return_lines WHERE tenant_id = :tenantId AND return_id = :returnId
+         ORDER BY created_at ASC`,
+        { tenantId: actor.tenantId, returnId: h.id },
+      );
+      returns.push({
+        id: h.id,
+        dcId: h.dc_id,
+        bomDocId: h.bom_doc_id,
+        returnNo: h.return_no,
+        returnDate: isoOf(h.return_date),
+        notes: h.notes,
+        createdByName: h.created_by_name,
+        createdAt: tsOf(h.created_at),
+        dcDocNo: h.dc_doc_no,
+        bomDocNo: h.bom_doc_no,
+        customerName: h.customer_name,
+        units: round3(money(h.units)),
+        lines: lineRows.map((l) => ({
+          id: l.id,
+          returnId: l.return_id,
+          dcId: l.dc_id,
+          dcLineId: l.dc_line_id,
+          bomLineId: l.bom_line_id,
+          itemId: l.item_id,
+          description: l.description,
+          qty: round3(money(l.qty)),
+          unit: l.unit,
+          remarks: l.remarks,
+        })),
+      });
+    }
+    res.json({ returns, total: Number(totalRow?.n ?? 0), limit, offset });
+  });
+
   /** Reverse an approved DC: RETURN_IN remaining net stock and cancel. */
   router.post("/bom/dcs/:id/reverse", async (req, res) => {
     requirePerm(res, "bom");
@@ -1367,9 +1645,16 @@ async function assertDcFreeOfInvoiceLinks(db: Queryable, tenantId: number, dcId:
     { tenantId, dcId },
   );
   if (!linked) return;
-  const label = linked.status === "draft" ? "draft invoice" : `invoice ${linked.invoice_no || ""}`.trim();
+  if (linked.status === "draft") {
+    throw conflict(
+      `This delivery challan is linked to a draft invoice${linked.invoice_no ? ` (${linked.invoice_no})` : ""}. Unlink it from the invoice (or delete the draft) before you ${action}.`,
+    );
+  }
   throw conflict(
-    `This delivery challan is linked to ${label}. Unlink it from the invoice (or cancel/delete the draft) before you ${action}.`,
+    `This delivery challan is linked to issued invoice ${linked.invoice_no || ""}. Cancel that invoice before you ${action} (stock remains on the delivery challan).`.replace(
+      /\s+/g,
+      " ",
+    ).trim(),
   );
 }
 

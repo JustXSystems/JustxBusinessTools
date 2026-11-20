@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, Field, FormGrid, Input, Textarea } from "@/components/bos";
 import { BOM_DC_STATUS_LABEL, bom, type BomDc, type BomDoc } from "@/lib/ims/bom";
+import { isDcReturnBlocked } from "@/lib/ims/bom-dc-intent";
 import { todayLocal } from "@/lib/ims/format";
-import { ErrorBlock, LoadingBlock, useImsAction, useImsData, usePrint } from "../core";
+import { ErrorBlock, LoadingBlock, useIms, useImsAction, useImsData, usePrint } from "../core";
 import { BomSplitLayout } from "./BomSplitLayout";
 import { DcPaper, type DcPaperModel } from "./DcPaper";
 
@@ -91,7 +92,7 @@ export function DeliveryChallanPanel({
   return (
     <Card className="ims-bom-action-card">
       <Alert tone="blue" title="Delivery challans (stock out)">
-        Create or open a DC in Composer with a live invoice-template preview. Verify records your display name; approve posts stock out.
+        Create or open a DC in Composer with a live invoice-template preview. Verify records your display name; approve posts stock out. Manage all DCs and unused-material returns under Bill of Materials → DC & Returns; verified challans also appear in Approvals.
       </Alert>
       {doc.stockIssuedAt ? (
         <div style={{ marginBottom: 10 }}>
@@ -127,7 +128,7 @@ export function DeliveryChallanPanel({
             >
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                 <b style={{ fontSize: 13 }}>{dc.docNo}</b>
-                <Badge tone={dc.status === "approved" ? "emerald" : dc.status === "verified" ? "blue" : dc.status === "cancelled" ? "neutral" : "amber"}>
+                <Badge tone={dc.status === "approved" ? "emerald" : dc.status === "verified" ? "blue" : dc.status === "cancelled" ? "coral" : "amber"}>
                   {BOM_DC_STATUS_LABEL[dc.status] ?? dc.status}
                 </Badge>
                 <span style={{ fontSize: 12, opacity: 0.7 }}>
@@ -135,6 +136,11 @@ export function DeliveryChallanPanel({
                 </span>
                 <span style={{ fontSize: 12, opacity: 0.75 }}>BOM {dc.bomDocNo ?? bomDocNo}</span>
                 {dc.verifiedByName ? <span style={{ fontSize: 12, opacity: 0.75 }}>Verified by {dc.verifiedByName}</span> : null}
+                {dc.invoiceLinked ? (
+                  <Badge tone="amber">
+                    Linked {dc.invoiceNo ? `· ${dc.invoiceNo}` : dc.invoiceStatus === "draft" ? "· draft invoice" : "· invoice"}
+                  </Badge>
+                ) : null}
                 {(dc.lines ?? []).some((l) => (l.returnedQty ?? 0) > 0) ? (
                   <Badge tone="amber">
                     Returned {(dc.lines ?? []).reduce((s, l) => s + (l.returnedQty ?? 0), 0)} units
@@ -356,6 +362,8 @@ export function DeliveryChallanWorkspace({
   onClose,
   onCreated,
   onRefresh,
+  backLabel = "Back to BOM",
+  allowInvoiceLink = true,
 }: {
   doc: BomDoc;
   workspace: DcWorkspace;
@@ -371,6 +379,13 @@ export function DeliveryChallanWorkspace({
   onCreated: (dcId: string) => void;
   /** Soft refresh BOM after save/verify without leaving. */
   onRefresh: () => void;
+  /** Nav label when leaving the workspace (BOM compose vs DC & Returns list). */
+  backLabel?: string;
+  /**
+   * When false (DC & Returns submodule), hide the invoice-link checkbox so it
+   * can’t block Return unused / Reverse. Invoice linking stays on the BOM compose rail.
+   */
+  allowInvoiceLink?: boolean;
 }) {
   const print = usePrint();
   const excludeDcId = workspace.kind === "manage" ? workspace.dcId : undefined;
@@ -391,7 +406,7 @@ export function DeliveryChallanWorkspace({
           <Alert tone="amber" title="Confirm BOM first">
             Delivery challans can only be created on a confirmed BOM.{" "}
             <Button size="sm" variant="ghost" onClick={onBack}>
-              Back to BOM
+              {backLabel}
             </Button>
           </Alert>
         </Card>
@@ -423,7 +438,7 @@ export function DeliveryChallanWorkspace({
             />
           ) : null}
           <Button size="sm" variant="ghost" onClick={onBack}>
-            Back to BOM
+            {backLabel}
           </Button>
         </Card>
       );
@@ -438,6 +453,7 @@ export function DeliveryChallanWorkspace({
         print={print}
         onBack={onBack}
         onCreated={onCreated}
+        backLabel={backLabel}
       />
     );
   }
@@ -458,6 +474,8 @@ export function DeliveryChallanWorkspace({
       onClose={onClose}
       onRefresh={onRefresh}
       print={print}
+      backLabel={backLabel}
+      allowInvoiceLink={allowInvoiceLink}
     />
   );
 }
@@ -477,6 +495,8 @@ function DcManagerLoader({
   onClose,
   onRefresh,
   print,
+  backLabel,
+  allowInvoiceLink,
 }: {
   doc: BomDoc;
   bomDocNo: string;
@@ -492,6 +512,8 @@ function DcManagerLoader({
   onClose: () => void;
   onRefresh: () => void;
   print: () => void;
+  backLabel: string;
+  allowInvoiceLink: boolean;
 }) {
   // Load the DC directly — avoids false "not found" while the BOM DC list is still fetching.
   const dcState = useImsData(() => bom.getDc(dcId), [dcId, doc.updatedAt, doc.stockIssuedAt]);
@@ -504,7 +526,7 @@ function DcManagerLoader({
         <Alert tone="amber" title="Delivery challan not found">
           It may have been removed.{" "}
           <Button size="sm" variant="ghost" onClick={onBack}>
-            Back to BOM
+            {backLabel}
           </Button>
         </Alert>
       </Card>
@@ -530,6 +552,8 @@ function DcManagerLoader({
         onRefresh();
       }}
       print={print}
+      backLabel={backLabel}
+      allowInvoiceLink={allowInvoiceLink}
     />
   );
 }
@@ -555,6 +579,7 @@ function DcEditorForm({
   print,
   onBack,
   onCreated,
+  backLabel,
 }: {
   doc: BomDoc;
   bomDocNo: string;
@@ -564,6 +589,7 @@ function DcEditorForm({
   print: () => void;
   onBack: () => void;
   onCreated: (dcId: string) => void;
+  backLabel: string;
 }) {
   const remainingKey = remaining.map((l) => l.bomLineId).join(",");
   const [docDate, setDocDate] = useState(todayLocal());
@@ -656,7 +682,7 @@ function DcEditorForm({
     <div className="ims-bom-dc-workspace">
       <div className="ims-between" style={{ marginBottom: 10 }}>
         <button type="button" className="bos-back-link" onClick={onBack}>
-          ← Back to BOM
+          ← {backLabel}
         </button>
         <div className="ims-row" style={{ flexWrap: "wrap" }}>
           <span className="ims-strong" style={{ fontSize: 14 }}>
@@ -738,6 +764,8 @@ function DcManagerForm({
   onClose,
   onRefresh,
   print,
+  backLabel,
+  allowInvoiceLink,
 }: {
   doc: BomDoc;
   bomDocNo: string;
@@ -752,9 +780,17 @@ function DcManagerForm({
   onClose: () => void;
   onRefresh: () => void;
   print: () => void;
+  backLabel: string;
+  allowInvoiceLink: boolean;
 }) {
+  const { navigate, can } = useIms();
   const isDraft = dc.status === "draft";
   const remById = useMemo(() => new Map(remaining.map((l) => [l.bomLineId, l])), [remaining]);
+  /** Always honour server invoiceLinked; Builder also blocks while ticked for “Link on invoice”. */
+  const returnBlockedByInvoice = isDcReturnBlocked(dc, { allowInvoiceLink, selectedDcIds });
+  const canReturnStock = can("approvals") || can("stockOut");
+  const stillOutUnits = (dc.lines ?? []).reduce((s, l) => s + (l.netQty ?? Math.max(0, l.qty - (l.returnedQty ?? 0))), 0);
+  const fullyReturned = dc.status === "approved" && dc.stockPosted && stillOutUnits <= 1e-9;
   const [docDate, setDocDate] = useState(dc.docDate);
   const [shipTo, setShipTo] = useState(dc.shipTo ?? "");
   const [transporter, setTransporter] = useState(dc.transporter ?? "");
@@ -935,48 +971,75 @@ function DcManagerForm({
             variant="ghost"
             disabled={Boolean(busy)}
             onClick={async () => {
-              if (!window.confirm(`Cancel verified ${dc.docNo}?`)) return;
-              const out = await run("dc-cancel", () => bom.cancelDc(dc.id), { success: "Delivery challan cancelled" });
+              if (!window.confirm(`Reject verified ${dc.docNo}? It will return to cancelled without posting stock.`)) return;
+              const out = await run("dc-reject", () => bom.rejectDc(dc.id), { success: "Delivery challan rejected" });
               if (out) onClose();
             }}
           >
-            Cancel DC
+            Reject
           </Button>
         </>
       ) : null}
       {dc.status === "approved" && dc.stockPosted ? (
         <>
-          <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
-            <input
-              type="checkbox"
-              checked={selectedDcIds.includes(dc.id)}
-              disabled={Boolean(busy)}
-              onChange={() => onToggleDc(dc.id)}
-            />
-            {doc.invoiceId ? "Linked on invoice" : "Link on invoice"}
-          </label>
-          {selectedDcIds.includes(dc.id) ? (
-            <span style={{ fontSize: 12, opacity: 0.75 }}>Unlink from invoice before return/reverse</span>
+          {allowInvoiceLink ? (
+            <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
+              <input
+                type="checkbox"
+                checked={selectedDcIds.includes(dc.id)}
+                disabled={Boolean(busy)}
+                onChange={() => onToggleDc(dc.id)}
+              />
+              {doc.invoiceId ? "Linked on invoice" : "Link on invoice"}
+            </label>
+          ) : null}
+          {returnBlockedByInvoice ? (
+            <span style={{ fontSize: 12, opacity: 0.75, display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              {dc.invoiceLinked
+                ? dc.invoiceStatus === "issued"
+                  ? `Linked to issued ${dc.invoiceNo || "invoice"} — cancel that invoice before return/reverse`
+                  : `Linked to draft invoice${dc.invoiceNo ? ` ${dc.invoiceNo}` : ""} — unlink before return/reverse`
+                : "Untick “Link on invoice” before return/reverse"}
+              {dc.invoiceId ? (
+                <Button size="sm" variant="ghost" onClick={() => navigate("sales", `open:${dc.invoiceId}`)}>
+                  Open invoice
+                </Button>
+              ) : null}
+            </span>
+          ) : !canReturnStock ? (
+            <span style={{ fontSize: 12, opacity: 0.75 }}>Approvals or Stock out permission required to return / reverse</span>
           ) : (
             <>
-              <Button size="sm" disabled={Boolean(busy)} onClick={() => setReturnMode((v) => !v)}>
-                {returnMode ? "Hide return" : "Return unused"}
-              </Button>
+              {!fullyReturned ? (
+                <Button size="sm" disabled={Boolean(busy)} onClick={() => setReturnMode((v) => !v)}>
+                  {returnMode ? "Hide return" : "Return unused"}
+                </Button>
+              ) : (
+                <Badge tone="amber">Fully returned</Badge>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
                 disabled={Boolean(busy)}
                 onClick={async () => {
-                  if (!window.confirm(`Reverse remaining stock on ${dc.docNo}? Partial returns already recorded stay in history.`)) return;
-                  const out = await run("dc-reverse", () => bom.reverseDc(dc.id), { success: "Delivery challan reversed" });
+                  const msg = fullyReturned
+                    ? `Cancel fully returned ${dc.docNo}? It will move to cancelled (no further stock movement).`
+                    : `Reverse remaining stock on ${dc.docNo}? Partial returns already recorded stay in history.`;
+                  if (!window.confirm(msg)) return;
+                  const out = await run("dc-reverse", () => bom.reverseDc(dc.id), {
+                    success: fullyReturned ? "Delivery challan cancelled" : "Delivery challan reversed",
+                  });
                   if (out) onClose();
                 }}
               >
-                Reverse remaining
+                {fullyReturned ? "Cancel DC" : "Reverse remaining"}
               </Button>
             </>
           )}
         </>
+      ) : null}
+      {dc.status === "cancelled" ? (
+        <span style={{ fontSize: 12, opacity: 0.75 }}>Cancelled — print only. Create a new challan if materials still need to go out.</span>
       ) : null}
     </>
   );
@@ -1019,15 +1082,21 @@ function DcManagerForm({
     <div className="ims-bom-dc-workspace">
       <div className="ims-between" style={{ marginBottom: 10 }}>
         <button type="button" className="bos-back-link" onClick={onBack}>
-          ← Back to BOM
+          ← {backLabel}
         </button>
         <div className="ims-row" style={{ flexWrap: "wrap" }}>
           <span className="ims-strong" style={{ fontSize: 14 }}>
             {dc.docNo}
           </span>
-          <Badge tone={dc.status === "approved" ? "emerald" : dc.status === "verified" ? "blue" : dc.status === "cancelled" ? "neutral" : "amber"}>
+          <Badge tone={dc.status === "approved" ? "emerald" : dc.status === "verified" ? "blue" : dc.status === "cancelled" ? "coral" : "amber"}>
             {BOM_DC_STATUS_LABEL[dc.status] ?? dc.status}
           </Badge>
+          {dc.invoiceLinked ? (
+            <Badge tone="amber">
+              Linked {dc.invoiceNo ? `· ${dc.invoiceNo}` : dc.invoiceStatus === "draft" ? "· draft" : ""}
+            </Badge>
+          ) : null}
+          {fullyReturned ? <Badge tone="amber">Fully returned</Badge> : null}
           <Button size="sm" icon="printer" onClick={print}>
             Print
           </Button>
@@ -1097,8 +1166,49 @@ function DcManagerForm({
               ) : (
                 <div style={{ display: "grid", gap: 12 }}>
                   <div style={{ fontSize: 13, opacity: 0.8 }}>
-                    This challan is {BOM_DC_STATUS_LABEL[dc.status] ?? dc.status}. Use the toolbar to approve, return unused materials, reverse remaining, or print.
+                    {dc.status === "cancelled"
+                      ? "This challan is cancelled. Quantities below are historical; stock was never posted or has already been reversed."
+                      : dc.status === "verified"
+                        ? "Verified — approve to post stock out, or reject to cancel without moving stock."
+                        : fullyReturned
+                          ? "All delivered quantities have been returned. You can cancel the challan or print the record."
+                          : "Approved — return unused materials still out at site, reverse remaining stock, or print."}
                   </div>
+                  {returnBlockedByInvoice && dc.status === "approved" ? (
+                    <Alert tone="amber" title={dc.invoiceLinked ? "Linked to an invoice" : "Selected for invoice link"}>
+                      {dc.invoiceLinked ? (
+                        <>
+                          {dc.invoiceStatus === "issued" ? (
+                            <>
+                              This challan is linked to issued invoice <b>{dc.invoiceNo || "—"}</b>. Cancel that invoice first (stock stays on
+                              the DC), then return unused materials or reverse.
+                            </>
+                          ) : (
+                            <>
+                              Unlink this delivery challan from the draft invoice
+                              {dc.invoiceNo ? (
+                                <>
+                                  {" "}
+                                  <b>{dc.invoiceNo}</b>
+                                </>
+                              ) : null}{" "}
+                              before returning unused stock or reversing.
+                            </>
+                          )}
+                          {dc.invoiceId ? (
+                            <>
+                              {" "}
+                              <Button size="sm" variant="ghost" onClick={() => navigate("sales", `open:${dc.invoiceId}`)}>
+                                Open invoice
+                              </Button>
+                            </>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>Untick “Link on invoice” in the toolbar before returning unused stock or reversing.</>
+                      )}
+                    </Alert>
+                  ) : null}
                   {(dc.lines ?? []).map((line) => (
                     <div key={line.id} style={{ fontSize: 13, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
                       {line.description}{" "}
@@ -1108,7 +1218,7 @@ function DcManagerForm({
                       </span>
                     </div>
                   ))}
-                  {returnMode && dc.status === "approved" && dc.stockPosted ? (
+                  {returnMode && !returnBlockedByInvoice && !fullyReturned && dc.status === "approved" && dc.stockPosted ? (
                     <Card className="ims-bom-action-card">
                       <Alert tone="amber" title="Return unused to store">
                         Stock is received back against <b>{dc.docNo}</b>. Enter only unused quantities still out at site.

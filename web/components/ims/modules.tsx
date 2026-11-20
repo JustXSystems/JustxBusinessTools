@@ -68,6 +68,7 @@ export const IMS_MODULES: ReadonlyArray<ImsModuleDef> = [
 
   /* Bill of Materials — own group so Sales & Finance stays billing/ledger focused */
   { key: "bom", label: "Create / Maintain", icon: "☰", section: "Bill of Materials", desc: "Compose customer BOMs, live preview and print", keywords: "bom bill of materials package quote materials builder create maintain", anyOf: ["bom"], component: screen("bom", () => import("./bom/Builder")) },
+  { key: "bomDc", label: "DC & Returns", icon: "◫", section: "Bill of Materials", desc: "Create, verify, approve or reject delivery challans and return unused stock", keywords: "dc delivery challan return unused materials verify approve reject stock out", anyOf: ["bom"], component: screen("bomDc", () => import("./bom/DcReturns")) },
   { key: "bomPackages", label: "Packages", icon: "⧉", section: "Bill of Materials", desc: "Reusable templates for kits and projects (owners / admins)", keywords: "bom package template kit assembly recipe", anyOf: ["bomPackages"], component: screen("bomPackages", () => import("./bom/Packages")) },
   { key: "bomRateCards", label: "Rate Cards", icon: "₨", section: "Bill of Materials", desc: "Price books for package and customer BOM lines", keywords: "bom rate card price book sell cost", anyOf: ["bom", "bomPackages"], component: screen("bomRateCards", () => import("./bom/RateCards")) },
   { key: "bomCompare", label: "Compare", icon: "⇄", section: "Bill of Materials", desc: "Diff packages or customer BOMs line by line", keywords: "bom compare diff package variant", anyOf: ["bom", "bomPackages"], component: screen("bomCompare", () => import("./bom/Compare")) },
@@ -108,6 +109,8 @@ export function visibleModules(session: ImsSession): ImsModuleDef[] {
   const perms = new Set(session.access.perms);
   const ceiling = session.enabledModules;
   const allowed = ceiling == null ? null : new Set(ceiling);
+  // Match server normalizeEnabledModules: BOM Create/Maintain implies DC & Returns.
+  if (allowed?.has("bom")) allowed.add("bomDc");
   return IMS_MODULES.filter(
     (x) =>
       (allowed == null || allowed.has(x.key)) &&

@@ -23,6 +23,7 @@ export const IMS_MODULE_CATALOG: ReadonlyArray<{
   { key: "purchase", label: "Purchase Orders", section: "Purchasing" },
   { key: "approvals", label: "Approvals", section: "Purchasing" },
   { key: "bom", label: "Create / Maintain", section: "Bill of Materials" },
+  { key: "bomDc", label: "DC & Returns", section: "Bill of Materials" },
   { key: "bomPackages", label: "Packages", section: "Bill of Materials" },
   { key: "bomRateCards", label: "Rate Cards", section: "Bill of Materials" },
   { key: "bomCompare", label: "Compare", section: "Bill of Materials" },
@@ -55,7 +56,7 @@ const ALWAYS = new Set(IMS_ALWAYS_ON_MODULES);
  */
 const PATH_MODULE_RULES: ReadonlyArray<{ prefix: string; anyOf: ReadonlyArray<ImsModuleKey> }> = [
   { prefix: "/bom/packages", anyOf: ["bomPackages", "bom"] },
-  { prefix: "/bom", anyOf: ["bom", "bomPackages"] },
+  { prefix: "/bom", anyOf: ["bom", "bomPackages", "bomDc", "bomRateCards", "bomCompare"] },
   { prefix: "/purchase-orders", anyOf: ["purchase", "approvals", "lowstock"] },
   { prefix: "/payment-runs", anyOf: ["payables"] },
   { prefix: "/receivables", anyOf: ["receivables"] },
@@ -123,6 +124,8 @@ export function normalizeEnabledModules(keys: ReadonlyArray<string>): ImsModuleK
   const out = new Set<ImsModuleKey>();
   for (const k of IMS_ALWAYS_ON_MODULES) out.add(k);
   for (const k of keys) if (isImsModuleKey(k)) out.add(k);
+  // DC & Returns is a BOM submodule — keep it available whenever Create / Maintain is.
+  if (out.has("bom")) out.add("bomDc");
   return IMS_MODULE_CATALOG.map((m) => m.key).filter((k) => out.has(k));
 }
 

@@ -225,6 +225,7 @@ export type ImsModuleKey =
   | "bomPackages"
   | "bomRateCards"
   | "bomCompare"
+  | "bomDc"
   | "receivables"
   | "payables"
   | "ledger"
@@ -282,7 +283,7 @@ export type ImsDashboard = {
     payable: number;
     pendingApprovals: number;
   };
-  pending: { po: number; bills: number; checks: number };
+  pending: { po: number; bills: number; checks: number; dcs?: number };
   aging: Array<{ key: AgingKey; label: string; color: string; items: number; value: number }>;
   categories: Array<{ category: string; items: number; units: number; value: number }>;
   series: Array<{ date: string; in: number; out: number }>;
@@ -294,7 +295,7 @@ export type ImsDashboard = {
 export type ImsEvent = { id: number; actorName: string | null; type: string; entityType: string | null; entityId: string | null; summary: string; createdAt: string | null };
 
 export type ImsSearchResult = {
-  kind: "item" | "party" | "invoice" | "po" | "bill" | "bom" | "bom_package";
+  kind: "item" | "party" | "invoice" | "po" | "bill" | "bom" | "bom_package" | "bom_dc";
   id: string;
   title: string;
   sub: string;

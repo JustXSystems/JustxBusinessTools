@@ -209,6 +209,28 @@ function InvoiceBody({
             />
           ) : null}
 
+          {isIssued && (inv.dcLinks?.length ?? 0) > 0 ? (
+            <WidgetCard title="Delivery challans" note={`${inv.dcLinks!.length} linked`}>
+              <p className="fin-note" style={{ marginBottom: 8 }}>
+                Stock was issued via these DCs. Return or reverse on a DC is blocked until this invoice is cancelled.
+              </p>
+              <div style={{ display: "grid", gap: 6 }}>
+                {inv.dcLinks!.map((dc) => (
+                  <div key={dc.id} className="ims-row" style={{ justifyContent: "space-between", gap: 8 }}>
+                    <span style={{ fontSize: 13 }}>
+                      <b>{dc.docNo}</b> · {dc.docDate}
+                    </span>
+                    {can("bom") ? (
+                      <Button size="sm" variant="ghost" onClick={() => navigate("bomDc", `open:${dc.id}`)}>
+                        Open DC
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </WidgetCard>
+          ) : null}
+
           {detail.payments.length ? (
             <WidgetCard title="Payments" note={`${detail.payments.length}`}>
               <div className="fin-table-wrap">

@@ -25,6 +25,7 @@ export type ImsModuleKey =
   | "bomPackages"
   | "bomRateCards"
   | "bomCompare"
+  | "bomDc"
   | "receivables"
   | "payables"
   | "ledger"
@@ -111,6 +112,28 @@ async function notifications(
     );
     if (allow("approvals") || allow("checks")) for (const c of checks) {
       out.push({ id: `check:${c.id}`, tone: "blue", title: `Stock check ${c.check_no} awaits approval`, body: c.title, module: "checks", open: c.id, at: tsOf(c.updated_at) });
+    }
+  }
+  if (perms.has("approvals") && perms.has("bom") && (allow("bomDc") || allow("bom"))) {
+    const pendingDcs = await rows<{ id: string; doc_no: string; customer_name: string | null; bom_doc_no: string; updated_at: string }>(
+      deps.db,
+      `SELECT d.id, d.doc_no, b.customer_name, b.doc_no AS bom_doc_no, d.updated_at
+       FROM ims_bom_dcs d
+       INNER JOIN ims_bom_docs b ON b.id = d.bom_doc_id AND b.tenant_id = d.tenant_id
+       WHERE d.tenant_id = :tenantId AND d.status = 'verified'
+       ORDER BY d.updated_at DESC LIMIT 5`,
+      { tenantId },
+    ).catch(() => [] as Array<{ id: string; doc_no: string; customer_name: string | null; bom_doc_no: string; updated_at: string }>);
+    for (const d of pendingDcs) {
+      out.push({
+        id: `bomdc:${d.id}`,
+        tone: "blue",
+        title: `DC ${d.doc_no} awaits approval`,
+        body: `${d.customer_name || "No customer"} · BOM ${d.bom_doc_no}`,
+        module: allow("bomDc") ? "bomDc" : "bom",
+        open: d.id,
+        at: tsOf(d.updated_at),
+      });
     }
   }
   if ((perms.has("receivables") || perms.has("sales")) && allow("receivables")) {
@@ -295,12 +318,13 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       `SELECT SUM(grand_total - amount_paid) AS payable FROM ims_bills WHERE tenant_id = :tenantId AND status <> 'cancelled'`,
       { tenantId },
     );
-    const pending = await rows<{ po: number; bills: number; checks: number }>(
+    const pending = await rows<{ po: number; bills: number; checks: number; dcs: number }>(
       deps.db,
       `SELECT
          (SELECT COUNT(*) FROM ims_purchase_orders WHERE tenant_id = :tenantId AND status = 'pending_approval') AS po,
          (SELECT COUNT(*) FROM ims_bills WHERE tenant_id = :tenantId AND status = 'pending_approval') AS bills,
-         (SELECT COUNT(*) FROM ims_stock_checks WHERE tenant_id = :tenantId AND status = 'submitted') AS checks`,
+         (SELECT COUNT(*) FROM ims_stock_checks WHERE tenant_id = :tenantId AND status = 'submitted') AS checks,
+         (SELECT COUNT(*) FROM ims_bom_dcs WHERE tenant_id = :tenantId AND status = 'verified') AS dcs`,
       { tenantId },
     );
 
@@ -335,9 +359,18 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
         overdue: round2(money(f?.overdue)),
         overdueCount: Number(f?.overdue_n ?? 0),
         payable: round2(money(payable[0]?.payable)),
-        pendingApprovals: Number(pending[0]?.po ?? 0) + Number(pending[0]?.bills ?? 0) + Number(pending[0]?.checks ?? 0),
+        pendingApprovals:
+          Number(pending[0]?.po ?? 0) +
+          Number(pending[0]?.bills ?? 0) +
+          Number(pending[0]?.checks ?? 0) +
+          Number(pending[0]?.dcs ?? 0),
       },
-      pending: { po: Number(pending[0]?.po ?? 0), bills: Number(pending[0]?.bills ?? 0), checks: Number(pending[0]?.checks ?? 0) },
+      pending: {
+        po: Number(pending[0]?.po ?? 0),
+        bills: Number(pending[0]?.bills ?? 0),
+        checks: Number(pending[0]?.checks ?? 0),
+        dcs: Number(pending[0]?.dcs ?? 0),
+      },
       aging: AGING_BUCKETS.map((b) => ({ key: b.key, label: b.label, color: b.color, items: aging[b.key].items, value: round2(aging[b.key].value) })),
       categories: [...byCategory.values()].map((c) => ({ ...c, units: round3(c.units), value: round2(c.value) })).sort((a, b) => b.value - a.value),
       series: fullSeries,
@@ -420,7 +453,7 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       return;
     }
     const params = { tenantId: actor.tenantId, q: likeOf(q), exact: q };
-    const [items, parties, invoices, pos, bills, boms, packages] = await Promise.all([
+    const [items, parties, invoices, pos, bills, boms, packages, dcs] = await Promise.all([
       rows<{ id: string; name: string; sku: string | null; current_stock: string; unit: string }>(
         deps.db,
         `SELECT id, name, sku, current_stock, unit FROM ims_items WHERE tenant_id = :tenantId AND (name LIKE :q OR sku LIKE :q OR barcode = :exact) ORDER BY name LIMIT 8`,
@@ -460,6 +493,15 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
          ORDER BY name LIMIT 4`,
         params,
       ).catch(() => [] as Array<{ id: string; name: string; code: string | null; capacity_label: string | null }>),
+      rows<{ id: string; doc_no: string; status: string; bom_doc_no: string; customer_name: string | null }>(
+        deps.db,
+        `SELECT d.id, d.doc_no, d.status, b.doc_no AS bom_doc_no, b.customer_name
+         FROM ims_bom_dcs d
+         INNER JOIN ims_bom_docs b ON b.id = d.bom_doc_id AND b.tenant_id = d.tenant_id
+         WHERE d.tenant_id = :tenantId AND (d.doc_no LIKE :q OR b.doc_no LIKE :q OR IFNULL(b.customer_name,'') LIKE :q OR IFNULL(d.vehicle_no,'') LIKE :q)
+         ORDER BY d.doc_date DESC LIMIT 5`,
+        params,
+      ).catch(() => [] as Array<{ id: string; doc_no: string; status: string; bom_doc_no: string; customer_name: string | null }>),
     ]);
     res.json({
       results: [
@@ -483,6 +525,14 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
           sub: [p.code, p.capacity_label].filter(Boolean).join(" · ") || "BOM package",
           module: "bomPackages",
           open: p.id,
+        })),
+        ...dcs.map((d) => ({
+          kind: "bom_dc",
+          id: d.id,
+          title: d.doc_no,
+          sub: `${d.customer_name || "No customer"} · BOM ${d.bom_doc_no} · ${d.status}`,
+          module: "bomDc" as const,
+          open: d.id,
         })),
       ],
     });

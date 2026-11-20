@@ -47,6 +47,8 @@ export const ENTITY_MODULE: Record<string, ImsModuleKey> = {
   party: "parties",
   payment: "receivables",
   closing: "closing",
+  bom_dc: "bomDc",
+  bom: "bom",
 };
 
 /** − / input / + quantity control; the input keeps the raw text so decimals can be typed. */

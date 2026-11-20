@@ -167,7 +167,7 @@ function SearchDialog({ open, onClose, onPick }: { open: boolean; onClose: () =>
     setResults(null);
     onClose();
   };
-  const KIND: Record<ImsSearchResult["kind"], string> = { item: "📦", party: "👤", invoice: "🧾", po: "🛒", bill: "📤", bom: "☰", bom_package: "⧉" };
+  const KIND: Record<ImsSearchResult["kind"], string> = { item: "📦", party: "👤", invoice: "🧾", po: "🛒", bill: "📤", bom: "☰", bom_package: "⧉", bom_dc: "◫" };
   const shown = q.trim().length >= 2 ? results : null;
 
   return (
@@ -315,7 +315,13 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
   const invalidate = useCallback(() => setVersion((v) => v + 1), []);
 
   const navigate = useCallback((module: ImsModuleKey, intent?: string) => {
-    setNav((n) => ({ module, intent: intent ? { module, value: intent } : null, seq: intent ? n.seq + 1 : n.seq }));
+    setNav((n) => ({
+      module,
+      intent: intent ? { module, value: intent } : null,
+      // Bump seq on deep-links and when re-selecting the active module (e.g. sidebar
+      // click while inside a DC workspace) so the screen remounts / returns to list.
+      seq: intent || n.module === module ? n.seq + 1 : n.seq,
+    }));
     setAskOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
@@ -358,6 +364,9 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
     ...(can("sales") ? [{ id: "q-inv", section: "Quick actions", label: "Create GST invoice", icon: "🧾", keywords: "bill sale", onSelect: go("sales", "new") }] : []),
     ...(can("po") ? [{ id: "q-po", section: "Quick actions", label: "Create purchase order", icon: "🛒", keywords: "po buy", onSelect: go("purchase", "new") }] : []),
     ...(can("receivables") ? [{ id: "q-pay", section: "Quick actions", label: "Receive a payment", icon: "💰", keywords: "collection receipt", onSelect: go("receivables", "pay") }] : []),
+    ...(can("bom") && modules.some((x) => x.key === "bomDc")
+      ? [{ id: "q-dc", section: "Quick actions", label: "New delivery challan", icon: "◫", keywords: "dc bom delivery challan return", onSelect: go("bomDc", "new") }]
+      : []),
     ...(modules.some((x) => x.key === "scanner") ? [{ id: "q-scan", section: "Quick actions", label: "Scan stock (QR / barcode)", icon: "⌗", onSelect: go("scanner") }] : []),
     { id: "q-search", section: "Quick actions", label: "Search items, parties & documents", icon: "⌕", keywords: "find lookup", onSelect: () => setSearchOpen(true) },
     ...(askPage ? [{ id: "q-ask", section: "Quick actions", label: `Ask AI about ${current.label}`, icon: "✦", keywords: "assistant question gemini help", onSelect: () => setAskOpen(true) }] : []),
