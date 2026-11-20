@@ -26,6 +26,8 @@ export function useDebounced<T>(value: T, ms = 350): T {
 export function movementView(m: Pick<ImsMovement, "type" | "reason" | "refType">): BadgeView {
   if (isRestore(m)) return { text: "RESTORED", tone: "emerald" };
   if (m.type === "RETURN_OUT" && m.refType === "manual" && m.reason === RESTORE_REASON) return { text: "OUT OF QUARANTINE", tone: "neutral" };
+  if (m.type === "RETURN_IN" && m.refType === "dc") return { text: "DC RETURN", tone: "amber" };
+  if (m.type === "OUT" && m.refType === "dc") return { text: "DC STOCK OUT", tone: "blue" };
   return movementBadge(m.type);
 }
 

@@ -153,7 +153,11 @@ function DocMeta({ model, extra }: { model: BomPaperModel; extra?: ReadonlyArray
 }
 
 function PartyBlock({ model }: { model: BomPaperModel }) {
-  const siteLine = [model.location || null, model.projectRef ? `Project ${model.projectRef}` : null]
+  const siteLine = [
+    model.location || null,
+    model.projectRef?.trim() ? `Project ${model.projectRef.trim()}` : null,
+    model.quotationRef?.trim() ? `Quotation ${model.quotationRef.trim()}` : null,
+  ]
     .filter(Boolean)
     .join(" · ");
   return (
@@ -662,8 +666,18 @@ export function ProposalBomPaper({ model }: { model: BomPaperModel }) {
           <b>For</b>
           <span>
             {model.customerName || "—"}
-            {[model.location, model.projectRef ? `Project ${model.projectRef}` : null].filter(Boolean).length
-              ? ` · ${[model.location, model.projectRef ? `Project ${model.projectRef}` : null].filter(Boolean).join(" · ")}`
+            {[
+              model.location,
+              model.projectRef?.trim() ? `Project ${model.projectRef.trim()}` : null,
+              model.quotationRef?.trim() ? `Quotation ${model.quotationRef.trim()}` : null,
+            ].filter(Boolean).length
+              ? ` · ${[
+                  model.location,
+                  model.projectRef?.trim() ? `Project ${model.projectRef.trim()}` : null,
+                  model.quotationRef?.trim() ? `Quotation ${model.quotationRef.trim()}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}`
               : ""}
           </span>
         </div>

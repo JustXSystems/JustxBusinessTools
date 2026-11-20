@@ -682,8 +682,8 @@ export function availableDcQty(
 }
 
 /**
- * Pure planner for BOM issued_qty / stock_issued_at after DC approve or reverse.
- * `approvedByLine` = SUM of qty on approved+stock_posted DCs per BOM line id.
+ * Pure planner for BOM issued_qty / stock_issued_at after DC approve, reverse, or partial return.
+ * `approvedByLine` = net qty still out (approved DC line qty − returns) per BOM line id.
  */
 export function planBomIssuedSync(
   stockLines: ReadonlyArray<{ id: string; qty: number }>,
@@ -718,6 +718,24 @@ export function planBomIssuedSync(
     stockIssueCount,
     stockIssuedAt: fullyCovered && anyIssued ? "set" : "clear",
   };
+}
+
+/** Net still out on one DC line after partial unused returns. */
+export function netDcLineQty(deliveredQty: number, returnedQty: number): number {
+  return remainingIssueQty(deliveredQty, returnedQty);
+}
+
+/** How much more can be returned against a DC line. */
+export function returnableDcQty(deliveredQty: number, alreadyReturned: number): number {
+  return remainingIssueQty(deliveredQty, alreadyReturned);
+}
+
+/**
+ * Minimum BOM line qty allowed when live DCs exist (cannot shrink below net committed).
+ * `committedNet` = draft/verified full + approved net (delivered − returned).
+ */
+export function minBomQtyWithLiveDcs(committedNet: number): number {
+  return round3(Math.max(0, committedNet));
 }
 
 export const SERIAL_NOTES_MAX = 500;

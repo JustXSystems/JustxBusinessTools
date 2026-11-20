@@ -16,6 +16,7 @@ import {
   previewBomInvoice,
   qtyForCapacity,
   type BomBusiness,
+  type BomDc,
   type BomDoc,
   type BomDocLineInput,
   type BomDocStatus,
@@ -130,9 +131,18 @@ function BomViewer({
   const [customerState, setCustomerState] = useState<string | null>(null);
   const [dcWorkspace, setDcWorkspace] = useState<DcWorkspace | null>(null);
   const doc = state.data?.doc;
+  // Live DCs (any status) — needed for draft-after-amend rail and explode-without-links guard.
+  const dcsProbe = useImsData(
+    () => (doc ? bom.listDcs(doc.id) : Promise.resolve({ dcs: [] as BomDc[], bomDocNo: "" })),
+    [doc?.id, doc?.updatedAt, doc?.stockIssueCount, doc?.status],
+  );
+  const liveDcs = (dcsProbe.data?.dcs ?? []).filter((d) => d.status !== "cancelled");
+  const hasLiveDcs = liveDcs.length > 0;
+  const showDcCompose = Boolean(doc && (doc.status === "confirmed" || (doc.stockIssueCount ?? 0) > 0 || hasLiveDcs || dcWorkspace));
   const canApproveDc = isOwner || can("approvals");
   const stockViaDc = linkDcIds.length > 0;
   const partyId = doc?.partyId ?? null;
+  const invoiceId = doc?.invoiceId ?? null;
   useEffect(() => {
     let cancelled = false;
     if (!partyId) {
@@ -151,6 +161,25 @@ function BomViewer({
       cancelled = true;
     };
   }, [partyId]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!invoiceId) {
+      setLinkDcIds([]);
+      return;
+    }
+    bom
+      .invoiceDcLinks(invoiceId)
+      .then((r) => {
+        if (!cancelled) setLinkDcIds(r.dcIds ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setLinkDcIds([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [invoiceId, doc?.updatedAt]);
+
   const stockShortfalls = useMemo(
     () => (availability.data?.items ?? []).filter((i) => i.shortfall > 0),
     [availability.data],
@@ -180,6 +209,21 @@ function BomViewer({
   const reloadAll = () => {
     state.reload();
     availability.reload();
+    dcsProbe.reload();
+  };
+  const toggleInvoiceDc = async (dcId: string) => {
+    const next = linkDcIds.includes(dcId) ? linkDcIds.filter((x) => x !== dcId) : [...linkDcIds, dcId];
+    if (invoiceId) {
+      const out = await run("dc-links", () => bom.setInvoiceDcLinks(invoiceId, next), {
+        success: next.includes(dcId) ? "DC linked on invoice" : "DC unlinked from invoice",
+      });
+      if (out) {
+        setLinkDcIds(next);
+        reloadAll();
+      }
+      return;
+    }
+    setLinkDcIds(next);
   };
 
   return (
@@ -222,6 +266,12 @@ function BomViewer({
                   <Button
                     disabled={Boolean(busy)}
                     onClick={async () => {
+                      if (session.settings.bomRequireQuotationRef && !String(doc.quotationRef ?? "").trim()) {
+                        window.alert(
+                          "Quotation reference is required before confirming this BOM (Business Profile → IMS settings). Edit the BOM and enter a quotation reference.",
+                        );
+                        return;
+                      }
                       const out = await run(
                         "confirm",
                         async () => {
@@ -460,9 +510,7 @@ function BomViewer({
           run={run}
           canApprove={canApproveDc}
           selectedDcIds={linkDcIds}
-          onToggleDc={(dcId) =>
-            setLinkDcIds((prev) => (prev.includes(dcId) ? prev.filter((x) => x !== dcId) : [...prev, dcId]))
-          }
+          onToggleDc={(dcId) => void toggleInvoiceDc(dcId)}
           onBack={() => setDcWorkspace(null)}
           onClose={() => {
             setDcWorkspace(null);
@@ -478,8 +526,14 @@ function BomViewer({
       <BomSplitLayout
         confirm={confirmed}
         compose={
-          confirmed ? (
+          showDcCompose ? (
             <div className="ims-bom-compose-actions">
+              {!confirmed ? (
+                <Alert tone="amber" title="Reconfirm required">
+                  BOM quantity was increased (or reopened). Confirm again before creating or approving further delivery challans. Existing DCs can still be opened or cancelled below.
+                </Alert>
+              ) : null}
+              {confirmed ? (
               <Card className="ims-bom-action-card">
                 <Alert tone="blue" title="Create GST invoice">
                   Choose how this BOM becomes a tax invoice. Lump-sum bills one package line; explode copies every BOM line (stock lines keep catalogue links).
@@ -543,9 +597,9 @@ function BomViewer({
                         Explode invoices need approved delivery challans linked (tick DCs below), or switch to lump-sum billing. Invoice issue will not post stock again when DCs are linked.
                       </Alert>
                     ) : null}
-                    {!stockViaDc && !doc.stockIssuedAt && convertMode === "explode_lines" && (doc.stockIssueCount ?? 0) > 0 ? (
+                    {!stockViaDc && !doc.stockIssuedAt && convertMode === "explode_lines" && hasLiveDcs ? (
                       <Alert tone="amber" title="Delivery challans on this BOM">
-                        Link the approved DCs below before creating an explode invoice, or use lump-sum billing.
+                        Link the approved DCs below before creating an explode invoice, or cancel open DCs / use lump-sum billing.
                       </Alert>
                     ) : null}
                     {issueOnCreate && convertMode === "explode_lines" && !stockViaDc && !can("stockOut") ? (
@@ -579,7 +633,7 @@ function BomViewer({
                         disabled={
                           Boolean(busy) ||
                           (convertMode === "explode_lines" && !stockViaDc && Boolean(doc.stockIssuedAt)) ||
-                          (convertMode === "explode_lines" && !stockViaDc && (doc.stockIssueCount ?? 0) > 0) ||
+                          (convertMode === "explode_lines" && !stockViaDc && hasLiveDcs) ||
                           (issueOnCreate && convertMode === "explode_lines" && !stockViaDc && !can("stockOut")) ||
                           (issueOnCreate && convertMode === "explode_lines" && !stockViaDc && blockOnShortfall)
                         }
@@ -611,6 +665,7 @@ function BomViewer({
                   </Alert>
                 )}
               </Card>
+              ) : null}
 
               <DeliveryChallanPanel
                 doc={doc}
@@ -618,10 +673,9 @@ function BomViewer({
                 onDone={reloadAll}
                 run={run}
                 canApprove={canApproveDc}
+                manageOnly={!confirmed}
                 selectedDcIds={linkDcIds}
-                onToggleDc={(dcId) =>
-                  setLinkDcIds((prev) => (prev.includes(dcId) ? prev.filter((x) => x !== dcId) : [...prev, dcId]))
-                }
+                onToggleDc={(dcId) => void toggleInvoiceDc(dcId)}
                 onOpenWorkspace={setDcWorkspace}
               />
 
@@ -806,6 +860,8 @@ function BomEditorForm({
   const [exclusions, setExclusions] = useState(initial?.exclusions ?? "");
   const [preparedBy, setPreparedBy] = useState(initial?.preparedBy ?? session.actor.name ?? "");
   const [projectRef, setProjectRef] = useState(initial?.projectRef ?? "");
+  const [quotationRef, setQuotationRef] = useState(initial?.quotationRef ?? "");
+  const quotationRefs = useImsData(() => bom.quotationRefs(), []);
   const [validUntil, setValidUntil] = useState(initial?.validUntil ?? "");
   const [paymentTerms, setPaymentTerms] = useState(initial?.paymentTerms ?? "");
   const [deliveryTerms, setDeliveryTerms] = useState(initial?.deliveryTerms ?? "");
@@ -1018,6 +1074,7 @@ function BomEditorForm({
     customerName: customerName.trim(),
     location: location.trim() || null,
     projectRef: projectRef.trim() || null,
+    quotationRef: quotationRef.trim() || null,
     partyId,
     marginPct: Number(marginPct) || 0,
     taxPct: Number(taxPct) || 0,
@@ -1295,6 +1352,28 @@ function BomEditorForm({
               </Field>
               <Field label="Project ref">
                 {({ id }) => <Input id={id} value={projectRef} onChange={(e) => setProjectRef(e.target.value)} placeholder="Site / job / PO ref" />}
+              </Field>
+              <Field
+                label="Quotation reference"
+                hint={session.settings.bomRequireQuotationRef ? "Required before confirm" : "Links this BOM to your quotation number"}
+              >
+                {({ id }) => (
+                  <>
+                    <Input
+                      id={id}
+                      list="ims-bom-quotation-refs"
+                      value={quotationRef}
+                      onChange={(e) => setQuotationRef(e.target.value)}
+                      placeholder="e.g. QTN-2026-0142"
+                      required={Boolean(session.settings.bomRequireQuotationRef)}
+                    />
+                    <datalist id="ims-bom-quotation-refs">
+                      {(quotationRefs.data?.refs ?? []).map((ref) => (
+                        <option key={ref} value={ref} />
+                      ))}
+                    </datalist>
+                  </>
+                )}
               </Field>
               <Field label="Valid until">
                 {({ id }) => <Input id={id} type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />}

@@ -162,6 +162,7 @@ export type BomDoc = {
   customerName: string;
   location: string | null;
   projectRef?: string | null;
+  quotationRef?: string | null;
   partyId: string | null;
   marginPct: number;
   taxPct: number;
@@ -236,6 +237,7 @@ export type BomDocInput = {
   customerName?: string;
   location?: string | null;
   projectRef?: string | null;
+  quotationRef?: string | null;
   partyId?: string | null;
   marginPct?: number;
   taxPct?: number;
@@ -674,7 +676,7 @@ export const bom = {
         issuedQty: number;
       }>;
     }>(`/bom/docs/${bomId}/dc-remaining`, excludeDcId ? { excludeDcId } : undefined),
-  listDcs: (bomId: string) => get<{ dcs: BomDc[]; bomDocNo: string }>(`/bom/docs/${bomId}/dcs`),
+  listDcs: (bomId: string) => get<{ dcs: BomDc[]; bomDocNo: string; quotationRef?: string | null }>(`/bom/docs/${bomId}/dcs`),
   getDc: (id: string) => get<{ dc: BomDc }>(`/bom/dcs/${id}`),
   createDc: (
     bomId: string,
@@ -710,6 +712,24 @@ export const bom = {
       `/bom/dcs/${id}/reverse`,
       body ?? {},
     ),
+  returnDc: (
+    id: string,
+    body: {
+      returnDate?: string;
+      notes?: string | null;
+      lines: Array<{ dcLineId: string; qty: number; remarks?: string | null }>;
+    },
+  ) =>
+    post<{
+      return: BomDcReturn | null;
+      dc: BomDc;
+      movements: Array<{ id: string; itemId: string; itemName: string; qty: number }>;
+      doc: BomDoc;
+    }>(`/bom/dcs/${id}/returns`, body),
+  listDcReturns: (id: string) => get<{ returns: BomDcReturn[]; dcDocNo: string }>(`/bom/dcs/${id}/returns`),
+  amendLineQty: (id: string, body: { lineId: string; qty: number }) =>
+    post<{ doc: BomDoc; message: string }>(`/bom/docs/${id}/amend-line-qty`, body),
+  quotationRefs: (q?: string) => get<{ refs: string[] }>("/bom/quotation-refs", q ? { q } : undefined),
   invoiceDcLinks: (invoiceId: string) => get<{ dcIds: string[]; dcs: BomDc[] }>(`/invoices/${invoiceId}/dc-links`),
   setInvoiceDcLinks: (invoiceId: string, dcIds: string[]) => put<{ dcIds: string[] }>(`/invoices/${invoiceId}/dc-links`, { dcIds }),
 };
@@ -733,8 +753,36 @@ export type BomDcLine = {
   description: string;
   makeText: string | null;
   qty: number;
+  returnedQty: number;
+  netQty: number;
   unit: string;
   remarks: string | null;
+};
+
+export type BomDcReturnLine = {
+  id: string;
+  returnId: string;
+  dcId: string;
+  dcLineId: string;
+  bomLineId: string;
+  itemId: string | null;
+  description: string;
+  qty: number;
+  unit: string;
+  remarks: string | null;
+};
+
+export type BomDcReturn = {
+  id: string;
+  dcId: string;
+  bomDocId: string;
+  returnNo: string;
+  returnDate: string;
+  notes: string | null;
+  createdByName: string | null;
+  createdAt: string | null;
+  lines: BomDcReturnLine[];
+  dcDocNo?: string | null;
 };
 
 export type BomDc = {
@@ -758,6 +806,8 @@ export type BomDc = {
   createdAt: string | null;
   updatedAt: string | null;
   lines?: BomDcLine[];
+  returns?: BomDcReturn[];
   bomDocNo?: string | null;
   customerName?: string | null;
+  quotationRef?: string | null;
 };

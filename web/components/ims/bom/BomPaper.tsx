@@ -35,6 +35,7 @@ export type BomPaperModel = {
   /** Customer billing state for GST place of supply (not site city). */
   customerState?: string | null;
   projectRef?: string | null;
+  quotationRef?: string | null;
   preparedBy?: string | null;
   notes?: string | null;
   revision?: number | null;
@@ -85,6 +86,7 @@ export function modelFromDoc(doc: BomDoc, business: BomBusiness, options?: BomPa
     location: doc.location || "",
     customerState: opts.customerState ?? null,
     projectRef: doc.projectRef ?? null,
+    quotationRef: doc.quotationRef ?? null,
     preparedBy: doc.preparedBy,
     notes: doc.notes,
     revision: doc.revision ?? 1,

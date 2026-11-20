@@ -562,7 +562,29 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
   const invoiceNo = await nextDocNo(conn, actor.tenantId, "invoice", settings.invoicePrefix, invoiceDate, settings.businessName);
 
   const dcIds = await listInvoiceDcIds(conn, actor.tenantId, id);
-  const stockViaDc = dcIds.length > 0;
+  let stockViaDc = false;
+  if (dcIds.length) {
+    // Re-validate under lock — reverse/return may have invalidated links between draft and issue.
+    if (!(row.source_tool === "ims_bom" && row.source_ref)) {
+      throw conflict("Delivery challan links are only valid on invoices created from a BOM. Remove the links before issuing.");
+    }
+    for (const dcId of dcIds) {
+      const dc = await one<{ status: string; stock_posted: number; bom_doc_id: string; doc_no: string }>(
+        conn,
+        `SELECT status, stock_posted, bom_doc_id, doc_no FROM ims_bom_dcs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        { tenantId: actor.tenantId, id: dcId },
+      );
+      if (!dc || dc.status !== "approved" || !dc.stock_posted) {
+        throw conflict(
+          `Linked delivery challan ${dc?.doc_no ?? dcId} must stay approved with stock posted. Unlink it or re-approve before issuing.`,
+        );
+      }
+      if (dc.bom_doc_id !== row.source_ref) {
+        throw conflict(`Linked delivery challan ${dc.doc_no} belongs to a different BOM`);
+      }
+    }
+    stockViaDc = true;
+  }
 
   // BOM explode invoices: refuse a second OUT and keep stock_issued_at in sync. Lump-sum never owns the BOM stock flag.
   // Skip when DCs already own stock movements.
@@ -828,24 +850,49 @@ export function registerSales(router: Router, deps: ImsDeps): void {
   router.patch("/invoices/:id", async (req, res) => {
     const actor = actorOf(res);
     requirePerm(res, "sales");
-    const existing = await loadInvoiceRow(deps.db, actor.tenantId, req.params.id);
-    if (existing.status !== "draft") throw conflict("Issued invoices can't be edited. Cancel it and issue a corrected one.");
     const input = parse(InvoiceInput, req.body);
     const settings = await getSettings(deps, actor.tenantId);
     const v = await invoiceValues(deps.db, actor, settings, input);
-    await exec(
-      deps.db,
-      `UPDATE ims_invoices SET customer_id = :customerId, customer_name = :customerName, customer_gstin = :customerGstin, customer_address = :customerAddress,
-         customer_mobile = :customerMobile, place_of_supply = :placeOfSupply, intra_state = :intraState, invoice_date = :invoiceDate, due_date = :dueDate,
-         \`lines\` = :lines, subtotal = :subtotal, discount_total = :discountTotal, tax_total = :taxTotal, cgst = :cgst, sgst = :sgst, igst = :igst,
-         round_off = :roundOff, grand_total = :grandTotal, round_to_rupee = :roundToRupee,
-         account_manager_id = COALESCE(account_manager_id, :accountManagerId), account_manager_name = COALESCE(account_manager_name, :accountManagerName),
-         notes = :notes, terms = :terms
-       WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`,
-      { ...v, tenantId: actor.tenantId, id: existing.id },
-    );
-    await recordEvent(deps, actor, { type: "invoice.updated", entityType: "invoice", entityId: existing.id, summary: `Updated draft invoice for ${v.customerName} (${formatINR(v.grandTotal)})` });
-    res.json(await invoiceDetail(deps, actor.tenantId, existing.id));
+    await tx(deps.db, async (conn) => {
+      const existing = await loadInvoiceRow(conn, actor.tenantId, req.params.id, true);
+      if (existing.status !== "draft") throw conflict("Issued invoices can't be edited. Cancel it and issue a corrected one.");
+      // DC-linked drafts skip invoice stock OUT — freeze lines so extras cannot bypass stock.
+      const linkedDcs = await listInvoiceDcIds(conn, actor.tenantId, existing.id);
+      if (linkedDcs.length) {
+        const prevLines = json<ImsLine[]>(existing.lines, []);
+        const nextLines = input.lines ?? [];
+        const sameShape =
+          prevLines.length === nextLines.length &&
+          prevLines.every((p, i) => {
+            const n = nextLines[i]!;
+            return p.itemId === (n.itemId ?? null) && Math.abs(Number(p.qty) - Number(n.qty)) < 1e-9;
+          });
+        if (!sameShape) {
+          throw conflict(
+            "This draft links delivery challans — stock stays on those DCs. Unlink the DCs before changing item lines or quantities.",
+          );
+        }
+      }
+      const updated = await exec(
+        conn,
+        `UPDATE ims_invoices SET customer_id = :customerId, customer_name = :customerName, customer_gstin = :customerGstin, customer_address = :customerAddress,
+           customer_mobile = :customerMobile, place_of_supply = :placeOfSupply, intra_state = :intraState, invoice_date = :invoiceDate, due_date = :dueDate,
+           \`lines\` = :lines, subtotal = :subtotal, discount_total = :discountTotal, tax_total = :taxTotal, cgst = :cgst, sgst = :sgst, igst = :igst,
+           round_off = :roundOff, grand_total = :grandTotal, round_to_rupee = :roundToRupee,
+           account_manager_id = COALESCE(account_manager_id, :accountManagerId), account_manager_name = COALESCE(account_manager_name, :accountManagerName),
+           notes = :notes, terms = :terms
+         WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`,
+        { ...v, tenantId: actor.tenantId, id: existing.id },
+      );
+      if (!updated.affectedRows) throw conflict("This draft was issued or changed by someone else — refresh and try again.");
+    });
+    await recordEvent(deps, actor, {
+      type: "invoice.updated",
+      entityType: "invoice",
+      entityId: req.params.id,
+      summary: `Updated draft invoice for ${v.customerName} (${formatINR(v.grandTotal)})`,
+    });
+    res.json(await invoiceDetail(deps, actor.tenantId, req.params.id));
   });
 
   router.post("/invoices/:id/issue", async (req, res) => {
@@ -879,6 +926,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
         id: r.id,
         reason: input.reason,
       });
+      // Drop links so the same DCs can attach to a new invoice (unique dc_id). Stock messaging uses cancel event / BOM source.
       await exec(conn, `DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId AND invoice_id = :id`, {
         tenantId: actor.tenantId,
         id: r.id,
@@ -909,6 +957,15 @@ export function registerSales(router: Router, deps: ImsDeps): void {
           });
         }
       }
+      await addActivity(conn, actor, {
+        invoiceId: r.id,
+        partyId: r.customer_id,
+        partyName: r.customer_name,
+        kind: "note",
+        message: stockViaDc
+          ? "Invoice cancelled — stock remains on delivery challans"
+          : "Invoice cancelled — stock returned to inventory",
+      });
       return { row: r, stockViaDc };
     });
     await recordEvent(deps, actor, {

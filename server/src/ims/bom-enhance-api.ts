@@ -18,6 +18,7 @@ import {
   FORMULA_PRESETS,
   lineIncludedByOptions,
   matchRateCardToBomLines,
+  minBomQtyWithLiveDcs,
   normalizeOptionSelection,
   planProposalShare,
   proposalWhatsAppUrl,
@@ -34,7 +35,7 @@ import { badRequest, conflict, notFound } from "./host.js";
 import { computeTotals, formatINR, isIntraStateSupply, round2, round3, todayISO } from "./logic.js";
 import { loadParty } from "./parties.js";
 import { getSettings } from "./settings.js";
-import { bomHasLiveDcs } from "./bom-dc.js";
+import { bomHasLiveDcs, committedDcQtyByBomLine, syncBomIssuedFromDcs } from "./bom-dc.js";
 import { nextDocNo } from "./stock.js";
 
 export type BomEnhanceDoc = {
@@ -216,6 +217,19 @@ export async function confirmBomDoc(
     (err as { gates?: typeof gates }).gates = gates;
     throw Object.assign(err, { gates });
   }
+  // After qty-amend reopen, reconfirm must still cover live DC commits (net of returns).
+  if (await bomHasLiveDcs(deps.db, actor.tenantId, doc.id)) {
+    const committed = await committedDcQtyByBomLine(deps.db, actor.tenantId, doc.id);
+    for (const line of doc.lines ?? []) {
+      if (line.lineKind !== "stock" || !line.itemId) continue;
+      const minQty = minBomQtyWithLiveDcs(committed.get(line.id) ?? 0);
+      if (line.qty + 1e-9 < minQty) {
+        throw conflict(
+          `“${line.description}” can’t go below ${minQty} ${line.unit} — that much is already on live delivery challans (net of returns)`,
+        );
+      }
+    }
+  }
   const { materialsCost } = await enrichDocCosts(deps.db, actor.tenantId, doc);
   const revision = Number(doc.revision ?? 1);
   await tx(deps.db, async (conn) => {
@@ -234,6 +248,10 @@ export async function confirmBomDoc(
        WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`,
       { tenantId: actor.tenantId, id: doc.id, materialsCost },
     );
+    const stockLines = (doc.lines ?? []).filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
+    if (stockLines.length && (await bomHasLiveDcs(conn, actor.tenantId, doc.id))) {
+      await syncBomIssuedFromDcs(conn, actor.tenantId, doc.id, stockLines);
+    }
   });
   await recordEvent(deps, actor as never, {
     type: "bom.doc.confirmed",

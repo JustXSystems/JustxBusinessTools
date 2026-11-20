@@ -85,6 +85,13 @@ export const MOVEMENT_LABEL: Record<MovementType, string> = {
   WRITE_OFF: "Write-off",
 };
 
+/** Prefer when refType is known — DC unused returns are not customer returns. */
+export function movementTypeLabel(type: MovementType, refType?: string | null): string {
+  if (type === "RETURN_IN" && refType === "dc") return "DC unused return";
+  if (type === "OUT" && refType === "dc") return "DC stock out";
+  return MOVEMENT_LABEL[type] ?? type;
+}
+
 const MOVEMENT_TONE: Record<MovementType, BosBadgeTone> = {
   OPENING: "blue",
   IN: "emerald",

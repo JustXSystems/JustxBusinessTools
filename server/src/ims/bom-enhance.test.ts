@@ -19,8 +19,11 @@ import {
   planProposalShare,
   proposalWhatsAppUrl,
   availableDcQty,
+  minBomQtyWithLiveDcs,
+  netDcLineQty,
   planBomIssuedSync,
   remainingIssueQty,
+  returnableDcQty,
   rotateAlternates,
   selectedOptionKeys,
   suggestAlternatesForShortfall,
@@ -263,6 +266,61 @@ describe("as-built and partial issue", () => {
       { lineId: "l2", issued: 1 },
     ]);
     expect(split.fullyCovered).toBe(false);
+  });
+
+  it("availableDcQty enforces BOM ceiling; bump + returns free capacity for next DC", () => {
+    // BOM 100, DC1 approved 100 — nothing left for DC2 (need +25 without BOM update)
+    expect(availableDcQty(100, 100, 100, null)).toBe(0);
+    expect(25 > availableDcQty(100, 100, 100, null) + 1e-9).toBe(true);
+    // After amend to 125 + reconfirm — 25 available
+    expect(availableDcQty(125, 100, 100, null)).toBe(25);
+    // Partial unused return of 10 on DC1 frees capacity without BOM bump
+    expect(availableDcQty(100, 90, 90, null)).toBe(10);
+  });
+
+  it("multi-DC + draft reserve + return + reverse scenarios stay under BOM qty", () => {
+    // DC1 approved 60 + DC2 draft 40 on BOM 100 — nothing left
+    expect(availableDcQty(100, 100, 60, null)).toBe(0);
+    // DC2 draft cancelled — 40 free
+    expect(availableDcQty(100, 60, 60, null)).toBe(40);
+    // DC1 return 15 → committed/issued net 45 → 55 free
+    expect(availableDcQty(100, 45, 45, null)).toBe(55);
+    // After full reverse of remaining on DC1 (net 0) — full BOM free
+    expect(availableDcQty(100, 0, 0, null)).toBe(100);
+    // Two approved partials: 70 + 30 = full
+    expect(availableDcQty(100, 100, 100, "2026-01-01")).toBe(0);
+    // Bump BOM to 125 with 100 still out → 25 for DC3
+    expect(availableDcQty(125, 100, 100, null)).toBe(25);
+    // Over-approve attempt blocked
+    expect(30 > availableDcQty(125, 100, 100, null) + 1e-9).toBe(true);
+  });
+
+  it("returnable / net DC qty and min BOM floor with live DCs", () => {
+    expect(netDcLineQty(100, 0)).toBe(100);
+    expect(netDcLineQty(100, 25)).toBe(75);
+    expect(returnableDcQty(100, 25)).toBe(75);
+    expect(returnableDcQty(100, 100)).toBe(0);
+    expect(returnableDcQty(100, 110)).toBe(0);
+    // Cannot shrink BOM below net committed on live DCs
+    expect(minBomQtyWithLiveDcs(100)).toBe(100);
+    expect(minBomQtyWithLiveDcs(75)).toBe(75);
+    // After return frees committed net, floor drops
+    expect(minBomQtyWithLiveDcs(75) <= 100).toBe(true);
+  });
+
+  it("planBomIssuedSync after return clears full-cover flag until BOM bump is filled", () => {
+    const lines = [{ id: "a", qty: 100 }];
+    const full = planBomIssuedSync(lines, { a: 100 }, 1);
+    expect(full.fullyCovered).toBe(true);
+    expect(full.stockIssuedAt).toBe("set");
+    // Return 25 → net 75 out; not fully covered
+    const afterReturn = planBomIssuedSync(lines, { a: 75 }, 1);
+    expect(afterReturn.fullyCovered).toBe(false);
+    expect(afterReturn.stockIssuedAt).toBe("clear");
+    // Amend BOM to 125 conceptually — still 75 of 125 out
+    const bumped = planBomIssuedSync([{ id: "a", qty: 125 }], { a: 75 }, 1);
+    expect(bumped.fullyCovered).toBe(false);
+    expect(availableDcQty(125, 75, 75, null)).toBe(50);
   });
 });
 

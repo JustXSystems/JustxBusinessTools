@@ -5,7 +5,7 @@ import "./inventory-a.css";
 import { useState, type ReactNode } from "react";
 import { DonutChart, Grid, WidgetCard, WidgetRow, type BosKpi } from "@/components/bos";
 import type { ImsModuleKey, ImsPermission, MovementType, Period } from "@/lib/ims/api";
-import { MOVEMENT_LABEL, dateLabel, dateRange, dayMonth, greetingFor, inr, inrCompact, pct, qtyText, signedQty, timeAgo } from "@/lib/ims/format";
+import { MOVEMENT_LABEL, movementTypeLabel, dateLabel, dateRange, dayMonth, greetingFor, inr, inrCompact, pct, qtyText, signedQty, timeAgo } from "@/lib/ims/format";
 import { invA, type ImsDashboardPlus } from "@/lib/ims/inventory-a";
 import { Loaded, PeriodPicker, Stack, useIms, useImsData } from "../core";
 import { KpiLink, movementDelta } from "./ItemDetail";
@@ -525,7 +525,7 @@ function DashboardBody({ d, period, setPeriod, canSeeCost }: { d: ImsDashboardPl
                       icon={MOVE_ICON[m.type]}
                       tone={MOVE_TONE[m.type]}
                       title={m.itemName}
-                      body={[MOVEMENT_LABEL[m.type], m.partyName ?? m.refNo, m.actorName].filter(Boolean).join(" · ")}
+                      body={[movementTypeLabel(m.type, m.refType), m.partyName ?? m.refNo, m.actorName].filter(Boolean).join(" · ")}
                       meta={
                         <span className="ims-cell-stack" style={{ alignItems: "flex-end" }}>
                           <span className={delta < 0 ? "ims-neg ims-strong" : "ims-pos ims-strong"}>{m.type === "ADJUSTMENT" ? qtyText(m.qty) : signedQty(delta)}</span>

@@ -146,4 +146,10 @@
   .bos .fin-kv dd { margin-bottom: 8px; }
   .bos .fin-cart-row { grid-template-columns: minmax(0, 1fr) 104px 28px; }
   .bos .fin-cart-row > :nth-child(3) { grid-column: 1 / 2; text-align: left !important; }
+  .bos .fin-sticky-actions {
+    justify-content: stretch;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .bos .fin-sticky-actions > .bos-btn { flex: 1 1 auto; min-height: 44px; }
+  .bos .fin-doc-side { min-width: 0; }
 }

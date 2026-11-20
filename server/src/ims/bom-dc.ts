@@ -7,7 +7,7 @@ import type { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { BomDoc, BomDocLine } from "./bom.js";
-import { availableDcQty, isLegacyFullIssue, planBomIssuedSync } from "./bom-enhance.js";
+import { availableDcQty, isLegacyFullIssue, planBomIssuedSync, returnableDcQty } from "./bom-enhance.js";
 import { actorName, actorOf, can, isoDate, optText, parse, qstr, recordEvent, requirePerm, type ImsDeps } from "./context.js";
 import { exec, isoOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
 import { badRequest, conflict, forbidden, notFound } from "./host.js";
@@ -55,6 +55,7 @@ type DcLineRow = {
   description: string;
   make_text: string | null;
   qty: string | number;
+  returned_qty?: string | number;
   unit: string;
   remarks: string | null;
 };
@@ -69,8 +70,39 @@ export type BomDcLine = {
   description: string;
   makeText: string | null;
   qty: number;
+  /** Cumulative unused returns against this DC line (still on the approved DC). */
+  returnedQty: number;
+  /** qty − returnedQty — still out at site. */
+  netQty: number;
   unit: string;
   remarks: string | null;
+};
+
+export type BomDcReturnLine = {
+  id: string;
+  returnId: string;
+  dcId: string;
+  dcLineId: string;
+  bomLineId: string;
+  itemId: string | null;
+  description: string;
+  qty: number;
+  unit: string;
+  remarks: string | null;
+};
+
+export type BomDcReturn = {
+  id: string;
+  dcId: string;
+  bomDocId: string;
+  returnNo: string;
+  returnDate: string;
+  notes: string | null;
+  createdByName: string | null;
+  createdAt: string | null;
+  lines: BomDcReturnLine[];
+  /** Parent DC number for stock / audit reference. */
+  dcDocNo?: string | null;
 };
 
 export type BomDc = {
@@ -94,13 +126,17 @@ export type BomDc = {
   createdAt: string | null;
   updatedAt: string | null;
   lines?: BomDcLine[];
+  returns?: BomDcReturn[];
   bomDocNo?: string | null;
   customerName?: string | null;
+  quotationRef?: string | null;
 };
 
 const statusOf = (v: string): BomDcStatus => ((BOM_DC_STATUSES as readonly string[]).includes(v) ? (v as BomDcStatus) : "draft");
 
 function mapLine(r: DcLineRow): BomDcLine {
+  const qty = round3(money(r.qty));
+  const returnedQty = round3(money(r.returned_qty ?? 0));
   return {
     id: r.id,
     dcId: r.dc_id,
@@ -110,13 +146,19 @@ function mapLine(r: DcLineRow): BomDcLine {
     sortNo: Number(r.sort_no),
     description: r.description,
     makeText: r.make_text,
-    qty: round3(money(r.qty)),
+    qty,
+    returnedQty,
+    netQty: round3(Math.max(0, qty - returnedQty)),
     unit: r.unit,
     remarks: r.remarks,
   };
 }
 
-function mapDc(r: DcRow, lines?: BomDcLine[], extra?: { bomDocNo?: string | null; customerName?: string | null }): BomDc {
+function mapDc(
+  r: DcRow,
+  lines?: BomDcLine[],
+  extra?: { bomDocNo?: string | null; customerName?: string | null; quotationRef?: string | null; returns?: BomDcReturn[] },
+): BomDc {
   return {
     id: r.id,
     bomDocId: r.bom_doc_id,
@@ -138,35 +180,108 @@ function mapDc(r: DcRow, lines?: BomDcLine[], extra?: { bomDocNo?: string | null
     createdAt: tsOf(r.created_at),
     updatedAt: tsOf(r.updated_at),
     lines,
+    returns: extra?.returns,
     bomDocNo: extra?.bomDocNo ?? null,
     customerName: extra?.customerName ?? null,
+    quotationRef: extra?.quotationRef ?? null,
   };
 }
 
 async function loadDcLines(db: Queryable, tenantId: number, dcId: string): Promise<BomDcLine[]> {
   const list = await rows<DcLineRow>(
     db,
-    `SELECT id, dc_id, bom_line_id, item_id, section, sort_no, description, make_text, qty, unit, remarks
+    `SELECT id, dc_id, bom_line_id, item_id, section, sort_no, description, make_text, qty,
+            COALESCE(returned_qty, 0) AS returned_qty, unit, remarks
      FROM ims_bom_dc_lines WHERE tenant_id = :tenantId AND dc_id = :dcId ORDER BY sort_no ASC, created_at ASC`,
     { tenantId, dcId },
   );
   return list.map(mapLine);
 }
 
-export async function loadDc(db: Queryable, tenantId: number, id: string): Promise<BomDc | null> {
-  const r = await one<DcRow & { bom_doc_no?: string; customer_name?: string }>(
+async function loadDcReturns(db: Queryable, tenantId: number, dcId: string): Promise<BomDcReturn[]> {
+  const headers = await rows<{
+    id: string;
+    dc_id: string;
+    bom_doc_id: string;
+    return_no: string;
+    return_date: unknown;
+    notes: string | null;
+    created_by_name: string | null;
+    created_at: unknown;
+  }>(
     db,
-    `SELECT d.*, b.doc_no AS bom_doc_no, b.customer_name
+    `SELECT id, dc_id, bom_doc_id, return_no, return_date, notes, created_by_name, created_at
+     FROM ims_bom_dc_returns WHERE tenant_id = :tenantId AND dc_id = :dcId
+     ORDER BY return_date DESC, created_at DESC`,
+    { tenantId, dcId },
+  );
+  const out: BomDcReturn[] = [];
+  for (const h of headers) {
+    const lines = await rows<{
+      id: string;
+      return_id: string;
+      dc_id: string;
+      dc_line_id: string;
+      bom_line_id: string;
+      item_id: string | null;
+      description: string;
+      qty: string | number;
+      unit: string;
+      remarks: string | null;
+    }>(
+      db,
+      `SELECT id, return_id, dc_id, dc_line_id, bom_line_id, item_id, description, qty, unit, remarks
+       FROM ims_bom_dc_return_lines WHERE tenant_id = :tenantId AND return_id = :returnId
+       ORDER BY created_at ASC`,
+      { tenantId, returnId: h.id },
+    );
+    out.push({
+      id: h.id,
+      dcId: h.dc_id,
+      bomDocId: h.bom_doc_id,
+      returnNo: h.return_no,
+      returnDate: isoOf(h.return_date),
+      notes: h.notes,
+      createdByName: h.created_by_name,
+      createdAt: tsOf(h.created_at),
+      lines: lines.map((l) => ({
+        id: l.id,
+        returnId: l.return_id,
+        dcId: l.dc_id,
+        dcLineId: l.dc_line_id,
+        bomLineId: l.bom_line_id,
+        itemId: l.item_id,
+        description: l.description,
+        qty: round3(money(l.qty)),
+        unit: l.unit,
+        remarks: l.remarks,
+      })),
+    });
+  }
+  return out;
+}
+
+export async function loadDc(db: Queryable, tenantId: number, id: string): Promise<BomDc | null> {
+  const r = await one<DcRow & { bom_doc_no?: string; customer_name?: string; quotation_ref?: string | null }>(
+    db,
+    `SELECT d.*, b.doc_no AS bom_doc_no, b.customer_name, b.quotation_ref
      FROM ims_bom_dcs d
      LEFT JOIN ims_bom_docs b ON b.id = d.bom_doc_id AND b.tenant_id = d.tenant_id
      WHERE d.tenant_id = :tenantId AND d.id = :id LIMIT 1`,
     { tenantId, id },
   );
   if (!r) return null;
-  return mapDc(r, await loadDcLines(db, tenantId, id), { bomDocNo: r.bom_doc_no ?? null, customerName: r.customer_name ?? null });
+  const lines = await loadDcLines(db, tenantId, id);
+  const returns = await loadDcReturns(db, tenantId, id);
+  return mapDc(r, lines, {
+    bomDocNo: r.bom_doc_no ?? null,
+    customerName: r.customer_name ?? null,
+    quotationRef: r.quotation_ref ?? null,
+    returns,
+  });
 }
 
-/** Qty already on live (non-cancelled) DCs for each BOM line — reserves draft/verified/approved. */
+/** Qty reserved by live DCs per BOM line (draft/verified full qty + approved net after returns). */
 export async function committedDcQtyByBomLine(
   db: Queryable,
   tenantId: number,
@@ -179,9 +294,16 @@ export async function committedDcQtyByBomLine(
     exclude = " AND d.id <> :excludeDcId";
     params.excludeDcId = opts.excludeDcId;
   }
+  // Draft/verified reserve full line qty; approved reserves net still out (delivered − returns).
   const list = await rows<{ bom_line_id: string; qty: string }>(
     db,
-    `SELECT l.bom_line_id, SUM(l.qty) AS qty
+    `SELECT l.bom_line_id,
+            SUM(
+              CASE
+                WHEN d.status = 'approved' THEN GREATEST(0, l.qty - COALESCE(l.returned_qty, 0))
+                ELSE l.qty
+              END
+            ) AS qty
      FROM ims_bom_dc_lines l
      INNER JOIN ims_bom_dcs d ON d.id = l.dc_id AND d.tenant_id = l.tenant_id
      WHERE l.tenant_id = :tenantId AND d.bom_doc_id = :bomDocId
@@ -194,11 +316,11 @@ export async function committedDcQtyByBomLine(
   return out;
 }
 
-/** Qty delivered (approved + stock posted) per BOM line. */
+/** Net qty still out (approved + stock posted − returns) per BOM line. */
 async function approvedDcQtyByBomLine(db: Queryable, tenantId: number, bomDocId: string): Promise<Map<string, number>> {
   const list = await rows<{ bom_line_id: string; qty: string }>(
     db,
-    `SELECT l.bom_line_id, SUM(l.qty) AS qty
+    `SELECT l.bom_line_id, SUM(GREATEST(0, l.qty - COALESCE(l.returned_qty, 0))) AS qty
      FROM ims_bom_dc_lines l
      INNER JOIN ims_bom_dcs d ON d.id = l.dc_id AND d.tenant_id = l.tenant_id
      WHERE l.tenant_id = :tenantId AND d.bom_doc_id = :bomDocId
@@ -215,7 +337,12 @@ function paramsOf(tenantId: number, bomDocId: string): Record<string, unknown> {
   return { tenantId, bomDocId };
 }
 
-export async function syncBomIssuedFromDcs(db: Queryable, tenantId: number, bomDocId: string, stockLines: BomDocLine[]): Promise<void> {
+export async function syncBomIssuedFromDcs(
+  db: Queryable,
+  tenantId: number,
+  bomDocId: string,
+  stockLines: ReadonlyArray<{ id: string; qty: number }>,
+): Promise<void> {
   const approved = await approvedDcQtyByBomLine(db, tenantId, bomDocId);
   const approvedCount = await one<{ n: number }>(
     db,
@@ -289,7 +416,10 @@ export async function assertDcsLinkable(
     }
     const linked = await one<{ invoice_id: string }>(
       db,
-      `SELECT invoice_id FROM ims_invoice_dc_links WHERE tenant_id = :tenantId AND dc_id = :dcId LIMIT 1`,
+      `SELECT l.invoice_id FROM ims_invoice_dc_links l
+       INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+       WHERE l.tenant_id = :tenantId AND l.dc_id = :dcId AND i.status IN ('draft','issued')
+       LIMIT 1`,
       { tenantId, dcId: id },
     );
     if (linked && linked.invoice_id !== opts?.invoiceId) {
@@ -410,8 +540,8 @@ function planDcLinesAgainstBom(
     if (qty > rem + 1e-9) {
       throw conflict(
         rem <= 0
-          ? `No remaining quantity for “${line.description}” — already on a DC or issued from the BOM/invoice`
-          : `Only ${rem} ${line.unit} remaining for “${line.description}”`,
+          ? `No remaining quantity for “${line.description}” — already on a DC or issued from the BOM/invoice. Increase the BOM line qty and reconfirm before raising another delivery challan`
+          : `Only ${rem} ${line.unit} remaining for “${line.description}” (approved DCs cannot exceed the confirmed BOM qty — increase the BOM and reconfirm to deliver more)`,
       );
     }
     planned.push({ line, qty, remarks: reqLine.remarks ?? null });
@@ -518,9 +648,15 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     );
     const dcs = [];
     for (const r of list) {
-      dcs.push(mapDc(r, await loadDcLines(deps.db, actor.tenantId, r.id), { bomDocNo: doc.docNo, customerName: doc.customerName }));
+      dcs.push(
+        mapDc(r, await loadDcLines(deps.db, actor.tenantId, r.id), {
+          bomDocNo: doc.docNo,
+          customerName: doc.customerName,
+          quotationRef: doc.quotationRef ?? null,
+        }),
+      );
     }
-    res.json({ dcs, bomDocNo: doc.docNo });
+    res.json({ dcs, bomDocNo: doc.docNo, quotationRef: doc.quotationRef ?? null });
   });
 
   router.get("/bom/dcs/:id", async (req, res) => {
@@ -908,7 +1044,193 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     res.json({ dc: await loadDc(deps.db, actor.tenantId, id) });
   });
 
-  /** Reverse an approved DC: RETURN_IN stock and cancel. */
+  /**
+   * Partial unused return against an approved DC.
+   * Posts RETURN_IN with the DC doc_no, marks lines Returned, frees BOM remaining capacity.
+   */
+  router.post("/bom/dcs/:id/returns", async (req, res) => {
+    requirePerm(res, "bom");
+    if (!can(res, "approvals") && !can(res, "stockOut")) {
+      throw forbidden("Approvals or Stock out permission is required to record a delivery challan return");
+    }
+    const actor = actorOf(res);
+    const id = String(req.params.id);
+    const body = parse(
+      z.object({
+        returnDate: isoDate.optional(),
+        notes: optText(2000),
+        lines: z
+          .array(
+            z.object({
+              dcLineId: z.string().uuid(),
+              qty: z.coerce.number().gt(0).max(1e9),
+              remarks: optText(500),
+            }),
+          )
+          .min(1)
+          .max(500),
+      }),
+      req.body,
+    );
+    const existing = await loadDc(deps.db, actor.tenantId, id);
+    if (!existing) throw notFound("Delivery challan not found");
+    if (existing.status !== "approved" || !existing.stockPosted) {
+      throw conflict("Only approved delivery challans with posted stock can record returns");
+    }
+    await assertDcFreeOfInvoiceLinks(deps.db, actor.tenantId, id, "return unused materials");
+    const returnDate = body.returnDate ?? todayISO();
+    if (returnDate > todayISO()) throw badRequest("Return date can’t be in the future");
+    await assertDayOpen(deps.db, actor.tenantId, returnDate);
+    const settings = await getSettings(deps, actor.tenantId);
+    const userName = await displayName(deps.db, actor);
+    const returnId = randomUUID();
+
+    const outcome = await tx(deps.db, async (conn) => {
+      const locked = await one<{ status: string; stock_posted: number; bom_doc_id: string; doc_no: string }>(
+        conn,
+        `SELECT status, stock_posted, bom_doc_id, doc_no FROM ims_bom_dcs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        { tenantId: actor.tenantId, id },
+      );
+      if (!locked || locked.status !== "approved" || !locked.stock_posted) {
+        throw conflict("Only approved delivery challans with posted stock can record returns");
+      }
+      await one(
+        conn,
+        `SELECT id FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        { tenantId: actor.tenantId, id: locked.bom_doc_id },
+      );
+      await assertDcFreeOfInvoiceLinks(conn, actor.tenantId, id, "return unused materials");
+      await assertDayOpen(conn, actor.tenantId, returnDate);
+
+      const dcLines = await loadDcLines(conn, actor.tenantId, id);
+      const byId = new Map(dcLines.map((l) => [l.id, l]));
+      if (new Set(body.lines.map((l) => l.dcLineId)).size !== body.lines.length) {
+        throw badRequest("Each DC line may only appear once on a return");
+      }
+
+      const planned: Array<{ line: BomDcLine; qty: number; remarks: string | null }> = [];
+      for (const reqLine of body.lines) {
+        const line = byId.get(reqLine.dcLineId);
+        if (!line) throw badRequest("Return line must belong to this delivery challan");
+        if (!line.itemId) throw conflict(`“${line.description}” has no catalogue item`);
+        const rem = returnableDcQty(line.qty, line.returnedQty);
+        const qty = round3(reqLine.qty);
+        if (!(qty > 0)) throw conflict(`Return quantity must be greater than zero for “${line.description}”`);
+        if (qty > rem + 1e-9) {
+          throw conflict(
+            rem <= 0
+              ? `Nothing left to return for “${line.description}” on ${locked.doc_no}`
+              : `Only ${rem} ${line.unit} can still be returned for “${line.description}” on ${locked.doc_no}`,
+          );
+        }
+        planned.push({ line, qty, remarks: reqLine.remarks ?? null });
+      }
+
+      const returnNo = await nextDocNo(conn, actor.tenantId, "bom_dc_rtn", "RTN", returnDate, settings.businessName);
+      await exec(
+        conn,
+        `INSERT INTO ims_bom_dc_returns
+           (id, tenant_id, dc_id, bom_doc_id, return_no, return_date, notes, created_by, created_by_name)
+         VALUES
+           (:id, :tenantId, :dcId, :bomId, :returnNo, :returnDate, :notes, :userId, :userName)`,
+        {
+          id: returnId,
+          tenantId: actor.tenantId,
+          dcId: id,
+          bomId: locked.bom_doc_id,
+          returnNo,
+          returnDate,
+          notes: body.notes ?? null,
+          userId: actor.userId,
+          userName,
+        },
+      );
+
+      const movements = [];
+      const freshBom = await loaders.loadDoc(conn, actor.tenantId, locked.bom_doc_id);
+      for (const p of planned) {
+        await exec(
+          conn,
+          `INSERT INTO ims_bom_dc_return_lines
+             (id, tenant_id, return_id, dc_id, dc_line_id, bom_line_id, item_id, description, qty, unit, remarks)
+           VALUES
+             (:id, :tenantId, :returnId, :dcId, :dcLineId, :bomLineId, :itemId, :description, :qty, :unit, :remarks)`,
+          {
+            id: randomUUID(),
+            tenantId: actor.tenantId,
+            returnId,
+            dcId: id,
+            dcLineId: p.line.id,
+            bomLineId: p.line.bomLineId,
+            itemId: p.line.itemId,
+            description: p.line.description,
+            qty: p.qty,
+            unit: p.line.unit,
+            remarks: p.remarks,
+          },
+        );
+        const bumped = await exec(
+          conn,
+          `UPDATE ims_bom_dc_lines
+           SET returned_qty = ROUND(returned_qty + :qty, 3)
+           WHERE tenant_id = :tenantId AND id = :lineId AND dc_id = :dcId
+             AND ROUND(returned_qty + :qty, 3) <= ROUND(qty, 3)`,
+          { tenantId: actor.tenantId, lineId: p.line.id, dcId: id, qty: p.qty },
+        );
+        if (!bumped.affectedRows) {
+          throw conflict(`Could not return ${p.qty} ${p.line.unit} for “${p.line.description}” — exceed delivered qty or concurrent return`);
+        }
+        movements.push(
+          await postMovement(
+            conn,
+            actor,
+            {
+              itemId: p.line.itemId!,
+              type: "RETURN_IN",
+              qty: p.qty,
+              refType: "dc",
+              refId: id,
+              refNo: locked.doc_no,
+              partyId: freshBom?.partyId ?? null,
+              partyName: freshBom?.customerName ?? null,
+              reason: "Delivery challan return (unused)",
+              notes: `Return ${returnNo} · ${p.remarks || p.line.description}`,
+              date: returnDate,
+            },
+            { allowNegative: settings.allowNegativeStock },
+          ),
+        );
+      }
+
+      await syncBomIssuedFromDcs(conn, actor.tenantId, locked.bom_doc_id, stockLinesOf(freshBom!));
+      return { movements, returnNo, bomDocId: locked.bom_doc_id };
+    });
+
+    await recordEvent(deps, actor, {
+      type: "bom.dc.returned",
+      entityType: "bom_dc",
+      entityId: id,
+      summary: `Returned unused materials on ${existing.docNo} (${outcome.returnNo})`,
+      payload: { returnId, returnNo: outcome.returnNo, count: outcome.movements.length },
+    });
+    const dc = await loadDc(deps.db, actor.tenantId, id);
+    const rtn = dc?.returns?.find((r) => r.id === returnId) ?? null;
+    res.status(201).json({
+      return: rtn,
+      dc,
+      movements: outcome.movements,
+      doc: await loaders.loadDoc(deps.db, actor.tenantId, outcome.bomDocId),
+    });
+  });
+
+  router.get("/bom/dcs/:id/returns", async (req, res) => {
+    requirePerm(res, "bom");
+    const dc = await loadDc(deps.db, actorOf(res).tenantId, String(req.params.id));
+    if (!dc) throw notFound("Delivery challan not found");
+    res.json({ returns: dc.returns ?? [], dcDocNo: dc.docNo });
+  });
+
+  /** Reverse an approved DC: RETURN_IN remaining net stock and cancel. */
   router.post("/bom/dcs/:id/reverse", async (req, res) => {
     requirePerm(res, "bom");
     if (!can(res, "approvals") && !can(res, "stockOut")) {
@@ -922,16 +1244,7 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     if (existing.status !== "approved" || !existing.stockPosted) {
       throw conflict("Only approved delivery challans with posted stock can be reversed");
     }
-    const linkedIssued = await one<{ n: number }>(
-      deps.db,
-      `SELECT COUNT(*) AS n FROM ims_invoice_dc_links l
-       INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
-       WHERE l.tenant_id = :tenantId AND l.dc_id = :dcId AND i.status = 'issued'`,
-      { tenantId: actor.tenantId, dcId: id },
-    );
-    if (Number(linkedIssued?.n) > 0) {
-      throw conflict("This delivery challan is linked to an issued invoice. Cancel or unlink the invoice first.");
-    }
+    await assertDcFreeOfInvoiceLinks(deps.db, actor.tenantId, id, "reverse");
 
     const settings = await getSettings(deps, actor.tenantId);
     const date = body.date ?? todayISO();
@@ -952,22 +1265,14 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
         `SELECT id FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
         { tenantId: actor.tenantId, id: locked.bom_doc_id },
       );
-      const stillIssued = await one<{ n: number }>(
-        conn,
-        `SELECT COUNT(*) AS n FROM ims_invoice_dc_links l
-         INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
-         WHERE l.tenant_id = :tenantId AND l.dc_id = :dcId AND i.status = 'issued'`,
-        { tenantId: actor.tenantId, dcId: id },
-      );
-      if (Number(stillIssued?.n) > 0) {
-        throw conflict("This delivery challan is linked to an issued invoice. Cancel or unlink the invoice first.");
-      }
+      await assertDcFreeOfInvoiceLinks(conn, actor.tenantId, id, "reverse");
       await assertDayOpen(conn, actor.tenantId, date);
       const freshBom = await loaders.loadDoc(conn, actor.tenantId, locked.bom_doc_id);
       const lines = await loadDcLines(conn, actor.tenantId, id);
       const movements = [];
       for (const line of lines) {
-        if (!line.itemId || !(line.qty > 0)) continue;
+        // Only return what is still out (qty already returned via partial returns stays as history).
+        if (!line.itemId || !(line.netQty > 0)) continue;
         movements.push(
           await postMovement(
             conn,
@@ -975,13 +1280,13 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
             {
               itemId: line.itemId,
               type: "RETURN_IN",
-              qty: line.qty,
+              qty: line.netQty,
               refType: "dc",
               refId: id,
               refNo: locked.doc_no,
               partyId: freshBom?.partyId ?? null,
               partyName: freshBom?.customerName ?? null,
-              reason: "Delivery challan reverse",
+              reason: line.returnedQty > 0 ? "Delivery challan reverse (remaining after returns)" : "Delivery challan reverse",
               date,
             },
             { allowNegative: settings.allowNegativeStock },
@@ -993,11 +1298,6 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
         `UPDATE ims_bom_dcs SET status = 'cancelled', stock_posted = 0 WHERE tenant_id = :tenantId AND id = :id`,
         { tenantId: actor.tenantId, id },
       );
-      // Drop draft invoice links; issued links were refused above.
-      await exec(conn, `DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId AND dc_id = :dcId`, {
-        tenantId: actor.tenantId,
-        dcId: id,
-      });
       await syncBomIssuedFromDcs(conn, actor.tenantId, locked.bom_doc_id, stockLinesOf(freshBom!));
       return movements;
     });
@@ -1034,25 +1334,43 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     const actor = actorOf(res);
     const invoiceId = String(req.params.id);
     const body = parse(z.object({ dcIds: z.array(z.string().uuid()).max(100) }), req.body);
-    const inv = await one<{ id: string; status: string; source_tool: string | null; source_ref: string | null }>(
-      deps.db,
-      `SELECT id, status, source_tool, source_ref FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id LIMIT 1`,
-      { tenantId: actor.tenantId, id: invoiceId },
-    );
-    if (!inv) throw notFound("Invoice");
-    if (inv.status !== "draft") throw conflict("Only draft invoices can change delivery challan links");
-
-    if (body.dcIds.length) {
-      // All DCs must share one BOM (prefer invoice source_ref when from BOM).
-      const first = await loadDc(deps.db, actor.tenantId, body.dcIds[0]!);
-      if (!first) throw notFound("Delivery challan not found");
-      const bomId = inv.source_tool === "ims_bom" && inv.source_ref ? inv.source_ref : first.bomDocId;
-      await assertDcsLinkable(deps.db, actor.tenantId, bomId, body.dcIds, { invoiceId });
-    }
-    await linkInvoiceDcs(deps.db, actor.tenantId, invoiceId, body.dcIds);
-    const ids = await listInvoiceDcIds(deps.db, actor.tenantId, invoiceId);
+    const ids = await tx(deps.db, async (conn) => {
+      const inv = await one<{ id: string; status: string; source_tool: string | null; source_ref: string | null }>(
+        conn,
+        `SELECT id, status, source_tool, source_ref FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        { tenantId: actor.tenantId, id: invoiceId },
+      );
+      if (!inv) throw notFound("Invoice");
+      if (inv.status !== "draft") throw conflict("Only draft invoices can change delivery challan links");
+      if (body.dcIds.length && !(inv.source_tool === "ims_bom" && inv.source_ref)) {
+        throw conflict("Delivery challan links are only for invoices created from a BOM");
+      }
+      if (body.dcIds.length) {
+        await assertDcsLinkable(conn, actor.tenantId, inv.source_ref!, body.dcIds, { invoiceId });
+      }
+      await linkInvoiceDcs(conn, actor.tenantId, invoiceId, body.dcIds);
+      return listInvoiceDcIds(conn, actor.tenantId, invoiceId);
+    });
     res.json({ dcIds: ids });
   });
+}
+
+/** Block return/reverse while a live (draft/issued) invoice still references this DC. Cancelled links are history only. */
+async function assertDcFreeOfInvoiceLinks(db: Queryable, tenantId: number, dcId: string, action: string): Promise<void> {
+  const linked = await one<{ invoice_no: string | null; status: string }>(
+    db,
+    `SELECT i.invoice_no, i.status FROM ims_invoice_dc_links l
+     INNER JOIN ims_invoices i ON i.id = l.invoice_id AND i.tenant_id = l.tenant_id
+     WHERE l.tenant_id = :tenantId AND l.dc_id = :dcId AND i.status IN ('draft','issued')
+     ORDER BY CASE WHEN i.status = 'issued' THEN 0 ELSE 1 END
+     LIMIT 1`,
+    { tenantId, dcId },
+  );
+  if (!linked) return;
+  const label = linked.status === "draft" ? "draft invoice" : `invoice ${linked.invoice_no || ""}`.trim();
+  throw conflict(
+    `This delivery challan is linked to ${label}. Unlink it from the invoice (or cancel/delete the draft) before you ${action}.`,
+  );
 }
 
 /** True when any live DC exists for the BOM (blocks reopen / legacy stock issue). */

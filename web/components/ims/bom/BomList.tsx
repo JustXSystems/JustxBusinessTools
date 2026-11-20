@@ -89,9 +89,12 @@ type ListPrefs = {
   view?: "table" | "cards";
 };
 
-/** Drafts: anyone with BOM access. Confirmed/cancelled: owners only, and never when invoice or stock is linked. */
-export function canDeleteBomDoc(doc: Pick<BomDoc, "status" | "invoiceId" | "stockIssuedAt">, isOwner: boolean): boolean {
-  if (doc.invoiceId || doc.stockIssuedAt) return false;
+/** Drafts: anyone with BOM access. Confirmed/cancelled: owners only, and never when invoice / stock / live DCs are linked. */
+export function canDeleteBomDoc(
+  doc: Pick<BomDoc, "status" | "invoiceId" | "stockIssuedAt" | "stockIssueCount">,
+  isOwner: boolean,
+): boolean {
+  if (doc.invoiceId || doc.stockIssuedAt || (doc.stockIssueCount ?? 0) > 0) return false;
   if (doc.status === "draft") return true;
   return isOwner;
 }

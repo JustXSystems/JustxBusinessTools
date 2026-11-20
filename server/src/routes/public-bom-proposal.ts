@@ -20,6 +20,7 @@ type BomDocPublicRow = {
   customer_name: string;
   location: string | null;
   project_ref: string | null;
+  quotation_ref?: string | null;
   party_id?: string | null;
   margin_pct: string;
   tax_pct: string;
@@ -79,7 +80,7 @@ async function loadByToken(token: string): Promise<BomDocPublicRow | null> {
   try {
     return await one<BomDocPublicRow>(
       pool,
-      `SELECT id, tenant_id, doc_no, status, doc_date, capacity_label, title, customer_name, location, project_ref, party_id,
+      `SELECT id, tenant_id, doc_no, status, doc_date, capacity_label, title, customer_name, location, project_ref, quotation_ref, party_id,
               margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total, notes, prepared_by,
               revision, valid_until, payment_terms, delivery_terms, warranty_terms,
               scope_of_supply, exclusions, paper_json,
@@ -323,6 +324,7 @@ function mapPublicDoc(
     location: row.location,
     customerState,
     projectRef: row.project_ref,
+    quotationRef: row.quotation_ref ?? null,
     revision: Number(row.revision ?? 1),
     validUntil: row.valid_until ? String(row.valid_until).slice(0, 10) : null,
     paymentTerms: row.payment_terms,

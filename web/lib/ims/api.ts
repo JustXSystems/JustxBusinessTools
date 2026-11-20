@@ -183,6 +183,7 @@ export type ImsSettings = {
   bomHideMargin: boolean;
   /** When true, confirming a BOM requires Approvals permission (owners always can). */
   bomConfirmNeedsApproval?: boolean;
+  bomRequireQuotationRef?: boolean;
   /** Null/omitted = industry-pack column defaults. */
   bomScheduleColumns?: BomScheduleColumnId[] | null;
   poApprovalLimit: number;

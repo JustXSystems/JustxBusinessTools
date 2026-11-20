@@ -8,8 +8,22 @@ import { exec, isoOf, likeOf, money, one, rows, tsOf, tx, type Queryable } from 
 import { badRequest, conflict, forbidden, notFound } from "./host.js";
 import { periodRange, round2, round3, todayISO, type ImsLineInput } from "./logic.js";
 import { confirmBomDoc, reopenBomDoc, registerBomEnhance } from "./bom-enhance-api.js";
-import { explodeNestedPackageLines, isLegacyFullIssue, normalizeOptionSelection, selectedOptionKeys } from "./bom-enhance.js";
-import { assertDcsLinkable, bomHasLiveDcs, linkInvoiceDcs, registerBomDc } from "./bom-dc.js";
+import {
+  explodeNestedPackageLines,
+  isLegacyFullIssue,
+  minBomQtyWithLiveDcs,
+  normalizeOptionSelection,
+  selectedOptionKeys,
+} from "./bom-enhance.js";
+import {
+  assertDcsLinkable,
+  bomHasApprovedDcs,
+  bomHasLiveDcs,
+  committedDcQtyByBomLine,
+  linkInvoiceDcs,
+  registerBomDc,
+  syncBomIssuedFromDcs,
+} from "./bom-dc.js";
 import { createLinkedInvoice } from "./sales.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo, postMovement } from "./stock.js";
@@ -289,6 +303,7 @@ export function mapDoc(r: DocRow, lines?: BomDocLine[]) {
     as_built_at?: string | null;
     as_built_json?: unknown;
     project_ref?: string | null;
+    quotation_ref?: string | null;
     valid_until?: string | null;
     payment_terms?: string | null;
     delivery_terms?: string | null;
@@ -309,6 +324,7 @@ export function mapDoc(r: DocRow, lines?: BomDocLine[]) {
     customerName: r.customer_name,
     location: r.location,
     projectRef: ext.project_ref ?? null,
+    quotationRef: ext.quotation_ref ?? null,
     partyId: r.party_id,
     marginPct: round3(money(r.margin_pct)),
     taxPct: round3(money(r.tax_pct)),
@@ -553,6 +569,7 @@ const docInput = z.object({
   notes: optText(4000),
   preparedBy: optText(120),
   projectRef: optText(120),
+  quotationRef: optText(120),
   validUntil: isoDate.nullable().optional(),
   paymentTerms: optText(240),
   deliveryTerms: optText(240),
@@ -1161,7 +1178,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
       filterParams.maxTotal = round2(maxTotal);
     }
     if (q) {
-      where += ` AND (doc_no LIKE :q OR customer_name LIKE :q OR IFNULL(location,'') LIKE :q OR IFNULL(title,'') LIKE :q OR IFNULL(capacity_label,'') LIKE :q OR IFNULL(package_name,'') LIKE :q OR IFNULL(project_ref,'') LIKE :q OR IFNULL(prepared_by,'') LIKE :q)`;
+      where += ` AND (doc_no LIKE :q OR customer_name LIKE :q OR IFNULL(location,'') LIKE :q OR IFNULL(title,'') LIKE :q OR IFNULL(capacity_label,'') LIKE :q OR IFNULL(package_name,'') LIKE :q OR IFNULL(project_ref,'') LIKE :q OR IFNULL(quotation_ref,'') LIKE :q OR IFNULL(prepared_by,'') LIKE :q)`;
       filterParams.q = likeOf(q);
     }
     /** Status filter applies to the row list only — tab counts stay for the same search/invoice/stock view. */
@@ -1368,12 +1385,12 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         conn,
         `INSERT INTO ims_bom_docs
           (id, tenant_id, package_id, package_name, doc_no, status, doc_date, capacity_label, title,
-           customer_name, location, project_ref, party_id, margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total,
+           customer_name, location, project_ref, quotation_ref, party_id, margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total,
            notes, prepared_by, valid_until, payment_terms, delivery_terms, warranty_terms,
            scope_of_supply, exclusions, paper_json, created_by, created_by_name)
          VALUES
           (:id, :tenantId, :packageId, :packageName, :docNo, 'draft', :docDate, :capacityLabel, :title,
-           :customerName, :location, :projectRef, :partyId, :marginPct, :taxPct, :materialsTotal, :marginAmount, :taxAmount, :grandTotal,
+           :customerName, :location, :projectRef, :quotationRef, :partyId, :marginPct, :taxPct, :materialsTotal, :marginAmount, :taxAmount, :grandTotal,
            :notes, :preparedBy, :validUntil, :paymentTerms, :deliveryTerms, :warrantyTerms,
            :scopeOfSupply, :exclusions, CAST(:paper AS JSON), :createdBy, :createdByName)`,
         {
@@ -1388,6 +1405,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           customerName: body.customerName || "",
           location: body.location ?? null,
           projectRef: body.projectRef ?? null,
+          quotationRef: body.quotationRef ?? null,
           partyId: body.partyId ?? null,
           marginPct,
           taxPct,
@@ -1448,6 +1466,35 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const body = parse(docInput, req.body);
     const lines = body.lines ?? existing.lines ?? [];
     if (!lines.length) throw conflict("Add at least one line");
+    // After a qty-amend reopen with live DCs, lines cannot shrink below net committed or be removed/relinked.
+    if (await bomHasLiveDcs(deps.db, actor.tenantId, id)) {
+      const committed = await committedDcQtyByBomLine(deps.db, actor.tenantId, id);
+      const prevById = new Map((existing.lines ?? []).map((l) => [l.id, l]));
+      for (const [lineId, committedQty] of committed) {
+        if (!(committedQty > 0)) continue;
+        const prev = prevById.get(lineId);
+        const next = lines.find((l) => l.id === lineId);
+        if (!next) {
+          throw conflict(
+            `“${prev?.description ?? "Stock line"}” is on a live delivery challan and can’t be removed — cancel/reverse those DCs first`,
+          );
+        }
+        if (next.lineKind !== "stock") {
+          throw conflict(`“${next.description}” is on a live delivery challan and must stay a stock line`);
+        }
+        if (prev?.itemId && next.itemId && prev.itemId !== next.itemId) {
+          throw conflict(
+            `“${next.description}” catalogue item can’t change while delivery challans reference this line — cancel/reverse those DCs first`,
+          );
+        }
+        const minQty = minBomQtyWithLiveDcs(committedQty);
+        if (next.qty + 1e-9 < minQty) {
+          throw conflict(
+            `“${next.description}” can’t go below ${minQty} ${next.unit} — that much is already on live delivery challans (net of returns)`,
+          );
+        }
+      }
+    }
     const totals = computeBomTotals(
       lines.map((l) => ({ qty: l.qty, rate: l.rate })),
       body.marginPct,
@@ -1458,7 +1505,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         conn,
         `UPDATE ims_bom_docs SET
           package_id = :packageId, doc_date = :docDate, capacity_label = :capacityLabel, title = :title,
-          customer_name = :customerName, location = :location, project_ref = :projectRef, party_id = :partyId,
+          customer_name = :customerName, location = :location, project_ref = :projectRef, quotation_ref = :quotationRef, party_id = :partyId,
           margin_pct = :marginPct, tax_pct = :taxPct,
           materials_total = :materialsTotal, margin_amount = :marginAmount, tax_amount = :taxAmount, grand_total = :grandTotal,
           notes = :notes, prepared_by = :preparedBy,
@@ -1475,6 +1522,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           customerName: body.customerName || "",
           location: body.location ?? null,
           projectRef: body.projectRef ?? null,
+          quotationRef: body.quotationRef ?? null,
           partyId: body.partyId ?? null,
           marginPct: body.marginPct,
           taxPct: body.taxPct,
@@ -1500,7 +1548,25 @@ export function registerBom(router: Router, deps: ImsDeps): void {
                 : null,
         },
       );
-      await replaceDocLines(conn, actor.tenantId, id, lines);
+      // Keep server-tracked issued_qty when live DCs exist — client must not wipe stock progress.
+      const hasLive = await bomHasLiveDcs(conn, actor.tenantId, id);
+      let linesForSave = lines;
+      if (hasLive) {
+        const prevIssued = new Map((existing.lines ?? []).map((l) => [l.id, l.issuedQty ?? 0]));
+        linesForSave = lines.map((l) =>
+          l.id && prevIssued.has(l.id) ? { ...l, issuedQty: prevIssued.get(l.id) } : l,
+        );
+      }
+      await replaceDocLines(conn, actor.tenantId, id, linesForSave);
+      if (hasLive) {
+        const fresh = await loadDocLines(conn, actor.tenantId, id);
+        await syncBomIssuedFromDcs(
+          conn,
+          actor.tenantId,
+          id,
+          fresh.filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0),
+        );
+      }
     });
     await recordEvent(deps, actor, { type: "bom.doc.updated", entityType: "bom_doc", entityId: id, summary: "Updated BOM document" });
     res.json({ doc: await loadDoc(deps.db, actor.tenantId, id) });
@@ -1518,6 +1584,9 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const existing = await loadDoc(deps.db, actor.tenantId, id);
     if (!existing) throw notFound("BOM document not found");
     if (existing.status !== "draft") throw conflict("Only drafts can be confirmed");
+    if (settings.bomRequireQuotationRef && !String(existing.quotationRef ?? "").trim()) {
+      throw conflict("Quotation reference is required before confirming this BOM (Business Profile → IMS settings).");
+    }
     try {
       const result = await confirmBomDoc(
         deps,
@@ -1550,6 +1619,133 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     }
     await reopenBomDoc(deps, { tenantId: actor.tenantId, userId: actor.userId ?? null, name: actor.name ?? null }, existing);
     res.json({ doc: await loadDoc(deps.db, actor.tenantId, id) });
+  });
+
+  /**
+   * Increase a stock line qty on a confirmed BOM that already has live DCs, then reopen to draft
+   * so the higher estimate must be reconfirmed before further DC approve.
+   */
+  router.post("/bom/docs/:id/amend-line-qty", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const id = String(req.params.id);
+    const body = parse(
+      z.object({
+        lineId: z.string().uuid(),
+        qty: z.coerce.number().gt(0).max(1e9),
+      }),
+      req.body,
+    );
+    const existing = await loadDoc(deps.db, actor.tenantId, id);
+    if (!existing) throw notFound("BOM document not found");
+    if (existing.status !== "confirmed") throw conflict("Only confirmed BOMs can amend line quantity this way");
+    if (existing.invoiceId) throw conflict("This BOM is linked to an invoice — handle the invoice before amending quantities");
+    if (!(await bomHasLiveDcs(deps.db, actor.tenantId, id))) {
+      throw conflict("No live delivery challans — reopen the BOM and edit quantities instead");
+    }
+    // Non-DC stock issue (legacy BOM issue / explode without DCs) must be reversed first — otherwise
+    // clearing stock_issued_at would reopen the full BOM for a second stock-out via DCs.
+    const hasApprovedDc = await bomHasApprovedDcs(deps.db, actor.tenantId, id);
+    if (existing.stockIssuedAt && !hasApprovedDc) {
+      throw conflict(
+        "Materials were already issued from this BOM outside delivery challans. Reverse that stock before increasing quantities for DCs.",
+      );
+    }
+    if (isLegacyFullIssue(existing.stockIssuedAt, existing.lines ?? []) && !hasApprovedDc) {
+      throw conflict(
+        "Materials were already issued from this BOM outside delivery challans. Reverse that stock before increasing quantities for DCs.",
+      );
+    }
+    const line = (existing.lines ?? []).find((l) => l.id === body.lineId);
+    if (!line) throw notFound("BOM line not found");
+    if (line.lineKind !== "stock") throw conflict("Only stock lines can be amended for delivery challans");
+    const newQty = round3(body.qty);
+    if (newQty + 1e-9 < line.qty) {
+      throw conflict("Use Amend only to increase quantity. To reduce, reopen after cancelling/reversing delivery challans.");
+    }
+    const committed = await committedDcQtyByBomLine(deps.db, actor.tenantId, id);
+    const minQty = minBomQtyWithLiveDcs(committed.get(line.id) ?? 0);
+    if (newQty + 1e-9 < minQty) {
+      throw conflict(`Quantity must be at least ${minQty} ${line.unit} to cover live delivery challans`);
+    }
+    if (newQty <= line.qty + 1e-9) {
+      throw conflict("Enter a quantity higher than the current BOM line quantity");
+    }
+
+    const nextRev = Number(existing.revision ?? 1) + 1;
+    const amount = round2(newQty * line.rate);
+    await tx(deps.db, async (conn) => {
+      await one(
+        conn,
+        `SELECT id FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        { tenantId: actor.tenantId, id },
+      );
+      await exec(
+        conn,
+        `UPDATE ims_bom_doc_lines SET qty = :qty, amount = :amount
+         WHERE tenant_id = :tenantId AND doc_id = :docId AND id = :lineId`,
+        { tenantId: actor.tenantId, docId: id, lineId: line.id, qty: newQty, amount },
+      );
+      const freshLines = await loadDocLines(conn, actor.tenantId, id);
+      const totals = computeBomTotals(
+        freshLines.map((l) => ({ qty: l.qty, rate: l.rate })),
+        existing.marginPct,
+        existing.taxPct,
+      );
+      await exec(
+        conn,
+        `UPDATE ims_bom_docs SET
+           status = 'draft', revision = :revision,
+           materials_total = :materialsTotal, margin_amount = :marginAmount, tax_amount = :taxAmount, grand_total = :grandTotal,
+           proposal_status = CASE
+             WHEN proposal_status IN ('sent', 'viewed') THEN 'revoked'
+             ELSE proposal_status
+           END
+         WHERE tenant_id = :tenantId AND id = :id AND status = 'confirmed'`,
+        {
+          tenantId: actor.tenantId,
+          id,
+          revision: nextRev,
+          materialsTotal: totals.materialsTotal,
+          marginAmount: totals.marginAmount,
+          taxAmount: totals.taxAmount,
+          grandTotal: totals.grandTotal,
+        },
+      );
+      // Recompute issued_qty / stock_issued_at against the new higher BOM qty (clears full-cover flag).
+      const stockLines = freshLines.filter((l) => l.lineKind === "stock" && l.itemId && l.qty > 0);
+      await syncBomIssuedFromDcs(conn, actor.tenantId, id, stockLines);
+    });
+    await recordEvent(deps, actor, {
+      type: "bom.doc.qty_amended",
+      entityType: "bom_doc",
+      entityId: id,
+      summary: `Amended ${existing.docNo} line qty ${line.qty} → ${newQty} — reconfirm required (rev ${nextRev})`,
+      payload: { lineId: line.id, fromQty: line.qty, toQty: newQty, revision: nextRev },
+    });
+    res.json({
+      doc: await loadDoc(deps.db, actor.tenantId, id),
+      message: "BOM quantity increased and reopened as draft — confirm again before approving further delivery challans.",
+    });
+  });
+
+  /** Distinct quotation references for BOM combobox. */
+  router.get("/bom/quotation-refs", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const q = qstr(req.query.q, 80);
+    const params: Record<string, unknown> = { tenantId: actor.tenantId };
+    let where = `tenant_id = :tenantId AND quotation_ref IS NOT NULL AND TRIM(quotation_ref) <> ''`;
+    if (q) {
+      where += ` AND quotation_ref LIKE :q`;
+      params.q = `%${q}%`;
+    }
+    const list = await rows<{ quotation_ref: string }>(
+      deps.db,
+      `SELECT DISTINCT quotation_ref FROM ims_bom_docs WHERE ${where} ORDER BY quotation_ref ASC LIMIT 50`,
+      params,
+    );
+    res.json({ refs: list.map((r) => r.quotation_ref) });
   });
 
   router.post("/bom/docs/:id/cancel", async (req, res) => {
@@ -1590,6 +1786,14 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         { tenantId: actor.tenantId, id },
       );
       for (const dc of dcIds) {
+        await exec(conn, `DELETE FROM ims_bom_dc_return_lines WHERE tenant_id = :tenantId AND dc_id = :dcId`, {
+          tenantId: actor.tenantId,
+          dcId: dc.id,
+        });
+        await exec(conn, `DELETE FROM ims_bom_dc_returns WHERE tenant_id = :tenantId AND dc_id = :dcId`, {
+          tenantId: actor.tenantId,
+          dcId: dc.id,
+        });
         await exec(conn, `DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId AND dc_id = :dcId`, {
           tenantId: actor.tenantId,
           dcId: dc.id,
@@ -1599,6 +1803,10 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           dcId: dc.id,
         });
       }
+      await exec(conn, `DELETE FROM ims_bom_dc_returns WHERE tenant_id = :tenantId AND bom_doc_id = :id`, {
+        tenantId: actor.tenantId,
+        id,
+      });
       await exec(conn, `DELETE FROM ims_bom_dcs WHERE tenant_id = :tenantId AND bom_doc_id = :id`, { tenantId: actor.tenantId, id });
       await exec(conn, `DELETE FROM ims_bom_doc_lines WHERE tenant_id = :tenantId AND doc_id = :id`, { tenantId: actor.tenantId, id });
       await exec(conn, `DELETE FROM ims_bom_docs WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id });
@@ -1634,12 +1842,12 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         conn,
         `INSERT INTO ims_bom_docs
           (id, tenant_id, package_id, package_name, doc_no, status, doc_date, capacity_label, title,
-           customer_name, location, project_ref, party_id, margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total,
+           customer_name, location, project_ref, quotation_ref, party_id, margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total,
            notes, prepared_by, valid_until, payment_terms, delivery_terms, warranty_terms,
            scope_of_supply, exclusions, paper_json, options_json, variables_json, created_by, created_by_name)
          VALUES
           (:id, :tenantId, :packageId, :packageName, :docNo, 'draft', :docDate, :capacityLabel, :title,
-           :customerName, :location, :projectRef, :partyId, :marginPct, :taxPct, :materialsTotal, :marginAmount, :taxAmount, :grandTotal,
+           :customerName, :location, :projectRef, :quotationRef, :partyId, :marginPct, :taxPct, :materialsTotal, :marginAmount, :taxAmount, :grandTotal,
            :notes, :preparedBy, :validUntil, :paymentTerms, :deliveryTerms, :warrantyTerms,
            :scopeOfSupply, :exclusions, CAST(:paper AS JSON), CAST(:options AS JSON), CAST(:variables AS JSON), :createdBy, :createdByName)`,
         {
@@ -1654,6 +1862,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           customerName: src.customerName,
           location: src.location,
           projectRef: src.projectRef ?? null,
+          quotationRef: src.quotationRef ?? null,
           partyId: src.partyId,
           marginPct: src.marginPct,
           taxPct: src.taxPct,
@@ -1869,12 +2078,18 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           if (!locked) throw notFound("BOM document not found");
           if (locked.status !== "confirmed") throw conflict("Confirm the BOM before creating an invoice");
           if (locked.invoice_id) throw conflict("This BOM already has an invoice. Open it from Sales.");
+          if (body.mode === "explode_lines" && !stockViaDc && (await bomHasLiveDcs(conn, actor.tenantId, id))) {
+            throw conflict("This BOM has delivery challans. Link approved DCs on create, or cancel open DCs before creating an explode invoice.");
+          }
           if (body.issue && body.mode === "explode_lines" && !stockViaDc && locked.stock_issued_at) {
             throw conflict("Materials were already issued from this BOM. Link approved delivery challans, create a draft explode invoice, or use lump-sum billing.");
           }
         },
         afterInsert: async (conn, invoiceId) => {
-          if (dcIds.length) await linkInvoiceDcs(conn, actor.tenantId, invoiceId, dcIds);
+          if (!dcIds.length) return;
+          // Re-assert under the create transaction — a DC may have been reversed since the pre-check.
+          await assertDcsLinkable(conn, actor.tenantId, id, dcIds, { invoiceId });
+          await linkInvoiceDcs(conn, actor.tenantId, invoiceId, dcIds);
         },
         after: async (conn, invoiceId) => {
           const linked = await exec(

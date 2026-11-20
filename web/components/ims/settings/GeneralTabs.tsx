@@ -309,6 +309,14 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
           disabled={readOnly}
         />
 
+        <ToggleRow
+          label="Quotation reference required"
+          desc="BOM confirm is blocked until a quotation reference is entered — use the quotation field on the BOM composer"
+          checked={Boolean(draft.bomRequireQuotationRef)}
+          onChange={(v) => set("bomRequireQuotationRef", v)}
+          disabled={readOnly}
+        />
+
         <div className="ims-bom-col-config" aria-label="Schedule columns">
           <div className="ims-bom-col-config-head">
             <div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Card, Dialog, WidgetCard } from "@/components/bos";
+import { bom, type BomDc } from "@/lib/ims/bom";
 import { finance, INVOICE_BADGE, invoiceShareText, methodLabel, whatsappShareLink, type InvoiceDetail } from "@/lib/ims/finance";
 import { dateLabel, inrExact, stampLabel } from "@/lib/ims/format";
 import { Loaded, Stack, StatusBadge, useIms, useImsAction, useImsData, usePrint } from "../core";
@@ -15,13 +16,23 @@ export function InvoiceView({ id, onBack, onEdit }: { id: string; onBack: () => 
     <Stack gap={16}>
       <BackLink onClick={onBack}>All invoices</BackLink>
       <Loaded state={state} rows={3}>
-        {(d) => <InvoiceBody detail={d} onEdit={onEdit} onGone={onBack} />}
+        {(d) => <InvoiceBody detail={d} onEdit={onEdit} onGone={onBack} onReload={state.reload} />}
       </Loaded>
     </Stack>
   );
 }
 
-function InvoiceBody({ detail, onEdit, onGone }: { detail: InvoiceDetail; onEdit: (id: string) => void; onGone: () => void }) {
+function InvoiceBody({
+  detail,
+  onEdit,
+  onGone,
+  onReload,
+}: {
+  detail: InvoiceDetail;
+  onEdit: (id: string) => void;
+  onGone: () => void;
+  onReload: () => void;
+}) {
   const { session, can, navigate } = useIms();
   const { run, busy } = useImsAction();
   const print = usePrint();
@@ -105,7 +116,9 @@ function InvoiceBody({ detail, onEdit, onGone }: { detail: InvoiceDetail; onEdit
                         ? "Moved out"
                         : isDraft
                           ? "Moves when issued"
-                          : "Returned",
+                          : detail.activity.some((a) => /stock remains on delivery challan/i.test(String(a.message ?? "")))
+                            ? "Remained on delivery challans"
+                            : "Returned",
                   ],
                   ...(inv.promiseDate ? ([["Promise", `${inrExact(inv.promiseAmount ?? inv.balance)} by ${dateLabel(inv.promiseDate)}`]] as Array<[string, string]>) : []),
                   ...(inv.disputed ? ([["Dispute", inv.disputeReason ?? "Disputed"]] as Array<[string, string]>) : []),
@@ -179,8 +192,21 @@ function InvoiceBody({ detail, onEdit, onGone }: { detail: InvoiceDetail; onEdit
 
           {inv.status === "cancelled" ? (
             <Alert tone="blue" title="Cancelled">
-              {inv.cancelReason ?? "This invoice was cancelled"}. Stock was returned. Duplicate it to issue a corrected invoice.
+              {inv.cancelReason ?? "This invoice was cancelled"}.{" "}
+              {detail.activity.some((a) => /stock remains on delivery challan/i.test(String(a.message ?? "")))
+                ? "Stock remains on the linked delivery challans."
+                : "Stock was returned."}{" "}
+              Duplicate it to issue a corrected invoice.
             </Alert>
+          ) : null}
+
+          {isDraft && inv.sourceTool === "ims_bom" && inv.sourceRef && canWrite ? (
+            <InvoiceBomDcLinks
+              invoiceId={inv.id}
+              bomDocId={inv.sourceRef}
+              linkedIds={inv.dcIds ?? inv.dcLinks?.map((d) => d.id) ?? []}
+              onChanged={onReload}
+            />
           ) : null}
 
           {detail.payments.length ? (
@@ -299,6 +325,104 @@ function InvoiceBody({ detail, onEdit, onGone }: { detail: InvoiceDetail; onEdit
         </div>
       </Dialog>
     </>
+  );
+}
+
+/** Link approved BOM delivery challans so issue skips invoice stock OUT. */
+function InvoiceBomDcLinks({
+  invoiceId,
+  bomDocId,
+  linkedIds,
+  onChanged,
+}: {
+  invoiceId: string;
+  bomDocId: string;
+  linkedIds: string[];
+  onChanged: () => void;
+}) {
+  const { run, busy } = useImsAction();
+  const dcsState = useImsData(() => bom.listDcs(bomDocId), [bomDocId]);
+  const [selected, setSelected] = useState<string[]>(linkedIds);
+  useEffect(() => {
+    setSelected(linkedIds);
+  }, [linkedIds.join("|")]);
+  const allDcs = dcsState.data?.dcs ?? [];
+  const approved = allDcs.filter((d: BomDc) => d.status === "approved" && d.stockPosted);
+  const approvedIds = new Set(approved.map((d) => d.id));
+  const orphanLinked = linkedIds.filter((id) => !approvedIds.has(id));
+  const dirty = selected.slice().sort().join("|") !== linkedIds.slice().sort().join("|");
+
+  return (
+    <WidgetCard title="Delivery challans" note={selected.length ? `${selected.length} linked` : "optional"}>
+      <p className="fin-note" style={{ marginBottom: 8 }}>
+        Link approved DCs so issuing this invoice does not post stock again. Required when the BOM has live delivery challans.
+      </p>
+      {dcsState.loading && !dcsState.data ? (
+        <span className="ims-muted" style={{ fontSize: 13 }}>
+          Loading DCs…
+        </span>
+      ) : (
+        <div style={{ display: "grid", gap: 6 }}>
+          {approved.map((dc) => (
+            <label key={dc.id} style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="checkbox"
+                checked={selected.includes(dc.id)}
+                onChange={() =>
+                  setSelected((prev) => (prev.includes(dc.id) ? prev.filter((x) => x !== dc.id) : [...prev, dc.id]))
+                }
+              />
+              <span>
+                <b>{dc.docNo}</b> · {dc.docDate}
+                {(dc.lines ?? []).length ? ` · ${(dc.lines ?? []).reduce((s, l) => s + l.qty, 0)} units` : ""}
+              </span>
+            </label>
+          ))}
+          {orphanLinked.map((id) => {
+            const dc = allDcs.find((d) => d.id === id);
+            return (
+              <label key={id} style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(id)}
+                  onChange={() =>
+                    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+                  }
+                />
+                <span style={{ opacity: 0.85 }}>
+                  <b>{dc?.docNo ?? id.slice(0, 8)}</b>
+                  {dc ? ` · ${dc.status}` : " · missing"} — not linkable; untick and save to clear
+                </span>
+              </label>
+            );
+          })}
+          {!approved.length && !orphanLinked.length ? (
+            <span className="ims-muted" style={{ fontSize: 13 }}>
+              No approved delivery challans on this BOM yet. Create and approve DCs from the BOM, then link them here.
+            </span>
+          ) : null}
+          {approved.length || orphanLinked.length || dirty ? (
+            <Button
+              size="sm"
+              disabled={Boolean(busy) || !dirty}
+              onClick={async () => {
+                // Only persist approved+posted IDs (orphans must be cleared, not re-saved).
+                const next = selected.filter((id) => approvedIds.has(id));
+                const out = await run("dc-links", () => bom.setInvoiceDcLinks(invoiceId, next), {
+                  success: next.length ? "Delivery challans linked" : "Delivery challan links cleared",
+                });
+                if (out) {
+                  setSelected(next);
+                  onChanged();
+                }
+              }}
+            >
+              {busy === "dc-links" ? "Saving…" : dirty ? "Save DC links" : "Links saved"}
+            </Button>
+          ) : null}
+        </div>
+      )}
+    </WidgetCard>
   );
 }
 

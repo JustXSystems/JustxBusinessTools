@@ -20,8 +20,10 @@ export type DcPaperModel = {
   status: BomDcStatus;
   /** BOM document number shown as the reference on the challan. */
   bomDocNo: string;
+  quotationRef?: string | null;
   customerName: string;
   location?: string | null;
+  projectRef?: string | null;
   shipTo?: string | null;
   transporter?: string | null;
   vehicleNo?: string | null;
@@ -69,6 +71,8 @@ export function DcPaper({ model }: { model: DcPaperModel }) {
     { label: "BOM reference", value: model.bomDocNo || "—" },
     { label: "Verified by", value: model.verifiedByName?.trim() || "—" },
   ];
+  if (model.quotationRef?.trim()) meta.push({ label: "Quotation", value: model.quotationRef.trim() });
+  if (model.projectRef?.trim()) meta.push({ label: "Project", value: model.projectRef.trim() });
   if (model.transporter?.trim()) meta.push({ label: "Transporter", value: model.transporter.trim() });
   if (model.vehicleNo?.trim()) meta.push({ label: "Vehicle", value: model.vehicleNo.trim() });
   if (model.approvedByName?.trim()) meta.push({ label: "Approved by", value: model.approvedByName.trim() });

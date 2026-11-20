@@ -305,4 +305,7 @@
   .bos .ims-hero-title { font-size: 20px; }
   .bos .ims-topbar-label { display: none; }
   .bos .ims-bar-row { grid-template-columns: 90px minmax(0, 1fr) auto; }
+  .bos .ims-page-actions { width: 100%; }
+  .bos .ims-page-actions .bos-btn { flex: 1 1 auto; min-height: 44px; }
+  .bos .ims-paper-meta { grid-template-columns: 1fr; }
 }

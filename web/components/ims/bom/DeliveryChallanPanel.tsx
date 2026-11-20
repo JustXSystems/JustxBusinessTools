@@ -16,6 +16,7 @@ type RemainingLine = {
   remainingQty: number;
   issuedQty: number;
   bomQty?: number;
+  committedQty?: number;
 };
 
 function roundQty(n: number): number {
@@ -37,8 +38,8 @@ function validateDcDraft(input: {
     }
     if (line.qty > line.remainingQty + 1e-9) {
       return line.remainingQty <= 0
-        ? `No remaining quantity for “${line.description}” — already on a DC or issued from the BOM/invoice.`
-        : `Only ${roundQty(line.remainingQty)} ${line.unit} remaining for “${line.description}”.`;
+        ? `No remaining quantity for “${line.description}” — already on a DC or issued. Increase the BOM line qty and reconfirm to deliver more.`
+        : `Only ${roundQty(line.remainingQty)} ${line.unit} remaining for “${line.description}” (approved DCs cannot exceed the confirmed BOM qty).`;
     }
   }
   return null;
@@ -56,6 +57,7 @@ export function DeliveryChallanPanel({
   onDone,
   run,
   canApprove,
+  manageOnly,
   selectedDcIds,
   onToggleDc,
   onOpenWorkspace,
@@ -65,6 +67,8 @@ export function DeliveryChallanPanel({
   onDone: () => void;
   run: ReturnType<typeof useImsAction>["run"];
   canApprove: boolean;
+  /** After qty-amend reopen — list/open/cancel only until BOM is reconfirmed. */
+  manageOnly?: boolean;
   selectedDcIds: string[];
   onToggleDc: (id: string) => void;
   onOpenWorkspace: (workspace: DcWorkspace) => void;
@@ -77,6 +81,9 @@ export function DeliveryChallanPanel({
   const remainingLines = remainingState.data?.lines ?? [];
   const openRemaining = remainingLines.filter((l) => l.remainingQty > 0);
   const dcs = dcsState.data?.dcs ?? [];
+  const liveDcs = dcs.filter((d) => d.status !== "cancelled");
+  /** Amend is only for when live DCs block reopen — never for invoice/legacy full issue without DCs. */
+  const canAmendBomForMoreDc = !manageOnly && doc.status === "confirmed" && !doc.invoiceId && liveDcs.length > 0;
   const bomDocNo = dcsState.data?.bomDocNo ?? doc.docNo;
   const deliveredUnits = remainingLines.reduce((s, l) => s + (Number(l.issuedQty) || 0), 0);
   const bomUnits = remainingLines.reduce((s, l) => s + (Number(l.bomQty) || 0), 0);
@@ -128,18 +135,28 @@ export function DeliveryChallanPanel({
                 </span>
                 <span style={{ fontSize: 12, opacity: 0.75 }}>BOM {dc.bomDocNo ?? bomDocNo}</span>
                 {dc.verifiedByName ? <span style={{ fontSize: 12, opacity: 0.75 }}>Verified by {dc.verifiedByName}</span> : null}
+                {(dc.lines ?? []).some((l) => (l.returnedQty ?? 0) > 0) ? (
+                  <Badge tone="amber">
+                    Returned {(dc.lines ?? []).reduce((s, l) => s + (l.returnedQty ?? 0), 0)} units
+                  </Badge>
+                ) : null}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 <Button size="sm" onClick={() => onOpenWorkspace({ kind: "manage", dcId: dc.id })}>
                   Open
                 </Button>
-                {dc.status === "approved" && dc.stockPosted && !doc.invoiceId ? (
+                {dc.status === "approved" && dc.stockPosted ? (
                   <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
-                    <input type="checkbox" checked={selectedDcIds.includes(dc.id)} onChange={() => onToggleDc(dc.id)} />
-                    Link on invoice
+                    <input
+                      type="checkbox"
+                      checked={selectedDcIds.includes(dc.id)}
+                      disabled={Boolean(busy)}
+                      onChange={() => onToggleDc(dc.id)}
+                    />
+                    {doc.invoiceId ? "Linked on invoice" : "Link on invoice"}
                   </label>
                 ) : null}
-                {dc.status === "verified" && canApprove ? (
+                {dc.status === "verified" && canApprove && !manageOnly ? (
                   <Button
                     size="sm"
                     disabled={Boolean(busy)}
@@ -150,6 +167,9 @@ export function DeliveryChallanPanel({
                   >
                     Approve
                   </Button>
+                ) : null}
+                {dc.status === "verified" && manageOnly ? (
+                  <span style={{ fontSize: 12, opacity: 0.7 }}>Confirm BOM before approve</span>
                 ) : null}
               </div>
             </div>
@@ -163,16 +183,160 @@ export function DeliveryChallanPanel({
           Verified DCs need Approvals to post stock out.
         </Alert>
       ) : null}
-      {openRemaining.length ? (
-        <Button size="sm" disabled={Boolean(busy)} onClick={() => onOpenWorkspace({ kind: "create" })}>
-          Create delivery challan
-        </Button>
+      {manageOnly ? (
+        <Alert tone="amber" title="Confirm BOM to continue">
+          Create and approve are locked until this BOM is confirmed again. Open a DC to cancel a draft/verified challan if needed.
+        </Alert>
+      ) : openRemaining.length ? (
+        <div style={{ display: "grid", gap: 10 }}>
+          <Button size="sm" disabled={Boolean(busy)} onClick={() => onOpenWorkspace({ kind: "create" })}>
+            Create delivery challan
+          </Button>
+          {canAmendBomForMoreDc ? (
+            <AmendBomQtyPanel
+              doc={doc}
+              lines={remainingLines}
+              busy={busy}
+              run={run}
+              onDone={onDone}
+              compact
+            />
+          ) : null}
+        </div>
       ) : remainingState.loading && !remainingState.data ? null : remainingLines.length ? (
-        <div style={{ fontSize: 13, opacity: 0.75 }}>All BOM stock quantities are on live delivery challans.</div>
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ fontSize: 13, opacity: 0.75 }}>
+            {doc.stockIssuedAt && !liveDcs.some((d) => d.status === "approved")
+              ? "Materials are already fully issued outside delivery challans. Reverse that stock before creating a DC."
+              : "All BOM stock quantities are on live delivery challans. Approved DC totals cannot exceed the confirmed BOM line qty."}
+          </div>
+          {canAmendBomForMoreDc ? (
+            <AmendBomQtyPanel doc={doc} lines={remainingLines} busy={busy} run={run} onDone={onDone} />
+          ) : null}
+        </div>
       ) : (
         <div style={{ fontSize: 13, opacity: 0.75 }}>No stock-linked lines — link catalogue items on the BOM first.</div>
       )}
     </Card>
+  );
+}
+
+/**
+ * Increase a confirmed BOM stock line so further DCs can be raised, then reopen as draft for reconfirm.
+ * Example: BOM 100 delivered → bump to 125 → reconfirm → DC2 for the extra 25.
+ */
+function AmendBomQtyPanel({
+  doc,
+  lines,
+  busy,
+  run,
+  onDone,
+  compact,
+}: {
+  doc: BomDoc;
+  lines: RemainingLine[];
+  busy: boolean | string | null;
+  run: ReturnType<typeof useImsAction>["run"];
+  onDone: () => void;
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(!compact);
+  const [lineId, setLineId] = useState(lines[0]?.bomLineId ?? "");
+  const selected = lines.find((l) => l.bomLineId === lineId) ?? lines[0];
+  const [newQty, setNewQty] = useState(selected ? String(roundQty((selected.bomQty ?? 0) + (selected.remainingQty <= 0 ? 25 : 1))) : "");
+
+  useEffect(() => {
+    if (!lines.some((l) => l.bomLineId === lineId) && lines[0]) {
+      setLineId(lines[0].bomLineId);
+    }
+  }, [lines, lineId]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const floor = selected.bomQty ?? 0;
+    setNewQty(String(roundQty(floor + (selected.remainingQty <= 0 ? 25 : Math.max(1, Math.ceil(floor * 0.1) || 1)))));
+  }, [selected?.bomLineId, selected?.bomQty, selected?.remainingQty]);
+
+  if (!lines.length) return null;
+
+  if (!open) {
+    return (
+      <Button size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => setOpen(true)}>
+        Need more qty than BOM allows?
+      </Button>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 8, borderTop: compact ? "1px solid var(--bos-border, #e2e8f0)" : undefined, paddingTop: compact ? 8 : 0 }}>
+      <Alert tone="amber" title="Increase BOM quantity + reconfirm">
+        Delivery challans cannot exceed the confirmed BOM line qty. Raise the estimate, then Confirm again before approving the next DC.
+      </Alert>
+      <Field label="Stock line">
+        {({ id }) => (
+          <select
+            id={id}
+            value={selected?.bomLineId ?? ""}
+            onChange={(e) => setLineId(e.target.value)}
+            style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--bos-border, #cbd5e1)" }}
+          >
+            {lines.map((l) => (
+              <option key={l.bomLineId} value={l.bomLineId}>
+                {l.description} · BOM {l.bomQty ?? "—"} · remaining {l.remainingQty} {l.unit}
+              </option>
+            ))}
+          </select>
+        )}
+      </Field>
+      <Field label={`New BOM qty${selected ? ` (${selected.unit})` : ""}`}>
+        {({ id }) => (
+          <Input
+            id={id}
+            className="ims-bom-dc-qty-input"
+            value={newQty}
+            onChange={(e) => setNewQty(e.target.value)}
+            inputMode="decimal"
+            style={{ width: 140 }}
+          />
+        )}
+      </Field>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={Boolean(busy) || !selected}
+          onClick={async () => {
+            if (!selected) return;
+            const qty = Number(newQty);
+            const floor = selected.bomQty ?? 0;
+            if (!(qty > floor + 1e-9)) {
+              window.alert(`Enter a quantity higher than the current BOM qty (${floor}).`);
+              return;
+            }
+            if (
+              !window.confirm(
+                `Increase “${selected.description}” from ${floor} to ${roundQty(qty)} ${selected.unit}?\n\nThe BOM will reopen as draft — confirm again before approving further delivery challans.`,
+              )
+            ) {
+              return;
+            }
+            const out = await run(
+              "bom-amend-qty",
+              () => bom.amendLineQty(doc.id, { lineId: selected.bomLineId, qty }),
+              { success: "BOM qty increased — reconfirm required" },
+            );
+            if (out) onDone();
+          }}
+        >
+          {busy === "bom-amend-qty" ? "Updating…" : "Update BOM qty"}
+        </Button>
+        {compact ? (
+          <Button size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -221,18 +385,46 @@ export function DeliveryChallanWorkspace({
   if (remainingState.error) return <ErrorBlock error={remainingState.error} onRetry={remainingState.reload} />;
 
   if (workspace.kind === "create") {
-    if (remainingState.loading && !remainingState.data) return <LoadingBlock rows={2} />;
-    if (!openRemaining.length) {
+    if (doc.status !== "confirmed") {
       return (
         <Card className="ims-bom-action-card">
-          <Alert tone="amber" title="Nothing left to deliver">
-            {doc.stockIssuedAt
-              ? "Materials for this BOM are already fully issued (delivery challans or invoice). Reverse stock or cancel open DCs before creating another challan."
-              : "All BOM stock quantities are already on live delivery challans."}{" "}
+          <Alert tone="amber" title="Confirm BOM first">
+            Delivery challans can only be created on a confirmed BOM.{" "}
             <Button size="sm" variant="ghost" onClick={onBack}>
               Back to BOM
             </Button>
           </Alert>
+        </Card>
+      );
+    }
+    if (remainingState.loading && !remainingState.data) return <LoadingBlock rows={2} />;
+    if (!openRemaining.length) {
+      const hasLiveDcCommit = remainingLines.some((l) => (l.committedQty ?? 0) > 0);
+      const canAmendBomForMoreDc = doc.status === "confirmed" && !doc.invoiceId && hasLiveDcCommit;
+      return (
+        <Card className="ims-bom-action-card">
+          <Alert tone="amber" title="Nothing left to deliver">
+            {doc.stockIssuedAt && !hasLiveDcCommit
+              ? "Materials for this BOM are already fully issued outside delivery challans. Reverse that stock before creating another challan."
+              : doc.stockIssuedAt
+                ? "Materials for this BOM are fully covered by delivery challans. Return unused stock, or increase the BOM qty and reconfirm before creating another challan."
+                : "All BOM stock quantities are already on live delivery challans. Approved DC totals cannot exceed the confirmed BOM line qty."}
+          </Alert>
+          {canAmendBomForMoreDc ? (
+            <AmendBomQtyPanel
+              doc={doc}
+              lines={remainingLines}
+              busy={busy}
+              run={run}
+              onDone={() => {
+                onRefresh();
+                onBack();
+              }}
+            />
+          ) : null}
+          <Button size="sm" variant="ghost" onClick={onBack}>
+            Back to BOM
+          </Button>
         </Card>
       );
     }
@@ -414,6 +606,8 @@ function DcEditorForm({
     docDate,
     status: "draft",
     bomDocNo,
+    quotationRef: doc.quotationRef,
+    projectRef: doc.projectRef,
     customerName: doc.customerName,
     location: doc.location,
     shipTo: shipTo.trim() || null,
@@ -513,6 +707,7 @@ function DcEditorForm({
                     </span>
                   </div>
                   <Input
+                    className="ims-bom-dc-qty-input"
                     value={qtyById[line.bomLineId] ?? String(line.remainingQty)}
                     onChange={(e) => setQtyById((prev) => ({ ...prev, [line.bomLineId]: e.target.value }))}
                     placeholder="Qty"
@@ -568,6 +763,9 @@ function DcManagerForm({
   const [qtyById, setQtyById] = useState<Record<string, string>>(() =>
     Object.fromEntries((dc.lines ?? []).map((l) => [l.bomLineId, String(l.qty)])),
   );
+  const [returnMode, setReturnMode] = useState(false);
+  const [returnNotes, setReturnNotes] = useState("");
+  const [returnQtyByLineId, setReturnQtyByLineId] = useState<Record<string, string>>({});
 
   // When server status/revision changes (verify/approve), adopt server fields without remounting mid-edit.
   useEffect(() => {
@@ -577,6 +775,9 @@ function DcManagerForm({
     setVehicleNo(dc.vehicleNo ?? "");
     setNotes(dc.notes ?? "");
     setQtyById(Object.fromEntries((dc.lines ?? []).map((l) => [l.bomLineId, String(l.qty)])));
+    setReturnMode(false);
+    setReturnNotes("");
+    setReturnQtyByLineId({});
   }, [dc.id, dc.status, dc.updatedAt]); // lines intentionally omitted — tied to updatedAt
 
   const editableLines = useMemo(() => {
@@ -625,6 +826,8 @@ function DcManagerForm({
     docDate: isDraft ? docDate : dc.docDate,
     status: dc.status,
     bomDocNo: dc.bomDocNo ?? bomDocNo,
+    quotationRef: dc.quotationRef ?? doc.quotationRef,
+    projectRef: doc.projectRef,
     customerName: dc.customerName ?? doc.customerName,
     location: doc.location,
     shipTo: isDraft ? shipTo.trim() || null : dc.shipTo,
@@ -680,7 +883,8 @@ function DcManagerForm({
           <Button
             size="sm"
             variant="primary"
-            disabled={Boolean(busy)}
+            disabled={Boolean(busy) || doc.status !== "confirmed"}
+            title={doc.status !== "confirmed" ? "Confirm the BOM before verifying this delivery challan" : undefined}
             onClick={async () => {
               const body = persist();
               if (!body) return;
@@ -711,8 +915,14 @@ function DcManagerForm({
           <Button
             size="sm"
             variant="primary"
-            disabled={Boolean(busy) || !canApprove}
-            title={!canApprove ? "Approvals permission required" : undefined}
+            disabled={Boolean(busy) || !canApprove || doc.status !== "confirmed"}
+            title={
+              doc.status !== "confirmed"
+                ? "Confirm the BOM before approving this delivery challan"
+                : !canApprove
+                  ? "Approvals permission required"
+                  : undefined
+            }
             onClick={async () => {
               const out = await run("dc-approve", () => bom.approveDc(dc.id), { success: "DC approved — stock out posted" });
               if (out) onClose();
@@ -736,28 +946,74 @@ function DcManagerForm({
       ) : null}
       {dc.status === "approved" && dc.stockPosted ? (
         <>
-          {!doc.invoiceId ? (
-            <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
-              <input type="checkbox" checked={selectedDcIds.includes(dc.id)} onChange={() => onToggleDc(dc.id)} />
-              Link on invoice
-            </label>
-          ) : null}
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={Boolean(busy)}
-            onClick={async () => {
-              if (!window.confirm(`Reverse ${dc.docNo} and return stock?`)) return;
-              const out = await run("dc-reverse", () => bom.reverseDc(dc.id), { success: "Delivery challan reversed" });
-              if (out) onClose();
-            }}
-          >
-            Reverse stock
-          </Button>
+          <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
+            <input
+              type="checkbox"
+              checked={selectedDcIds.includes(dc.id)}
+              disabled={Boolean(busy)}
+              onChange={() => onToggleDc(dc.id)}
+            />
+            {doc.invoiceId ? "Linked on invoice" : "Link on invoice"}
+          </label>
+          {selectedDcIds.includes(dc.id) ? (
+            <span style={{ fontSize: 12, opacity: 0.75 }}>Unlink from invoice before return/reverse</span>
+          ) : (
+            <>
+              <Button size="sm" disabled={Boolean(busy)} onClick={() => setReturnMode((v) => !v)}>
+                {returnMode ? "Hide return" : "Return unused"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  if (!window.confirm(`Reverse remaining stock on ${dc.docNo}? Partial returns already recorded stay in history.`)) return;
+                  const out = await run("dc-reverse", () => bom.reverseDc(dc.id), { success: "Delivery challan reversed" });
+                  if (out) onClose();
+                }}
+              >
+                Reverse remaining
+              </Button>
+            </>
+          )}
         </>
       ) : null}
     </>
   );
+
+  const submitReturn = async () => {
+    const lines = (dc.lines ?? [])
+      .map((l) => {
+        const qty = Number(returnQtyByLineId[l.id] ?? 0) || 0;
+        return { dcLineId: l.id, qty, max: Math.max(0, l.netQty ?? l.qty - (l.returnedQty ?? 0)), description: l.description, unit: l.unit };
+      })
+      .filter((l) => l.qty > 0);
+    if (!lines.length) {
+      window.alert("Enter at least one return quantity.");
+      return;
+    }
+    for (const line of lines) {
+      if (line.qty > line.max + 1e-9) {
+        window.alert(`Only ${line.max} ${line.unit} can still be returned for “${line.description}”.`);
+        return;
+      }
+    }
+    const out = await run(
+      "dc-return",
+      () =>
+        bom.returnDc(dc.id, {
+          notes: returnNotes.trim() || null,
+          lines: lines.map((l) => ({ dcLineId: l.dcLineId, qty: l.qty })),
+        }),
+      { success: "Unused materials returned to stock" },
+    );
+    if (out) {
+      setReturnMode(false);
+      setReturnNotes("");
+      setReturnQtyByLineId({});
+      onRefresh();
+    }
+  };
 
   return (
     <div className="ims-bom-dc-workspace">
@@ -830,6 +1086,7 @@ function DcManagerForm({
                         </span>
                       </div>
                       <Input
+                        className="ims-bom-dc-qty-input"
                         value={qtyById[line.bomLineId] ?? "0"}
                         onChange={(e) => setQtyById((prev) => ({ ...prev, [line.bomLineId]: e.target.value }))}
                         style={{ width: 120 }}
@@ -838,8 +1095,68 @@ function DcManagerForm({
                   ))}
                 </>
               ) : (
-                <div style={{ fontSize: 13, opacity: 0.8 }}>
-                  This challan is {BOM_DC_STATUS_LABEL[dc.status] ?? dc.status}. Use the toolbar to approve, reverse, or print — Live Preview shows the invoice-template sheet.
+                <div style={{ display: "grid", gap: 12 }}>
+                  <div style={{ fontSize: 13, opacity: 0.8 }}>
+                    This challan is {BOM_DC_STATUS_LABEL[dc.status] ?? dc.status}. Use the toolbar to approve, return unused materials, reverse remaining, or print.
+                  </div>
+                  {(dc.lines ?? []).map((line) => (
+                    <div key={line.id} style={{ fontSize: 13, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
+                      {line.description}{" "}
+                      <span style={{ opacity: 0.7 }}>
+                        · delivered {line.qty} {line.unit}
+                        {(line.returnedQty ?? 0) > 0 ? ` · returned ${line.returnedQty} · still out ${line.netQty}` : ""}
+                      </span>
+                    </div>
+                  ))}
+                  {returnMode && dc.status === "approved" && dc.stockPosted ? (
+                    <Card className="ims-bom-action-card">
+                      <Alert tone="amber" title="Return unused to store">
+                        Stock is received back against <b>{dc.docNo}</b>. Enter only unused quantities still out at site.
+                      </Alert>
+                      <Field label="Return notes">
+                        {({ id }) => <Textarea id={id} rows={2} value={returnNotes} onChange={(e) => setReturnNotes(e.target.value)} />}
+                      </Field>
+                      {(dc.lines ?? [])
+                        .filter((l) => (l.netQty ?? l.qty - (l.returnedQty ?? 0)) > 0)
+                        .map((line) => {
+                          const max = Math.max(0, line.netQty ?? line.qty - (line.returnedQty ?? 0));
+                          return (
+                            <div key={line.id} style={{ display: "grid", gap: 4, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
+                              <div style={{ fontSize: 13 }}>
+                                {line.description}{" "}
+                                <span style={{ opacity: 0.65 }}>
+                                  · returnable {max} {line.unit}
+                                </span>
+                              </div>
+                              <Input
+                                className="ims-bom-dc-qty-input"
+                                value={returnQtyByLineId[line.id] ?? ""}
+                                onChange={(e) => setReturnQtyByLineId((prev) => ({ ...prev, [line.id]: e.target.value }))}
+                                placeholder="0"
+                                style={{ width: 120 }}
+                              />
+                            </div>
+                          );
+                        })}
+                      <Button size="sm" variant="primary" disabled={Boolean(busy)} onClick={submitReturn}>
+                        {busy === "dc-return" ? "Returning…" : "Post return to stock"}
+                      </Button>
+                    </Card>
+                  ) : null}
+                  {(dc.returns ?? []).length ? (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>Return history</div>
+                      {(dc.returns ?? []).map((rtn) => (
+                        <div key={rtn.id} style={{ fontSize: 12, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 6 }}>
+                          <b>{rtn.returnNo}</b> · {rtn.returnDate}
+                          {rtn.createdByName ? ` · ${rtn.createdByName}` : ""}
+                          <div style={{ opacity: 0.75 }}>
+                            {rtn.lines.map((l) => `${l.description}: ${l.qty} ${l.unit}`).join(" · ")}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               )}
             </Card>

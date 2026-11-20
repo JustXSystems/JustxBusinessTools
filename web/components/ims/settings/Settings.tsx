@@ -50,6 +50,7 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
   "bomPaperDensity",
   "bomHideMargin",
   "bomConfirmNeedsApproval",
+  "bomRequireQuotationRef",
   "bomScheduleColumns",
   "poApprovalLimit",
   "draftPoPurgeDays",

@@ -69,7 +69,9 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
     return after > s.creditLimit ? { after, limit: s.creditLimit, over: round2(after - s.creditLimit) } : null;
   }, [summary.data, totals.grandTotal]);
 
+  const stockViaDc = Boolean(inv?.dcLinks?.length || inv?.dcIds?.length);
   const stockIssues = useMemo(() => {
+    if (stockViaDc) return [];
     const items = new Map((catalog.data ?? []).map((i) => [i.id, i]));
     const need = new Map<string, number>();
     for (const l of lines) if (l.itemId) need.set(l.itemId, (need.get(l.itemId) ?? 0) + Number(l.qty || 0));
@@ -77,7 +79,7 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
       .map(([itemId, qty]) => ({ item: items.get(itemId), qty }))
       .filter((x): x is { item: NonNullable<typeof x.item>; qty: number } => Boolean(x.item) && x.qty > (x.item?.currentStock ?? 0))
       .map((x) => ({ name: x.item.name, unit: x.item.unit, have: x.item.currentStock, need: x.qty }));
-  }, [catalog.data, lines]);
+  }, [catalog.data, lines, stockViaDc]);
 
   const gstinError = gstin.trim() && !GSTIN_RE.test(gstin.trim().toUpperCase()) ? "That doesn't look like a valid 15-character GSTIN" : null;
   const errors = {
@@ -131,19 +133,29 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
         await finance.updateInvoice(draft.invoice.id, body);
         return issue ? finance.issueInvoice(draft.invoice.id) : finance.invoice(draft.invoice.id);
       },
-      { success: issue ? "Invoice issued — stock updated" : "Draft saved" },
+      {
+        success: issue
+          ? stockViaDc
+            ? "Invoice issued — stock stays on linked DCs"
+            : "Invoice issued — stock updated"
+          : "Draft saved",
+      },
     );
     if (out) onClose(out.invoice.id);
   };
 
-  const blockedByStock = stockIssues.length > 0 && !settings.allowNegativeStock;
+  const blockedByStock = !stockViaDc && stockIssues.length > 0 && !settings.allowNegativeStock;
 
   return (
     <Stack gap={16}>
       <BackLink onClick={() => onClose(draft?.invoice.id ?? null)}>{draft ? "Back to invoice" : "All invoices"}</BackLink>
       <PageHeader
         title={draft ? "Edit draft invoice" : "New invoice"}
-        sub="Stock moves out when the invoice is issued. Drafts don't touch stock or the invoice number series."
+        sub={
+          stockViaDc
+            ? "Stock already moved on linked delivery challans — issuing won’t post stock again. Unlink DCs before changing item quantities."
+            : "Stock moves out when the invoice is issued. Drafts don't touch stock or the invoice number series."
+        }
         actions={
           inv?.sourceTool && inv.sourceTool !== "pos" ? (
             <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
@@ -157,6 +169,13 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
           ) : null
         }
       />
+
+      {stockViaDc ? (
+        <Alert tone="blue" title="Delivery challans linked">
+          {(inv?.dcLinks ?? []).map((d) => d.docNo).join(", ") || `${inv?.dcIds?.length ?? 0} DC(s)`} — stock stays on those DCs.
+          Item lines are locked while links remain; manage links on the invoice view.
+        </Alert>
+      ) : null}
 
       <Card interactive={false}>
         <div className="fin-doc-grid">
@@ -262,7 +281,19 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
             Round off total
           </label>
         </div>
-        <LineEditor lines={lines.length ? lines : []} onChange={setLines} intraState={intraState} price="selling" roundToRupee={roundToRupee} />
+        <LineEditor
+          lines={lines.length ? lines : []}
+          onChange={setLines}
+          intraState={intraState}
+          price="selling"
+          roundToRupee={roundToRupee}
+          readOnly={stockViaDc}
+        />
+        {stockViaDc ? (
+          <p className="ims-muted" style={{ fontSize: 12.5, marginTop: 8 }}>
+            Item lines are locked while delivery challans are linked.
+          </p>
+        ) : null}
         {touched && errors.lines ? (
           <p className="ims-neg" role="alert" style={{ fontSize: 12.5, marginTop: 6 }}>
             {errors.lines}
