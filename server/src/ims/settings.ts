@@ -454,48 +454,96 @@ const ClearOperationalInput = z.object({
   confirmName: z.string().trim().min(1).max(200),
 });
 
-/** Document-number sequences reset when operational docs are wiped. */
-const CLEAR_SEQ_KEYS = ["po", "invoice", "bill", "return", "check", "bom", "bom_dc", "bom_dc_rtn", "payrun"] as const;
+/**
+ * Never delete or update these — Quotation V1 (and other non-IMS tools) own them.
+ * Live customer quotes for orgs such as Zigma Technologies live in document_records,
+ * not in ims_* tables. Clear operational data must never touch this surface.
+ */
+const QUOTATION_AND_OUTSIDE_IMS_NEVER_TOUCH = [
+  "document_records",
+  "quotation_followup_reminders",
+  "platform_config",
+  "business_profiles",
+  "profile_tool_licenses",
+] as const;
+
+/** Only `DELETE FROM ims_<table> WHERE tenant_id = :tenantId` is allowed. */
+const CLEAR_SQL_RE = /^DELETE FROM (ims_[a-z0-9_]+) WHERE tenant_id = :tenantId$/i;
 
 /**
- * Tables wiped for a fresh Stock / BOM / DC / Invoice / Return / PO load.
- * Preserves settings, team, parties, item catalogue (stock zeroed), BOM packages, integrations.
+ * Child-first wipe of every IMS-created row for a fresh module load.
+ * Preserves settings, team (JBT user links), and integration connection config.
+ * Never touches Quotation V1 / document_records / other tools outside IMS.
  */
 const CLEAR_TABLES: ReadonlyArray<{ key: string; sql: string }> = [
+  { key: "events", sql: "DELETE FROM ims_events WHERE tenant_id = :tenantId" },
+  { key: "syncLog", sql: "DELETE FROM ims_sync_log WHERE tenant_id = :tenantId" },
+  { key: "arActivity", sql: "DELETE FROM ims_ar_activity WHERE tenant_id = :tenantId" },
+  { key: "documents", sql: "DELETE FROM ims_documents WHERE tenant_id = :tenantId" },
+  { key: "auditItems", sql: "DELETE FROM ims_audit_items WHERE tenant_id = :tenantId" },
+  { key: "bankTxns", sql: "DELETE FROM ims_bank_txns WHERE tenant_id = :tenantId" },
+  { key: "payments", sql: "DELETE FROM ims_payments WHERE tenant_id = :tenantId" },
+  { key: "paymentRuns", sql: "DELETE FROM ims_payment_runs WHERE tenant_id = :tenantId" },
+  { key: "ledgerEntries", sql: "DELETE FROM ims_ledger_entries WHERE tenant_id = :tenantId" },
+  { key: "expenses", sql: "DELETE FROM ims_expenses WHERE tenant_id = :tenantId" },
+  { key: "dailyClosings", sql: "DELETE FROM ims_daily_closings WHERE tenant_id = :tenantId" },
+  { key: "invoiceDcLinks", sql: "DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId" },
   { key: "bomDcReturnLines", sql: "DELETE FROM ims_bom_dc_return_lines WHERE tenant_id = :tenantId" },
   { key: "bomDcReturns", sql: "DELETE FROM ims_bom_dc_returns WHERE tenant_id = :tenantId" },
-  { key: "invoiceDcLinks", sql: "DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId" },
   { key: "bomDcLines", sql: "DELETE FROM ims_bom_dc_lines WHERE tenant_id = :tenantId" },
   { key: "bomDcs", sql: "DELETE FROM ims_bom_dcs WHERE tenant_id = :tenantId" },
-  { key: "bomDocLines", sql: "DELETE FROM ims_bom_doc_lines WHERE tenant_id = :tenantId" },
-  { key: "bomRevisions", sql: "DELETE FROM ims_bom_revisions WHERE tenant_id = :tenantId" },
   { key: "bomPdfBlobs", sql: "DELETE FROM ims_bom_pdf_blobs WHERE tenant_id = :tenantId" },
+  { key: "bomDocLines", sql: "DELETE FROM ims_bom_doc_lines WHERE tenant_id = :tenantId" },
   { key: "bomDocs", sql: "DELETE FROM ims_bom_docs WHERE tenant_id = :tenantId" },
-  { key: "arActivity", sql: "DELETE FROM ims_ar_activity WHERE tenant_id = :tenantId" },
-  { key: "paymentRuns", sql: "DELETE FROM ims_payment_runs WHERE tenant_id = :tenantId" },
-  { key: "payments", sql: "DELETE FROM ims_payments WHERE tenant_id = :tenantId" },
-  { key: "ledgerEntries", sql: "DELETE FROM ims_ledger_entries WHERE tenant_id = :tenantId" },
+  { key: "bomRevisions", sql: "DELETE FROM ims_bom_revisions WHERE tenant_id = :tenantId" },
+  { key: "bomRateCardLines", sql: "DELETE FROM ims_bom_rate_card_lines WHERE tenant_id = :tenantId" },
+  { key: "bomRateCards", sql: "DELETE FROM ims_bom_rate_cards WHERE tenant_id = :tenantId" },
+  { key: "bomPackageLines", sql: "DELETE FROM ims_bom_package_lines WHERE tenant_id = :tenantId" },
+  { key: "bomPackages", sql: "DELETE FROM ims_bom_packages WHERE tenant_id = :tenantId" },
+  { key: "movements", sql: "DELETE FROM ims_movements WHERE tenant_id = :tenantId" },
+  { key: "returns", sql: "DELETE FROM ims_returns WHERE tenant_id = :tenantId" },
+  { key: "stockChecks", sql: "DELETE FROM ims_stock_checks WHERE tenant_id = :tenantId" },
   { key: "invoices", sql: "DELETE FROM ims_invoices WHERE tenant_id = :tenantId" },
   { key: "bills", sql: "DELETE FROM ims_bills WHERE tenant_id = :tenantId" },
-  { key: "returns", sql: "DELETE FROM ims_returns WHERE tenant_id = :tenantId" },
   { key: "purchaseOrders", sql: "DELETE FROM ims_purchase_orders WHERE tenant_id = :tenantId" },
-  { key: "stockChecks", sql: "DELETE FROM ims_stock_checks WHERE tenant_id = :tenantId" },
-  { key: "movements", sql: "DELETE FROM ims_movements WHERE tenant_id = :tenantId" },
-  {
-    key: "importLinks",
-    sql: `DELETE FROM ims_links WHERE tenant_id = :tenantId AND target_type IN ('invoice', 'bill', 'return')`,
-  },
-  { key: "syncLog", sql: "DELETE FROM ims_sync_log WHERE tenant_id = :tenantId" },
+  { key: "fieldVisits", sql: "DELETE FROM ims_field_visits WHERE tenant_id = :tenantId" },
+  { key: "fieldCheckins", sql: "DELETE FROM ims_field_checkins WHERE tenant_id = :tenantId" },
+  { key: "fieldTasks", sql: "DELETE FROM ims_field_tasks WHERE tenant_id = :tenantId" },
+  { key: "exciseRecords", sql: "DELETE FROM ims_excise_records WHERE tenant_id = :tenantId" },
+  { key: "reports", sql: "DELETE FROM ims_reports WHERE tenant_id = :tenantId" },
+  { key: "tickets", sql: "DELETE FROM ims_tickets WHERE tenant_id = :tenantId" },
+  { key: "links", sql: "DELETE FROM ims_links WHERE tenant_id = :tenantId" },
+  { key: "items", sql: "DELETE FROM ims_items WHERE tenant_id = :tenantId" },
+  { key: "parties", sql: "DELETE FROM ims_parties WHERE tenant_id = :tenantId" },
+  { key: "sequences", sql: "DELETE FROM ims_sequences WHERE tenant_id = :tenantId" },
 ];
+
+function assertClearTablesAreImsOnly(): void {
+  const blocked = new Set(QUOTATION_AND_OUTSIDE_IMS_NEVER_TOUCH.map((t) => t.toLowerCase()));
+  for (const step of CLEAR_TABLES) {
+    const m = CLEAR_SQL_RE.exec(step.sql.trim());
+    if (!m) {
+      throw new Error(`IMS clear refused unsafe SQL for “${step.key}” — only DELETE FROM ims_* is allowed`);
+    }
+    const table = m[1]!.toLowerCase();
+    if (blocked.has(table) || !table.startsWith("ims_")) {
+      throw new Error(`IMS clear refused table “${table}” — Quotation / non-IMS data must never be touched`);
+    }
+  }
+}
+
+assertClearTablesAreImsOnly();
 
 export type ClearOperationalResult = {
   businessName: string;
   deleted: Record<string, number>;
-  itemsStockReset: number;
   sequencesCleared: number;
 };
 
-/** Platform-admin wipe of transactional IMS data for the active business profile. */
+/**
+ * Platform-admin wipe of all IMS-created data for the active business profile.
+ * Quotation V1 records (document_records / platform_config / reminders) are never modified.
+ */
 export async function clearOperationalData(deps: ImsDeps, actor: ImsActor, confirmName: string): Promise<ClearOperationalResult> {
   if (!isPlatformAdmin()) throw forbidden("Only a JBT Super Admin can clear IMS operational data");
   const settings = await getSettings(deps, actor.tenantId);
@@ -511,7 +559,7 @@ export async function clearOperationalData(deps: ImsDeps, actor: ImsActor, confi
         const res = await exec(conn, step.sql, { tenantId: actor.tenantId });
         deleted[step.key] = Number(res.affectedRows ?? 0);
       } catch (err) {
-        // Older deploys may lack BOM/DC tables — skip missing relations.
+        // Older deploys may lack BOM/DC/submodule tables — skip missing relations.
         const e = err as { code?: string; errno?: number };
         if (e.code === "ER_NO_SUCH_TABLE" || e.errno === 1146) {
           deleted[step.key] = 0;
@@ -521,27 +569,10 @@ export async function clearOperationalData(deps: ImsDeps, actor: ImsActor, confi
       }
     }
 
-    const stockRes = await exec(
-      conn,
-      `UPDATE ims_items SET current_stock = 0, damaged_stock = 0, last_movement_at = NULL
-       WHERE tenant_id = :tenantId AND (current_stock <> 0 OR damaged_stock <> 0 OR last_movement_at IS NOT NULL)`,
-      { tenantId: actor.tenantId },
-    );
-    const itemsStockReset = Number(stockRes.affectedRows ?? 0);
-
-    const seqPlaceholders = CLEAR_SEQ_KEYS.map((_, i) => `:k${i}`).join(", ");
-    const seqParams = Object.fromEntries(CLEAR_SEQ_KEYS.map((k, i) => [`k${i}`, k]));
-    const seqRes = await exec(
-      conn,
-      `DELETE FROM ims_sequences WHERE tenant_id = :tenantId AND seq_key IN (${seqPlaceholders})`,
-      { tenantId: actor.tenantId, ...seqParams },
-    );
-
     return {
       businessName: settings.businessName,
       deleted,
-      itemsStockReset,
-      sequencesCleared: Number(seqRes.affectedRows ?? 0),
+      sequencesCleared: deleted.sequences ?? 0,
     };
   });
 
@@ -549,7 +580,7 @@ export async function clearOperationalData(deps: ImsDeps, actor: ImsActor, confi
     type: "settings.clear_operational",
     entityType: "settings",
     entityId: String(actor.tenantId),
-    summary: `Cleared Stock, BOM, DC, Invoice, Return and PO data for ${result.businessName}`,
+    summary: `Cleared all IMS module data for ${result.businessName}`,
     payload: result,
   });
   await deps.host.audit(actor, "settings.clear_operational", "tenant", String(actor.tenantId), result).catch(() => undefined);

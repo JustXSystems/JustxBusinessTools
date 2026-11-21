@@ -133,8 +133,8 @@ export function DataTab() {
         return out;
       },
       {
-        success: "Operational data cleared",
-        description: "Stock, BOM, DC, Invoice, Return and PO are empty — ready for a fresh dataset.",
+        success: "IMS data cleared",
+        description: "Stock items and all IMS module data are empty — Quotation untouched; settings, team and integrations kept.",
       },
     );
 
@@ -181,10 +181,10 @@ export function DataTab() {
       {isPlatformAdmin ? (
         <SectionCard
           title="Clear operational data"
-          desc="JBT Super Admin only. Permanently delete Stock movements, BOM documents, delivery challans, invoices, returns and purchase orders for this business profile so you can load a fresh dataset."
+          desc="JBT Super Admin only. Permanently delete every IMS-created row for this business — stock items, parties, BOM packages, documents, finance, field, audit and other submodules — so you can load a fresh dataset."
         >
           <Alert tone="coral" title="Irreversible for this profile">
-            Keeps settings, team, parties, item catalogue and BOM packages. Zeros on-hand stock, resets document numbering for those docs, and removes supplier bills / payments tied to them. Active business: <strong>{businessName || "—"}</strong>.
+            Deletes stock items and all IMS module / submodule data. Keeps IMS settings, team roles and integration connection config. Never touches Quotation V1 (or any other non-IMS tool) — live quotes stay intact. Active business: <strong>{businessName || "—"}</strong>.
           </Alert>
           <div style={{ marginTop: 14 }}>
             <Button
@@ -197,7 +197,7 @@ export function DataTab() {
                 setClearOpen(true);
               }}
             >
-              Clear Stock, BOM, DC, Invoice, Return &amp; PO…
+              Clear all IMS data…
             </Button>
           </div>
 
@@ -208,8 +208,8 @@ export function DataTab() {
               setClearOpen(false);
               setConfirmName("");
             }}
-            title="Clear operational IMS data?"
-            description={`This deletes Stock, BOM, DC, Invoice, Return and PO data for “${businessName}”. Type the business name to confirm.`}
+            title="Clear all IMS data?"
+            description={`This deletes stock items and every IMS module record for “${businessName}”. Quotation module data is never touched. Settings, team and integrations stay. Type the business name to confirm.`}
             icon={{ tone: "coral", name: "warning" }}
             dismissible={busy !== "clear-ops"}
             actions={

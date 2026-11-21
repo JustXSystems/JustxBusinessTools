@@ -1560,7 +1560,7 @@ function BomEditorForm({
 
           {!sections.length ? (
             <Card>
-              <EmptyState icon="list" title="No sections yet">
+              <EmptyState icon="layers" title="No sections yet">
                 {`Add the default sections for ${bomIndustryPackMeta(docPack).label}, or create a custom section.`}
               </EmptyState>
             </Card>

@@ -528,12 +528,11 @@ export const ims = {
 
   settings: () => get<ImsSettingsMeta>("/settings"),
   saveSettings: (input: Partial<Omit<ImsSettings, "exciseActive">>) => put<{ settings: ImsSettings }>("/settings", input),
-  /** JBT Super Admin only — wipe Stock / BOM / DC / Invoice / Return / PO for a fresh dataset. */
+  /** JBT Super Admin only — wipe all IMS-created module data (keeps settings, team, integrations). */
   clearOperational: (confirmName: string) =>
     post<{
       businessName: string;
       deleted: Record<string, number>;
-      itemsStockReset: number;
       sequencesCleared: number;
     }>("/settings/clear-operational", { confirmName }),
   team: () => get<{ members: ImsMember[]; canManage: boolean }>("/team"),

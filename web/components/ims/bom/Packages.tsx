@@ -457,7 +457,7 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
 
       {!sections.length ? (
         <Card>
-          <EmptyState icon="list" title="No sections yet">
+          <EmptyState icon="layers" title="No sections yet">
             {`Add the default sections for ${packMeta.label}, or create a custom section.`}
           </EmptyState>
         </Card>
