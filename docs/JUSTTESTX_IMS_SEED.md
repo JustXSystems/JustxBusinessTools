@@ -10,14 +10,16 @@ Pairs with the BOS pack (`docs/JUSTTESTX_BOS_SEED.md`); same org/profile/login. 
 |-------|---------|
 | **JBT** | Same **JustTestX** profile (created if missing), **imsdealer** enabled in `tool_catalog` |
 | **Login** | `santhosh.hs@justxsystems.com` as **owner** (password only for new users, or with `--set-password`) |
-| **IMS window** | Rolling **~2 years → today** (Asia/Kolkata), e.g. 2024-10-24 → 2026-10-24 |
-| **Catalog** | ~35 SKUs (LED/bulbs/switches/wire/fixtures + inactive), opening stock + ledger |
-| **Parties** | Customers + suppliers (GSTIN, terms, cities) |
-| **Purchasing** | Monthly POs (draft / pending / sent / partial / received / rejected / cancelled) + vendor bills + AP payments |
-| **Sales** | ~195 invoices across the window (issued / draft / cancelled), GST intra/inter, AR activity |
-| **Stock** | Chronological IN → OUT movements (~600+), damages, adjustments, customer/supplier returns |
-| **Ops** | Stock checks, expenses, month closings, payment runs, field tasks/visits/check-ins |
-| **Bank / audit** | Matched NEFT lines + 1 unmatched, audit items, support tickets, reports, sync log |
+| **IMS window** | Rolling **~2 years → today** (Asia/Kolkata) |
+| **Catalog** | ~35 SKUs (LED/bulbs/switches/wire/networking + inactive), high opening stock + ledger |
+| **Parties** | Customers + suppliers (GSTIN, terms, cities; unregistered SME included) |
+| **Purchasing** | ~3 POs/month (draft / pending / approved / sent / partial / received / rejected / cancelled) + bills (incl. cancelled / on_hold) + AP payments |
+| **Sales** | Near-daily high volume (1–3 invoices per workday; issued / draft / cancelled), GST intra/inter, POS-sourced, disputed, AR reminders/promises |
+| **Stock** | Chronological IN → OUT (~thousands), damages, adjustments, customer/supplier returns (open/completed/cancelled) |
+| **BOM** | Packages, rate cards, BOM docs (draft/confirmed/cancelled), DCs (draft/verified/approved/cancelled), DC returns, revisions, invoice↔DC links |
+| **Ops** | Stock checks, expenses, daily closings, payment runs, field tasks/visits/check-ins, excise samples |
+| **Bank / audit** | Matched NEFT + unmatched + ignored, audit items, support tickets, sync log (success/partial/failed) |
+| **Reports** | Saved schedule for **every** runnable type (stock in/out, full stock, damage, PO, sales, AR/AP aging, margin, suppliers, onsite, low/dead stock) with custom full-window params; GST rate mix (5/12/18%), B2CL, AR 90+ / AP aging, damage density, dead-stock residuals, field GPS km |
 
 Scripts live under `server/scripts/justtestx/` (`seed-ims.ts`, `wipe-ims.ts`, `audit-ims.ts`, `ims-scenario.ts`).
 

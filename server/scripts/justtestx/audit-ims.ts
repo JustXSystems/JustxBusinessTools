@@ -70,11 +70,18 @@ async function main() {
     ["audit", "ims_audit_items"],
     ["tickets", "ims_tickets"],
     ["reports", "ims_reports"],
+    ["bom_packages", "ims_bom_packages"],
+    ["bom_docs", "ims_bom_docs"],
+    ["bom_dcs", "ims_bom_dcs"],
+    ["bom_rate_cards", "ims_bom_rate_cards"],
+    ["excise", "ims_excise_records"],
   ] as const) {
     coverage[k] = await count(`SELECT COUNT(*) AS n FROM ${table} WHERE tenant_id = :t`, { t });
     if (coverage[k]! <= 0) bad(`Empty: ${k}`);
     else pass(`${k}=${coverage[k]}`);
   }
+  if ((coverage.invoices ?? 0) < 400) soft(`Invoice volume only ${coverage.invoices} (want ≥400 for everyday high-volume)`);
+  else pass(`High-volume invoices=${coverage.invoices}`);
   console.log("\n=== COVERAGE ===");
   console.log(coverage);
 
@@ -90,6 +97,8 @@ async function main() {
     ["ims_bank_txns", "status"],
     ["ims_audit_items", "status"],
     ["ims_tickets", "status"],
+    ["ims_bom_docs", "status"],
+    ["ims_bom_dcs", "status"],
   ] as const) {
     const d = await many<{ k: string; n: number }>(`SELECT ${col} AS k, COUNT(*) AS n FROM ${table} WHERE tenant_id = :t GROUP BY ${col}`, { t });
     console.log(`${table}.${col}:`, d.map((x) => `${x.k}=${x.n}`).join(", ") || "(none)");
@@ -155,11 +164,30 @@ async function main() {
     ["PO received", `SELECT COUNT(*) AS n FROM ims_purchase_orders WHERE tenant_id = :t AND status = 'received'`],
     ["PO draft/pending", `SELECT COUNT(*) AS n FROM ims_purchase_orders WHERE tenant_id = :t AND status IN ('draft','pending_approval')`],
     ["unmatched bank", `SELECT COUNT(*) AS n FROM ims_bank_txns WHERE tenant_id = :t AND status = 'unmatched'`],
+    ["ignored bank", `SELECT COUNT(*) AS n FROM ims_bank_txns WHERE tenant_id = :t AND status = 'ignored'`],
     ["customer returns", `SELECT COUNT(*) AS n FROM ims_returns WHERE tenant_id = :t AND kind = 'customer'`],
     ["supplier returns", `SELECT COUNT(*) AS n FROM ims_returns WHERE tenant_id = :t AND kind = 'supplier'`],
     ["field visits", `SELECT COUNT(*) AS n FROM ims_field_visits WHERE tenant_id = :t`],
     ["audit open", `SELECT COUNT(*) AS n FROM ims_audit_items WHERE tenant_id = :t AND status = 'open'`],
     ["low stock items", `SELECT COUNT(*) AS n FROM ims_items WHERE tenant_id = :t AND active = 1 AND current_stock <= min_stock`],
+    ["PO approved", `SELECT COUNT(*) AS n FROM ims_purchase_orders WHERE tenant_id = :t AND status = 'approved'`],
+    ["bill cancelled", `SELECT COUNT(*) AS n FROM ims_bills WHERE tenant_id = :t AND status = 'cancelled'`],
+    ["BOM draft", `SELECT COUNT(*) AS n FROM ims_bom_docs WHERE tenant_id = :t AND status = 'draft'`],
+    ["BOM confirmed", `SELECT COUNT(*) AS n FROM ims_bom_docs WHERE tenant_id = :t AND status = 'confirmed'`],
+    ["BOM cancelled", `SELECT COUNT(*) AS n FROM ims_bom_docs WHERE tenant_id = :t AND status = 'cancelled'`],
+    ["DC draft", `SELECT COUNT(*) AS n FROM ims_bom_dcs WHERE tenant_id = :t AND status = 'draft'`],
+    ["DC verified", `SELECT COUNT(*) AS n FROM ims_bom_dcs WHERE tenant_id = :t AND status = 'verified'`],
+    ["DC approved", `SELECT COUNT(*) AS n FROM ims_bom_dcs WHERE tenant_id = :t AND status = 'approved'`],
+    ["DC cancelled", `SELECT COUNT(*) AS n FROM ims_bom_dcs WHERE tenant_id = :t AND status = 'cancelled'`],
+    ["BOM DC returns", `SELECT COUNT(*) AS n FROM ims_bom_dc_returns WHERE tenant_id = :t`],
+    ["BOM rate cards", `SELECT COUNT(*) AS n FROM ims_bom_rate_cards WHERE tenant_id = :t`],
+    ["excise rows", `SELECT COUNT(*) AS n FROM ims_excise_records WHERE tenant_id = :t`],
+    ["damage/write-off moves", `SELECT COUNT(*) AS n FROM ims_movements WHERE tenant_id = :t AND type IN ('DAMAGE','WRITE_OFF')`],
+    ["AR over 90 days", `SELECT COUNT(*) AS n FROM ims_invoices WHERE tenant_id = :t AND status = 'issued' AND grand_total - amount_paid > 0.005 AND due_date < DATE_SUB(:today, INTERVAL 90 DAY)`],
+    ["dead-ish idle items", `SELECT COUNT(*) AS n FROM ims_items WHERE tenant_id = :t AND active = 1 AND current_stock > 0 AND last_movement_at < DATE_SUB(:today, INTERVAL 90 DAY)`],
+    ["saved reports all types", `SELECT COUNT(DISTINCT report_type) AS n FROM ims_reports WHERE tenant_id = :t`],
+    ["field checkins with GPS", `SELECT COUNT(*) AS n FROM ims_field_checkins WHERE tenant_id = :t AND lat IS NOT NULL`],
+    ["B2C unregistered invoices", `SELECT COUNT(*) AS n FROM ims_invoices WHERE tenant_id = :t AND status = 'issued' AND (customer_gstin IS NULL OR customer_gstin = '')`],
   ];
   console.log("\n=== SCENARIOS ===");
   for (const [label, sql] of need) {

@@ -6,6 +6,7 @@
  *   JUSTTESTX_CONFIRM=YES npm run db:seed:justtestx:ims -w server -- --reset
  */
 import "dotenv/config";
+import bcrypt from "bcryptjs";
 import type { PoolConnection } from "mysql2/promise";
 import { pool } from "../../src/db.js";
 import {
@@ -29,17 +30,93 @@ import {
   buildImsWorld,
   itemId,
   partyId,
+  type FieldStaff,
 } from "./ims-scenario.js";
+import { OWNER_PASSWORD } from "./scenario.js";
 
 type Counts = Record<string, number>;
 
-async function seedIms(conn: PoolConnection, tenantId: number, userId: number): Promise<Counts> {
+const FIELD_STAFF_DEFS = [
+  { email: "field.arjun@justtestx.example", name: "Arjun Field", role: "field", phone: "+91 98765 22001" },
+  { email: "field.meera@justtestx.example", name: "Meera Onsite", role: "field", phone: "+91 98765 22002" },
+  { email: "field.vikram@justtestx.example", name: "Vikram Route", role: "field", phone: "+91 98765 22003" },
+  { email: "accounts.priya@justtestx.example", name: "Priya Accounts", role: "accountant", phone: "+91 98765 22004" },
+] as const;
+
+async function ensureFieldStaff(
+  conn: PoolConnection,
+  orgId: number,
+  profileId: number,
+  owner: FieldStaff,
+): Promise<FieldStaff[]> {
+  await exec(
+    conn,
+    `INSERT INTO ims_members (tenant_id, user_id, display_name, ims_role, is_account_manager, active)
+     VALUES (:t, :userId, :name, 'owner', 1, 1)
+     ON DUPLICATE KEY UPDATE display_name = VALUES(display_name), ims_role = 'owner', active = 1`,
+    { t: profileId, userId: owner.userId, name: owner.name },
+  );
+  const hash = await bcrypt.hash(OWNER_PASSWORD, 10);
+  const staff: FieldStaff[] = [owner];
+  for (const def of FIELD_STAFF_DEFS) {
+    const existing = await q(conn, `SELECT id FROM users WHERE email = :email LIMIT 1`, { email: def.email });
+    let uid: number;
+    if (existing[0]) {
+      uid = Number(existing[0].id);
+      await exec(conn, `UPDATE users SET name = :name, status = 'active' WHERE id = :id`, { name: def.name, id: uid });
+    } else {
+      const ins = await exec(
+        conn,
+        `INSERT INTO users (email, password_hash, name, status) VALUES (:email, :hash, :name, 'active')`,
+        { email: def.email, hash, name: def.name },
+      );
+      uid = ins.insertId;
+    }
+    await exec(
+      conn,
+      `INSERT INTO org_members (organization_id, user_id, role)
+       VALUES (:orgId, :userId, 'staff')
+       ON DUPLICATE KEY UPDATE role = VALUES(role)`,
+      { orgId, userId: uid },
+    );
+    await exec(conn, `INSERT IGNORE INTO branch_access (user_id, business_profile_id) VALUES (:userId, :profileId)`, {
+      userId: uid,
+      profileId,
+    });
+    await exec(
+      conn,
+      `INSERT INTO ims_members (tenant_id, user_id, display_name, ims_role, phone, is_account_manager, active)
+       VALUES (:t, :userId, :name, :role, :phone, :am, 1)
+       ON DUPLICATE KEY UPDATE display_name = VALUES(display_name), ims_role = VALUES(ims_role), phone = VALUES(phone), active = 1`,
+      {
+        t: profileId,
+        userId: uid,
+        name: def.name,
+        role: def.role,
+        phone: def.phone,
+        am: def.role === "accountant" ? 1 : 0,
+      },
+    );
+    if (def.role === "field") staff.push({ userId: uid, name: def.name });
+  }
+  return staff;
+}
+
+async function seedIms(
+  conn: PoolConnection,
+  tenantId: number,
+  userId: number,
+  orgId: number,
+): Promise<Counts> {
   const counts: Counts = {};
   const bump = (k: string, n = 1) => {
     counts[k] = (counts[k] ?? 0) + n;
   };
   const t = tenantId;
   const byName = OWNER_NAME;
+
+  const fieldStaff = await ensureFieldStaff(conn, orgId, tenantId, { userId, name: OWNER_NAME });
+  bump("field_staff", fieldStaff.length);
 
   await exec(
     conn,
@@ -56,7 +133,8 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
      ON DUPLICATE KEY UPDATE
        business_name = VALUES(business_name), business_type = VALUES(business_type), taxonomy = VALUES(taxonomy),
        reminders = VALUES(reminders), permissions = VALUES(permissions), terms = VALUES(terms),
-       bom_paper_template = VALUES(bom_paper_template)`,
+       bom_paper_template = VALUES(bom_paper_template), excise_enabled = VALUES(excise_enabled),
+       allow_negative_stock = VALUES(allow_negative_stock)`,
     {
       t,
       ...IMS_SETTINGS,
@@ -99,10 +177,21 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
     bump("parties");
   }
 
-  const world = buildImsWorld(userId);
+  const world = buildImsWorld(userId, fieldStaff);
+
+  const lastMoveAt = new Map<string, string>();
+  const damagedQty = new Map<string, number>();
+  for (const m of world.movements) {
+    const iid = String(m.itemId);
+    const d = String(m.date);
+    if (!lastMoveAt.has(iid) || d >= (lastMoveAt.get(iid) ?? "")) lastMoveAt.set(iid, d);
+    if (m.type === "DAMAGE") damagedQty.set(iid, (damagedQty.get(iid) ?? 0) + Number(m.qty));
+  }
 
   for (const it of world.items) {
     const stock = world.finalStock.get(it.key) ?? 0;
+    const iid = itemId(it.key);
+    const lastAt = lastMoveAt.get(iid);
     await exec(
       conn,
       `INSERT INTO ims_items
@@ -112,9 +201,9 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
        VALUES
         (:id, :t, :name, :sku, :barcode, :category, :brand, :unit, :hsn, :gst, :supplierId,
          :purchase, :sell, :mrp, :stock, :damaged, :min, :max, :reorder,
-         :location, :notes, :active, CURRENT_TIMESTAMP, :userId)`,
+         :location, :notes, :active, :lastMove, :userId)`,
       {
-        id: itemId(it.key),
+        id: iid,
         t,
         name: it.name,
         sku: it.sku,
@@ -129,13 +218,14 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
         sell: it.sell,
         mrp: it.mrp,
         stock,
-        damaged: it.key === "led12" ? 5 : 0,
+        damaged: damagedQty.get(iid) ?? 0,
         min: it.min,
         max: it.max,
         reorder: it.reorder,
         location: it.location,
         notes: it.key === "inactive" ? "Discontinued — do not reorder" : null,
         active: it.key === "inactive" ? 0 : 1,
+        lastMove: lastAt ? `${lastAt} 18:00:00` : null,
         userId,
       },
     );
@@ -169,15 +259,16 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
       conn,
       `INSERT INTO ims_purchase_orders
         (id, tenant_id, po_no, status, supplier_id, supplier_name, supplier_snapshot, business_snapshot,
-         order_date, expected_date, \`lines\`, subtotal, tax_total, grand_total, notes,
+         order_date, expected_date, \`lines\`, subtotal, tax_total, grand_total, notes, bom_doc_id,
          decided_by, decided_by_name, decided_at, sent_at, received_at, created_by, created_by_name)
        VALUES
         (:id, :t, :poNo, :status, :supplierId, :supplierName, :supplierSnapshot, :businessSnapshot,
-         :orderDate, :expectedDate, :lines, :subtotal, :taxTotal, :grandTotal, :notes,
+         :orderDate, :expectedDate, :lines, :subtotal, :taxTotal, :grandTotal, :notes, :bomDocId,
          :decidedBy, :byName, :decidedAt, :sentAt, :receivedAt, :userId, :byName)`,
       {
         ...po,
         t,
+        bomDocId: po.bomDocId ?? null,
         supplierSnapshot: JSON.stringify(po.supplierSnapshot),
         businessSnapshot: JSON.stringify(po.businessSnapshot),
         lines: JSON.stringify(po.lines),
@@ -221,15 +312,16 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
         (id, tenant_id, invoice_no, status, customer_id, customer_name, customer_gstin, customer_address, customer_mobile,
          place_of_supply, intra_state, invoice_date, due_date, \`lines\`, subtotal, discount_total, tax_total,
          cgst, sgst, igst, round_off, grand_total, amount_paid, pay_mode, stock_posted, disputed, dispute_reason,
-         promise_date, promise_amount, source_tool, notes, issued_at, cancelled_at, cancel_reason, created_by, created_by_name)
+         promise_date, promise_amount, source_tool, account_manager_name, notes, issued_at, cancelled_at, cancel_reason, created_by, created_by_name)
        VALUES
         (:id, :t, :invoiceNo, :status, :customerId, :customerName, :customerGstin, :customerAddress, :customerMobile,
          :placeOfSupply, :intraState, :invoiceDate, :dueDate, :lines, :subtotal, :discountTotal, :taxTotal,
          :cgst, :sgst, :igst, :roundOff, :grandTotal, :amountPaid, :payMode, :stockPosted, :disputed, :disputeReason,
-         :promiseDate, :promiseAmount, :sourceTool, :notes, :issuedAt, :cancelledAt, :cancelReason, :userId, :byName)`,
+         :promiseDate, :promiseAmount, :sourceTool, :accountManagerName, :notes, :issuedAt, :cancelledAt, :cancelReason, :userId, :byName)`,
       {
         ...inv,
         t,
+        accountManagerName: inv.accountManagerName ?? byName,
         lines: JSON.stringify(inv.lines),
         userId,
         byName,
@@ -287,9 +379,9 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
     await exec(
       conn,
       `INSERT INTO ims_expenses
-        (id, tenant_id, expense_date, category, description, amount, pay_method, vendor, created_by, created_by_name)
-       VALUES (:id, :t, :expenseDate, :category, :description, :amount, :payMethod, :vendor, :userId, :byName)`,
-      { ...e, t, userId, byName },
+        (id, tenant_id, expense_date, category, description, amount, gst_amount, pay_method, vendor, created_by, created_by_name)
+       VALUES (:id, :t, :expenseDate, :category, :description, :amount, :gstAmount, :payMethod, :vendor, :userId, :byName)`,
+      { ...e, gstAmount: e.gstAmount ?? 0, t, userId, byName },
     );
     bump("expenses");
   }
@@ -394,10 +486,10 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
     await exec(
       conn,
       `INSERT INTO ims_field_checkins
-        (id, tenant_id, user_id, user_name, kind, field_status, lat, lng, accuracy_m, site_name, task_id, note, ping_date)
+        (id, tenant_id, user_id, user_name, kind, field_status, lat, lng, accuracy_m, site_name, task_id, note, ping_date, created_at)
        VALUES
-        (:id, :t, :userId, :userName, :kind, :fieldStatus, :lat, :lng, :accuracyM, :siteName, :taskId, :note, :pingDate)`,
-      { ...f, t },
+        (:id, :t, :userId, :userName, :kind, :fieldStatus, :lat, :lng, :accuracyM, :siteName, :taskId, :note, :pingDate, :createdAt)`,
+      { ...f, t, createdAt: f.createdAt ?? `${f.pingDate} 12:00:00` },
     );
     bump("field_checkins");
   }
@@ -407,11 +499,15 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
       conn,
       `INSERT INTO ims_field_visits
         (id, tenant_id, user_id, user_name, visit_date, site_name, party_id, party_name, purpose, task_id, address,
-         in_lat, in_lng, checked_out_at, out_lat, out_lng, summary, outcome, next_visit_on)
+         in_lat, in_lng, checked_in_at, checked_out_at, out_lat, out_lng, summary, outcome, next_visit_on)
        VALUES
         (:id, :t, :userId, :userName, :visitDate, :siteName, :partyId, :partyName, :purpose, :taskId, :address,
-         :inLat, :inLng, :checkedOutAt, :outLat, :outLng, :summary, :outcome, :nextVisitOn)`,
-      { ...f, t },
+         :inLat, :inLng, :checkedInAt, :checkedOutAt, :outLat, :outLng, :summary, :outcome, :nextVisitOn)`,
+      {
+        ...f,
+        t,
+        checkedInAt: f.checkedInAt ?? `${f.visitDate} 09:15:00`,
+      },
     );
     bump("field_visits");
   }
@@ -437,13 +533,21 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
     await exec(
       conn,
       `INSERT INTO ims_audit_items
-        (id, tenant_id, kind, area, title, detail, entity_type, entity_id, severity, status, raised_by, raised_by_name, resolved_at)
+        (id, tenant_id, kind, area, title, detail, entity_type, entity_id, entity_label, severity, status, thread,
+         assignee_user_id, assignee_name, amount, due_date, raised_by, raised_by_name, resolved_at)
        VALUES
-        (:id, :t, :kind, :area, :title, :detail, :entityType, :entityId, :severity, :status, :userId, :byName, :resolvedAt)`,
+        (:id, :t, :kind, :area, :title, :detail, :entityType, :entityId, :entityLabel, :severity, :status, :thread,
+         :assigneeUserId, :assigneeName, :amount, :dueDate, :userId, :byName, :resolvedAt)`,
       {
         ...a,
         t,
         detail: `${a.title} — JustTestX seed`,
+        entityLabel: a.entityLabel ?? null,
+        thread: JSON.stringify(a.thread ?? []),
+        assigneeUserId: a.assigneeUserId ?? null,
+        assigneeName: a.assigneeName ?? null,
+        amount: a.amount ?? null,
+        dueDate: a.dueDate ?? null,
         resolvedAt: a.status === "resolved" || a.status === "dismissed" ? `${IMS_TODAY} 12:00:00` : null,
         userId,
         byName,
@@ -456,12 +560,18 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
     await exec(
       conn,
       `INSERT INTO ims_tickets
-        (id, tenant_id, ticket_no, subject, priority, status, description, raised_by, raised_by_name, resolved_at)
+        (id, tenant_id, ticket_no, subject, category, priority, status, description, thread,
+         raised_by, raised_by_name, assigned_to, assigned_to_name, resolved_at)
        VALUES
-        (:id, :t, :ticketNo, :subject, :priority, :status, :description, :userId, :raisedByName, :resolvedAt)`,
+        (:id, :t, :ticketNo, :subject, :category, :priority, :status, :description, :thread,
+         :userId, :raisedByName, :assignedTo, :assignedToName, :resolvedAt)`,
       {
         ...tk,
         t,
+        category: tk.category ?? "general",
+        thread: JSON.stringify(tk.thread ?? []),
+        assignedTo: tk.assignedTo ?? null,
+        assignedToName: tk.assignedToName ?? null,
         userId,
         resolvedAt: ["resolved", "closed"].includes(String(tk.status)) ? `${IMS_TODAY} 12:00:00` : null,
       },
@@ -479,7 +589,12 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
       {
         ...r,
         t,
-        params: JSON.stringify({}),
+        params: JSON.stringify({
+          period: r.period ?? "custom",
+          from: r.from ?? IMS_WINDOW_START,
+          to: r.to ?? IMS_TODAY,
+          filters: r.filters ?? {},
+        }),
         approvedBy: ["approved", "sent"].includes(String(r.approvalStatus)) ? userId : null,
         approvedAt: ["approved", "sent"].includes(String(r.approvalStatus)) ? `${IMS_TODAY} 10:00:00` : null,
         userId,
@@ -493,9 +608,23 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
     await exec(
       conn,
       `INSERT INTO ims_documents
-        (id, tenant_id, title, category, entity_type, entity_id, notes, uploaded_by, uploaded_by_name)
-       VALUES (:id, :t, :title, :category, :entityType, :entityId, 'JustTestX vault seed', :userId, :byName)`,
-      { ...d, t, userId, byName },
+        (id, tenant_id, title, category, period, entity_type, entity_id, entity_label, notes,
+         file_name, mime, size_bytes, content, uploaded_by, uploaded_by_name)
+       VALUES
+        (:id, :t, :title, :category, :period, :entityType, :entityId, :entityLabel, 'JustTestX vault seed',
+         :fileName, :mime, :sizeBytes, :content, :userId, :byName)`,
+      {
+        ...d,
+        t,
+        period: d.period ?? null,
+        entityLabel: d.entityLabel ?? null,
+        fileName: d.fileName ?? null,
+        mime: d.mime ?? null,
+        sizeBytes: d.sizeBytes ?? null,
+        content: d.content ?? null,
+        userId,
+        byName,
+      },
     );
     bump("documents");
   }
@@ -503,15 +632,15 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
   await exec(
     conn,
     `INSERT INTO ims_integrations (tenant_id, provider, enabled, config, sync, last_status, updated_by)
-     VALUES (:t, 'tally', 0, :config, :sync, 'ok', :userId)
-     ON DUPLICATE KEY UPDATE config = VALUES(config)`,
-    { t, config: JSON.stringify({ host: "127.0.0.1", port: 9000, company: COMPANY }), sync: JSON.stringify({ invoices: true, parties: true }), userId },
+     VALUES (:t, 'tally', 1, :config, :sync, 'ok', :userId)
+     ON DUPLICATE KEY UPDATE config = VALUES(config), enabled = 1, last_status = 'ok'`,
+    { t, config: JSON.stringify({ host: "127.0.0.1", port: 9000, company: COMPANY }), sync: JSON.stringify({ invoices: true, parties: true, bills: true }), userId },
   );
   await exec(
     conn,
     `INSERT INTO ims_integrations (tenant_id, provider, enabled, config, sync, last_status, updated_by)
-     VALUES (:t, 'pos', 0, :config, :sync, 'error', :userId)
-     ON DUPLICATE KEY UPDATE config = VALUES(config)`,
+     VALUES (:t, 'pos', 1, :config, :sync, 'error', :userId)
+     ON DUPLICATE KEY UPDATE config = VALUES(config), enabled = 1`,
     { t, config: JSON.stringify({ provider: "generic" }), sync: JSON.stringify({ sales: true }), userId },
   );
   bump("integrations", 2);
@@ -526,6 +655,189 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
     bump("sync_log");
   }
 
+  // ——— BOM submodule ———
+  for (const p of world.bom.packages) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_packages
+        (id, tenant_id, code, name, capacity_label, description, default_margin_pct, default_tax_pct, active,
+         revision, effective_from, effective_to, variables_json, options_json, created_by, created_by_name)
+       VALUES
+        (:id, :t, :code, :name, :capacityLabel, :description, :defaultMarginPct, :defaultTaxPct, :active,
+         :revision, :effectiveFrom, :effectiveTo, :variablesJson, :optionsJson, :userId, :byName)`,
+      { ...p, t, userId, byName },
+    );
+    bump("bom_packages");
+  }
+  for (const l of world.bom.packageLines) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_package_lines
+        (id, tenant_id, package_id, section, sort_no, line_kind, item_id, description, make_text, qty, unit,
+         scale_by_capacity, default_rate, cost_rate, remarks, active, optional_flag, option_key, service_spare, scrap_pct)
+       VALUES
+        (:id, :t, :packageId, :section, :sortNo, :lineKind, :itemId, :description, :makeText, :qty, :unit,
+         :scaleByCapacity, :defaultRate, :costRate, :remarks, :active, :optionalFlag, :optionKey, :serviceSpare, :scrapPct)`,
+      { ...l, t },
+    );
+    bump("bom_package_lines");
+  }
+  for (const r of world.bom.rateCards) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_rate_cards
+        (id, tenant_id, code, name, currency, valid_from, valid_to, active, notes, created_by, created_by_name)
+       VALUES (:id, :t, :code, :name, :currency, :validFrom, :validTo, :active, :notes, :userId, :byName)`,
+      { ...r, t, userId, byName },
+    );
+    bump("bom_rate_cards");
+  }
+  for (const l of world.bom.rateCardLines) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_rate_card_lines
+        (id, tenant_id, rate_card_id, item_id, sku, description, unit, rate, cost_rate, sort_no, active)
+       VALUES (:id, :t, :rateCardId, :itemId, :sku, :description, :unit, :rate, :costRate, :sortNo, :active)`,
+      { ...l, t },
+    );
+    bump("bom_rate_card_lines");
+  }
+  for (const d of world.bom.docs) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_docs
+        (id, tenant_id, package_id, package_name, doc_no, status, doc_date, capacity_label, title, customer_name, location,
+         project_ref, quotation_ref, party_id, margin_pct, tax_pct, materials_total, margin_amount, tax_amount, grand_total,
+         materials_cost, notes, prepared_by, valid_until, payment_terms, delivery_terms, warranty_terms, scope_of_supply, exclusions,
+         invoice_id, invoice_convert_mode, revision, parent_doc_id, variables_json, options_json,
+         proposal_token, proposal_status, proposal_sent_at, proposal_responded_at, proposal_response_note, rate_card_id,
+         stock_issued_at, stock_issue_count, as_built_at, as_built_json,
+         pdf_artifact_id, pdf_sha256, pdf_generated_at, created_by, created_by_name)
+       VALUES
+        (:id, :t, :packageId, :packageName, :docNo, :status, :docDate, :capacityLabel, :title, :customerName, :location,
+         :projectRef, :quotationRef, :partyId, :marginPct, :taxPct, :materialsTotal, :marginAmount, :taxAmount, :grandTotal,
+         :materialsCost, :notes, :preparedBy, :validUntil, :paymentTerms, :deliveryTerms, :warrantyTerms, :scopeOfSupply, :exclusions,
+         :invoiceId, :invoiceConvertMode, :revision, :parentDocId, :variablesJson, :optionsJson,
+         :proposalToken, :proposalStatus, :proposalSentAt, :proposalRespondedAt, :proposalResponseNote, :rateCardId,
+         :stockIssuedAt, :stockIssueCount, :asBuiltAt, :asBuiltJson,
+         :pdfArtifactId, :pdfSha256, :pdfGeneratedAt, :userId, :byName)`,
+      {
+        ...d,
+        t,
+        pdfArtifactId: d.pdfArtifactId ?? null,
+        pdfSha256: d.pdfSha256 ?? null,
+        pdfGeneratedAt: d.pdfGeneratedAt ?? null,
+        userId,
+        byName,
+      },
+    );
+    bump("bom_docs");
+  }
+  for (const l of world.bom.docLines) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_doc_lines
+        (id, tenant_id, doc_id, section, sort_no, line_kind, item_id, description, make_text, qty, unit,
+         scale_by_capacity, rate, amount, cost_rate, issued_qty, remarks, optional_flag, service_spare, scrap_pct)
+       VALUES
+        (:id, :t, :docId, :section, :sortNo, :lineKind, :itemId, :description, :makeText, :qty, :unit,
+         :scaleByCapacity, :rate, :amount, :costRate, :issuedQty, :remarks, :optionalFlag, :serviceSpare, :scrapPct)`,
+      { ...l, t },
+    );
+    bump("bom_doc_lines");
+  }
+  for (const r of world.bom.revisions) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_revisions
+        (id, tenant_id, entity_type, entity_id, revision, snapshot_json, created_by, created_by_name)
+       VALUES (:id, :t, :entityType, :entityId, :revision, :snapshotJson, :userId, :byName)`,
+      { ...r, t, userId, byName },
+    );
+    bump("bom_revisions");
+  }
+  for (const d of world.bom.dcs) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_dcs
+        (id, tenant_id, bom_doc_id, doc_no, status, doc_date, ship_to, transporter, vehicle_no, notes,
+         verified_by, verified_by_name, verified_at, approved_by, approved_by_name, approved_at, stock_posted,
+         created_by, created_by_name)
+       VALUES
+        (:id, :t, :bomDocId, :docNo, :status, :docDate, :shipTo, :transporter, :vehicleNo, :notes,
+         :verifiedBy, :verifiedByName, :verifiedAt, :approvedBy, :approvedByName, :approvedAt, :stockPosted,
+         :userId, :byName)`,
+      { ...d, t, userId, byName },
+    );
+    bump("bom_dcs");
+  }
+  for (const l of world.bom.dcLines) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_dc_lines
+        (id, tenant_id, dc_id, bom_line_id, item_id, section, sort_no, description, make_text, qty, returned_qty, unit, remarks)
+       VALUES
+        (:id, :t, :dcId, :bomLineId, :itemId, :section, :sortNo, :description, :makeText, :qty, :returnedQty, :unit, :remarks)`,
+      { ...l, t },
+    );
+    bump("bom_dc_lines");
+  }
+  for (const r of world.bom.dcReturns) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_dc_returns
+        (id, tenant_id, dc_id, bom_doc_id, return_no, return_date, notes, created_by, created_by_name)
+       VALUES (:id, :t, :dcId, :bomDocId, :returnNo, :returnDate, :notes, :userId, :byName)`,
+      { ...r, t, userId, byName },
+    );
+    bump("bom_dc_returns");
+  }
+  for (const l of world.bom.dcReturnLines) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_dc_return_lines
+        (id, tenant_id, return_id, dc_id, dc_line_id, bom_line_id, item_id, description, qty, unit, remarks)
+       VALUES
+        (:id, :t, :returnId, :dcId, :dcLineId, :bomLineId, :itemId, :description, :qty, :unit, :remarks)`,
+      { ...l, t },
+    );
+    bump("bom_dc_return_lines");
+  }
+  for (const link of world.bom.invoiceDcLinks) {
+    await exec(
+      conn,
+      `INSERT IGNORE INTO ims_invoice_dc_links (tenant_id, invoice_id, dc_id) VALUES (:t, :invoiceId, :dcId)`,
+      { t, ...link },
+    );
+    bump("invoice_dc_links");
+  }
+
+  for (const blob of world.pdfBlobs) {
+    await exec(
+      conn,
+      `INSERT INTO ims_bom_pdf_blobs (id, tenant_id, doc_id, sha256, pdf_base64)
+       VALUES (:id, :t, :docId, :sha256, :pdfBase64)`,
+      { ...blob, t },
+    );
+    bump("bom_pdf_blobs");
+  }
+
+  for (const e of world.excise) {
+    await exec(
+      conn,
+      `INSERT INTO ims_excise_records
+        (id, tenant_id, record_date, item_id, item_name, brand, volume_ml, opening_qty, received_qty, issued_qty, closing_qty,
+         duty_rate, duty_amount, permit_no, transport_permit_no, batch_no, vendor_id, vendor_name, cases, bottles_per_case,
+         permit_date, excise_category, status, notes, movement_id, created_by, created_by_name)
+       VALUES
+        (:id, :t, :recordDate, :itemId, :itemName, :brand, :volumeMl, :openingQty, :receivedQty, :issuedQty, :closingQty,
+         :dutyRate, :dutyAmount, :permitNo, :transportPermitNo, :batchNo, :vendorId, :vendorName, :cases, :bottlesPerCase,
+         :permitDate, :exciseCategory, :status, :notes, :movementId, :userId, :byName)`,
+      { ...e, t, userId, byName },
+    );
+    bump("excise");
+  }
+
   for (const s of world.sequences) {
     await exec(
       conn,
@@ -536,15 +848,44 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
     bump("sequences");
   }
 
-  // Link a few BOS parties/items if present (optional Connect trail)
+  // Connect / BOS cross-links (parties, items, invoices when BOS data exists)
   try {
-    const bosParty = await q(conn, `SELECT id FROM bos_parties WHERE tenant_id = :t AND name LIKE 'Cascade%' LIMIT 1`, { t });
-    if (bosParty[0]) {
+    const bosParties = await q(
+      conn,
+      `SELECT id, name FROM bos_parties WHERE tenant_id = :t ORDER BY id LIMIT 12`,
+      { t },
+    );
+    const imsPartyKeys = ["cascade", "meridian", "harbor", "bright", "spark", "netzone", "havells", "polycab", "legrand"];
+    for (let i = 0; i < bosParties.length; i++) {
+      const bp = bosParties[i]!;
+      const key = imsPartyKeys[i % imsPartyKeys.length]!;
       await exec(
         conn,
         `INSERT IGNORE INTO ims_links (tenant_id, source_tool, source_ref, target_type, target_id)
          VALUES (:t, 'bos', :ref, 'party', :target)`,
-        { t, ref: String(bosParty[0].id), target: partyId("cascade") },
+        { t, ref: String(bp.id), target: partyId(key) },
+      );
+      bump("links");
+    }
+    const bosItems = await q(conn, `SELECT id FROM bos_items WHERE tenant_id = :t ORDER BY id LIMIT 8`, { t });
+    const imsItemKeys = ["bulb9", "sw1", "cab15", "led12", "mcb16", "router", "ups1", "lan"];
+    for (let i = 0; i < bosItems.length; i++) {
+      await exec(
+        conn,
+        `INSERT IGNORE INTO ims_links (tenant_id, source_tool, source_ref, target_type, target_id)
+         VALUES (:t, 'bos', :ref, 'item', :target)`,
+        { t, ref: String(bosItems[i]!.id), target: itemId(imsItemKeys[i % imsItemKeys.length]!) },
+      );
+      bump("links");
+    }
+    const bosInvs = await q(conn, `SELECT id FROM bos_invoices WHERE tenant_id = :t ORDER BY id DESC LIMIT 5`, { t });
+    const imsInvs = world.invoices.filter((x) => x.status === "issued").slice(-5);
+    for (let i = 0; i < Math.min(bosInvs.length, imsInvs.length); i++) {
+      await exec(
+        conn,
+        `INSERT IGNORE INTO ims_links (tenant_id, source_tool, source_ref, target_type, target_id)
+         VALUES (:t, 'bos', :ref, 'invoice', :target)`,
+        { t, ref: String(bosInvs[i]!.id), target: String(imsInvs[i]!.id) },
       );
       bump("links");
     }
@@ -552,19 +893,17 @@ async function seedIms(conn: PoolConnection, tenantId: number, userId: number): 
     /* bos tables may be empty */
   }
 
-  await exec(
-    conn,
-    `INSERT INTO ims_events (tenant_id, actor_user_id, actor_name, event_type, entity_type, entity_id, summary, payload)
-     VALUES (:t, :userId, :byName, 'seed.complete', 'seed', 'justtestx-ims', :summary, :payload)`,
-    {
-      t,
-      userId,
-      byName,
-      summary: "JustTestX IMS 2-year scenario loaded",
-      payload: JSON.stringify({ windowStart: IMS_WINDOW_START, today: IMS_TODAY, invoices: world.invoices.length, items: world.items.length }),
-    },
-  );
-  bump("events");
+  for (const ev of world.events) {
+    await exec(
+      conn,
+      `INSERT INTO ims_events
+        (tenant_id, actor_user_id, actor_name, event_type, entity_type, entity_id, summary, payload, created_at)
+       VALUES
+        (:t, :actorUserId, :actorName, :eventType, :entityType, :entityId, :summary, :payload, :createdAt)`,
+      { ...ev, t },
+    );
+    bump("events");
+  }
 
   return counts;
 }
@@ -575,7 +914,11 @@ async function main() {
   const reset = Boolean(args.reset);
 
   if (dryRun) {
-    const world = buildImsWorld(1);
+    const world = buildImsWorld(1, [
+      { userId: 1, name: OWNER_NAME },
+      { userId: 2, name: "Arjun Field" },
+      { userId: 3, name: "Meera Onsite" },
+    ]);
     console.log("Dry run — JustTestX IMS seed plan", {
       COMPANY,
       IMS_TODAY,
@@ -585,6 +928,14 @@ async function main() {
       pos: world.pos.length,
       movements: world.movements.length,
       bills: world.bills.length,
+      bomDocs: world.bom.docs.length,
+      bomDcs: world.bom.dcs.length,
+      bomPackages: world.bom.packages.length,
+      excise: world.excise.length,
+      events: world.events.length,
+      pdfBlobs: world.pdfBlobs.length,
+      fieldVisits: world.fieldVisits.length,
+      documents: world.documents.length,
     });
     await pool.end();
     return;
@@ -615,7 +966,6 @@ async function main() {
   }
 
   const result = await withTx(async (conn) => {
-    await enableImsDealer(conn, found.orgId, found.profileId, userId, OWNER_NAME);
     if (reset) {
       const wiped = await wipeImsTenant(conn, found.profileId);
       console.log(`--reset: wiped ${wiped} existing IMS row(s)`);
@@ -625,7 +975,8 @@ async function main() {
         throw new Error(`JustTestX already has IMS settings. Re-run with --reset.`);
       }
     }
-    const counts = await seedIms(conn, found.profileId, userId);
+    await enableImsDealer(conn, found.orgId, found.profileId, userId, OWNER_NAME);
+    const counts = await seedIms(conn, found.profileId, userId, found.orgId);
     return counts;
   });
 
