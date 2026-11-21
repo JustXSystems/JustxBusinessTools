@@ -150,6 +150,22 @@ export type BomDocPaperOverride = {
 
 export type BomHealth = { score: number; flags: string[] };
 
+/** Approved Quotation V1 (or other connected) quote for BOM linking. */
+export type BomApprovedQuotation = {
+  ref: string;
+  docNo: string;
+  date: string;
+  amount: number;
+  title: string;
+  partyName: string;
+  partyPhone?: string | null;
+  partyGstin?: string | null;
+  partyState?: string | null;
+  partyCity?: string | null;
+  sourceId: string;
+  sourceLabel: string;
+};
+
 export type BomDoc = {
   id: string;
   packageId: string | null;
@@ -778,7 +794,8 @@ export const bom = {
   ) => patch<{ return: BomDcReturnListRow }>(`/bom/dc-returns/${id}`, body),
   amendLineQty: (id: string, body: { lineId: string; qty: number }) =>
     post<{ doc: BomDoc; message: string }>(`/bom/docs/${id}/amend-line-qty`, body),
-  quotationRefs: (q?: string) => get<{ refs: string[] }>("/bom/quotation-refs", q ? { q } : undefined),
+  quotationRefs: (q?: string) =>
+    get<{ refs: string[]; quotations: BomApprovedQuotation[] }>("/bom/quotation-refs", q ? { q } : undefined),
   invoiceDcLinks: (invoiceId: string) => get<{ dcIds: string[]; dcs: BomDc[] }>(`/invoices/${invoiceId}/dc-links`),
   setInvoiceDcLinks: (invoiceId: string, dcIds: string[]) => put<{ dcIds: string[] }>(`/invoices/${invoiceId}/dc-links`, { dcIds }),
 };

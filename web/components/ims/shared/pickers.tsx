@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Badge, Button, Dialog, Input, Select } from "@/components/bos";
+import { useEffect, useMemo, useState } from "react";
+import { Badge, Button, Dialog, Input, Select, Switch } from "@/components/bos";
 import { ims, type ImsItem, type PartyOption } from "@/lib/ims/api";
-import { inr, qtyText, stockBadge } from "@/lib/ims/format";
+import { bom, type BomApprovedQuotation } from "@/lib/ims/bom";
+import { dateLabel, inr, inrExact, qtyText, stockBadge } from "@/lib/ims/format";
 import { useImsAction, useImsData } from "../core";
 
 /** All active items, loaded once per mount (and after mutations). Filter client-side for instant search. */
@@ -230,5 +231,188 @@ export function PartySelect({
       ))}
       {allowFreeText ? <option value="__new">✎ Type a name instead…</option> : null}
     </Select>
+  );
+}
+
+/**
+ * Advanced picker for approved quotations (Quotation V1 → BOM link).
+ * Stores the quotation document number as the BOM `quotationRef`.
+ */
+export function QuotationSelect({
+  value,
+  onChange,
+  id,
+  required,
+  placeholder = "Select approved quotation…",
+}: {
+  value: string;
+  onChange: (next: { quotationRef: string; quotation: BomApprovedQuotation | null; applyCustomer: boolean }) => void;
+  id?: string;
+  required?: boolean;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [qDebounced, setQDebounced] = useState("");
+  const [applyCustomer, setApplyCustomer] = useState(true);
+  const state = useImsData(() => bom.quotationRefs(qDebounced || undefined), [qDebounced]);
+  const quotations = state.data?.quotations ?? [];
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setQDebounced(q.trim()), 200);
+    return () => window.clearTimeout(t);
+  }, [q]);
+
+  useEffect(() => {
+    if (!open) {
+      setQ("");
+      setQDebounced("");
+    }
+  }, [open]);
+
+  const selected = useMemo(() => {
+    const needle = value.trim().toLowerCase();
+    if (!needle) return null;
+    return quotations.find((row) => row.docNo.toLowerCase() === needle) ?? null;
+  }, [quotations, value]);
+
+  const pick = (row: BomApprovedQuotation) => {
+    onChange({ quotationRef: row.docNo, quotation: row, applyCustomer });
+    setOpen(false);
+  };
+
+  const clear = () => {
+    onChange({ quotationRef: "", quotation: null, applyCustomer: false });
+  };
+
+  return (
+    <div className="ims-quote-select">
+      <div className="ims-quote-select-trigger">
+        <button
+          type="button"
+          id={id}
+          className="ims-quote-select-btn"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-required={required || undefined}
+          onClick={() => setOpen(true)}
+        >
+          {value.trim() ? (
+            <span className="ims-cell-stack">
+              <span className="ims-strong">{value.trim()}</span>
+              <small className="ims-faint">
+                {selected
+                  ? [selected.partyName, selected.title, selected.amount ? inr(selected.amount) : null].filter(Boolean).join(" · ")
+                  : "Approved quotation linked"}
+              </small>
+            </span>
+          ) : (
+            <span className="ims-quote-select-placeholder">{placeholder}</span>
+          )}
+          <span className="ims-quote-select-chevron" aria-hidden="true">
+            ▾
+          </span>
+        </button>
+        {value.trim() ? (
+          <Button type="button" size="sm" variant="ghost" onClick={clear} aria-label="Clear quotation reference">
+            Clear
+          </Button>
+        ) : null}
+      </div>
+
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Approved quotations"
+        description="Pick a customer-approved Quotation V1 document. Its number is stored as the BOM quotation reference."
+        wide
+        actions={
+          <Button variant="primary" onClick={() => setOpen(false)}>
+            Close
+          </Button>
+        }
+      >
+        {open ? (
+          <div className="ims-quote-picker">
+            <div className="ims-quote-picker-toolbar">
+              <Input
+                autoFocus
+                size="sm"
+                className="ims-quote-picker-search"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search quote no, customer, title…"
+                aria-label="Search approved quotations"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && quotations[0]) {
+                    e.preventDefault();
+                    pick(quotations[0]);
+                  }
+                }}
+              />
+              <label className="ims-quote-picker-apply">
+                <Switch checked={applyCustomer} onChange={setApplyCustomer} aria-label="Also set customer from quotation" />
+                Set customer from quote
+              </label>
+            </div>
+            <div className="ims-quote-picker-meta" aria-live="polite">
+              {state.loading && !state.data ? "Loading…" : null}
+              {state.error ? (
+                <button type="button" className="bos-back-link" onClick={() => state.reload()}>
+                  Retry load
+                </button>
+              ) : null}
+              {!state.loading && state.data ? (
+                <span>
+                  <b>{quotations.length}</b> approved
+                  {qDebounced ? ` matching “${qDebounced}”` : ""}
+                </span>
+              ) : null}
+            </div>
+            <div className="ims-pick ims-quote-picker-list" role="listbox" aria-label="Approved quotations">
+              {!state.loading && !quotations.length ? (
+                <p className="ims-faint" style={{ margin: "8px 2px" }}>
+                  {qDebounced
+                    ? `No approved quotations match “${qDebounced}”.`
+                    : "No approved quotations yet. Approve a quote in Quotation V1 first."}
+                </p>
+              ) : null}
+              {quotations.map((row) => {
+                const active = value.trim().toLowerCase() === row.docNo.toLowerCase();
+                return (
+                  <button
+                    key={row.ref}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    className={`ims-pick-row ims-quote-picker-row${active ? " is-active" : ""}`}
+                    onClick={() => pick(row)}
+                  >
+                    <span className="ims-cell-stack">
+                      <span className="ims-strong">
+                        {row.docNo}{" "}
+                        {active ? (
+                          <Badge tone="emerald" auto>
+                            Selected
+                          </Badge>
+                        ) : null}
+                      </span>
+                      <small>
+                        {[row.partyName, row.title].filter(Boolean).join(" · ")}
+                        {row.partyGstin ? ` · ${row.partyGstin}` : ""}
+                      </small>
+                    </span>
+                    <span className="ims-cell-stack" style={{ textAlign: "right" }}>
+                      <span className="ims-num ims-strong">{inrExact(row.amount)}</span>
+                      <small className="ims-faint">{row.date ? dateLabel(row.date) : "—"}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </Dialog>
+    </div>
   );
 }

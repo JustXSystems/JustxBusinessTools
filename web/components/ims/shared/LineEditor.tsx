@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BosIcon, Button, Input, Select } from "@/components/bos";
+import { BosIcon, Button, Input, Select, Segmented } from "@/components/bos";
 import type { ImsItem } from "@/lib/ims/api";
 import { computeTotals, GST_RATES, inrExact, num, type ImsLineInput, type ImsTotals } from "@/lib/ims/format";
 import { ItemPickerDialog } from "./pickers";
@@ -36,9 +36,10 @@ export const toLineInputs = (lines: ReadonlyArray<EditableLine>): ImsLineInput[]
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- drops the editor-only key
     .map(({ key, ...rest }) => ({ ...rest, qty: num(rest.qty), rate: num(rest.rate), discountPct: num(rest.discountPct), gstRate: num(rest.gstRate) }));
 
+type Scope = "all" | "catalog" | "freetext";
+
 /**
- * GST line editor: dense sticky table for 100+ lines — item · qty · rate · disc% · GST% · amount.
- * Lines linked to an item move stock; free-text lines (services, freight) don't.
+ * Ultra-compact GST line editor for 100+ rows — advanced filter, bulk GST/disc, sticky grid.
  */
 export function LineEditor({
   lines,
@@ -59,6 +60,8 @@ export function LineEditor({
 }) {
   const [picking, setPicking] = useState(false);
   const [q, setQ] = useState("");
+  const [scope, setScope] = useState<Scope>("all");
+  const [bulkGst, setBulkGst] = useState("");
   const totals = useMemo(() => computeTotals(lines, intraState, roundToRupee), [lines, intraState, roundToRupee]);
   const update = (key: string, patch: Partial<EditableLine>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const remove = (key: string) => onChange(lines.filter((l) => l.key !== key));
@@ -69,34 +72,95 @@ export function LineEditor({
   };
 
   const query = q.trim().toLowerCase();
-  const showSearch = lines.length >= 8;
+  const showTools = lines.length >= 4;
+  const catalogCount = lines.filter((l) => l.itemId).length;
+  const freeCount = lines.length - catalogCount;
+
   const visible = useMemo(() => {
-    if (!query) return lines.map((l, i) => ({ line: l, index: i }));
     return lines
       .map((l, i) => ({ line: l, index: i }))
       .filter(({ line: l }) => {
-        const hay = `${l.name} ${l.sku ?? ""} ${l.hsn ?? ""}`.toLowerCase();
-        return hay.includes(query);
+        if (scope === "catalog" && !l.itemId) return false;
+        if (scope === "freetext" && l.itemId) return false;
+        if (!query) return true;
+        return `${l.name} ${l.sku ?? ""} ${l.hsn ?? ""}`.toLowerCase().includes(query);
       });
-  }, [lines, query]);
+  }, [lines, query, scope]);
+
+  const applyBulkGst = () => {
+    if (readOnly || bulkGst === "") return;
+    const rate = Number(bulkGst);
+    if (!Number.isFinite(rate)) return;
+    const keys = new Set(visible.map((v) => v.line.key));
+    onChange(lines.map((l) => (keys.has(l.key) ? { ...l, gstRate: rate } : l)));
+  };
+
+  const clearDiscounts = () => {
+    if (readOnly) return;
+    const keys = new Set(visible.map((v) => v.line.key));
+    onChange(lines.map((l) => (keys.has(l.key) ? { ...l, discountPct: 0 } : l)));
+  };
 
   return (
     <div className="ims-line-editor">
-      <div className="ims-line-editor-toolbar">
-        <span className="ims-line-editor-count" aria-live="polite">
-          <b>{lines.length}</b> line{lines.length === 1 ? "" : "s"}
-          {query && visible.length !== lines.length ? <span className="ims-faint"> · showing {visible.length}</span> : null}
-        </span>
-        {showSearch ? (
-          <Input
-            size="sm"
-            className="ims-line-editor-search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Filter items…"
-            aria-label="Filter line items"
-          />
-        ) : null}
+      <div className="ims-compose-cmd">
+        <div className="ims-compose-cmd-left">
+          <span className="ims-line-editor-count" aria-live="polite">
+            <b>{lines.length}</b>
+            <span className="ims-faint"> lines</span>
+            {query || scope !== "all" ? <span className="ims-faint"> · {visible.length} shown</span> : null}
+          </span>
+          {showTools ? (
+            <Segmented
+              size="sm"
+              role="radio"
+              aria-label="Line type"
+              value={scope}
+              onChange={setScope}
+              options={[
+                { value: "all", label: "All" },
+                { value: "catalog", label: `Stock · ${catalogCount}` },
+                { value: "freetext", label: `Text · ${freeCount}` },
+              ]}
+            />
+          ) : null}
+        </div>
+        <div className="ims-compose-cmd-right">
+          {showTools || lines.length >= 8 ? (
+            <Input
+              size="sm"
+              className="ims-line-editor-search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Filter…"
+              aria-label="Filter line items"
+            />
+          ) : null}
+          {!readOnly && showTools ? (
+            <>
+              <Select
+                size="sm"
+                className="ims-line-bulk-gst"
+                value={bulkGst}
+                onChange={(e) => setBulkGst(e.target.value)}
+                aria-label="Bulk GST rate"
+              >
+                <option value="">GST…</option>
+                {GST_RATES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}%
+                  </option>
+                ))}
+              </Select>
+              <Button size="sm" variant="ghost" disabled={bulkGst === ""} onClick={applyBulkGst} title="Apply GST to visible lines">
+                Apply
+              </Button>
+              <Button size="sm" variant="ghost" onClick={clearDiscounts} title="Clear discount on visible lines">
+                Clear disc
+              </Button>
+            </>
+          ) : null}
+        </div>
       </div>
 
       <div className="ims-line-editor-frame">
@@ -114,10 +178,10 @@ export function LineEditor({
           {!lines.length ? (
             <p className="ims-line-editor-empty">No lines yet — add catalogue items or a free-text line.</p>
           ) : !visible.length ? (
-            <p className="ims-line-editor-empty">No lines match “{q.trim()}”.</p>
+            <p className="ims-line-editor-empty">No lines match the current filter.</p>
           ) : (
             visible.map(({ line: l, index: i }) => (
-              <div key={l.key} className="ims-line" role="listitem">
+              <div key={l.key} className={`ims-line${l.itemId ? " is-catalog" : ""}`} role="listitem">
                 <span className="ims-line-idx">{i + 1}</span>
                 <div className="ims-cell-stack">
                   {l.itemId || !allowFreeText || readOnly ? (
@@ -184,7 +248,7 @@ export function LineEditor({
                 </Select>
                 <div className="ims-line-amount">
                   {inrExact(totals.lines[i]?.amount ?? 0)}
-                  {totals.lines[i]?.tax ? <small>incl. GST {inrExact(totals.lines[i].tax)}</small> : null}
+                  {totals.lines[i]?.tax ? <small>+{inrExact(totals.lines[i].tax)}</small> : null}
                 </div>
                 {readOnly ? (
                   <span />
@@ -206,7 +270,7 @@ export function LineEditor({
           </Button>
           {allowFreeText ? (
             <Button size="sm" variant="ghost" onClick={() => onChange([...lines, blankLine()])}>
-              Add free-text line
+              Free-text
             </Button>
           ) : null}
         </div>
@@ -228,7 +292,7 @@ export function TotalsBlock({ totals, intraState }: { totals: ImsTotals; intraSt
           <dd>−{inrExact(totals.discountTotal)}</dd>
         </>
       ) : null}
-      <dt>Taxable value</dt>
+      <dt>Taxable</dt>
       <dd>{inrExact(totals.taxable)}</dd>
       {intraState ? (
         <>

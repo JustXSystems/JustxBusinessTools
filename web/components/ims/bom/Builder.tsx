@@ -32,7 +32,7 @@ import { canRevokeBomProposal, proposalShareButtonLabel, shareBomProposal } from
 import { purchase } from "@/lib/ims/purchase";
 import { withBasePath } from "@/lib/base-path";
 import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
-import { ItemPickerDialog, PartySelect } from "../shared/pickers";
+import { ItemPickerDialog, PartySelect, QuotationSelect } from "../shared/pickers";
 import {
   BOM_COLUMN_LABEL,
   BOM_INDUSTRY_PACK_META,
@@ -872,7 +872,6 @@ function BomEditorForm({
   const [preparedBy, setPreparedBy] = useState(initial?.preparedBy ?? session.actor.name ?? "");
   const [projectRef, setProjectRef] = useState(initial?.projectRef ?? "");
   const [quotationRef, setQuotationRef] = useState(initial?.quotationRef ?? "");
-  const quotationRefs = useImsData(() => bom.quotationRefs(), []);
   const [validUntil, setValidUntil] = useState(initial?.validUntil ?? "");
   const [paymentTerms, setPaymentTerms] = useState(initial?.paymentTerms ?? "");
   const [deliveryTerms, setDeliveryTerms] = useState(initial?.deliveryTerms ?? "");
@@ -1366,24 +1365,25 @@ function BomEditorForm({
               </Field>
               <Field
                 label="Quotation reference"
-                hint={session.settings.bomRequireQuotationRef ? "Required before confirm" : "Links this BOM to your quotation number"}
+                hint={
+                  session.settings.bomRequireQuotationRef
+                    ? "Required before confirm — pick an approved Quotation V1"
+                    : "Select an approved quotation to link this BOM"
+                }
               >
                 {({ id }) => (
-                  <>
-                    <Input
-                      id={id}
-                      list="ims-bom-quotation-refs"
-                      value={quotationRef}
-                      onChange={(e) => setQuotationRef(e.target.value)}
-                      placeholder="e.g. QTN-2026-0142"
-                      required={Boolean(session.settings.bomRequireQuotationRef)}
-                    />
-                    <datalist id="ims-bom-quotation-refs">
-                      {(quotationRefs.data?.refs ?? []).map((ref) => (
-                        <option key={ref} value={ref} />
-                      ))}
-                    </datalist>
-                  </>
+                  <QuotationSelect
+                    id={id}
+                    value={quotationRef}
+                    required={Boolean(session.settings.bomRequireQuotationRef)}
+                    onChange={({ quotationRef: next, quotation, applyCustomer }) => {
+                      setQuotationRef(next);
+                      if (!quotation || !applyCustomer) return;
+                      if (!customerName.trim()) setCustomerName(quotation.partyName);
+                      if (!location.trim() && quotation.partyCity) setLocation(quotation.partyCity);
+                      if (!customerState.trim() && quotation.partyState) setCustomerState(quotation.partyState);
+                    }}
+                  />
                 )}
               </Field>
               <Field label="Valid until">

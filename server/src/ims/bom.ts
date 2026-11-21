@@ -1741,23 +1741,87 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     });
   });
 
-  /** Distinct quotation references for BOM combobox. */
+  /**
+   * Approved quotations from connected tools (Quotation V1) for BOM linking.
+   * Also returns legacy `refs` (doc numbers) for older clients.
+   */
   router.get("/bom/quotation-refs", async (req, res) => {
     requirePerm(res, "bom");
     const actor = actorOf(res);
-    const q = qstr(req.query.q, 80);
-    const params: Record<string, unknown> = { tenantId: actor.tenantId };
-    let where = `tenant_id = :tenantId AND quotation_ref IS NOT NULL AND TRIM(quotation_ref) <> ''`;
-    if (q) {
-      where += ` AND quotation_ref LIKE :q`;
-      params.q = `%${q}%`;
+    const q = qstr(req.query.q, 80).toLowerCase();
+
+    type QuoteOption = {
+      ref: string;
+      docNo: string;
+      date: string;
+      amount: number;
+      title: string;
+      partyName: string;
+      partyPhone: string | null;
+      partyGstin: string | null;
+      partyState: string | null;
+      partyCity: string | null;
+      sourceId: string;
+      sourceLabel: string;
+    };
+
+    const quotations: QuoteOption[] = [];
+    const seen = new Set<string>();
+
+    for (const source of deps.sources) {
+      let records: Awaited<ReturnType<(typeof source)["list"]>> = [];
+      try {
+        records = await source.list(actor.tenantId);
+      } catch (err) {
+        // Older deploys / missing document_records — skip this source.
+        const code = (err as { code?: string } | null)?.code;
+        if (code !== "ER_NO_SUCH_TABLE" && code !== "ER_BAD_FIELD_ERROR") {
+          console.warn(`[bom/quotation-refs] ${source.id}:`, err instanceof Error ? err.message : err);
+        }
+        continue;
+      }
+      for (const r of records) {
+        if (String(r.status).toLowerCase() !== "approved") continue;
+        const docNo = String(r.docNo ?? "").trim();
+        if (!docNo || seen.has(docNo)) continue;
+        seen.add(docNo);
+        const partyName = String(r.party?.company || r.party?.name || "").trim() || "Customer";
+        quotations.push({
+          ref: r.ref,
+          docNo,
+          date: String(r.date ?? "").slice(0, 10),
+          amount: round2(Number(r.amount) || 0),
+          title: String(r.title ?? "").trim() || source.label,
+          partyName,
+          partyPhone: r.party?.phone ? String(r.party.phone) : null,
+          partyGstin: r.party?.gstin ? String(r.party.gstin) : null,
+          partyState: r.party?.state ? String(r.party.state) : null,
+          partyCity: r.party?.city ? String(r.party.city) : null,
+          sourceId: source.id,
+          sourceLabel: source.label,
+        });
+      }
     }
-    const list = await rows<{ quotation_ref: string }>(
-      deps.db,
-      `SELECT DISTINCT quotation_ref FROM ims_bom_docs WHERE ${where} ORDER BY quotation_ref ASC LIMIT 50`,
-      params,
-    );
-    res.json({ refs: list.map((r) => r.quotation_ref) });
+
+    const filtered = q
+      ? quotations.filter((row) => {
+          const hay = `${row.docNo} ${row.partyName} ${row.title} ${row.partyGstin ?? ""} ${row.partyPhone ?? ""}`.toLowerCase();
+          return hay.includes(q);
+        })
+      : quotations;
+
+    filtered.sort((a, b) => {
+      const da = a.date || "";
+      const db = b.date || "";
+      if (da !== db) return db.localeCompare(da);
+      return a.docNo.localeCompare(b.docNo);
+    });
+
+    const limited = filtered.slice(0, 200);
+    res.json({
+      quotations: limited,
+      refs: limited.map((r) => r.docNo),
+    });
   });
 
   router.post("/bom/docs/:id/cancel", async (req, res) => {

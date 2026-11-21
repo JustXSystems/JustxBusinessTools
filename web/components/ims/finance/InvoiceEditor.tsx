@@ -298,9 +298,9 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
             </label>
           </div>
           {stockViaDc ? (
-            <p className="ims-compose-hint">Item lines are locked while delivery challans are linked.</p>
+            <p className="ims-compose-hint">Lines locked while DCs are linked.</p>
           ) : (
-            <p className="ims-compose-hint">Catalogue items move stock on issue. Free-text lines (freight, services) do not.</p>
+            <p className="ims-compose-hint">Stock items post on issue · free-text does not.</p>
           )}
           <LineEditor
             lines={lines.length ? lines : []}
