@@ -6,6 +6,7 @@ import { BOM_DC_STATUS_LABEL, bom, type BomDoc } from "@/lib/ims/bom";
 import { isDcReturnBlocked } from "@/lib/ims/bom-dc-intent";
 import { todayLocal } from "@/lib/ims/format";
 import { ErrorBlock, LoadingBlock, useIms, useImsAction, useImsData, usePrint } from "../core";
+import { ComposerLineTable } from "../shared/ComposerLineTable";
 import { BomSplitLayout } from "./BomSplitLayout";
 import { DocRefLink } from "./DocRefLink";
 import { ReturnPaper, type ReturnPaperModel } from "./ReturnPaper";
@@ -222,10 +223,10 @@ export function CreateReturnWorkspace({ dcId, onBack, onPosted }: CreateProps) {
         compose={
           <div className="ims-bom-dc-compose">
             <Card className="ims-bom-action-card">
-              <Alert tone="blue" title="Composer">
-                Return unused materials from <b>{dc.docNo}</b> (BOM <b>{doc.docNo}</b>). Live preview updates as you enter quantities; posting
-                creates the RTN number and receives stock.
-              </Alert>
+              <p className="ims-compose-hint">
+                Return unused materials from <b>{dc.docNo}</b> (BOM <b>{doc.docNo}</b>). Preview updates as you enter qty; posting creates the RTN
+                number and receives stock.
+              </p>
               {blocked ? (
                 <Alert tone="amber" title="Linked to an invoice">
                   {dc.invoiceStatus === "issued"
@@ -264,32 +265,31 @@ export function CreateReturnWorkspace({ dcId, onBack, onPosted }: CreateProps) {
               <Field label="Notes">
                 {({ id }) => <Textarea id={id} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />}
               </Field>
-              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>Quantities still out</div>
-              {returnable.map((line) => {
-                const max = Math.max(0, line.netQty ?? line.qty - (line.returnedQty ?? 0));
-                return (
-                  <div key={line.id} style={{ display: "grid", gap: 6, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
-                    <div style={{ fontSize: 13 }}>
-                      {line.description}{" "}
-                      <span style={{ opacity: 0.65 }}>
-                        · returnable {max} {line.unit}
-                      </span>
-                    </div>
-                    <Input
-                      className="ims-bom-dc-qty-input"
-                      value={qtyByLineId[line.id] ?? ""}
-                      onChange={(e) => setQtyByLineId((prev) => ({ ...prev, [line.id]: e.target.value }))}
-                      placeholder="0"
-                      style={{ width: 120 }}
-                    />
-                    <Input
-                      value={remarksByLineId[line.id] ?? ""}
-                      onChange={(e) => setRemarksByLineId((prev) => ({ ...prev, [line.id]: e.target.value }))}
-                      placeholder="Line remarks (optional)"
-                    />
-                  </div>
-                );
-              })}
+              <div className="ims-compose-section">
+                <h3 className="ims-compose-section-title">Quantities still out</h3>
+                <ComposerLineTable
+                  ariaLabel="Return quantities"
+                  qtyLabel="Return qty"
+                  showRemarks
+                  allowBulkFill
+                  allowBulkClear
+                  emptyLabel="Nothing left to return on this challan."
+                  rows={returnable.map((line) => {
+                    const max = Math.max(0, line.netQty ?? line.qty - (line.returnedQty ?? 0));
+                    return {
+                      id: line.id,
+                      description: line.description,
+                      unit: line.unit,
+                      maxQty: max,
+                      meta: `Returnable ${max} ${line.unit}${(line.returnedQty ?? 0) > 0 ? ` · already returned ${line.returnedQty}` : ""}`,
+                      qtyValue: qtyByLineId[line.id] ?? "",
+                      onQtyChange: (v) => setQtyByLineId((prev) => ({ ...prev, [line.id]: v })),
+                      remarksValue: remarksByLineId[line.id] ?? "",
+                      onRemarksChange: (v) => setRemarksByLineId((prev) => ({ ...prev, [line.id]: v })),
+                    };
+                  })}
+                />
+              </div>
             </Card>
           </div>
         }
@@ -433,10 +433,10 @@ export function ManageReturnWorkspace({ returnId, onBack, onOpenDc }: ManageProp
         compose={
           <div className="ims-bom-dc-compose">
             <Card className="ims-bom-action-card">
-              <Alert tone="blue" title="Composer">
-                Maintain return paper <b>{rtn.returnNo}</b>. Quantities are fixed after stock was received; edit date, notes, and line
-                remarks. Post another return on the DC for more unused stock.
-              </Alert>
+              <p className="ims-compose-hint">
+                Maintain <b>{rtn.returnNo}</b>. Quantities are fixed after stock was received — edit notes and line remarks. Post another return
+                on the DC for more unused stock.
+              </p>
               <FormGrid>
                 <Field label="Return date">
                   {({ id }) => (
@@ -451,34 +451,38 @@ export function ManageReturnWorkspace({ returnId, onBack, onOpenDc }: ManageProp
                   )}
                 </Field>
               </FormGrid>
-              <p className="ims-faint" style={{ fontSize: 12, margin: 0 }}>
-                Date is fixed after stock RETURN_IN. Edit notes and line remarks only.
-              </p>
+              <p className="ims-compose-hint">Date is fixed after stock RETURN_IN.</p>
               <Field label="Notes">
                 {({ id }) => (
                   <Textarea id={id} rows={2} value={notes} disabled={!canEdit} onChange={(e) => setNotes(e.target.value)} />
                 )}
               </Field>
-              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>
-                Lines · {rtn.units ?? (rtn.lines ?? []).reduce((s, l) => s + l.qty, 0)} units
+              <div className="ims-compose-section">
+                <h3 className="ims-compose-section-title">
+                  Lines
+                  <span>
+                    {rtn.units ?? (rtn.lines ?? []).reduce((s, l) => s + l.qty, 0)} units
+                  </span>
+                </h3>
+                <ComposerLineTable
+                  ariaLabel="Returned lines"
+                  qtyLabel="Qty"
+                  showRemarks
+                  emptyLabel="No lines on this return."
+                  rows={(rtn.lines ?? []).map((line) => ({
+                    id: line.id,
+                    description: line.description,
+                    unit: line.unit,
+                    qtyValue: String(line.qty),
+                    active: true,
+                    remarksValue: remarksByLineId[line.id] ?? "",
+                    onRemarksChange: canEdit
+                      ? (v) => setRemarksByLineId((prev) => ({ ...prev, [line.id]: v }))
+                      : undefined,
+                  }))}
+                />
               </div>
-              {(rtn.lines ?? []).map((line) => (
-                <div key={line.id} style={{ display: "grid", gap: 6, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
-                  <div style={{ fontSize: 13 }}>
-                    {line.description}{" "}
-                    <span style={{ opacity: 0.65 }}>
-                      · {line.qty} {line.unit}
-                    </span>
-                  </div>
-                  <Input
-                    value={remarksByLineId[line.id] ?? ""}
-                    disabled={!canEdit}
-                    onChange={(e) => setRemarksByLineId((prev) => ({ ...prev, [line.id]: e.target.value }))}
-                    placeholder="Line remarks"
-                  />
-                </div>
-              ))}
-              <div className="ims-row" style={{ marginTop: 8, flexWrap: "wrap" }}>
+              <div className="ims-row" style={{ marginTop: 4, flexWrap: "wrap" }}>
                 <Button size="sm" variant="ghost" onClick={() => navigate("bomDc", "returns")}>
                   Returns list
                 </Button>

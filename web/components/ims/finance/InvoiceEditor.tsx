@@ -287,40 +287,40 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
       ) : null}
 
       <Card interactive={false}>
-        <div className="ims-between" style={{ marginBottom: 10 }}>
-          <h2 className="fin-section-title" style={{ margin: 0 }}>
-            Items
-          </h2>
-          <label className="ims-row" style={{ fontSize: 13 }}>
-            <Switch checked={roundToRupee} onChange={setRoundToRupee} aria-label="Round total to the nearest rupee" />
-            Round off total
-          </label>
-        </div>
-        <LineEditor
-          lines={lines.length ? lines : []}
-          onChange={setLines}
-          intraState={intraState}
-          price="selling"
-          roundToRupee={roundToRupee}
-          readOnly={stockViaDc}
-        />
-        {stockViaDc ? (
-          <p className="ims-muted" style={{ fontSize: 12.5, marginTop: 8 }}>
-            Item lines are locked while delivery challans are linked.
-          </p>
-        ) : null}
-        {touched && errors.lines ? (
-          <p className="ims-neg" role="alert" style={{ fontSize: 12.5, marginTop: 6 }}>
-            {errors.lines}
-          </p>
-        ) : null}
-        {!lines.length ? (
-          <div style={{ marginTop: 8 }}>
+        <div className="ims-compose-section">
+          <div className="ims-between" style={{ marginBottom: 2 }}>
+            <h2 className="ims-compose-section-title" style={{ margin: 0 }}>
+              Line items
+            </h2>
+            <label className="ims-row" style={{ fontSize: 12.5 }}>
+              <Switch checked={roundToRupee} onChange={setRoundToRupee} aria-label="Round total to the nearest rupee" />
+              Round off total
+            </label>
+          </div>
+          {stockViaDc ? (
+            <p className="ims-compose-hint">Item lines are locked while delivery challans are linked.</p>
+          ) : (
+            <p className="ims-compose-hint">Catalogue items move stock on issue. Free-text lines (freight, services) do not.</p>
+          )}
+          <LineEditor
+            lines={lines.length ? lines : []}
+            onChange={setLines}
+            intraState={intraState}
+            price="selling"
+            roundToRupee={roundToRupee}
+            readOnly={stockViaDc}
+          />
+          {touched && errors.lines ? (
+            <p className="ims-neg" role="alert" style={{ fontSize: 12.5, margin: 0 }}>
+              {errors.lines}
+            </p>
+          ) : null}
+          {!lines.length && !stockViaDc ? (
             <Button size="sm" variant="ghost" onClick={() => setLines([blankLine(settings.defaultGstRate)])}>
               Start with a free-text line
             </Button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </Card>
 
       {stockIssues.length ? (

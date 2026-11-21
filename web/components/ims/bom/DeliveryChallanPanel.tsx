@@ -6,6 +6,7 @@ import { BOM_DC_STATUS_LABEL, bom, type BomDc, type BomDoc } from "@/lib/ims/bom
 import { isDcReturnBlocked } from "@/lib/ims/bom-dc-intent";
 import { todayLocal } from "@/lib/ims/format";
 import { ErrorBlock, LoadingBlock, useIms, useImsAction, useImsData, usePrint } from "../core";
+import { ComposerLineTable } from "../shared/ComposerLineTable";
 import { BomSplitLayout } from "./BomSplitLayout";
 import { DocRefLink } from "./DocRefLink";
 import { DcPaper, type DcPaperModel } from "./DcPaper";
@@ -750,13 +751,13 @@ function DcEditorForm({
         compose={
           <div className="ims-bom-dc-compose">
             <Card className="ims-bom-action-card">
-              <Alert tone="blue" title="Composer">
-                Edit quantities and dispatch details. Live Preview updates on the invoice paper template — BOM reference{" "}
+              <p className="ims-compose-hint">
+                Edit quantities and dispatch details. Live preview follows the invoice paper template — BOM{" "}
                 <DocRefLink module="bom" intent={`open:${doc.id}`}>
                   {bomDocNo}
                 </DocRefLink>{" "}
-                prints on the sheet; Verified by fills when you verify.
-              </Alert>
+                prints on the sheet.
+              </p>
               <FormGrid>
                 <Field label="Challan date">
                   {({ id }) => (
@@ -776,25 +777,25 @@ function DcEditorForm({
               <Field label="Notes">
                 {({ id }) => <Textarea id={id} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />}
               </Field>
-              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>Quantities</div>
-              {remaining.map((line) => (
-                <div key={line.bomLineId} style={{ display: "grid", gap: 4, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
-                  <div style={{ fontSize: 13 }}>
-                    {line.description}{" "}
-                    <span style={{ opacity: 0.65 }}>
-                      · remaining {line.remainingQty} {line.unit}
-                      {line.issuedQty > 0 ? ` (delivered ${line.issuedQty})` : ""}
-                    </span>
-                  </div>
-                  <Input
-                    className="ims-bom-dc-qty-input"
-                    value={qtyById[line.bomLineId] ?? String(line.remainingQty)}
-                    onChange={(e) => setQtyById((prev) => ({ ...prev, [line.bomLineId]: e.target.value }))}
-                    placeholder="Qty"
-                    style={{ width: 120 }}
-                  />
-                </div>
-              ))}
+              <div className="ims-compose-section">
+                <h3 className="ims-compose-section-title">Quantities</h3>
+                <ComposerLineTable
+                  ariaLabel="Delivery quantities"
+                  qtyLabel="Deliver"
+                  allowBulkFill
+                  allowBulkClear
+                  emptyLabel="Nothing remaining to deliver on this BOM."
+                  rows={remaining.map((line) => ({
+                    id: line.bomLineId,
+                    description: line.description,
+                    unit: line.unit,
+                    maxQty: line.remainingQty,
+                    meta: `Remaining ${line.remainingQty} ${line.unit}${line.issuedQty > 0 ? ` · delivered ${line.issuedQty}` : ""}${line.makeText ? ` · ${line.makeText}` : ""}`,
+                    qtyValue: qtyById[line.bomLineId] ?? String(line.remainingQty),
+                    onQtyChange: (v) => setQtyById((prev) => ({ ...prev, [line.bomLineId]: v })),
+                  }))}
+                />
+              </div>
             </Card>
           </div>
         }
@@ -1206,8 +1207,8 @@ function DcManagerForm({
         compose={
           <div className="ims-bom-dc-compose">
             <Card className="ims-bom-action-card">
-              <Alert tone="blue" title="Composer">
-                BOM reference{" "}
+              <p className="ims-compose-hint">
+                BOM{" "}
                 <DocRefLink module="bom" intent={`open:${doc.id}`}>
                   {dc.bomDocNo ?? bomDocNo}
                 </DocRefLink>
@@ -1225,7 +1226,7 @@ function DcManagerForm({
                     · Approved by <b>{dc.approvedByName}</b>
                   </>
                 ) : null}
-              </Alert>
+              </p>
               {isDraft ? (
                 <>
                   <FormGrid>
@@ -1247,27 +1248,28 @@ function DcManagerForm({
                   <Field label="Notes">
                     {({ id }) => <Textarea id={id} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />}
                   </Field>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>Quantities</div>
-                  {editableLines.map((line) => (
-                    <div key={line.bomLineId} style={{ display: "grid", gap: 4, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
-                      <div style={{ fontSize: 13 }}>
-                        {line.description}{" "}
-                        <span style={{ opacity: 0.65 }}>
-                          · max {line.remainingQty} {line.unit}
-                        </span>
-                      </div>
-                      <Input
-                        className="ims-bom-dc-qty-input"
-                        value={qtyById[line.bomLineId] ?? "0"}
-                        onChange={(e) => setQtyById((prev) => ({ ...prev, [line.bomLineId]: e.target.value }))}
-                        style={{ width: 120 }}
-                      />
-                    </div>
-                  ))}
+                  <div className="ims-compose-section">
+                    <h3 className="ims-compose-section-title">Quantities</h3>
+                    <ComposerLineTable
+                      ariaLabel="Delivery quantities"
+                      qtyLabel="Deliver"
+                      allowBulkFill
+                      allowBulkClear
+                      rows={editableLines.map((line) => ({
+                        id: line.bomLineId,
+                        description: line.description,
+                        unit: line.unit,
+                        maxQty: line.remainingQty,
+                        meta: `Max ${line.remainingQty} ${line.unit}${line.makeText ? ` · ${line.makeText}` : ""}`,
+                        qtyValue: qtyById[line.bomLineId] ?? "0",
+                        onQtyChange: (v) => setQtyById((prev) => ({ ...prev, [line.bomLineId]: v })),
+                      }))}
+                    />
+                  </div>
                 </>
               ) : (
-                <div style={{ display: "grid", gap: 12 }}>
-                  <div style={{ fontSize: 13, opacity: 0.8 }}>
+                <div className="ims-compose-section">
+                  <p className="ims-compose-hint">
                     {dc.status === "cancelled"
                       ? "This challan is cancelled. Quantities below are historical; stock was never posted or has already been reversed."
                       : dc.status === "verified"
@@ -1275,7 +1277,7 @@ function DcManagerForm({
                         : fullyReturned
                           ? "All delivered quantities have been returned. You can cancel the challan or print the record."
                           : "Approved — return unused materials still out at site, reverse remaining stock, or print."}
-                  </div>
+                  </p>
                   {returnBlockedByInvoice && dc.status === "approved" ? (
                     <Alert tone="amber" title={dc.invoiceLinked ? "Linked to an invoice" : "Selected for invoice link"}>
                       {dc.invoiceLinked ? (
@@ -1317,15 +1319,22 @@ function DcManagerForm({
                       )}
                     </Alert>
                   ) : null}
-                  {(dc.lines ?? []).map((line) => (
-                    <div key={line.id} style={{ fontSize: 13, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
-                      {line.description}{" "}
-                      <span style={{ opacity: 0.7 }}>
-                        · delivered {line.qty} {line.unit}
-                        {(line.returnedQty ?? 0) > 0 ? ` · returned ${line.returnedQty} · still out ${line.netQty}` : ""}
-                      </span>
-                    </div>
-                  ))}
+                  <ComposerLineTable
+                    ariaLabel="Delivered lines"
+                    qtyLabel="Delivered"
+                    emptyLabel="No lines on this challan."
+                    rows={(dc.lines ?? []).map((line) => ({
+                      id: line.id,
+                      description: line.description,
+                      unit: line.unit,
+                      qtyValue: String(line.qty),
+                      active: (line.netQty ?? Math.max(0, line.qty - (line.returnedQty ?? 0))) > 1e-9,
+                      meta:
+                        (line.returnedQty ?? 0) > 0
+                          ? `Returned ${line.returnedQty} · still out ${line.netQty}`
+                          : line.makeText || undefined,
+                    }))}
+                  />
                   {returnMode && !returnBlockedByInvoice && !fullyReturned && dc.status === "approved" && dc.stockPosted ? (
                     <Card className="ims-bom-action-card">
                       <Alert tone="amber" title="Return unused to store">
@@ -1334,43 +1343,41 @@ function DcManagerForm({
                       <Field label="Return notes">
                         {({ id }) => <Textarea id={id} rows={2} value={returnNotes} onChange={(e) => setReturnNotes(e.target.value)} />}
                       </Field>
-                      {(dc.lines ?? [])
-                        .filter((l) => (l.netQty ?? l.qty - (l.returnedQty ?? 0)) > 0)
-                        .map((line) => {
-                          const max = Math.max(0, line.netQty ?? line.qty - (line.returnedQty ?? 0));
-                          return (
-                            <div key={line.id} style={{ display: "grid", gap: 4, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 8 }}>
-                              <div style={{ fontSize: 13 }}>
-                                {line.description}{" "}
-                                <span style={{ opacity: 0.65 }}>
-                                  · returnable {max} {line.unit}
-                                </span>
-                              </div>
-                              <Input
-                                className="ims-bom-dc-qty-input"
-                                value={returnQtyByLineId[line.id] ?? ""}
-                                onChange={(e) => setReturnQtyByLineId((prev) => ({ ...prev, [line.id]: e.target.value }))}
-                                placeholder="0"
-                                style={{ width: 120 }}
-                              />
-                            </div>
-                          );
-                        })}
+                      <ComposerLineTable
+                        ariaLabel="Return quantities"
+                        qtyLabel="Return qty"
+                        allowBulkFill
+                        allowBulkClear
+                        rows={(dc.lines ?? [])
+                          .filter((l) => (l.netQty ?? l.qty - (l.returnedQty ?? 0)) > 0)
+                          .map((line) => {
+                            const max = Math.max(0, line.netQty ?? line.qty - (line.returnedQty ?? 0));
+                            return {
+                              id: line.id,
+                              description: line.description,
+                              unit: line.unit,
+                              maxQty: max,
+                              meta: `Returnable ${max} ${line.unit}`,
+                              qtyValue: returnQtyByLineId[line.id] ?? "",
+                              onQtyChange: (v) => setReturnQtyByLineId((prev) => ({ ...prev, [line.id]: v })),
+                            };
+                          })}
+                      />
                       <Button size="sm" variant="primary" disabled={Boolean(busy)} onClick={submitReturn}>
                         {busy === "dc-return" ? "Returning…" : "Post return to stock"}
                       </Button>
                     </Card>
                   ) : null}
                   {(dc.returns ?? []).length ? (
-                    <div style={{ display: "grid", gap: 8 }}>
-                      <div className="ims-between" style={{ alignItems: "baseline" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>Return history</div>
+                    <div className="ims-compose-section">
+                      <h3 className="ims-compose-section-title">
+                        Return history
                         <Button size="sm" variant="ghost" onClick={() => navigate("bomDc", "returns")}>
                           All returns
                         </Button>
-                      </div>
+                      </h3>
                       {(dc.returns ?? []).map((rtn) => (
-                        <div key={rtn.id} style={{ fontSize: 12, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 6 }}>
+                        <div key={rtn.id} className="ims-compose-history-row">
                           <div className="ims-row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                             <span>
                               <b>{rtn.returnNo}</b> · {rtn.returnDate}
@@ -1386,7 +1393,7 @@ function DcManagerForm({
                               </Button>
                             )}
                           </div>
-                          <div style={{ opacity: 0.75 }}>
+                          <div className="ims-compose-lines-meta">
                             {rtn.lines.map((l) => `${l.description}: ${l.qty} ${l.unit}`).join(" · ")}
                           </div>
                         </div>

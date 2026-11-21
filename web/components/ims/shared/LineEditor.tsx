@@ -37,8 +37,8 @@ export const toLineInputs = (lines: ReadonlyArray<EditableLine>): ImsLineInput[]
     .map(({ key, ...rest }) => ({ ...rest, qty: num(rest.qty), rate: num(rest.rate), discountPct: num(rest.discountPct), gstRate: num(rest.gstRate) }));
 
 /**
- * GST line editor: item · qty · rate · disc% · GST% · amount. Lines linked to an item move stock;
- * free-text lines (services, freight) don't. Totals mirror the server's computeTotals.
+ * GST line editor: dense sticky table for 100+ lines — item · qty · rate · disc% · GST% · amount.
+ * Lines linked to an item move stock; free-text lines (services, freight) don't.
  */
 export function LineEditor({
   lines,
@@ -58,6 +58,7 @@ export function LineEditor({
   readOnly?: boolean;
 }) {
   const [picking, setPicking] = useState(false);
+  const [q, setQ] = useState("");
   const totals = useMemo(() => computeTotals(lines, intraState, roundToRupee), [lines, intraState, roundToRupee]);
   const update = (key: string, patch: Partial<EditableLine>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const remove = (key: string) => onChange(lines.filter((l) => l.key !== key));
@@ -67,56 +68,139 @@ export function LineEditor({
     else onChange([...lines.filter((l) => l.name.trim() || l.itemId), lineFromItem(item, price)]);
   };
 
+  const query = q.trim().toLowerCase();
+  const showSearch = lines.length >= 8;
+  const visible = useMemo(() => {
+    if (!query) return lines.map((l, i) => ({ line: l, index: i }));
+    return lines
+      .map((l, i) => ({ line: l, index: i }))
+      .filter(({ line: l }) => {
+        const hay = `${l.name} ${l.sku ?? ""} ${l.hsn ?? ""}`.toLowerCase();
+        return hay.includes(query);
+      });
+  }, [lines, query]);
+
   return (
-    <div>
-      <div className="ims-line-head" aria-hidden="true">
-        <span>Item / description</span>
-        <span>Qty</span>
-        <span>Rate ₹</span>
-        <span>Disc %</span>
-        <span>GST %</span>
-        <span style={{ textAlign: "right" }}>Amount</span>
-        <span />
+    <div className="ims-line-editor">
+      <div className="ims-line-editor-toolbar">
+        <span className="ims-line-editor-count" aria-live="polite">
+          <b>{lines.length}</b> line{lines.length === 1 ? "" : "s"}
+          {query && visible.length !== lines.length ? <span className="ims-faint"> · showing {visible.length}</span> : null}
+        </span>
+        {showSearch ? (
+          <Input
+            size="sm"
+            className="ims-line-editor-search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Filter items…"
+            aria-label="Filter line items"
+          />
+        ) : null}
       </div>
-      <div role="list" aria-label="Line items">
-        {lines.map((l, i) => (
-          <div key={l.key} className="ims-line" role="listitem">
-            <div className="ims-cell-stack">
-              {l.itemId || !allowFreeText || readOnly ? (
-                <>
-                  <span className="ims-strong">{l.name || "—"}</span>
-                  <small>{[l.sku, l.hsn ? `HSN ${l.hsn}` : null, l.unit].filter(Boolean).join(" · ")}</small>
-                </>
-              ) : (
-                <Input size="sm" placeholder="Description (service, freight…)" value={l.name} onChange={(e) => update(l.key, { name: e.target.value })} aria-label={`Line ${i + 1} description`} />
-              )}
-            </div>
-            <Input size="sm" type="number" min={0} step="any" inputMode="decimal" value={String(l.qty)} disabled={readOnly} onChange={(e) => update(l.key, { qty: e.target.value === "" ? 0 : Number(e.target.value) })} aria-label={`Line ${i + 1} quantity`} />
-            <Input size="sm" type="number" min={0} step="any" inputMode="decimal" value={String(l.rate)} disabled={readOnly} onChange={(e) => update(l.key, { rate: e.target.value === "" ? 0 : Number(e.target.value) })} aria-label={`Line ${i + 1} rate`} />
-            <Input size="sm" type="number" min={0} max={100} step="any" inputMode="decimal" value={String(l.discountPct ?? 0)} disabled={readOnly} onChange={(e) => update(l.key, { discountPct: e.target.value === "" ? 0 : Number(e.target.value) })} aria-label={`Line ${i + 1} discount percent`} />
-            <Select size="sm" value={String(l.gstRate)} disabled={readOnly} onChange={(e) => update(l.key, { gstRate: Number(e.target.value) })} aria-label={`Line ${i + 1} GST rate`}>
-              {[...new Set([...GST_RATES, num(l.gstRate)])].sort((a, b) => a - b).map((r) => (
-                <option key={r} value={r}>
-                  {r}%
-                </option>
-              ))}
-            </Select>
-            <div className="ims-line-amount">
-              {inrExact(totals.lines[i]?.amount ?? 0)}
-              {totals.lines[i]?.tax ? <small>incl. GST {inrExact(totals.lines[i].tax)}</small> : null}
-            </div>
-            {readOnly ? (
-              <span />
-            ) : (
-              <button type="button" className="bos-inv-remove" aria-label={`Remove line ${i + 1}`} title="Remove" onClick={() => remove(l.key)}>
-                <BosIcon name="x" />
-              </button>
-            )}
-          </div>
-        ))}
+
+      <div className="ims-line-editor-frame">
+        <div className="ims-line-head" aria-hidden="true">
+          <span className="ims-line-idx">#</span>
+          <span>Item / description</span>
+          <span>Qty</span>
+          <span>Rate ₹</span>
+          <span>Disc %</span>
+          <span>GST %</span>
+          <span style={{ textAlign: "right" }}>Amount</span>
+          <span />
+        </div>
+        <div className="ims-line-editor-body" role="list" aria-label="Line items">
+          {!lines.length ? (
+            <p className="ims-line-editor-empty">No lines yet — add catalogue items or a free-text line.</p>
+          ) : !visible.length ? (
+            <p className="ims-line-editor-empty">No lines match “{q.trim()}”.</p>
+          ) : (
+            visible.map(({ line: l, index: i }) => (
+              <div key={l.key} className="ims-line" role="listitem">
+                <span className="ims-line-idx">{i + 1}</span>
+                <div className="ims-cell-stack">
+                  {l.itemId || !allowFreeText || readOnly ? (
+                    <>
+                      <span className="ims-strong">{l.name || "—"}</span>
+                      <small>{[l.sku, l.hsn ? `HSN ${l.hsn}` : null, l.unit].filter(Boolean).join(" · ")}</small>
+                    </>
+                  ) : (
+                    <Input
+                      size="sm"
+                      placeholder="Description (service, freight…)"
+                      value={l.name}
+                      onChange={(e) => update(l.key, { name: e.target.value })}
+                      aria-label={`Line ${i + 1} description`}
+                    />
+                  )}
+                </div>
+                <Input
+                  size="sm"
+                  type="number"
+                  min={0}
+                  step="any"
+                  inputMode="decimal"
+                  value={String(l.qty)}
+                  disabled={readOnly}
+                  onChange={(e) => update(l.key, { qty: e.target.value === "" ? 0 : Number(e.target.value) })}
+                  aria-label={`Line ${i + 1} quantity`}
+                />
+                <Input
+                  size="sm"
+                  type="number"
+                  min={0}
+                  step="any"
+                  inputMode="decimal"
+                  value={String(l.rate)}
+                  disabled={readOnly}
+                  onChange={(e) => update(l.key, { rate: e.target.value === "" ? 0 : Number(e.target.value) })}
+                  aria-label={`Line ${i + 1} rate`}
+                />
+                <Input
+                  size="sm"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="any"
+                  inputMode="decimal"
+                  value={String(l.discountPct ?? 0)}
+                  disabled={readOnly}
+                  onChange={(e) => update(l.key, { discountPct: e.target.value === "" ? 0 : Number(e.target.value) })}
+                  aria-label={`Line ${i + 1} discount percent`}
+                />
+                <Select
+                  size="sm"
+                  value={String(l.gstRate)}
+                  disabled={readOnly}
+                  onChange={(e) => update(l.key, { gstRate: Number(e.target.value) })}
+                  aria-label={`Line ${i + 1} GST rate`}
+                >
+                  {[...new Set([...GST_RATES, num(l.gstRate)])].sort((a, b) => a - b).map((r) => (
+                    <option key={r} value={r}>
+                      {r}%
+                    </option>
+                  ))}
+                </Select>
+                <div className="ims-line-amount">
+                  {inrExact(totals.lines[i]?.amount ?? 0)}
+                  {totals.lines[i]?.tax ? <small>incl. GST {inrExact(totals.lines[i].tax)}</small> : null}
+                </div>
+                {readOnly ? (
+                  <span />
+                ) : (
+                  <button type="button" className="bos-inv-remove" aria-label={`Remove line ${i + 1}`} title="Remove" onClick={() => remove(l.key)}>
+                    <BosIcon name="x" />
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
+
       {readOnly ? null : (
-        <div className="ims-row" style={{ marginTop: 6 }}>
+        <div className="ims-line-editor-add">
           <Button size="sm" icon="plus" onClick={() => setPicking(true)}>
             Add items
           </Button>

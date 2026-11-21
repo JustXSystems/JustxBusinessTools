@@ -703,10 +703,18 @@
 /* DC compose must stay single-column (confirmed BOM compose-actions is 2-col). */
 .ims-bom-dc-compose {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   grid-template-columns: minmax(0, 1fr);
   width: 100%;
   align-content: start;
+}
+.ims-bom-dc-compose .ims-bom-action-card {
+  display: grid;
+  gap: 12px;
+}
+.ims-bom-dc-compose .ims-compose-lines-frame {
+  /* Keep the qty grid usable inside the split pane with 100+ lines */
+  background: var(--bos-surface, #fff);
 }
 
 /* Tone & density — brand voice without new skins */
