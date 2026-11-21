@@ -246,6 +246,15 @@ export function bomIndustryPackMeta(id: BomIndustryPackId | null | undefined): B
   return BOM_INDUSTRY_PACK_META.find((p) => p.id === n) ?? BOM_INDUSTRY_PACK_META[0]!;
 }
 
+/** Pack default section names not yet present on the sheet (case-insensitive). */
+export function missingBomPackSections(
+  presentSections: ReadonlyArray<string>,
+  pack: BomIndustryPackId | null | undefined,
+): string[] {
+  const have = new Set(presentSections.map((s) => s.trim().toLowerCase()).filter(Boolean));
+  return bomIndustryPackMeta(pack).defaultSections.filter((s) => !have.has(s.trim().toLowerCase()));
+}
+
 export function bomPackFromBusinessType(businessType: string | null | undefined): BomIndustryPackId {
   switch (String(businessType ?? "").toLowerCase()) {
     case "manufacturer":

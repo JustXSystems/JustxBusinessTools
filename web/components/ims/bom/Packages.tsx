@@ -2,7 +2,7 @@
 
 import "./bom.css";
 import { Fragment, useMemo, useRef, useState } from "react";
-import { Alert, Badge, Button, Card, EmptyState, Field, FormGrid, Input, Select, Textarea } from "@/components/bos";
+import { Alert, Badge, Button, Card, EmptyState, Field, FormGrid, Input, Select, Textarea, useToast } from "@/components/bos";
 import {
   BOM_LINE_KIND_LABEL,
   BOM_LINE_KINDS,
@@ -14,8 +14,9 @@ import {
 import { type ImsItem } from "@/lib/ims/api";
 import { formatCatalogEnsureSummary, parseBomPackageWorkbook } from "@/lib/ims/bom-excel";
 import { ensureBomPackageCatalog, ensureStockLinesForSave } from "@/lib/ims/ensure-catalog";
+import { bomIndustryPackMeta, missingBomPackSections, normalizeBomIndustryPack } from "@/lib/ims/bom-paper";
 import { useFeatureSwitch } from "@/components/config/ConfigProvider";
-import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useImsAction, useImsData, useOpenIntent } from "../core";
+import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent } from "../core";
 import { ItemPickerDialog } from "../shared/pickers";
 
 const SAMPLE_TEMPLATES_SWITCH = "ims.bom.sample_templates";
@@ -190,7 +191,11 @@ function PackageEditor({ id, onBack, onOpen }: { id: string | null; onBack: () =
 }
 
 function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; onBack: () => void; onOpen: (id: string) => void }) {
+  const { session } = useIms();
   const { run, busy } = useImsAction();
+  const toast = useToast();
+  const packId = normalizeBomIndustryPack(session.settings.bomIndustryPack);
+  const packMeta = bomIndustryPackMeta(packId);
   const [code, setCode] = useState(initial?.code ?? "");
   const [name, setName] = useState(initial?.name ?? "");
   const [capacityLabel, setCapacityLabel] = useState(initial?.capacityLabel ?? "");
@@ -225,14 +230,19 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
         serviceSpare: Boolean(l.serviceSpare),
         scrapPct: l.scrapPct ?? 0,
         costRate: l.costRate ?? null,
-      })) ?? [blankLine("Main Items"), blankLine("Accessories & Services")],
+      })) ?? packMeta.defaultSections.map((section) => blankLine(section)),
   );
 
   const sections = useMemo(() => {
     const names: string[] = [];
-    for (const l of lines) if (!names.includes(l.section)) names.push(l.section);
-    return names.length ? names : ["Main Items"];
+    for (const l of lines) {
+      const s = l.section.trim() || "Main Items";
+      if (!names.some((n) => n.toLowerCase() === s.toLowerCase())) names.push(s);
+    }
+    return names;
   }, [lines]);
+
+  const packSectionGaps = useMemo(() => missingBomPackSections(sections, packId), [sections, packId]);
 
   const save = async () => {
     if (!name.trim()) return;
@@ -445,6 +455,14 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
         Excel / line map → Inventory: Description → name · Vendor/Make → brand · Unit → unit · Price/unit → selling price. Other catalogue fields (SKU, barcode, category, HSN, GST, estimated cost) are invented when an item is created. Service, overhead and capacity-scaled lines stay commercial only.
       </Alert>
 
+      {!sections.length ? (
+        <Card>
+          <EmptyState icon="list" title="No sections yet">
+            {`Add the default sections for ${packMeta.label}, or create a custom section.`}
+          </EmptyState>
+        </Card>
+      ) : null}
+
       {sections.map((section) => (
         <Card key={section}>
           <div className="ims-bom-section-bar">
@@ -455,7 +473,7 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
           </div>
           <div className="ims-bom-line-editor" style={{ marginTop: 10 }}>
             {(() => {
-              const sectionLines = lines.filter((l) => l.section === section);
+              const sectionLines = lines.filter((l) => (l.section.trim() || "Main Items") === section);
               if (!sectionLines.length) {
                 return <p className="ims-line-editor-empty">No lines in this section yet.</p>;
               }
@@ -640,16 +658,51 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
           </div>
         </Card>
       ))}
-      <div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
         <Button
           size="sm"
           variant="ghost"
           onClick={() => {
             const next = window.prompt("New section name", "Extras");
-            if (next?.trim()) setLines((prev) => [...prev, blankLine(next.trim())]);
+            const name = next?.trim();
+            if (!name) return;
+            if (sections.some((s) => s.toLowerCase() === name.toLowerCase())) {
+              toast.show({ tone: "amber", title: "Section already exists", description: `“${name}” is already on this package.` });
+              return;
+            }
+            setLines((prev) => [...prev, blankLine(name)]);
           }}
         >
           Add section
+        </Button>
+        <Button
+          size="sm"
+          variant={packSectionGaps.length ? "primary" : "ghost"}
+          disabled={!packSectionGaps.length}
+          title={
+            packSectionGaps.length
+              ? `Add missing sections for ${packMeta.label}: ${packSectionGaps.join(", ")}`
+              : `All default sections for ${packMeta.label} are already on this package`
+          }
+          onClick={() => {
+            const missing = missingBomPackSections(sections, packId);
+            if (!missing.length) {
+              toast.show({
+                tone: "amber",
+                title: "Nothing to add",
+                description: `All default sections for ${packMeta.label} are already here.`,
+              });
+              return;
+            }
+            setLines((prev) => [...prev, ...missing.map((section) => blankLine(section))]);
+            toast.show({
+              tone: "emerald",
+              title: missing.length === 1 ? "Section added" : "Sections added",
+              description: missing.join(" · "),
+            });
+          }}
+        >
+          {packSectionGaps.length ? `Add pack sections (${packSectionGaps.length})` : "Add pack sections"}
         </Button>
       </div>
 

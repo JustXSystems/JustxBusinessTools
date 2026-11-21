@@ -11,6 +11,7 @@ import {
   bomIndustryPackMeta,
   bomOptionAppendix,
   bomPackFromBusinessType,
+  missingBomPackSections,
   bomPaperPurposeMeta,
   bomPlaceOfSupply,
   bomTaxBreakup,
@@ -204,6 +205,12 @@ describe("bom-paper purposes", () => {
     expect(bomIndustryPackMeta("epc").defaultSections).toEqual(["Supply", "Installation", "Civil & Misc"]);
     expect(bomIndustryPackMeta("manufacturing").defaultSections[0]).toBe("Raw materials");
     expect(bomIndustryPackMeta("services").defaultSections).toContain("Labour");
+  });
+
+  it("reports missing pack sections case-insensitively", () => {
+    expect(missingBomPackSections(["Supply", "installation"], "epc")).toEqual(["Civil & Misc"]);
+    expect(missingBomPackSections(["Main Items", "Accessories & Services"], "solar")).toEqual([]);
+    expect(missingBomPackSections([], "procurement")).toEqual(["Buy list", "Services"]);
   });
 
   it("computes validity days remaining and fills paper setting defaults", () => {

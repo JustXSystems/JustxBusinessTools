@@ -2,7 +2,7 @@
 
 import "./bom.css";
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Alert, Badge, Button, Card, EmptyState, Field, FilterChip, FormGrid, Input, Select, Textarea } from "@/components/bos";
+import { Alert, Badge, Button, Card, EmptyState, Field, FilterChip, FormGrid, Input, Select, Textarea, useToast } from "@/components/bos";
 import {
   BOM_DOC_STATUS_LABEL,
   BOM_INVOICE_CONVERT_LABEL,
@@ -48,6 +48,7 @@ import {
   BOM_PAPER_DENSITIES,
   BOM_PAPER_PURPOSE_META,
   bomIndustryPackMeta,
+  missingBomPackSections,
   normalizeBomIndustryPack,
   normalizeBomPaperDensity,
   normalizeBomPaperPurpose,
@@ -852,6 +853,7 @@ function BomEditorForm({
 }) {
   const { session } = useIms();
   const { run, busy } = useImsAction();
+  const toast = useToast();
   const print = usePrint();
   const settings = session.settings;
   const [customerPreview, setCustomerPreview] = useState(
@@ -953,22 +955,40 @@ function BomEditorForm({
     return packSections.map((section) => blankLine(section));
   });
 
+  /** Only real sections that have lines — never invent names or "Add pack sections" no-ops. */
   const sections = useMemo(() => {
     const names: string[] = [];
-    for (const l of lines) if (!names.includes(l.section)) names.push(l.section);
-    return names.length ? names : [...bomIndustryPackMeta(docPack).defaultSections];
-  }, [lines, docPack]);
+    for (const l of lines) {
+      const s = l.section.trim() || "Main Items";
+      if (!names.some((n) => n.toLowerCase() === s.toLowerCase())) names.push(s);
+    }
+    return names;
+  }, [lines]);
+
+  const packSectionGaps = useMemo(
+    () => missingBomPackSections(sections, docPack),
+    [sections, docPack],
+  );
 
   /** When pack changes and the sheet is still empty placeholders, rebuild section shells. */
   useEffect(() => {
     if (initial?.lines?.length || seeded?.lines?.length) return;
     setLines((prev) => {
+      const wanted = [...bomIndustryPackMeta(docPack).defaultSections];
+      if (!prev.length) return wanted.map((section) => blankLine(section));
       const allBlank = prev.every((l) => !l.description.trim() && !l.itemId);
       if (!allBlank) return prev;
-      const wanted = [...bomIndustryPackMeta(docPack).defaultSections];
-      const current: string[] = [];
-      for (const l of prev) if (!current.includes(l.section)) current.push(l.section);
-      if (wanted.length === current.length && wanted.every((s, i) => s === current[i])) return prev;
+      const present: string[] = [];
+      for (const l of prev) {
+        const s = l.section.trim();
+        if (s && !present.some((n) => n.toLowerCase() === s.toLowerCase())) present.push(s);
+      }
+      if (
+        wanted.length === present.length &&
+        wanted.every((s, i) => s.toLowerCase() === present[i]!.toLowerCase())
+      ) {
+        return prev;
+      }
       return wanted.map((section) => blankLine(section));
     });
   }, [docPack, initial?.lines?.length, seeded?.lines?.length]);
@@ -1538,6 +1558,13 @@ function BomEditorForm({
             </div>
           </Card>
 
+          {!sections.length ? (
+            <Card>
+              <EmptyState icon="list" title="No sections yet">
+                {`Add the default sections for ${bomIndustryPackMeta(docPack).label}, or create a custom section.`}
+              </EmptyState>
+            </Card>
+          ) : null}
           {sections.map((section) => (
             <Card key={section}>
               <div className="ims-bom-section-bar">
@@ -1548,7 +1575,7 @@ function BomEditorForm({
               </div>
               <div className="ims-bom-line-editor" style={{ marginTop: 10 }}>
                 {(() => {
-                  const sectionLines = lines.filter((l) => l.section === section);
+                  const sectionLines = lines.filter((l) => (l.section.trim() || "Main Items") === section);
                   if (!sectionLines.length) {
                     return <p className="ims-line-editor-empty">No lines in this section yet.</p>;
                   }
@@ -1700,28 +1727,51 @@ function BomEditorForm({
               </div>
             </Card>
           ))}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => {
                 const next = window.prompt("New section name", "Extras");
-                if (next?.trim()) setLines((prev) => [...prev, blankLine(next.trim())]);
+                const name = next?.trim();
+                if (!name) return;
+                if (sections.some((s) => s.toLowerCase() === name.toLowerCase())) {
+                  toast.show({ tone: "amber", title: "Section already exists", description: `“${name}” is already on this BOM.` });
+                  return;
+                }
+                setLines((prev) => [...prev, blankLine(name)]);
               }}
             >
               Add section
             </Button>
             <Button
               size="sm"
-              variant="ghost"
+              variant={packSectionGaps.length ? "primary" : "ghost"}
+              disabled={!packSectionGaps.length}
+              title={
+                packSectionGaps.length
+                  ? `Add missing sections for ${bomIndustryPackMeta(docPack).label}: ${packSectionGaps.join(", ")}`
+                  : `All default sections for ${bomIndustryPackMeta(docPack).label} are already on this BOM`
+              }
               onClick={() => {
-                const wanted = [...bomIndustryPackMeta(docPack).defaultSections];
-                const missing = wanted.filter((s) => !sections.includes(s));
-                if (!missing.length) return;
+                const missing = missingBomPackSections(sections, docPack);
+                if (!missing.length) {
+                  toast.show({
+                    tone: "amber",
+                    title: "Nothing to add",
+                    description: `All default sections for ${bomIndustryPackMeta(docPack).label} are already here.`,
+                  });
+                  return;
+                }
                 setLines((prev) => [...prev, ...missing.map((section) => blankLine(section))]);
+                toast.show({
+                  tone: "emerald",
+                  title: missing.length === 1 ? "Section added" : "Sections added",
+                  description: missing.join(" · "),
+                });
               }}
             >
-              Add pack sections
+              {packSectionGaps.length ? `Add pack sections (${packSectionGaps.length})` : "Add pack sections"}
             </Button>
           </div>
           </>
