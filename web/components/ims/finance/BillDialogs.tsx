@@ -7,7 +7,7 @@ import { BILL_BADGE, finance, gstStateName, intraStateFor, methodLabel, RUN_BADG
 import { addDaysISO, computeTotals, dateLabel, downloadCsv, inrExact, num, round2 } from "@/lib/ims/format";
 import { Loaded, StatusBadge, useIms, useImsAction, useImsData } from "../core";
 import { lineKey, LineEditor, toLineInputs, type EditableLine } from "../shared/LineEditor";
-import { PartySelect } from "../shared/pickers";
+import { fillRelated, ForceRelatedToggle, PartySelect } from "../shared/pickers";
 import { ConfirmDialog, KeyValues, MethodSelect, Stats } from "./shared";
 
 /* ---------- Add / edit bill ---------- */
@@ -30,6 +30,7 @@ export function BillEditorDialog({ bill, canApprove, onClose, onSaved }: { bill:
   const [notes, setNotes] = useState(bill?.notes ?? "");
   const [approveNow, setApproveNow] = useState(canApprove);
   const [touched, setTouched] = useState(false);
+  const [forceRelatedFill, setForceRelatedFill] = useState(false);
 
   const intraState = intraStateFor(settings, party?.state || gstStateName(party?.gstin) || null);
   const totals = useMemo(() => computeTotals(toLineInputs(lines), intraState), [lines, intraState]);
@@ -82,6 +83,9 @@ export function BillEditorDialog({ bill, canApprove, onClose, onSaved }: { bill:
       }
     >
       <div className="fin-xl">
+        <div className="ims-force-related-row">
+          <ForceRelatedToggle checked={forceRelatedFill} onChange={setForceRelatedFill} />
+        </div>
         <FormGrid columns="1fr 1fr">
           <Field label="Supplier *" error={touched ? errors.supplier : undefined}>
             {({ id }) => (
@@ -89,10 +93,18 @@ export function BillEditorDialog({ bill, canApprove, onClose, onSaved }: { bill:
                 id={id}
                 kind="supplier"
                 value={supplier}
-                onChange={(v) => {
+                onChange={(v, meta) => {
                   setSupplier({ id: v.id, name: v.name });
                   setParty(v.party);
-                  if (v.party?.paymentTermsDays != null) setDueDate(addDaysISO(billDate, v.party.paymentTermsDays));
+                  if (v.party?.paymentTermsDays == null) return;
+                  // Due starts on settings default for new bills — treat that as "empty" for empty-only fill.
+                  // Force (list pick only) overwrites a custom due; never clear when supplier has no terms.
+                  const force = Boolean(meta?.picked && forceRelatedFill);
+                  const next = addDaysISO(billDate, v.party.paymentTermsDays);
+                  const atSettingsDefault = dueDate === addDaysISO(billDate, settings.paymentTermsDays);
+                  if (force || !dueDate.trim() || (!bill && atSettingsDefault)) {
+                    fillRelated(dueDate, next, setDueDate, true);
+                  }
                 }}
               />
             )}

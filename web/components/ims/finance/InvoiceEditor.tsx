@@ -8,7 +8,7 @@ import { addDaysISO, computeTotals, dateLabel, inrExact, qtyText, round2 } from 
 import { DocRefLink } from "../bom/DocRefLink";
 import { ErrorBlock, LoadingBlock, PageHeader, Stack, useIms, useImsAction, useImsData } from "../core";
 import { blankLine, lineKey, LineEditor, toLineInputs, type EditableLine } from "../shared/LineEditor";
-import { fillIfEmpty, PartySelect, useItemCatalog } from "../shared/pickers";
+import { fillRelated, ForceRelatedToggle, PartySelect, useItemCatalog } from "../shared/pickers";
 import { SuggestInput } from "../shared/SuggestInput";
 import { BackLink, QuickChips } from "./shared";
 
@@ -58,6 +58,7 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const [notes, setNotes] = useState(inv?.notes ?? "");
   const [terms, setTerms] = useState(inv?.terms ?? settings.terms ?? "");
   const [touched, setTouched] = useState(false);
+  const [forceRelatedFill, setForceRelatedFill] = useState(false);
 
   const effectivePos = placeOfSupply || party?.state || gstStateName(gstin) || settings.state || "";
   const intraState = intraStateFor(settings, effectivePos);
@@ -97,17 +98,22 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
     setDueDate(addDaysISO(from, days));
   };
 
-  const pickCustomer = (v: { id: string | null; name: string; party: PartyOption | null }) => {
+  const pickCustomer = (
+    v: { id: string | null; name: string; party: PartyOption | null },
+    meta?: { picked?: boolean },
+  ) => {
     setCustomer({ id: v.id, name: v.name });
     setParty(v.party);
     if (!v.party) return;
-    fillIfEmpty(gstin, v.party.gstin, setGstin);
-    fillIfEmpty(mobile, v.party.mobile, setMobile);
-    fillIfEmpty(address, [v.party.address, v.party.city].filter(Boolean).join(", "), setAddress);
-    fillIfEmpty(placeOfSupply, v.party.state ?? gstStateName(v.party.gstin), setPlaceOfSupply);
-    // Payment terms: only nudge when still on business-profile default (new invoice).
-    if (!draft && termsDays === settings.paymentTermsDays && v.party.paymentTermsDays != null) {
-      applyTerms(v.party.paymentTermsDays);
+    const force = Boolean(meta?.picked && forceRelatedFill);
+    fillRelated(gstin, v.party.gstin, setGstin, force);
+    fillRelated(mobile, v.party.mobile, setMobile, force);
+    fillRelated(address, [v.party.address, v.party.city].filter(Boolean).join(", "), setAddress, force);
+    fillRelated(placeOfSupply, v.party.state ?? gstStateName(v.party.gstin), setPlaceOfSupply, force);
+    // Payment terms: empty-only when still on settings default (new invoice); force always applies.
+    if (v.party.paymentTermsDays != null) {
+      const termsUntouched = !draft && termsDays === settings.paymentTermsDays;
+      if (force || termsUntouched) applyTerms(v.party.paymentTermsDays);
     }
   };
 
@@ -198,7 +204,10 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
       <Card interactive={false}>
         <div className="fin-doc-grid">
           <div className="fin-box">
-            <div className="fin-box-label">Bill to</div>
+            <div className="fin-box-label">
+              Bill to
+              <ForceRelatedToggle checked={forceRelatedFill} onChange={setForceRelatedFill} />
+            </div>
             <FormGrid columns="1fr">
               <Field label="Customer *" error={touched ? errors.customer : undefined}>
                 {({ id }) => <PartySelect id={id} kind="customer" value={customer} onChange={pickCustomer} />}

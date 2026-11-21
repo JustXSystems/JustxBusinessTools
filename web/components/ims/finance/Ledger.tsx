@@ -6,7 +6,7 @@ import { Badge, Button, Card, DataTable, Dialog, EmptyState, Field, FormGrid, Gr
 import { finance, LEDGER_CATEGORY_LABEL, methodLabel, reminderLink, type LedgerData, type LedgerEntry, type LedgerEntryCategory, type PartyBalance, type PayMethod } from "@/lib/ims/finance";
 import { dateLabel, downloadCsv, inrCompact, inrExact, num, round2, stampLabel } from "@/lib/ims/format";
 import { Loaded, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData } from "../core";
-import { PartySelect } from "../shared/pickers";
+import { fillRelated, ForceRelatedToggle, PartySelect } from "../shared/pickers";
 import { ConfirmDialog, KeyValues, MethodSelect, PeriodSelect, QuickChips, sellerOf, type PeriodOrAll } from "./shared";
 import { balanceText, StatementDialog } from "./Statement";
 
@@ -336,6 +336,7 @@ function EntryDialog({ type: initialType, party, onClose }: { type: "credit" | "
   const [category, setCategory] = useState<LedgerEntryCategory>("udhaar");
   const [refNo, setRefNo] = useState("");
   const [notes, setNotes] = useState("");
+  const [forceRelatedFill, setForceRelatedFill] = useState(false);
   const amt = round2(num(amount));
   const valid = who.name.trim().length > 0 && amt > 0 && Boolean(date);
   const addDays = (d: number) => {
@@ -397,6 +398,9 @@ function EntryDialog({ type: initialType, party, onClose }: { type: "credit" | "
             { value: "debit", label: "Debit · you owe them" },
           ]}
         />
+        <div className="ims-force-related-row">
+          <ForceRelatedToggle checked={forceRelatedFill} onChange={setForceRelatedFill} />
+        </div>
         <FormGrid columns="1fr 1fr">
           <Field label="Party" hint="Pick a saved party or type any name.">
             {({ id }) => (
@@ -404,9 +408,14 @@ function EntryDialog({ type: initialType, party, onClose }: { type: "credit" | "
                 id={id}
                 kind={type === "credit" ? "customer" : "supplier"}
                 value={who}
-                onChange={(v) => {
+                onChange={(v, meta) => {
                   setWho({ id: v.id, name: v.name });
-                  if (v.party?.mobile) setPhone(v.party.mobile);
+                  if (!v.party) return;
+                  const force = Boolean(meta?.picked && forceRelatedFill);
+                  fillRelated(phone, v.party.mobile, setPhone, force);
+                  if (v.party.paymentTermsDays != null) {
+                    fillRelated(dueDate, addDays(v.party.paymentTermsDays), setDueDate, force);
+                  }
                 }}
               />
             )}

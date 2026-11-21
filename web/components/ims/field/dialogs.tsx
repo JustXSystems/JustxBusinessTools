@@ -4,7 +4,7 @@ import "./field.css";
 import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Checkbox, Dialog, Field, FormGrid, Input, Select, Textarea } from "@/components/bos";
 import { ErrorBlock, LoadingBlock, PersonAvatar, StatusBadge, useImsAction, useImsData } from "../core";
-import { PartySelect } from "../shared/pickers";
+import { fillRelated, ForceRelatedToggle, PartySelect } from "../shared/pickers";
 import {
   FIELD_STATUSES,
   FIELD_STATUS_META,
@@ -115,6 +115,7 @@ export function CheckInDialog({ open, onClose, tasks, initialTask }: { open: boo
   const [address, setAddress] = useState(initialTask?.siteAddress ?? "");
   const [photoNote, setPhotoNote] = useState("");
   const [touched, setTouched] = useState(false);
+  const [forceRelatedFill, setForceRelatedFill] = useState(false);
 
   const siteError = touched && siteName.trim().length < 2 ? "Enter the site or customer name" : undefined;
 
@@ -173,6 +174,9 @@ export function CheckInDialog({ open, onClose, tasks, initialTask }: { open: boo
     >
       <div className="bos-stack" style={{ gap: 14 }}>
         <GeoStatus geo={geo} onRetry={retry} />
+        <div className="ims-force-related-row">
+          <ForceRelatedToggle checked={forceRelatedFill} onChange={setForceRelatedFill} />
+        </div>
         <FormGrid>
           {tasks.length ? (
             <Field label="For task" hint="Optional — links this visit to an assigned task" full>
@@ -212,10 +216,12 @@ export function CheckInDialog({ open, onClose, tasks, initialTask }: { open: boo
                 id={id}
                 kind="customer"
                 value={party}
-                onChange={(v) => {
+                onChange={(v, meta) => {
                   setParty({ id: v.id, name: v.name });
-                  if (v.party && !siteName.trim()) setSiteName(v.party.name);
-                  if (v.party?.address && !address.trim()) setAddress([v.party.address, v.party.city].filter(Boolean).join(", "));
+                  if (!v.party) return;
+                  const force = Boolean(meta?.picked && forceRelatedFill);
+                  fillRelated(siteName, v.party.name, setSiteName, force);
+                  fillRelated(address, [v.party.address, v.party.city].filter(Boolean).join(", "), setAddress, force);
                 }}
               />
             )}
@@ -422,6 +428,7 @@ export function TaskDialog({
   const [amount, setAmount] = useState(task?.amount != null ? String(task.amount) : "");
   const [notes, setNotes] = useState(task?.notes ?? "");
   const [touched, setTouched] = useState(false);
+  const [forceRelatedFill, setForceRelatedFill] = useState(false);
 
   const amountNum = amount.trim() ? Number(amount) : null;
   const errors = {
@@ -475,6 +482,10 @@ export function TaskDialog({
         </>
       }
     >
+      <div className="bos-stack" style={{ gap: 10 }}>
+      <div className="ims-force-related-row">
+        <ForceRelatedToggle checked={forceRelatedFill} onChange={setForceRelatedFill} />
+      </div>
       <FormGrid>
         <Field label="Task *" error={show("title")} full>
           {({ id, describedBy, invalid: bad }) => (
@@ -510,9 +521,11 @@ export function TaskDialog({
               id={id}
               kind="customer"
               value={party}
-              onChange={(v) => {
+              onChange={(v, meta) => {
                 setParty({ id: v.id, name: v.name });
-                if (v.party?.address && !siteAddress.trim()) setSiteAddress([v.party.address, v.party.city].filter(Boolean).join(", "));
+                if (!v.party) return;
+                const force = Boolean(meta?.picked && forceRelatedFill);
+                fillRelated(siteAddress, [v.party.address, v.party.city].filter(Boolean).join(", "), setSiteAddress, force);
               }}
             />
           )}
@@ -557,6 +570,7 @@ export function TaskDialog({
           {({ id }) => <Textarea id={id} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Contact person, gate pass, items to carry…" maxLength={2000} />}
         </Field>
       </FormGrid>
+      </div>
     </Dialog>
   );
 }

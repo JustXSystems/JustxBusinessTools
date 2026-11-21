@@ -9,7 +9,7 @@ import { purchase, type PoAction, type PoShare, type PurchaseOrder } from "@/lib
 import { stateCodeOf } from "@/lib/ims/settings";
 import { PageHeader, Stack, useIms, useImsAction } from "../core";
 import { LineEditor, lineFromItem, lineKey, toLineInputs, type EditableLine } from "../shared/LineEditor";
-import { fillIfEmpty, PartySelect, useItemCatalog, usePartyOptions } from "../shared/pickers";
+import { fillRelated, ForceRelatedToggle, PartySelect, useItemCatalog, usePartyOptions } from "../shared/pickers";
 import { PartyDialog } from "./PartyDialog";
 
 export type PoPrefill = { supplierId: string | null; supplierName?: string; lines: EditableLine[]; note?: string };
@@ -53,6 +53,7 @@ export function PoEditor({ order, prefill, onSaved, onCancel }: { order?: Purcha
   const [lines, setLines] = useState<EditableLine[]>(() => (order ? fromOrderLines(order) : (prefill?.lines ?? [])));
   const [addingSupplier, setAddingSupplier] = useState(false);
   const [touched, setTouched] = useState(false);
+  const [forceRelatedFill, setForceRelatedFill] = useState(false);
 
   const party: PartyOption | null = useMemo(() => (supplier.id ? ((suppliers.data ?? []).find((p) => p.id === supplier.id) ?? null) : null), [supplier.id, suppliers.data]);
   const supplierName = supplier.name || party?.name || "";
@@ -135,19 +136,28 @@ export function PoEditor({ order, prefill, onSaved, onCancel }: { order?: Purcha
           <div className="ims-doc-box">
             <div className="ims-doc-box-label">
               <span>To (supplier) *</span>
-              {can("suppliers") || can("po") ? (
-                <Button size="sm" variant="ghost" icon="plus" onClick={() => setAddingSupplier(true)}>
-                  New supplier
-                </Button>
-              ) : null}
+              <span className="ims-row" style={{ gap: 8 }}>
+                <ForceRelatedToggle checked={forceRelatedFill} onChange={setForceRelatedFill} />
+                {can("suppliers") || can("po") ? (
+                  <Button size="sm" variant="ghost" icon="plus" onClick={() => setAddingSupplier(true)}>
+                    New supplier
+                  </Button>
+                ) : null}
+              </span>
             </div>
             <PartySelect
               kind="supplier"
               value={{ id: supplier.id, name: supplierName }}
-              onChange={(v) => {
+              onChange={(v, meta) => {
                 setSupplier({ id: v.id, name: v.name });
                 if (!v.party) return;
-                fillIfEmpty(paymentTerms, v.party.paymentTermsDays != null ? String(v.party.paymentTermsDays) : "", setPaymentTerms);
+                const force = Boolean(meta?.picked && forceRelatedFill);
+                fillRelated(
+                  paymentTerms,
+                  v.party.paymentTermsDays != null ? String(v.party.paymentTermsDays) : "",
+                  setPaymentTerms,
+                  force,
+                );
               }}
               placeholder="Supplier name"
             />
@@ -264,7 +274,12 @@ export function PoEditor({ order, prefill, onSaved, onCancel }: { order?: Purcha
         onClose={() => setAddingSupplier(false)}
         onSaved={(p) => {
           setSupplier({ id: p.id, name: p.name });
-          fillIfEmpty(paymentTerms, p.paymentTermsDays != null ? String(p.paymentTermsDays) : "", setPaymentTerms);
+          fillRelated(
+            paymentTerms,
+            p.paymentTermsDays != null ? String(p.paymentTermsDays) : "",
+            setPaymentTerms,
+            forceRelatedFill,
+          );
         }}
       />
     </div>

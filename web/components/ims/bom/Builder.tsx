@@ -1,7 +1,7 @@
 "use client";
 
 import "./bom.css";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, EmptyState, Field, FilterChip, FormGrid, Input, Select, Textarea } from "@/components/bos";
 import {
   BOM_DOC_STATUS_LABEL,
@@ -33,7 +33,14 @@ import { purchase } from "@/lib/ims/purchase";
 import { withBasePath } from "@/lib/base-path";
 import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
 import { GST_STATES } from "@/lib/ims/finance";
-import { fillIfEmpty, HistorySuggestInput, ItemPickerDialog, PartySelect, QuotationSelect } from "../shared/pickers";
+import {
+  fillRelated,
+  ForceRelatedToggle,
+  HistorySuggestInput,
+  ItemPickerDialog,
+  PartySelect,
+  QuotationSelect,
+} from "../shared/pickers";
 import { SuggestInput } from "../shared/SuggestInput";
 import {
   BOM_COLUMN_LABEL,
@@ -874,6 +881,7 @@ function BomEditorForm({
   const [preparedBy, setPreparedBy] = useState(initial?.preparedBy ?? session.actor.name ?? "");
   const [projectRef, setProjectRef] = useState(initial?.projectRef ?? "");
   const [quotationRef, setQuotationRef] = useState(initial?.quotationRef ?? "");
+  const [forceRelatedFill, setForceRelatedFill] = useState(false);
   const [validUntil, setValidUntil] = useState(initial?.validUntil ?? "");
   const [paymentTerms, setPaymentTerms] = useState(initial?.paymentTerms ?? "");
   const [deliveryTerms, setDeliveryTerms] = useState(initial?.deliveryTerms ?? "");
@@ -1307,6 +1315,9 @@ function BomEditorForm({
           ) : null}
 
           <Card>
+            <div className="ims-force-related-row">
+              <ForceRelatedToggle checked={forceRelatedFill} onChange={setForceRelatedFill} />
+            </div>
             <FormGrid>
               <Field label="Customer">
                 {({ id }) => (
@@ -1314,12 +1325,13 @@ function BomEditorForm({
                     id={id}
                     kind="customer"
                     value={{ id: partyId, name: customerName }}
-                    onChange={(v) => {
+                    onChange={(v, meta) => {
                       setPartyId(v.id);
                       setCustomerName(v.name);
                       if (!v.party) return;
-                      fillIfEmpty(location, v.party.city, setLocation);
-                      fillIfEmpty(customerState, v.party.state, setCustomerState);
+                      const force = Boolean(meta?.picked && forceRelatedFill);
+                      fillRelated(location, v.party.city, setLocation, force);
+                      fillRelated(customerState, v.party.state, setCustomerState, force);
                     }}
                   />
                 )}
@@ -1408,9 +1420,12 @@ function BomEditorForm({
                     onChange={setQuotationRef}
                     onPick={(quotation) => {
                       setQuotationRef(quotation.docNo);
-                      fillIfEmpty(customerName, quotation.partyName, setCustomerName);
-                      fillIfEmpty(location, quotation.partyCity, setLocation);
-                      fillIfEmpty(customerState, quotation.partyState, setCustomerState);
+                      const nameWasEmpty = !customerName.trim();
+                      fillRelated(customerName, quotation.partyName, setCustomerName, forceRelatedFill);
+                      if ((forceRelatedFill || nameWasEmpty) && quotation.partyName?.trim()) setPartyId(null);
+                      fillRelated(location, quotation.partyCity, setLocation, forceRelatedFill);
+                      fillRelated(customerState, quotation.partyState, setCustomerState, forceRelatedFill);
+                      fillRelated(title, quotation.title, setTitle, forceRelatedFill);
                     }}
                   />
                 )}
@@ -1532,76 +1547,156 @@ function BomEditorForm({
                 </Button>
               </div>
               <div className="ims-bom-line-editor" style={{ marginTop: 10 }}>
-                {lines
-                  .filter((l) => l.section === section)
-                  .map((l) => (
-                    <div key={l.key}>
-                      <div className="ims-bom-line-row">
-                        <span style={{ opacity: 0.5, paddingTop: 8 }}>•</span>
-                        <Input value={l.description} onChange={(e) => updateLine(l.key, { description: e.target.value })} placeholder="Description" />
-                        <Input value={l.makeText ?? ""} onChange={(e) => updateLine(l.key, { makeText: e.target.value })} placeholder="Make / brand" />
-                        <Input value={String(l.qty)} onChange={(e) => updateLine(l.key, { qty: Number(e.target.value) || 0 })} placeholder="Qty" />
-                        <Input value={l.unit} onChange={(e) => updateLine(l.key, { unit: e.target.value })} placeholder="Unit" />
-                        <Select value={l.lineKind} onChange={(e) => updateLine(l.key, { lineKind: e.target.value as BomLineKind })}>
-                          {BOM_LINE_KINDS.map((k) => (
-                            <option key={k} value={k}>
-                              {BOM_LINE_KIND_LABEL[k]}
-                            </option>
+                {(() => {
+                  const sectionLines = lines.filter((l) => l.section === section);
+                  if (!sectionLines.length) {
+                    return <p className="ims-line-editor-empty">No lines in this section yet.</p>;
+                  }
+                  return (
+                    <div className="ims-bom-line-frame">
+                      <table className="ims-bom-line-table" aria-label={`${section} lines`}>
+                        <thead>
+                          <tr>
+                            <th className="is-idx" scope="col">
+                              #
+                            </th>
+                            <th className="is-desc" scope="col">
+                              Description
+                            </th>
+                            <th className="is-make" scope="col">
+                              Make
+                            </th>
+                            <th className="is-qty" scope="col">
+                              Qty
+                            </th>
+                            <th className="is-unit" scope="col">
+                              Unit
+                            </th>
+                            <th className="is-kind" scope="col">
+                              Kind
+                            </th>
+                            <th className="is-rate" scope="col">
+                              Rate
+                            </th>
+                            <th className="is-act" scope="col">
+                              <span className="bos-sr-only">Actions</span>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sectionLines.map((l, i) => (
+                            <Fragment key={l.key}>
+                              <tr className="is-main">
+                                <td className="is-idx">{i + 1}</td>
+                                <td className="is-desc" data-label="Description">
+                                  <Input
+                                    value={l.description}
+                                    onChange={(e) => updateLine(l.key, { description: e.target.value })}
+                                    aria-label={`Line ${i + 1} description`}
+                                  />
+                                </td>
+                                <td className="is-make" data-label="Make">
+                                  <Input
+                                    value={l.makeText ?? ""}
+                                    onChange={(e) => updateLine(l.key, { makeText: e.target.value })}
+                                    aria-label={`Line ${i + 1} make`}
+                                  />
+                                </td>
+                                <td className="is-qty" data-label="Qty">
+                                  <Input
+                                    value={String(l.qty)}
+                                    onChange={(e) => updateLine(l.key, { qty: Number(e.target.value) || 0 })}
+                                    inputMode="decimal"
+                                    aria-label={`Line ${i + 1} quantity`}
+                                  />
+                                </td>
+                                <td className="is-unit" data-label="Unit">
+                                  <Input value={l.unit} onChange={(e) => updateLine(l.key, { unit: e.target.value })} aria-label={`Line ${i + 1} unit`} />
+                                </td>
+                                <td className="is-kind" data-label="Kind">
+                                  <Select value={l.lineKind} onChange={(e) => updateLine(l.key, { lineKind: e.target.value as BomLineKind })} aria-label={`Line ${i + 1} kind`}>
+                                    {BOM_LINE_KINDS.map((k) => (
+                                      <option key={k} value={k}>
+                                        {BOM_LINE_KIND_LABEL[k]}
+                                      </option>
+                                    ))}
+                                  </Select>
+                                </td>
+                                <td className="is-rate" data-label="Rate">
+                                  <Input
+                                    value={String(l.rate ?? 0)}
+                                    onChange={(e) => updateLine(l.key, { rate: Number(e.target.value) || 0 })}
+                                    inputMode="decimal"
+                                    aria-label={`Line ${i + 1} rate`}
+                                  />
+                                </td>
+                                <td className="is-act">
+                                  <Button size="sm" variant="ghost" onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))} aria-label={`Remove line ${i + 1}`}>
+                                    ×
+                                  </Button>
+                                </td>
+                              </tr>
+                              <tr className="is-meta">
+                                <td colSpan={8}>
+                                  <div className="ims-bom-line-meta">
+                                    <Button size="sm" variant="ghost" onClick={() => setPickFor(l.key)}>
+                                      {l.itemId ? "Change item" : "Pick inventory item"}
+                                    </Button>
+                                    {l.itemId ? (
+                                      <Button size="sm" variant="ghost" onClick={() => updateLine(l.key, { itemId: null })}>
+                                        Unlink
+                                      </Button>
+                                    ) : null}
+                                    {l.itemId ? (
+                                      <Badge tone="emerald">In inventory</Badge>
+                                    ) : l.lineKind === "stock" && l.description.trim() ? (
+                                      <Badge tone="amber">Will sync on save</Badge>
+                                    ) : null}
+                                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={Boolean(l.scaleByCapacity)}
+                                        onChange={(e) => updateLine(l.key, { scaleByCapacity: e.target.checked })}
+                                      />
+                                      Scale with {bomIndustryPackMeta(docPack).sizeLabel.toLowerCase()}
+                                    </label>
+                                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={Boolean(l.optionalFlag)}
+                                        onChange={(e) => updateLine(l.key, { optionalFlag: e.target.checked })}
+                                      />
+                                      Optional
+                                    </label>
+                                    <Input
+                                      value={l.optionKey ?? ""}
+                                      onChange={(e) => updateLine(l.key, { optionKey: e.target.value })}
+                                      placeholder="Option key"
+                                      style={{ maxWidth: 110 }}
+                                      aria-label={`Line ${i + 1} option key`}
+                                    />
+                                    <Input
+                                      value={l.remarks ?? ""}
+                                      onChange={(e) => updateLine(l.key, { remarks: e.target.value })}
+                                      placeholder="Remarks"
+                                      style={{ maxWidth: 180 }}
+                                      aria-label={`Line ${i + 1} remarks`}
+                                    />
+                                    {Array.isArray(l.alternateItemIds) && l.alternateItemIds.length > 0 ? (
+                                      <Badge tone="neutral">
+                                        {l.alternateItemIds.length} alt{l.alternateItemIds.length === 1 ? "" : "s"}
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                </td>
+                              </tr>
+                            </Fragment>
                           ))}
-                        </Select>
-                        <Input value={String(l.rate ?? 0)} onChange={(e) => updateLine(l.key, { rate: Number(e.target.value) || 0 })} placeholder="Rate" />
-                        <Button size="sm" variant="ghost" onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))} aria-label="Remove">
-                          ×
-                        </Button>
-                      </div>
-                      <div className="ims-bom-line-meta">
-                        <Button size="sm" variant="ghost" onClick={() => setPickFor(l.key)}>
-                          {l.itemId ? "Change item" : "Pick inventory item"}
-                        </Button>
-                        {l.itemId ? (
-                          <Button size="sm" variant="ghost" onClick={() => updateLine(l.key, { itemId: null })}>
-                            Unlink
-                          </Button>
-                        ) : null}
-                        {l.itemId ? (
-                          <Badge tone="emerald">In inventory</Badge>
-                        ) : l.lineKind === "stock" && l.description.trim() ? (
-                          <Badge tone="amber">Will sync on save</Badge>
-                        ) : null}
-                        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(l.scaleByCapacity)}
-                            onChange={(e) => updateLine(l.key, { scaleByCapacity: e.target.checked })}
-                          />
-                          Scale with {bomIndustryPackMeta(docPack).sizeLabel.toLowerCase()}
-                        </label>
-                        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(l.optionalFlag)}
-                            onChange={(e) => updateLine(l.key, { optionalFlag: e.target.checked })}
-                          />
-                          Optional
-                        </label>
-                        <Input
-                          value={l.optionKey ?? ""}
-                          onChange={(e) => updateLine(l.key, { optionKey: e.target.value })}
-                          placeholder="Option key"
-                          style={{ maxWidth: 110 }}
-                        />
-                        <Input
-                          value={l.remarks ?? ""}
-                          onChange={(e) => updateLine(l.key, { remarks: e.target.value })}
-                          placeholder="Remarks"
-                          style={{ maxWidth: 180 }}
-                        />
-                        {Array.isArray(l.alternateItemIds) && l.alternateItemIds.length > 0 ? (
-                          <Badge tone="neutral">{l.alternateItemIds.length} alt{l.alternateItemIds.length === 1 ? "" : "s"}</Badge>
-                        ) : null}
-                      </div>
+                        </tbody>
+                      </table>
                     </div>
-                  ))}
+                  );
+                })()}
               </div>
             </Card>
           ))}

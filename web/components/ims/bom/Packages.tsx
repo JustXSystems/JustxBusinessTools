@@ -1,7 +1,7 @@
 "use client";
 
 import "./bom.css";
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { Alert, Badge, Button, Card, EmptyState, Field, FormGrid, Input, Select, Textarea } from "@/components/bos";
 import {
   BOM_LINE_KIND_LABEL,
@@ -454,114 +454,189 @@ function PackageForm({ initial, onBack, onOpen }: { initial: BomPackage | null; 
             </Button>
           </div>
           <div className="ims-bom-line-editor" style={{ marginTop: 10 }}>
-            {lines
-              .filter((l) => l.section === section)
-              .map((l) => (
-                <div key={l.key}>
-                  <div className="ims-bom-line-row">
-                    <span style={{ opacity: 0.5, paddingTop: 8 }}>•</span>
-                    <Input value={l.description} onChange={(e) => updateLine(l.key, { description: e.target.value })} placeholder="Description" />
-                    <Input value={l.makeText ?? ""} onChange={(e) => updateLine(l.key, { makeText: e.target.value })} placeholder="Make / brand" />
-                    <Input value={String(l.qty)} onChange={(e) => updateLine(l.key, { qty: Number(e.target.value) || 0 })} placeholder="Qty" />
-                    <Input value={l.unit} onChange={(e) => updateLine(l.key, { unit: e.target.value })} placeholder="Unit" />
-                    <Select value={l.lineKind} onChange={(e) => updateLine(l.key, { lineKind: e.target.value as BomLineKind })}>
-                      {BOM_LINE_KINDS.map((k) => (
-                        <option key={k} value={k}>
-                          {BOM_LINE_KIND_LABEL[k]}
-                        </option>
+            {(() => {
+              const sectionLines = lines.filter((l) => l.section === section);
+              if (!sectionLines.length) {
+                return <p className="ims-line-editor-empty">No lines in this section yet.</p>;
+              }
+              return (
+                <div className="ims-bom-line-frame">
+                  <table className="ims-bom-line-table" aria-label={`${section} lines`}>
+                    <thead>
+                      <tr>
+                        <th className="is-idx" scope="col">
+                          #
+                        </th>
+                        <th className="is-desc" scope="col">
+                          Description
+                        </th>
+                        <th className="is-make" scope="col">
+                          Make
+                        </th>
+                        <th className="is-qty" scope="col">
+                          Qty
+                        </th>
+                        <th className="is-unit" scope="col">
+                          Unit
+                        </th>
+                        <th className="is-kind" scope="col">
+                          Kind
+                        </th>
+                        <th className="is-rate" scope="col">
+                          Rate
+                        </th>
+                        <th className="is-act" scope="col">
+                          <span className="bos-sr-only">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sectionLines.map((l, i) => (
+                        <Fragment key={l.key}>
+                          <tr className="is-main">
+                            <td className="is-idx">{i + 1}</td>
+                            <td className="is-desc" data-label="Description">
+                              <Input
+                                value={l.description}
+                                onChange={(e) => updateLine(l.key, { description: e.target.value })}
+                                aria-label={`Line ${i + 1} description`}
+                              />
+                            </td>
+                            <td className="is-make" data-label="Make">
+                              <Input
+                                value={l.makeText ?? ""}
+                                onChange={(e) => updateLine(l.key, { makeText: e.target.value })}
+                                aria-label={`Line ${i + 1} make`}
+                              />
+                            </td>
+                            <td className="is-qty" data-label="Qty">
+                              <Input
+                                value={String(l.qty)}
+                                onChange={(e) => updateLine(l.key, { qty: Number(e.target.value) || 0 })}
+                                inputMode="decimal"
+                                aria-label={`Line ${i + 1} quantity`}
+                              />
+                            </td>
+                            <td className="is-unit" data-label="Unit">
+                              <Input value={l.unit} onChange={(e) => updateLine(l.key, { unit: e.target.value })} aria-label={`Line ${i + 1} unit`} />
+                            </td>
+                            <td className="is-kind" data-label="Kind">
+                              <Select value={l.lineKind} onChange={(e) => updateLine(l.key, { lineKind: e.target.value as BomLineKind })} aria-label={`Line ${i + 1} kind`}>
+                                {BOM_LINE_KINDS.map((k) => (
+                                  <option key={k} value={k}>
+                                    {BOM_LINE_KIND_LABEL[k]}
+                                  </option>
+                                ))}
+                              </Select>
+                            </td>
+                            <td className="is-rate" data-label="Rate">
+                              <Input
+                                value={String(l.defaultRate ?? 0)}
+                                onChange={(e) => updateLine(l.key, { defaultRate: Number(e.target.value) || 0 })}
+                                inputMode="decimal"
+                                aria-label={`Line ${i + 1} rate`}
+                              />
+                            </td>
+                            <td className="is-act">
+                              <Button size="sm" variant="ghost" onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))} aria-label={`Remove line ${i + 1}`}>
+                                ×
+                              </Button>
+                            </td>
+                          </tr>
+                          <tr className="is-meta">
+                            <td colSpan={8}>
+                              <div className="ims-bom-line-meta">
+                                <Button size="sm" variant="ghost" onClick={() => setPickFor(l.key)}>
+                                  {l.itemId ? "Change item" : "Pick inventory item"}
+                                </Button>
+                                {l.itemId ? (
+                                  <Button size="sm" variant="ghost" onClick={() => updateLine(l.key, { itemId: null })}>
+                                    Unlink
+                                  </Button>
+                                ) : null}
+                                {l.itemId ? (
+                                  <Badge tone="emerald">In inventory</Badge>
+                                ) : l.lineKind === "stock" && l.description.trim() ? (
+                                  <Badge tone="amber">Will sync on save</Badge>
+                                ) : null}
+                                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(l.scaleByCapacity)}
+                                    onChange={(e) => updateLine(l.key, { scaleByCapacity: e.target.checked })}
+                                  />
+                                  Scale with capacity
+                                </label>
+                                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(l.serviceSpare)}
+                                    onChange={(e) => updateLine(l.key, { serviceSpare: e.target.checked })}
+                                  />
+                                  Service / spare
+                                </label>
+                                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(l.optionalFlag)}
+                                    onChange={(e) => updateLine(l.key, { optionalFlag: e.target.checked })}
+                                  />
+                                  Optional
+                                </label>
+                              </div>
+                              <div className="ims-bom-line-meta" style={{ marginTop: 6 }}>
+                                <Input
+                                  value={l.qtyFormula ?? ""}
+                                  onChange={(e) => updateLine(l.key, { qtyFormula: e.target.value })}
+                                  placeholder="Qty formula e.g. ceil(capacityKw*1000/panelWp)"
+                                  style={{ minWidth: 220, flex: 1 }}
+                                  aria-label={`Line ${i + 1} qty formula`}
+                                />
+                                <Input
+                                  value={l.optionKey ?? ""}
+                                  onChange={(e) => updateLine(l.key, { optionKey: e.target.value })}
+                                  placeholder="Option key"
+                                  style={{ width: 120 }}
+                                  aria-label={`Line ${i + 1} option key`}
+                                />
+                                <div style={{ minWidth: 160 }}>
+                                  <Select
+                                    value={l.childPackageId ?? ""}
+                                    onChange={(e) => updateLine(l.key, { childPackageId: e.target.value || null })}
+                                    aria-label={`Line ${i + 1} nested package`}
+                                  >
+                                    <option value="">No nested package</option>
+                                    {(packageChoices.data?.packages ?? [])
+                                      .filter((p) => p.id !== initial?.id)
+                                      .map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                          {p.code ? `${p.code} · ` : ""}
+                                          {p.name}
+                                        </option>
+                                      ))}
+                                  </Select>
+                                </div>
+                                <Button size="sm" variant="ghost" onClick={() => setAltPickFor(l.key)}>
+                                  Add alternate
+                                </Button>
+                                {(l.alternateItemIds ?? []).length ? (
+                                  <Badge tone="blue">{(l.alternateItemIds ?? []).length} alternate(s)</Badge>
+                                ) : null}
+                                {(l.alternateItemIds ?? []).length ? (
+                                  <Button size="sm" variant="ghost" onClick={() => updateLine(l.key, { alternateItemIds: [] })}>
+                                    Clear alts
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        </Fragment>
                       ))}
-                    </Select>
-                    <Input
-                      value={String(l.defaultRate ?? 0)}
-                      onChange={(e) => updateLine(l.key, { defaultRate: Number(e.target.value) || 0 })}
-                      placeholder="Rate"
-                    />
-                    <Button size="sm" variant="ghost" onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))} aria-label="Remove line">
-                      ×
-                    </Button>
-                  </div>
-                  <div className="ims-bom-line-meta">
-                    <Button size="sm" variant="ghost" onClick={() => setPickFor(l.key)}>
-                      {l.itemId ? "Change item" : "Pick inventory item"}
-                    </Button>
-                    {l.itemId ? (
-                      <Button size="sm" variant="ghost" onClick={() => updateLine(l.key, { itemId: null })}>
-                        Unlink
-                      </Button>
-                    ) : null}
-                    {l.itemId ? (
-                      <Badge tone="emerald">In inventory</Badge>
-                    ) : l.lineKind === "stock" && l.description.trim() ? (
-                      <Badge tone="amber">Will sync on save</Badge>
-                    ) : null}
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(l.scaleByCapacity)}
-                        onChange={(e) => updateLine(l.key, { scaleByCapacity: e.target.checked })}
-                      />
-                      Scale with capacity
-                    </label>
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(l.serviceSpare)}
-                        onChange={(e) => updateLine(l.key, { serviceSpare: e.target.checked })}
-                      />
-                      Service / spare
-                    </label>
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.85, cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(l.optionalFlag)}
-                        onChange={(e) => updateLine(l.key, { optionalFlag: e.target.checked })}
-                      />
-                      Optional
-                    </label>
-                  </div>
-                  <div className="ims-bom-line-meta" style={{ flexWrap: "wrap" }}>
-                    <Input
-                      value={l.qtyFormula ?? ""}
-                      onChange={(e) => updateLine(l.key, { qtyFormula: e.target.value })}
-                      placeholder="Qty formula e.g. ceil(capacityKw*1000/panelWp)"
-                      style={{ minWidth: 220, flex: 1 }}
-                    />
-                    <Input
-                      value={l.optionKey ?? ""}
-                      onChange={(e) => updateLine(l.key, { optionKey: e.target.value })}
-                      placeholder="Option key"
-                      style={{ width: 120 }}
-                    />
-                    <div style={{ minWidth: 160 }}>
-                      <Select
-                        value={l.childPackageId ?? ""}
-                        onChange={(e) => updateLine(l.key, { childPackageId: e.target.value || null })}
-                      >
-                        <option value="">No nested package</option>
-                        {(packageChoices.data?.packages ?? [])
-                          .filter((p) => p.id !== initial?.id)
-                          .map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.code ? `${p.code} · ` : ""}
-                              {p.name}
-                            </option>
-                          ))}
-                      </Select>
-                    </div>
-                    <Button size="sm" variant="ghost" onClick={() => setAltPickFor(l.key)}>
-                      Add alternate
-                    </Button>
-                    {(l.alternateItemIds ?? []).length ? (
-                      <Badge tone="blue">{(l.alternateItemIds ?? []).length} alternate(s)</Badge>
-                    ) : null}
-                    {(l.alternateItemIds ?? []).length ? (
-                      <Button size="sm" variant="ghost" onClick={() => updateLine(l.key, { alternateItemIds: [] })}>
-                        Clear alts
-                      </Button>
-                    ) : null}
-                  </div>
+                    </tbody>
+                  </table>
                 </div>
-              ))}
+              );
+            })()}
           </div>
         </Card>
       ))}

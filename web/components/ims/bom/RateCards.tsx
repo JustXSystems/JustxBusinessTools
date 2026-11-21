@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import "./bom.css";
+import { Fragment, useState } from "react";
 import { Badge, Button, Card, EmptyState, Field, FormGrid, Input, Select, Textarea } from "@/components/bos";
 import { bom, type BomRateCard, type BomRateCardLine } from "@/lib/ims/bom";
 import type { ImsItem } from "@/lib/ims/api";
@@ -208,31 +209,93 @@ function RateCardForm({ initial, onBack }: { initial: BomRateCard | null; onBack
             Add line
           </Button>
         </div>
-        <div style={{ display: "grid", gap: 10 }}>
-          {lines.map((l) => (
-            <div key={l.key} style={{ display: "grid", gap: 6, borderTop: "1px solid var(--bos-border, #e2e8f0)", paddingTop: 10 }}>
-              <div className="ims-bom-line-row">
-                <Input value={l.description ?? ""} onChange={(e) => updateLine(l.key, { description: e.target.value })} placeholder="Description" />
-                <Input value={l.sku ?? ""} onChange={(e) => updateLine(l.key, { sku: e.target.value })} placeholder="SKU" />
-                <Input value={l.unit ?? "nos"} onChange={(e) => updateLine(l.key, { unit: e.target.value })} placeholder="Unit" />
-                <Input value={String(l.rate ?? 0)} onChange={(e) => updateLine(l.key, { rate: Number(e.target.value) || 0 })} placeholder="Sell rate" />
-                <Input
-                  value={String(l.costRate ?? 0)}
-                  onChange={(e) => updateLine(l.key, { costRate: Number(e.target.value) || 0 })}
-                  placeholder="Cost"
-                />
-                <Button size="sm" variant="ghost" onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))}>
-                  ×
-                </Button>
-              </div>
-              <div className="ims-bom-line-meta">
-                <Button size="sm" variant="ghost" onClick={() => setPickFor(l.key)}>
-                  {l.itemId ? "Change item" : "Pick inventory item"}
-                </Button>
-                {l.itemId ? <Badge tone="emerald">Linked</Badge> : null}
-              </div>
+        <div className="ims-bom-line-editor">
+          {!lines.length ? (
+            <p className="ims-line-editor-empty">No lines yet — add a rate line.</p>
+          ) : (
+            <div className="ims-bom-line-frame">
+              <table className="ims-bom-line-table" aria-label="Rate card lines">
+                <thead>
+                  <tr>
+                    <th className="is-idx" scope="col">
+                      #
+                    </th>
+                    <th className="is-desc" scope="col">
+                      Description
+                    </th>
+                    <th className="is-sku" scope="col">
+                      SKU
+                    </th>
+                    <th className="is-unit" scope="col">
+                      Unit
+                    </th>
+                    <th className="is-rate" scope="col">
+                      Sell
+                    </th>
+                    <th className="is-cost" scope="col">
+                      Cost
+                    </th>
+                    <th className="is-act" scope="col">
+                      <span className="bos-sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l, i) => (
+                    <Fragment key={l.key}>
+                      <tr className="is-main">
+                        <td className="is-idx">{i + 1}</td>
+                        <td className="is-desc" data-label="Description">
+                          <Input
+                            value={l.description ?? ""}
+                            onChange={(e) => updateLine(l.key, { description: e.target.value })}
+                            aria-label={`Line ${i + 1} description`}
+                          />
+                        </td>
+                        <td className="is-sku" data-label="SKU">
+                          <Input value={l.sku ?? ""} onChange={(e) => updateLine(l.key, { sku: e.target.value })} aria-label={`Line ${i + 1} SKU`} />
+                        </td>
+                        <td className="is-unit" data-label="Unit">
+                          <Input value={l.unit ?? "nos"} onChange={(e) => updateLine(l.key, { unit: e.target.value })} aria-label={`Line ${i + 1} unit`} />
+                        </td>
+                        <td className="is-rate" data-label="Sell">
+                          <Input
+                            value={String(l.rate ?? 0)}
+                            onChange={(e) => updateLine(l.key, { rate: Number(e.target.value) || 0 })}
+                            inputMode="decimal"
+                            aria-label={`Line ${i + 1} sell rate`}
+                          />
+                        </td>
+                        <td className="is-cost" data-label="Cost">
+                          <Input
+                            value={String(l.costRate ?? 0)}
+                            onChange={(e) => updateLine(l.key, { costRate: Number(e.target.value) || 0 })}
+                            inputMode="decimal"
+                            aria-label={`Line ${i + 1} cost`}
+                          />
+                        </td>
+                        <td className="is-act">
+                          <Button size="sm" variant="ghost" onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))} aria-label={`Remove line ${i + 1}`}>
+                            ×
+                          </Button>
+                        </td>
+                      </tr>
+                      <tr className="is-meta">
+                        <td colSpan={7}>
+                          <div className="ims-bom-line-meta">
+                            <Button size="sm" variant="ghost" onClick={() => setPickFor(l.key)}>
+                              {l.itemId ? "Change item" : "Pick inventory item"}
+                            </Button>
+                            {l.itemId ? <Badge tone="emerald">Linked</Badge> : null}
+                          </div>
+                        </td>
+                      </tr>
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
+          )}
         </div>
       </Card>
       <ItemPickerDialog

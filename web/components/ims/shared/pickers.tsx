@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Button, Dialog, Input } from "@/components/bos";
+import { Badge, Button, Dialog, Input, Switch } from "@/components/bos";
 import { ims, type ImsItem, type PartyOption } from "@/lib/ims/api";
 import {
   bom,
@@ -13,11 +13,51 @@ import { dateLabel, inr, inrExact, qtyText, stockBadge } from "@/lib/ims/format"
 import { useImsAction, useImsData } from "../core";
 import { SuggestInput, type SuggestOption } from "./SuggestInput";
 
-/** Fill a related composer field only when the current value is blank. */
-export function fillIfEmpty(current: string, next: string | null | undefined, set: (value: string) => void) {
-  if (current.trim()) return;
+/**
+ * Apply a related composer field from a picked party/quote.
+ * Default: only when current is blank. `force` overwrites even when filled.
+ * Never clears a field when the source value is empty (both modes).
+ */
+export function fillRelated(
+  current: string,
+  next: string | null | undefined,
+  set: (value: string) => void,
+  force = false,
+) {
   const v = String(next ?? "").trim();
-  if (v) set(v);
+  if (!v) return;
+  if (!force) {
+    if (current.trim()) return;
+    set(v);
+    return;
+  }
+  if (current === v) return;
+  set(v);
+}
+
+/** @deprecated use fillRelated — kept for call-site clarity aliases */
+export const fillIfEmpty = (current: string, next: string | null | undefined, set: (value: string) => void) =>
+  fillRelated(current, next, set, false);
+
+/** Compact toggle: when on, picking a party/quote overwrites related fields. */
+export function ForceRelatedToggle({
+  checked,
+  onChange,
+  label = "Force fill related",
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label?: string;
+}) {
+  return (
+    <label
+      className={`ims-force-related${checked ? " is-on" : ""}`}
+      title="When on, picking a party or quotation overwrites related fields even if they already have values"
+    >
+      <Switch checked={checked} onChange={onChange} aria-label={label} />
+      <span>{label}</span>
+    </label>
+  );
 }
 
 /** All active items, loaded once per mount (and after mutations). Filter client-side for instant search. */
@@ -187,9 +227,13 @@ export function usePartyOptions(kind?: "supplier" | "customer") {
   return useImsData(() => ims.partyOptions(kind).then((r) => r.parties), [kind]);
 }
 
+export type PartySelectValue = { id: string | null; name: string; party: PartyOption | null };
+export type PartySelectMeta = { picked?: boolean };
+
 /**
  * Free-text cum select for customers/suppliers.
  * Type to filter the book; pick a row to link the party id; keep free text for walk-ins.
+ * `meta.picked` is true only when choosing from the suggestion list (for force-fill).
  */
 export function PartySelect({
   kind,
@@ -201,7 +245,7 @@ export function PartySelect({
 }: {
   kind: "supplier" | "customer";
   value: { id: string | null; name: string };
-  onChange: (v: { id: string | null; name: string; party: PartyOption | null }) => void;
+  onChange: (v: PartySelectValue, meta?: PartySelectMeta) => void;
   id?: string;
   allowFreeText?: boolean;
   placeholder?: string;
@@ -233,11 +277,11 @@ export function PartySelect({
       options={options}
       onChange={(name) => {
         const exact = list.find((p) => p.name.toLowerCase() === name.trim().toLowerCase()) ?? null;
-        onChange({ id: exact?.id ?? null, name, party: exact });
+        onChange({ id: exact?.id ?? null, name, party: exact }, { picked: false });
       }}
       onPick={(opt) => {
         const party = opt.data ?? null;
-        onChange({ id: party?.id ?? null, name: opt.value, party });
+        onChange({ id: party?.id ?? null, name: opt.value, party }, { picked: true });
       }}
     />
   );

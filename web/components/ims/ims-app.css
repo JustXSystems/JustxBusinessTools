@@ -174,7 +174,7 @@
   font-size: 10.5px; letter-spacing: .02em; color: var(--bos-text-faint);
 }
 
-/* Document line editor: ultra-dense sticky grid for 100+ invoice/PO lines */
+/* Document line editor: dense sticky table for 100+ invoice/PO lines */
 .bos .ims-line-editor { display: grid; gap: 6px; min-width: 0; }
 .bos .ims-line-editor-count { font-size: 11.5px; color: var(--bos-text-muted); }
 .bos .ims-line-editor-count b { color: var(--bos-text); font-variant-numeric: tabular-nums; }
@@ -192,7 +192,6 @@
   max-height: min(56vh, 580px);
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 0 6px 4px;
 }
 .bos .ims-line-editor-empty {
   margin: 0;
@@ -202,48 +201,81 @@
   color: var(--bos-text-faint);
 }
 .bos .ims-line-editor-add { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.bos .ims-line-head,
-.bos .ims-line {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 2.4fr) 64px 84px 52px 58px 92px 26px;
-  gap: 4px 6px;
-  align-items: center;
+.bos .ims-line-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 12px;
 }
-.bos .ims-line-head {
-  font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--bos-text-faint); font-weight: 700;
-  padding: 6px 6px 5px;
+.bos .ims-line-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--bos-text-faint);
+  font-weight: 700;
+  text-align: left;
+  padding: 7px 6px;
   background: var(--bos-surface-2, var(--ims-well, #f8fafc));
   border-bottom: 1px solid var(--bos-border-soft);
+  white-space: nowrap;
 }
-.bos .ims-line {
-  padding: 2px 0;
+.bos .ims-line-table thead th.is-amt { text-align: right; }
+.bos .ims-line-table tbody td {
+  padding: 3px 5px;
   border-bottom: 1px solid color-mix(in srgb, var(--bos-border-soft) 75%, transparent);
-  min-height: 30px;
+  vertical-align: middle;
+  background: var(--bos-surface);
 }
-.bos .ims-line:nth-child(even) { background: color-mix(in srgb, var(--ims-well, #f8fafc) 45%, transparent); }
-.bos .ims-line:hover { background: color-mix(in srgb, var(--bos-blue, #2563eb) 4%, transparent); }
-.bos .ims-line:last-child { border-bottom: 0; }
-.bos .ims-line.is-catalog .ims-strong::before {
+.bos .ims-line-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--ims-well, #f8fafc) 45%, transparent);
+}
+.bos .ims-line-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--bos-blue, #2563eb) 4%, transparent);
+}
+.bos .ims-line-table tbody tr:last-child td { border-bottom: 0; }
+.bos .ims-line-table .is-idx {
+  width: 28px;
+  text-align: right;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--bos-text-faint);
+  padding-right: 2px;
+}
+.bos .ims-line-table .is-item { width: auto; }
+.bos .ims-line-table .is-qty { width: 68px; }
+.bos .ims-line-table .is-rate { width: 88px; }
+.bos .ims-line-table .is-disc { width: 56px; }
+.bos .ims-line-table .is-gst { width: 64px; }
+.bos .ims-line-table .is-amt { width: 96px; text-align: right; }
+.bos .ims-line-table .is-act { width: 30px; text-align: center; }
+.bos .ims-line-table tr.is-catalog .ims-strong::before {
   content: "";
   display: inline-block; width: 5px; height: 5px; border-radius: 50%;
   background: var(--bos-blue, #2563eb); margin-right: 6px; vertical-align: middle; opacity: .7;
 }
-.bos .ims-line-idx {
-  font-size: 10px; font-variant-numeric: tabular-nums;
-  color: var(--bos-text-faint); text-align: right; padding-right: 1px;
-}
-.bos .ims-line .ims-cell-stack { min-width: 0; }
-.bos .ims-line .ims-cell-stack .ims-strong {
+.bos .ims-line-table .ims-cell-stack { min-width: 0; }
+.bos .ims-line-table .ims-cell-stack .ims-strong {
   font-size: 12px; font-weight: 600; line-height: 1.25;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;
 }
-.bos .ims-line .ims-cell-stack small {
+.bos .ims-line-table .ims-cell-stack small {
   font-size: 10px; line-height: 1.2; color: var(--bos-text-faint);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.bos .ims-line .bos-input-sm,
-.bos .ims-line .bos-input { padding: 3px 6px; font-size: 11.5px; min-height: 26px; border-radius: 6px; }
+.bos .ims-line-table .bos-input-sm,
+.bos .ims-line-table .bos-input,
+.bos .ims-line-table .bos-select,
+.bos .ims-line-table select {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 11.5px;
+  min-height: 26px;
+  border-radius: 6px;
+}
 .bos .ims-line-amount {
   font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 650;
   text-align: right; padding-right: 2px; line-height: 1.2;
@@ -454,6 +486,16 @@
   margin: 4px 0 0;
   font-size: 10.5px; color: var(--bos-text-faint); line-height: 1.35;
 }
+.bos .ims-force-related {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11.5px; color: var(--bos-text-muted); cursor: pointer; user-select: none;
+  white-space: nowrap;
+}
+.bos .ims-force-related.is-on { color: var(--bos-text); font-weight: 600; }
+.bos .ims-force-related-row {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap;
+  margin: 0 0 2px;
+}
 
 /* Stock check count sheet */
 .bos .ims-count-input { width: 96px; }
@@ -607,31 +649,83 @@
   .bos .ims-split { grid-template-columns: minmax(0, 1fr); }
   .bos .ims-paper-meta { grid-template-columns: 1fr 1fr; }
 
-  /* Invoice/PO line editor — keep all fields, stack for narrow widths */
-  .bos .ims-line-head { display: none; }
-  .bos .ims-line-editor-body { max-height: min(62vh, 640px); padding: 0 6px 8px; }
+  /* Invoice/PO line editor — card stack with data-label cues */
+  .bos .ims-line-editor-body { max-height: min(62vh, 640px); }
   .bos .ims-line-editor-search { width: 100%; flex: 1 1 160px; }
-  .bos .ims-line {
-    grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr) 36px;
-    gap: 6px 8px;
-    padding: 10px 2px;
-    align-items: start;
+  .bos .ims-line-table { font-size: 12.5px; table-layout: auto; }
+  .bos .ims-line-table thead { display: none; }
+  .bos .ims-line-table,
+  .bos .ims-line-table tbody,
+  .bos .ims-line-table tr,
+  .bos .ims-line-table td {
+    display: block;
+    width: 100%;
   }
-  .bos .ims-line > :nth-child(1) { grid-column: 1; grid-row: 1 / span 3; padding-top: 10px; } /* # */
-  .bos .ims-line > :nth-child(2) { grid-column: 2 / 4; grid-row: 1; min-width: 0; } /* item */
-  .bos .ims-line > :nth-child(8) { grid-column: 4; grid-row: 1; justify-self: end; } /* remove */
-  .bos .ims-line > :nth-child(3) { grid-column: 2; grid-row: 2; } /* qty */
-  .bos .ims-line > :nth-child(4) { grid-column: 3; grid-row: 2; } /* rate */
-  .bos .ims-line > :nth-child(5) { grid-column: 2; grid-row: 3; } /* disc */
-  .bos .ims-line > :nth-child(6) { grid-column: 3; grid-row: 3; } /* gst */
-  .bos .ims-line > :nth-child(7) { grid-column: 2 / 5; grid-row: 4; text-align: left; padding: 2px 0 0; } /* amount */
-  .bos .ims-line .bos-input,
-  .bos .ims-line .bos-input-sm {
+  .bos .ims-line-table tbody tr {
+    position: relative;
+    padding: 10px 10px 10px 34px;
+    border-bottom: 1px solid var(--bos-border-soft);
+  }
+  .bos .ims-line-table tbody tr:nth-child(even) td { background: transparent; }
+  .bos .ims-line-table tbody tr:last-child { border-bottom: 0; }
+  .bos .ims-line-table tbody td {
+    padding: 0;
+    border-bottom: 0;
+    background: transparent !important;
+    width: auto;
+  }
+  .bos .ims-line-table .is-idx {
+    position: absolute;
+    left: 8px;
+    top: 12px;
+    width: auto;
+    text-align: left;
+    font-size: 11px;
+  }
+  .bos .ims-line-table .is-item { margin-bottom: 6px; padding-right: 28px; }
+  .bos .ims-line-table .is-act {
+    position: absolute;
+    right: 6px;
+    top: 8px;
+    width: auto;
+  }
+  .bos .ims-line-table .is-qty,
+  .bos .ims-line-table .is-rate,
+  .bos .ims-line-table .is-disc,
+  .bos .ims-line-table .is-gst,
+  .bos .ims-line-table .is-amt {
+    display: inline-block;
+    width: calc(50% - 4px);
+    vertical-align: top;
+    margin: 4px 0;
+  }
+  .bos .ims-line-table .is-qty,
+  .bos .ims-line-table .is-disc { margin-right: 8px; }
+  .bos .ims-line-table .is-amt { width: 100%; margin-top: 6px; text-align: left; }
+  .bos .ims-line-table .is-qty::before,
+  .bos .ims-line-table .is-rate::before,
+  .bos .ims-line-table .is-disc::before,
+  .bos .ims-line-table .is-gst::before,
+  .bos .ims-line-table .is-amt::before,
+  .bos .ims-line-table .is-item::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--bos-text-faint);
+    margin-bottom: 3px;
+  }
+  .bos .ims-line-table .bos-input,
+  .bos .ims-line-table .bos-input-sm,
+  .bos .ims-line-table .bos-select,
+  .bos .ims-line-table select {
     min-height: 40px;
     font-size: 16px; /* avoid iOS focus zoom */
     padding: 8px 10px;
   }
-  .bos .ims-line-amount { font-size: 13px; }
+  .bos .ims-line-amount { font-size: 13px; text-align: left; }
 
   /* DC/Return qty table — compact card stack */
   .bos .ims-compose-cmd { padding: 8px; gap: 8px; }
