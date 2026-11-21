@@ -9,7 +9,7 @@ import { purchase, type PoAction, type PoShare, type PurchaseOrder } from "@/lib
 import { stateCodeOf } from "@/lib/ims/settings";
 import { PageHeader, Stack, useIms, useImsAction } from "../core";
 import { LineEditor, lineFromItem, lineKey, toLineInputs, type EditableLine } from "../shared/LineEditor";
-import { PartySelect, useItemCatalog, usePartyOptions } from "../shared/pickers";
+import { fillIfEmpty, PartySelect, useItemCatalog, usePartyOptions } from "../shared/pickers";
 import { PartyDialog } from "./PartyDialog";
 
 export type PoPrefill = { supplierId: string | null; supplierName?: string; lines: EditableLine[]; note?: string };
@@ -146,7 +146,8 @@ export function PoEditor({ order, prefill, onSaved, onCancel }: { order?: Purcha
               value={{ id: supplier.id, name: supplierName }}
               onChange={(v) => {
                 setSupplier({ id: v.id, name: v.name });
-                if (v.party?.paymentTermsDays != null && !paymentTerms.trim()) setPaymentTerms(String(v.party.paymentTermsDays));
+                if (!v.party) return;
+                fillIfEmpty(paymentTerms, v.party.paymentTermsDays != null ? String(v.party.paymentTermsDays) : "", setPaymentTerms);
               }}
               placeholder="Supplier name"
             />
@@ -263,7 +264,7 @@ export function PoEditor({ order, prefill, onSaved, onCancel }: { order?: Purcha
         onClose={() => setAddingSupplier(false)}
         onSaved={(p) => {
           setSupplier({ id: p.id, name: p.name });
-          if (p.paymentTermsDays != null) setPaymentTerms(String(p.paymentTermsDays));
+          fillIfEmpty(paymentTerms, p.paymentTermsDays != null ? String(p.paymentTermsDays) : "", setPaymentTerms);
         }}
       />
     </div>

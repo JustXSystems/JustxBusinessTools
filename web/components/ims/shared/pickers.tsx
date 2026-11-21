@@ -1,11 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Button, Dialog, Input, Select, Switch } from "@/components/bos";
+import { Badge, Button, Dialog, Input } from "@/components/bos";
 import { ims, type ImsItem, type PartyOption } from "@/lib/ims/api";
-import { bom, type BomApprovedQuotation } from "@/lib/ims/bom";
+import {
+  bom,
+  type BomApprovedQuotation,
+  type BomDcSuggestField,
+  type BomSuggestField,
+} from "@/lib/ims/bom";
 import { dateLabel, inr, inrExact, qtyText, stockBadge } from "@/lib/ims/format";
 import { useImsAction, useImsData } from "../core";
+import { SuggestInput, type SuggestOption } from "./SuggestInput";
+
+/** Fill a related composer field only when the current value is blank. */
+export function fillIfEmpty(current: string, next: string | null | undefined, set: (value: string) => void) {
+  if (current.trim()) return;
+  const v = String(next ?? "").trim();
+  if (v) set(v);
+}
 
 /** All active items, loaded once per mount (and after mutations). Filter client-side for instant search. */
 export function useItemCatalog() {
@@ -107,7 +120,8 @@ export function ItemSearch({
             <p className="ims-faint">{q ? `No items match “${q}”.` : "No items yet — create the first from here or Items."}</p>
             {allowCreate && createLabel ? (
               <Button size="sm" disabled={Boolean(busy)} onClick={() => void createAndLink()}>
-                Create “{createLabel.slice(0, 48)}{createLabel.length > 48 ? "…" : ""}” in inventory
+                Create “{createLabel.slice(0, 48)}
+                {createLabel.length > 48 ? "…" : ""}” in inventory
               </Button>
             ) : null}
           </div>
@@ -116,7 +130,8 @@ export function ItemSearch({
       {allowCreate && hits.length > 0 && createLabel && !hits.some((h) => h.name.toLowerCase() === createLabel.toLowerCase()) ? (
         <div className="ims-item-search-create">
           <Button size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => void createAndLink()}>
-            Or create “{createLabel.slice(0, 40)}{createLabel.length > 40 ? "…" : ""}” as new inventory item
+            Or create “{createLabel.slice(0, 40)}
+            {createLabel.length > 40 ? "…" : ""}” as new inventory item
           </Button>
         </div>
       ) : null}
@@ -173,8 +188,8 @@ export function usePartyOptions(kind?: "supplier" | "customer") {
 }
 
 /**
- * Party select with a free-text fallback (walk-in customer, one-off supplier).
- * `value` carries both the linked id (or null) and the display name.
+ * Free-text cum select for customers/suppliers.
+ * Type to filter the book; pick a row to link the party id; keep free text for walk-ins.
  */
 export function PartySelect({
   kind,
@@ -193,226 +208,169 @@ export function PartySelect({
 }) {
   const parties = usePartyOptions(kind);
   const list = parties.data ?? [];
-  const [typing, setTyping] = useState(Boolean(value.name && !value.id));
 
-  if (typing && allowFreeText) {
-    return (
-      <div className="ims-row" style={{ flexWrap: "nowrap" }}>
-        <Input id={id} placeholder={placeholder ?? (kind === "supplier" ? "Supplier name" : "Customer name (e.g. Walk-in)")} value={value.name} onChange={(e) => onChange({ id: null, name: e.target.value, party: null })} style={{ flex: 1 }} />
-        {list.length ? (
-          <Button size="sm" variant="ghost" onClick={() => setTyping(false)}>
-            Pick saved
-          </Button>
-        ) : null}
-      </div>
-    );
-  }
+  const options = useMemo<SuggestOption<PartyOption>[]>(
+    () =>
+      list.map((p) => ({
+        id: p.id,
+        value: p.name,
+        label: p.name,
+        meta: [p.city, p.state, p.gstin, p.mobile].filter(Boolean).join(" · ") || undefined,
+        searchText: [p.city, p.state, p.gstin, p.mobile, p.contactPerson].filter(Boolean).join(" "),
+        data: p,
+      })),
+    [list],
+  );
+
   return (
-    <Select
+    <SuggestInput
       id={id}
-      value={value.id ?? ""}
-      onChange={(e) => {
-        const v = e.target.value;
-        if (v === "__new") {
-          setTyping(true);
-          onChange({ id: null, name: "", party: null });
-          return;
-        }
-        const party = list.find((p) => p.id === v) ?? null;
-        onChange({ id: party?.id ?? null, name: party?.name ?? "", party });
+      value={value.name}
+      loading={parties.data === null}
+      allowFreeText={allowFreeText}
+      placeholder={placeholder ?? (kind === "supplier" ? "Supplier name or pick…" : "Customer name or pick…")}
+      emptyLabel={allowFreeText ? "No saved match — keep typing" : `No ${kind}s found`}
+      options={options}
+      onChange={(name) => {
+        const exact = list.find((p) => p.name.toLowerCase() === name.trim().toLowerCase()) ?? null;
+        onChange({ id: exact?.id ?? null, name, party: exact });
       }}
-    >
-      <option value="">{parties.data === null ? "Loading…" : `Select ${kind}…`}</option>
-      {list.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.name}
-          {p.city ? ` — ${p.city}` : ""}
-        </option>
-      ))}
-      {allowFreeText ? <option value="__new">✎ Type a name instead…</option> : null}
-    </Select>
+      onPick={(opt) => {
+        const party = opt.data ?? null;
+        onChange({ id: party?.id ?? null, name: opt.value, party });
+      }}
+    />
   );
 }
 
 /**
- * Advanced picker for approved quotations (Quotation V1 → BOM link).
- * Stores the quotation document number as the BOM `quotationRef`.
+ * Approved quotation free-text cum select (BOM quotation reference).
+ * Type a legacy ref freely, or pick an approved Quotation V1 document.
  */
 export function QuotationSelect({
   value,
   onChange,
+  onPick,
   id,
   required,
-  placeholder = "Select approved quotation…",
+  placeholder = "Quote no. or pick approved…",
 }: {
   value: string;
-  onChange: (next: { quotationRef: string; quotation: BomApprovedQuotation | null; applyCustomer: boolean }) => void;
+  onChange: (quotationRef: string) => void;
+  onPick?: (quotation: BomApprovedQuotation) => void;
   id?: string;
   required?: boolean;
   placeholder?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
   const [qDebounced, setQDebounced] = useState("");
-  const [applyCustomer, setApplyCustomer] = useState(true);
+  useEffect(() => {
+    const t = window.setTimeout(() => setQDebounced(value.trim()), 200);
+    return () => window.clearTimeout(t);
+  }, [value]);
+
   const state = useImsData(() => bom.quotationRefs(qDebounced || undefined), [qDebounced]);
   const quotations = state.data?.quotations ?? [];
 
-  useEffect(() => {
-    const t = window.setTimeout(() => setQDebounced(q.trim()), 200);
-    return () => window.clearTimeout(t);
-  }, [q]);
-
-  useEffect(() => {
-    if (!open) {
-      setQ("");
-      setQDebounced("");
-    }
-  }, [open]);
-
-  const selected = useMemo(() => {
-    const needle = value.trim().toLowerCase();
-    if (!needle) return null;
-    return quotations.find((row) => row.docNo.toLowerCase() === needle) ?? null;
-  }, [quotations, value]);
-
-  const pick = (row: BomApprovedQuotation) => {
-    onChange({ quotationRef: row.docNo, quotation: row, applyCustomer });
-    setOpen(false);
-  };
-
-  const clear = () => {
-    onChange({ quotationRef: "", quotation: null, applyCustomer: false });
-  };
+  const options = useMemo<SuggestOption<BomApprovedQuotation>[]>(
+    () =>
+      quotations.map((row) => ({
+        id: row.ref,
+        value: row.docNo,
+        label: row.docNo,
+        meta: [row.partyName, row.title, row.partyGstin].filter(Boolean).join(" · "),
+        searchText: [row.partyName, row.title, row.partyGstin, row.partyPhone, row.partyCity, row.partyState]
+          .filter(Boolean)
+          .join(" "),
+        trailing: (
+          <>
+            {inrExact(row.amount)}
+            <span className="ims-faint" style={{ display: "block", fontSize: 10 }}>
+              {row.date ? dateLabel(row.date) : "—"}
+            </span>
+          </>
+        ),
+        data: row,
+      })),
+    [quotations],
+  );
 
   return (
-    <div className="ims-quote-select">
-      <div className="ims-quote-select-trigger">
-        <button
-          type="button"
-          id={id}
-          className="ims-quote-select-btn"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-required={required || undefined}
-          onClick={() => setOpen(true)}
-        >
-          {value.trim() ? (
-            <span className="ims-cell-stack">
-              <span className="ims-strong">{value.trim()}</span>
-              <small className="ims-faint">
-                {selected
-                  ? [selected.partyName, selected.title, selected.amount ? inr(selected.amount) : null].filter(Boolean).join(" · ")
-                  : "Approved quotation linked"}
-              </small>
-            </span>
-          ) : (
-            <span className="ims-quote-select-placeholder">{placeholder}</span>
-          )}
-          <span className="ims-quote-select-chevron" aria-hidden="true">
-            ▾
-          </span>
-        </button>
-        {value.trim() ? (
-          <Button type="button" size="sm" variant="ghost" onClick={clear} aria-label="Clear quotation reference">
-            Clear
-          </Button>
-        ) : null}
-      </div>
-
-      <Dialog
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Approved quotations"
-        description="Pick a customer-approved Quotation V1 document. Its number is stored as the BOM quotation reference."
-        wide
-        actions={
-          <Button variant="primary" onClick={() => setOpen(false)}>
-            Close
-          </Button>
-        }
-      >
-        {open ? (
-          <div className="ims-quote-picker">
-            <div className="ims-quote-picker-toolbar">
-              <Input
-                autoFocus
-                size="sm"
-                className="ims-quote-picker-search"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search quote no, customer, title…"
-                aria-label="Search approved quotations"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && quotations[0]) {
-                    e.preventDefault();
-                    pick(quotations[0]);
-                  }
-                }}
-              />
-              <label className="ims-quote-picker-apply">
-                <Switch checked={applyCustomer} onChange={setApplyCustomer} aria-label="Also set customer from quotation" />
-                Set customer from quote
-              </label>
-            </div>
-            <div className="ims-quote-picker-meta" aria-live="polite">
-              {state.loading && !state.data ? "Loading…" : null}
-              {state.error ? (
-                <button type="button" className="bos-back-link" onClick={() => state.reload()}>
-                  Retry load
-                </button>
-              ) : null}
-              {!state.loading && state.data ? (
-                <span>
-                  <b>{quotations.length}</b> approved
-                  {qDebounced ? ` matching “${qDebounced}”` : ""}
-                </span>
-              ) : null}
-            </div>
-            <div className="ims-pick ims-quote-picker-list" role="listbox" aria-label="Approved quotations">
-              {!state.loading && !quotations.length ? (
-                <p className="ims-faint" style={{ margin: "8px 2px" }}>
-                  {qDebounced
-                    ? `No approved quotations match “${qDebounced}”.`
-                    : "No approved quotations yet. Approve a quote in Quotation V1 first."}
-                </p>
-              ) : null}
-              {quotations.map((row) => {
-                const active = value.trim().toLowerCase() === row.docNo.toLowerCase();
-                return (
-                  <button
-                    key={row.ref}
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    className={`ims-pick-row ims-quote-picker-row${active ? " is-active" : ""}`}
-                    onClick={() => pick(row)}
-                  >
-                    <span className="ims-cell-stack">
-                      <span className="ims-strong">
-                        {row.docNo}{" "}
-                        {active ? (
-                          <Badge tone="emerald" auto>
-                            Selected
-                          </Badge>
-                        ) : null}
-                      </span>
-                      <small>
-                        {[row.partyName, row.title].filter(Boolean).join(" · ")}
-                        {row.partyGstin ? ` · ${row.partyGstin}` : ""}
-                      </small>
-                    </span>
-                    <span className="ims-cell-stack" style={{ textAlign: "right" }}>
-                      <span className="ims-num ims-strong">{inrExact(row.amount)}</span>
-                      <small className="ims-faint">{row.date ? dateLabel(row.date) : "—"}</small>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-      </Dialog>
+    <div>
+      <SuggestInput
+        id={id}
+        value={value}
+        required={required}
+        loading={state.loading && !state.data}
+        filterLocal={false}
+        allowFreeText
+        placeholder={placeholder}
+        emptyLabel="No approved quotes — type a reference"
+        options={options}
+        onChange={onChange}
+        onPick={(opt) => {
+          if (opt.data) onPick?.(opt.data);
+        }}
+      />
+      <p className="ims-suggest-hint">Approved Quotation V1 suggestions · free text still allowed</p>
     </div>
+  );
+}
+
+/** Historical string suggestions for BOM/DC composer reference fields. */
+export function HistorySuggestInput({
+  scope,
+  field,
+  value,
+  onChange,
+  id,
+  placeholder,
+  required,
+}: {
+  scope: "bom" | "dc";
+  field: BomSuggestField | BomDcSuggestField;
+  value: string;
+  onChange: (value: string) => void;
+  id?: string;
+  placeholder?: string;
+  required?: boolean;
+}) {
+  const [qDebounced, setQDebounced] = useState("");
+  useEffect(() => {
+    const t = window.setTimeout(() => setQDebounced(value.trim()), 220);
+    return () => window.clearTimeout(t);
+  }, [value]);
+
+  const state = useImsData(
+    () =>
+      scope === "bom"
+        ? bom.suggest(field as BomSuggestField, qDebounced || undefined)
+        : bom.dcSuggest(field as BomDcSuggestField, qDebounced || undefined),
+    [scope, field, qDebounced],
+  );
+  const suggestions = state.data?.suggestions ?? [];
+
+  const options = useMemo<SuggestOption[]>(
+    () =>
+      suggestions.map((s) => ({
+        id: s,
+        value: s,
+        label: s,
+      })),
+    [suggestions],
+  );
+
+  return (
+    <SuggestInput
+      id={id}
+      value={value}
+      required={required}
+      loading={state.loading && !state.data}
+      filterLocal={false}
+      allowFreeText
+      placeholder={placeholder}
+      emptyLabel="No prior values — type freely"
+      options={options}
+      onChange={onChange}
+    />
   );
 }

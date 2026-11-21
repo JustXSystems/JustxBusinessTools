@@ -7,6 +7,7 @@ import { isDcReturnBlocked } from "@/lib/ims/bom-dc-intent";
 import { todayLocal } from "@/lib/ims/format";
 import { ErrorBlock, LoadingBlock, useIms, useImsAction, useImsData, usePrint } from "../core";
 import { ComposerLineTable } from "../shared/ComposerLineTable";
+import { HistorySuggestInput } from "../shared/pickers";
 import { BomSplitLayout } from "./BomSplitLayout";
 import { DocRefLink } from "./DocRefLink";
 import { DcPaper, type DcPaperModel } from "./DcPaper";
@@ -765,13 +766,26 @@ function DcEditorForm({
                   )}
                 </Field>
                 <Field label="Ship to / consignee">
-                  {({ id }) => <Input id={id} value={shipTo} onChange={(e) => setShipTo(e.target.value)} placeholder="Delivery address" />}
+                  {({ id }) => (
+                    <HistorySuggestInput
+                      id={id}
+                      scope="dc"
+                      field="shipTo"
+                      value={shipTo}
+                      onChange={setShipTo}
+                      placeholder="Delivery address"
+                    />
+                  )}
                 </Field>
                 <Field label="Transporter">
-                  {({ id }) => <Input id={id} value={transporter} onChange={(e) => setTransporter(e.target.value)} />}
+                  {({ id }) => (
+                    <HistorySuggestInput id={id} scope="dc" field="transporter" value={transporter} onChange={setTransporter} />
+                  )}
                 </Field>
                 <Field label="Vehicle no.">
-                  {({ id }) => <Input id={id} value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value)} />}
+                  {({ id }) => (
+                    <HistorySuggestInput id={id} scope="dc" field="vehicleNo" value={vehicleNo} onChange={setVehicleNo} />
+                  )}
                 </Field>
               </FormGrid>
               <Field label="Notes">
@@ -1236,13 +1250,19 @@ function DcManagerForm({
                       )}
                     </Field>
                     <Field label="Ship to / consignee">
-                      {({ id }) => <Input id={id} value={shipTo} onChange={(e) => setShipTo(e.target.value)} />}
+                      {({ id }) => (
+                        <HistorySuggestInput id={id} scope="dc" field="shipTo" value={shipTo} onChange={setShipTo} />
+                      )}
                     </Field>
                     <Field label="Transporter">
-                      {({ id }) => <Input id={id} value={transporter} onChange={(e) => setTransporter(e.target.value)} />}
+                      {({ id }) => (
+                        <HistorySuggestInput id={id} scope="dc" field="transporter" value={transporter} onChange={setTransporter} />
+                      )}
                     </Field>
                     <Field label="Vehicle no.">
-                      {({ id }) => <Input id={id} value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value)} />}
+                      {({ id }) => (
+                        <HistorySuggestInput id={id} scope="dc" field="vehicleNo" value={vehicleNo} onChange={setVehicleNo} />
+                      )}
                     </Field>
                   </FormGrid>
                   <Field label="Notes">

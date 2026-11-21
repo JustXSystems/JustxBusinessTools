@@ -833,6 +833,36 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     res.json({ dcs, bomDocNo: doc.docNo, quotationRef: doc.quotationRef ?? null });
   });
 
+  /** Distinct historical values for DC composer reference fields. */
+  router.get("/bom/dc-suggest", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const field = qstr(req.query.field, 40);
+    const q = qstr(req.query.q, 80);
+    const columns: Record<string, string> = {
+      shipTo: "ship_to",
+      transporter: "transporter",
+      vehicleNo: "vehicle_no",
+    };
+    const col = columns[field];
+    if (!col) {
+      res.json({ suggestions: [] as string[] });
+      return;
+    }
+    const params: Record<string, unknown> = { tenantId: actor.tenantId };
+    let where = `tenant_id = :tenantId AND ${col} IS NOT NULL AND TRIM(${col}) <> '' AND status <> 'cancelled'`;
+    if (q) {
+      where += ` AND ${col} LIKE :q`;
+      params.q = `%${q}%`;
+    }
+    const list = await rows<{ v: string }>(
+      deps.db,
+      `SELECT DISTINCT ${col} AS v FROM ims_bom_dcs WHERE ${where} ORDER BY v ASC LIMIT 40`,
+      params,
+    );
+    res.json({ suggestions: list.map((r) => String(r.v)) });
+  });
+
   /** Tenant-wide DC list for the Bill of Materials → DC & Returns submodule. */
   router.get("/bom/dcs", async (req, res) => {
     requirePerm(res, "bom");

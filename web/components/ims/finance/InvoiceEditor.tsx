@@ -1,14 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Alert, Badge, Button, Card, Field, FormGrid, Input, Select, Switch, Textarea } from "@/components/bos";
+import { Alert, Badge, Button, Card, Field, FormGrid, Input, Switch, Textarea } from "@/components/bos";
 import type { PartyOption } from "@/lib/ims/api";
 import { finance, gstStateName, GST_STATES, intraStateFor, type InvoiceDetail, type InvoiceInput } from "@/lib/ims/finance";
 import { addDaysISO, computeTotals, dateLabel, inrExact, qtyText, round2 } from "@/lib/ims/format";
 import { DocRefLink } from "../bom/DocRefLink";
 import { ErrorBlock, LoadingBlock, PageHeader, Stack, useIms, useImsAction, useImsData } from "../core";
 import { blankLine, lineKey, LineEditor, toLineInputs, type EditableLine } from "../shared/LineEditor";
-import { PartySelect, useItemCatalog } from "../shared/pickers";
+import { fillIfEmpty, PartySelect, useItemCatalog } from "../shared/pickers";
+import { SuggestInput } from "../shared/SuggestInput";
 import { BackLink, QuickChips } from "./shared";
 
 const GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
@@ -99,12 +100,14 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const pickCustomer = (v: { id: string | null; name: string; party: PartyOption | null }) => {
     setCustomer({ id: v.id, name: v.name });
     setParty(v.party);
-    if (v.party) {
-      setGstin(v.party.gstin ?? "");
-      setMobile(v.party.mobile ?? "");
-      setAddress([v.party.address, v.party.city].filter(Boolean).join(", "));
-      setPlaceOfSupply(v.party.state ?? gstStateName(v.party.gstin) ?? "");
-      applyTerms(v.party.paymentTermsDays ?? settings.paymentTermsDays);
+    if (!v.party) return;
+    fillIfEmpty(gstin, v.party.gstin, setGstin);
+    fillIfEmpty(mobile, v.party.mobile, setMobile);
+    fillIfEmpty(address, [v.party.address, v.party.city].filter(Boolean).join(", "), setAddress);
+    fillIfEmpty(placeOfSupply, v.party.state ?? gstStateName(v.party.gstin), setPlaceOfSupply);
+    // Payment terms: only nudge when still on business-profile default (new invoice).
+    if (!draft && termsDays === settings.paymentTermsDays && v.party.paymentTermsDays != null) {
+      applyTerms(v.party.paymentTermsDays);
     }
   };
 
@@ -249,16 +252,27 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
                   />
                 )}
               </Field>
-              <Field label="Place of supply" full hint={`Business state: ${settings.state || "not set"} · ${intraState ? "intra-state supply" : "inter-state supply"}`}>
+              <Field
+                label="Place of supply"
+                full
+                hint={`Business state: ${settings.state || "not set"} · ${intraState ? "intra-state supply" : "inter-state supply"}${!placeOfSupply ? ` · Auto ${effectivePos || "business"}` : ""}`}
+              >
                 {({ id, describedBy }) => (
-                  <Select id={id} aria-describedby={describedBy} value={placeOfSupply} onChange={(e) => setPlaceOfSupply(e.target.value)}>
-                    <option value="">{effectivePos ? `Auto — ${effectivePos}` : "Same as business"}</option>
-                    {GST_STATES.map((s) => (
-                      <option key={s.code} value={s.name}>
-                        {s.code} · {s.name}
-                      </option>
-                    ))}
-                  </Select>
+                  <SuggestInput
+                    id={id}
+                    aria-describedby={describedBy}
+                    value={placeOfSupply}
+                    onChange={setPlaceOfSupply}
+                    placeholder={effectivePos ? `Auto — ${effectivePos}` : "Type or pick GST state…"}
+                    emptyLabel="No state match — keep typing"
+                    options={GST_STATES.map((s) => ({
+                      id: s.code,
+                      value: s.name,
+                      label: s.name,
+                      meta: `State code ${s.code}`,
+                      trailing: s.code,
+                    }))}
+                  />
                 )}
               </Field>
             </FormGrid>

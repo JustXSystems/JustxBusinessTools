@@ -1742,6 +1742,42 @@ export function registerBom(router: Router, deps: ImsDeps): void {
   });
 
   /**
+   * Distinct historical values for BOM composer reference fields
+   * (project ref, prepared by, location, commercial terms).
+   */
+  router.get("/bom/suggest", async (req, res) => {
+    requirePerm(res, "bom");
+    const actor = actorOf(res);
+    const field = qstr(req.query.field, 40);
+    const q = qstr(req.query.q, 80);
+    const columns: Record<string, string> = {
+      projectRef: "project_ref",
+      preparedBy: "prepared_by",
+      location: "location",
+      paymentTerms: "payment_terms",
+      deliveryTerms: "delivery_terms",
+      warrantyTerms: "warranty_terms",
+    };
+    const col = columns[field];
+    if (!col) {
+      res.json({ suggestions: [] as string[] });
+      return;
+    }
+    const params: Record<string, unknown> = { tenantId: actor.tenantId };
+    let where = `tenant_id = :tenantId AND ${col} IS NOT NULL AND TRIM(${col}) <> '' AND status <> 'cancelled'`;
+    if (q) {
+      where += ` AND ${col} LIKE :q`;
+      params.q = `%${q}%`;
+    }
+    const list = await rows<{ v: string }>(
+      deps.db,
+      `SELECT DISTINCT ${col} AS v FROM ims_bom_docs WHERE ${where} ORDER BY v ASC LIMIT 40`,
+      params,
+    );
+    res.json({ suggestions: list.map((r) => String(r.v)) });
+  });
+
+  /**
    * Approved quotations from connected tools (Quotation V1) for BOM linking.
    * Also returns legacy `refs` (doc numbers) for older clients.
    */

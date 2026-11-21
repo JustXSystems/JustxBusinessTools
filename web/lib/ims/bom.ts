@@ -166,6 +166,16 @@ export type BomApprovedQuotation = {
   sourceLabel: string;
 };
 
+export type BomSuggestField =
+  | "projectRef"
+  | "preparedBy"
+  | "location"
+  | "paymentTerms"
+  | "deliveryTerms"
+  | "warrantyTerms";
+
+export type BomDcSuggestField = "shipTo" | "transporter" | "vehicleNo";
+
 export type BomDoc = {
   id: string;
   packageId: string | null;
@@ -796,6 +806,12 @@ export const bom = {
     post<{ doc: BomDoc; message: string }>(`/bom/docs/${id}/amend-line-qty`, body),
   quotationRefs: (q?: string) =>
     get<{ refs: string[]; quotations: BomApprovedQuotation[] }>("/bom/quotation-refs", q ? { q } : undefined),
+  /** Historical distinct values for BOM composer reference fields. */
+  suggest: (field: BomSuggestField, q?: string) =>
+    get<{ suggestions: string[] }>("/bom/suggest", { field, ...(q ? { q } : {}) }),
+  /** Historical distinct values for DC composer reference fields. */
+  dcSuggest: (field: BomDcSuggestField, q?: string) =>
+    get<{ suggestions: string[] }>("/bom/dc-suggest", { field, ...(q ? { q } : {}) }),
   invoiceDcLinks: (invoiceId: string) => get<{ dcIds: string[]; dcs: BomDc[] }>(`/invoices/${invoiceId}/dc-links`),
   setInvoiceDcLinks: (invoiceId: string, dcIds: string[]) => put<{ dcIds: string[] }>(`/invoices/${invoiceId}/dc-links`, { dcIds }),
 };

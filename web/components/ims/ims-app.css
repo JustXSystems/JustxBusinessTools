@@ -393,39 +393,66 @@
 .bos .ims-item-search-empty { display: grid; gap: 10px; padding: 8px 2px 4px; }
 .bos .ims-item-search-create { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--ims-tile-border, rgba(15, 23, 42, 0.08)); }
 
-/* Approved quotation select (BOM composer) */
-.bos .ims-quote-select { display: grid; gap: 6px; min-width: 0; }
-.bos .ims-quote-select-trigger { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
-.bos .ims-quote-select-btn {
-  flex: 1 1 auto; min-width: 0;
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 7px 10px;
-  border: 1px solid var(--bos-border);
+/* Free-text + select combobox (composer reference fields) */
+.bos .ims-suggest { position: relative; min-width: 0; }
+.bos .ims-suggest-panel,
+.ims-suggest-panel {
+  overflow: auto; overscroll-behavior: contain;
+  border: 1px solid var(--bos-border-soft, rgba(15, 23, 42, 0.12));
   border-radius: 8px;
-  background: var(--bos-surface);
+  background: var(--bos-surface, #fff);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  padding: 4px;
+}
+.bos .ims-suggest-panel.is-portal,
+.ims-suggest-panel.is-portal {
+  /* Portaled to body so BOM/DC overflow panes cannot clip it */
+  max-height: min(42vh, 280px);
+}
+.bos .ims-suggest-empty,
+.ims-suggest-empty {
+  padding: 10px 10px;
+  font-size: 12px; color: var(--bos-text-faint, #94a3b8); text-align: left;
+}
+.bos .ims-suggest-option,
+.ims-suggest-option {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.bos .ims-quote-select-btn:hover { border-color: var(--bos-blue); }
-.bos .ims-quote-select-btn:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; }
-.bos .ims-quote-select-placeholder { color: var(--bos-text-faint); font-size: 13px; }
-.bos .ims-quote-select-chevron { color: var(--bos-text-faint); font-size: 11px; flex: 0 0 auto; }
-.bos .ims-quote-picker { display: grid; gap: 8px; min-width: 0; }
-.bos .ims-quote-picker-toolbar {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+.bos .ims-suggest-option:hover,
+.bos .ims-suggest-option.is-active,
+.ims-suggest-option:hover,
+.ims-suggest-option.is-active {
+  background: color-mix(in srgb, var(--bos-blue, #2563eb) 8%, transparent);
 }
-.bos .ims-quote-picker-search { flex: 1 1 220px; min-width: 0; }
-.bos .ims-quote-picker-apply {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-size: 12px; color: var(--bos-text-muted); white-space: nowrap;
+.bos .ims-suggest-option-main,
+.ims-suggest-option-main { min-width: 0; display: grid; gap: 1px; }
+.bos .ims-suggest-option-label,
+.ims-suggest-option-label {
+  font-size: 12.5px; font-weight: 600; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.bos .ims-quote-picker-meta {
-  font-size: 11.5px; color: var(--bos-text-muted);
+.bos .ims-suggest-option-meta,
+.ims-suggest-option-meta {
+  font-size: 10.5px; color: var(--bos-text-faint, #94a3b8); line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.bos .ims-quote-picker-meta b { color: var(--bos-text); font-variant-numeric: tabular-nums; }
-.bos .ims-quote-picker-list { max-height: min(52vh, 420px); }
-.bos .ims-quote-picker-row.is-active {
-  border-color: color-mix(in srgb, var(--bos-blue, #2563eb) 35%, var(--bos-border-soft));
-  background: color-mix(in srgb, var(--bos-blue, #2563eb) 7%, transparent);
+.bos .ims-suggest-option-trailing,
+.ims-suggest-option-trailing {
+  font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--bos-text-muted, #64748b);
+  text-align: right; white-space: nowrap;
+}
+.bos .ims-suggest-hint {
+  margin: 4px 0 0;
+  font-size: 10.5px; color: var(--bos-text-faint); line-height: 1.35;
 }
 
 /* Stock check count sheet */

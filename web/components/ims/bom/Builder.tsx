@@ -32,7 +32,9 @@ import { canRevokeBomProposal, proposalShareButtonLabel, shareBomProposal } from
 import { purchase } from "@/lib/ims/purchase";
 import { withBasePath } from "@/lib/base-path";
 import { ErrorBlock, LoadingBlock, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData, useOpenIntent, usePrint } from "../core";
-import { ItemPickerDialog, PartySelect, QuotationSelect } from "../shared/pickers";
+import { GST_STATES } from "@/lib/ims/finance";
+import { fillIfEmpty, HistorySuggestInput, ItemPickerDialog, PartySelect, QuotationSelect } from "../shared/pickers";
+import { SuggestInput } from "../shared/SuggestInput";
 import {
   BOM_COLUMN_LABEL,
   BOM_INDUSTRY_PACK_META,
@@ -1315,23 +1317,39 @@ function BomEditorForm({
                     onChange={(v) => {
                       setPartyId(v.id);
                       setCustomerName(v.name);
-                      if (v.party?.city && !location.trim()) setLocation(v.party.city);
-                      if (v.party?.state) setCustomerState(v.party.state);
-                      else if (!v.id) setCustomerState("");
+                      if (!v.party) return;
+                      fillIfEmpty(location, v.party.city, setLocation);
+                      fillIfEmpty(customerState, v.party.state, setCustomerState);
                     }}
                   />
                 )}
               </Field>
               <Field label="Location / site" hint="Site or city — not used for GST place of supply">
-                {({ id }) => <Input id={id} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Site / city / plant" />}
+                {({ id }) => (
+                  <HistorySuggestInput
+                    id={id}
+                    scope="bom"
+                    field="location"
+                    value={location}
+                    onChange={setLocation}
+                    placeholder="Site / city / plant"
+                  />
+                )}
               </Field>
               <Field label="Customer state (GST)" hint="Billing state for CGST/SGST vs IGST">
                 {({ id }) => (
-                  <Input
+                  <SuggestInput
                     id={id}
                     value={customerState}
-                    onChange={(e) => setCustomerState(e.target.value)}
+                    onChange={setCustomerState}
                     placeholder="e.g. Karnataka"
+                    options={GST_STATES.map((s) => ({
+                      id: s.code,
+                      value: s.name,
+                      label: s.name,
+                      meta: `Code ${s.code}`,
+                      trailing: s.code,
+                    }))}
                   />
                 )}
               </Field>
@@ -1358,17 +1376,28 @@ function BomEditorForm({
                 {({ id }) => <Input id={id} type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} />}
               </Field>
               <Field label="Prepared by">
-                {({ id }) => <Input id={id} value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)} />}
+                {({ id }) => (
+                  <HistorySuggestInput id={id} scope="bom" field="preparedBy" value={preparedBy} onChange={setPreparedBy} placeholder="Name" />
+                )}
               </Field>
               <Field label="Project ref">
-                {({ id }) => <Input id={id} value={projectRef} onChange={(e) => setProjectRef(e.target.value)} placeholder="Site / job / PO ref" />}
+                {({ id }) => (
+                  <HistorySuggestInput
+                    id={id}
+                    scope="bom"
+                    field="projectRef"
+                    value={projectRef}
+                    onChange={setProjectRef}
+                    placeholder="Site / job / PO ref"
+                  />
+                )}
               </Field>
               <Field
                 label="Quotation reference"
                 hint={
                   session.settings.bomRequireQuotationRef
-                    ? "Required before confirm — pick an approved Quotation V1"
-                    : "Select an approved quotation to link this BOM"
+                    ? "Required before confirm — type or pick an approved quote"
+                    : "Type a ref or pick from approved Quotation V1"
                 }
               >
                 {({ id }) => (
@@ -1376,12 +1405,12 @@ function BomEditorForm({
                     id={id}
                     value={quotationRef}
                     required={Boolean(session.settings.bomRequireQuotationRef)}
-                    onChange={({ quotationRef: next, quotation, applyCustomer }) => {
-                      setQuotationRef(next);
-                      if (!quotation || !applyCustomer) return;
-                      if (!customerName.trim()) setCustomerName(quotation.partyName);
-                      if (!location.trim() && quotation.partyCity) setLocation(quotation.partyCity);
-                      if (!customerState.trim() && quotation.partyState) setCustomerState(quotation.partyState);
+                    onChange={setQuotationRef}
+                    onPick={(quotation) => {
+                      setQuotationRef(quotation.docNo);
+                      fillIfEmpty(customerName, quotation.partyName, setCustomerName);
+                      fillIfEmpty(location, quotation.partyCity, setLocation);
+                      fillIfEmpty(customerState, quotation.partyState, setCustomerState);
                     }}
                   />
                 )}
@@ -1396,13 +1425,40 @@ function BomEditorForm({
                 {({ id }) => <Input id={id} value={taxPct} onChange={(e) => setTaxPct(e.target.value)} inputMode="decimal" />}
               </Field>
               <Field label="Payment terms">
-                {({ id }) => <Input id={id} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="e.g. 40% advance · 60% delivery" />}
+                {({ id }) => (
+                  <HistorySuggestInput
+                    id={id}
+                    scope="bom"
+                    field="paymentTerms"
+                    value={paymentTerms}
+                    onChange={setPaymentTerms}
+                    placeholder="e.g. 40% advance · 60% delivery"
+                  />
+                )}
               </Field>
               <Field label="Delivery terms">
-                {({ id }) => <Input id={id} value={deliveryTerms} onChange={(e) => setDeliveryTerms(e.target.value)} placeholder="e.g. 7–10 working days" />}
+                {({ id }) => (
+                  <HistorySuggestInput
+                    id={id}
+                    scope="bom"
+                    field="deliveryTerms"
+                    value={deliveryTerms}
+                    onChange={setDeliveryTerms}
+                    placeholder="e.g. 7–10 working days"
+                  />
+                )}
               </Field>
               <Field label="Warranty terms">
-                {({ id }) => <Input id={id} value={warrantyTerms} onChange={(e) => setWarrantyTerms(e.target.value)} placeholder="OEM + workmanship" />}
+                {({ id }) => (
+                  <HistorySuggestInput
+                    id={id}
+                    scope="bom"
+                    field="warrantyTerms"
+                    value={warrantyTerms}
+                    onChange={setWarrantyTerms}
+                    placeholder="OEM + workmanship"
+                  />
+                )}
               </Field>
               <Field label="Paper purpose" hint="Overrides tenant default for this BOM">
                 {({ id }) => (
