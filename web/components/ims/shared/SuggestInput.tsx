@@ -12,8 +12,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
-import { Input } from "@/components/bos";
+import { BosPortal, Input } from "@/components/bos";
 
 export type SuggestOption<T = unknown> = {
   id: string;
@@ -214,45 +213,44 @@ export function SuggestInput<T = unknown>({
     : undefined;
 
   const panel =
-    showList && mounted
-      ? createPortal(
-          <div
-            ref={panelRef}
-            id={listId}
-            className="ims-suggest-panel is-portal"
-            role="listbox"
-            style={panelStyle}
-          >
-            {loading && !filtered.length ? <div className="ims-suggest-empty">Loading…</div> : null}
-            {!loading && !filtered.length ? (
-              <div className="ims-suggest-empty">
-                {allowFreeText && value.trim() ? `Keep “${value.trim()}” as free text` : emptyLabel}
-              </div>
-            ) : null}
-            {filtered.map((opt, i) => (
-              <button
-                key={opt.id}
-                type="button"
-                id={`${listId}-${opt.id}`}
-                role="option"
-                aria-selected={i === active}
-                data-suggest-idx={i}
-                className={`ims-suggest-option${i === active ? " is-active" : ""}`}
-                onMouseEnter={() => setActive(i)}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(opt)}
-              >
-                <span className="ims-suggest-option-main">
-                  <span className="ims-suggest-option-label">{opt.label}</span>
-                  {opt.meta ? <span className="ims-suggest-option-meta">{opt.meta}</span> : null}
-                </span>
-                {opt.trailing ? <span className="ims-suggest-option-trailing">{opt.trailing}</span> : null}
-              </button>
-            ))}
-          </div>,
-          document.body,
-        )
-      : null;
+    showList && mounted ? (
+      <BosPortal>
+        <div
+          ref={panelRef}
+          id={listId}
+          className="ims-suggest-panel is-portal"
+          role="listbox"
+          style={panelStyle}
+        >
+          {loading && !filtered.length ? <div className="ims-suggest-empty">Loading…</div> : null}
+          {!loading && !filtered.length ? (
+            <div className="ims-suggest-empty">
+              {allowFreeText && value.trim() ? `Keep “${value.trim()}” as free text` : emptyLabel}
+            </div>
+          ) : null}
+          {filtered.map((opt, i) => (
+            <button
+              key={opt.id}
+              type="button"
+              id={`${listId}-${opt.id}`}
+              role="option"
+              aria-selected={i === active}
+              data-suggest-idx={i}
+              className={`ims-suggest-option${i === active ? " is-active" : ""}`}
+              onMouseEnter={() => setActive(i)}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(opt)}
+            >
+              <span className="ims-suggest-option-main">
+                <span className="ims-suggest-option-label">{opt.label}</span>
+                {opt.meta ? <span className="ims-suggest-option-meta">{opt.meta}</span> : null}
+              </span>
+              {opt.trailing ? <span className="ims-suggest-option-trailing">{opt.trailing}</span> : null}
+            </button>
+          ))}
+        </div>
+      </BosPortal>
+    ) : null;
 
   return (
     <div ref={rootRef} className={`ims-suggest${className ? ` ${className}` : ""}`}>

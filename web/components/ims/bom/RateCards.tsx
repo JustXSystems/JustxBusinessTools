@@ -214,7 +214,7 @@ function RateCardForm({ initial, onBack }: { initial: BomRateCard | null; onBack
             <p className="ims-line-editor-empty">No lines yet — add a rate line.</p>
           ) : (
             <div className="ims-bom-line-frame">
-              <table className="ims-bom-line-table" aria-label="Rate card lines">
+              <table className="ims-bom-line-table ims-bom-line-table--rate" aria-label="Rate card lines">
                 <thead>
                   <tr>
                     <th className="is-idx" scope="col">

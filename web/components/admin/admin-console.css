@@ -1505,6 +1505,14 @@
   min-width: 0;
   box-sizing: border-box;
   overflow-x: auto;
+  background-color: var(--bos-ims-surface-solid, var(--bos-surface));
+  color: var(--bos-text);
+  color-scheme: inherit;
+}
+.bos.admin-bos .admin-cc-enter-list option {
+  background-color: var(--bos-ims-surface-solid, var(--bos-surface));
+  color: var(--bos-text);
+  padding: 6px 4px;
 }
 
 .bos.admin-bos .admin-cc-enter-check {
@@ -2062,6 +2070,8 @@
 
   .bos.admin-bos .admin-cc-enter-list option {
     padding: 8px 6px;
+    background-color: var(--bos-ims-surface-solid, var(--bos-surface));
+    color: var(--bos-text);
   }
 
   .bos.admin-bos .admin-cc-enter-card .bos-segmented {

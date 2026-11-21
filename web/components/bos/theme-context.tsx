@@ -27,7 +27,12 @@ export function BosPortal({ children }: { children: ReactNode }) {
   const { theme, skin } = useBosTheme();
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="bos" data-bos-theme={theme} data-bos-skin={skin === "bos" ? undefined : skin}>
+    <div
+      className="bos"
+      data-bos-theme={theme}
+      data-bos-skin={skin === "bos" ? undefined : skin}
+      style={{ color: "var(--bos-text)" }}
+    >
       {children}
     </div>,
     document.body,

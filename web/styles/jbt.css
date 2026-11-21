@@ -30,7 +30,7 @@ textarea {
   font-family: inherit;
 }
 
-/* Global select chrome � match Quotation V1 category (.qgv1-cat) accent glass */
+/* Global select chrome — match host scheme so native <option> lists aren't OS-mismatched */
 select {
   background: var(--glass-2);
   border: 1px solid rgba(var(--accent-rgb), 0.32);
@@ -39,12 +39,12 @@ select {
   border-radius: var(--radius-sm);
   padding: 10px 14px;
   outline: none;
-  color-scheme: inherit;
+  color-scheme: dark;
 }
 
 select option,
 select optgroup {
-  background: var(--bg-2);
+  background-color: var(--bg-2);
   color: var(--text-hi);
 }
 
@@ -67,9 +67,15 @@ html[data-scheme="light"] select {
   color-scheme: light;
 }
 
+html[data-scheme="dark"] select {
+  color-scheme: dark;
+}
+
 html[data-scheme="light"] select option,
-html[data-scheme="light"] select optgroup {
-  background: var(--bg-2);
+html[data-scheme="light"] select optgroup,
+html[data-scheme="dark"] select option,
+html[data-scheme="dark"] select optgroup {
+  background-color: var(--bg-2);
   color: var(--text-hi);
 }
 
@@ -1270,7 +1276,7 @@ body:has(.mobile-menu) .float-dock {
   color: var(--text-hi);
   font-size: 13px;
   outline: none;
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 
 .field select {

@@ -1530,12 +1530,20 @@
   padding: 10px 14px;
   border-radius: var(--radius-sm);
   outline: none;
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 
 .qgv1-cat option {
-  background: var(--bg-2);
+  background-color: var(--bg-2);
   color: var(--text-hi);
+}
+
+html[data-scheme="light"] .qgv1-cat {
+  color-scheme: light;
+}
+
+html[data-scheme="dark"] .qgv1-cat {
+  color-scheme: dark;
 }
 
 .qgv1-cat:focus {
@@ -2198,7 +2206,7 @@
   color: var(--text-hi);
   border: 1px solid var(--border-hair);
   border-radius: var(--radius-sm);
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 
 .qgv1-root .field select,
@@ -2209,8 +2217,15 @@
 
 .qgv1-root .field select option,
 .qgv1-root select option {
-  background: var(--bg-2);
+  background-color: var(--bg-2);
   color: var(--text-hi);
+}
+
+html[data-scheme="dark"] .qgv1-root .field input,
+html[data-scheme="dark"] .qgv1-root .field select,
+html[data-scheme="dark"] .qgv1-root .field textarea,
+html[data-scheme="dark"] .qgv1-input {
+  color-scheme: dark;
 }
 
 .qgv1-root .field input:focus,

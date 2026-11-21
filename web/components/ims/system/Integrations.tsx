@@ -833,14 +833,80 @@ function ManualSaleDialog({ open, onClose, onDone }: { open: boolean; onClose: (
             )}
           </Field>
         </FormGrid>
-        {lines.map((l, i) => (
-          <FormGrid key={i} columns="2fr 1fr 1fr auto">
-            <Field label={i === 0 ? "SKU or barcode" : ""}>{({ id }) => <Input id={id} size="sm" value={l.code} onChange={(e) => setLine(i, { code: e.target.value })} />}</Field>
-            <Field label={i === 0 ? "Qty" : ""}>{({ id }) => <Input id={id} size="sm" type="number" min={0} step="any" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} />}</Field>
-            <Field label={i === 0 ? "Rate (optional)" : ""}>{({ id }) => <Input id={id} size="sm" type="number" min={0} step="any" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} />}</Field>
-            <Field label={i === 0 ? " " : ""}>{() => <Button size="sm" iconOnly icon="x" aria-label="Remove line" disabled={lines.length === 1} onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} />}</Field>
-          </FormGrid>
-        ))}
+        <div className="ims-line-editor-frame">
+          <table className="ims-line-table ims-line-table--pos" aria-label="POS bill lines">
+            <thead>
+              <tr>
+                <th className="is-idx" scope="col">
+                  #
+                </th>
+                <th className="is-item" scope="col">
+                  SKU / barcode
+                </th>
+                <th className="is-qty" scope="col">
+                  Qty
+                </th>
+                <th className="is-rate" scope="col">
+                  Rate
+                </th>
+                <th className="is-act" scope="col">
+                  <span className="bos-sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l, i) => (
+                <tr key={i}>
+                  <td className="is-idx">{i + 1}</td>
+                  <td className="is-item" data-label="SKU / barcode">
+                    <Input
+                      id={`pos-line-code-${i}`}
+                      size="sm"
+                      value={l.code}
+                      onChange={(e) => setLine(i, { code: e.target.value })}
+                      aria-label={`Line ${i + 1} SKU or barcode`}
+                    />
+                  </td>
+                  <td className="is-qty" data-label="Qty">
+                    <Input
+                      id={`pos-line-qty-${i}`}
+                      size="sm"
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={l.qty}
+                      onChange={(e) => setLine(i, { qty: e.target.value })}
+                      aria-label={`Line ${i + 1} quantity`}
+                    />
+                  </td>
+                  <td className="is-rate" data-label="Rate">
+                    <Input
+                      id={`pos-line-rate-${i}`}
+                      size="sm"
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={l.rate}
+                      onChange={(e) => setLine(i, { rate: e.target.value })}
+                      aria-label={`Line ${i + 1} rate`}
+                      placeholder="Optional"
+                    />
+                  </td>
+                  <td className="is-act">
+                    <Button
+                      size="sm"
+                      iconOnly
+                      icon="x"
+                      aria-label={`Remove line ${i + 1}`}
+                      disabled={lines.length === 1}
+                      onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div>
           <Button size="sm" icon="plus" disabled={lines.length >= 50} onClick={() => setLines((ls) => [...ls, { code: "", qty: "1", rate: "" }])}>
             Add line

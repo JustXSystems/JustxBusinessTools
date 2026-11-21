@@ -162,24 +162,55 @@
   outline: none;
   box-shadow: var(--bos-shadow-xs);
   transition: border-color var(--bos-dur) var(--bos-ease), box-shadow var(--bos-dur) var(--bos-ease);
-  color-scheme: inherit;
+  /* Follow the BOS theme, not the OS / host page — keeps native <option> lists in sync */
+  color-scheme: light;
 }
+.bos[data-bos-theme="dark"] .bos-input { color-scheme: dark; }
 .bos .bos-input::placeholder { color: var(--bos-text-faint); }
 .bos .bos-input:focus { border-color: var(--bos-blue); box-shadow: var(--bos-shadow-focus-blue); }
 .bos .bos-input:disabled { opacity: .55; cursor: not-allowed; }
 .bos .bos-input[aria-invalid="true"] { border-color: var(--bos-coral); }
 .bos textarea.bos-input { resize: vertical; min-height: 84px; }
-.bos select.bos-input {
+/* Single-value selects only — leave listboxes (size/multiple) alone */
+.bos select:not([multiple]):not([size]),
+.bos select.bos-input:not([multiple]):not([size]) {
   appearance: none;
   padding-right: 34px;
   cursor: pointer;
+  color-scheme: light;
+  background-color: var(--bos-surface);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2398A2B3' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
 }
+.bos[data-bos-theme="dark"] select:not([multiple]):not([size]),
+.bos[data-bos-theme="dark"] select.bos-input:not([multiple]):not([size]) {
+  color-scheme: dark;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23C7C7CC' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+/* Opaque option chrome — transparent --bos-surface (IMS glass) breaks native dropdowns */
+.bos select option,
+.bos select optgroup,
 .bos .bos-input option,
-.bos .bos-input optgroup { background: var(--bos-surface); color: var(--bos-text); }
+.bos .bos-input optgroup {
+  background-color: var(--bos-surface);
+  color: var(--bos-text);
+}
+.bos select[multiple],
+.bos select[size] {
+  color-scheme: light;
+  background-color: var(--bos-surface);
+  color: var(--bos-text);
+  padding-right: 10px;
+  background-image: none;
+  cursor: default;
+}
+.bos[data-bos-theme="dark"] select[multiple],
+.bos[data-bos-theme="dark"] select[size] {
+  color-scheme: dark;
+}
 .bos .bos-input-sm { padding: 7px 10px; font-size: 12px; }
+.bos select.bos-input-sm { padding-right: 28px; background-position: right 10px center; }
 
 /* Pill search (topbar / list headers). */
 .bos .bos-search {

@@ -46,6 +46,7 @@
   flex-direction: column;
   gap: 0;
   min-width: 0;
+  color-scheme: inherit;
 }
 
 .ssv1-shell * {
@@ -737,6 +738,7 @@
   transition: border-color 0.15s, background 0.15s;
   font-family: inherit;
   min-height: 46px;
+  color-scheme: inherit;
 }
 
 .ssv1-field textarea {
@@ -759,6 +761,20 @@
   background-position: right 12px center;
   background-color: var(--ssv1-card2);
   padding-right: 32px;
+}
+
+.ssv1-field select option,
+.ssv1-field select optgroup {
+  background-color: var(--ssv1-card2);
+  color: var(--ssv1-text);
+}
+
+html[data-scheme="light"] .ssv1-field select {
+  color-scheme: light;
+}
+
+html[data-scheme="dark"] .ssv1-field select {
+  color-scheme: dark;
 }
 
 .ssv1-req {

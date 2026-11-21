@@ -287,8 +287,35 @@
   box-shadow: none;
 }
 .bos[data-bos-skin="ims"] .bos-input:focus { border-color: var(--bos-blue); background: var(--bos-ims-surface-solid); box-shadow: var(--bos-shadow-focus-blue); }
+.bos[data-bos-skin="ims"] select:not([multiple]):not([size]),
+.bos[data-bos-skin="ims"] select.bos-input:not([multiple]):not([size]) {
+  /* Restore chevron after .bos-input background shorthand; use opaque solid for native lists */
+  background-color: color-mix(in srgb, var(--bos-ims-surface-solid) 92%, transparent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239098B8' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+.bos[data-bos-skin="ims"] select:not([multiple]):not([size]):focus,
+.bos[data-bos-skin="ims"] select.bos-input:not([multiple]):not([size]):focus {
+  background-color: var(--bos-ims-surface-solid);
+}
+.bos[data-bos-skin="ims"] select option,
+.bos[data-bos-skin="ims"] select optgroup,
 .bos[data-bos-skin="ims"] .bos-input option,
-.bos[data-bos-skin="ims"] .bos-input optgroup { background: var(--bos-ims-surface-solid); }
+.bos[data-bos-skin="ims"] .bos-input optgroup {
+  background-color: var(--bos-ims-surface-solid);
+  color: var(--bos-text);
+}
+.bos[data-bos-skin="ims"] select[multiple],
+.bos[data-bos-skin="ims"] select[size] {
+  background-color: var(--bos-ims-surface-solid);
+  background-image: none;
+  color: var(--bos-text);
+}
+.bos[data-bos-skin="ims"][data-bos-theme="dark"] select:not([multiple]):not([size]),
+.bos[data-bos-skin="ims"][data-bos-theme="dark"] select.bos-input:not([multiple]):not([size]) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A4ACD3' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
 .bos[data-bos-skin="ims"] .bos-search {
   border-radius: var(--bos-r-md);
   border-color: var(--bos-border-soft);
