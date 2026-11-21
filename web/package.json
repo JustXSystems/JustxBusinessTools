@@ -28,7 +28,7 @@
     "jspdf-autotable": "^5.0.8",
     "jsqr": "^1.4.0",
     "leaflet": "^1.9.4",
-    "next": "16.3.1",
+    "next": "^16.4.6",
     "protomaps-leaflet": "^5.1.0",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
@@ -50,7 +50,7 @@
     "jsdom": "^30.0.1",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^3.2.4"
+    "vitest": "^5.1.1"
   },
   "optionalDependencies": {
     "@tailwindcss/oxide-linux-x64-gnu": "4.3.3",

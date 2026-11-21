@@ -159,7 +159,14 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRateLimit, authRouter);
+// Rate-limit only credential / OTP / OAuth entry points — NOT /me, switch-branch, logout.
+// Blanket /api/auth limiting exhausted the budget during normal session checks (IMS SPA navigations).
+app.use("/api/auth/login", authRateLimit);
+app.use("/api/auth/register", authRateLimit);
+app.use("/api/auth/otp", authRateLimit);
+app.use("/api/auth/mfa/verify", authRateLimit);
+app.use("/api/auth/google", authRateLimit);
+app.use("/api/auth", authRouter);
 app.use("/api/files", filesRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/analytics", analyticsRouter);

@@ -1,7 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
+import path from "node:path";
 
 const webPort = 3100;
 const apiPort = 4100;
+const authFile = path.join(__dirname, "e2e/.auth/justtestx.json");
 
 export default defineConfig({
   testDir: "./e2e",
@@ -17,7 +19,27 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testMatch: /.*\.spec\.ts/,
+      testIgnore: [/[/\\]ims[/\\]/],
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "ims-setup",
+      testMatch: /[/\\]ims[/\\]auth\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "ims",
+      testMatch: /[/\\]ims[/\\].*\.spec\.ts/,
+      dependencies: ["ims-setup"],
+      timeout: 120_000,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: authFile,
+        screenshot: "only-on-failure",
+        video: "retain-on-failure",
+        trace: "retain-on-failure",
+      },
     },
   ],
   webServer: [

@@ -57,6 +57,20 @@ First-time setup: `npx playwright install chromium`
 | P3 | Capacitor Android | Back button navigates history; safe-area padding |
 | P4 | Native QR camera | Camera permission granted on Android |
 
+## JustTestX IMS (on-demand only)
+
+Full IMS UI suite — **not** run by `npm run test:e2e`. Local or **production / pre–go-live**. See [`IMS_E2E.md`](IMS_E2E.md).
+
+```bash
+npm run test:e2e:ims
+# Production (PowerShell):
+#   $env:E2E_IMS_BASE_URL='https://HOST/jbt'
+#   $env:E2E_IMS_EMAIL='...'; $env:E2E_IMS_PASSWORD='...'
+#   npm run test:e2e:ims:prod
+npm run test:e2e:ims:report   # HTML
+# then open e2e-results/ims/MANUAL_VERIFY.md
+```
+
 ## Future (Phase 7+)
 
 - Export CSV/Excel from trackers and documents
