@@ -47,7 +47,15 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const [gstin, setGstin] = useState(inv?.customerGstin ?? "");
   const [mobile, setMobile] = useState(inv?.customerMobile ?? "");
   const [address, setAddress] = useState(inv?.customerAddress ?? "");
+  const [customerPoNo, setCustomerPoNo] = useState(inv?.customerPoNo ?? "");
+  const [shipSame, setShipSame] = useState(!inv?.shipToName && !inv?.shipToAddress);
+  const [shipToName, setShipToName] = useState(inv?.shipToName ?? "");
+  const [shipToGstin, setShipToGstin] = useState(inv?.shipToGstin ?? "");
+  const [shipToAddress, setShipToAddress] = useState(inv?.shipToAddress ?? "");
+  const [shipToState, setShipToState] = useState(inv?.shipToState ?? "");
+  const [shipToMobile, setShipToMobile] = useState(inv?.shipToMobile ?? "");
   const [placeOfSupply, setPlaceOfSupply] = useState(inv?.placeOfSupply ?? "");
+  const [docKind, setDocKind] = useState<"tax_invoice" | "proforma">(inv?.docKind === "proforma" ? "proforma" : "tax_invoice");
   const [invoiceDate, setInvoiceDate] = useState(inv?.invoiceDate ?? today);
   const [termsDays, setTermsDays] = useState<number | null>(inv ? null : settings.paymentTermsDays);
   const [dueDate, setDueDate] = useState(inv?.dueDate ?? addDaysISO(today, settings.paymentTermsDays));
@@ -59,6 +67,7 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const [terms, setTerms] = useState(inv?.terms ?? settings.terms ?? "");
   const [touched, setTouched] = useState(false);
   const [forceRelatedFill, setForceRelatedFill] = useState(false);
+  const isCreditNote = inv?.docKind === "credit_note" || inv?.docKind === "debit_note";
 
   const effectivePos = placeOfSupply || party?.state || gstStateName(gstin) || settings.state || "";
   const intraState = intraStateFor(settings, effectivePos);
@@ -123,9 +132,16 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
     customerGstin: gstin.trim().toUpperCase() || null,
     customerAddress: address.trim() || null,
     customerMobile: mobile.trim() || null,
+    customerPoNo: customerPoNo.trim() || null,
+    shipToName: shipSame ? null : shipToName.trim() || null,
+    shipToGstin: shipSame ? null : shipToGstin.trim().toUpperCase() || null,
+    shipToAddress: shipSame ? null : shipToAddress.trim() || null,
+    shipToState: shipSame ? null : shipToState.trim() || null,
+    shipToMobile: shipSame ? null : shipToMobile.trim() || null,
     placeOfSupply: effectivePos || null,
     invoiceDate,
     dueDate: dueDate || null,
+    docKind: isCreditNote ? inv?.docKind : docKind,
     lines: toLineInputs(lines),
     roundToRupee,
     notes: notes.trim() || null,
@@ -154,17 +170,35 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
     if (out) onClose(out.invoice.id);
   };
 
-  const blockedByStock = !stockViaDc && stockIssues.length > 0 && !settings.allowNegativeStock;
+  const blockedByStock = !isCreditNote && docKind !== "proforma" && !stockViaDc && stockIssues.length > 0 && !settings.allowNegativeStock;
 
   return (
     <Stack gap={16}>
       <BackLink onClick={() => onClose(draft?.invoice.id ?? null)}>{draft ? "Back to invoice" : "All invoices"}</BackLink>
       <PageHeader
-        title={draft ? "Edit draft invoice" : "New invoice"}
+        title={
+          isCreditNote
+            ? draft
+              ? `Edit draft ${inv?.docKind === "debit_note" ? "debit note" : "credit note"}`
+              : "New credit note"
+            : draft
+              ? docKind === "proforma"
+                ? "Edit draft proforma"
+                : "Edit draft invoice"
+              : docKind === "proforma"
+                ? "New proforma"
+                : "New invoice"
+        }
         sub={
-          stockViaDc
-            ? "Stock already moved on linked delivery challans — issuing won’t post stock again. Unlink DCs before changing item quantities."
-            : "Stock moves out when the invoice is issued. Drafts don't touch stock or the invoice number series."
+          isCreditNote
+            ? inv?.againstInvoiceNo
+              ? `Against ${inv.againstInvoiceNo}. Issuing applies credit to that invoice’s balance — no stock movement.`
+              : "Issuing applies credit to the linked tax invoice — no stock movement."
+            : stockViaDc
+              ? "Stock already moved on linked delivery challans — issuing won’t post stock again. Unlink DCs before changing item quantities."
+              : docKind === "proforma"
+                ? "Proforma does not post stock or create a receivable. Convert later by duplicating into a tax invoice."
+                : "Stock moves out when the invoice is issued. Drafts don't touch stock or the invoice number series."
         }
         actions={
           inv?.sourceTool && inv.sourceTool !== "pos" ? (
@@ -221,6 +255,45 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
                 <Field label="Mobile">{({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} maxLength={40} />}</Field>
               </FormGrid>
               <Field label="Billing address">{({ id, describedBy }) => <Textarea id={id} aria-describedby={describedBy} rows={2} value={address} onChange={(e) => setAddress(e.target.value)} maxLength={500} />}</Field>
+              <label className="ims-row" style={{ fontSize: 12.5, marginTop: 4 }}>
+                <Switch checked={shipSame} onChange={setShipSame} aria-label="Ship to same as bill to" />
+                Ship to same as bill to
+              </label>
+              {!shipSame ? (
+                <>
+                  <Field label="Ship-to name">
+                    {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} value={shipToName} maxLength={200} onChange={(e) => setShipToName(e.target.value)} placeholder={customer.name || "Consignee"} />}
+                  </Field>
+                  <FormGrid columns="1fr 1fr">
+                    <Field label="Ship-to GSTIN">
+                      {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} value={shipToGstin} maxLength={15} onChange={(e) => setShipToGstin(e.target.value.toUpperCase())} />}
+                    </Field>
+                    <Field label="Ship-to mobile">
+                      {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="tel" value={shipToMobile} maxLength={40} onChange={(e) => setShipToMobile(e.target.value)} />}
+                    </Field>
+                  </FormGrid>
+                  <Field label="Ship-to address">{({ id, describedBy }) => <Textarea id={id} aria-describedby={describedBy} rows={2} value={shipToAddress} onChange={(e) => setShipToAddress(e.target.value)} maxLength={500} />}</Field>
+                  <Field label="Ship-to state">
+                    {({ id, describedBy }) => (
+                      <SuggestInput
+                        id={id}
+                        aria-describedby={describedBy}
+                        value={shipToState}
+                        onChange={setShipToState}
+                        placeholder="Delivery state…"
+                        emptyLabel="No state match — keep typing"
+                        options={GST_STATES.map((s) => ({
+                          id: s.code,
+                          value: s.name,
+                          label: s.name,
+                          meta: `State code ${s.code}`,
+                          trailing: s.code,
+                        }))}
+                      />
+                    )}
+                  </Field>
+                </>
+              ) : null}
             </FormGrid>
           </div>
 
@@ -230,6 +303,24 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
               <Badge tone={intraState ? "blue" : "amber"}>{intraState ? "CGST + SGST" : "IGST"}</Badge>
             </div>
             <FormGrid columns="1fr 1fr">
+              {!isCreditNote && !draft ? (
+                <Field label="Document" full>
+                  {({ id, describedBy }) => (
+                    <QuickChips
+                      label="Document kind"
+                      active={docKind}
+                      options={[
+                        { key: "tax_invoice", label: "Tax invoice" },
+                        { key: "proforma", label: "Proforma" },
+                      ]}
+                      onPick={(k) => setDocKind(k as "tax_invoice" | "proforma")}
+                    />
+                  )}
+                </Field>
+              ) : null}
+              <Field label="Customer PO / order ref">
+                {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} value={customerPoNo} maxLength={64} onChange={(e) => setCustomerPoNo(e.target.value)} placeholder="Optional" />}
+              </Field>
               <Field label="Invoice date">
                 {({ id, describedBy }) => (
                   <Input

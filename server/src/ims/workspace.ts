@@ -139,8 +139,9 @@ async function notifications(
   if ((perms.has("receivables") || perms.has("sales")) && allow("receivables")) {
     const overdue = await rows<{ id: string; invoice_no: string; customer_name: string; balance: string; due_date: string }>(
       deps.db,
-      `SELECT id, invoice_no, customer_name, grand_total - amount_paid AS balance, due_date FROM ims_invoices
-       WHERE tenant_id = :tenantId AND status = 'issued' AND grand_total - amount_paid > 0.005 AND due_date < :today
+      `SELECT id, invoice_no, customer_name, grand_total - amount_paid - COALESCE(credit_applied, 0) AS balance, due_date FROM ims_invoices
+       WHERE tenant_id = :tenantId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') = 'tax_invoice'
+         AND grand_total - amount_paid - COALESCE(credit_applied, 0) > 0.005 AND due_date < :today
        ORDER BY due_date ASC LIMIT 5`,
       { tenantId, today },
     );
@@ -302,15 +303,15 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       deps.db,
       `SELECT
          SUM(CASE WHEN invoice_date BETWEEN :mfrom AND :today THEN grand_total ELSE 0 END) AS sales,
-         SUM(grand_total - amount_paid) AS receivable,
-         SUM(CASE WHEN due_date < :today THEN grand_total - amount_paid ELSE 0 END) AS overdue,
-         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid > 0.005 THEN 1 ELSE 0 END) AS overdue_n
-       FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued'`,
+         SUM(grand_total - amount_paid - COALESCE(credit_applied, 0)) AS receivable,
+         SUM(CASE WHEN due_date < :today THEN grand_total - amount_paid - COALESCE(credit_applied, 0) ELSE 0 END) AS overdue,
+         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) > 0.005 THEN 1 ELSE 0 END) AS overdue_n
+       FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') = 'tax_invoice'`,
       { tenantId, today, mfrom: monthStartISO(today) },
     );
     const invoiced = await rows<{ n: number; total: string | null }>(
       deps.db,
-      `SELECT COUNT(*) AS n, SUM(grand_total) AS total FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND invoice_date BETWEEN :from AND :to`,
+      `SELECT COUNT(*) AS n, SUM(grand_total) AS total FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') = 'tax_invoice' AND invoice_date BETWEEN :from AND :to`,
       { tenantId, ...range },
     );
     const payable = await rows<{ payable: string | null }>(

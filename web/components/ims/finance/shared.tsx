@@ -1,10 +1,19 @@
 "use client";
 
 import "./finance.css";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Dialog, Field, FormGrid, Input, Segmented, Select, Textarea } from "@/components/bos";
 import type { ImsSession, Period } from "@/lib/ims/api";
-import { INVOICE_STAMP, PAY_METHOD_LABEL, PAY_METHODS, type InvoiceDetail, type PayMethod, type PaymentInput } from "@/lib/ims/finance";
+import {
+  DOC_KIND_LABEL,
+  INVOICE_STAMP,
+  PAY_METHOD_LABEL,
+  PAY_METHODS,
+  upiPayIntent,
+  type InvoiceDetail,
+  type PayMethod,
+  type PaymentInput,
+} from "@/lib/ims/finance";
 import { computeTotals, dateLabel, inrExact, num, PERIOD_OPTIONS, qtyText, round2 } from "@/lib/ims/format";
 import { DocRefLink } from "../bom/DocRefLink";
 import { DocumentPaper, type PaperParty } from "../shared/DocumentPaper";
@@ -385,17 +394,62 @@ export function sellerOf(session: ImsSession): PaperParty {
 }
 
 /** Printable GST tax invoice with HSN summary, payment status stamp and terms. */
+function paperTitle(inv: InvoiceDetail["invoice"]): string {
+  const kind = inv.docKind || "tax_invoice";
+  if (inv.status === "draft") {
+    if (kind === "credit_note") return "DRAFT CREDIT NOTE";
+    if (kind === "debit_note") return "DRAFT DEBIT NOTE";
+    if (kind === "proforma") return "DRAFT PROFORMA";
+    return "DRAFT INVOICE";
+  }
+  if (kind === "credit_note") return "CREDIT NOTE";
+  if (kind === "debit_note") return "DEBIT NOTE";
+  if (kind === "proforma") return "PROFORMA INVOICE";
+  return "TAX INVOICE";
+}
+
+function InvoicePayQr({ intent, vpa }: { intent: string; vpa: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void import("qrcode").then(async (QRCode) => {
+      if (cancelled || !canvasRef.current) return;
+      await QRCode.toCanvas(canvasRef.current, intent, { width: 112, margin: 1, errorCorrectionLevel: "M" });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [intent]);
+  return (
+    <div className="fin-pay-qr" style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 10 }}>
+      <canvas ref={canvasRef} aria-label="UPI payment QR" width={112} height={112} />
+      <div style={{ fontSize: 12, lineHeight: 1.45 }}>
+        <div className="fin-paper-h" style={{ marginBottom: 2 }}>
+          Pay by UPI
+        </div>
+        <div className="ims-mono">{vpa}</div>
+        <div className="ims-muted">Scan with any UPI app</div>
+      </div>
+    </div>
+  );
+}
+
 export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; session: ImsSession }) {
   const { can } = useIms();
   const inv = detail.invoice;
-  const totals = computeTotals(inv.lines, inv.intraState, inv.roundToRupee);
+  const totals = computeTotals(inv.lines ?? [], inv.intraState, inv.roundToRupee);
   const stamp = INVOICE_STAMP[inv.displayStatus] ?? (inv.displayStatus === "partial" ? { text: "PART PAID", color: "#D98A1F" } : null);
   const meta: Array<{ label: string; value: ReactNode }> = [
-    { label: "Invoice no.", value: inv.isDraftNo ? "Draft" : inv.invoiceNo },
-    { label: "Invoice date", value: dateLabel(inv.invoiceDate) },
+    { label: inv.docKind === "credit_note" ? "Credit note no." : inv.docKind === "proforma" ? "Proforma no." : "Invoice no.", value: inv.isDraftNo ? "Draft" : inv.invoiceNo },
+    { label: "Date", value: dateLabel(inv.invoiceDate) },
     { label: "Due date", value: inv.dueDate ? dateLabel(inv.dueDate) : "On receipt" },
     { label: "Place of supply", value: inv.placeOfSupply || session.settings.state || "—" },
   ];
+  if (inv.customerPoNo) meta.push({ label: "Customer PO", value: inv.customerPoNo });
+  if (inv.againstInvoiceNo) meta.push({ label: "Against invoice", value: inv.againstInvoiceNo });
+  if (inv.docKind && inv.docKind !== "tax_invoice") meta.push({ label: "Document", value: DOC_KIND_LABEL[inv.docKind] });
+  if (inv.irn) meta.push({ label: "IRN", value: <span className="ims-mono" style={{ fontSize: 11 }}>{inv.irn}</span> });
+  if (inv.ewayBillNo) meta.push({ label: "E-Way bill", value: inv.ewayBillNo });
   // Business refs only — never print internal UUIDs as "Reference".
   if (inv.sourceTool === "ims_bom" && inv.sourceLabel) {
     meta.push({
@@ -429,11 +483,31 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
       ),
     });
   }
+  const shipTo =
+    inv.shipToName || inv.shipToAddress
+      ? {
+          label: "Ship to",
+          name: inv.shipToName || inv.customerName,
+          gstin: inv.shipToGstin,
+          address: inv.shipToAddress,
+          state: inv.shipToState,
+          phone: inv.shipToMobile,
+        }
+      : null;
+  const upi = session.settings.bankUpi?.trim() || null;
+  const payIntent =
+    inv.status === "issued" && (inv.docKind || "tax_invoice") === "tax_invoice" && inv.balance > 0.005 && upi
+      ? upiPayIntent({ vpa: upi, payeeName: session.settings.businessName, amount: inv.balance, note: inv.invoiceNo })
+      : null;
+  const bankBits = [session.settings.bankName, session.settings.bankAccountName, session.settings.bankAccountNo ? `A/c ${session.settings.bankAccountNo}` : null, session.settings.bankIfsc ? `IFSC ${session.settings.bankIfsc}` : null]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <DocumentPaper
-      title={inv.status === "draft" ? "DRAFT INVOICE" : "TAX INVOICE"}
+      title={paperTitle(inv)}
       seller={sellerOf(session)}
       party={{ label: "Bill to", name: inv.customerName, gstin: inv.customerGstin, address: inv.customerAddress, state: inv.placeOfSupply, phone: inv.customerMobile, email: inv.customerEmail }}
+      shipTo={shipTo}
       meta={meta}
       totals={totals}
       intraState={inv.intraState}
@@ -485,12 +559,16 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
               </table>
             </div>
           ) : null}
-          {inv.status === "issued" ? (
+          {inv.status === "issued" && (inv.docKind || "tax_invoice") === "tax_invoice" ? (
             <div>
-              Received {inrExact(inv.amountPaid)} · Balance {inrExact(inv.balance)}
+              Received {inrExact(inv.amountPaid)}
+              {inv.creditApplied > 0.005 ? ` · Credits ${inrExact(inv.creditApplied)}` : ""}
+              {" · "}Balance {inrExact(inv.balance)}
               {inv.payMode ? ` · Last paid by ${inv.payMode.toUpperCase()}` : ""}
             </div>
           ) : null}
+          {bankBits ? <div style={{ marginTop: 6, fontSize: 12 }}>Bank: {bankBits}</div> : null}
+          {payIntent && upi ? <InvoicePayQr intent={payIntent} vpa={upi} /> : null}
           {inv.status === "cancelled" ? <div>Cancelled{inv.cancelReason ? ` — ${inv.cancelReason}` : ""}</div> : null}
         </>
       }

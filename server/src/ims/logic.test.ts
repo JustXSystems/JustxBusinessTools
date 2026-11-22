@@ -166,6 +166,20 @@ describe("receivables & payables", () => {
     expect(invoiceDisplayStatus({ ...base, dueDate: "2026-10-20", amountPaid: 200 }, "2026-10-12")).toBe("partial");
     expect(invoiceDisplayStatus({ ...base, amountPaid: 1000 }, "2026-10-12")).toBe("paid");
     expect(invoiceBalance({ status: "cancelled", grandTotal: 1000, amountPaid: 0 })).toBe(0);
+    expect(invoiceBalance({ status: "issued", grandTotal: 1000, amountPaid: 200, creditApplied: 300 })).toBe(500);
+    expect(invoiceDisplayStatus({ ...base, amountPaid: 200, creditApplied: 800 }, "2026-10-12")).toBe("paid");
+    expect(invoiceBalance({ status: "issued", grandTotal: 500, amountPaid: 0, docKind: "credit_note" })).toBe(0);
+    expect(invoiceDisplayStatus({ ...base, docKind: "proforma" }, "2026-10-12")).toBe("paid");
+  });
+
+  it("builds UPI payment intents", async () => {
+    const { upiPayIntent, isArTaxInvoice } = await import("./logic.js");
+    expect(isArTaxInvoice("tax_invoice")).toBe(true);
+    expect(isArTaxInvoice("credit_note")).toBe(false);
+    expect(upiPayIntent({ vpa: "shop@upi", payeeName: "JustTestX", amount: 1250.5, note: "SI-1" })).toBe(
+      "upi://pay?pa=shop%40upi&pn=JustTestX&cu=INR&am=1250.50&tn=SI-1",
+    );
+    expect(upiPayIntent({ vpa: "bad" })).toBeNull();
   });
 
   it("derives bill status and urgency", () => {

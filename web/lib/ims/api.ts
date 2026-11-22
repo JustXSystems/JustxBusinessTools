@@ -167,10 +167,18 @@ export type ImsSettings = {
   stateCode: string | null;
   address: string | null;
   phone: string | null;
+  bankUpi: string | null;
+  bankAccountName: string | null;
+  bankAccountNo: string | null;
+  bankIfsc: string | null;
+  bankName: string | null;
   email: string | null;
   fiscalYearStart: number;
   poPrefix: string;
   invoicePrefix: string;
+  cnPrefix: string;
+  dnPrefix: string;
+  proformaPrefix: string;
   billPrefix: string;
   returnPrefix: string;
   checkPrefix: string;

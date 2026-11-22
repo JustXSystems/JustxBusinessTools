@@ -128,6 +128,40 @@ export function BusinessTab({ draft, set, errors, readOnly, meta }: TabProps & {
           <Field label="Email" error={errors.email}>
             {({ id, describedBy, invalid }) => <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="email" maxLength={180} value={draft.email ?? ""} onChange={(e) => set("email", e.target.value || null)} />}
           </Field>
+          <Field label="UPI ID (VPA)" hint="Printed as a payment QR on issued tax invoices when a balance is due.">
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                className="ims-mono"
+                maxLength={80}
+                placeholder="business@upi"
+                value={draft.bankUpi ?? ""}
+                onChange={(e) => set("bankUpi", e.target.value.trim() || null)}
+              />
+            )}
+          </Field>
+          <Field label="Bank account name">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} maxLength={120} value={draft.bankAccountName ?? ""} onChange={(e) => set("bankAccountName", e.target.value || null)} />}
+          </Field>
+          <Field label="Account number">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} className="ims-mono" maxLength={40} value={draft.bankAccountNo ?? ""} onChange={(e) => set("bankAccountNo", e.target.value || null)} />}
+          </Field>
+          <Field label="IFSC">
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                className="ims-mono"
+                maxLength={20}
+                value={draft.bankIfsc ?? ""}
+                onChange={(e) => set("bankIfsc", e.target.value.toUpperCase() || null)}
+              />
+            )}
+          </Field>
+          <Field label="Bank name">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} maxLength={120} value={draft.bankName ?? ""} onChange={(e) => set("bankName", e.target.value || null)} />}
+          </Field>
           <Field label="Financial year starts in" hint={`Current year: FY ${fiscalYearLabel(session.today, draft.fiscalYearStart)}`}>
             {({ id, describedBy }) => (
               <Select id={id} aria-describedby={describedBy} value={draft.fiscalYearStart} onChange={(e) => set("fiscalYearStart", Number(e.target.value))}>

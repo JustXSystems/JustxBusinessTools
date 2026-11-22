@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Badge, Button, Card, DataTable, EmptyState, Grid, KpiCard, SearchInput, Segmented, Select, type BosColumn } from "@/components/bos";
-import { finance, INVOICE_BADGE, type ImsInvoice, type InvoiceDisplayStatus } from "@/lib/ims/finance";
+import { DOC_KIND_LABEL, finance, INVOICE_BADGE, type ImsInvoice, type InvoiceDisplayStatus, type InvoiceDocKind } from "@/lib/ims/finance";
 import { dateLabel, downloadCsv, inr, inrCompact, inrExact, pct } from "@/lib/ims/format";
 import { Loaded, PageHeader, RequirePerm, Stack, StatusBadge, SubTabs, useIms, useImsData } from "../core";
 import { usePartyOptions } from "../shared/pickers";
@@ -97,8 +97,20 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
   const [q, setQ] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [source, setSource] = useState<"" | "pos" | "quotation" | "bom" | "tally">("");
+  const [docKind, setDocKind] = useState<"" | InvoiceDocKind | "notes">("");
   const customers = usePartyOptions("customer");
-  const state = useImsData(() => finance.invoices({ period, status, q: q.trim() || undefined, customerId: customerId || undefined, source: source || undefined }), [period, status, q, customerId, source]);
+  const state = useImsData(
+    () =>
+      finance.invoices({
+        period,
+        status,
+        q: q.trim() || undefined,
+        customerId: customerId || undefined,
+        source: source || undefined,
+        docKind: docKind || undefined,
+      }),
+    [period, status, q, customerId, source, docKind],
+  );
 
   const columns: BosColumn<ImsInvoice>[] = [
     {
@@ -107,7 +119,10 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
       cell: (i) => (
         <span className="ims-cell-stack">
           <span className="ims-strong">{i.isDraftNo ? "Draft" : i.invoiceNo}</span>
-          <small>{dateLabel(i.invoiceDate)}</small>
+          <small>
+            {dateLabel(i.invoiceDate)}
+            {i.docKind && i.docKind !== "tax_invoice" ? ` · ${DOC_KIND_LABEL[i.docKind]}` : ""}
+          </small>
         </span>
       ),
     },
@@ -183,6 +198,13 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
                       {c.name}
                     </option>
                   ))}
+                </Select>
+                <Select size="sm" value={docKind} onChange={(e) => setDocKind(e.target.value as "" | InvoiceDocKind | "notes")} aria-label="Document kind" style={{ maxWidth: 170 }}>
+                  <option value="">All documents</option>
+                  <option value="tax_invoice">Tax invoices</option>
+                  <option value="proforma">Proforma</option>
+                  <option value="credit_note">Credit notes</option>
+                  <option value="notes">Credit & debit notes</option>
                 </Select>
                 <Select size="sm" value={source} onChange={(e) => setSource(e.target.value as "" | "pos" | "quotation" | "bom" | "tally")} aria-label="Source" style={{ maxWidth: 170 }}>
                   <option value="">All sources</option>

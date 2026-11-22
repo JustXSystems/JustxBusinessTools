@@ -335,18 +335,62 @@ export const INVOICE_STATUSES = ["draft", "issued", "cancelled"] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 export type InvoiceDisplayStatus = "draft" | "unpaid" | "partial" | "paid" | "overdue" | "cancelled";
 
-export function invoiceBalance(inv: { status: string; grandTotal: number; amountPaid: number }): number {
-  if (inv.status !== "issued") return 0;
-  return Math.max(0, round2(inv.grandTotal - inv.amountPaid));
+export type InvoiceDocKind = "tax_invoice" | "proforma" | "credit_note" | "debit_note";
+
+export const INVOICE_DOC_KINDS = ["tax_invoice", "proforma", "credit_note", "debit_note"] as const;
+
+/** True when the document contributes to sales KPIs and AR outstanding. */
+export function isArTaxInvoice(kind: string | null | undefined): boolean {
+  return !kind || kind === "tax_invoice";
 }
 
-export function invoiceDisplayStatus(inv: { status: string; grandTotal: number; amountPaid: number; dueDate: string | null }, today: string): InvoiceDisplayStatus {
+export function invoiceBalance(inv: {
+  status: string;
+  grandTotal: number;
+  amountPaid: number;
+  creditApplied?: number;
+  docKind?: string | null;
+}): number {
+  if (inv.status !== "issued") return 0;
+  // Proforma never creates a receivable; CN/DN balances are tracked against the source invoice.
+  if (inv.docKind === "proforma" || inv.docKind === "credit_note" || inv.docKind === "debit_note") return 0;
+  const credit = Number(inv.creditApplied ?? 0) || 0;
+  return Math.max(0, round2(inv.grandTotal - inv.amountPaid - credit));
+}
+
+export function invoiceDisplayStatus(
+  inv: { status: string; grandTotal: number; amountPaid: number; dueDate: string | null; creditApplied?: number; docKind?: string | null },
+  today: string,
+): InvoiceDisplayStatus {
   if (inv.status === "draft") return "draft";
   if (inv.status === "cancelled") return "cancelled";
+  if (inv.docKind === "proforma") return inv.status === "issued" ? "paid" : "draft";
+  if (inv.docKind === "credit_note" || inv.docKind === "debit_note") {
+    return inv.status === "issued" ? "paid" : inv.status === "cancelled" ? "cancelled" : "draft";
+  }
   const balance = invoiceBalance(inv);
   if (balance <= 0.005) return "paid";
   if (inv.dueDate && inv.dueDate < today) return "overdue";
-  return inv.amountPaid > 0 ? "partial" : "unpaid";
+  const settled = (Number(inv.amountPaid) || 0) + (Number(inv.creditApplied) || 0);
+  return settled > 0 ? "partial" : "unpaid";
+}
+
+/** UPI deep link for invoice payment QR (NPCI intent). */
+export function upiPayIntent(opts: {
+  vpa: string;
+  payeeName?: string | null;
+  amount?: number | null;
+  note?: string | null;
+}): string | null {
+  const pa = String(opts.vpa ?? "").trim();
+  if (!pa || !pa.includes("@")) return null;
+  const q = new URLSearchParams();
+  q.set("pa", pa);
+  q.set("pn", String(opts.payeeName ?? "Payee").trim().slice(0, 80) || "Payee");
+  q.set("cu", "INR");
+  if (opts.amount != null && opts.amount > 0.005) q.set("am", round2(opts.amount).toFixed(2));
+  if (opts.note?.trim()) q.set("tn", opts.note.trim().slice(0, 80));
+  return `upi://pay?${q.toString()}`;
 }
 
 export const BILL_STATUSES = ["pending_approval", "approved", "on_hold", "scheduled", "cancelled"] as const;

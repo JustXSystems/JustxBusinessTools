@@ -142,10 +142,19 @@ export type ImsSettings = {
   stateCode: string | null;
   address: string | null;
   phone: string | null;
+  /** UPI VPA printed as payment QR on issued tax invoices. */
+  bankUpi: string | null;
+  bankAccountName: string | null;
+  bankAccountNo: string | null;
+  bankIfsc: string | null;
+  bankName: string | null;
   email: string | null;
   fiscalYearStart: number;
   poPrefix: string;
   invoicePrefix: string;
+  cnPrefix: string;
+  dnPrefix: string;
+  proformaPrefix: string;
   billPrefix: string;
   returnPrefix: string;
   checkPrefix: string;
@@ -184,10 +193,18 @@ type SettingsRow = {
   state_code: string | null;
   address: string | null;
   phone: string | null;
+  bank_upi?: string | null;
+  bank_account_name?: string | null;
+  bank_account_no?: string | null;
+  bank_ifsc?: string | null;
+  bank_name?: string | null;
   email: string | null;
   fiscal_year_start: number;
   po_prefix: string;
   invoice_prefix: string;
+  cn_prefix?: string;
+  dn_prefix?: string;
+  proforma_prefix?: string;
   bill_prefix: string;
   return_prefix: string;
   check_prefix: string;
@@ -220,10 +237,18 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   stateCode: r.state_code,
   address: r.address,
   phone: r.phone,
+  bankUpi: r.bank_upi ?? null,
+  bankAccountName: r.bank_account_name ?? null,
+  bankAccountNo: r.bank_account_no ?? null,
+  bankIfsc: r.bank_ifsc ?? null,
+  bankName: r.bank_name ?? null,
   email: r.email,
   fiscalYearStart: Number(r.fiscal_year_start) || 4,
   poPrefix: r.po_prefix,
   invoicePrefix: r.invoice_prefix,
+  cnPrefix: r.cn_prefix || "CN",
+  dnPrefix: r.dn_prefix || "DN",
+  proformaPrefix: r.proforma_prefix || "PF",
   billPrefix: r.bill_prefix,
   returnPrefix: r.return_prefix,
   checkPrefix: r.check_prefix,
@@ -284,10 +309,18 @@ const SettingsInput = z.object({
   stateCode: optText(4),
   address: optText(500),
   phone: optText(40),
+  bankUpi: optText(80),
+  bankAccountName: optText(120),
+  bankAccountNo: optText(40),
+  bankIfsc: optText(20),
+  bankName: optText(120),
   email: optText(180),
   fiscalYearStart: z.coerce.number().int().min(1).max(12).optional(),
   poPrefix: prefix.optional(),
   invoicePrefix: prefix.optional(),
+  cnPrefix: prefix.optional(),
+  dnPrefix: prefix.optional(),
+  proformaPrefix: prefix.optional(),
   billPrefix: prefix.optional(),
   returnPrefix: prefix.optional(),
   checkPrefix: prefix.optional(),
@@ -320,10 +353,18 @@ const COLUMN: Record<string, string> = {
   stateCode: "state_code",
   address: "address",
   phone: "phone",
+  bankUpi: "bank_upi",
+  bankAccountName: "bank_account_name",
+  bankAccountNo: "bank_account_no",
+  bankIfsc: "bank_ifsc",
+  bankName: "bank_name",
   email: "email",
   fiscalYearStart: "fiscal_year_start",
   poPrefix: "po_prefix",
   invoicePrefix: "invoice_prefix",
+  cnPrefix: "cn_prefix",
+  dnPrefix: "dn_prefix",
+  proformaPrefix: "proforma_prefix",
   billPrefix: "bill_prefix",
   returnPrefix: "return_prefix",
   checkPrefix: "check_prefix",

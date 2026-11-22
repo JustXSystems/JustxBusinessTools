@@ -24,6 +24,7 @@ import {
   intraStateFor,
   invoiceBalance,
   invoiceDisplayStatus,
+  isArTaxInvoice,
   monthStartISO,
   periodRange,
   posChange,
@@ -34,6 +35,7 @@ import {
   todayISO,
   type ArPriority,
   type ImsLine,
+  type InvoiceDocKind,
   type PayMethod,
   type ReminderChannel,
   type ReminderRuleKey,
@@ -171,12 +173,21 @@ export const PaymentInput = z.object({
 export type InvoiceRow = {
   id: string;
   invoice_no: string;
+  doc_kind?: string;
+  against_invoice_id?: string | null;
+  against_invoice_no?: string | null;
   status: string;
   customer_id: string | null;
   customer_name: string;
   customer_gstin: string | null;
   customer_address: string | null;
   customer_mobile: string | null;
+  customer_po_no?: string | null;
+  ship_to_name?: string | null;
+  ship_to_gstin?: string | null;
+  ship_to_address?: string | null;
+  ship_to_state?: string | null;
+  ship_to_mobile?: string | null;
   place_of_supply: string | null;
   intra_state: number;
   invoice_date: unknown;
@@ -191,6 +202,7 @@ export type InvoiceRow = {
   round_off: string;
   grand_total: string;
   amount_paid: string;
+  credit_applied?: string | number | null;
   pay_mode: string | null;
   stock_posted: number;
   account_manager_id: number | null;
@@ -215,6 +227,13 @@ export type InvoiceRow = {
   issued_at?: string | null;
   cancelled_at?: string | null;
   cancel_reason?: string | null;
+  einv_status?: string | null;
+  irn?: string | null;
+  ack_no?: string | null;
+  ack_at?: string | null;
+  signed_qr?: string | null;
+  eway_bill_no?: string | null;
+  eway_valid_upto?: string | null;
   party_mobile?: string | null;
   party_email?: string | null;
   party_state?: string | null;
@@ -237,10 +256,12 @@ function invoiceSourceLabel(r: Pick<InvoiceRow, "source_tool" | "source_ref" | "
 export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
   const grandTotal = round2(money(r.grand_total));
   const amountPaid = round2(money(r.amount_paid));
+  const creditApplied = round2(money(r.credit_applied ?? 0));
+  const docKind = (r.doc_kind || "tax_invoice") as InvoiceDocKind;
   const dueDate = r.due_date ? isoOf(r.due_date) : null;
-  const base = { status: r.status, grandTotal, amountPaid, dueDate };
+  const base = { status: r.status, grandTotal, amountPaid, dueDate, creditApplied, docKind };
   const balance = invoiceBalance(base);
-  const open = r.status === "issued" && balance > 0.005;
+  const open = isArTaxInvoice(docKind) && r.status === "issued" && balance > 0.005;
   const daysOverdue = open && dueDate ? Math.max(0, daysBetween(dueDate, today)) : 0;
   const invoiceDate = isoOf(r.invoice_date);
   const subtotal = round2(money(r.subtotal));
@@ -251,6 +272,9 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     id: r.id,
     invoiceNo: r.invoice_no,
     isDraftNo: r.invoice_no.startsWith(DRAFT_PREFIX),
+    docKind,
+    againstInvoiceId: r.against_invoice_id ?? null,
+    againstInvoiceNo: r.against_invoice_no ?? null,
     status: r.status as "draft" | "issued" | "cancelled",
     displayStatus: invoiceDisplayStatus(base, today),
     customerId: r.customer_id,
@@ -259,6 +283,12 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     customerAddress: r.customer_address,
     customerMobile: r.customer_mobile || r.party_mobile || null,
     customerEmail: r.party_email ?? null,
+    customerPoNo: r.customer_po_no ?? null,
+    shipToName: r.ship_to_name ?? null,
+    shipToGstin: r.ship_to_gstin ?? null,
+    shipToAddress: r.ship_to_address ?? null,
+    shipToState: r.ship_to_state ?? null,
+    shipToMobile: r.ship_to_mobile ?? null,
     placeOfSupply: r.place_of_supply,
     intraState: Boolean(r.intra_state),
     invoiceDate,
@@ -274,6 +304,7 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     roundToRupee: Boolean(r.round_to_rupee),
     grandTotal,
     amountPaid,
+    creditApplied,
     balance,
     payMode: r.pay_mode,
     stockPosted: Boolean(r.stock_posted),
@@ -298,11 +329,18 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     issuedAt: tsOf(r.issued_at),
     cancelledAt: tsOf(r.cancelled_at),
     cancelReason: r.cancel_reason ?? null,
+    einvStatus: r.einv_status ?? null,
+    irn: r.irn ?? null,
+    ackNo: r.ack_no ?? null,
+    ackAt: tsOf(r.ack_at),
+    signedQr: r.signed_qr ?? null,
+    ewayBillNo: r.eway_bill_no ?? null,
+    ewayValidUpto: tsOf(r.eway_valid_upto),
     daysOverdue,
     ageDays: Math.max(0, daysBetween(invoiceDate, today)),
     agingBucket: agingBucket(daysOverdue),
     priority: arPriority(daysOverdue) as ArPriority,
-    arStatus: arStatus({ disputed: Boolean(r.disputed), promiseDate, dueDate, amountPaid }, today),
+    arStatus: arStatus({ disputed: Boolean(r.disputed), promiseDate, dueDate, amountPaid: amountPaid + creditApplied }, today),
     lineCount: lines.length,
     ...(withLines ? { lines } : {}),
   };
@@ -437,9 +475,16 @@ const InvoiceInput = z.object({
   customerGstin: optText(20),
   customerAddress: optText(500),
   customerMobile: optText(40),
+  customerPoNo: optText(64),
+  shipToName: optText(200),
+  shipToGstin: optText(20),
+  shipToAddress: optText(500),
+  shipToState: optText(80),
+  shipToMobile: optText(40),
   placeOfSupply: optText(80),
   invoiceDate: isoDate,
   dueDate: isoDate.nullable().optional(),
+  docKind: z.enum(["tax_invoice", "proforma", "credit_note", "debit_note"]).optional(),
   lines: z.array(LineInput).min(1, "Add at least one line").max(300),
   roundToRupee: z.boolean().default(false),
   notes: optText(4000),
@@ -481,16 +526,24 @@ async function invoiceValues(db: Queryable, actor: ImsActor, settings: ImsSettin
   const dueDate = input.dueDate ?? dueDateFor(input.invoiceDate, party?.payment_terms_days ?? null, settings.paymentTermsDays);
   if (dueDate < input.invoiceDate) throw badRequest("The due date can't be before the invoice date");
   const address = input.customerAddress?.trim() || [party?.address, party?.city].filter(Boolean).join(", ") || null;
+  const docKind = (input.docKind ?? "tax_invoice") as InvoiceDocKind;
   return {
     customerId: party?.id ?? null,
     customerName: input.customerName.trim(),
     customerGstin: gstin,
     customerAddress: address,
     customerMobile: input.customerMobile?.trim() || party?.mobile || null,
+    customerPoNo: input.customerPoNo?.trim() || null,
+    shipToName: input.shipToName?.trim() || null,
+    shipToGstin: input.shipToGstin?.trim().toUpperCase() || null,
+    shipToAddress: input.shipToAddress?.trim() || null,
+    shipToState: input.shipToState?.trim() || null,
+    shipToMobile: input.shipToMobile?.trim() || null,
     placeOfSupply,
     intraState: intra ? 1 : 0,
     invoiceDate: input.invoiceDate,
     dueDate,
+    docKind,
     lines: JSON.stringify(totals.lines),
     subtotal: totals.subtotal,
     discountTotal: totals.discountTotal,
@@ -508,15 +561,30 @@ async function invoiceValues(db: Queryable, actor: ImsActor, settings: ImsSettin
   };
 }
 
-async function insertInvoice(db: Queryable, actor: ImsActor, id: string, values: Awaited<ReturnType<typeof invoiceValues>>, extra: { sourceTool?: string | null; sourceRef?: string | null } = {}) {
+async function insertInvoice(
+  db: Queryable,
+  actor: ImsActor,
+  id: string,
+  values: Awaited<ReturnType<typeof invoiceValues>>,
+  extra: {
+    sourceTool?: string | null;
+    sourceRef?: string | null;
+    againstInvoiceId?: string | null;
+    againstInvoiceNo?: string | null;
+    docKind?: InvoiceDocKind;
+  } = {},
+) {
+  const docKind = extra.docKind ?? values.docKind ?? "tax_invoice";
   await exec(
     db,
     `INSERT INTO ims_invoices
-       (id, tenant_id, invoice_no, status, customer_id, customer_name, customer_gstin, customer_address, customer_mobile, place_of_supply, intra_state,
+       (id, tenant_id, invoice_no, doc_kind, against_invoice_id, against_invoice_no, status, customer_id, customer_name, customer_gstin, customer_address, customer_mobile,
+        customer_po_no, ship_to_name, ship_to_gstin, ship_to_address, ship_to_state, ship_to_mobile, place_of_supply, intra_state,
         invoice_date, due_date, \`lines\`, subtotal, discount_total, tax_total, cgst, sgst, igst, round_off, grand_total, round_to_rupee,
         account_manager_id, account_manager_name, source_tool, source_ref, notes, terms, created_by, created_by_name)
      VALUES
-       (:id, :tenantId, :invoiceNo, 'draft', :customerId, :customerName, :customerGstin, :customerAddress, :customerMobile, :placeOfSupply, :intraState,
+       (:id, :tenantId, :invoiceNo, :docKind, :againstInvoiceId, :againstInvoiceNo, 'draft', :customerId, :customerName, :customerGstin, :customerAddress, :customerMobile,
+        :customerPoNo, :shipToName, :shipToGstin, :shipToAddress, :shipToState, :shipToMobile, :placeOfSupply, :intraState,
         :invoiceDate, :dueDate, :lines, :subtotal, :discountTotal, :taxTotal, :cgst, :sgst, :igst, :roundOff, :grandTotal, :roundToRupee,
         :accountManagerId, :accountManagerName, :sourceTool, :sourceRef, :notes, :terms, :userId, :userName)`,
     {
@@ -524,6 +592,9 @@ async function insertInvoice(db: Queryable, actor: ImsActor, id: string, values:
       id,
       tenantId: actor.tenantId,
       invoiceNo: `${DRAFT_PREFIX}${id.slice(0, 8).toUpperCase()}`,
+      docKind,
+      againstInvoiceId: extra.againstInvoiceId ?? null,
+      againstInvoiceNo: extra.againstInvoiceNo ?? null,
       sourceTool: extra.sourceTool ?? null,
       sourceRef: extra.sourceRef ?? null,
       userId: actor.userId,
@@ -601,10 +672,32 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
       invoiceNo = tallyNo;
     }
   }
-  if (!invoiceNo) invoiceNo = await nextDocNo(conn, actor.tenantId, "invoice", settings.invoicePrefix, invoiceDate, settings.businessName);
+  const docKind = (row.doc_kind || "tax_invoice") as InvoiceDocKind;
+  if (docKind === "credit_note" && !row.against_invoice_id) {
+    throw badRequest("A credit note must be linked to the original tax invoice");
+  }
+  if (!invoiceNo) {
+    const prefix =
+      docKind === "credit_note"
+        ? settings.cnPrefix
+        : docKind === "debit_note"
+          ? settings.dnPrefix
+          : docKind === "proforma"
+            ? settings.proformaPrefix
+            : settings.invoicePrefix;
+    const seqKey =
+      docKind === "credit_note" ? "credit_note" : docKind === "debit_note" ? "debit_note" : docKind === "proforma" ? "proforma" : "invoice";
+    invoiceNo = await nextDocNo(conn, actor.tenantId, seqKey, prefix, invoiceDate, settings.businessName);
+  }
+
+  /** Credit notes, debit notes and proformas never post sales stock OUT. */
+  const nonStockDoc = docKind === "credit_note" || docKind === "debit_note" || docKind === "proforma";
 
   const dcIds = await listInvoiceDcIds(conn, actor.tenantId, id);
   let stockViaDc = false;
+  if (nonStockDoc && dcIds.length) {
+    throw conflict("Credit notes, debit notes and proformas cannot link delivery challans");
+  }
   if (dcIds.length) {
     // Re-validate under lock — reverse/return may have invalidated links between draft and issue.
     if (!(row.source_tool === "ims_bom" && row.source_ref)) {
@@ -643,7 +736,7 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
 
   /** Tally imports are an accounting mirror — stock already moved in Tally (or not tracked here). */
   const tallyImport = row.source_tool === "tally";
-  const skipStock = stockViaDc || tallyImport;
+  const skipStock = stockViaDc || tallyImport || nonStockDoc;
 
   // BOM explode invoices: refuse a second OUT and keep stock_issued_at in sync. Lump-sum never owns the BOM stock flag.
   // Skip when DCs already own stock movements.
@@ -693,13 +786,55 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
       }
     }
   }
-  // stock_posted=1 when invoice moved stock, or when linked DCs already covered stock. Tally imports stay 0.
+  // stock_posted=1 when invoice moved stock, or when linked DCs already covered stock. Tally / CN / PF stay 0.
+  const stockPosted = tallyImport || nonStockDoc ? 0 : 1;
   await exec(conn, `UPDATE ims_invoices SET status = 'issued', invoice_no = :invoiceNo, stock_posted = :stockPosted, issued_at = CURRENT_TIMESTAMP WHERE tenant_id = :tenantId AND id = :id`, {
     tenantId: actor.tenantId,
     id,
     invoiceNo,
-    stockPosted: tallyImport ? 0 : 1,
+    stockPosted,
   });
+
+  // Credit note: apply to the original tax invoice's AR balance (FIFO credit_applied).
+  if (docKind === "credit_note" && row.against_invoice_id) {
+    const against = await loadInvoiceRow(conn, actor.tenantId, row.against_invoice_id, true);
+    if (against.status !== "issued" || !isArTaxInvoice(against.doc_kind)) {
+      throw conflict("Credit notes can only be applied against an issued tax invoice");
+    }
+    const cnTotal = round2(money(row.grand_total));
+    const bal = invoiceBalance({
+      status: against.status,
+      grandTotal: money(against.grand_total),
+      amountPaid: money(against.amount_paid),
+      creditApplied: money(against.credit_applied ?? 0),
+      docKind: against.doc_kind || "tax_invoice",
+    });
+    const apply = Math.min(cnTotal, bal);
+    if (apply > 0.005) {
+      await exec(
+        conn,
+        `UPDATE ims_invoices SET credit_applied = ROUND(credit_applied + :apply, 2) WHERE tenant_id = :tenantId AND id = :id`,
+        { tenantId: actor.tenantId, id: against.id, apply },
+      );
+    }
+    await addActivity(conn, actor, {
+      invoiceId: against.id,
+      partyId: against.customer_id,
+      partyName: against.customer_name,
+      kind: "credit_note",
+      message: `Credit note ${invoiceNo} applied ${formatINR(apply)}${apply + 0.005 < cnTotal ? ` of ${formatINR(cnTotal)}` : ""}`,
+      status: "applied",
+    });
+    await addActivity(conn, actor, {
+      invoiceId: id,
+      partyId: row.customer_id,
+      partyName: row.customer_name,
+      kind: "credit_note",
+      message: `Issued against ${against.invoice_no} · applied ${formatINR(apply)}`,
+      status: "issued",
+    });
+  }
+
   if (!skipStock && row.source_tool === "ims_bom" && row.source_ref && bomExplode && bomStockItems.length) {
     await exec(
       conn,
@@ -816,6 +951,13 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     else if (source === "bom") where.push("i.source_tool = 'ims_bom'");
     else if (source === "tally") where.push("i.source_tool = 'tally'");
     else if (source === "quotation") where.push("i.source_tool IS NOT NULL AND i.source_tool NOT IN ('pos', 'ims_bom', 'tally')");
+    const docKind = qstr(req.query.docKind, 16);
+    if (docKind === "tax_invoice" || docKind === "proforma" || docKind === "credit_note" || docKind === "debit_note") {
+      where.push("COALESCE(i.doc_kind, 'tax_invoice') = :docKind");
+      params.docKind = docKind;
+    } else if (docKind === "notes") {
+      where.push("COALESCE(i.doc_kind, 'tax_invoice') IN ('credit_note', 'debit_note')");
+    }
     const q = qstr(req.query.q);
     if (q) {
       where.push(
@@ -839,13 +981,14 @@ export function registerSales(router: Router, deps: ImsDeps): void {
          SUM(CASE WHEN invoice_date >= :monthStart THEN grand_total ELSE 0 END) AS sales_mtd,
          SUM(CASE WHEN invoice_date >= :monthStart THEN 1 ELSE 0 END) AS count_mtd,
          SUM(CASE WHEN invoice_date BETWEEN :lmStart AND :lmEnd THEN grand_total ELSE 0 END) AS sales_lm,
-         SUM(GREATEST(grand_total - amount_paid, 0)) AS outstanding,
-         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid > 0.005 THEN grand_total - amount_paid ELSE 0 END) AS overdue,
-         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid > 0.005 THEN 1 ELSE 0 END) AS overdue_count
-       FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued'`,
+         SUM(GREATEST(grand_total - amount_paid - COALESCE(credit_applied, 0), 0)) AS outstanding,
+         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) > 0.005 THEN grand_total - amount_paid - COALESCE(credit_applied, 0) ELSE 0 END) AS overdue,
+         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) > 0.005 THEN 1 ELSE 0 END) AS overdue_count
+       FROM ims_invoices
+       WHERE tenant_id = :tenantId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') = 'tax_invoice'`,
       { tenantId: actor.tenantId, monthStart, lmStart, lmEnd, today },
     );
-    const issued = list.filter((i) => i.status === "issued");
+    const issued = list.filter((i) => i.status === "issued" && isArTaxInvoice(i.docKind));
     res.json({
       range,
       invoices: shown,
@@ -874,10 +1017,10 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     const r = await one<{ outstanding: string | null; overdue: string | null; open_count: string | null; last_date: unknown; credit_limit: string | null }>(
       deps.db,
       `SELECT
-         (SELECT SUM(GREATEST(grand_total - amount_paid, 0)) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued') AS outstanding,
-         (SELECT SUM(grand_total - amount_paid) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND due_date < :today AND grand_total - amount_paid > 0.005) AS overdue,
-         (SELECT COUNT(*) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND grand_total - amount_paid > 0.005) AS open_count,
-         (SELECT MAX(invoice_date) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued') AS last_date,
+         (SELECT SUM(GREATEST(grand_total - amount_paid - COALESCE(credit_applied, 0), 0)) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') = 'tax_invoice') AS outstanding,
+         (SELECT SUM(grand_total - amount_paid - COALESCE(credit_applied, 0)) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') = 'tax_invoice' AND due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) > 0.005) AS overdue,
+         (SELECT COUNT(*) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') = 'tax_invoice' AND grand_total - amount_paid - COALESCE(credit_applied, 0) > 0.005) AS open_count,
+         (SELECT MAX(invoice_date) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') = 'tax_invoice') AS last_date,
          (SELECT credit_limit FROM ims_parties WHERE tenant_id = :tenantId AND id = :customerId) AS credit_limit`,
       { tenantId: actor.tenantId, customerId, today },
     );
@@ -901,6 +1044,10 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     const actor = actorOf(res);
     requirePerm(res, "sales");
     const input = parse(InvoiceInput.extend({ issue: z.boolean().optional() }), req.body);
+    // Credit notes must go through /invoices/:id/credit-note so against_invoice is set.
+    if (input.docKind === "credit_note" || input.docKind === "debit_note") {
+      throw badRequest("Create credit notes from an issued invoice (Credit note action). Debit notes land in Wave 2.");
+    }
     const created = await createLinkedInvoice(deps, actor, {
       ...input,
       sourceTool: null,
@@ -939,7 +1086,9 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       const updated = await exec(
         conn,
         `UPDATE ims_invoices SET customer_id = :customerId, customer_name = :customerName, customer_gstin = :customerGstin, customer_address = :customerAddress,
-           customer_mobile = :customerMobile, place_of_supply = :placeOfSupply, intra_state = :intraState, invoice_date = :invoiceDate, due_date = :dueDate,
+           customer_mobile = :customerMobile, customer_po_no = :customerPoNo,
+           ship_to_name = :shipToName, ship_to_gstin = :shipToGstin, ship_to_address = :shipToAddress, ship_to_state = :shipToState, ship_to_mobile = :shipToMobile,
+           place_of_supply = :placeOfSupply, intra_state = :intraState, invoice_date = :invoiceDate, due_date = :dueDate,
            \`lines\` = :lines, subtotal = :subtotal, discount_total = :discountTotal, tax_total = :taxTotal, cgst = :cgst, sgst = :sgst, igst = :igst,
            round_off = :roundOff, grand_total = :grandTotal, round_to_rupee = :roundToRupee,
            account_manager_id = COALESCE(account_manager_id, :accountManagerId), account_manager_name = COALESCE(account_manager_name, :accountManagerName),
@@ -1056,17 +1205,91 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       customerGstin: src.customer_gstin,
       customerAddress: src.customer_address,
       customerMobile: src.customer_mobile,
+      customerPoNo: src.customer_po_no ?? null,
+      shipToName: src.ship_to_name ?? null,
+      shipToGstin: src.ship_to_gstin ?? null,
+      shipToAddress: src.ship_to_address ?? null,
+      shipToState: src.ship_to_state ?? null,
+      shipToMobile: src.ship_to_mobile ?? null,
       placeOfSupply: src.place_of_supply,
       invoiceDate: today,
       dueDate: null,
+      docKind: "tax_invoice",
       lines: lines.map((l) => ({ itemId: l.itemId ?? null, name: l.name, sku: l.sku ?? null, hsn: l.hsn ?? null, unit: l.unit ?? null, qty: l.qty, rate: l.rate, discountPct: l.discountPct, gstRate: l.gstRate })),
       roundToRupee: Boolean(src.round_to_rupee),
       notes: src.notes,
       terms: src.terms,
     });
     const id = randomUUID();
-    await insertInvoice(deps.db, actor, id, values);
+    await insertInvoice(deps.db, actor, id, values, { docKind: "tax_invoice" });
     await recordEvent(deps, actor, { type: "invoice.created", entityType: "invoice", entityId: id, summary: `Duplicated ${src.invoice_no} as a new draft for ${src.customer_name}` });
+    res.status(201).json(await invoiceDetail(deps, actor.tenantId, id));
+  });
+
+  /** Create a draft credit note from an issued tax invoice (lines copied; edit then issue to apply AR credit). */
+  router.post("/invoices/:id/credit-note", async (req, res) => {
+    const actor = actorOf(res);
+    requirePerm(res, "sales");
+    const body = parse(
+      z.object({
+        restock: z.boolean().optional(),
+        notes: optText(4000),
+        lines: z.array(LineInput).min(1).max(300).optional(),
+      }),
+      req.body ?? {},
+    );
+    const src = await loadInvoiceRow(deps.db, actor.tenantId, req.params.id);
+    if (src.status !== "issued") throw conflict("Credit notes can only be created from issued invoices");
+    if (!isArTaxInvoice(src.doc_kind)) throw conflict("Credit notes can only be created from tax invoices");
+    const settings = await getSettings(deps, actor.tenantId);
+    const today = todayISO();
+    const srcLines = json<ImsLine[]>(src.lines, []);
+    const lineInputs =
+      body.lines ??
+      srcLines.map((l) => ({
+        itemId: l.itemId ?? null,
+        name: l.name,
+        sku: l.sku ?? null,
+        hsn: l.hsn ?? null,
+        unit: l.unit ?? null,
+        qty: l.qty,
+        rate: l.rate,
+        discountPct: l.discountPct,
+        gstRate: l.gstRate,
+      }));
+    const values = await invoiceValues(deps.db, actor, settings, {
+      customerId: src.customer_id,
+      customerName: src.customer_name,
+      customerGstin: src.customer_gstin,
+      customerAddress: src.customer_address,
+      customerMobile: src.customer_mobile,
+      customerPoNo: src.customer_po_no ?? null,
+      shipToName: src.ship_to_name ?? null,
+      shipToGstin: src.ship_to_gstin ?? null,
+      shipToAddress: src.ship_to_address ?? null,
+      shipToState: src.ship_to_state ?? null,
+      shipToMobile: src.ship_to_mobile ?? null,
+      placeOfSupply: src.place_of_supply,
+      invoiceDate: today,
+      dueDate: today,
+      docKind: "credit_note",
+      lines: lineInputs,
+      roundToRupee: Boolean(src.round_to_rupee),
+      notes: body.notes ?? `Credit note against ${src.invoice_no}${body.restock ? " · restock on issue (stock IN handled via Returns)" : ""}`,
+      terms: src.terms,
+    });
+    const id = randomUUID();
+    await insertInvoice(deps.db, actor, id, values, {
+      docKind: "credit_note",
+      againstInvoiceId: src.id,
+      againstInvoiceNo: src.invoice_no,
+    });
+    await recordEvent(deps, actor, {
+      type: "invoice.created",
+      entityType: "invoice",
+      entityId: id,
+      summary: `Draft credit note against ${src.invoice_no} for ${src.customer_name} (${formatINR(values.grandTotal)})`,
+    });
     res.status(201).json(await invoiceDetail(deps, actor.tenantId, id));
   });
 
@@ -1106,7 +1329,14 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     const row = await tx(deps.db, async (conn) => {
       const r = await loadInvoiceRow(conn, actor.tenantId, req.params.id, true);
       if (r.status !== "issued") throw conflict("Payments can only be recorded against issued invoices");
-      const balance = invoiceBalance({ status: r.status, grandTotal: money(r.grand_total), amountPaid: money(r.amount_paid) });
+      if (!isArTaxInvoice(r.doc_kind)) throw conflict("Payments can only be recorded against tax invoices");
+      const balance = invoiceBalance({
+        status: r.status,
+        grandTotal: money(r.grand_total),
+        amountPaid: money(r.amount_paid),
+        creditApplied: money(r.credit_applied ?? 0),
+        docKind: r.doc_kind || "tax_invoice",
+      });
       if (input.amount > balance + 0.005) throw badRequest(`That's more than the balance due (${formatINR(balance)})`);
       await assertDayOpen(conn, actor.tenantId, date);
       await applyInvoicePayment(conn, actor, r, { ...input, date });
@@ -1139,7 +1369,8 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       await assertDayOpen(conn, actor.tenantId, date);
       const open = await rows<InvoiceRow>(
         conn,
-        `SELECT * FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND grand_total - amount_paid > 0.005
+        `SELECT * FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') = 'tax_invoice'
+           AND grand_total - amount_paid - COALESCE(credit_applied, 0) > 0.005
            AND ${input.partyId ? "customer_id = :partyId" : "customer_id IS NULL AND customer_name = :partyName"}
          ORDER BY COALESCE(due_date, invoice_date), invoice_date, created_at FOR UPDATE`,
         { tenantId: actor.tenantId, partyId: input.partyId ?? null, partyName: input.partyName },
@@ -1147,7 +1378,10 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       const ordered = input.invoiceIds?.length ? input.invoiceIds.map((id) => open.find((o) => o.id === id)).filter((o): o is InvoiceRow => Boolean(o)) : open;
       const { allocations, remainder } = allocateFifo(
         input.amount,
-        ordered.map((o) => ({ id: o.id, balance: round2(money(o.grand_total) - money(o.amount_paid)) })),
+        ordered.map((o) => ({
+          id: o.id,
+          balance: round2(money(o.grand_total) - money(o.amount_paid) - money(o.credit_applied ?? 0)),
+        })),
       );
       const applied: Array<{ invoiceId: string; invoiceNo: string; amount: number }> = [];
       for (const a of allocations) {
@@ -1301,7 +1535,8 @@ export function registerSales(router: Router, deps: ImsDeps): void {
         `SELECT i.*, p.mobile AS party_mobile, p.email AS party_email, p.state AS party_state,
            (SELECT a.channel FROM ims_ar_activity a WHERE a.tenant_id = i.tenant_id AND a.invoice_id = i.id AND a.kind = 'reminder' ORDER BY a.created_at DESC LIMIT 1) AS last_reminder_channel
          FROM ims_invoices i LEFT JOIN ims_parties p ON p.id = i.customer_id AND p.tenant_id = i.tenant_id
-         WHERE i.tenant_id = :tenantId AND i.status = 'issued' AND i.grand_total - i.amount_paid > 0.005
+         WHERE i.tenant_id = :tenantId AND i.status = 'issued' AND COALESCE(i.doc_kind, 'tax_invoice') = 'tax_invoice'
+           AND i.grand_total - i.amount_paid - COALESCE(i.credit_applied, 0) > 0.005
          ORDER BY i.due_date ASC, i.invoice_date ASC LIMIT 3000`,
         { tenantId: actor.tenantId },
       ),
@@ -1309,7 +1544,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
         tenantId: actor.tenantId,
         monthStart,
       }),
-      one<{ total: string | null }>(deps.db, `SELECT SUM(grand_total) AS total FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND invoice_date >= :since`, {
+      one<{ total: string | null }>(deps.db, `SELECT SUM(grand_total) AS total FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') = 'tax_invoice' AND invoice_date >= :since`, {
         tenantId: actor.tenantId,
         since: addDaysISO(today, -89),
       }),

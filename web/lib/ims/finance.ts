@@ -38,6 +38,7 @@ export type PaymentInput = { amount: number; date?: string; method: PayMethod; r
 
 export type InvoiceStatus = "draft" | "issued" | "cancelled";
 export type InvoiceDisplayStatus = "draft" | "unpaid" | "partial" | "paid" | "overdue" | "cancelled";
+export type InvoiceDocKind = "tax_invoice" | "proforma" | "credit_note" | "debit_note";
 export type ArPriority = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 export type ArStatus = "disputed" | "promise" | "promise_missed" | "overdue" | "partial" | "due";
 
@@ -45,6 +46,9 @@ export type ImsInvoice = {
   id: string;
   invoiceNo: string;
   isDraftNo: boolean;
+  docKind: InvoiceDocKind;
+  againstInvoiceId: string | null;
+  againstInvoiceNo: string | null;
   status: InvoiceStatus;
   displayStatus: InvoiceDisplayStatus;
   customerId: string | null;
@@ -53,6 +57,12 @@ export type ImsInvoice = {
   customerAddress: string | null;
   customerMobile: string | null;
   customerEmail: string | null;
+  customerPoNo: string | null;
+  shipToName: string | null;
+  shipToGstin: string | null;
+  shipToAddress: string | null;
+  shipToState: string | null;
+  shipToMobile: string | null;
   placeOfSupply: string | null;
   intraState: boolean;
   invoiceDate: string;
@@ -68,6 +78,7 @@ export type ImsInvoice = {
   roundToRupee: boolean;
   grandTotal: number;
   amountPaid: number;
+  creditApplied: number;
   balance: number;
   payMode: string | null;
   stockPosted: boolean;
@@ -97,6 +108,13 @@ export type ImsInvoice = {
   issuedAt: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
+  einvStatus: string | null;
+  irn: string | null;
+  ackNo: string | null;
+  ackAt: string | null;
+  signedQr: string | null;
+  ewayBillNo: string | null;
+  ewayValidUpto: string | null;
   daysOverdue: number;
   ageDays: number;
   agingBucket: AgingKey;
@@ -153,9 +171,16 @@ export type InvoiceInput = {
   customerGstin?: string | null;
   customerAddress?: string | null;
   customerMobile?: string | null;
+  customerPoNo?: string | null;
+  shipToName?: string | null;
+  shipToGstin?: string | null;
+  shipToAddress?: string | null;
+  shipToState?: string | null;
+  shipToMobile?: string | null;
   placeOfSupply?: string | null;
   invoiceDate: string;
   dueDate?: string | null;
+  docKind?: InvoiceDocKind;
   lines: ImsLineInput[];
   roundToRupee?: boolean;
   notes?: string | null;
@@ -573,7 +598,36 @@ export type ClosingHistory = { closings: ImsClosing[]; stats: { days: number; sh
 
 /* ---------- Endpoints ---------- */
 
-export type InvoiceQuery = { period?: Period | "all"; from?: string; to?: string; customerId?: string; source?: "pos" | "quotation" | "bom" | "tally"; q?: string; status?: string };
+export type InvoiceQuery = {
+  period?: Period | "all";
+  from?: string;
+  to?: string;
+  customerId?: string;
+  source?: "pos" | "quotation" | "bom" | "tally";
+  docKind?: InvoiceDocKind | "notes";
+  q?: string;
+  status?: string;
+};
+
+/** NPCI UPI intent for payment QR on tax invoices. */
+export function upiPayIntent(opts: { vpa: string; payeeName?: string | null; amount?: number | null; note?: string | null }): string | null {
+  const pa = String(opts.vpa ?? "").trim();
+  if (!pa || !pa.includes("@")) return null;
+  const q = new URLSearchParams();
+  q.set("pa", pa);
+  q.set("pn", String(opts.payeeName ?? "Payee").trim().slice(0, 80) || "Payee");
+  q.set("cu", "INR");
+  if (opts.amount != null && opts.amount > 0.005) q.set("am", Number(opts.amount).toFixed(2));
+  if (opts.note?.trim()) q.set("tn", opts.note.trim().slice(0, 80));
+  return `upi://pay?${q.toString()}`;
+}
+
+export const DOC_KIND_LABEL: Record<InvoiceDocKind, string> = {
+  tax_invoice: "Tax invoice",
+  proforma: "Proforma",
+  credit_note: "Credit note",
+  debit_note: "Debit note",
+};
 export type BillQuery = { status?: string; supplierId?: string; q?: string; priority?: string };
 
 export const finance = {
@@ -586,6 +640,7 @@ export const finance = {
   issueInvoice: (id: string) => post<InvoiceDetail>(`/invoices/${id}/issue`),
   cancelInvoice: (id: string, reason: string) => post<InvoiceDetail>(`/invoices/${id}/cancel`, { reason }),
   duplicateInvoice: (id: string) => post<InvoiceDetail>(`/invoices/${id}/duplicate`),
+  createCreditNote: (id: string, input?: { notes?: string | null; restock?: boolean }) => post<InvoiceDetail>(`/invoices/${id}/credit-note`, input ?? {}),
   deleteInvoice: (id: string) => del(`/invoices/${id}`),
   recordInvoicePayment: (id: string, input: PaymentInput) => post<InvoiceDetail>(`/invoices/${id}/payments`, input),
   recordReceipt: (input: PaymentInput & { partyId?: string | null; partyName: string; invoiceIds?: string[] }) =>

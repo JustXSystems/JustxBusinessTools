@@ -108,6 +108,24 @@ function InvoiceBody({
               <KeyValues
                 rows={[
                   ["Customer", inv.customerName],
+                  ...(inv.docKind && inv.docKind !== "tax_invoice" ? ([["Document", inv.docKind === "credit_note" ? "Credit note" : inv.docKind === "debit_note" ? "Debit note" : "Proforma"]] as Array<[string, ReactNode]>) : []),
+                  ...(inv.againstInvoiceNo
+                    ? ([
+                        [
+                          "Against",
+                          inv.againstInvoiceId ? (
+                            <DocRefLink key="against" module="sales" intent={`open:${inv.againstInvoiceId}`} enabled>
+                              {inv.againstInvoiceNo}
+                            </DocRefLink>
+                          ) : (
+                            inv.againstInvoiceNo
+                          ),
+                        ],
+                      ] as Array<[string, ReactNode]>)
+                    : []),
+                  ...(inv.customerPoNo ? ([["Customer PO", inv.customerPoNo]] as Array<[string, ReactNode]>) : []),
+                  ...(inv.shipToName || inv.shipToAddress ? ([["Ship to", [inv.shipToName, inv.shipToAddress].filter(Boolean).join(" · ")]] as Array<[string, ReactNode]>) : []),
+                  ...(inv.creditApplied > 0.005 ? ([["Credits applied", inrExact(inv.creditApplied)]] as Array<[string, ReactNode]>) : []),
                   ...(inv.sourceTool === "ims_bom" && inv.sourceLabel
                     ? ([
                         [
@@ -120,6 +138,10 @@ function InvoiceBody({
                     : []),
                   ["Due", inv.status === "issued" ? `${dateLabel(inv.dueDate)}${inv.daysOverdue > 0 ? ` · ${inv.daysOverdue} days overdue` : ""}` : dateLabel(inv.dueDate)],
                   ["Tax", inv.intraState ? `CGST ${inrExact(inv.cgst)} + SGST ${inrExact(inv.sgst)}` : `IGST ${inrExact(inv.igst)}`],
+                  [
+                    "e-Invoice",
+                    inv.irn ? `Pushed · IRN ${inv.irn.slice(0, 12)}…` : inv.einvStatus || (inv.status === "issued" && (inv.docKind || "tax_invoice") === "tax_invoice" ? "Yet to push (Wave 2)" : "Not applicable"),
+                  ],
                   [
                     "Stock",
                     inv.dcLinks?.length ? (
@@ -202,6 +224,19 @@ function InvoiceBody({
               ) : null}
             </div>
             <div className="ims-row" style={{ marginTop: 8 }}>
+              {canWrite && isIssued && (inv.docKind || "tax_invoice") === "tax_invoice" ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy === "cn"}
+                  onClick={async () => {
+                    const out = await run("cn", () => finance.createCreditNote(inv.id), { success: "Credit note draft created" });
+                    if (out) onEdit(out.invoice.id);
+                  }}
+                >
+                  {busy === "cn" ? "Creating…" : "Credit note"}
+                </Button>
+              ) : null}
               {canWrite ? (
                 <Button
                   size="sm"
