@@ -38,6 +38,11 @@ async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
      VALUES (:orgId, 'qrgenerator', 'Utilities', 38, 1)`,
     { orgId },
   );
+  await pool.query(
+    `INSERT IGNORE INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available)
+     VALUES (:orgId, 'gmap2mappls', 'Utilities', 42, 1)`,
+    { orgId },
+  );
   // Opt-in tool: seeded hidden so admins enable it per org.
   await pool.query(
     `INSERT IGNORE INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available)
@@ -117,7 +122,10 @@ export async function getEffectiveConfig(): Promise<{
   for (const row of catalog) {
     if (
       row.available &&
-      (row.id === "sitesurveyv1" || row.id === "quotationv1" || row.id === "qrgenerator")
+      (row.id === "sitesurveyv1" ||
+        row.id === "quotationv1" ||
+        row.id === "qrgenerator" ||
+        row.id === "gmap2mappls")
     ) {
       await appendToolToOrgHomeSelections(orgId, row.id);
     }

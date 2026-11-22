@@ -29,6 +29,19 @@ const QrGeneratorTool = dynamic(
   },
 );
 
+const Gmap2MapplsTool = dynamic(
+  () => import("@/components/utilities/Gmap2MapplsTool").then((m) => m.Gmap2MapplsTool),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="empty-state">
+        <div className="es-icon">⏳</div>
+        <div className="es-title">Loading…</div>
+      </div>
+    ),
+  },
+);
+
 const BosDesignTool = dynamic(() => import("@/components/bos-design/BosDesignTool"), {
   ssr: false,
   loading: () => (
@@ -143,6 +156,10 @@ export function ToolView({ toolId }: { toolId: string }) {
 
   if (tool.id === "qrgenerator") {
     return <QrGeneratorTool />;
+  }
+
+  if (tool.id === "gmap2mappls") {
+    return <Gmap2MapplsTool />;
   }
 
   if (tool.id === "bosdesign") {

@@ -606,6 +606,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
         "bos",
         "gstcalc",
         "qrgenerator",
+        "gmap2mappls",
         "paymenttracker",
       ],
       items: [],

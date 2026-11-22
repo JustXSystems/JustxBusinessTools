@@ -42,6 +42,7 @@ const DEFAULT_TOOLS = [
   ["visitors", "Utilities"],
   ["qrscanner", "Utilities"],
   ["qrgenerator", "Utilities"],
+  ["gmap2mappls", "Utilities"],
 ] as const;
 
 const router = Router();
@@ -84,6 +85,11 @@ async function ensureCatalog(orgId: number): Promise<void> {
        VALUES (:orgId, 'qrgenerator', 'Utilities', 38, 1)`,
       { orgId },
     );
+    await pool.query(
+      `INSERT IGNORE INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available)
+       VALUES (:orgId, 'gmap2mappls', 'Utilities', 42, 1)`,
+      { orgId },
+    );
   }
   // Opt-in tool: seeded hidden so admins enable it per org.
   await pool.query(
@@ -103,10 +109,16 @@ async function ensureCatalog(orgId: number): Promise<void> {
   );
 
   // New tools added after branch home allowlists were saved stay invisible unless we opt them in.
+  await pool.query(
+    `INSERT IGNORE INTO tool_catalog (organization_id, tool_id, group_name, sort_order, available)
+     VALUES (:orgId, 'gmap2mappls', 'Utilities', 42, 1)`,
+    { orgId },
+  );
+
   const [liveRows] = await pool.query(
     `SELECT tool_id FROM tool_catalog
      WHERE organization_id = :orgId AND available = 1
-       AND tool_id IN ('sitesurveyv1', 'quotationv1', 'qrgenerator')`,
+       AND tool_id IN ('sitesurveyv1', 'quotationv1', 'qrgenerator', 'gmap2mappls')`,
     { orgId },
   );
   for (const row of Array.isArray(liveRows) ? liveRows : []) {

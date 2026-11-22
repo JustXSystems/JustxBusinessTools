@@ -29,6 +29,7 @@ const BUILTIN_IDS = new Set(
       "dealercommission",
       "qrscanner",
       "qrgenerator",
+      "gmap2mappls",
       "bosdesign",
       "bos",
       "imsdealer",

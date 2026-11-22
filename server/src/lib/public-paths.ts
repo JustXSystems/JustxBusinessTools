@@ -20,3 +20,6 @@ export function isUnauthenticatedApiPath(pathname: string): boolean {
     path === "/api/profile/drive/callback"
   );
 }
+
+/** Explicit public free-tool APIs (covered by /api/public/ prefix; listed for tests/docs). */
+export const PUBLIC_FREE_TOOL_PREFIXES = ["/api/public/gmap2mappls"] as const;

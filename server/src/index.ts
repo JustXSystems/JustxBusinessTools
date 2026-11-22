@@ -62,6 +62,7 @@ import { getActiveUserId } from "./lib/request-context.js";
 import { getRequestId, log } from "./lib/logging.js";
 import { pool } from "./db.js";
 import publicStatusRouter from "./routes/public-status.js";
+import publicGmap2MapplsRouter from "./routes/public-gmap2mappls.js";
 
 try {
   validateServerEnv();
@@ -190,6 +191,7 @@ app.use("/api/public/quotation-v1", publicQuoteRateLimit, publicQuotationV1Route
 app.use("/api/public/bom-proposal", publicQuoteRateLimit, publicBomProposalRouter);
 app.use("/api/public/invoice-portal", publicQuoteRateLimit, publicInvoicePortalRouter);
 app.use("/api/public/status", publicStatusRouter);
+app.use("/api/public/gmap2mappls", publicQuoteRateLimit, publicGmap2MapplsRouter);
 app.use("/api/quotation-v1", quotationV1Router);
 app.use("/api/site-survey-v1", siteSurveyV1Router);
 app.use("/api/artifacts", artifactsRouter);
