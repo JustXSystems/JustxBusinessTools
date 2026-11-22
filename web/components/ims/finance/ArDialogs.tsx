@@ -19,7 +19,7 @@ import {
   type SentReminder,
 } from "@/lib/ims/finance";
 import { dateLabel, inrExact, num, round2, stampLabel } from "@/lib/ims/format";
-import { Loaded, StatusBadge, useIms, useImsAction, useImsData } from "../core";
+import { Loaded, StatusBadge, useIms, useImsAction, useImsData, usePrint } from "../core";
 import { activityTone, KeyValues, MethodSelect, PaymentDialog, QuickChips, ReasonDialog, Stats, Timeline, type TimelineItem } from "./shared";
 
 /* ---------- Reminders ---------- */
@@ -657,5 +657,117 @@ export function CollectionsPanel({
         </>
       ) : null}
     </>
+  );
+}
+
+/** Formal overdue notice for print / PDF (SAP-style dunning letter light). */
+export function DunningLetterDialog({
+  customer,
+  invoices,
+  businessName,
+  today,
+  onClose,
+}: {
+  customer: ArCustomer;
+  invoices: ImsInvoice[];
+  businessName: string;
+  today: string;
+  onClose: () => void;
+}) {
+  const { session } = useIms();
+  const print = usePrint();
+  const overdue = invoices.filter((i) => i.daysOverdue > 0 && i.balance > 0.005).sort((a, b) => b.daysOverdue - a.daysOverdue);
+  const open = invoices.filter((i) => i.balance > 0.005);
+  const list = overdue.length ? overdue : open;
+  const total = round2(list.reduce((s, i) => s + i.balance, 0));
+  const s = session.settings;
+
+  return (
+    <Dialog open onClose={onClose} title={`Payment reminder · ${customer.name}`} wide>
+      <div className="ims-row no-print" style={{ marginBottom: 12 }}>
+        <Button variant="primary" icon="printer" onClick={print}>
+          Print letter
+        </Button>
+        <Button variant="ghost" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+      <div className="bos-inv-paper fin-dunning-letter" style={{ border: "1px solid var(--bos-border)", padding: 20, borderRadius: 8, background: "#fff", color: "#111" }}>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{businessName || s.businessName}</div>
+          {s.address ? <div style={{ fontSize: 12, whiteSpace: "pre-wrap" }}>{s.address}</div> : null}
+          <div style={{ fontSize: 12 }}>
+            {[s.gstin ? `GSTIN ${s.gstin}` : null, s.phone, s.email].filter(Boolean).join(" · ")}
+          </div>
+          {s.msmeRegistered ? <div style={{ fontSize: 12 }}>MSME{s.msmeUdyam ? ` · UDYAM ${s.msmeUdyam}` : ""}</div> : null}
+        </div>
+        <div style={{ fontSize: 13, marginBottom: 12 }}>Date: {dateLabel(today)}</div>
+        <div style={{ fontSize: 13, marginBottom: 16 }}>
+          <div style={{ fontWeight: 600 }}>To</div>
+          <div>{customer.name}</div>
+          {customer.mobile ? <div>{customer.mobile}</div> : null}
+        </div>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Subject: Outstanding dues — payment reminder</div>
+        <p style={{ fontSize: 13, lineHeight: 1.5 }}>
+          Dear {customer.name},
+          <br />
+          <br />
+          This is a formal reminder that the following invoice{list.length === 1 ? " is" : "s are"} outstanding as of {dateLabel(today)}. Kindly arrange payment of{" "}
+          <b>{inrExact(total)}</b> at the earliest.
+        </p>
+        <table className="fin-table" style={{ width: "100%", marginTop: 12, marginBottom: 12, fontSize: 12 }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left" }}>Invoice</th>
+              <th style={{ textAlign: "left" }}>Date</th>
+              <th style={{ textAlign: "left" }}>Due</th>
+              <th style={{ textAlign: "right" }}>Days overdue</th>
+              <th style={{ textAlign: "right" }}>Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((i) => (
+              <tr key={i.id}>
+                <td>{i.invoiceNo}</td>
+                <td>{dateLabel(i.invoiceDate)}</td>
+                <td>{i.dueDate ? dateLabel(i.dueDate) : "—"}</td>
+                <td style={{ textAlign: "right" }}>{i.daysOverdue || "—"}</td>
+                <td style={{ textAlign: "right" }}>{inrExact(i.balance)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={4} style={{ textAlign: "right" }}>
+                <b>Total due</b>
+              </td>
+              <td style={{ textAlign: "right" }}>
+                <b>{inrExact(total)}</b>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+        {s.bankAccountNo || s.bankUpi ? (
+          <p style={{ fontSize: 12, lineHeight: 1.5 }}>
+            Payment details:
+            {s.bankAccountName ? ` ${s.bankAccountName}` : ""}
+            {s.bankAccountNo ? ` · A/c ${s.bankAccountNo}` : ""}
+            {s.bankIfsc ? ` · IFSC ${s.bankIfsc}` : ""}
+            {s.bankName ? ` · ${s.bankName}` : ""}
+            {s.bankUpi ? ` · UPI ${s.bankUpi}` : ""}
+          </p>
+        ) : null}
+        <p style={{ fontSize: 13, marginTop: 16 }}>
+          Please ignore this notice if payment has already been made. For queries, contact {s.phone || s.email || "our accounts team"}.
+        </p>
+        <p style={{ fontSize: 13, marginTop: 24 }}>
+          Yours sincerely,
+          <br />
+          <b>{businessName || s.businessName}</b>
+          <br />
+          Accounts
+        </p>
+      </div>
+    </Dialog>
   );
 }

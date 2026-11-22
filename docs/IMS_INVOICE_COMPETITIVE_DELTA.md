@@ -66,7 +66,7 @@ Legend: ❌ missing · 🟡 partial · ✅ present
 | 28 | Multi-GSTIN / branch series | ✅ | ✅ | ✅ | — | ❌ | P1 | 6 |
 | 29 | Scheduled send | ✅ | ❌ | ❌ | ✅ | ❌ | P2 | 6 |
 | 30 | Custom fields | ✅ | ✅ UDF | 🟡 | ✅ | ❌ | P2 | 6 |
-| 31 | **Dunning wizard / letters** | 🟡 reminders | ✅ | 🟡 | 🟡 | 🟡 AR reminders | P1 | 5 |
+| 31 | **Dunning wizard / letters** | 🟡 reminders | ✅ | 🟡 | 🟡 | 🟡 print letter | P1 | 5 |
 | 32 | **Down-payment / deposit invoice** | ✅ retainer | ✅ A/R DP | 🟡 | ✅ | ✅ retainer | P1 | 4 |
 | 33 | **Installment payment plans** | 🟡 | ✅ | ❌ | 🟡 | ❌ | P2 | 6 |
 | 34 | **Document generation wizard** (batch invoice from deliveries) | 🟡 | ✅ | 🟡 | ❌ | ❌ | P1 | 5 |
@@ -128,3 +128,7 @@ Shared UI: `DocumentPaper`, `LineEditor`, `InvoicePaper`, Sales SubTabs (`Invoic
 ## Acceptance (Wave 5b)
 
 - [x] Progress % + milestone label on editor, map, and invoice paper  
+
+## Acceptance (Wave 5c)
+
+- [x] AR customer **Letter** → printable dunning / payment reminder with overdue lines + bank/UPI  

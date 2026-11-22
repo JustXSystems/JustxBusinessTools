@@ -7,7 +7,7 @@ import type { AgingKey } from "@/lib/ims/api";
 import { AR_PRIORITY_BADGE, AR_STATUS_BADGE, CHANNEL_LABEL, finance, type ArCustomer, type ArPriority, type ImsInvoice, type ReceivablesData } from "@/lib/ims/finance";
 import { dateLabel, downloadCsv, inr, inrCompact, inrExact, timeAgo } from "@/lib/ims/format";
 import { Loaded, PageHeader, RequirePerm, Stack, StatusBadge, useIms, useImsAction, useImsData } from "../core";
-import { AssignDialog, CollectionsPanel, ReceiptDialog, ReminderDialog } from "./ArDialogs";
+import { AssignDialog, CollectionsPanel, DunningLetterDialog, ReceiptDialog, ReminderDialog } from "./ArDialogs";
 import { StatementDialog } from "./Statement";
 
 type ViewMode = "invoices" | "customers";
@@ -48,6 +48,7 @@ function ReceivablesBody({ data, intent }: { data: ReceivablesData; intent: stri
   const [reminder, setReminder] = useState<ReminderJob | null>(null);
   const [assignIds, setAssignIds] = useState<string[] | null>(null);
   const [statement, setStatement] = useState<{ id: string | null; name: string } | null>(null);
+  const [dunning, setDunning] = useState<ArCustomer | null>(null);
   const k = data.kpis;
   const today = data.today;
 
@@ -177,6 +178,11 @@ function ReceivablesBody({ data, intent }: { data: ReceivablesData; intent: stri
           <Button size="sm" variant="ghost" onClick={() => setStatement({ id: c.customerId, name: c.name })}>
             Statement
           </Button>
+          {c.overdue > 0 || c.outstanding > 0 ? (
+            <Button size="sm" variant="ghost" onClick={() => setDunning(c)}>
+              Letter
+            </Button>
+          ) : null}
         </span>
       ),
     },
@@ -530,6 +536,15 @@ function ReceivablesBody({ data, intent }: { data: ReceivablesData; intent: stri
         />
       ) : null}
       <StatementDialog party={statement} onClose={() => setStatement(null)} />
+      {dunning ? (
+        <DunningLetterDialog
+          customer={dunning}
+          invoices={data.invoices.filter((i) => customerKeyOf(i) === dunning.key)}
+          businessName={data.businessName}
+          today={today}
+          onClose={() => setDunning(null)}
+        />
+      ) : null}
     </>
   );
 }
