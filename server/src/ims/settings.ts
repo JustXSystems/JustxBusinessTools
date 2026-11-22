@@ -155,6 +155,7 @@ export type ImsSettings = {
   cnPrefix: string;
   dnPrefix: string;
   proformaPrefix: string;
+  retainerPrefix: string;
   billPrefix: string;
   returnPrefix: string;
   checkPrefix: string;
@@ -172,6 +173,8 @@ export type ImsSettings = {
   /** Null = use industry-pack column defaults. */
   bomScheduleColumns: BomScheduleColumnId[] | null;
   poApprovalLimit: number;
+  /** 0 = no invoice approval. At/above this grand total, Save & issue queues for Approvals. */
+  invoiceApprovalLimit: number;
   draftPoPurgeDays: number;
   paymentTermsDays: number;
   defaultGstRate: number;
@@ -205,6 +208,7 @@ type SettingsRow = {
   cn_prefix?: string;
   dn_prefix?: string;
   proforma_prefix?: string;
+  retainer_prefix?: string;
   bill_prefix: string;
   return_prefix: string;
   check_prefix: string;
@@ -218,6 +222,7 @@ type SettingsRow = {
   bom_require_quotation_ref?: number | boolean | null;
   bom_schedule_columns_json?: unknown;
   po_approval_limit: string | number;
+  invoice_approval_limit?: string | number;
   draft_po_purge_days: number;
   payment_terms_days: number;
   default_gst_rate: string | number;
@@ -249,6 +254,7 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   cnPrefix: r.cn_prefix || "CN",
   dnPrefix: r.dn_prefix || "DN",
   proformaPrefix: r.proforma_prefix || "PF",
+  retainerPrefix: r.retainer_prefix || "RA",
   billPrefix: r.bill_prefix,
   returnPrefix: r.return_prefix,
   checkPrefix: r.check_prefix,
@@ -262,6 +268,7 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   bomRequireQuotationRef: Boolean(r.bom_require_quotation_ref),
   bomScheduleColumns: normalizeBomScheduleColumnsSetting(r.bom_schedule_columns_json),
   poApprovalLimit: money(r.po_approval_limit),
+  invoiceApprovalLimit: money(r.invoice_approval_limit ?? 0),
   draftPoPurgeDays: Number(r.draft_po_purge_days) || 0,
   paymentTermsDays: Number(r.payment_terms_days) || 0,
   defaultGstRate: money(r.default_gst_rate),
@@ -321,6 +328,7 @@ const SettingsInput = z.object({
   cnPrefix: prefix.optional(),
   dnPrefix: prefix.optional(),
   proformaPrefix: prefix.optional(),
+  retainerPrefix: prefix.optional(),
   billPrefix: prefix.optional(),
   returnPrefix: prefix.optional(),
   checkPrefix: prefix.optional(),
@@ -334,6 +342,7 @@ const SettingsInput = z.object({
   bomRequireQuotationRef: z.boolean().optional(),
   bomScheduleColumns: z.array(z.enum(BOM_SCHEDULE_COLUMN_IDS)).max(16).nullable().optional(),
   poApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
+  invoiceApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
   draftPoPurgeDays: z.coerce.number().int().min(0).max(365).optional(),
   paymentTermsDays: z.coerce.number().int().min(0).max(365).optional(),
   defaultGstRate: z.coerce.number().min(0).max(100).optional(),
@@ -365,6 +374,7 @@ const COLUMN: Record<string, string> = {
   cnPrefix: "cn_prefix",
   dnPrefix: "dn_prefix",
   proformaPrefix: "proforma_prefix",
+  retainerPrefix: "retainer_prefix",
   billPrefix: "bill_prefix",
   returnPrefix: "return_prefix",
   checkPrefix: "check_prefix",
@@ -378,6 +388,7 @@ const COLUMN: Record<string, string> = {
   bomRequireQuotationRef: "bom_require_quotation_ref",
   bomScheduleColumns: "bom_schedule_columns_json",
   poApprovalLimit: "po_approval_limit",
+  invoiceApprovalLimit: "invoice_approval_limit",
   draftPoPurgeDays: "draft_po_purge_days",
   paymentTermsDays: "payment_terms_days",
   defaultGstRate: "default_gst_rate",

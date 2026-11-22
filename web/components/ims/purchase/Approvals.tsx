@@ -6,18 +6,22 @@ import { Alert, Badge, Button, Card, DataTable, Dialog, EmptyState, Grid, KpiCar
 import { ims, type ImsEvent, type ImsStockCheck } from "@/lib/ims/api";
 import { dateLabel, inr, inrCompact, inrExact, qtyText, stampLabel, timeAgo } from "@/lib/ims/format";
 import { bom, type BomDc } from "@/lib/ims/bom";
+import { finance, type ImsInvoice } from "@/lib/ims/finance";
 import { purchase, type ApprovalBill, type PurchaseOrder } from "@/lib/ims/purchase";
 import { DocRefLink } from "../bom/DocRefLink";
 import { ErrorBlock, LoadingBlock, Loaded, PageHeader, PersonAvatar, RequirePerm, Stack, SubTabs, useIms, useImsAction, useImsData } from "../core";
 import { KeyValues, ReasonDialog } from "./ui";
 
-type Tab = "pos" | "bills" | "checks" | "dcs" | "history";
+type Tab = "pos" | "invoices" | "bills" | "checks" | "dcs" | "history";
 
 const PO_REJECT_REASONS = ["Price too high — renegotiate", "Quantity too large", "Wrong supplier", "Not needed now"];
+const INV_REJECT_REASONS = ["Price too high", "Wrong customer", "Wrong items or rates", "Needs manager review"];
 const CHECK_REJECT_REASONS = ["Recount the mismatched items", "Variance too high — recheck", "Count looks incomplete"];
 const DECISION_TYPES = new Set([
   "po.approved",
   "po.rejected",
+  "invoice.approved",
+  "invoice.rejected",
   "bill.approved",
   "bill.held",
   "check.approved",
@@ -52,11 +56,15 @@ function Inbox() {
   const { takeIntent, can } = useIms();
   const [intent] = useState(() => takeIntent("approvals"));
   const [tab, setTab] = useState<Tab>(() =>
-    intent === "bills" || intent === "checks" || intent === "dcs" || intent === "history" ? intent : "pos",
+    intent === "bills" || intent === "checks" || intent === "dcs" || intent === "history" || intent === "invoices" ? intent : "pos",
   );
   const [reviewId, setReviewId] = useState<string | null>(() => (intent?.startsWith("open:") ? intent.slice(5) : null));
 
   const pos = useImsData(() => purchase.orders({ status: "pending_approval" }), []);
+  const invoices = useImsData(async () => {
+    const list = await finance.invoices({ status: "pending_approval", limit: 100 });
+    return { invoices: list.invoices as ImsInvoice[], approvalLimit: 0 };
+  }, []);
   const bills = useImsData(async () => ({ list: await purchase.pendingBills() }), []);
   const checks = useImsData(async () => (await ims.checks()).checks.filter((c) => c.status === "submitted"), []);
   const hasBom = can("bom");
@@ -77,11 +85,12 @@ function Inbox() {
   const billList = bills.data?.list;
   const billsUnavailable = billList === null;
   const poCount = pos.data?.orders.length ?? 0;
+  const invCount = invoices.data?.invoices.length ?? 0;
   const billCount = billList?.length ?? 0;
   const checkCount = checks.data?.length ?? 0;
   const dcCount = dcs.data?.dcs.length ?? 0;
-  const loading = !pos.data || !bills.data || !checks.data || (hasBom && !dcs.data);
-  const total = poCount + billCount + checkCount + dcCount;
+  const loading = !pos.data || !invoices.data || !bills.data || !checks.data || (hasBom && !dcs.data);
+  const total = poCount + invCount + billCount + checkCount + dcCount;
 
   return (
     <Stack>
@@ -89,10 +98,10 @@ function Inbox() {
 
       <Grid cols={5} min={140}>
         <KpiCard label="Purchase orders" value={poCount} chip={{ color: "blue", glyph: "🛒" }} delta={poCount ? inrCompact(pos.data?.summary.awaitingValue ?? 0) : "None pending"} deltaTone={poCount ? "warn" : "muted"} />
+        <KpiCard label="Invoices" value={invCount} chip={{ color: "amber", glyph: "🧾" }} delta={invCount ? inrCompact((invoices.data?.invoices ?? []).reduce((t, i) => t + i.grandTotal, 0)) : "None pending"} deltaTone={invCount ? "warn" : "muted"} />
         <KpiCard label="Supplier bills" value={billsUnavailable ? "—" : billCount} chip={{ color: "rose", glyph: "₹" }} delta={billsUnavailable ? "Not available yet" : billCount ? inrCompact((billList ?? []).reduce((t, b) => t + b.grandTotal, 0)) : "None pending"} deltaTone={billCount ? "warn" : "muted"} />
         <KpiCard label="Stock checks" value={checkCount} chip={{ color: "mint", glyph: "✓" }} delta={checkCount ? `${(checks.data ?? []).reduce((t, c) => t + c.mismatchCount, 0)} mismatches` : "None submitted"} deltaTone={checkCount ? "warn" : "muted"} />
         <KpiCard label="Delivery challans" value={hasBom ? dcCount : "—"} chip={{ color: "blue", glyph: "◫" }} delta={hasBom ? (dcCount ? "Verified — stock out on approve" : "None verified") : "BOM not enabled"} deltaTone={dcCount ? "warn" : "muted"} />
-        <KpiCard label="Approval limit" value={inrCompact(pos.data?.approvalLimit ?? 0)} chip={{ color: "lavender", glyph: "🛡" }} delta="POs at or above need sign-off" deltaTone="muted" />
       </Grid>
 
       <SubTabs<Tab>
@@ -101,6 +110,7 @@ function Inbox() {
         label="Approval type"
         options={[
           { value: "pos", label: `Purchase orders${poCount ? ` · ${poCount}` : ""}` },
+          { value: "invoices", label: `Invoices${invCount ? ` · ${invCount}` : ""}` },
           { value: "bills", label: `Bills${billCount ? ` · ${billCount}` : ""}` },
           { value: "checks", label: `Stock checks${checkCount ? ` · ${checkCount}` : ""}` },
           ...(hasBom ? [{ value: "dcs" as const, label: `Delivery challans${dcCount ? ` · ${dcCount}` : ""}` }] : []),
@@ -111,6 +121,10 @@ function Inbox() {
       {tab === "pos" ? (
         <Loaded state={pos} rows={3}>
           {(d) => <PoQueue orders={d.orders} onReview={setReviewId} />}
+        </Loaded>
+      ) : tab === "invoices" ? (
+        <Loaded state={invoices} rows={3}>
+          {(d) => <InvoiceQueue invoices={d.invoices} onReload={invoices.reload} />}
         </Loaded>
       ) : tab === "bills" ? (
         bills.error && !bills.data ? (
@@ -140,6 +154,106 @@ function Inbox() {
 
       {reviewId ? <PoReview id={reviewId} onClose={() => setReviewId(null)} /> : null}
     </Stack>
+  );
+}
+
+/* ---------- Invoices ---------- */
+
+function InvoiceQueue({ invoices, onReload }: { invoices: ImsInvoice[]; onReload: () => void }) {
+  const { navigate } = useIms();
+  const { run, busy } = useImsAction();
+  const [rejecting, setRejecting] = useState<ImsInvoice | null>(null);
+
+  if (!invoices.length)
+    return (
+      <Card interactive={false}>
+        <EmptyState icon="check" title="No invoices waiting">
+          Tax invoices at or above the invoice approval limit land here when Save &amp; issue is used.
+        </EmptyState>
+      </Card>
+    );
+
+  const columns: BosColumn<ImsInvoice>[] = [
+    {
+      key: "inv",
+      header: "Invoice",
+      cell: (i) => (
+        <span className="ims-cell-stack">
+          <span className="ims-strong ims-mono">{i.isDraftNo ? "Draft" : i.invoiceNo}</span>
+          <small>{dateLabel(i.invoiceDate)}</small>
+        </span>
+      ),
+    },
+    {
+      key: "customer",
+      header: "Customer",
+      cell: (i) => (
+        <span className="ims-cell-stack">
+          <span>{i.customerName}</span>
+          <small>{i.createdByName ? `Raised by ${i.createdByName}` : `${i.lineCount} line${i.lineCount === 1 ? "" : "s"}`}</small>
+        </span>
+      ),
+    },
+    { key: "total", header: "Total", align: "right", cell: (i) => <span className="ims-num ims-strong">{inr(i.grandTotal)}</span> },
+    {
+      key: "actions",
+      header: <span className="bos-sr-only">Actions</span>,
+      align: "right",
+      cell: (i) => (
+        <span className="ims-row" style={{ gap: 6, flexWrap: "nowrap", justifyContent: "flex-end" }} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <Button size="sm" variant="ghost" onClick={() => setRejecting(i)}>
+            Reject
+          </Button>
+          <Button
+            size="sm"
+            variant="success"
+            icon="check"
+            disabled={Boolean(busy)}
+            onClick={() =>
+              void run(`approve-inv-${i.id}`, () => finance.approveInvoice(i.id), {
+                success: "Approved and issued",
+                description: i.customerName,
+              }).then(() => onReload())
+            }
+          >
+            Approve
+          </Button>
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <div className="bos-stack" style={{ gap: 12 }}>
+      <DataTable
+        caption="Invoices awaiting approval"
+        columns={columns}
+        rows={invoices}
+        rowKey={(i) => i.id}
+        onRowClick={(i) => navigate("sales", `open:${i.id}`)}
+        chevron
+      />
+      <ReasonDialog
+        open={Boolean(rejecting)}
+        onClose={() => setRejecting(null)}
+        title={rejecting ? `Reject invoice for ${rejecting.customerName}?` : "Reject"}
+        description="Returns to draft so the raiser can fix and re-submit."
+        confirmLabel="Reject invoice"
+        destructive
+        busy={Boolean(busy)}
+        suggestions={INV_REJECT_REASONS}
+        onConfirm={async (reason) => {
+          if (!rejecting) return;
+          await run(`reject-inv-${rejecting.id}`, () => finance.rejectInvoice(rejecting.id, reason), {
+            success: "Rejected",
+            description: rejecting.customerName,
+            tone: "amber",
+          });
+          setRejecting(null);
+          onReload();
+        }}
+      />
+    </div>
   );
 }
 
@@ -630,6 +744,7 @@ function History() {
   const open = (e: ImsEvent) => {
     if (!e.entityId) return;
     if (e.entityType === "po") navigate("purchase", `open:${e.entityId}`);
+    else if (e.entityType === "invoice") navigate("sales", `open:${e.entityId}`);
     else if (e.entityType === "bill") navigate("payables", `open:${e.entityId}`);
     else if (e.entityType === "check") navigate("checks", `open:${e.entityId}`);
     else if (e.entityType === "bom_dc_return") navigate("bomDc", `return:${e.entityId}`);

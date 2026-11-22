@@ -69,7 +69,7 @@ function RecurringList({ onNew, onEdit, onOpenInvoice }: { onNew: () => void; on
     {
       key: "status",
       header: "Status",
-      cell: (p) => <Badge tag={p.status === "active" ? "mint" : p.status === "paused" ? "amber" : "slate"}>{p.status}</Badge>,
+      cell: (p) => <Badge tag={p.status === "active" ? "mint" : p.status === "paused" ? "lavender" : "blue"}>{p.status}</Badge>,
     },
     {
       key: "actions",

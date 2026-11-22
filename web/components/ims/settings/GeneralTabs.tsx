@@ -416,10 +416,33 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
         </div>
       </SectionCard>
 
-      <SectionCard title="Purchasing" desc="How purchase orders flow from draft to supplier.">
+      <SectionCard title="Purchasing & sales approvals" desc="How purchase orders and large invoices flow to Approvals.">
         <FormGrid>
           <Field label="PO approval limit (₹)" error={errors.poApprovalLimit} hint={draft.poApprovalLimit > 0 ? `POs of ${inr(draft.poApprovalLimit)} or more need an approver` : "0 — every submitted PO needs approval"}>
             {({ id, describedBy, invalid }) => <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="number" min={0} step={500} inputMode="decimal" value={draft.poApprovalLimit} onChange={(e) => set("poApprovalLimit", Number(e.target.value))} />}
+          </Field>
+          <Field
+            label="Invoice approval limit (₹)"
+            error={errors.invoiceApprovalLimit}
+            hint={
+              draft.invoiceApprovalLimit > 0
+                ? `Tax invoices / retainers of ${inr(draft.invoiceApprovalLimit)} or more queue for Approvals on Save & issue`
+                : "0 — issue immediately (no invoice approval)"
+            }
+          >
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                type="number"
+                min={0}
+                step={500}
+                inputMode="decimal"
+                value={draft.invoiceApprovalLimit}
+                onChange={(e) => set("invoiceApprovalLimit", Number(e.target.value))}
+              />
+            )}
           </Field>
           <Field label="Delete untouched drafts after (days)" error={errors.draftPoPurgeDays} hint={draft.draftPoPurgeDays > 0 ? `Drafts idle for ${draft.draftPoPurgeDays} days are removed` : "0 — keep drafts forever"}>
             {({ id, describedBy, invalid }) => <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="number" min={0} max={365} value={draft.draftPoPurgeDays} onChange={(e) => set("draftPoPurgeDays", Number(e.target.value))} />}

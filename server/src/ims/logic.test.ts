@@ -165,14 +165,25 @@ describe("receivables & payables", () => {
   it("derives invoice display status", () => {
     const base = { status: "issued", grandTotal: 1000, amountPaid: 0, dueDate: "2026-10-01" };
     expect(invoiceDisplayStatus({ ...base, status: "draft" }, "2026-10-12")).toBe("draft");
+    expect(invoiceDisplayStatus({ ...base, status: "pending_approval" }, "2026-10-12")).toBe("pending_approval");
     expect(invoiceDisplayStatus(base, "2026-10-12")).toBe("overdue");
     expect(invoiceDisplayStatus({ ...base, dueDate: "2026-10-20", amountPaid: 200 }, "2026-10-12")).toBe("partial");
     expect(invoiceDisplayStatus({ ...base, amountPaid: 1000 }, "2026-10-12")).toBe("paid");
     expect(invoiceBalance({ status: "cancelled", grandTotal: 1000, amountPaid: 0 })).toBe(0);
     expect(invoiceBalance({ status: "issued", grandTotal: 1000, amountPaid: 200, creditApplied: 300 })).toBe(500);
+    expect(invoiceBalance({ status: "issued", grandTotal: 1000, amountPaid: 100, advanceApplied: 200, creditApplied: 100 })).toBe(600);
     expect(invoiceDisplayStatus({ ...base, amountPaid: 200, creditApplied: 800 }, "2026-10-12")).toBe("paid");
     expect(invoiceBalance({ status: "issued", grandTotal: 500, amountPaid: 0, docKind: "credit_note" })).toBe(0);
     expect(invoiceDisplayStatus({ ...base, docKind: "proforma" }, "2026-10-12")).toBe("paid");
+  });
+
+  it("gates invoice approval by threshold", async () => {
+    const { invoiceNeedsApproval, invoiceSkipsStock, isArTaxInvoice } = await import("./logic.js");
+    expect(invoiceNeedsApproval(50_000, 0)).toBe(false);
+    expect(invoiceNeedsApproval(50_000, 75_000)).toBe(false);
+    expect(invoiceNeedsApproval(75_000, 75_000)).toBe(true);
+    expect(invoiceSkipsStock("retainer")).toBe(true);
+    expect(isArTaxInvoice("retainer")).toBe(true);
   });
 
   it("builds UPI payment intents", async () => {

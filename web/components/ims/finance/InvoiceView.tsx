@@ -3,14 +3,23 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Alert, Badge, Button, Card, Dialog, Field, FormGrid, Input, WidgetCard } from "@/components/bos";
 import { bom, type BomDc } from "@/lib/ims/bom";
-import { finance, INVOICE_BADGE, invoiceShareText, methodLabel, whatsappShareLink, type InvoiceDetail } from "@/lib/ims/finance";
+import {
+  DOC_KIND_LABEL,
+  finance,
+  INVOICE_BADGE,
+  invoiceEmailShareLink,
+  invoiceShareText,
+  methodLabel,
+  whatsappShareLink,
+  type InvoiceDetail,
+} from "@/lib/ims/finance";
 import { dateLabel, inrExact, stampLabel } from "@/lib/ims/format";
 import { imsSystem, saveBlob } from "@/lib/ims/system";
 import { Loaded, Stack, StatusBadge, useIms, useImsAction, useImsData, usePrint } from "../core";
 import { DocRefLink } from "../bom/DocRefLink";
 import { activityTone, BackLink, ConfirmDialog, InvoicePaper, KeyValues, PaymentDialog, ReasonDialog, Stats, Timeline, type TimelineItem } from "./shared";
 
-type Dlg = null | "pay" | "cancel" | "delete" | "share" | "einvoice" | { voidId: string; amount: number };
+type Dlg = null | "pay" | "cancel" | "reject" | "delete" | "share" | "einvoice" | { voidId: string; amount: number };
 
 export function InvoiceView({ id, onBack, onEdit }: { id: string; onBack: () => void; onEdit: (id: string) => void }) {
   const state = useImsData(() => finance.invoice(id), [id]);
@@ -43,8 +52,12 @@ function InvoiceBody({
   const canWrite = can("sales");
   const canCollect = can("sales") || can("receivables");
   const isDraft = inv.status === "draft";
+  const isPending = inv.status === "pending_approval";
   const isIssued = inv.status === "issued";
-  const shareText = invoiceShareText(inv, { name: session.settings.businessName, gstin: session.settings.gstin, phone: session.settings.phone });
+  const canApprove = can("approvals");
+  const shareSeller = { name: session.settings.businessName, gstin: session.settings.gstin, phone: session.settings.phone };
+  const shareText = invoiceShareText(inv, shareSeller);
+  const emailHref = invoiceEmailShareLink(inv, shareSeller);
 
   const timeline: TimelineItem[] = [
     ...detail.payments.map((p) => ({
@@ -108,7 +121,11 @@ function InvoiceBody({
               <KeyValues
                 rows={[
                   ["Customer", inv.customerName],
-                  ...(inv.docKind && inv.docKind !== "tax_invoice" ? ([["Document", inv.docKind === "credit_note" ? "Credit note" : inv.docKind === "debit_note" ? "Debit note" : "Proforma"]] as Array<[string, ReactNode]>) : []),
+                  ...(inv.docKind && inv.docKind !== "tax_invoice"
+                    ? ([["Document", DOC_KIND_LABEL[inv.docKind] || inv.docKind]] as Array<[string, ReactNode]>)
+                    : []),
+                  ...(inv.advanceApplied > 0.005 ? ([["Advance applied", inrExact(inv.advanceApplied)]] as Array<[string, ReactNode]>) : []),
+                  ...(isPending && inv.approvalNote ? ([["Approval note", inv.approvalNote]] as Array<[string, ReactNode]>) : []),
                   ...(inv.againstInvoiceNo
                     ? ([
                         [
@@ -187,6 +204,8 @@ function InvoiceBody({
                     onClick={() =>
                       run("issue", () => finance.issueInvoice(inv.id), {
                         success: inv.dcLinks?.length ? "Invoice issued — stock stays on linked DCs" : "Invoice issued — stock updated",
+                      }).then((out) => {
+                        if (out?.invoice.status === "pending_approval") onReload();
                       })
                     }
                   >
@@ -197,12 +216,46 @@ function InvoiceBody({
                   </Button>
                 </>
               ) : null}
+              {isPending && canApprove ? (
+                <>
+                  <Button
+                    variant="success"
+                    icon="check"
+                    disabled={busy === "approve"}
+                    onClick={() => run("approve", () => finance.approveInvoice(inv.id), { success: "Approved and issued" }).then(() => onReload())}
+                  >
+                    {busy === "approve" ? "Approving…" : "Approve & issue"}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setDlg("reject")}>
+                    Reject…
+                  </Button>
+                </>
+              ) : null}
+              {isPending && canWrite ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy === "withdraw"}
+                  onClick={() => run("withdraw", () => finance.withdrawInvoiceApproval(inv.id), { success: "Withdrawn to draft" }).then(() => onReload())}
+                >
+                  {busy === "withdraw" ? "Withdrawing…" : "Withdraw"}
+                </Button>
+              ) : null}
               <Button icon="printer" onClick={print}>
                 Print
               </Button>
               <Button icon="sparkle" onClick={() => setDlg("share")}>
                 WhatsApp
               </Button>
+              {emailHref ? (
+                <Button
+                  onClick={() => {
+                    window.location.href = emailHref;
+                  }}
+                >
+                  Email
+                </Button>
+              ) : null}
               {isIssued && inv.sourceTool !== "tally" && (canWrite || can("integrations") || can("audit")) ? (
                 <Button
                   icon="download"
@@ -460,6 +513,20 @@ function InvoiceBody({
           const out = await run("cancel", () => finance.cancelInvoice(inv.id, reason), {
             success: inv.dcLinks?.length ? "Invoice cancelled — stock remains on delivery challans" : "Invoice cancelled — stock returned",
           });
+          if (out) setDlg(null);
+        }}
+      />
+      <ReasonDialog
+        open={dlg === "reject"}
+        onClose={() => setDlg(null)}
+        title="Reject this invoice?"
+        description="It returns to draft so the raiser can fix it and re-submit."
+        confirmLabel="Reject"
+        destructive
+        busy={busy === "reject"}
+        suggestions={["Price too high", "Wrong customer", "Wrong items or rates", "Needs manager review"]}
+        onConfirm={async (reason) => {
+          const out = await run("reject", () => finance.rejectInvoice(inv.id, reason), { success: "Rejected — back to draft" });
           if (out) setDlg(null);
         }}
       />

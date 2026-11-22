@@ -24,6 +24,8 @@ import {
   intraStateFor,
   invoiceBalance,
   invoiceDisplayStatus,
+  invoiceNeedsApproval,
+  invoiceSkipsStock,
   isArTaxInvoice,
   monthStartISO,
   periodRange,
@@ -207,6 +209,11 @@ export type InvoiceRow = {
   grand_total: string;
   amount_paid: string;
   credit_applied?: string | number | null;
+  advance_applied?: string | number | null;
+  approved_by?: number | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
+  approval_note?: string | null;
   pay_mode: string | null;
   stock_posted: number;
   account_manager_id: number | null;
@@ -261,11 +268,12 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
   const grandTotal = round2(money(r.grand_total));
   const amountPaid = round2(money(r.amount_paid));
   const creditApplied = round2(money(r.credit_applied ?? 0));
+  const advanceApplied = round2(money(r.advance_applied ?? 0));
   const retentionAmount = round2(money((r as { retention_amount?: string | number }).retention_amount ?? 0));
   const retentionPct = round2(money((r as { retention_pct?: string | number }).retention_pct ?? 0));
   const docKind = (r.doc_kind || "tax_invoice") as InvoiceDocKind;
   const dueDate = r.due_date ? isoOf(r.due_date) : null;
-  const base = { status: r.status, grandTotal, amountPaid, dueDate, creditApplied, retentionAmount, docKind };
+  const base = { status: r.status, grandTotal, amountPaid, dueDate, creditApplied, advanceApplied, retentionAmount, docKind };
   const balance = invoiceBalance(base);
   const open = isArTaxInvoice(docKind) && r.status === "issued" && balance > 0.005;
   const daysOverdue = open && dueDate ? Math.max(0, daysBetween(dueDate, today)) : 0;
@@ -281,7 +289,7 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     docKind,
     againstInvoiceId: r.against_invoice_id ?? null,
     againstInvoiceNo: r.against_invoice_no ?? null,
-    status: r.status as "draft" | "issued" | "cancelled",
+    status: r.status as "draft" | "pending_approval" | "issued" | "cancelled",
     displayStatus: invoiceDisplayStatus(base, today),
     customerId: r.customer_id,
     customerName: r.customer_name,
@@ -317,8 +325,13 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     grandTotal,
     amountPaid,
     creditApplied,
+    advanceApplied,
     balance,
     payMode: r.pay_mode,
+    approvedBy: r.approved_by == null ? null : Number(r.approved_by),
+    approvedByName: r.approved_by_name ?? null,
+    approvedAt: tsOf(r.approved_at),
+    approvalNote: r.approval_note ?? null,
     stockPosted: Boolean(r.stock_posted),
     accountManagerId: r.account_manager_id == null ? null : Number(r.account_manager_id),
     accountManagerName: r.account_manager_name,
@@ -352,7 +365,7 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     ageDays: Math.max(0, daysBetween(invoiceDate, today)),
     agingBucket: agingBucket(daysOverdue),
     priority: arPriority(daysOverdue) as ArPriority,
-    arStatus: arStatus({ disputed: Boolean(r.disputed), promiseDate, dueDate, amountPaid: amountPaid + creditApplied }, today),
+    arStatus: arStatus({ disputed: Boolean(r.disputed), promiseDate, dueDate, amountPaid: amountPaid + creditApplied + advanceApplied }, today),
     lineCount: lines.length,
     ...(withLines ? { lines } : {}),
   };
@@ -496,7 +509,7 @@ const InvoiceInput = z.object({
   placeOfSupply: optText(80),
   invoiceDate: isoDate,
   dueDate: isoDate.nullable().optional(),
-  docKind: z.enum(["tax_invoice", "proforma", "credit_note", "debit_note"]).optional(),
+  docKind: z.enum(["tax_invoice", "proforma", "credit_note", "debit_note", "retainer"]).optional(),
   shippingCharges: z.coerce.number().min(0).max(1e10).optional(),
   shippingGstRate: z.coerce.number().min(0).max(100).optional(),
   retentionPct: z.coerce.number().min(0).max(100).optional(),
@@ -680,15 +693,60 @@ export async function createLinkedInvoice(
  * line (respecting the negative-stock rule) and mark stock as posted.
  * When the invoice links one or more delivery challans, stock was already moved on DC approve — skip OUT.
  */
-async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSettings, id: string, refType: "invoice" | "pos"): Promise<{ invoiceNo: string; row: InvoiceRow }> {
+async function issueDraft(
+  conn: PoolConnection,
+  actor: ImsActor,
+  settings: ImsSettings,
+  id: string,
+  refType: "invoice" | "pos",
+  opts: { fromApproval?: boolean } = {},
+): Promise<{ invoiceNo: string; row: InvoiceRow; pendingApproval?: boolean }> {
   const row = await loadInvoiceRow(conn, actor.tenantId, id, true);
-  if (row.status !== "draft") throw conflict("Only draft invoices can be issued");
+  const fromApproval = opts.fromApproval === true;
+  if (fromApproval) {
+    if (row.status !== "pending_approval") throw conflict("Only invoices waiting for approval can be approved");
+  } else if (row.status === "pending_approval") {
+    throw conflict("This invoice is waiting for approval — ask an approver, or withdraw it first");
+  } else if (row.status !== "draft") {
+    throw conflict("Only draft invoices can be issued");
+  }
   const lines = json<ImsLine[]>(row.lines, []);
   if (!lines.length) throw badRequest("Add at least one line before issuing");
   if (money(row.grand_total) <= 0) throw badRequest("The invoice total must be more than zero");
   if (!row.customer_name.trim()) throw badRequest("Pick a customer before issuing");
   const invoiceDate = isoOf(row.invoice_date);
   await assertDayOpen(conn, actor.tenantId, invoiceDate);
+
+  const docKind = (row.doc_kind || "tax_invoice") as InvoiceDocKind;
+  if (docKind === "credit_note" && !row.against_invoice_id) {
+    throw badRequest("A credit note must be linked to the original tax invoice");
+  }
+
+  // Gate tax invoices / debit notes / retainers over the approval limit (POS never queues).
+  const approvalEligible = docKind === "tax_invoice" || docKind === "debit_note" || docKind === "retainer";
+  if (
+    !fromApproval &&
+    refType === "invoice" &&
+    approvalEligible &&
+    invoiceNeedsApproval(money(row.grand_total), settings.invoiceApprovalLimit)
+  ) {
+    await exec(
+      conn,
+      `UPDATE ims_invoices SET status = 'pending_approval', approval_note = NULL, approved_by = NULL, approved_by_name = NULL, approved_at = NULL
+       WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`,
+      { tenantId: actor.tenantId, id },
+    );
+    await addActivity(conn, actor, {
+      invoiceId: id,
+      partyId: row.customer_id,
+      partyName: row.customer_name,
+      kind: "approval",
+      message: `Submitted for approval (≥ ${formatINR(settings.invoiceApprovalLimit)} limit)`,
+      status: "pending",
+    });
+    return { invoiceNo: row.invoice_no, row: { ...row, status: "pending_approval" }, pendingApproval: true };
+  }
+
   /** Tally drafts keep the original voucher number (source_ref, or parsed from notes if an older import stored a GUID). */
   let invoiceNo: string | null = null;
   if (row.source_tool === "tally") {
@@ -708,10 +766,6 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
       invoiceNo = tallyNo;
     }
   }
-  const docKind = (row.doc_kind || "tax_invoice") as InvoiceDocKind;
-  if (docKind === "credit_note" && !row.against_invoice_id) {
-    throw badRequest("A credit note must be linked to the original tax invoice");
-  }
   if (!invoiceNo) {
     const prefix =
       docKind === "credit_note"
@@ -720,14 +774,24 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
           ? settings.dnPrefix
           : docKind === "proforma"
             ? settings.proformaPrefix
-            : settings.invoicePrefix;
+            : docKind === "retainer"
+              ? settings.retainerPrefix
+              : settings.invoicePrefix;
     const seqKey =
-      docKind === "credit_note" ? "credit_note" : docKind === "debit_note" ? "debit_note" : docKind === "proforma" ? "proforma" : "invoice";
+      docKind === "credit_note"
+        ? "credit_note"
+        : docKind === "debit_note"
+          ? "debit_note"
+          : docKind === "proforma"
+            ? "proforma"
+            : docKind === "retainer"
+              ? "retainer"
+              : "invoice";
     invoiceNo = await nextDocNo(conn, actor.tenantId, seqKey, prefix, invoiceDate, settings.businessName);
   }
 
-  /** Credit notes, debit notes and proformas never post sales stock OUT. */
-  const nonStockDoc = docKind === "credit_note" || docKind === "debit_note" || docKind === "proforma";
+  /** Credit notes, debit notes, proformas and retainers never post sales stock OUT. */
+  const nonStockDoc = invoiceSkipsStock(docKind);
 
   const dcIds = await listInvoiceDcIds(conn, actor.tenantId, id);
   let stockViaDc = false;
@@ -832,6 +896,7 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
     conn,
     `UPDATE ims_invoices SET status = 'issued', invoice_no = :invoiceNo, stock_posted = :stockPosted, issued_at = CURRENT_TIMESTAMP,
        einv_status = COALESCE(einv_status, :einvStatus)
+       ${fromApproval ? ", approved_by = :userId, approved_by_name = :userName, approved_at = CURRENT_TIMESTAMP" : ""}
      WHERE tenant_id = :tenantId AND id = :id`,
     {
       tenantId: actor.tenantId,
@@ -839,6 +904,7 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
       invoiceNo,
       stockPosted,
       einvStatus,
+      ...(fromApproval ? { userId: actor.userId, userName: actorName(actor) } : {}),
     },
   );
 
@@ -854,6 +920,8 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
       grandTotal: money(against.grand_total),
       amountPaid: money(against.amount_paid),
       creditApplied: money(against.credit_applied ?? 0),
+      advanceApplied: money(against.advance_applied ?? 0),
+      retentionAmount: money((against as { retention_amount?: string | number }).retention_amount ?? 0),
       docKind: against.doc_kind || "tax_invoice",
     });
     const apply = Math.min(cnTotal, bal);
@@ -999,12 +1067,17 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     else if (source === "tally") where.push("i.source_tool = 'tally'");
     else if (source === "quotation") where.push("i.source_tool IS NOT NULL AND i.source_tool NOT IN ('pos', 'ims_bom', 'tally')");
     const docKind = qstr(req.query.docKind, 16);
-    if (docKind === "tax_invoice" || docKind === "proforma" || docKind === "credit_note" || docKind === "debit_note") {
+    if (docKind === "tax_invoice" || docKind === "proforma" || docKind === "credit_note" || docKind === "debit_note" || docKind === "retainer") {
       where.push("COALESCE(i.doc_kind, 'tax_invoice') = :docKind");
       params.docKind = docKind;
     } else if (docKind === "notes") {
       where.push("COALESCE(i.doc_kind, 'tax_invoice') IN ('credit_note', 'debit_note')");
     }
+    const statusFilter = qstr(req.query.status, 24);
+    if (statusFilter === "pending_approval") where.push("i.status = 'pending_approval'");
+    else if (statusFilter === "draft") where.push("i.status = 'draft'");
+    else if (statusFilter === "cancelled") where.push("i.status = 'cancelled'");
+    else if (statusFilter === "issued") where.push("i.status = 'issued'");
     const q = qstr(req.query.q);
     if (q) {
       where.push(
@@ -1013,10 +1086,19 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       params.q = likeOf(q);
     }
     const list = (await rows<InvoiceRow>(deps.db, `${INVOICE_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.invoice_date DESC, i.created_at DESC LIMIT :limit`, params)).map((r) => mapInvoice(r, today));
-    const counts = { all: list.length, draft: 0, unpaid: 0, partial: 0, paid: 0, overdue: 0, cancelled: 0 };
-    for (const inv of list) counts[inv.displayStatus] += 1;
-    const status = qstr(req.query.status, 12);
-    const shown = status && status !== "all" ? list.filter((i) => (status === "open" ? i.balance > 0.005 : i.displayStatus === status)) : list;
+    const counts: Record<string, number> = { all: list.length, draft: 0, pending_approval: 0, unpaid: 0, partial: 0, paid: 0, overdue: 0, cancelled: 0 };
+    for (const inv of list) counts[inv.displayStatus] = (counts[inv.displayStatus] ?? 0) + 1;
+    const status = qstr(req.query.status, 24);
+    const shown =
+      status && status !== "all"
+        ? list.filter((i) =>
+            status === "open"
+              ? i.balance > 0.005
+              : status === "pending_approval"
+                ? i.status === "pending_approval" || i.displayStatus === "pending_approval"
+                : i.displayStatus === status,
+          )
+        : list;
 
     const monthStart = monthStartISO(today);
     const lmStart = monthStartISO(addDaysISO(monthStart, -1));
@@ -1028,9 +1110,9 @@ export function registerSales(router: Router, deps: ImsDeps): void {
          SUM(CASE WHEN invoice_date >= :monthStart THEN grand_total ELSE 0 END) AS sales_mtd,
          SUM(CASE WHEN invoice_date >= :monthStart THEN 1 ELSE 0 END) AS count_mtd,
          SUM(CASE WHEN invoice_date BETWEEN :lmStart AND :lmEnd THEN grand_total ELSE 0 END) AS sales_lm,
-         SUM(GREATEST(grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0), 0)) AS outstanding,
-         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0) > 0.005 THEN grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0) ELSE 0 END) AS overdue,
-         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0) > 0.005 THEN 1 ELSE 0 END) AS overdue_count
+         SUM(GREATEST(grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0), 0)) AS outstanding,
+         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0) > 0.005 THEN grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0) ELSE 0 END) AS overdue,
+         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0) > 0.005 THEN 1 ELSE 0 END) AS overdue_count
        FROM ims_invoices
        WHERE tenant_id = :tenantId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note')`,
       { tenantId: actor.tenantId, monthStart, lmStart, lmEnd, today },
@@ -1064,9 +1146,9 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     const r = await one<{ outstanding: string | null; overdue: string | null; open_count: string | null; last_date: unknown; credit_limit: string | null }>(
       deps.db,
       `SELECT
-         (SELECT SUM(GREATEST(grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0), 0)) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note')) AS outstanding,
-         (SELECT SUM(grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0)) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note') AND due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0) > 0.005) AS overdue,
-         (SELECT COUNT(*) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note') AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0) > 0.005) AS open_count,
+         (SELECT SUM(GREATEST(grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0), 0)) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note')) AS outstanding,
+         (SELECT SUM(grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0)) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note') AND due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0) > 0.005) AS overdue,
+         (SELECT COUNT(*) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note') AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0) > 0.005) AS open_count,
          (SELECT MAX(invoice_date) FROM ims_invoices WHERE tenant_id = :tenantId AND customer_id = :customerId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note')) AS last_date,
          (SELECT credit_limit FROM ims_parties WHERE tenant_id = :tenantId AND id = :customerId) AS credit_limit`,
       { tenantId: actor.tenantId, customerId, today },
@@ -1160,14 +1242,182 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     const actor = actorOf(res);
     requirePerm(res, "sales");
     const settings = await getSettings(deps, actor.tenantId);
-    const { invoiceNo, row } = await tx(deps.db, (conn) => issueDraft(conn, actor, settings, req.params.id, "invoice"));
+    const { invoiceNo, row, pendingApproval } = await tx(deps.db, (conn) => issueDraft(conn, actor, settings, req.params.id, "invoice"));
+    if (pendingApproval) {
+      await recordEvent(deps, actor, {
+        type: "invoice.pending_approval",
+        entityType: "invoice",
+        entityId: row.id,
+        summary: `Submitted invoice for ${row.customer_name} (${formatINR(money(row.grand_total))}) for approval`,
+      });
+    } else {
+      await recordEvent(deps, actor, {
+        type: "invoice.issued",
+        entityType: "invoice",
+        entityId: row.id,
+        summary: `Issued invoice ${invoiceNo} to ${row.customer_name} (${formatINR(money(row.grand_total))})${row.source_tool && row.source_tool !== "pos" ? ` · from ${row.source_tool}` : ""}`,
+      });
+    }
+    res.json(await invoiceDetail(deps, actor.tenantId, row.id));
+  });
+
+  router.post("/invoices/:id/approve", async (req, res) => {
+    const actor = actorOf(res);
+    requirePerm(res, "approvals");
+    const settings = await getSettings(deps, actor.tenantId);
+    const note = parse(z.object({ note: optText(255) }), req.body).note ?? null;
+    const { invoiceNo, row } = await tx(deps.db, async (conn) => {
+      if (note) {
+        await exec(conn, `UPDATE ims_invoices SET approval_note = :note WHERE tenant_id = :tenantId AND id = :id AND status = 'pending_approval'`, {
+          tenantId: actor.tenantId,
+          id: req.params.id,
+          note,
+        });
+      }
+      return issueDraft(conn, actor, settings, req.params.id, "invoice", { fromApproval: true });
+    });
     await recordEvent(deps, actor, {
-      type: "invoice.issued",
+      type: "invoice.approved",
       entityType: "invoice",
       entityId: row.id,
-      summary: `Issued invoice ${invoiceNo} to ${row.customer_name} (${formatINR(money(row.grand_total))})${row.source_tool && row.source_tool !== "pos" ? ` · from ${row.source_tool}` : ""}`,
+      summary: `Approved and issued ${invoiceNo} to ${row.customer_name} (${formatINR(money(row.grand_total))})${note ? ` — ${note}` : ""}`,
     });
     res.json(await invoiceDetail(deps, actor.tenantId, row.id));
+  });
+
+  router.post("/invoices/:id/reject", async (req, res) => {
+    const actor = actorOf(res);
+    requirePerm(res, "approvals");
+    const input = parse(z.object({ reason: z.string().trim().min(3, "Give a short reason").max(255) }), req.body);
+    await tx(deps.db, async (conn) => {
+      const row = await loadInvoiceRow(conn, actor.tenantId, req.params.id, true);
+      if (row.status !== "pending_approval") throw conflict("Only invoices waiting for approval can be rejected");
+      await exec(
+        conn,
+        `UPDATE ims_invoices SET status = 'draft', approval_note = :note, approved_by = NULL, approved_by_name = NULL, approved_at = NULL
+         WHERE tenant_id = :tenantId AND id = :id`,
+        { tenantId: actor.tenantId, id: row.id, note: input.reason },
+      );
+      await addActivity(conn, actor, {
+        invoiceId: row.id,
+        partyId: row.customer_id,
+        partyName: row.customer_name,
+        kind: "approval",
+        message: `Rejected — ${input.reason}`,
+        status: "rejected",
+      });
+    });
+    await recordEvent(deps, actor, {
+      type: "invoice.rejected",
+      entityType: "invoice",
+      entityId: req.params.id,
+      summary: `Rejected invoice — ${input.reason}`,
+    });
+    res.json(await invoiceDetail(deps, actor.tenantId, req.params.id));
+  });
+
+  router.post("/invoices/:id/withdraw-approval", async (req, res) => {
+    const actor = actorOf(res);
+    requirePerm(res, "sales");
+    await tx(deps.db, async (conn) => {
+      const row = await loadInvoiceRow(conn, actor.tenantId, req.params.id, true);
+      if (row.status !== "pending_approval") throw conflict("Only invoices waiting for approval can be withdrawn");
+      await exec(
+        conn,
+        `UPDATE ims_invoices SET status = 'draft', approval_note = NULL, approved_by = NULL, approved_by_name = NULL, approved_at = NULL
+         WHERE tenant_id = :tenantId AND id = :id`,
+        { tenantId: actor.tenantId, id: row.id },
+      );
+      await addActivity(conn, actor, {
+        invoiceId: row.id,
+        partyId: row.customer_id,
+        partyName: row.customer_name,
+        kind: "approval",
+        message: "Withdrawn from approval",
+        status: "withdrawn",
+      });
+    });
+    await recordEvent(deps, actor, {
+      type: "invoice.withdrawn",
+      entityType: "invoice",
+      entityId: req.params.id,
+      summary: "Withdrew invoice from approval queue",
+    });
+    res.json(await invoiceDetail(deps, actor.tenantId, req.params.id));
+  });
+
+  /** Apply paid retainer/advance credit onto an issued tax invoice. */
+  router.post("/invoices/:id/apply-advance", async (req, res) => {
+    const actor = actorOf(res);
+    requireAnyPerm(res, ["sales", "receivables"]);
+    const input = parse(
+      z.object({
+        retainerId: z.string().uuid(),
+        amount: z.coerce.number().positive().max(1e12).optional(),
+      }),
+      req.body,
+    );
+    await tx(deps.db, async (conn) => {
+      const tax = await loadInvoiceRow(conn, actor.tenantId, req.params.id, true);
+      if (tax.status !== "issued" || !isArTaxInvoice(tax.doc_kind) || tax.doc_kind === "retainer") {
+        throw conflict("Advances can only be applied to an issued tax invoice or debit note");
+      }
+      const retainer = await loadInvoiceRow(conn, actor.tenantId, input.retainerId, true);
+      if (retainer.doc_kind !== "retainer" || retainer.status !== "issued") throw conflict("Pick an issued retainer invoice");
+      if (retainer.customer_id && tax.customer_id && retainer.customer_id !== tax.customer_id) {
+        throw conflict("Retainer and tax invoice must be for the same customer");
+      }
+      if (!retainer.customer_id && retainer.customer_name.trim().toLowerCase() !== tax.customer_name.trim().toLowerCase()) {
+        throw conflict("Retainer and tax invoice must be for the same customer");
+      }
+      const available = round2(money(retainer.amount_paid) - money(retainer.credit_applied ?? 0));
+      if (available <= 0.005) throw conflict("No unapplied advance left on this retainer");
+      const taxBal = invoiceBalance({
+        status: tax.status,
+        grandTotal: money(tax.grand_total),
+        amountPaid: money(tax.amount_paid),
+        creditApplied: money(tax.credit_applied ?? 0),
+        advanceApplied: money(tax.advance_applied ?? 0),
+        retentionAmount: money((tax as { retention_amount?: string | number }).retention_amount ?? 0),
+        docKind: tax.doc_kind || "tax_invoice",
+      });
+      if (taxBal <= 0.005) throw conflict("This invoice is already settled");
+      const apply = round2(Math.min(input.amount ?? available, available, taxBal));
+      if (apply <= 0.005) throw badRequest("Nothing to apply");
+      await exec(
+        conn,
+        `UPDATE ims_invoices SET advance_applied = ROUND(advance_applied + :apply, 2) WHERE tenant_id = :tenantId AND id = :id`,
+        { tenantId: actor.tenantId, id: tax.id, apply },
+      );
+      await exec(
+        conn,
+        `UPDATE ims_invoices SET credit_applied = ROUND(credit_applied + :apply, 2) WHERE tenant_id = :tenantId AND id = :id`,
+        { tenantId: actor.tenantId, id: retainer.id, apply },
+      );
+      await addActivity(conn, actor, {
+        invoiceId: tax.id,
+        partyId: tax.customer_id,
+        partyName: tax.customer_name,
+        kind: "advance",
+        message: `Applied ${formatINR(apply)} from retainer ${retainer.invoice_no}`,
+        status: "applied",
+      });
+      await addActivity(conn, actor, {
+        invoiceId: retainer.id,
+        partyId: retainer.customer_id,
+        partyName: retainer.customer_name,
+        kind: "advance",
+        message: `Applied ${formatINR(apply)} to ${tax.invoice_no}`,
+        status: "applied",
+      });
+    });
+    await recordEvent(deps, actor, {
+      type: "invoice.advance_applied",
+      entityType: "invoice",
+      entityId: req.params.id,
+      summary: `Applied advance from retainer`,
+    });
+    res.json(await invoiceDetail(deps, actor.tenantId, req.params.id));
   });
 
   router.post("/invoices/:id/cancel", async (req, res) => {
@@ -1596,7 +1846,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       const open = await rows<InvoiceRow>(
         conn,
         `SELECT * FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note')
-           AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0) > 0.005
+           AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0) > 0.005
            AND ${input.partyId ? "customer_id = :partyId" : "customer_id IS NULL AND customer_name = :partyName"}
          ORDER BY COALESCE(due_date, invoice_date), invoice_date, created_at FOR UPDATE`,
         { tenantId: actor.tenantId, partyId: input.partyId ?? null, partyName: input.partyName },
@@ -1606,7 +1856,9 @@ export function registerSales(router: Router, deps: ImsDeps): void {
         input.amount,
         ordered.map((o) => ({
           id: o.id,
-          balance: round2(money(o.grand_total) - money(o.amount_paid) - money(o.credit_applied ?? 0)),
+          balance: round2(
+            money(o.grand_total) - money(o.amount_paid) - money(o.credit_applied ?? 0) - money(o.advance_applied ?? 0) - money((o as { retention_amount?: string | number }).retention_amount ?? 0),
+          ),
         })),
       );
       const applied: Array<{ invoiceId: string; invoiceNo: string; amount: number }> = [];
@@ -1762,7 +2014,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
            (SELECT a.channel FROM ims_ar_activity a WHERE a.tenant_id = i.tenant_id AND a.invoice_id = i.id AND a.kind = 'reminder' ORDER BY a.created_at DESC LIMIT 1) AS last_reminder_channel
          FROM ims_invoices i LEFT JOIN ims_parties p ON p.id = i.customer_id AND p.tenant_id = i.tenant_id
          WHERE i.tenant_id = :tenantId AND i.status = 'issued' AND COALESCE(i.doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note')
-           AND i.grand_total - i.amount_paid - COALESCE(i.credit_applied, 0) - COALESCE(i.retention_amount, 0) > 0.005
+           AND i.grand_total - i.amount_paid - COALESCE(i.credit_applied, 0) - COALESCE(i.advance_applied, 0) - COALESCE(i.retention_amount, 0) > 0.005
          ORDER BY i.due_date ASC, i.invoice_date ASC LIMIT 3000`,
         { tenantId: actor.tenantId },
       ),

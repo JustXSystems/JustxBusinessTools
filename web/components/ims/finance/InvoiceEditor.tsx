@@ -58,7 +58,9 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const [shipToState, setShipToState] = useState(inv?.shipToState ?? "");
   const [shipToMobile, setShipToMobile] = useState(inv?.shipToMobile ?? "");
   const [placeOfSupply, setPlaceOfSupply] = useState(inv?.placeOfSupply ?? "");
-  const [docKind, setDocKind] = useState<"tax_invoice" | "proforma">(inv?.docKind === "proforma" ? "proforma" : "tax_invoice");
+  const [docKind, setDocKind] = useState<"tax_invoice" | "proforma" | "retainer">(
+    inv?.docKind === "proforma" ? "proforma" : inv?.docKind === "retainer" ? "retainer" : "tax_invoice",
+  );
   const [invoiceDate, setInvoiceDate] = useState(inv?.invoiceDate ?? today);
   const [termsDays, setTermsDays] = useState<number | null>(inv ? null : settings.paymentTermsDays);
   const [dueDate, setDueDate] = useState(inv?.dueDate ?? addDaysISO(today, settings.paymentTermsDays));
@@ -187,6 +189,12 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
     terms: terms.trim() || null,
   });
 
+  const needsApproval =
+    settings.invoiceApprovalLimit > 0 &&
+    totals.grandTotal >= settings.invoiceApprovalLimit &&
+    (docKind === "tax_invoice" || docKind === "retainer") &&
+    !isCreditNote;
+
   const save = async (issue: boolean) => {
     setTouched(true);
     if (invalid) return;
@@ -200,16 +208,18 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
       },
       {
         success: issue
-          ? stockViaDc
-            ? "Invoice issued — stock stays on linked DCs"
-            : "Invoice issued — stock updated"
+          ? needsApproval
+            ? "Submitted for approval"
+            : stockViaDc
+              ? "Invoice issued — stock stays on linked DCs"
+              : "Invoice issued — stock updated"
           : "Draft saved",
       },
     );
     if (out) onClose(out.invoice.id);
   };
-
-  const blockedByStock = !isCreditNote && docKind !== "proforma" && !stockViaDc && stockIssues.length > 0 && !settings.allowNegativeStock;
+  const blockedByStock =
+    !isCreditNote && docKind !== "proforma" && docKind !== "retainer" && !stockViaDc && stockIssues.length > 0 && !settings.allowNegativeStock;
 
   return (
     <Stack gap={16}>
@@ -351,8 +361,9 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
                       options={[
                         { key: "tax_invoice", label: "Tax invoice" },
                         { key: "proforma", label: "Proforma" },
+                        { key: "retainer", label: "Retainer / advance" },
                       ]}
-                      onPick={(k) => setDocKind(k as "tax_invoice" | "proforma")}
+                      onPick={(k) => setDocKind(k as "tax_invoice" | "proforma" | "retainer")}
                     />
                   )}
                 </Field>
@@ -548,9 +559,14 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
           {busy === "save" ? "Saving…" : "Save draft"}
         </Button>
         <Button variant="primary" icon="check" onClick={() => save(true)} disabled={Boolean(busy) || blockedByStock}>
-          {busy === "issue" ? "Issuing…" : "Save & issue"}
+          {busy === "issue" ? (needsApproval ? "Submitting…" : "Issuing…") : needsApproval ? "Save & submit for approval" : "Save & issue"}
         </Button>
       </div>
+      {needsApproval ? (
+        <p className="ims-muted" style={{ fontSize: 12, margin: 0 }}>
+          Total is at or above the {inrExact(settings.invoiceApprovalLimit)} invoice approval limit — Approvals must sign off before stock and AR post.
+        </p>
+      ) : null}
     </Stack>
   );
 }

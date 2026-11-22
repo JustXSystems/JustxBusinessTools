@@ -36,9 +36,9 @@ export type PaymentInput = { amount: number; date?: string; method: PayMethod; r
 
 /* ---------- Invoices ---------- */
 
-export type InvoiceStatus = "draft" | "issued" | "cancelled";
-export type InvoiceDisplayStatus = "draft" | "unpaid" | "partial" | "paid" | "overdue" | "cancelled";
-export type InvoiceDocKind = "tax_invoice" | "proforma" | "credit_note" | "debit_note";
+export type InvoiceStatus = "draft" | "pending_approval" | "issued" | "cancelled";
+export type InvoiceDisplayStatus = "draft" | "pending_approval" | "unpaid" | "partial" | "paid" | "overdue" | "cancelled";
+export type InvoiceDocKind = "tax_invoice" | "proforma" | "credit_note" | "debit_note" | "retainer";
 export type ArPriority = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 export type ArStatus = "disputed" | "promise" | "promise_missed" | "overdue" | "partial" | "due";
 
@@ -85,8 +85,13 @@ export type ImsInvoice = {
   grandTotal: number;
   amountPaid: number;
   creditApplied: number;
+  advanceApplied: number;
   balance: number;
   payMode: string | null;
+  approvedBy: number | null;
+  approvedByName: string | null;
+  approvedAt: string | null;
+  approvalNote: string | null;
   stockPosted: boolean;
   /** Linked delivery challans (stock already moved on DC approve when present). */
   dcIds?: string[];
@@ -294,6 +299,7 @@ export type PosToday = {
 
 export const INVOICE_BADGE: Record<InvoiceDisplayStatus, BadgeView> = {
   draft: { text: "Draft", tone: "neutral" },
+  pending_approval: { text: "Pending approval", tone: "amber" },
   unpaid: { text: "Unpaid", tone: "blue" },
   partial: { text: "Partly paid", tone: "amber" },
   paid: { text: "Paid", tone: "emerald" },
@@ -306,6 +312,7 @@ export const INVOICE_STAMP: Partial<Record<InvoiceDisplayStatus, { text: string;
   overdue: { text: "OVERDUE", color: "#E1483F" },
   cancelled: { text: "CANCELLED", color: "#8A8FA3" },
   draft: { text: "DRAFT", color: "#8A8FA3" },
+  pending_approval: { text: "APPROVAL", color: "#D97706" },
 };
 
 /* ---------- Receivables ---------- */
@@ -690,6 +697,7 @@ export type InvoiceQuery = {
   docKind?: InvoiceDocKind | "notes";
   q?: string;
   status?: string;
+  limit?: number;
 };
 
 /** NPCI UPI intent for payment QR on tax invoices. */
@@ -710,6 +718,7 @@ export const DOC_KIND_LABEL: Record<InvoiceDocKind, string> = {
   proforma: "Proforma",
   credit_note: "Credit note",
   debit_note: "Debit note",
+  retainer: "Retainer / advance",
 };
 export type BillQuery = { status?: string; supplierId?: string; q?: string; priority?: string };
 
@@ -721,6 +730,10 @@ export const finance = {
   createInvoice: (input: InvoiceInput & { issue?: boolean }) => post<InvoiceDetail>("/invoices", input),
   updateInvoice: (id: string, input: InvoiceInput) => patch<InvoiceDetail>(`/invoices/${id}`, input),
   issueInvoice: (id: string) => post<InvoiceDetail>(`/invoices/${id}/issue`),
+  approveInvoice: (id: string, note?: string | null) => post<InvoiceDetail>(`/invoices/${id}/approve`, { note: note || null }),
+  rejectInvoice: (id: string, reason: string) => post<InvoiceDetail>(`/invoices/${id}/reject`, { reason }),
+  withdrawInvoiceApproval: (id: string) => post<InvoiceDetail>(`/invoices/${id}/withdraw-approval`),
+  applyAdvance: (id: string, input: { retainerId: string; amount?: number }) => post<InvoiceDetail>(`/invoices/${id}/apply-advance`, input),
   cancelInvoice: (id: string, reason: string) => post<InvoiceDetail>(`/invoices/${id}/cancel`, { reason }),
   duplicateInvoice: (id: string) => post<InvoiceDetail>(`/invoices/${id}/duplicate`),
   createCreditNote: (id: string, input?: { notes?: string | null; restock?: boolean }) => post<InvoiceDetail>(`/invoices/${id}/credit-note`, input ?? {}),
@@ -932,3 +945,16 @@ export function invoiceShareText(inv: ImsInvoice & { lines: ImsLine[] }, seller:
 }
 
 export const whatsappShareLink = (text: string, phone?: string | null) => reminderLink("whatsapp", phone, text);
+
+/** Plain-text email compose for an invoice (mailto). */
+export function invoiceEmailShareLink(
+  inv: ImsInvoice & { lines?: ImsLine[] },
+  seller: { name: string; gstin?: string | null; phone?: string | null },
+): string | null {
+  const email = String(inv.customerEmail ?? "").trim();
+  if (!email || !email.includes("@")) return null;
+  const lines = inv.lines ?? [];
+  const body = invoiceShareText({ ...inv, lines }, seller).replace(/\*/g, "");
+  const subject = `${DOC_KIND_LABEL[inv.docKind] || "Invoice"} ${inv.isDraftNo ? "draft" : inv.invoiceNo} — ${seller.name || "Invoice"}`;
+  return reminderLink("email", email, body, subject);
+}

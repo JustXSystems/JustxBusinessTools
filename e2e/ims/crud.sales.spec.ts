@@ -55,11 +55,11 @@ test.describe.serial("IMS CRUD — Sales & Finance (JustTestX)", () => {
     await assertNoModuleCrash(page);
   });
 
-  test("TAB-SALES-POS — invoices and POS tabs", async ({}, testInfo) => {
-    annotateScenario(testInfo, "TAB-SALES-POS", "Sales — Invoices + POS counter tabs", {
+  test("TAB-SALES-POS — invoices, Recurring and POS tabs", async ({}, testInfo) => {
+    annotateScenario(testInfo, "TAB-SALES-POS", "Sales — Invoices + Recurring + POS counter tabs", {
       mutates: "false",
       moduleKey: "sales",
-      manualChecks: "Invoices list | POS counter",
+      manualChecks: "Invoices list | Recurring | POS counter",
     });
     await gotoImsModule(page, "/ims?m=sales");
     await assertNoModuleCrash(page);
@@ -67,6 +67,12 @@ test.describe.serial("IMS CRUD — Sales & Finance (JustTestX)", () => {
 
     await clickTab(page, /^Invoices/i);
     await expect(page.getByRole("button", { name: /New invoice/i }).first()).toBeVisible({ timeout: 15_000 });
+
+    const recurring = page.getByRole("tab", { name: /Recurring/i }).first();
+    test.skip((await recurring.count()) === 0, "Recurring tab not enabled");
+    await recurring.click();
+    await assertNoModuleCrash(page);
+    await expect(page.getByText(/Recurring invoices|New profile|No recurring/i).first()).toBeVisible({ timeout: 15_000 });
 
     const pos = page.getByRole("tab", { name: /POS counter/i }).first();
     test.skip((await pos.count()) === 0, "POS tab not enabled");

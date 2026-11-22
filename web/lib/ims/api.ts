@@ -179,6 +179,7 @@ export type ImsSettings = {
   cnPrefix: string;
   dnPrefix: string;
   proformaPrefix: string;
+  retainerPrefix: string;
   billPrefix: string;
   returnPrefix: string;
   checkPrefix: string;
@@ -195,6 +196,7 @@ export type ImsSettings = {
   /** Null/omitted = industry-pack column defaults. */
   bomScheduleColumns?: BomScheduleColumnId[] | null;
   poApprovalLimit: number;
+  invoiceApprovalLimit: number;
   draftPoPurgeDays: number;
   paymentTermsDays: number;
   defaultGstRate: number;

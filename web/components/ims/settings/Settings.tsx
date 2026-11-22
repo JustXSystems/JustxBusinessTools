@@ -61,6 +61,7 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
   "bomRequireQuotationRef",
   "bomScheduleColumns",
   "poApprovalLimit",
+  "invoiceApprovalLimit",
   "draftPoPurgeDays",
   "paymentTermsDays",
   "defaultGstRate",
@@ -79,6 +80,7 @@ const ERROR_TAB: Record<string, Tab> = {
   phone: "business",
   email: "business",
   poApprovalLimit: "documents",
+  invoiceApprovalLimit: "documents",
   draftPoPurgeDays: "documents",
   paymentTermsDays: "documents",
   categories: "catalog",
@@ -97,6 +99,7 @@ function validate(d: ImsSettings): SettingsErrors {
   if (d.phone && !/^[+\d][\d\s-]{5,39}$/.test(d.phone.trim())) e.phone = "Not a valid phone number";
   for (const f of PREFIX_FIELDS) if (!PREFIX_RE.test(d[f.key])) e[f.key] = "1–12 letters, digits or dashes";
   if (!Number.isFinite(d.poApprovalLimit) || d.poApprovalLimit < 0) e.poApprovalLimit = "Enter 0 or more";
+  if (!Number.isFinite(d.invoiceApprovalLimit) || d.invoiceApprovalLimit < 0) e.invoiceApprovalLimit = "Enter 0 or more";
   if (!intIn(d.draftPoPurgeDays, 0, 365)) e.draftPoPurgeDays = "Whole days, 0–365";
   if (!intIn(d.paymentTermsDays, 0, 365)) e.paymentTermsDays = "Whole days, 0–365";
   const names = d.taxonomy.categories.map((c) => c.name.trim().toLowerCase());

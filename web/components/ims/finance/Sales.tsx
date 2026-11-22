@@ -220,6 +220,7 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
                   <option value="">All documents</option>
                   <option value="tax_invoice">Tax invoices</option>
                   <option value="proforma">Proforma</option>
+                  <option value="retainer">Retainer / advance</option>
                   <option value="credit_note">Credit notes</option>
                   <option value="notes">Credit & debit notes</option>
                 </Select>

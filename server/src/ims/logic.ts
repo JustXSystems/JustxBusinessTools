@@ -331,17 +331,27 @@ export function apPriority(dueDate: string | null, today: string): ApPriority {
 
 /* ---------- Sales invoices & bills ---------- */
 
-export const INVOICE_STATUSES = ["draft", "issued", "cancelled"] as const;
+export const INVOICE_STATUSES = ["draft", "pending_approval", "issued", "cancelled"] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
-export type InvoiceDisplayStatus = "draft" | "unpaid" | "partial" | "paid" | "overdue" | "cancelled";
 
-export type InvoiceDocKind = "tax_invoice" | "proforma" | "credit_note" | "debit_note";
+export type InvoiceDocKind = "tax_invoice" | "proforma" | "credit_note" | "debit_note" | "retainer";
 
-export const INVOICE_DOC_KINDS = ["tax_invoice", "proforma", "credit_note", "debit_note"] as const;
+export const INVOICE_DOC_KINDS = ["tax_invoice", "proforma", "credit_note", "debit_note", "retainer"] as const;
 
 /** True when the document contributes to sales KPIs and AR outstanding. */
 export function isArTaxInvoice(kind: string | null | undefined): boolean {
-  return !kind || kind === "tax_invoice" || kind === "debit_note";
+  return !kind || kind === "tax_invoice" || kind === "debit_note" || kind === "retainer";
+}
+
+/** True when issuing should skip stock (proforma / CN / retainer). Debit notes also skip stock OUT. */
+export function invoiceSkipsStock(kind: string | null | undefined): boolean {
+  return kind === "proforma" || kind === "credit_note" || kind === "debit_note" || kind === "retainer";
+}
+
+export function invoiceNeedsApproval(grandTotal: number, limit: number): boolean {
+  const lim = Number(limit) || 0;
+  if (lim <= 0) return false;
+  return round2(grandTotal) >= round2(lim);
 }
 
 export function invoiceBalance(inv: {
@@ -349,6 +359,7 @@ export function invoiceBalance(inv: {
   grandTotal: number;
   amountPaid: number;
   creditApplied?: number;
+  advanceApplied?: number;
   retentionAmount?: number;
   docKind?: string | null;
 }): number {
@@ -356,9 +367,10 @@ export function invoiceBalance(inv: {
   // Proforma never creates a receivable; credit notes reduce AR on the source invoice instead.
   if (inv.docKind === "proforma" || inv.docKind === "credit_note") return 0;
   const credit = Number(inv.creditApplied ?? 0) || 0;
+  const advance = Number(inv.advanceApplied ?? 0) || 0;
   const retention = Number(inv.retentionAmount ?? 0) || 0;
   // Retention is contractually withheld — not currently collectible.
-  return Math.max(0, round2(inv.grandTotal - inv.amountPaid - credit - retention));
+  return Math.max(0, round2(inv.grandTotal - inv.amountPaid - credit - advance - retention));
 }
 
 /** Advance a recurring schedule date by frequency × repeatEvery (UTC calendar). */
@@ -384,11 +396,23 @@ export function advanceRecurringDate(
   return dt.toISOString().slice(0, 10);
 }
 
+export type InvoiceDisplayStatus = "draft" | "pending_approval" | "unpaid" | "partial" | "paid" | "overdue" | "cancelled";
+
 export function invoiceDisplayStatus(
-  inv: { status: string; grandTotal: number; amountPaid: number; dueDate: string | null; creditApplied?: number; docKind?: string | null },
+  inv: {
+    status: string;
+    grandTotal: number;
+    amountPaid: number;
+    dueDate: string | null;
+    creditApplied?: number;
+    advanceApplied?: number;
+    retentionAmount?: number;
+    docKind?: string | null;
+  },
   today: string,
 ): InvoiceDisplayStatus {
   if (inv.status === "draft") return "draft";
+  if (inv.status === "pending_approval") return "pending_approval";
   if (inv.status === "cancelled") return "cancelled";
   if (inv.docKind === "proforma") return inv.status === "issued" ? "paid" : "draft";
   if (inv.docKind === "credit_note") {
@@ -397,7 +421,7 @@ export function invoiceDisplayStatus(
   const balance = invoiceBalance(inv);
   if (balance <= 0.005) return "paid";
   if (inv.dueDate && inv.dueDate < today) return "overdue";
-  const settled = (Number(inv.amountPaid) || 0) + (Number(inv.creditApplied) || 0);
+  const settled = (Number(inv.amountPaid) || 0) + (Number(inv.creditApplied) || 0) + (Number(inv.advanceApplied) || 0);
   return settled > 0 ? "partial" : "unpaid";
 }
 

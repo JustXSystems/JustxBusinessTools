@@ -119,7 +119,7 @@ test.describe.serial("IMS CRUD — Purchasing (JustTestX)", () => {
     await assertNoModuleCrash(page);
     await expectModuleTitle(page, "Approvals");
 
-    for (const tab of [/Purchase orders/i, /^Bills/i, /Stock checks/i, /Delivery challans/i, /^History$/i]) {
+    for (const tab of [/Purchase orders/i, /^Invoices/i, /^Bills/i, /Stock checks/i, /Delivery challans/i, /^History$/i]) {
       const t = page.getByRole("tab", { name: tab }).first();
       if ((await t.count()) === 0) continue;
       await t.click();

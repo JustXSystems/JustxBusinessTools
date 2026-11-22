@@ -94,6 +94,7 @@ const settingsSheet = (s: ImsSettings): SheetSpec => ({
     ["Quotation reference required", s.bomRequireQuotationRef ? "Yes" : "No"],
     ["BOM schedule columns", s.bomScheduleColumns?.length ? s.bomScheduleColumns.join(", ") : "Pack defaults"],
     ["PO approval limit", s.poApprovalLimit],
+    ["Invoice approval limit", s.invoiceApprovalLimit],
     ["Default payment terms (days)", s.paymentTermsDays],
     ["Default GST %", s.defaultGstRate],
     ["Categories", s.taxonomy.categories.map((c) => c.name).join(", ")],

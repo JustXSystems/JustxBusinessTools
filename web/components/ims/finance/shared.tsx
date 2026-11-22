@@ -478,7 +478,19 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
   })();
   const stamp = INVOICE_STAMP[inv.displayStatus] ?? (inv.displayStatus === "partial" ? { text: "PART PAID", color: "#D98A1F" } : null);
   const meta: Array<{ label: string; value: ReactNode }> = [
-    { label: inv.docKind === "credit_note" ? "Credit note no." : inv.docKind === "proforma" ? "Proforma no." : "Invoice no.", value: inv.isDraftNo ? "Draft" : inv.invoiceNo },
+    {
+      label:
+        inv.docKind === "credit_note"
+          ? "Credit note no."
+          : inv.docKind === "proforma"
+            ? "Proforma no."
+            : inv.docKind === "retainer"
+              ? "Retainer no."
+              : inv.docKind === "debit_note"
+                ? "Debit note no."
+                : "Invoice no.",
+      value: inv.isDraftNo ? "Draft" : inv.invoiceNo,
+    },
     { label: "Date", value: dateLabel(inv.invoiceDate) },
     { label: "Due date", value: inv.dueDate ? dateLabel(inv.dueDate) : "On receipt" },
     { label: "Place of supply", value: inv.placeOfSupply || session.settings.state || "—" },

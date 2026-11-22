@@ -105,6 +105,24 @@ async function notifications(
     if (allow("approvals") || allow("purchase")) for (const p of pos) {
       out.push({ id: `po:${p.id}`, tone: "blue", title: `PO ${p.po_no} needs approval`, body: `${p.supplier_name} · ₹${round2(money(p.grand_total)).toLocaleString("en-IN")}`, module: "approvals", open: p.id, at: tsOf(p.updated_at) });
     }
+    if (allow("approvals") || allow("sales")) {
+      const invs = await rows<{ id: string; invoice_no: string; customer_name: string; grand_total: string; updated_at: string }>(
+        deps.db,
+        `SELECT id, invoice_no, customer_name, grand_total, updated_at FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'pending_approval' ORDER BY updated_at DESC LIMIT 5`,
+        { tenantId },
+      );
+      for (const i of invs) {
+        out.push({
+          id: `inv:${i.id}`,
+          tone: "blue",
+          title: `Invoice for ${i.customer_name} needs approval`,
+          body: `${i.invoice_no} · ₹${round2(money(i.grand_total)).toLocaleString("en-IN")}`,
+          module: "sales",
+          open: i.id,
+          at: tsOf(i.updated_at),
+        });
+      }
+    }
     const checks = await rows<{ id: string; check_no: string; title: string; updated_at: string }>(
       deps.db,
       `SELECT id, check_no, title, updated_at FROM ims_stock_checks WHERE tenant_id = :tenantId AND status = 'submitted' ORDER BY updated_at DESC LIMIT 3`,
@@ -139,9 +157,9 @@ async function notifications(
   if ((perms.has("receivables") || perms.has("sales")) && allow("receivables")) {
     const overdue = await rows<{ id: string; invoice_no: string; customer_name: string; balance: string; due_date: string }>(
       deps.db,
-      `SELECT id, invoice_no, customer_name, grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0) AS balance, due_date FROM ims_invoices
+      `SELECT id, invoice_no, customer_name, grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0) AS balance, due_date FROM ims_invoices
        WHERE tenant_id = :tenantId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note')
-         AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0) > 0.005 AND due_date < :today
+         AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0) > 0.005 AND due_date < :today
        ORDER BY due_date ASC LIMIT 5`,
       { tenantId, today },
     );
@@ -303,9 +321,9 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       deps.db,
       `SELECT
          SUM(CASE WHEN invoice_date BETWEEN :mfrom AND :today THEN grand_total ELSE 0 END) AS sales,
-         SUM(grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0)) AS receivable,
-         SUM(CASE WHEN due_date < :today THEN grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0) ELSE 0 END) AS overdue,
-         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(retention_amount, 0) > 0.005 THEN 1 ELSE 0 END) AS overdue_n
+         SUM(grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0)) AS receivable,
+         SUM(CASE WHEN due_date < :today THEN grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0) ELSE 0 END) AS overdue,
+         SUM(CASE WHEN due_date < :today AND grand_total - amount_paid - COALESCE(credit_applied, 0) - COALESCE(advance_applied, 0) - COALESCE(retention_amount, 0) > 0.005 THEN 1 ELSE 0 END) AS overdue_n
        FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND COALESCE(doc_kind, 'tax_invoice') IN ('tax_invoice', 'debit_note')`,
       { tenantId, today, mfrom: monthStartISO(today) },
     );
@@ -319,11 +337,12 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       `SELECT SUM(grand_total - amount_paid) AS payable FROM ims_bills WHERE tenant_id = :tenantId AND status <> 'cancelled'`,
       { tenantId },
     );
-    const pending = await rows<{ po: number; bills: number; checks: number; dcs: number }>(
+    const pending = await rows<{ po: number; bills: number; invoices: number; checks: number; dcs: number }>(
       deps.db,
       `SELECT
          (SELECT COUNT(*) FROM ims_purchase_orders WHERE tenant_id = :tenantId AND status = 'pending_approval') AS po,
          (SELECT COUNT(*) FROM ims_bills WHERE tenant_id = :tenantId AND status = 'pending_approval') AS bills,
+         (SELECT COUNT(*) FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'pending_approval') AS invoices,
          (SELECT COUNT(*) FROM ims_stock_checks WHERE tenant_id = :tenantId AND status = 'submitted') AS checks,
          (SELECT COUNT(*) FROM ims_bom_dcs WHERE tenant_id = :tenantId AND status = 'verified') AS dcs`,
       { tenantId },
@@ -363,6 +382,7 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
         pendingApprovals:
           Number(pending[0]?.po ?? 0) +
           Number(pending[0]?.bills ?? 0) +
+          Number(pending[0]?.invoices ?? 0) +
           Number(pending[0]?.checks ?? 0) +
           Number(pending[0]?.dcs ?? 0),
       },

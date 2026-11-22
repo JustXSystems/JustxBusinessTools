@@ -36,7 +36,7 @@ const MODULE_WITH_TABS: ReadonlyArray<ModuleTabs> = [
     label: "Approvals",
     path: "/ims?m=approvals",
     title: "Approvals",
-    tabs: [/Purchase orders/i, /^Bills/i, /Stock checks/i, /Delivery challans/i, /^History$/i],
+    tabs: [/Purchase orders/i, /^Invoices/i, /^Bills/i, /Stock checks/i, /Delivery challans/i, /^History$/i],
   },
   {
     id: "MATRIX-SALES",
@@ -44,7 +44,7 @@ const MODULE_WITH_TABS: ReadonlyArray<ModuleTabs> = [
     label: "Invoices & Billing",
     path: "/ims?m=sales",
     title: "Invoices & Billing",
-    tabs: [/^Invoices/i, /POS counter/i],
+    tabs: [/^Invoices/i, /Recurring/i, /POS counter/i],
   },
   {
     id: "MATRIX-AP",

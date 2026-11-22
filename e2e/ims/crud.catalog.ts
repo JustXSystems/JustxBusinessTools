@@ -131,10 +131,10 @@ export const IMS_CRUD_SCENARIOS: ReadonlyArray<ImsCrudScenario> = [
   },
   {
     id: "TAB-SALES-POS",
-    title: "Sales — Invoices + POS counter tabs",
+    title: "Sales — Invoices + Recurring + POS counter tabs",
     module: "sales",
     mutates: false,
-    manualChecks: ["Invoices list", "POS counter UI"],
+    manualChecks: ["Invoices list", "Recurring profiles", "POS counter UI"],
   },
   {
     id: "UI-AR-RECORD",

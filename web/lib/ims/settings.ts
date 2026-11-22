@@ -125,13 +125,24 @@ export function docNoSample(docType: string, today: string, companyName: string,
 
 export const PREFIX_RE = /^[A-Za-z0-9-]{1,12}$/;
 
-export type PrefixKey = "poPrefix" | "invoicePrefix" | "cnPrefix" | "dnPrefix" | "proformaPrefix" | "billPrefix" | "returnPrefix" | "checkPrefix" | "ticketPrefix";
+export type PrefixKey =
+  | "poPrefix"
+  | "invoicePrefix"
+  | "cnPrefix"
+  | "dnPrefix"
+  | "proformaPrefix"
+  | "retainerPrefix"
+  | "billPrefix"
+  | "returnPrefix"
+  | "checkPrefix"
+  | "ticketPrefix";
 export const PREFIX_FIELDS: ReadonlyArray<{ key: PrefixKey; label: string; hint: string }> = [
   { key: "poPrefix", label: "Purchase orders", hint: "Raised to suppliers" },
   { key: "invoicePrefix", label: "Sales invoices", hint: "GST tax invoices" },
   { key: "cnPrefix", label: "Credit notes", hint: "Issued against tax invoices" },
   { key: "dnPrefix", label: "Debit notes", hint: "Supplier-side adjustments" },
   { key: "proformaPrefix", label: "Proforma invoices", hint: "Non-AR quotes to bill" },
+  { key: "retainerPrefix", label: "Retainer / advance", hint: "Customer advances applied later" },
   { key: "billPrefix", label: "Supplier bills", hint: "Created on goods receipt" },
   { key: "returnPrefix", label: "Returns", hint: "Customer & supplier returns" },
   { key: "checkPrefix", label: "Stock checks", hint: "Physical count sessions" },
