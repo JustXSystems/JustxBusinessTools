@@ -528,6 +528,48 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
           </Alert>
         ) : null}
       </SectionCard>
+
+      <SectionCard title="Print & attachments" desc="Batch printing and file upload limits used across Sales, Bills and Audit.">
+        <FormGrid>
+          <Field
+            label="Print pack max"
+            error={errors.printPackMax}
+            hint={`Sales “Print pack” includes at most this many selected invoices (currently ${draft.printPackMax ?? 25})`}
+          >
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                type="number"
+                min={1}
+                max={200}
+                value={draft.printPackMax ?? 25}
+                onChange={(e) => set("printPackMax", Number(e.target.value))}
+              />
+            )}
+          </Field>
+          <Field
+            label="Attachment max size (MB)"
+            error={errors.attachmentMaxBytes}
+            hint="Invoice, bill and audit uploads. Larger files should be linked by URL instead."
+          >
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                type="number"
+                min={0.25}
+                max={20}
+                step={0.25}
+                value={Number((((draft.attachmentMaxBytes ?? 2 * 1024 * 1024) / (1024 * 1024)) * 100).toFixed(0)) / 100}
+                onChange={(e) => set("attachmentMaxBytes", Math.round(Number(e.target.value) * 1024 * 1024))}
+              />
+            )}
+          </Field>
+        </FormGrid>
+      </SectionCard>
     </fieldset>
   );
 }

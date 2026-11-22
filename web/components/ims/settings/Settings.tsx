@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Alert, Button, useToast } from "@/components/bos";
 import type { ImsSettings, ImsSettingsMeta } from "@/lib/ims/api";
 import { withBomPaperSettingsDefaults } from "@/lib/ims/bom-paper";
-import { PREFIX_FIELDS, PREFIX_RE, diffSettings, isValidGstin, settingsApi, unknownPlaceholders, type SettingsPatch } from "@/lib/ims/settings";
+import { PREFIX_FIELDS, PREFIX_RE, diffSettings, isValidGstin, settingsApi, unknownPlaceholders, withOpsSettingsDefaults, type SettingsPatch } from "@/lib/ims/settings";
 import { Loaded, PageHeader, Stack, SubTabs, useIms, useImsAction, useImsData } from "../core";
 import { CatalogTab, PermissionsTab } from "./AccessTabs";
 import { DataTab } from "./DataTab";
@@ -58,6 +58,9 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
   "returnPrefix",
   "checkPrefix",
   "ticketPrefix",
+  "bomPrefix",
+  "bomDcPrefix",
+  "bomDcReturnPrefix",
   "bomPaperTemplate",
   "bomIndustryPack",
   "bomPaperTone",
@@ -73,6 +76,8 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
   "paymentTermsDays",
   "defaultGstRate",
   "allowNegativeStock",
+  "printPackMax",
+  "attachmentMaxBytes",
   "exciseEnabled",
   "permissions",
   "taxonomy",
@@ -92,6 +97,8 @@ const ERROR_TAB: Record<string, Tab> = {
   invoiceApprovalLimit: "documents",
   draftPoPurgeDays: "documents",
   paymentTermsDays: "documents",
+  printPackMax: "documents",
+  attachmentMaxBytes: "documents",
   categories: "catalog",
   reminders: "reminders",
   ...Object.fromEntries(PREFIX_FIELDS.map((f) => [f.key, "documents"])),
@@ -112,6 +119,10 @@ function validate(d: ImsSettings): SettingsErrors {
   if (!Number.isFinite(d.invoiceApprovalLimit) || d.invoiceApprovalLimit < 0) e.invoiceApprovalLimit = "Enter 0 or more";
   if (!intIn(d.draftPoPurgeDays, 0, 365)) e.draftPoPurgeDays = "Whole days, 0–365";
   if (!intIn(d.paymentTermsDays, 0, 365)) e.paymentTermsDays = "Whole days, 0–365";
+  if (!intIn(d.printPackMax ?? 25, 1, 200)) e.printPackMax = "Whole number, 1–200";
+  if (!Number.isFinite(d.attachmentMaxBytes) || d.attachmentMaxBytes < 256 * 1024 || d.attachmentMaxBytes > 20 * 1024 * 1024) {
+    e.attachmentMaxBytes = "Between 0.25 MB and 20 MB";
+  }
   const names = d.taxonomy.categories.map((c) => c.name.trim().toLowerCase());
   if (names.some((n) => !n)) e.categories = "Every category needs a name";
   else if (new Set(names).size !== names.length) e.categories = "Category names must be unique";
@@ -146,8 +157,9 @@ function SettingsEditor({ meta, initialTab }: { meta: ImsSettingsMeta; initialTa
   const { show } = useToast();
   const readOnly = !can("settings");
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [base, setBase] = useState<ImsSettings>(() => withBomPaperSettingsDefaults(meta.settings) as ImsSettings);
-  const [draft, setDraft] = useState<ImsSettings>(() => withBomPaperSettingsDefaults(meta.settings) as ImsSettings);
+  const hydrate = (s: ImsSettings) => withOpsSettingsDefaults(withBomPaperSettingsDefaults(s) as ImsSettings) as ImsSettings;
+  const [base, setBase] = useState<ImsSettings>(() => hydrate(meta.settings));
+  const [draft, setDraft] = useState<ImsSettings>(() => hydrate(meta.settings));
   const [showErrors, setShowErrors] = useState(false);
 
   const patch = diffSettings(base, draft, SAVE_KEYS);
@@ -168,7 +180,7 @@ function SettingsEditor({ meta, initialTab }: { meta: ImsSettingsMeta; initialTa
     }
     const out = await run("save", () => settingsApi.save(patch), { success: "Settings saved", description: `${changed} change${changed === 1 ? "" : "s"}` });
     if (!out) return;
-    const next = withBomPaperSettingsDefaults(out.settings) as ImsSettings;
+    const next = hydrate(out.settings);
     setBase(next);
     setDraft(next);
     setShowErrors(false);

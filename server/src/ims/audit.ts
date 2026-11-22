@@ -750,7 +750,8 @@ async function runAutoMatch(db: Queryable, tenantId: number, by: string | null):
 
 const DOC_CATEGORIES = ["invoice", "bill", "bank_statement", "gst_return", "tds", "agreement", "ledger", "payroll", "other"] as const;
 const DOC_ENTITY_TYPES = ["invoice", "bill", "payment", "expense", "party", "item", "bank", "audit", "po"] as const;
-const MAX_FILE_BYTES = 2 * 1024 * 1024;
+/** Fallback when settings row lacks the column (pre-migration). */
+const DEFAULT_ATTACHMENT_MAX_BYTES = 2 * 1024 * 1024;
 
 const DocInput = z
   .object({
@@ -1603,7 +1604,8 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
       params.q = likeOf(q);
     }
     const list = await rows<DocRow>(deps.db, `${DOC_SELECT} WHERE ${where.join(" AND ")} ORDER BY created_at DESC LIMIT 1000`, params);
-    res.json({ documents: list.map(mapDoc), categories: DOC_CATEGORIES, maxBytes: MAX_FILE_BYTES });
+    const settings = await getSettings(deps, actor.tenantId);
+    res.json({ documents: list.map(mapDoc), categories: DOC_CATEGORIES, maxBytes: settings.attachmentMaxBytes || DEFAULT_ATTACHMENT_MAX_BYTES });
   });
 
   router.post("/audit/documents", async (req, res) => {
@@ -1613,6 +1615,8 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
       ["audit", "reports", "payables", "settings", "sales", "receivables"],
       "Uploading documents needs Sales, Receivables, Auditor, Reports, Payables or Settings permission.",
     );
+    const settings = await getSettings(deps, actor.tenantId);
+    const maxBytes = settings.attachmentMaxBytes || DEFAULT_ATTACHMENT_MAX_BYTES;
     const input = parse(DocInput, req.body);
     let mime: string | null = null;
     let size: number | null = null;
@@ -1621,7 +1625,10 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
       if (!m) throw badRequest("The file must be sent as a base64 data URL");
       mime = m[1] ?? "application/octet-stream";
       size = Buffer.from(m[3], "base64").length;
-      if (size > MAX_FILE_BYTES) throw badRequest("Files up to 2 MB can be stored here — paste a link to larger files instead");
+      if (size > maxBytes) {
+        const mb = Math.round(maxBytes / (1024 * 1024));
+        throw badRequest(`Files up to ${mb} MB can be stored here — paste a link to larger files instead`);
+      }
       if (!/^(application\/pdf|image\/(png|jpe?g|webp|gif)|text\/(csv|plain)|application\/(vnd\.openxmlformats-officedocument\.[\w.]+|vnd\.ms-excel|msword|zip|xml)|application\/octet-stream)$/i.test(mime)) {
         throw badRequest("Upload a PDF, image, spreadsheet, Word, CSV, XML or ZIP file");
       }

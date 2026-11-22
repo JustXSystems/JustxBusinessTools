@@ -193,6 +193,9 @@ export type ImsSettings = {
   returnPrefix: string;
   checkPrefix: string;
   ticketPrefix: string;
+  bomPrefix: string;
+  bomDcPrefix: string;
+  bomDcReturnPrefix: string;
   /** Default BOM document purpose for live preview + print/PDF. */
   bomPaperTemplate: BomPaperTemplateId;
   bomIndustryPack: BomIndustryPackId;
@@ -212,6 +215,10 @@ export type ImsSettings = {
   paymentTermsDays: number;
   defaultGstRate: number;
   allowNegativeStock: boolean;
+  /** Max invoices in a Sales print-pack batch. */
+  printPackMax: number;
+  /** Max attachment upload size in bytes. */
+  attachmentMaxBytes: number;
   exciseEnabled: boolean;
   /** Excise applies (enabled, or a liquor / bar business type). */
   exciseActive: boolean;

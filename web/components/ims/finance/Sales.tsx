@@ -109,7 +109,8 @@ function NewInvoiceButton({ onClick }: { onClick: () => void }) {
 }
 
 function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: () => void }) {
-  const { navigate, can } = useIms();
+  const { navigate, can, session } = useIms();
+  const printPackMax = Math.max(1, Math.min(200, session.settings.printPackMax ?? 25));
   const [status, setStatus] = useState<"all" | InvoiceDisplayStatus>("all");
   const [period, setPeriod] = useState<PeriodOrAll>("all");
   const [q, setQ] = useState("");
@@ -272,9 +273,9 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
                   size="sm"
                   icon="printer"
                   disabled={!liveSelected.size}
-                  onClick={() => setPrintIds([...liveSelected].slice(0, 25))}
+                  onClick={() => setPrintIds([...liveSelected].slice(0, printPackMax))}
                 >
-                  Print pack{liveSelected.size ? ` · ${Math.min(liveSelected.size, 25)}` : ""}
+                  Print pack{liveSelected.size ? ` · ${Math.min(liveSelected.size, printPackMax)}` : ""}
                 </Button>
               </div>
               <div className="ims-toolbar">

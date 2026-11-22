@@ -1392,7 +1392,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     );
 
     await tx(deps.db, async (conn) => {
-      const docNo = await nextDocNo(conn, actor.tenantId, "bom", "BOM", docDate, settings.businessName);
+      const docNo = await nextDocNo(conn, actor.tenantId, "bom", settings.bomPrefix, docDate, settings.businessName);
       await exec(
         conn,
         `INSERT INTO ims_bom_docs
@@ -1949,7 +1949,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
       src.taxPct,
     );
     await tx(deps.db, async (conn) => {
-      const docNo = await nextDocNo(conn, actor.tenantId, "bom", "BOM", docDate, settings.businessName);
+      const docNo = await nextDocNo(conn, actor.tenantId, "bom", settings.bomPrefix, docDate, settings.businessName);
       await exec(
         conn,
         `INSERT INTO ims_bom_docs

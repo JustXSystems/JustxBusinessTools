@@ -167,6 +167,9 @@ export type ImsSettings = {
   returnPrefix: string;
   checkPrefix: string;
   ticketPrefix: string;
+  bomPrefix: string;
+  bomDcPrefix: string;
+  bomDcReturnPrefix: string;
   /** Default BOM document purpose for live preview + print/PDF. */
   bomPaperTemplate: BomPaperTemplateId;
   bomIndustryPack: BomIndustryPackId;
@@ -188,6 +191,10 @@ export type ImsSettings = {
   paymentTermsDays: number;
   defaultGstRate: number;
   allowNegativeStock: boolean;
+  /** Max invoices included in a Sales “Print pack” batch. */
+  printPackMax: number;
+  /** Max upload size for invoice/bill/audit attachments (bytes). */
+  attachmentMaxBytes: number;
   exciseEnabled: boolean;
   /** Derived: excise register is shown (enabled or a liquor / bar business type). */
   exciseActive: boolean;
@@ -227,6 +234,9 @@ type SettingsRow = {
   return_prefix: string;
   check_prefix: string;
   ticket_prefix: string;
+  bom_prefix?: string | null;
+  bom_dc_prefix?: string | null;
+  bom_dc_return_prefix?: string | null;
   bom_paper_template?: string | null;
   bom_industry_pack?: string | null;
   bom_paper_tone?: string | null;
@@ -242,6 +252,8 @@ type SettingsRow = {
   payment_terms_days: number;
   default_gst_rate: string | number;
   allow_negative_stock: number;
+  print_pack_max?: number | null;
+  attachment_max_bytes?: number | null;
   excise_enabled: number;
   permissions: unknown;
   taxonomy: unknown;
@@ -279,6 +291,9 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   returnPrefix: r.return_prefix,
   checkPrefix: r.check_prefix,
   ticketPrefix: r.ticket_prefix,
+  bomPrefix: r.bom_prefix || "BOM",
+  bomDcPrefix: r.bom_dc_prefix || "DC",
+  bomDcReturnPrefix: r.bom_dc_return_prefix || "RTN",
   bomPaperTemplate: normalizeBomPaperTemplate(r.bom_paper_template),
   bomIndustryPack: normalizeBomIndustryPack(r.bom_industry_pack),
   bomPaperTone: normalizeBomPaperTone(r.bom_paper_tone),
@@ -294,6 +309,8 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   paymentTermsDays: Number(r.payment_terms_days) || 0,
   defaultGstRate: money(r.default_gst_rate),
   allowNegativeStock: Boolean(r.allow_negative_stock),
+  printPackMax: Math.max(1, Math.min(200, Number(r.print_pack_max) || 25)),
+  attachmentMaxBytes: Math.max(256 * 1024, Math.min(20 * 1024 * 1024, Number(r.attachment_max_bytes) || 2 * 1024 * 1024)),
   exciseEnabled: Boolean(r.excise_enabled),
   exciseActive: exciseApplies(r.business_type, Boolean(r.excise_enabled)),
   permissions: normalizePermissions(json(r.permissions, {})),
@@ -363,6 +380,9 @@ const SettingsInput = z.object({
   returnPrefix: prefix.optional(),
   checkPrefix: prefix.optional(),
   ticketPrefix: prefix.optional(),
+  bomPrefix: prefix.optional(),
+  bomDcPrefix: prefix.optional(),
+  bomDcReturnPrefix: prefix.optional(),
   bomPaperTemplate: z.enum(BOM_PAPER_TEMPLATES).optional(),
   bomIndustryPack: z.enum(BOM_INDUSTRY_PACKS).optional(),
   bomPaperTone: z.enum(BOM_PAPER_TONES).optional(),
@@ -389,6 +409,8 @@ const SettingsInput = z.object({
   paymentTermsDays: z.coerce.number().int().min(0).max(365).optional(),
   defaultGstRate: z.coerce.number().min(0).max(100).optional(),
   allowNegativeStock: z.boolean().optional(),
+  printPackMax: z.coerce.number().int().min(1).max(200).optional(),
+  attachmentMaxBytes: z.coerce.number().int().min(256 * 1024).max(20 * 1024 * 1024).optional(),
   exciseEnabled: z.boolean().optional(),
   permissions: z.record(z.string(), z.record(z.string(), z.boolean())).optional(),
   taxonomy: z.record(z.string(), z.unknown()).optional(),
@@ -426,6 +448,9 @@ const COLUMN: Record<string, string> = {
   returnPrefix: "return_prefix",
   checkPrefix: "check_prefix",
   ticketPrefix: "ticket_prefix",
+  bomPrefix: "bom_prefix",
+  bomDcPrefix: "bom_dc_prefix",
+  bomDcReturnPrefix: "bom_dc_return_prefix",
   bomPaperTemplate: "bom_paper_template",
   bomIndustryPack: "bom_industry_pack",
   bomPaperTone: "bom_paper_tone",
@@ -441,6 +466,8 @@ const COLUMN: Record<string, string> = {
   paymentTermsDays: "payment_terms_days",
   defaultGstRate: "default_gst_rate",
   allowNegativeStock: "allow_negative_stock",
+  printPackMax: "print_pack_max",
+  attachmentMaxBytes: "attachment_max_bytes",
   exciseEnabled: "excise_enabled",
   permissions: "permissions",
   taxonomy: "taxonomy",

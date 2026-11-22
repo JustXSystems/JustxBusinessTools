@@ -137,7 +137,10 @@ export type PrefixKey =
   | "billPrefix"
   | "returnPrefix"
   | "checkPrefix"
-  | "ticketPrefix";
+  | "ticketPrefix"
+  | "bomPrefix"
+  | "bomDcPrefix"
+  | "bomDcReturnPrefix";
 export const PREFIX_FIELDS: ReadonlyArray<{ key: PrefixKey; label: string; hint: string }> = [
   { key: "poPrefix", label: "Purchase orders", hint: "Raised to suppliers" },
   { key: "invoicePrefix", label: "Sales invoices", hint: "GST tax invoices" },
@@ -151,6 +154,9 @@ export const PREFIX_FIELDS: ReadonlyArray<{ key: PrefixKey; label: string; hint:
   { key: "returnPrefix", label: "Returns", hint: "Customer & supplier returns" },
   { key: "checkPrefix", label: "Stock checks", hint: "Physical count sessions" },
   { key: "ticketPrefix", label: "Help desk tickets", hint: "Support requests" },
+  { key: "bomPrefix", label: "Bill of Materials", hint: "Confirmed BOM proposals" },
+  { key: "bomDcPrefix", label: "BOM delivery challans", hint: "Material issue against a BOM" },
+  { key: "bomDcReturnPrefix", label: "BOM DC returns", hint: "Unused materials returned from a DC" },
 ];
 
 /* ---------- Pick-lists ---------- */
@@ -206,6 +212,18 @@ export const unknownPlaceholders = (body: string): string[] => {
 /* ---------- Dirty checks ---------- */
 
 export type SettingsPatch = Partial<Omit<ImsSettings, "exciseActive">>;
+
+/** Fill Wave-1+ ops fields when an older API payload omits them. */
+export function withOpsSettingsDefaults<T extends Partial<ImsSettings>>(settings: T): T & Pick<ImsSettings, "bomPrefix" | "bomDcPrefix" | "bomDcReturnPrefix" | "printPackMax" | "attachmentMaxBytes"> {
+  return {
+    ...settings,
+    bomPrefix: settings.bomPrefix || "BOM",
+    bomDcPrefix: settings.bomDcPrefix || "DC",
+    bomDcReturnPrefix: settings.bomDcReturnPrefix || "RTN",
+    printPackMax: Math.max(1, Math.min(200, Number(settings.printPackMax) || 25)),
+    attachmentMaxBytes: Math.max(256 * 1024, Math.min(20 * 1024 * 1024, Number(settings.attachmentMaxBytes) || 2 * 1024 * 1024)),
+  };
+}
 
 /** Only the keys whose values differ (deep compare via JSON for lists / matrices). */
 export function diffSettings(base: ImsSettings, draft: ImsSettings, keys: ReadonlyArray<keyof SettingsPatch>): SettingsPatch {

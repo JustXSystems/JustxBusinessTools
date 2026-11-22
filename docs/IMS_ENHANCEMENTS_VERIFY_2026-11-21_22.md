@@ -340,6 +340,9 @@ Spot-check seeded world (full catalog also in `e2e-results/ims/MANUAL_VERIFY.md`
 | Bank account / IFSC | Business | On paper + dunning letter |
 | MSME + UDYAM | Business | On tax invoice paper |
 | Invoice / CN / DN / Proforma / Retainer prefixes | Documents & numbering | Next sample updates |
+| **BOM / DC / RTN prefixes** | Documents & numbering | New BOM/DC/return numbers use Settings prefixes (migration **060**) |
+| **Print pack max** | Documents → Print & attachments | Sales Print pack caps at this count (default 25) |
+| **Attachment max size** | Documents → Print & attachments | Invoice/bill/audit uploads enforce MB limit |
 | **Invoice approval limit** | Documents | Queues large invoices |
 | PO approval limit | Documents | Unchanged PO behaviour |
 | Reminder rules | Reminders | AR “Send reminders” still works |

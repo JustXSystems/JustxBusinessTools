@@ -26,7 +26,7 @@ export function EntityAttachments({
   const { run, busy } = useImsAction();
   const state = useImsData(() => imsSystem.documents({ entityType, entityId }), [entityType, entityId]);
   const docs = state.data?.documents ?? [];
-  const maxBytes = state.data?.maxBytes ?? 2 * 1024 * 1024;
+  const maxBytes = state.data?.maxBytes ?? 2_097_152;
 
   const onFile = async (file: File | null) => {
     if (!file || !canWrite) return;

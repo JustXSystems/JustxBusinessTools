@@ -1081,7 +1081,7 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
       const committed = await committedDcQtyByBomLine(conn, actor.tenantId, bomId);
       const planned = planDcLinesAgainstBom(fresh, body.lines, committed);
 
-      const docNo = await nextDocNo(conn, actor.tenantId, "bom_dc", "DC", docDate, settings.businessName);
+      const docNo = await nextDocNo(conn, actor.tenantId, "bom_dc", settings.bomDcPrefix, docDate, settings.businessName);
       await exec(
         conn,
         `INSERT INTO ims_bom_dcs
@@ -1519,7 +1519,7 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
         planned.push({ line, qty, remarks: reqLine.remarks ?? null });
       }
 
-      const returnNo = await nextDocNo(conn, actor.tenantId, "bom_dc_rtn", "RTN", returnDate, settings.businessName);
+      const returnNo = await nextDocNo(conn, actor.tenantId, "bom_dc_rtn", settings.bomDcReturnPrefix, returnDate, settings.businessName);
       await exec(
         conn,
         `INSERT INTO ims_bom_dc_returns
