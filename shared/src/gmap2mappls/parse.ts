@@ -3,7 +3,7 @@ import {
   type CoordSource,
   type LatLng,
   type ParsedCoords,
-} from "./types.js";
+} from "./types";
 
 const GOOGLE_HOST_RE =
   /^(?:(?:www|maps|www\.maps)\.)?google\.[a-z.]+$|^(?:maps\.app\.)?goo\.gl$/i;

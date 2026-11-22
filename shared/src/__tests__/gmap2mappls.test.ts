@@ -9,7 +9,7 @@ import {
   formatCoordPair,
   mapplsPointUrl,
   googleMapsPointUrl,
-} from "../gmap2mappls/index.js";
+} from "../gmap2mappls/index";
 
 describe("gmap2mappls parse", () => {
   it("extracts @lat,lng from Google Maps URL (acceptance 1)", () => {

@@ -1,4 +1,4 @@
-import type { LatLng } from "./types.js";
+import type { LatLng } from "./types";
 
 /** Tokens that are too generic to use as neighbourhood anchors. */
 const STOP = new Set([

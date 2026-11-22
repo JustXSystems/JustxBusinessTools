@@ -1,4 +1,4 @@
-import { mapplsPointUrl, roundCoord, type MapplsSide } from "./types.js";
+import { mapplsPointUrl, roundCoord, type MapplsSide } from "./types";
 
 export type SampleFixture = {
   id: string;
