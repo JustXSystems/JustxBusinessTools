@@ -92,13 +92,13 @@ What happens:
 
 1. Logs into production `/jbt/login` (not the marketing homepage)  
 2. Switches branch to **JustTestX** via API  
-3. Opens `/jbt/ims` and runs **42** scenarios (all modules + journeys)  
+3. Opens `/jbt/ims` and runs the full catalog: module smoke, CRUD, tab matrix, deep business flows, and journeys (~125+ scenarios; Excise soft-skips when gated)  
 4. Writes reports under `e2e-results/ims*`  
 
 > **Note:** Playwright treats `/login` as origin-absolute. The suite rewrites it to
 > `/jbt/login` so you do not land on `https://justxsystems.com/login` (public marketing site).
 
-Expected duration: often **30–90+ minutes** on production (full QA-style suite, not a smoke).
+Expected duration: often **5–15 minutes** on a warm production session (full QA-style suite, not PR smoke).
 
 ### After the run
 
