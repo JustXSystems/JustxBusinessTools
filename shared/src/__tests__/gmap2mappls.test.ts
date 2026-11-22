@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyInput,
   extractCoordsFromGoogleUrl,
+  extractPlaceNameFromGoogleUrl,
   extractNeighbourhoodTokens,
   pickBestCandidate,
   scoreCandidate,
@@ -133,11 +134,21 @@ describe("gmap2mappls neighbourhood", () => {
 });
 
 describe("gmap2mappls urls + samples", () => {
-  it("builds matching mappls and google URLs from same coords", () => {
+  it("builds matching mappls and google URLs from same coords (no Google-style 18z)", () => {
     const lat = 12.8804;
     const lng = 77.5958;
-    expect(mapplsPointUrl(lat, lng)).toBe("https://www.mappls.com/@12.8804,77.5958,18z");
+    // Mappls web breaks on `,18z` — official share format is @lat,lng only
+    expect(mapplsPointUrl(lat, lng)).toBe("https://www.mappls.com/@12.8804,77.5958");
+    expect(mapplsPointUrl(lat, lng)).not.toMatch(/18z/);
     expect(googleMapsPointUrl(lat, lng)).toContain(formatCoordPair(lat, lng));
+  });
+
+  it("extracts place name from Google /place/ path", () => {
+    expect(
+      extractPlaceNameFromGoogleUrl(
+        "https://www.google.com/maps/place/Zigma+Technologies/@12.87,77.61,16z/data=!3d12.8770726!4d77.6135744",
+      ),
+    ).toBe("Zigma Technologies");
   });
 
   it("ships acceptance fixtures with shared coords", () => {

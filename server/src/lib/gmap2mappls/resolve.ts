@@ -1,6 +1,7 @@
 import {
   classifyInput,
   extractCoordsFromGoogleUrl,
+  extractPlaceNameFromGoogleUrl,
   formatCoordPair,
   googleMapsPointUrl,
   mapplsPointUrl,
@@ -104,6 +105,7 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
       lng = expanded.coords.lng;
       source = "short_link";
       label = expanded.coords.label;
+      displayName = expanded.placeName ?? undefined;
     } else if (classified.kind === "google_url") {
       const coords = classified.coords ?? extractCoordsFromGoogleUrl(classified.url);
       if (!coords) {
@@ -118,6 +120,7 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
       lng = coords.lng;
       source = coords.source;
       label = coords.label;
+      displayName = extractPlaceNameFromGoogleUrl(classified.url) ?? undefined;
     } else {
       // Full address — Photon/Nominatim only (never Mappls text search)
       const geo = await geocodeIndiaAddress(classified.address);

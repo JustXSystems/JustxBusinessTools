@@ -56,6 +56,21 @@ export function parseRawLatLng(input: string): ParsedCoords | null {
  * Extract coordinates from a (possibly expanded) Google Maps URL.
  * Preference order mirrors product rule: /@lat,lng → !3d!4d → q= → ll= → place path.
  */
+/** `/place/Zigma+Technologies/@...` → "Zigma Technologies" */
+export function extractPlaceNameFromGoogleUrl(urlString: string): string | null {
+  try {
+    const url = new URL(urlString);
+    if (!isAllowedGoogleHost(url.hostname)) return null;
+    const m = decodeURIComponent(url.pathname).match(/\/place\/([^/]+)/i);
+    if (!m?.[1]) return null;
+    const name = m[1].replace(/\+/g, " ").replace(/\s+/g, " ").trim();
+    if (!name || /^[\d.,\s@-]+$/.test(name)) return null;
+    return name;
+  } catch {
+    return null;
+  }
+}
+
 export function extractCoordsFromGoogleUrl(urlString: string): ParsedCoords | null {
   let url: URL;
   try {

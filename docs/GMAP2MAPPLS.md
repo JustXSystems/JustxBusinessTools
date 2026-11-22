@@ -16,6 +16,14 @@ API: `POST /api/public/gmap2mappls/resolve` · `GET /api/public/gmap2mappls/meta
 
 Mappls address wording may differ; the **map point must match**.
 
+### Mappls open URL
+
+Use the official share form (no Google-style zoom suffix):
+
+`https://www.mappls.com/@{lat},{lng}`
+
+Do **not** append `,18z`. Mappls’s web app treats `@lat,lng,18z` as a broken path — the interstitial never opens the shared point. Plain `@lat,lng` loads the same pin Google uses.
+
 ## Local run
 
 ```bash

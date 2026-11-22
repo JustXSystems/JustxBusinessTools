@@ -18,9 +18,24 @@ describe("resolveGmap2Mappls sample mode", () => {
     expect(r.lng).toBeCloseTo(77.5958, 4);
     expect(r.google.lat).toBe(r.mappls.lat);
     expect(r.google.lng).toBe(r.mappls.lng);
-    expect(r.mappls.mapplsUrl).toContain("@12.8804,77.5958");
+    expect(r.mappls.mapplsUrl).toBe("https://www.mappls.com/@12.8804,77.5958");
+    expect(r.mappls.mapplsUrl).not.toMatch(/18z/);
     expect(r.sampleMode).toBe(true);
     expect(r.mappls.formattedAddress.toLowerCase()).toMatch(/hulimavu|bannerghatta/);
+  });
+
+  it("Zigma short link: pin !3d!4d, same Google/Mappls coords, Mappls URL without 18z", async () => {
+    delete process.env.MAPPLS_ACCESS_TOKEN;
+    const r = await resolveGmap2Mappls("https://maps.app.goo.gl/P3RTQ5woooJXgFGA6");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.lat).toBeCloseTo(12.877073, 5);
+    expect(r.lng).toBeCloseTo(77.613574, 5);
+    expect(r.google.lat).toBe(r.mappls.lat);
+    expect(r.google.lng).toBe(r.mappls.lng);
+    expect(r.google.name.toLowerCase()).toContain("zigma");
+    expect(r.mappls.mapplsUrl).toBe(`https://www.mappls.com/@${r.lat},${r.lng}`);
+    expect(r.google.mapsUrl).toContain(`${r.lat},${r.lng}`);
   });
 
   it("acceptance 2: Brindavan / Hulimavu address stays Bengaluru area", async () => {

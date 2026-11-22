@@ -1,4 +1,9 @@
-import { extractCoordsFromGoogleUrl, isAllowedGoogleHost, type ParsedCoords } from "@jbt/shared";
+import {
+  extractCoordsFromGoogleUrl,
+  extractPlaceNameFromGoogleUrl,
+  isAllowedGoogleHost,
+  type ParsedCoords,
+} from "@jbt/shared";
 
 const UA = "Justxsystems-JBT-GMAP2MAPPLS/1.0";
 
@@ -8,6 +13,7 @@ const UA = "Justxsystems-JBT-GMAP2MAPPLS/1.0";
 export async function expandGoogleShortLink(startUrl: string): Promise<{
   finalUrl: string;
   coords: ParsedCoords | null;
+  placeName: string | null;
 }> {
   let current = startUrl;
   for (let i = 0; i < 6; i++) {
@@ -64,5 +70,6 @@ export async function expandGoogleShortLink(startUrl: string): Promise<{
   }
 
   const coords = extractCoordsFromGoogleUrl(current);
-  return { finalUrl: current, coords };
+  const placeName = extractPlaceNameFromGoogleUrl(current);
+  return { finalUrl: current, coords, placeName };
 }

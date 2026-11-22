@@ -64,11 +64,18 @@ export function formatCoordPair(lat: number, lng: number, digits = 6): string {
 }
 
 export function googleMapsPointUrl(lat: number, lng: number): string {
-  return `https://www.google.com/maps/search/?api=1&query=${roundCoord(lat)},${roundCoord(lng)}`;
+  // Center + pin on the shared point (same lat/lng Mappls uses).
+  return `https://www.google.com/maps?q=${roundCoord(lat)},${roundCoord(lng)}&z=18`;
 }
 
-export function mapplsPointUrl(lat: number, lng: number, zoom = 18): string {
-  return `https://www.mappls.com/@${roundCoord(lat)},${roundCoord(lng)},${zoom}z`;
+/**
+ * Official Mappls lat/lng share URL.
+ * Do NOT append Google-style `,18z` — Mappls treats that as a broken path and the
+ * map never opens at the shared point (interstitial → blank / wrong place).
+ * Docs: https://mappls.com/@lat,lng
+ */
+export function mapplsPointUrl(lat: number, lng: number): string {
+  return `https://www.mappls.com/@${roundCoord(lat)},${roundCoord(lng)}`;
 }
 
 export function isFiniteLatLng(lat: number, lng: number): boolean {
