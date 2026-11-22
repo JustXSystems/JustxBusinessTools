@@ -79,6 +79,8 @@ export type ImsInvoice = {
   shippingTax: number;
   retentionPct: number;
   retentionAmount: number;
+  progressPct: number | null;
+  progressLabel: string | null;
   recurringId: string | null;
   roundOff: number;
   roundToRupee: boolean;
@@ -195,6 +197,8 @@ export type InvoiceInput = {
   shippingCharges?: number;
   shippingGstRate?: number;
   retentionPct?: number;
+  progressPct?: number | null;
+  progressLabel?: string | null;
   accountManagerId?: number | null;
   accountManagerName?: string | null;
   lines: ImsLineInput[];

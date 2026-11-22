@@ -1,11 +1,11 @@
 # IMS Invoice Management — Competitive Delta
 
-Research date: 2026-11-22 (pass 3 / Wave 4)  
+Research date: 2026-11-22 (pass 4 / Wave 5)  
 Benchmarks: **Zoho Books**, **SAP Business One (India / FP2608)**, **TallyPrime**, **QuickBooks**, **FreshBooks**.
 
 Living backlog for corporate-standard IMS invoicing. Score = competitive gap × India dealer value × architecture fit.
 
-## IMS baseline (shipped through Wave 4)
+## IMS baseline (shipped through Wave 5a/b)
 
 | Capability | Status |
 |---|---|
@@ -23,6 +23,7 @@ Living backlog for corporate-standard IMS invoicing. Score = competitive gap × 
 | Email share (mailto) + WhatsApp | ✅ |
 | Invoice attachments (PDF / image / office) | ✅ |
 | MSME / UDYAM on invoice paper | ✅ |
+| Progress % + milestone label on invoice | ✅ |
 | UPI payment QR on paper | ✅ |
 | e-Invoice IRN associate / mark cancelled | ✅ |
 | Partial payments, AR aging, reminders, promises | ✅ |
@@ -45,7 +46,7 @@ Legend: ❌ missing · 🟡 partial · ✅ present
 | 8 | E-Way Bill | ✅ | ✅ | ✅ | — | 🟡 field only | P0 | 2 |
 | 9 | Recurring invoices | ✅ | 🟡 | 🟡 | ✅ | ✅ | P1 | 3 |
 | 10 | Retainer / advance invoices | ✅ | ✅ A/R DP | 🟡 | ✅ | ✅ | P1 | 4 |
-| 11 | Progress / milestone invoicing | ✅ | ✅ | ❌ | 🟡 | ❌ | P1 | 5 |
+| 11 | Progress / milestone invoicing | ✅ | ✅ | ❌ | 🟡 | 🟡 % + label | P1 | 5 |
 | 12 | Payment retention | ✅ | ✅ | ❌ | 🟡 | ✅ | P1 | 3 |
 | 13 | Sales Orders → DC → Invoice | ✅ | ✅ | ✅ | 🟡 | 🟡 BOM/DC | P1 | 5 |
 | 14 | Partial invoice from order/DC | ✅ | ✅ | ✅ | 🟡 | 🟡 DC link | P1 | 5 |
@@ -108,6 +109,7 @@ Shared UI: `DocumentPaper`, `LineEditor`, `InvoicePaper`, Sales SubTabs (`Invoic
 - `055_ims_recurring_invoices.sql` — recurring profiles + retention + recurring_id  
 - `056_ims_invoice_approval_retainer.sql` — invoice approval limit, advance_applied, retainer prefix, approval audit columns  
 - `057_ims_msme_udyam.sql` — MSME flag + UDYAM number on settings  
+- `058_ims_invoice_progress.sql` — progress_pct + progress_label  
 
 ## Acceptance (Wave 4)
 
@@ -122,3 +124,7 @@ Shared UI: `DocumentPaper`, `LineEditor`, `InvoicePaper`, Sales SubTabs (`Invoic
 
 - [x] Attachments panel on invoice view (reuse `ims_documents`, sales can upload)  
 - [x] MSME registered + UDYAM on Settings → printed on tax invoice paper  
+
+## Acceptance (Wave 5b)
+
+- [x] Progress % + milestone label on editor, map, and invoice paper  

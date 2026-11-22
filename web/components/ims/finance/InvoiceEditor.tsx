@@ -70,6 +70,8 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const [shippingCharges, setShippingCharges] = useState(String(inv?.shippingCharges ? inv.shippingCharges : ""));
   const [shippingGstRate, setShippingGstRate] = useState(String(inv?.shippingGstRate ?? settings.defaultGstRate));
   const [retentionPct, setRetentionPct] = useState(String(inv?.retentionPct ? inv.retentionPct : ""));
+  const [progressPct, setProgressPct] = useState(String(inv?.progressPct != null && inv.progressPct > 0 ? inv.progressPct : ""));
+  const [progressLabel, setProgressLabel] = useState(inv?.progressLabel ?? "");
   const [salespersonId, setSalespersonId] = useState<string>(inv?.accountManagerId != null ? String(inv.accountManagerId) : "");
   const [roundToRupee, setRoundToRupee] = useState(inv?.roundToRupee ?? true);
   const [notes, setNotes] = useState(inv?.notes ?? "");
@@ -181,6 +183,8 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
     shippingCharges: shipAmt,
     shippingGstRate: shipGst,
     retentionPct: retPct,
+    progressPct: progressPct.trim() === "" ? null : Math.max(0, Math.min(100, Number(progressPct) || 0)),
+    progressLabel: progressLabel.trim() || null,
     accountManagerId: salesperson ? salesperson.userId : salespersonId === "" ? null : Number(salespersonId) || null,
     accountManagerName: salesperson ? salesperson.name || null : null,
     lines: toLineInputs(lines),
@@ -527,6 +531,26 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
           <Field label="Retention %" hint={retPct > 0 ? `Withheld ${inrExact(totals.retentionAmount ?? 0)} — not due yet` : "Contract retention (Zoho / SAP parity)"}>
             {({ id, describedBy }) => (
               <Input id={id} aria-describedby={describedBy} type="number" min={0} max={100} step="0.01" value={retentionPct} onChange={(e) => setRetentionPct(e.target.value)} placeholder="0" />
+            )}
+          </Field>
+          <Field label="Progress %" hint="Milestone / stage billing against the job or quote (optional)">
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={progressPct}
+                onChange={(e) => setProgressPct(e.target.value)}
+                placeholder="e.g. 40"
+              />
+            )}
+          </Field>
+          <Field label="Progress label" hint="Printed on the invoice, e.g. Stage 2 — Cabling">
+            {({ id, describedBy }) => (
+              <Input id={id} aria-describedby={describedBy} maxLength={120} value={progressLabel} onChange={(e) => setProgressLabel(e.target.value)} placeholder="Optional milestone name" />
             )}
           </Field>
           <Field label="Salesperson">

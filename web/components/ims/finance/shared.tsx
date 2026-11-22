@@ -497,6 +497,12 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
   ];
   if (inv.customerPoNo) meta.push({ label: "Customer PO", value: inv.customerPoNo });
   if (inv.againstInvoiceNo) meta.push({ label: "Against invoice", value: inv.againstInvoiceNo });
+  if (inv.progressPct != null && inv.progressPct > 0) {
+    meta.push({
+      label: "Progress",
+      value: inv.progressLabel ? `${inv.progressPct}% · ${inv.progressLabel}` : `${inv.progressPct}%`,
+    });
+  }
   if (inv.docKind && inv.docKind !== "tax_invoice") meta.push({ label: "Document", value: DOC_KIND_LABEL[inv.docKind] });
   if (inv.irn) meta.push({ label: "IRN", value: <span className="ims-mono" style={{ fontSize: 11 }}>{inv.irn}</span> });
   if (inv.ewayBillNo) meta.push({ label: "E-Way bill", value: inv.ewayBillNo });

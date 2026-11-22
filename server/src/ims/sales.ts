@@ -319,6 +319,12 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     shippingTax: round2(money(r.shipping_tax ?? 0)),
     retentionPct,
     retentionAmount,
+    progressPct: (() => {
+      const raw = (r as { progress_pct?: string | number | null }).progress_pct;
+      if (raw == null || raw === "") return null;
+      return round2(money(raw));
+    })(),
+    progressLabel: (r as { progress_label?: string | null }).progress_label ?? null,
     recurringId: (r as { recurring_id?: string | null }).recurring_id ?? null,
     roundOff: round2(money(r.round_off)),
     roundToRupee: Boolean(r.round_to_rupee),
@@ -513,6 +519,8 @@ const InvoiceInput = z.object({
   shippingCharges: z.coerce.number().min(0).max(1e10).optional(),
   shippingGstRate: z.coerce.number().min(0).max(100).optional(),
   retentionPct: z.coerce.number().min(0).max(100).optional(),
+  progressPct: z.coerce.number().min(0).max(100).nullable().optional(),
+  progressLabel: optText(120),
   accountManagerId: z.coerce.number().int().positive().nullable().optional(),
   accountManagerName: optText(120),
   lines: z.array(LineInput).min(1, "Add at least one line").max(300),
@@ -595,6 +603,8 @@ async function invoiceValues(db: Queryable, actor: ImsActor, settings: ImsSettin
       const pct = Math.max(0, Math.min(100, Number(input.retentionPct) || 0));
       return pct > 0 ? round2((totals.grandTotal * pct) / 100) : 0;
     })(),
+    progressPct: input.progressPct == null ? null : Math.max(0, Math.min(100, Number(input.progressPct) || 0)),
+    progressLabel: input.progressLabel?.trim() || null,
     roundOff: totals.roundOff,
     grandTotal: totals.grandTotal,
     roundToRupee: input.roundToRupee ? 1 : 0,
@@ -628,13 +638,13 @@ async function insertInvoice(
        (id, tenant_id, invoice_no, doc_kind, against_invoice_id, against_invoice_no, status, customer_id, customer_name, customer_gstin, customer_address, customer_mobile,
         customer_po_no, ship_to_name, ship_to_gstin, ship_to_address, ship_to_state, ship_to_mobile, place_of_supply, intra_state,
         invoice_date, due_date, \`lines\`, subtotal, discount_total, tax_total, cgst, sgst, igst, shipping_charges, shipping_gst_rate, shipping_tax,
-        retention_pct, retention_amount, round_off, grand_total, round_to_rupee,
+        retention_pct, retention_amount, progress_pct, progress_label, round_off, grand_total, round_to_rupee,
         account_manager_id, account_manager_name, source_tool, source_ref, notes, terms, created_by, created_by_name)
      VALUES
        (:id, :tenantId, :invoiceNo, :docKind, :againstInvoiceId, :againstInvoiceNo, 'draft', :customerId, :customerName, :customerGstin, :customerAddress, :customerMobile,
         :customerPoNo, :shipToName, :shipToGstin, :shipToAddress, :shipToState, :shipToMobile, :placeOfSupply, :intraState,
         :invoiceDate, :dueDate, :lines, :subtotal, :discountTotal, :taxTotal, :cgst, :sgst, :igst, :shippingCharges, :shippingGstRate, :shippingTax,
-        :retentionPct, :retentionAmount, :roundOff, :grandTotal, :roundToRupee,
+        :retentionPct, :retentionAmount, :progressPct, :progressLabel, :roundOff, :grandTotal, :roundToRupee,
         :accountManagerId, :accountManagerName, :sourceTool, :sourceRef, :notes, :terms, :userId, :userName)`,
     {
       ...values,
@@ -1221,6 +1231,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
            \`lines\` = :lines, subtotal = :subtotal, discount_total = :discountTotal, tax_total = :taxTotal, cgst = :cgst, sgst = :sgst, igst = :igst,
            shipping_charges = :shippingCharges, shipping_gst_rate = :shippingGstRate, shipping_tax = :shippingTax,
            retention_pct = :retentionPct, retention_amount = :retentionAmount,
+           progress_pct = :progressPct, progress_label = :progressLabel,
            round_off = :roundOff, grand_total = :grandTotal, round_to_rupee = :roundToRupee,
            account_manager_id = :accountManagerId, account_manager_name = :accountManagerName,
            notes = :notes, terms = :terms
