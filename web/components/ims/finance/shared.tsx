@@ -624,6 +624,12 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
             </div>
           ) : null}
           {bankBits ? <div style={{ marginTop: 6, fontSize: 12 }}>Bank: {bankBits}</div> : null}
+          {session.settings.msmeRegistered ? (
+            <div style={{ marginTop: 6, fontSize: 12 }}>
+              MSME registered
+              {session.settings.msmeUdyam ? ` · UDYAM ${session.settings.msmeUdyam}` : ""}
+            </div>
+          ) : null}
           {payIntent && upi ? <InvoicePayQr intent={payIntent} vpa={upi} /> : null}
           {inv.status === "cancelled" ? <div>Cancelled{inv.cancelReason ? ` — ${inv.cancelReason}` : ""}</div> : null}
         </>

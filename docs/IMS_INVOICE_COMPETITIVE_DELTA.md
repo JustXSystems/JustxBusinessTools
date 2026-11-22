@@ -21,6 +21,8 @@ Living backlog for corporate-standard IMS invoicing. Score = competitive gap × 
 | Invoice approval queue (threshold + Approvals tab) | ✅ |
 | Retainer / advance apply to tax invoice | ✅ |
 | Email share (mailto) + WhatsApp | ✅ |
+| Invoice attachments (PDF / image / office) | ✅ |
+| MSME / UDYAM on invoice paper | ✅ |
 | UPI payment QR on paper | ✅ |
 | e-Invoice IRN associate / mark cancelled | ✅ |
 | Partial payments, AR aging, reminders, promises | ✅ |
@@ -54,7 +56,7 @@ Legend: ❌ missing · 🟡 partial · ✅ present
 | 19 | Email invoice + payment link | ✅ | ✅ | 🟡 | ✅ | 🟡 mailto | P1 | 4 |
 | 20 | Customer portal | ✅ | 🟡 | ❌ | ✅ | ❌ | P2 | 6 |
 | 21 | Invoice templates / branding | ✅ | 🟡 | ✅ | ✅ | 🟡 DocumentPaper | P2 | 5 |
-| 22 | Attachments on invoice | ✅ | ✅ | ❌ | ✅ | ❌ | P2 | 5 |
+| 22 | Attachments on invoice | ✅ | ✅ | ❌ | ✅ | ✅ | P2 | 5 |
 | 23 | Salesperson override | ✅ | ✅ | ✅ | ✅ | ✅ | P2 | 3 |
 | 24 | Actual vs billed qty / free qty | ❌ | 🟡 | ✅ | ❌ | ❌ | P2 | 5 |
 | 25 | Bulk send / bulk IRP push | ✅ | ✅ Doc Gen Wizard | ✅ | 🟡 | ❌ | P1 | 5 |
@@ -72,7 +74,7 @@ Legend: ❌ missing · 🟡 partial · ✅ present
 | 37 | **Batch print / PDF pack** | ✅ | ✅ | ✅ | ✅ | ❌ | P2 | 5 |
 | 38 | **Invoice from timesheet / project** | ✅ | 🟡 | ❌ | ✅ | ❌ | P2 | 6 |
 | 39 | **Split payment on create** | ✅ | ✅ | ✅ | ✅ | 🟡 POS | P2 | 5 |
-| 40 | **MSME UDYAM on invoice** | 🟡 | ❌ | ✅ | — | ❌ | P2 | 5 |
+| 40 | **MSME UDYAM on invoice** | 🟡 | ❌ | ✅ | — | ✅ | P2 | 5 |
 | 41 | **Godown / warehouse on line** | 🟡 | ✅ | ✅ | ❌ | 🟡 stock loc | P2 | 5 |
 | 42 | **Auto-charge cards on recurring** | ✅ | ❌ | ❌ | ✅ | ❌ | P2 | 6 |
 | 43 | **Progress from quote % / amount** | ✅ | 🟡 | ❌ | 🟡 | ❌ | P1 | 5 |
@@ -105,6 +107,7 @@ Shared UI: `DocumentPaper`, `LineEditor`, `InvoicePaper`, Sales SubTabs (`Invoic
 - `054_ims_invoice_shipping.sql` — shipping GST  
 - `055_ims_recurring_invoices.sql` — recurring profiles + retention + recurring_id  
 - `056_ims_invoice_approval_retainer.sql` — invoice approval limit, advance_applied, retainer prefix, approval audit columns  
+- `057_ims_msme_udyam.sql` — MSME flag + UDYAM number on settings  
 
 ## Acceptance (Wave 4)
 
@@ -114,3 +117,8 @@ Shared UI: `DocumentPaper`, `LineEditor`, `InvoicePaper`, Sales SubTabs (`Invoic
 - [x] Email mailto share from invoice view  
 - [x] E2E Sales tabs include Recurring; Approvals tabs include Invoices  
 - [x] Unit tests: pending_approval display, advance balance, invoiceNeedsApproval  
+
+## Acceptance (Wave 5a)
+
+- [x] Attachments panel on invoice view (reuse `ims_documents`, sales can upload)  
+- [x] MSME registered + UDYAM on Settings → printed on tax invoice paper  

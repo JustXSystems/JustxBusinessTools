@@ -14,7 +14,7 @@ import {
   type InvoiceDetail,
 } from "@/lib/ims/finance";
 import { dateLabel, inrExact, stampLabel } from "@/lib/ims/format";
-import { imsSystem, saveBlob } from "@/lib/ims/system";
+import { imsSystem, saveBlob, type AuditDocument } from "@/lib/ims/system";
 import { Loaded, Stack, StatusBadge, useIms, useImsAction, useImsData, usePrint } from "../core";
 import { DocRefLink } from "../bom/DocRefLink";
 import { activityTone, BackLink, ConfirmDialog, InvoicePaper, KeyValues, PaymentDialog, ReasonDialog, Stats, Timeline, type TimelineItem } from "./shared";
@@ -469,6 +469,8 @@ function InvoiceBody({
             </WidgetCard>
           ) : null}
 
+          <InvoiceAttachments invoiceId={inv.id} invoiceNo={inv.isDraftNo ? "Draft" : inv.invoiceNo} canWrite={canWrite || canCollect} />
+
           <WidgetCard title="Activity">
             <Timeline items={timeline} />
           </WidgetCard>
@@ -754,6 +756,124 @@ function InvoiceBomDcLinks({
           ) : null}
         </div>
       )}
+    </WidgetCard>
+  );
+}
+
+function InvoiceAttachments({ invoiceId, invoiceNo, canWrite }: { invoiceId: string; invoiceNo: string; canWrite: boolean }) {
+  const { run, busy } = useImsAction();
+  const state = useImsData(() => imsSystem.documents({ entityType: "invoice", entityId: invoiceId }), [invoiceId]);
+  const docs = state.data?.documents ?? [];
+  const maxBytes = state.data?.maxBytes ?? 2 * 1024 * 1024;
+
+  const onFile = async (file: File | null) => {
+    if (!file || !canWrite) return;
+    if (file.size > maxBytes) {
+      await run("attach", async () => {
+        throw new Error(`Files up to ${Math.round(maxBytes / (1024 * 1024))} MB can be attached`);
+      });
+      return;
+    }
+    const content = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(new Error("Could not read the file"));
+      reader.readAsDataURL(file);
+    });
+    await run(
+      "attach",
+      () =>
+        imsSystem.addDocument({
+          title: file.name.replace(/\.[^.]+$/, "") || file.name,
+          category: "invoice",
+          content,
+          fileName: file.name,
+          entityType: "invoice",
+          entityId: invoiceId,
+          entityLabel: invoiceNo,
+        }),
+      { success: "Attachment added" },
+    );
+    state.reload();
+  };
+
+  return (
+    <WidgetCard title="Attachments" note={docs.length ? String(docs.length) : undefined}>
+      {docs.length ? (
+        <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
+          {docs.map((d: AuditDocument) => (
+            <div key={d.id} className="ims-row" style={{ justifyContent: "space-between", gap: 8 }}>
+              <span className="ims-cell-stack" style={{ minWidth: 0 }}>
+                <span className="ims-strong" style={{ fontSize: 13 }}>
+                  {d.title}
+                </span>
+                <small>
+                  {d.fileName || d.url || "Link"}
+                  {d.sizeBytes ? ` · ${Math.round(d.sizeBytes / 1024)} KB` : ""}
+                </small>
+              </span>
+              <span className="ims-row" style={{ gap: 4, flexShrink: 0 }}>
+                {d.hasFile ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy === `dl-${d.id}`}
+                    onClick={() =>
+                      void run(
+                        `dl-${d.id}`,
+                        async () => {
+                          const file = await imsSystem.documentFile(d.id, d.fileName || d.title);
+                          saveBlob(file);
+                          return file;
+                        },
+                        { success: "Downloaded", refresh: false },
+                      )
+                    }
+                  >
+                    Download
+                  </Button>
+                ) : d.url ? (
+                  <a className="bos-btn bos-btn-ghost bos-btn-sm" href={d.url} target="_blank" rel="noreferrer">
+                    Open
+                  </a>
+                ) : null}
+                {canWrite ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy === `del-${d.id}`}
+                    onClick={() =>
+                      void run(`del-${d.id}`, () => imsSystem.deleteDocument(d.id), { success: "Attachment removed" }).then(() => state.reload())
+                    }
+                  >
+                    Remove
+                  </Button>
+                ) : null}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="fin-note" style={{ marginBottom: 8 }}>
+          PO copies, delivery proofs, or customer POs — up to {Math.round(maxBytes / (1024 * 1024))} MB.
+        </p>
+      )}
+      {canWrite ? (
+        <label className="bos-btn bos-btn-ghost bos-btn-sm" style={{ cursor: busy === "attach" ? "wait" : "pointer" }}>
+          {busy === "attach" ? "Uploading…" : "Add file"}
+          <input
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.csv,.txt,.xlsx,.xls,.doc,.docx,.zip,.xml"
+            hidden
+            disabled={busy === "attach"}
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              e.target.value = "";
+              void onFile(f);
+            }}
+          />
+        </label>
+      ) : null}
     </WidgetCard>
   );
 }

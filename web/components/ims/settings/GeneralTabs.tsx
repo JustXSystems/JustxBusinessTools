@@ -162,6 +162,26 @@ export function BusinessTab({ draft, set, errors, readOnly, meta }: TabProps & {
           <Field label="Bank name">
             {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} maxLength={120} value={draft.bankName ?? ""} onChange={(e) => set("bankName", e.target.value || null)} />}
           </Field>
+          <ToggleRow
+            label="MSME registered"
+            desc="Shows UDYAM / MSME declaration on tax invoice paper"
+            checked={draft.msmeRegistered}
+            onChange={(v) => set("msmeRegistered", v)}
+          />
+          <Field label="UDYAM registration no." hint={draft.msmeRegistered ? "Printed next to MSME declaration" : "Enable MSME registered to print"}>
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                className="ims-mono"
+                maxLength={32}
+                disabled={!draft.msmeRegistered}
+                placeholder="UDYAM-XX-00-0000000"
+                value={draft.msmeUdyam ?? ""}
+                onChange={(e) => set("msmeUdyam", e.target.value.trim().toUpperCase() || null)}
+              />
+            )}
+          </Field>
           <Field label="Financial year starts in" hint={`Current year: FY ${fiscalYearLabel(session.today, draft.fiscalYearStart)}`}>
             {({ id, describedBy }) => (
               <Select id={id} aria-describedby={describedBy} value={draft.fiscalYearStart} onChange={(e) => set("fiscalYearStart", Number(e.target.value))}>

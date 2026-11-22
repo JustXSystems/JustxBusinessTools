@@ -172,6 +172,8 @@ export type ImsSettings = {
   bankAccountNo: string | null;
   bankIfsc: string | null;
   bankName: string | null;
+  msmeRegistered: boolean;
+  msmeUdyam: string | null;
   email: string | null;
   fiscalYearStart: number;
   poPrefix: string;

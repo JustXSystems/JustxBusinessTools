@@ -148,6 +148,8 @@ export type ImsSettings = {
   bankAccountNo: string | null;
   bankIfsc: string | null;
   bankName: string | null;
+  msmeRegistered: boolean;
+  msmeUdyam: string | null;
   email: string | null;
   fiscalYearStart: number;
   poPrefix: string;
@@ -201,6 +203,8 @@ type SettingsRow = {
   bank_account_no?: string | null;
   bank_ifsc?: string | null;
   bank_name?: string | null;
+  msme_registered?: number | boolean | null;
+  msme_udyam?: string | null;
   email: string | null;
   fiscal_year_start: number;
   po_prefix: string;
@@ -247,6 +251,8 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   bankAccountNo: r.bank_account_no ?? null,
   bankIfsc: r.bank_ifsc ?? null,
   bankName: r.bank_name ?? null,
+  msmeRegistered: Boolean(r.msme_registered),
+  msmeUdyam: r.msme_udyam ?? null,
   email: r.email,
   fiscalYearStart: Number(r.fiscal_year_start) || 4,
   poPrefix: r.po_prefix,
@@ -321,6 +327,8 @@ const SettingsInput = z.object({
   bankAccountNo: optText(40),
   bankIfsc: optText(20),
   bankName: optText(120),
+  msmeRegistered: z.boolean().optional(),
+  msmeUdyam: optText(32),
   email: optText(180),
   fiscalYearStart: z.coerce.number().int().min(1).max(12).optional(),
   poPrefix: prefix.optional(),
@@ -367,6 +375,8 @@ const COLUMN: Record<string, string> = {
   bankAccountNo: "bank_account_no",
   bankIfsc: "bank_ifsc",
   bankName: "bank_name",
+  msmeRegistered: "msme_registered",
+  msmeUdyam: "msme_udyam",
   email: "email",
   fiscalYearStart: "fiscal_year_start",
   poPrefix: "po_prefix",

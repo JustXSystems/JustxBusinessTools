@@ -1579,7 +1579,7 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
 
   router.get("/audit/documents", async (req, res) => {
     const actor = actorOf(res);
-    requireAnyPerm(res, ["audit", "reports", "payables", "settings"]);
+    requireAnyPerm(res, ["audit", "reports", "payables", "settings", "sales", "receivables"]);
     const where = ["tenant_id = :tenantId"];
     const params: Record<string, unknown> = { tenantId: actor.tenantId };
     const category = qstr(req.query.category, 40);
@@ -1608,7 +1608,11 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
 
   router.post("/audit/documents", async (req, res) => {
     const actor = actorOf(res);
-    requireAnyPerm(res, ["audit", "reports", "payables", "settings"], "Uploading documents needs the Auditor workspace, Reports, Payables or Settings permission.");
+    requireAnyPerm(
+      res,
+      ["audit", "reports", "payables", "settings", "sales", "receivables"],
+      "Uploading documents needs Sales, Receivables, Auditor, Reports, Payables or Settings permission.",
+    );
     const input = parse(DocInput, req.body);
     let mime: string | null = null;
     let size: number | null = null;
@@ -1659,7 +1663,7 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
 
   router.get("/audit/documents/:id/file", async (req, res) => {
     const actor = actorOf(res);
-    requireAnyPerm(res, ["audit", "reports", "payables", "settings"]);
+    requireAnyPerm(res, ["audit", "reports", "payables", "settings", "sales", "receivables"]);
     const row = await one<{ title: string; file_name: string | null; mime: string | null; content: string | null; url: string | null }>(
       deps.db,
       `SELECT title, file_name, mime, content, url FROM ims_documents WHERE tenant_id = :tenantId AND id = :id`,
@@ -1684,10 +1688,23 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
 
   router.delete("/audit/documents/:id", async (req, res) => {
     const actor = actorOf(res);
-    requireAnyPerm(res, ["audit", "settings"]);
-    const row = await one<{ id: string; title: string; uploaded_by: number | null }>(deps.db, `SELECT id, title, uploaded_by FROM ims_documents WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id: req.params.id });
+    requireAnyPerm(res, ["audit", "settings", "sales", "receivables"]);
+    const row = await one<{ id: string; title: string; uploaded_by: number | null; entity_type: string | null }>(
+      deps.db,
+      `SELECT id, title, uploaded_by, entity_type FROM ims_documents WHERE tenant_id = :tenantId AND id = :id`,
+      { tenantId: actor.tenantId, id: req.params.id },
+    );
     if (!row) throw notFound("Document");
-    if (row.uploaded_by !== null && Number(row.uploaded_by) !== actor.userId && accessOf(res).role !== "owner" && !can(res, "settings")) throw forbidden("Only the uploader or an owner can delete this document");
+    const salesScoped = row.entity_type === "invoice" && (can(res, "sales") || can(res, "receivables"));
+    if (
+      row.uploaded_by !== null &&
+      Number(row.uploaded_by) !== actor.userId &&
+      accessOf(res).role !== "owner" &&
+      !can(res, "settings") &&
+      !salesScoped
+    ) {
+      throw forbidden("Only the uploader or an owner can delete this document");
+    }
     await exec(deps.db, `DELETE FROM ims_documents WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id: row.id });
     await recordEvent(deps, actor, { type: "audit.document.deleted", entityType: "document", entityId: row.id, summary: `Deleted document “${row.title}”`, ip: req.ip });
     res.status(204).end();

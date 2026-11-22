@@ -95,6 +95,7 @@ const settingsSheet = (s: ImsSettings): SheetSpec => ({
     ["BOM schedule columns", s.bomScheduleColumns?.length ? s.bomScheduleColumns.join(", ") : "Pack defaults"],
     ["PO approval limit", s.poApprovalLimit],
     ["Invoice approval limit", s.invoiceApprovalLimit],
+    ["MSME / UDYAM", s.msmeRegistered ? s.msmeUdyam || "Registered" : "No"],
     ["Default payment terms (days)", s.paymentTermsDays],
     ["Default GST %", s.defaultGstRate],
     ["Categories", s.taxonomy.categories.map((c) => c.name).join(", ")],
