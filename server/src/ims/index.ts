@@ -19,6 +19,8 @@ import { registerPurchase } from "./purchase.js";
 import { registerRecurring } from "./recurring.js";
 import { registerReports } from "./reports.js";
 import { registerSales } from "./sales.js";
+import { registerSalesOrders } from "./sales-orders.js";
+import { registerSalesWave6 } from "./sales-wave6.js";
 import { registerSettings, resolveAccess } from "./settings.js";
 import type { ImsCatalogSource, ImsDocumentSource } from "./sources/types.js";
 import { registerSupport } from "./support.js";
@@ -99,6 +101,8 @@ export function createImsRouter({ db, host, sources = [], catalogs = [] }: Creat
   registerParties(router, deps);
   registerPurchase(router, deps);
   registerSales(router, deps);
+  registerSalesOrders(router, deps);
+  registerSalesWave6(router, deps);
   registerRecurring(deps, router);
   registerBom(router, deps);
   registerPayables(router, deps);

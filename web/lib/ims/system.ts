@@ -41,9 +41,16 @@ export type PosSaleInput = {
 };
 export type PosSaleResult = { invoiceId: string; invoiceNo: string; grandTotal: number; lines: number; units: number; paid: boolean };
 
+export type GspMode = "sandbox" | "live";
+export type GspConfigView = { mode: GspMode; baseUrl: string | null; gstin: string | null; autoPushOnIssue: boolean; hasApiKey: boolean; apiKeyHint: string | null };
+export type GspView = { enabled: boolean; config: GspConfigView | null; lastSyncAt: string | null; lastStatus: string | null };
+export type GspConfigInput = { mode: GspMode; baseUrl?: string | null; apiKey?: string | null; gstin?: string | null; autoPushOnIssue: boolean; enabled?: boolean };
+export type GspTestResult = { ok: boolean; mode: GspMode; latencyMs: number; message: string };
+
 export type IntegrationsOverview = {
   tally: TallyView;
   pos: PosView;
+  gsp: GspView;
   log: SyncLogEntry[];
   counts: { parties: number; items: number; invoices: number; bills: number; posToday: number };
   posProviders: string[];
@@ -532,7 +539,7 @@ export type Gstr2bResult = {
 
 export const imsSystem = {
   integrations: () => get<IntegrationsOverview>("/integrations"),
-  syncLog: (provider?: "tally" | "pos", limit?: number) => get<{ log: SyncLogEntry[] }>("/integrations/log", { provider, limit }),
+  syncLog: (provider?: "tally" | "pos" | "gsp", limit?: number) => get<{ log: SyncLogEntry[] }>("/integrations/log", { provider, limit }),
   saveTally: (input: TallyConfig & { enabled?: boolean }) => put<{ tally: TallyView }>("/integrations/tally", input),
   saveTallySync: (input: TallySync) => put<{ tally: TallyView }>("/integrations/tally/sync", input),
   disconnectTally: () => post<{ tally: TallyView }>("/integrations/tally/disconnect"),
@@ -546,6 +553,8 @@ export const imsSystem = {
   disconnectPos: () => post<{ pos: PosView }>("/integrations/pos/disconnect"),
   posSale: (input: PosSaleInput) => post<{ sale: PosSaleResult }>("/integrations/pos/sale", input),
   simulatePos: () => post<{ sale: PosSaleResult; billNo: string }>("/integrations/pos/simulate"),
+  saveGsp: (input: GspConfigInput) => put<{ gsp: GspView }>("/integrations/gsp", input),
+  testGsp: (input: Partial<Omit<GspConfigInput, "enabled">> = {}) => post<GspTestResult>("/integrations/gsp/test", input),
 
   excise: (params: RangeParams & { q?: string; itemId?: string; status?: ExciseStatus } = {}) => get<ExciseList>("/excise", params),
   createExcise: (input: ExciseInput) => post<{ record: ExciseRecord | null }>("/excise", input),

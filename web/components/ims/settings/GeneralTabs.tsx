@@ -30,6 +30,7 @@ import {
   withCommercialSample,
   type BomScheduleColumn,
 } from "@/lib/ims/bom-paper";
+import { COMMON_CURRENCIES } from "@/lib/ims/finance";
 import { GST_RATES, inr } from "@/lib/ims/format";
 import { GST_STATES, MONTHS, PREFIX_FIELDS, docNoSample, fiscalYearLabel, gstinPlace } from "@/lib/ims/settings";
 import "../bom/bom.css";
@@ -128,6 +129,30 @@ export function BusinessTab({ draft, set, errors, readOnly, meta }: TabProps & {
           <Field label="Email" error={errors.email}>
             {({ id, describedBy, invalid }) => <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="email" maxLength={180} value={draft.email ?? ""} onChange={(e) => set("email", e.target.value || null)} />}
           </Field>
+          <Field
+            label="Base currency"
+            error={errors.baseCurrency}
+            hint="Invoices and bills in another currency lock an FX rate against this base. Each document also stores its base-currency total."
+          >
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                className="ims-mono"
+                list="ims-base-currency-options"
+                maxLength={3}
+                placeholder="INR"
+                value={draft.baseCurrency ?? "INR"}
+                onChange={(e) => set("baseCurrency", e.target.value.toUpperCase().replace(/[^A-Z]/g, ""))}
+              />
+            )}
+          </Field>
+          <datalist id="ims-base-currency-options">
+            {COMMON_CURRENCIES.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
           <Field label="UPI ID (VPA)" hint="Printed as a payment QR on issued tax invoices when a balance is due.">
             {({ id, describedBy }) => (
               <Input

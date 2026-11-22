@@ -27,6 +27,7 @@ import {
 import { LineInput, PaymentInput, assertDayOpen, dateText, insertPayment, mapPayment, type PaymentRow } from "./sales.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo } from "./stock.js";
+import { resolveFx } from "./wave6-logic.js";
 
 export type BillRow = {
   id: string;
@@ -43,6 +44,9 @@ export type BillRow = {
   subtotal: string;
   tax_total: string;
   grand_total: string;
+  currency_code?: string | null;
+  fx_rate?: string | number | null;
+  fx_base_total?: string | number | null;
   amount_paid: string;
   hold_reason: string | null;
   scheduled_on: unknown;
@@ -86,6 +90,9 @@ export function mapBill(r: BillRow, today: string, withLines = false) {
     subtotal: round2(money(r.subtotal)),
     taxTotal: round2(money(r.tax_total)),
     grandTotal,
+    currencyCode: r.currency_code || "INR",
+    fxRate: r.fx_rate == null ? 1 : Number(money(r.fx_rate).toFixed(8)),
+    fxBaseTotal: r.fx_base_total == null ? grandTotal : round2(money(r.fx_base_total)),
     amountPaid,
     balance,
     status: r.status as (typeof BILL_STATUSES)[number],
@@ -149,6 +156,14 @@ const BillInput = z.object({
   taxAmount: z.coerce.number().min(0).max(1e12).optional(),
   category: optText(60),
   notes: optText(2000),
+  /** Document currency (ISO-4217); defaults to the business base currency. */
+  currencyCode: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{3}$/, "Use a 3-letter ISO currency code (e.g. USD)")
+    .optional(),
+  /** Locked FX rate vs base; forced to 1 when currency = base. */
+  fxRate: z.coerce.number().positive("FX rate must be more than zero").max(1e9).optional(),
 });
 type BillInputT = z.infer<typeof BillInput>;
 
@@ -178,7 +193,8 @@ async function billValues(deps: ImsDeps, actor: ImsActor, input: BillInputT) {
   if (grandTotal <= 0) throw badRequest("Enter the bill lines or an amount more than zero");
   const dueDate = input.dueDate ?? dueDateFor(input.billDate, supplier?.payment_terms_days ?? null, settings.paymentTermsDays);
   if (dueDate < input.billDate) throw badRequest("The due date can't be before the bill date");
-  return { settings, supplierId: supplier?.id ?? null, lines, subtotal, taxTotal, grandTotal, dueDate };
+  const fx = resolveFx({ currencyCode: input.currencyCode, fxRate: input.fxRate, baseCurrency: settings.baseCurrency, grandTotal });
+  return { settings, supplierId: supplier?.id ?? null, lines, subtotal, taxTotal, grandTotal, dueDate, currencyCode: fx.currencyCode, fxRate: fx.fxRate, fxBaseTotal: fx.fxBaseTotal };
 }
 
 async function assertNoDuplicate(db: Queryable, tenantId: number, supplierId: string | null, supplierName: string, supplierBillNo: string | null | undefined, exceptId?: string) {
@@ -350,9 +366,9 @@ export function registerPayables(router: Router, deps: ImsDeps): void {
       await exec(
         conn,
         `INSERT INTO ims_bills (id, tenant_id, bill_no, supplier_bill_no, status, supplier_id, supplier_name, bill_date, due_date, \`lines\`, subtotal, tax_total, grand_total,
-           category, notes, decided_by, decided_by_name, decided_at, created_by, created_by_name)
+           currency_code, fx_rate, fx_base_total, category, notes, decided_by, decided_by_name, decided_at, created_by, created_by_name)
          VALUES (:id, :tenantId, :billNo, :supplierBillNo, :status, :supplierId, :supplierName, :billDate, :dueDate, :lines, :subtotal, :taxTotal, :grandTotal,
-           :category, :notes, :decidedBy, :decidedByName, ${approved ? "CURRENT_TIMESTAMP" : "NULL"}, :userId, :userName)`,
+           :currencyCode, :fxRate, :fxBaseTotal, :category, :notes, :decidedBy, :decidedByName, ${approved ? "CURRENT_TIMESTAMP" : "NULL"}, :userId, :userName)`,
         {
           id,
           tenantId: actor.tenantId,
@@ -367,6 +383,9 @@ export function registerPayables(router: Router, deps: ImsDeps): void {
           subtotal: v.subtotal,
           taxTotal: v.taxTotal,
           grandTotal: v.grandTotal,
+          currencyCode: v.currencyCode,
+          fxRate: v.fxRate,
+          fxBaseTotal: v.fxBaseTotal,
           category: input.category ?? null,
           notes: input.notes ?? null,
           decidedBy: approved ? actor.userId : null,
@@ -408,7 +427,8 @@ export function registerPayables(router: Router, deps: ImsDeps): void {
     await exec(
       deps.db,
       `UPDATE ims_bills SET supplier_id = :supplierId, supplier_name = :supplierName, supplier_bill_no = :supplierBillNo, bill_date = :billDate, due_date = :dueDate,
-         \`lines\` = :lines, subtotal = :subtotal, tax_total = :taxTotal, grand_total = :grandTotal, category = :category, notes = :notes
+         \`lines\` = :lines, subtotal = :subtotal, tax_total = :taxTotal, grand_total = :grandTotal,
+         currency_code = :currencyCode, fx_rate = :fxRate, fx_base_total = :fxBaseTotal, category = :category, notes = :notes
          ${backToApproval ? ", status = 'pending_approval', decided_by = NULL, decided_by_name = NULL, decided_at = NULL" : ""}
        WHERE tenant_id = :tenantId AND id = :id`,
       {
@@ -423,6 +443,9 @@ export function registerPayables(router: Router, deps: ImsDeps): void {
         subtotal: v.subtotal,
         taxTotal: v.taxTotal,
         grandTotal: v.grandTotal,
+        currencyCode: v.currencyCode,
+        fxRate: v.fxRate,
+        fxBaseTotal: v.fxBaseTotal,
         category: input.category ?? null,
         notes: input.notes ?? null,
       },

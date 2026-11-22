@@ -1688,7 +1688,7 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
 
   router.delete("/audit/documents/:id", async (req, res) => {
     const actor = actorOf(res);
-    requireAnyPerm(res, ["audit", "settings", "sales", "receivables"]);
+    requireAnyPerm(res, ["audit", "settings", "sales", "receivables", "payables", "approvals"]);
     const row = await one<{ id: string; title: string; uploaded_by: number | null; entity_type: string | null }>(
       deps.db,
       `SELECT id, title, uploaded_by, entity_type FROM ims_documents WHERE tenant_id = :tenantId AND id = :id`,
@@ -1696,12 +1696,14 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
     );
     if (!row) throw notFound("Document");
     const salesScoped = row.entity_type === "invoice" && (can(res, "sales") || can(res, "receivables"));
+    const payablesScoped = row.entity_type === "bill" && (can(res, "payables") || can(res, "approvals"));
     if (
       row.uploaded_by !== null &&
       Number(row.uploaded_by) !== actor.userId &&
       accessOf(res).role !== "owner" &&
       !can(res, "settings") &&
-      !salesScoped
+      !salesScoped &&
+      !payablesScoped
     ) {
       throw forbidden("Only the uploader or an owner can delete this document");
     }

@@ -74,6 +74,7 @@ export const IMS_MODULES: ReadonlyArray<ImsModuleDef> = [
   { key: "bomCompare", label: "Compare", icon: "⇄", section: "Bill of Materials", desc: "Diff packages or customer BOMs line by line", keywords: "bom compare diff package variant", anyOf: ["bom", "bomPackages"], component: screen("bomCompare", () => import("./bom/Compare")) },
 
   /* Sales & finance */
+  { key: "salesOrders", label: "Sales Orders", icon: "📝", section: "Sales & Finance", desc: "Customer orders, delivery challans and the SO → DC → invoice wizard", keywords: "so sales order customer order dc delivery challan dispatch invoice wizard", anyOf: ["sales"], component: screen("salesOrders", () => import("./finance/SalesOrders")) },
   { key: "sales", label: "Invoices & Billing", icon: "🧾", section: "Sales & Finance", desc: "GST invoices, bills and POS counter", keywords: "invoice bill pos sale gst", anyOf: ["sales"], component: screen("sales", () => import("./finance/Sales")) },
   { key: "receivables", label: "Accounts Receivable", icon: "💰", section: "Sales & Finance", desc: "Collections, aging, reminders and promises", keywords: "ar collection outstanding dues reminder", anyOf: ["receivables"], component: screen("receivables", () => import("./finance/Receivables")) },
   { key: "payables", label: "Accounts Payable", icon: "📤", section: "Sales & Finance", desc: "Supplier bills, approvals and payment runs", keywords: "ap vendor bill payment", anyOf: ["payables", "approvals"], component: screen("payables", () => import("./finance/Payables")) },

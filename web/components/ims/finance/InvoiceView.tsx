@@ -13,10 +13,12 @@ import {
   whatsappShareLink,
   type InvoiceDetail,
 } from "@/lib/ims/finance";
-import { dateLabel, inrExact, stampLabel } from "@/lib/ims/format";
-import { imsSystem, saveBlob, type AuditDocument } from "@/lib/ims/system";
+import { dateLabel, inrExact, moneyFmt, stampLabel } from "@/lib/ims/format";
+import { imsSystem, saveBlob } from "@/lib/ims/system";
 import { Loaded, Stack, StatusBadge, useIms, useImsAction, useImsData, usePrint } from "../core";
 import { DocRefLink } from "../bom/DocRefLink";
+import { EntityAttachments } from "../shared/EntityAttachments";
+import { CustomerPortalCard, PaymentPlanCard } from "./InvoiceExtras";
 import { activityTone, BackLink, ConfirmDialog, InvoicePaper, KeyValues, PaymentDialog, ReasonDialog, Stats, Timeline, type TimelineItem } from "./shared";
 
 type Dlg = null | "pay" | "cancel" | "reject" | "delete" | "share" | "einvoice" | { voidId: string; amount: number };
@@ -49,6 +51,7 @@ function InvoiceBody({
   const print = usePrint();
   const [dlg, setDlg] = useState<Dlg>(null);
   const inv = detail.invoice;
+  const money = (n: number) => moneyFmt(n, inv.currencyCode);
   const canWrite = can("sales");
   const canCollect = can("sales") || can("receivables");
   const isDraft = inv.status === "draft";
@@ -63,7 +66,7 @@ function InvoiceBody({
     ...detail.payments.map((p) => ({
       key: `p-${p.id}`,
       at: p.createdAt ?? p.paidOn,
-      text: `Received ${inrExact(p.amount)} by ${methodLabel(p.method)}${p.reference ? ` · ${p.reference}` : ""}`,
+      text: `Received ${money(p.amount)} by ${methodLabel(p.method)}${p.reference ? ` · ${p.reference}` : ""}`,
       meta: `${dateLabel(p.paidOn)} · ${p.createdByName ?? "—"}`,
       tone: "good" as const,
     })),
@@ -112,9 +115,9 @@ function InvoiceBody({
             ) : null}
             <Stats
               items={[
-                { label: "Total", value: inrExact(inv.grandTotal) },
-                { label: "Received", value: inrExact(inv.amountPaid), tone: inv.amountPaid > 0 ? "emerald" : null },
-                { label: "Balance", value: inrExact(inv.balance), tone: inv.daysOverdue > 0 ? "coral" : inv.balance > 0 ? "amber" : null },
+                { label: "Total", value: money(inv.grandTotal) },
+                { label: "Received", value: money(inv.amountPaid), tone: inv.amountPaid > 0 ? "emerald" : null },
+                { label: "Balance", value: money(inv.balance), tone: inv.daysOverdue > 0 ? "coral" : inv.balance > 0 ? "amber" : null },
               ]}
             />
             <div style={{ marginTop: 12 }}>
@@ -157,7 +160,11 @@ function InvoiceBody({
                   ["Tax", inv.intraState ? `CGST ${inrExact(inv.cgst)} + SGST ${inrExact(inv.sgst)}` : `IGST ${inrExact(inv.igst)}`],
                   [
                     "e-Invoice",
-                    inv.irn ? `Pushed · IRN ${inv.irn.slice(0, 12)}…` : inv.einvStatus || (inv.status === "issued" && (inv.docKind || "tax_invoice") === "tax_invoice" ? "Yet to push (Wave 2)" : "Not applicable"),
+                    inv.irn
+                      ? `Pushed · IRN ${inv.irn.slice(0, 12)}…`
+                      : inv.einvStatus === "failed"
+                        ? "Push failed — retry"
+                        : inv.einvStatus || (inv.status === "issued" && (inv.docKind || "tax_invoice") === "tax_invoice" ? "Yet to push" : "Not applicable"),
                   ],
                   [
                     "Stock",
@@ -365,15 +372,20 @@ function InvoiceBody({
           {isIssued && (inv.docKind || "tax_invoice") !== "proforma" ? (
             <WidgetCard
               title="e-Invoice / IRP"
-              note={inv.irn ? "Pushed" : inv.einvStatus === "yet_to_push" ? "Yet to push" : inv.einvStatus === "marked_cancelled" ? "Marked cancelled" : inv.customerGstin ? "Ready" : "B2C"}
+              note={inv.irn ? "Pushed" : inv.einvStatus === "failed" ? "Push failed" : inv.einvStatus === "yet_to_push" ? "Yet to push" : inv.einvStatus === "marked_cancelled" ? "Marked cancelled" : inv.customerGstin ? "Ready" : "B2C"}
             >
               <p className="fin-note" style={{ marginBottom: 8 }}>
                 {inv.irn
-                  ? "IRN is on this document. Live GSP push lands in a later wave — associate portal IRNs here today."
+                  ? "IRN is on this document."
                   : inv.customerGstin
-                    ? "B2B document is IRP-eligible. Associate an IRN from the portal, or wait for the live GSP connector."
+                    ? "B2B document is IRP-eligible. Push it through your GSP (Integrations → GSP / e-Invoice), or associate an IRN generated on the portal."
                     : "No buyer GSTIN — e-Invoice is not required for this B2C sale."}
               </p>
+              {!inv.irn && inv.einvStatus === "failed" ? (
+                <Alert tone="coral" title="IRP push failed">
+                  {detail.activity.find((a) => a.kind === "e_invoice" && a.status === "failed")?.message ?? "The GSP did not accept this invoice."}
+                </Alert>
+              ) : null}
               {inv.irn ? (
                 <KeyValues
                   rows={[
@@ -384,6 +396,11 @@ function InvoiceBody({
                 />
               ) : null}
               <div className="ims-row" style={{ marginTop: 8 }}>
+                {!inv.irn && inv.customerGstin && (inv.einvStatus === "yet_to_push" || inv.einvStatus === "failed") && (canWrite || can("integrations") || can("audit")) ? (
+                  <Button size="sm" variant="primary" disabled={busy === "einv-push"} onClick={() => void run("einv-push", () => finance.pushEInvoice(inv.id), { success: "IRN generated" })}>
+                    {busy === "einv-push" ? "Pushing…" : inv.einvStatus === "failed" ? "Retry push to IRP" : "Push to IRP"}
+                  </Button>
+                ) : null}
                 {canWrite || can("integrations") || can("audit") ? (
                   <Button size="sm" variant="ghost" onClick={() => setDlg("einvoice")}>
                     {inv.irn ? "Update IRN" : "Associate IRN"}
@@ -437,6 +454,9 @@ function InvoiceBody({
             </WidgetCard>
           ) : null}
 
+          <PaymentPlanCard inv={inv} today={session.today} canWrite={canWrite || canCollect} />
+          <CustomerPortalCard inv={inv} canWrite={canWrite} />
+
           {detail.payments.length ? (
             <WidgetCard title="Payments" note={`${detail.payments.length}`}>
               <div className="fin-table-wrap">
@@ -453,7 +473,7 @@ function InvoiceBody({
                             </small>
                           </span>
                         </td>
-                        <td className="is-num">{inrExact(p.amount)}</td>
+                        <td className="is-num">{money(p.amount)}</td>
                         <td style={{ width: 1 }}>
                           {canCollect ? (
                             <Button size="sm" variant="ghost" onClick={() => setDlg({ voidId: p.id, amount: p.amount })}>
@@ -469,7 +489,14 @@ function InvoiceBody({
             </WidgetCard>
           ) : null}
 
-          <InvoiceAttachments invoiceId={inv.id} invoiceNo={inv.isDraftNo ? "Draft" : inv.invoiceNo} canWrite={canWrite || canCollect} />
+          <EntityAttachments
+            entityType="invoice"
+            entityId={inv.id}
+            entityLabel={inv.isDraftNo ? "Draft" : inv.invoiceNo}
+            category="invoice"
+            canWrite={canWrite || canCollect}
+            emptyHint="PO copies, delivery proofs, or customer POs — up to 2 MB."
+          />
 
           <WidgetCard title="Activity">
             <Timeline items={timeline} />
@@ -485,7 +512,7 @@ function InvoiceBody({
         balance={inv.balance}
         today={session.today}
         busy={busy === "pay"}
-        onSubmit={(input) => run("pay", () => finance.recordInvoicePayment(inv.id, input), { success: `Payment of ${inrExact(input.amount)} recorded` })}
+        onSubmit={(input) => run("pay", () => finance.recordInvoicePayment(inv.id, input), { success: `Payment of ${money(input.amount)} recorded` })}
       />
       <EInvoiceAssociateDialog
         open={dlg === "einvoice"}
@@ -756,124 +783,6 @@ function InvoiceBomDcLinks({
           ) : null}
         </div>
       )}
-    </WidgetCard>
-  );
-}
-
-function InvoiceAttachments({ invoiceId, invoiceNo, canWrite }: { invoiceId: string; invoiceNo: string; canWrite: boolean }) {
-  const { run, busy } = useImsAction();
-  const state = useImsData(() => imsSystem.documents({ entityType: "invoice", entityId: invoiceId }), [invoiceId]);
-  const docs = state.data?.documents ?? [];
-  const maxBytes = state.data?.maxBytes ?? 2 * 1024 * 1024;
-
-  const onFile = async (file: File | null) => {
-    if (!file || !canWrite) return;
-    if (file.size > maxBytes) {
-      await run("attach", async () => {
-        throw new Error(`Files up to ${Math.round(maxBytes / (1024 * 1024))} MB can be attached`);
-      });
-      return;
-    }
-    const content = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result ?? ""));
-      reader.onerror = () => reject(new Error("Could not read the file"));
-      reader.readAsDataURL(file);
-    });
-    await run(
-      "attach",
-      () =>
-        imsSystem.addDocument({
-          title: file.name.replace(/\.[^.]+$/, "") || file.name,
-          category: "invoice",
-          content,
-          fileName: file.name,
-          entityType: "invoice",
-          entityId: invoiceId,
-          entityLabel: invoiceNo,
-        }),
-      { success: "Attachment added" },
-    );
-    state.reload();
-  };
-
-  return (
-    <WidgetCard title="Attachments" note={docs.length ? String(docs.length) : undefined}>
-      {docs.length ? (
-        <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
-          {docs.map((d: AuditDocument) => (
-            <div key={d.id} className="ims-row" style={{ justifyContent: "space-between", gap: 8 }}>
-              <span className="ims-cell-stack" style={{ minWidth: 0 }}>
-                <span className="ims-strong" style={{ fontSize: 13 }}>
-                  {d.title}
-                </span>
-                <small>
-                  {d.fileName || d.url || "Link"}
-                  {d.sizeBytes ? ` · ${Math.round(d.sizeBytes / 1024)} KB` : ""}
-                </small>
-              </span>
-              <span className="ims-row" style={{ gap: 4, flexShrink: 0 }}>
-                {d.hasFile ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy === `dl-${d.id}`}
-                    onClick={() =>
-                      void run(
-                        `dl-${d.id}`,
-                        async () => {
-                          const file = await imsSystem.documentFile(d.id, d.fileName || d.title);
-                          saveBlob(file);
-                          return file;
-                        },
-                        { success: "Downloaded", refresh: false },
-                      )
-                    }
-                  >
-                    Download
-                  </Button>
-                ) : d.url ? (
-                  <a className="bos-btn bos-btn-ghost bos-btn-sm" href={d.url} target="_blank" rel="noreferrer">
-                    Open
-                  </a>
-                ) : null}
-                {canWrite ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy === `del-${d.id}`}
-                    onClick={() =>
-                      void run(`del-${d.id}`, () => imsSystem.deleteDocument(d.id), { success: "Attachment removed" }).then(() => state.reload())
-                    }
-                  >
-                    Remove
-                  </Button>
-                ) : null}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="fin-note" style={{ marginBottom: 8 }}>
-          PO copies, delivery proofs, or customer POs — up to {Math.round(maxBytes / (1024 * 1024))} MB.
-        </p>
-      )}
-      {canWrite ? (
-        <label className="bos-btn bos-btn-ghost bos-btn-sm" style={{ cursor: busy === "attach" ? "wait" : "pointer" }}>
-          {busy === "attach" ? "Uploading…" : "Add file"}
-          <input
-            type="file"
-            accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.csv,.txt,.xlsx,.xls,.doc,.docx,.zip,.xml"
-            hidden
-            disabled={busy === "attach"}
-            onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              e.target.value = "";
-              void onFile(f);
-            }}
-          />
-        </label>
-      ) : null}
     </WidgetCard>
   );
 }

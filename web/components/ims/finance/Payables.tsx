@@ -3,16 +3,20 @@
 import "./finance.css";
 import { useMemo, useState, type ReactNode } from "react";
 import { Alert, Button, Card, DataTable, EmptyState, Grid, KpiCard, SearchInput, Segmented, Select, WidgetCard, type BosColumn } from "@/components/bos";
-import { AP_PRIORITY_BADGE, BILL_BADGE, billPayable, finance, gstStateName, intraStateFor, methodLabel, RUN_BADGE, type ApPriority, type BillDetail, type ImsBill, type PaymentRun, type PayMethod } from "@/lib/ims/finance";
-import { computeTotals, dateLabel, downloadCsv, inrCompact, inrExact, stampLabel } from "@/lib/ims/format";
+import { AP_PRIORITY_BADGE, BILL_BADGE, billPayable, finance, gstStateName, intraStateFor, methodLabel, normalizeCurrencyCode, RUN_BADGE, type ApPriority, type BillDetail, type ImsBill, type PaymentRun, type PayMethod } from "@/lib/ims/finance";
+import { computeTotals, dateLabel, downloadCsv, inrCompact, inrExact, moneyFmt, stampLabel } from "@/lib/ims/format";
 import { Loaded, PageHeader, RequirePerm, Stack, StatusBadge, SubTabs, useIms, useImsAction, useImsData, usePrint } from "../core";
 import { DocumentPaper } from "../shared/DocumentPaper";
+import { EntityAttachments } from "../shared/EntityAttachments";
 import { usePartyOptions } from "../shared/pickers";
 import { BillEditorDialog, CreateRunDialog, RunDetailDialog, ScheduleDialog } from "./BillDialogs";
 import { BackLink, ConfirmDialog, KeyValues, PaymentDialog, ReasonDialog, sellerOf, Stats, Timeline } from "./shared";
 
 type View = { kind: "list" } | { kind: "view"; id: string };
 type Tab = "bills" | "runs";
+
+/** Bill amount in the bill's own currency (INR keeps the rupee formatter). */
+const billMoney = (b: { currencyCode?: string | null }, n: number) => moneyFmt(n, b.currencyCode);
 
 const STATUS_TABS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "open", label: "Open" },
@@ -128,8 +132,8 @@ function BillList({ onOpen }: { onOpen: (id: string) => void }) {
           </span>
         ),
     },
-    { key: "total", header: "Total", align: "right", mono: true, cell: (b) => inrExact(b.grandTotal) },
-    { key: "balance", header: "Balance", align: "right", mono: true, cell: (b) => (b.balance > 0.005 ? inrExact(b.balance) : <span className="ims-faint">—</span>) },
+    { key: "total", header: "Total", align: "right", mono: true, cell: (b) => billMoney(b, b.grandTotal) },
+    { key: "balance", header: "Balance", align: "right", mono: true, cell: (b) => (b.balance > 0.005 ? billMoney(b, b.balance) : <span className="ims-faint">—</span>) },
     {
       key: "status",
       header: "Status",
@@ -369,6 +373,9 @@ function BillBody({ detail }: { detail: BillDetail }) {
   const canApprove = can("approvals");
   const intraState = intraStateFor(session.settings, gstStateName(b.supplierGstin));
   const totals = useMemo(() => computeTotals(b.lines, intraState), [b.lines, intraState]);
+  const billCurrency = normalizeCurrencyCode(b.currencyCode);
+  const baseCurrency = normalizeCurrencyCode(session.settings.baseCurrency);
+  const foreignBill = billCurrency !== baseCurrency;
   const open = b.status !== "cancelled" && b.balance > 0.005;
   const editable = b.status !== "cancelled" && b.amountPaid <= 0.005 && b.status !== "scheduled";
 
@@ -431,8 +438,16 @@ function BillBody({ detail }: { detail: BillDetail }) {
                 { label: "Bill date", value: dateLabel(b.billDate) },
                 { label: "Due date", value: dateLabel(b.dueDate) },
                 ...(b.poNo ? [{ label: "PO", value: b.poNo }] : []),
+                ...(foreignBill
+                  ? [
+                      { label: "Currency", value: billCurrency },
+                      { label: "FX rate", value: `1 ${billCurrency} = ${b.fxRate} ${baseCurrency}` },
+                      { label: `Total in ${baseCurrency}`, value: moneyFmt(b.fxBaseTotal, baseCurrency) },
+                    ]
+                  : []),
               ]}
               totals={totals}
+              currencyCode={billCurrency}
               intraState={intraState}
               notes={b.notes}
               stamp={b.displayStatus === "paid" ? { text: "PAID", color: "#1FA679" } : b.displayStatus === "on_hold" ? { text: "ON HOLD", color: "#7C5CD6" } : b.displayStatus === "overdue" ? { text: "OVERDUE", color: "#E1483F" } : null}
@@ -447,9 +462,10 @@ function BillBody({ detail }: { detail: BillDetail }) {
                   ["Bill date", dateLabel(b.billDate)],
                   ["Due date", dateLabel(b.dueDate)],
                   ["Category", b.category ?? "Purchase"],
-                  ["Taxable", inrExact(b.subtotal)],
-                  ["GST", inrExact(b.taxTotal)],
-                  ["Total", inrExact(b.grandTotal)],
+                  ...(foreignBill ? ([["FX rate", `1 ${billCurrency} = ${b.fxRate} ${baseCurrency}`], [`Total in ${baseCurrency}`, moneyFmt(b.fxBaseTotal, baseCurrency)]] as Array<[string, string]>) : []),
+                  ["Taxable", billMoney(b, b.subtotal)],
+                  ["GST", billMoney(b, b.taxTotal)],
+                  ["Total", billMoney(b, b.grandTotal)],
                   ["Notes", b.notes],
                 ]}
               />
@@ -467,9 +483,9 @@ function BillBody({ detail }: { detail: BillDetail }) {
             </div>
             <Stats
               items={[
-                { label: "Total", value: inrExact(b.grandTotal) },
-                { label: "Paid", value: inrExact(b.amountPaid), tone: b.amountPaid > 0 ? "emerald" : null },
-                { label: "Balance", value: inrExact(b.balance), tone: b.priority === "OVERDUE" && open ? "coral" : open ? "amber" : null },
+                { label: "Total", value: billMoney(b, b.grandTotal) },
+                { label: "Paid", value: billMoney(b, b.amountPaid), tone: b.amountPaid > 0 ? "emerald" : null },
+                { label: "Balance", value: billMoney(b, b.balance), tone: b.priority === "OVERDUE" && open ? "coral" : open ? "amber" : null },
               ]}
             />
             <div style={{ marginTop: 12 }}>
@@ -532,7 +548,7 @@ function BillBody({ detail }: { detail: BillDetail }) {
                             </small>
                           </span>
                         </td>
-                        <td className="is-num">{inrExact(p.amount)}</td>
+                        <td className="is-num">{billMoney(b, p.amount)}</td>
                         <td style={{ width: 1 }}>
                           {canPay ? (
                             <Button size="sm" variant="ghost" onClick={() => setDlg({ voidId: p.id, amount: p.amount })}>
@@ -547,6 +563,15 @@ function BillBody({ detail }: { detail: BillDetail }) {
               </div>
             </WidgetCard>
           ) : null}
+
+          <EntityAttachments
+            entityType="bill"
+            entityId={b.id}
+            entityLabel={b.billNo}
+            category="bill"
+            canWrite={canPay || canApprove}
+            emptyHint="Supplier invoices, GRNs, or supporting PDFs — up to 2 MB."
+          />
 
           <WidgetCard title="History">
             <Timeline

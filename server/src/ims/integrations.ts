@@ -51,10 +51,11 @@ import {
   type TallyImportResult,
   type TallyVoucher,
 } from "./logic.js";
+import { isGstin, pingGsp, validateGspConfig, type GspConfig as GspRuntimeConfig } from "./einvoice/gsp.js";
 import { getSettings, type ImsSettings } from "./settings.js";
 import { postMovement } from "./stock.js";
 
-export type IntegrationProvider = "tally" | "pos";
+export type IntegrationProvider = "tally" | "pos" | "gsp";
 type SyncStatus = "success" | "failed" | "partial";
 
 const TALLY_FREQUENCIES = ["realtime", "15m", "hourly", "daily", "manual"] as const;
@@ -90,6 +91,29 @@ const PosConfig = z.object({
   customerName: z.string().trim().max(120).default("Walk-in customer"),
 });
 type PosConfigT = Omit<z.infer<typeof PosConfig>, "apiKey"> & { apiKey?: string | null };
+
+const blankToNull = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
+
+const GspConfigInput = z.object({
+  mode: z.enum(["sandbox", "live"]).default("sandbox"),
+  baseUrl: z
+    .string()
+    .max(300)
+    .nullable()
+    .optional()
+    .transform(blankToNull)
+    .refine((v) => !v || /^https?:\/\/\S+$/i.test(v), "Use a full URL starting with https://"),
+  /** Write-only. Omit or send blank to keep the stored key. */
+  apiKey: z.string().max(400).nullable().optional().transform(blankToNull),
+  gstin: z
+    .string()
+    .max(15)
+    .nullable()
+    .optional()
+    .transform((v) => blankToNull(v)?.toUpperCase() ?? null)
+    .refine((v) => !v || isGstin(v), "Enter a valid 15-character GSTIN"),
+  autoPushOnIssue: z.boolean().default(false),
+});
 
 type IntegrationRow = { provider: IntegrationProvider; enabled: number; config: unknown; sync: unknown; last_sync_at: string | null; last_status: string | null; updated_at: string | null };
 
@@ -147,6 +171,41 @@ function posView(row: IntegrationRow | null) {
     lastStatus: row?.last_status ?? null,
   };
 }
+
+function gspConfigOf(row: IntegrationRow | null): GspRuntimeConfig | null {
+  const raw = json<Record<string, unknown>>(row?.config, {});
+  const parsed = GspConfigInput.safeParse(raw);
+  return parsed.success ? { ...parsed.data, apiKey: typeof raw.apiKey === "string" && raw.apiKey ? raw.apiKey : null } : null;
+}
+
+/** Never returns the stored API key — only whether one is set and its last four characters. */
+function gspView(row: IntegrationRow | null) {
+  const cfg = gspConfigOf(row);
+  return {
+    enabled: Boolean(row?.enabled) && cfg !== null,
+    config: cfg
+      ? {
+          mode: cfg.mode,
+          baseUrl: cfg.baseUrl ?? null,
+          gstin: cfg.gstin ?? null,
+          autoPushOnIssue: Boolean(cfg.autoPushOnIssue),
+          hasApiKey: Boolean(cfg.apiKey),
+          apiKeyHint: cfg.apiKey ? `•••• ${cfg.apiKey.slice(-4)}` : null,
+        }
+      : null,
+    lastSyncAt: tsOf(row?.last_sync_at),
+    lastStatus: row?.last_status ?? null,
+  };
+}
+
+/** GSP settings for e-Invoice pushes (includes the API key — server-side use only). */
+export async function loadGsp(db: Queryable, tenantId: number): Promise<{ enabled: boolean; config: GspRuntimeConfig | null }> {
+  const row = await loadIntegration(db, tenantId, "gsp");
+  const config = gspConfigOf(row);
+  return { enabled: Boolean(row?.enabled) && config !== null, config };
+}
+
+export const noteGspOutcome = (db: Queryable, tenantId: number, status: SyncStatus) => touchIntegration(db, tenantId, "gsp", status).catch(() => undefined);
 
 async function saveIntegration(db: Queryable, actor: ImsActor, provider: IntegrationProvider, patch: { enabled?: boolean; config?: unknown; sync?: unknown }): Promise<void> {
   await exec(
@@ -1436,9 +1495,10 @@ export function registerIntegrations(router: Router, deps: ImsDeps): void {
   router.get("/integrations", async (_req, res) => {
     const actor = actorOf(res);
     requireAnyPerm(res, ["integrations", "audit"]);
-    const [tally, pos, log, counts] = await Promise.all([
+    const [tally, pos, gsp, log, counts] = await Promise.all([
       loadIntegration(deps.db, actor.tenantId, "tally"),
       loadIntegration(deps.db, actor.tenantId, "pos"),
+      loadIntegration(deps.db, actor.tenantId, "gsp"),
       syncLog(deps.db, actor.tenantId, null, 60),
       one<{ parties: number; items: number; invoices: number; bills: number; pos_today: number }>(
         deps.db,
@@ -1454,6 +1514,7 @@ export function registerIntegrations(router: Router, deps: ImsDeps): void {
     res.json({
       tally: tallyView(tally),
       pos: posView(pos),
+      gsp: gspView(gsp),
       log,
       counts: { parties: Number(counts?.parties ?? 0), items: Number(counts?.items ?? 0), invoices: Number(counts?.invoices ?? 0), bills: Number(counts?.bills ?? 0), posToday: Number(counts?.pos_today ?? 0) },
       posProviders: POS_PROVIDERS,
@@ -1464,7 +1525,7 @@ export function registerIntegrations(router: Router, deps: ImsDeps): void {
     const actor = actorOf(res);
     requireAnyPerm(res, ["integrations", "audit"]);
     const provider = qstr(req.query.provider, 16);
-    res.json({ log: await syncLog(deps.db, actor.tenantId, provider === "tally" || provider === "pos" ? provider : null, qint(req.query.limit, 100, 1, 500)) });
+    res.json({ log: await syncLog(deps.db, actor.tenantId, provider === "tally" || provider === "pos" || provider === "gsp" ? provider : null, qint(req.query.limit, 100, 1, 500)) });
   });
 
   router.put("/integrations/tally", async (req, res) => {
@@ -1771,6 +1832,48 @@ export function registerIntegrations(router: Router, deps: ImsDeps): void {
     await saveIntegration(deps.db, actor, "pos", { enabled: false });
     await recordEvent(deps, actor, { type: "integration.pos.disconnected", entityType: "integration", entityId: "pos", summary: "Disconnected POS", ip: req.ip });
     res.json({ pos: posView(await loadIntegration(deps.db, actor.tenantId, "pos")) });
+  });
+
+  /* GSP / IRP e-Invoice */
+
+  router.put("/integrations/gsp", async (req, res) => {
+    const actor = actorOf(res);
+    requirePerm(res, "integrations");
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const input = parse(GspConfigInput, body);
+    const existing = gspConfigOf(await loadIntegration(deps.db, actor.tenantId, "gsp"));
+    const config = { ...input, apiKey: input.apiKey ?? existing?.apiKey ?? null };
+    const problems = validateGspConfig(config);
+    if (problems.length) throw badRequest(problems[0], problems);
+    await saveIntegration(deps.db, actor, "gsp", { config, enabled: body.enabled === false ? false : true });
+    await recordEvent(deps, actor, {
+      type: "integration.gsp.saved",
+      entityType: "integration",
+      entityId: "gsp",
+      summary: `${body.enabled === false ? "Saved (disabled)" : "Enabled"} GSP e-Invoice in ${config.mode} mode${config.autoPushOnIssue ? " with auto-push on issue" : ""}`,
+      ip: req.ip,
+    });
+    res.json({ gsp: gspView(await loadIntegration(deps.db, actor.tenantId, "gsp")) });
+  });
+
+  /** Sandbox is always fine; live validates the config and checks the GSP host answers. Unsaved form values override the saved ones. */
+  router.post("/integrations/gsp/test", async (req, res) => {
+    const actor = actorOf(res);
+    requirePerm(res, "integrations");
+    const override = parse(GspConfigInput.partial(), req.body ?? {});
+    const row = await loadIntegration(deps.db, actor.tenantId, "gsp");
+    const saved = gspConfigOf(row);
+    const config: GspRuntimeConfig = {
+      mode: override.mode ?? saved?.mode ?? "sandbox",
+      baseUrl: override.baseUrl !== undefined ? override.baseUrl : (saved?.baseUrl ?? null),
+      apiKey: override.apiKey ?? saved?.apiKey ?? null,
+      gstin: override.gstin !== undefined ? override.gstin : (saved?.gstin ?? null),
+    };
+    const out = await pingGsp(config);
+    const status: SyncStatus = out.ok ? "success" : "failed";
+    await logSync(deps.db, actor, { provider: "gsp", direction: "export", entity: "connection", status, records: 0, message: `${config.mode}: ${out.message}` });
+    if (row) await touchIntegration(deps.db, actor.tenantId, "gsp", status);
+    res.json({ ok: out.ok, mode: config.mode, latencyMs: out.latencyMs, message: out.message });
   });
 
   /** POS → IMS: one bill becomes OUT movements plus a paid (or credit) invoice. Idempotent per bill number. */

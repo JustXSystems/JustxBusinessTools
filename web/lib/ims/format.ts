@@ -23,9 +23,21 @@ export {
   toneFor,
   type BadgeView,
 } from "@/lib/bos-app/format";
+import { inrExact } from "@/lib/bos-app/format";
 import type { BadgeView } from "@/lib/bos-app/format";
 
 export const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/**
+ * Document money: INR keeps the rupee formatter (`inrExact`); any other currency shows its ISO code
+ * (`USD 1,234.50`) so a foreign document is never mistaken for rupees.
+ */
+export function moneyFmt(amount: number, code?: string | null): string {
+  const c = String(code ?? "INR").trim().toUpperCase() || "INR";
+  if (c === "INR") return inrExact(amount);
+  const n = Number.isFinite(amount) ? amount : 0;
+  return `${c} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 export const round3 = (n: number): number => Math.round((n + Number.EPSILON) * 1000) / 1000;
 export const num = (v: unknown, fallback = 0): number => {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));

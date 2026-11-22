@@ -132,6 +132,8 @@ export type PrefixKey =
   | "dnPrefix"
   | "proformaPrefix"
   | "retainerPrefix"
+  | "soPrefix"
+  | "soDcPrefix"
   | "billPrefix"
   | "returnPrefix"
   | "checkPrefix"
@@ -143,6 +145,8 @@ export const PREFIX_FIELDS: ReadonlyArray<{ key: PrefixKey; label: string; hint:
   { key: "dnPrefix", label: "Debit notes", hint: "Supplier-side adjustments" },
   { key: "proformaPrefix", label: "Proforma invoices", hint: "Non-AR quotes to bill" },
   { key: "retainerPrefix", label: "Retainer / advance", hint: "Customer advances applied later" },
+  { key: "soPrefix", label: "Sales orders", hint: "Customer orders before delivery & billing" },
+  { key: "soDcPrefix", label: "Sales order delivery challans", hint: "Dispatch against a sales order" },
   { key: "billPrefix", label: "Supplier bills", hint: "Created on goods receipt" },
   { key: "returnPrefix", label: "Returns", hint: "Customer & supplier returns" },
   { key: "checkPrefix", label: "Stock checks", hint: "Physical count sessions" },

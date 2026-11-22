@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { Alert, Button, Dialog, Field, FormGrid, Input, Segmented, Select, Switch, Textarea } from "@/components/bos";
 import type { PartyOption } from "@/lib/ims/api";
-import { BILL_BADGE, finance, gstStateName, intraStateFor, methodLabel, RUN_BADGE, type BillInput, type ImsBill, type PaymentRun, type PayMethod } from "@/lib/ims/finance";
-import { addDaysISO, computeTotals, dateLabel, downloadCsv, inrExact, num, round2 } from "@/lib/ims/format";
+import { BILL_BADGE, COMMON_CURRENCIES, finance, fxPreview, gstStateName, intraStateFor, methodLabel, normalizeCurrencyCode, parseCurrencyCode, RUN_BADGE, type BillInput, type ImsBill, type PaymentRun, type PayMethod } from "@/lib/ims/finance";
+import { addDaysISO, computeTotals, dateLabel, downloadCsv, inrExact, moneyFmt, num, round2 } from "@/lib/ims/format";
 import { Loaded, StatusBadge, useIms, useImsAction, useImsData } from "../core";
 import { lineKey, LineEditor, toLineInputs, type EditableLine } from "../shared/LineEditor";
 import { fillRelated, ForceRelatedToggle, PartySelect } from "../shared/pickers";
@@ -29,8 +29,17 @@ export function BillEditorDialog({ bill, canApprove, onClose, onSaved }: { bill:
   const [category, setCategory] = useState(bill?.category ?? "");
   const [notes, setNotes] = useState(bill?.notes ?? "");
   const [approveNow, setApproveNow] = useState(canApprove);
+  const baseCurrency = normalizeCurrencyCode(settings.baseCurrency);
+  const currencyChoices = useMemo(() => [...new Set<string>([baseCurrency, ...COMMON_CURRENCIES])], [baseCurrency]);
+  const startCurrency = normalizeCurrencyCode(bill?.currencyCode, baseCurrency);
+  const [currencyChoice, setCurrencyChoice] = useState<string>(currencyChoices.includes(startCurrency) ? startCurrency : "__other");
+  const [currencyCustom, setCurrencyCustom] = useState(currencyChoices.includes(startCurrency) ? "" : startCurrency);
+  const [fxRate, setFxRate] = useState(bill && startCurrency !== baseCurrency && bill.fxRate > 0 ? String(bill.fxRate) : "");
   const [touched, setTouched] = useState(false);
   const [forceRelatedFill, setForceRelatedFill] = useState(false);
+  const currencyCode = currencyChoice === "__other" ? (parseCurrencyCode(currencyCustom) ?? "") : currencyChoice;
+  const foreign = currencyCode !== "" && currencyCode !== baseCurrency;
+  const fxRateNum = Number(fxRate);
 
   const intraState = intraStateFor(settings, party?.state || gstStateName(party?.gstin) || null);
   const totals = useMemo(() => computeTotals(toLineInputs(lines), intraState), [lines, intraState]);
@@ -39,8 +48,12 @@ export function BillEditorDialog({ bill, canApprove, onClose, onSaved }: { bill:
     supplier: !supplier.name.trim() ? "Pick a supplier or type a name" : null,
     total: !(grand > 0) ? (mode === "lines" ? "Add at least one line" : "Enter the bill amount") : null,
     due: dueDate && dueDate < billDate ? "The due date can't be before the bill date" : null,
+    currency: currencyChoice === "__other" && !currencyCode ? "Enter a 3-letter currency code (e.g. SGD)" : null,
+    fx: foreign && !(fxRateNum > 0) ? "Enter the locked FX rate (base currency per 1 unit)" : null,
   };
   const invalid = Object.values(errors).some(Boolean);
+  const fx = fxPreview({ currencyCode: currencyCode || baseCurrency, fxRate: fxRateNum, baseCurrency, grandTotal: grand });
+  const money = (n: number) => moneyFmt(n, currencyCode || baseCurrency);
 
   const save = async () => {
     setTouched(true);
@@ -54,6 +67,8 @@ export function BillEditorDialog({ bill, canApprove, onClose, onSaved }: { bill:
       ...(mode === "lines" ? { lines: toLineInputs(lines) } : { lines: [], amount: round2(num(amount)), taxAmount: round2(num(taxAmount)) }),
       category: category || null,
       notes: notes.trim() || null,
+      currencyCode: currencyCode || baseCurrency,
+      fxRate: foreign ? fxRateNum : 1,
     };
     const out = await run("bill", () => (bill ? finance.updateBill(bill.id, input) : finance.createBill({ ...input, approveNow: canApprove && approveNow })), {
       success: bill ? "Bill updated" : canApprove && approveNow ? "Bill added and approved" : "Bill added — sent for approval",
@@ -71,7 +86,8 @@ export function BillEditorDialog({ bill, canApprove, onClose, onSaved }: { bill:
       actions={
         <>
           <span className="ims-muted" style={{ marginRight: "auto", fontSize: 13 }}>
-            Total <b className="ims-num">{inrExact(grand)}</b>
+            Total <b className="ims-num">{money(grand)}</b>
+            {foreign && fxRateNum > 0 ? ` · ≈ ${moneyFmt(fx.fxBaseTotal, baseCurrency)}` : ""}
           </span>
           <Button variant="ghost" onClick={onClose}>
             Cancel
@@ -114,6 +130,33 @@ export function BillEditorDialog({ bill, canApprove, onClose, onSaved }: { bill:
           <Field label="Due date" error={touched ? errors.due : undefined}>
             {({ id, describedBy, invalid: bad }) => <Input id={id} aria-describedby={describedBy} aria-invalid={bad} type="date" min={billDate} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />}
           </Field>
+          <Field label="Currency" error={touched ? (errors.currency ?? undefined) : undefined} hint={`Base currency is ${baseCurrency}`}>
+            {({ id, describedBy }) => (
+              <Select id={id} aria-describedby={describedBy} value={currencyChoice} onChange={(e) => setCurrencyChoice(e.target.value)}>
+                {currencyChoices.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                    {c === baseCurrency ? " (base)" : ""}
+                  </option>
+                ))}
+                <option value="__other">Other…</option>
+              </Select>
+            )}
+          </Field>
+          {currencyChoice === "__other" ? (
+            <Field label="Currency code">
+              {({ id }) => <Input id={id} className="ims-mono" maxLength={3} placeholder="SGD" value={currencyCustom} onChange={(e) => setCurrencyCustom(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} />}
+            </Field>
+          ) : null}
+          {foreign ? (
+            <Field
+              label={`FX rate (${baseCurrency} per 1 ${currencyCode})`}
+              error={touched ? (errors.fx ?? undefined) : undefined}
+              hint={fxRateNum > 0 ? `Locked on save · ${money(grand)} ≈ ${moneyFmt(fx.fxBaseTotal, baseCurrency)}` : "Rate is locked on this bill when you save"}
+            >
+              {({ id, describedBy, invalid: bad }) => <Input id={id} aria-describedby={describedBy} aria-invalid={bad} type="number" min={0} step="0.0001" inputMode="decimal" value={fxRate} onChange={(e) => setFxRate(e.target.value)} placeholder="e.g. 83.25" />}
+            </Field>
+          ) : null}
         </FormGrid>
 
         <div className="fin-section" style={{ marginTop: 14 }}>
@@ -133,13 +176,20 @@ export function BillEditorDialog({ bill, canApprove, onClose, onSaved }: { bill:
             />
           </div>
           {mode === "lines" ? (
-            <LineEditor lines={lines} onChange={setLines} intraState={intraState} price="purchase" />
+            <LineEditor
+              lines={lines}
+              onChange={setLines}
+              intraState={intraState}
+              price="purchase"
+              currencyCode={currencyCode || baseCurrency}
+              baseEquivalent={foreign && fxRateNum > 0 ? { code: baseCurrency, amount: fx.fxBaseTotal } : null}
+            />
           ) : (
             <FormGrid columns="1fr 1fr 1fr">
-              <Field label="Taxable amount (₹) *" error={touched && errors.total ? errors.total : undefined}>
+              <Field label={`Taxable amount (${foreign ? currencyCode : "₹"}) *`} error={touched && errors.total ? errors.total : undefined}>
                 {({ id, describedBy, invalid: bad }) => <Input id={id} aria-describedby={describedBy} aria-invalid={bad} type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />}
               </Field>
-              <Field label="GST amount (₹)">{({ id }) => <Input id={id} type="number" min={0} step="0.01" value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} />}</Field>
+              <Field label={`GST amount (${foreign ? currencyCode : "₹"})`}>{({ id }) => <Input id={id} type="number" min={0} step="0.01" value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} />}</Field>
               <Field label="Category">
                 {({ id }) => (
                   <Select id={id} value={category} onChange={(e) => setCategory(e.target.value)}>

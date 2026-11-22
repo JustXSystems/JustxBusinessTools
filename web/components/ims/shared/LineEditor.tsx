@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { BosIcon, Button, Input, Select, Segmented } from "@/components/bos";
 import type { ImsItem } from "@/lib/ims/api";
-import { computeTotals, GST_RATES, inrExact, num, type ImsLineInput, type ImsTotals } from "@/lib/ims/format";
+import { computeTotals, GST_RATES, moneyFmt, num, type ImsLineInput, type ImsTotals } from "@/lib/ims/format";
 import { ItemPickerDialog } from "./pickers";
 
 /** An editable document line; `key` keeps React rows stable while editing. */
@@ -49,6 +49,8 @@ export function LineEditor({
   allowFreeText = true,
   roundToRupee = false,
   readOnly = false,
+  currencyCode,
+  baseEquivalent,
 }: {
   lines: EditableLine[];
   onChange: (lines: EditableLine[]) => void;
@@ -57,7 +59,12 @@ export function LineEditor({
   allowFreeText?: boolean;
   roundToRupee?: boolean;
   readOnly?: boolean;
+  /** Document currency; amounts show the ISO code when it is not INR. */
+  currencyCode?: string;
+  /** Base-currency equivalent of the grand total (foreign documents). */
+  baseEquivalent?: { code: string; amount: number } | null;
 }) {
+  const money = (n: number) => moneyFmt(n, currencyCode);
   const [picking, setPicking] = useState(false);
   const [q, setQ] = useState("");
   const [scope, setScope] = useState<Scope>("all");
@@ -278,8 +285,8 @@ export function LineEditor({
                     </td>
                     <td className="is-amt" data-label="Amount">
                       <div className="ims-line-amount">
-                        {inrExact(totals.lines[i]?.amount ?? 0)}
-                        {totals.lines[i]?.tax ? <small>+{inrExact(totals.lines[i].tax)}</small> : null}
+                        {money(totals.lines[i]?.amount ?? 0)}
+                        {totals.lines[i]?.tax ? <small>+{money(totals.lines[i].tax)}</small> : null}
                       </div>
                     </td>
                     <td className="is-act">
@@ -309,46 +316,63 @@ export function LineEditor({
           ) : null}
         </div>
       )}
-      <TotalsBlock totals={totals} intraState={intraState} />
+      <TotalsBlock totals={totals} intraState={intraState} currencyCode={currencyCode} baseEquivalent={baseEquivalent} />
       <ItemPickerDialog open={picking} onClose={() => setPicking(false)} onPick={addItem} price={price} />
     </div>
   );
 }
 
-export function TotalsBlock({ totals, intraState }: { totals: ImsTotals; intraState: boolean }) {
+export function TotalsBlock({
+  totals,
+  intraState,
+  currencyCode,
+  baseEquivalent,
+}: {
+  totals: ImsTotals;
+  intraState: boolean;
+  currencyCode?: string;
+  baseEquivalent?: { code: string; amount: number } | null;
+}) {
+  const money = (n: number) => moneyFmt(n, currencyCode);
   return (
     <dl className="ims-totals">
       <dt>Subtotal</dt>
-      <dd>{inrExact(totals.subtotal)}</dd>
+      <dd>{money(totals.subtotal)}</dd>
       {totals.discountTotal ? (
         <>
           <dt>Discount</dt>
-          <dd>−{inrExact(totals.discountTotal)}</dd>
+          <dd>−{money(totals.discountTotal)}</dd>
         </>
       ) : null}
       <dt>Taxable</dt>
-      <dd>{inrExact(totals.taxable)}</dd>
+      <dd>{money(totals.taxable)}</dd>
       {intraState ? (
         <>
           <dt>CGST</dt>
-          <dd>{inrExact(totals.cgst)}</dd>
+          <dd>{money(totals.cgst)}</dd>
           <dt>SGST</dt>
-          <dd>{inrExact(totals.sgst)}</dd>
+          <dd>{money(totals.sgst)}</dd>
         </>
       ) : (
         <>
           <dt>IGST</dt>
-          <dd>{inrExact(totals.igst)}</dd>
+          <dd>{money(totals.igst)}</dd>
         </>
       )}
       {totals.roundOff ? (
         <>
           <dt>Round off</dt>
-          <dd>{inrExact(totals.roundOff)}</dd>
+          <dd>{money(totals.roundOff)}</dd>
         </>
       ) : null}
       <dt className="is-grand">Total</dt>
-      <dd className="is-grand">{inrExact(totals.grandTotal)}</dd>
+      <dd className="is-grand">{money(totals.grandTotal)}</dd>
+      {baseEquivalent ? (
+        <>
+          <dt>Base equivalent ({baseEquivalent.code})</dt>
+          <dd>{moneyFmt(baseEquivalent.amount, baseEquivalent.code)}</dd>
+        </>
+      ) : null}
     </dl>
   );
 }

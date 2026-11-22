@@ -11,6 +11,7 @@ describe("isUnauthenticatedApiPath", () => {
     expect(isUnauthenticatedApiPath("/api/config/favicon.ico")).toBe(true);
     expect(isUnauthenticatedApiPath("/api/public/quotation-v1/abc")).toBe(true);
     expect(isUnauthenticatedApiPath("/api/public/bom-proposal/xyz")).toBe(true);
+    expect(isUnauthenticatedApiPath("/api/public/invoice-portal/abc")).toBe(true);
     expect(isUnauthenticatedApiPath("/api/webhooks/payments/razorpay")).toBe(true);
     expect(isUnauthenticatedApiPath("/api/files/logos/x.png")).toBe(true);
   });

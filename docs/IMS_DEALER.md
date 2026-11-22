@@ -73,6 +73,7 @@ permissions apply.
 | | `bomPackages` | Packages — reusable templates; Excel import; sample templates (permission `bomPackages` — owners/admins by default) |
 | | `bomRateCards` | Rate Cards — price books for package and customer BOM lines |
 | | `bomCompare` | Compare — diff packages or customer BOMs line by line |
+| Sales & Finance | `salesOrders` | Sales orders → delivery challans (stock out on approve) → invoice wizard; deep links `new`, `open:<id>`, `to-dc:<id>`, `to-invoice:<id>` |
 | Sales & Finance | `sales` | GST tax invoices / proforma / credit notes (ship-to, customer PO, UPI QR), POS, print — see [IMS_INVOICE_COMPETITIVE_DELTA.md](IMS_INVOICE_COMPETITIVE_DELTA.md) |
 | | `receivables` | Aging, priorities, reminders (WhatsApp/SMS/email templates), promises, disputes |
 | | `payables` | Bills, approvals, holds, scheduled payment runs |

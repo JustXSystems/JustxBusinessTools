@@ -32,6 +32,7 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
   "businessName",
   "businessType",
   "gstin",
+  "baseCurrency",
   "state",
   "stateCode",
   "address",
@@ -46,6 +47,8 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
   "email",
   "fiscalYearStart",
   "retainerPrefix",
+  "soPrefix",
+  "soDcPrefix",
   "poPrefix",
   "invoicePrefix",
   "cnPrefix",
@@ -65,6 +68,7 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
   "bomScheduleColumns",
   "poApprovalLimit",
   "invoiceApprovalLimit",
+  "dunningSequences",
   "draftPoPurgeDays",
   "paymentTermsDays",
   "defaultGstRate",
@@ -80,6 +84,8 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
 const ERROR_TAB: Record<string, Tab> = {
   businessName: "business",
   gstin: "business",
+  baseCurrency: "business",
+  dunningSequences: "reminders",
   phone: "business",
   email: "business",
   poApprovalLimit: "documents",
@@ -98,6 +104,7 @@ function validate(d: ImsSettings): SettingsErrors {
   const e: SettingsErrors = {};
   if (!d.businessName.trim()) e.businessName = "Enter your business name";
   if (d.gstin && !isValidGstin(d.gstin)) e.gstin = "Not a valid GSTIN";
+  if (d.baseCurrency !== undefined && !/^[A-Z]{3}$/.test(d.baseCurrency.trim().toUpperCase())) e.baseCurrency = "Use a 3-letter ISO code, e.g. INR";
   if (d.email && !EMAIL_RE.test(d.email.trim())) e.email = "Not a valid email";
   if (d.phone && !/^[+\d][\d\s-]{5,39}$/.test(d.phone.trim())) e.phone = "Not a valid phone number";
   for (const f of PREFIX_FIELDS) if (!PREFIX_RE.test(d[f.key])) e[f.key] = "1–12 letters, digits or dashes";
@@ -110,6 +117,13 @@ function validate(d: ImsSettings): SettingsErrors {
   else if (new Set(names).size !== names.length) e.categories = "Category names must be unique";
   const badTpl = d.reminders.templates.find((t) => !t.label.trim() || !t.body.trim() || unknownPlaceholders(t.body).length > 0);
   if (badTpl) e.reminders = `“${badTpl.label || "Untitled"}” needs a name, a message and only known placeholders`;
+  const lv = d.dunningSequences;
+  if (!lv) {
+    /* older API without dunning levels — nothing to validate */
+  } else if (!lv.length) e.dunningSequences = "Keep at least one dunning level";
+  else if (lv.some((l) => !/^[A-Za-z0-9_-]{1,24}$/.test(l.key.trim()))) e.dunningSequences = "Level keys use letters, digits, dashes or underscores (max 24)";
+  else if (new Set(lv.map((l) => l.key.trim().toUpperCase())).size !== lv.length) e.dunningSequences = "Level keys must be unique";
+  else if (lv.some((l) => !l.label.trim() || !Number.isInteger(l.minDaysOverdue) || l.minDaysOverdue < 0 || l.minDaysOverdue > 3650)) e.dunningSequences = "Every level needs a name and whole days overdue (0–3650)";
   return e;
 }
 

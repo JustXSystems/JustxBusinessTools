@@ -43,8 +43,12 @@ import {
   type ReminderChannel,
   type ReminderRuleKey,
 } from "./logic.js";
+import { GspError, buildIrnPayload, cancelIrn, pushIrn, type IrnResult } from "./einvoice/gsp.js";
+import { loadGsp, logSync, noteGspOutcome } from "./integrations.js";
 import { getSettings, listMembers, type ImsSettings } from "./settings.js";
 import { nextDocNo, postMovement } from "./stock.js";
+import { allocateInvoicePlanPayment, cancelInvoicePlan, deallocateInvoicePlanPayment, lastDunningByCustomer } from "./wave6-db.js";
+import { resolveFx } from "./wave6-logic.js";
 
 /** Invoice ↔ DC links (table in 050). Kept local to avoid a bom ↔ sales import cycle. */
 async function listInvoiceDcIds(db: Queryable, tenantId: number, invoiceId: string): Promise<string[]> {
@@ -54,6 +58,16 @@ async function listInvoiceDcIds(db: Queryable, tenantId: number, invoiceId: stri
     { tenantId, invoiceId },
   );
   return list.map((r) => r.dc_id);
+}
+
+/** Invoice ↔ sales-order DC links (table in 059). Same role as {@link listInvoiceDcIds} for SO delivery challans. */
+async function listInvoiceSoDcIds(db: Queryable, tenantId: number, invoiceId: string): Promise<string[]> {
+  const list = await rows<{ so_dc_id: string }>(
+    db,
+    `SELECT so_dc_id FROM ims_invoice_so_dc_links WHERE tenant_id = :tenantId AND invoice_id = :invoiceId`,
+    { tenantId, invoiceId },
+  );
+  return list.map((r) => r.so_dc_id);
 }
 
 /** Live (non-cancelled) DCs on a BOM — invoice must not also post stock while these exist. */
@@ -239,6 +253,10 @@ export type InvoiceRow = {
   cancelled_at?: string | null;
   cancel_reason?: string | null;
   einv_status?: string | null;
+  currency_code?: string | null;
+  fx_rate?: string | number | null;
+  fx_base_total?: string | number | null;
+  portal_token?: string | null;
   irn?: string | null;
   ack_no?: string | null;
   ack_at?: string | null;
@@ -329,6 +347,10 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     roundOff: round2(money(r.round_off)),
     roundToRupee: Boolean(r.round_to_rupee),
     grandTotal,
+    currencyCode: r.currency_code || "INR",
+    fxRate: r.fx_rate == null ? 1 : Number(money(r.fx_rate).toFixed(8)),
+    fxBaseTotal: r.fx_base_total == null ? grandTotal : round2(money(r.fx_base_total)),
+    portalEnabled: Boolean(r.portal_token),
     amountPaid,
     creditApplied,
     advanceApplied,
@@ -379,7 +401,7 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
 
 export type ImsInvoice = ReturnType<typeof mapInvoice>;
 
-const INVOICE_SELECT = `SELECT i.*, p.mobile AS party_mobile, p.email AS party_email, p.state AS party_state,
+export const INVOICE_SELECT = `SELECT i.*, p.mobile AS party_mobile, p.email AS party_email, p.state AS party_state,
   CASE
     WHEN i.source_tool = 'ims_bom' THEN b.doc_no
     WHEN i.source_tool = 'pos' THEN i.source_ref
@@ -389,7 +411,7 @@ const INVOICE_SELECT = `SELECT i.*, p.mobile AS party_mobile, p.email AS party_e
   LEFT JOIN ims_parties p ON p.id = i.customer_id AND p.tenant_id = i.tenant_id
   LEFT JOIN ims_bom_docs b ON i.source_tool = 'ims_bom' AND b.id = i.source_ref AND b.tenant_id = i.tenant_id`;
 
-async function loadInvoiceRow(db: Queryable, tenantId: number, id: string, lock = false): Promise<InvoiceRow> {
+export async function loadInvoiceRow(db: Queryable, tenantId: number, id: string, lock = false): Promise<InvoiceRow> {
   const r = lock
     ? await one<InvoiceRow>(db, `SELECT * FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id FOR UPDATE`, { tenantId, id })
     : await one<InvoiceRow>(db, `${INVOICE_SELECT} WHERE i.tenant_id = :tenantId AND i.id = :id LIMIT 1`, { tenantId, id });
@@ -429,7 +451,7 @@ const mapActivity = (r: ActivityRow) => ({
   createdAt: tsOf(r.created_at),
 });
 
-async function addActivity(
+export async function addActivity(
   db: Queryable,
   actor: ImsActor,
   a: { invoiceId: string | null; partyId: string | null; partyName: string | null; kind: string; channel?: string | null; templateKey?: string | null; message?: string | null; promiseDate?: string | null; promiseAmount?: number | null; status?: string | null },
@@ -481,7 +503,7 @@ export async function invoiceDetail(deps: ImsDeps, tenantId: number, id: string)
     stockPosted: Boolean(d.stock_posted),
   }));
   return {
-    invoice: { ...invoice, dcIds: dcLinks.map((d) => d.id), dcLinks },
+    invoice: { ...invoice, dcIds: dcLinks.map((d) => d.id), dcLinks, portalToken: r.portal_token ?? null },
     hsn: hsnSummary(invoice.lines ?? []),
     payments: payments.map(mapPayment),
     activity: activity.map(mapActivity),
@@ -523,6 +545,14 @@ const InvoiceInput = z.object({
   progressLabel: optText(120),
   accountManagerId: z.coerce.number().int().positive().nullable().optional(),
   accountManagerName: optText(120),
+  /** Document currency (ISO-4217). Defaults to the business base currency. */
+  currencyCode: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{3}$/, "Use a 3-letter ISO currency code (e.g. USD)")
+    .optional(),
+  /** Locked FX rate vs base currency (units of base per 1 unit of document currency). Forced to 1 when currency = base. */
+  fxRate: z.coerce.number().positive("FX rate must be more than zero").max(1e9).optional(),
   lines: z.array(LineInput).min(1, "Add at least one line").max(300),
   roundToRupee: z.boolean().default(false),
   notes: optText(4000),
@@ -554,6 +584,11 @@ async function partyLite(db: Queryable, tenantId: number, id: string | null | un
   return p;
 }
 
+/** Carries a source document's currency + locked rate onto a derived draft (duplicate, credit/debit note, proforma). */
+function srcFx(src: Pick<InvoiceRow, "currency_code" | "fx_rate">): { currencyCode: string; fxRate: number } {
+  return { currencyCode: src.currency_code || "INR", fxRate: money(src.fx_rate ?? 1) || 1 };
+}
+
 /** Column values for an invoice from the editor input (GST split, totals, due date from terms). */
 async function invoiceValues(db: Queryable, actor: ImsActor, settings: ImsSettings, input: InvoiceInputT) {
   const party = await partyLite(db, actor.tenantId, input.customerId);
@@ -571,7 +606,11 @@ async function invoiceValues(db: Queryable, actor: ImsActor, settings: ImsSettin
   if (dueDate < input.invoiceDate) throw badRequest("The due date can't be before the invoice date");
   const address = input.customerAddress?.trim() || [party?.address, party?.city].filter(Boolean).join(", ") || null;
   const docKind = (input.docKind ?? "tax_invoice") as InvoiceDocKind;
+  const fx = resolveFx({ currencyCode: input.currencyCode, fxRate: input.fxRate, baseCurrency: settings.baseCurrency, grandTotal: totals.grandTotal });
   return {
+    currencyCode: fx.currencyCode,
+    fxRate: fx.fxRate,
+    fxBaseTotal: fx.fxBaseTotal,
     customerId: party?.id ?? null,
     customerName: input.customerName.trim(),
     customerGstin: gstin,
@@ -638,13 +677,13 @@ async function insertInvoice(
        (id, tenant_id, invoice_no, doc_kind, against_invoice_id, against_invoice_no, status, customer_id, customer_name, customer_gstin, customer_address, customer_mobile,
         customer_po_no, ship_to_name, ship_to_gstin, ship_to_address, ship_to_state, ship_to_mobile, place_of_supply, intra_state,
         invoice_date, due_date, \`lines\`, subtotal, discount_total, tax_total, cgst, sgst, igst, shipping_charges, shipping_gst_rate, shipping_tax,
-        retention_pct, retention_amount, progress_pct, progress_label, round_off, grand_total, round_to_rupee,
+        retention_pct, retention_amount, progress_pct, progress_label, round_off, grand_total, currency_code, fx_rate, fx_base_total, round_to_rupee,
         account_manager_id, account_manager_name, source_tool, source_ref, notes, terms, created_by, created_by_name)
      VALUES
        (:id, :tenantId, :invoiceNo, :docKind, :againstInvoiceId, :againstInvoiceNo, 'draft', :customerId, :customerName, :customerGstin, :customerAddress, :customerMobile,
         :customerPoNo, :shipToName, :shipToGstin, :shipToAddress, :shipToState, :shipToMobile, :placeOfSupply, :intraState,
         :invoiceDate, :dueDate, :lines, :subtotal, :discountTotal, :taxTotal, :cgst, :sgst, :igst, :shippingCharges, :shippingGstRate, :shippingTax,
-        :retentionPct, :retentionAmount, :progressPct, :progressLabel, :roundOff, :grandTotal, :roundToRupee,
+        :retentionPct, :retentionAmount, :progressPct, :progressLabel, :roundOff, :grandTotal, :currencyCode, :fxRate, :fxBaseTotal, :roundToRupee,
         :accountManagerId, :accountManagerName, :sourceTool, :sourceRef, :notes, :terms, :userId, :userName)`,
     {
       ...values,
@@ -695,6 +734,7 @@ export async function createLinkedInvoice(
       ? `Issued invoice ${invoiceNo} to ${values.customerName} (${formatINR(values.grandTotal)})`
       : `Saved draft invoice for ${values.customerName} (${formatINR(values.grandTotal)})`,
   });
+  if (input.issue) await autoPushIrn(deps, actor, id);
   return invoiceDetail(deps, actor.tenantId, id);
 }
 
@@ -804,9 +844,13 @@ async function issueDraft(
   const nonStockDoc = invoiceSkipsStock(docKind);
 
   const dcIds = await listInvoiceDcIds(conn, actor.tenantId, id);
+  const soDcIds = await listInvoiceSoDcIds(conn, actor.tenantId, id);
   let stockViaDc = false;
-  if (nonStockDoc && dcIds.length) {
+  if (nonStockDoc && (dcIds.length || soDcIds.length)) {
     throw conflict("Credit notes, debit notes and proformas cannot link delivery challans");
+  }
+  if (dcIds.length && soDcIds.length) {
+    throw conflict("An invoice can't link both BOM and sales-order delivery challans");
   }
   if (dcIds.length) {
     // Re-validate under lock — reverse/return may have invalidated links between draft and issue.
@@ -826,6 +870,27 @@ async function issueDraft(
       }
       if (dc.bom_doc_id !== row.source_ref) {
         throw conflict(`Linked delivery challan ${dc.doc_no} belongs to a different BOM`);
+      }
+    }
+    stockViaDc = true;
+  } else if (soDcIds.length) {
+    // Sales-order DCs: stock already left on DC approve, so the invoice must not post a second OUT.
+    if (!(row.source_tool === "ims_so" && row.source_ref)) {
+      throw conflict("Sales-order delivery challan links are only valid on invoices created from a sales order. Remove the links before issuing.");
+    }
+    for (const dcId of soDcIds) {
+      const dc = await one<{ status: string; stock_posted: number; sales_order_id: string; doc_no: string }>(
+        conn,
+        `SELECT status, stock_posted, sales_order_id, doc_no FROM ims_so_dcs WHERE tenant_id = :tenantId AND id = :id LIMIT 1 FOR UPDATE`,
+        { tenantId: actor.tenantId, id: dcId },
+      );
+      if (!dc || dc.status !== "approved" || !dc.stock_posted) {
+        throw conflict(
+          `Linked delivery challan ${dc?.doc_no ?? dcId} must stay approved with stock posted. Unlink it or re-approve before issuing.`,
+        );
+      }
+      if (dc.sales_order_id !== row.source_ref) {
+        throw conflict(`Linked delivery challan ${dc.doc_no} belongs to a different sales order`);
       }
     }
     stockViaDc = true;
@@ -984,6 +1049,8 @@ async function reverseInvoiceStock(conn: PoolConnection, actor: ImsActor, row: I
   if (!row.stock_posted) return;
   const dcIds = await listInvoiceDcIds(conn, actor.tenantId, row.id);
   if (dcIds.length) return;
+  // Sales-order DCs keep the stock OUT (and any return) on the challan, not the invoice.
+  if ((await listInvoiceSoDcIds(conn, actor.tenantId, row.id)).length) return;
   for (const l of json<ImsLine[]>(row.lines, [])) {
     if (!l.itemId || !(l.qty > 0)) continue;
     const exists = await one<{ id: string }>(conn, `SELECT id FROM ims_items WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id: l.itemId });
@@ -1035,6 +1102,8 @@ async function applyInvoicePayment(conn: PoolConnection, actor: ImsActor, row: I
   if (settled) {
     await exec(conn, `UPDATE ims_ar_activity SET status = 'kept' WHERE tenant_id = :tenantId AND invoice_id = :id AND kind = 'promise' AND status = 'open'`, { tenantId: actor.tenantId, id: row.id });
   }
+  // Payment plan: money goes to the earliest pending installments first.
+  await allocateInvoicePlanPayment(conn, actor.tenantId, row.id, p.amount);
 }
 
 const requireSalesRead = (res: Response) => requireAnyPerm(res, ["sales", "receivables"]);
@@ -1050,6 +1119,112 @@ function templateForRule(rule: ReminderRuleKey, templates: ImsSettings["reminder
 }
 
 const PRIORITY_RANK: Record<ArPriority, number> = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 };
+
+const EINV_KINDS = new Set(["tax_invoice", "credit_note", "debit_note"]);
+const EINV_PUSHABLE = new Set(["yet_to_push", "failed"]);
+
+const einvEligible = (row: Pick<InvoiceRow, "doc_kind" | "customer_gstin">) => EINV_KINDS.has(row.doc_kind || "tax_invoice") && Boolean(row.customer_gstin?.trim());
+
+/**
+ * Generate the IRN through the connected GSP (sandbox or live) and store it like a manual association.
+ * A GSP failure is recorded on the invoice (einv_status = failed + activity) and then rethrown.
+ */
+async function pushInvoiceIrn(deps: ImsDeps, actor: ImsActor, id: string, ip?: string): Promise<void> {
+  const row = await loadInvoiceRow(deps.db, actor.tenantId, id);
+  if (row.status !== "issued") throw conflict("Only issued documents can be pushed to the IRP");
+  if (!einvEligible(row)) throw conflict("Only B2B tax invoices, credit notes and debit notes with a customer GSTIN can be e-Invoiced");
+  if (row.irn) throw conflict("This document already has an IRN");
+  if (row.einv_status && !EINV_PUSHABLE.has(row.einv_status)) throw conflict(`e-Invoice status is “${row.einv_status}” — only yet-to-push or failed documents can be pushed`);
+  const gsp = await loadGsp(deps.db, actor.tenantId);
+  if (!gsp.enabled || !gsp.config) throw conflict("GSP e-Invoice is switched off — enable it under Integrations → GSP / e-Invoice first");
+  const config = gsp.config;
+  const settings = await getSettings(deps, actor.tenantId);
+  const against = row.against_invoice_id ? await one<{ invoice_date: unknown }>(deps.db, `SELECT invoice_date FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id: row.against_invoice_id }) : null;
+
+  let result: IrnResult;
+  try {
+    const payload = buildIrnPayload(
+      {
+        invoiceNo: row.invoice_no,
+        docKind: row.doc_kind || "tax_invoice",
+        invoiceDate: isoOf(row.invoice_date),
+        customerName: row.customer_name,
+        customerGstin: row.customer_gstin,
+        customerAddress: row.customer_address,
+        placeOfSupply: row.place_of_supply,
+        intraState: Boolean(row.intra_state),
+        lines: json<ImsLine[]>(row.lines, []),
+        subtotal: money(row.subtotal),
+        discountTotal: money(row.discount_total),
+        cgst: money(row.cgst),
+        sgst: money(row.sgst),
+        igst: money(row.igst),
+        shippingCharges: money(row.shipping_charges ?? 0),
+        roundOff: money(row.round_off),
+        grandTotal: money(row.grand_total),
+        againstInvoiceNo: row.against_invoice_no ?? null,
+        againstInvoiceDate: against ? isoOf(against.invoice_date) : null,
+      },
+      settings,
+      { gstin: config.gstin },
+    );
+    result = await pushIrn(config, payload);
+  } catch (err) {
+    if (!(err instanceof GspError)) throw err;
+    await tx(deps.db, async (conn) => {
+      await exec(conn, `UPDATE ims_invoices SET einv_status = 'failed' WHERE tenant_id = :tenantId AND id = :id AND irn IS NULL`, { tenantId: actor.tenantId, id: row.id });
+      await addActivity(conn, actor, { invoiceId: row.id, partyId: row.customer_id, partyName: row.customer_name, kind: "e_invoice", message: `IRP push failed (${config.mode}): ${err.message}`.slice(0, 480), status: "failed" });
+    });
+    await logSync(deps.db, actor, { provider: "gsp", direction: "export", entity: "irn-push", status: "failed", records: 0, message: `${row.invoice_no}: ${err.message}` });
+    await noteGspOutcome(deps.db, actor.tenantId, "failed");
+    await recordEvent(deps, actor, { type: "invoice.einvoice.failed", entityType: "invoice", entityId: row.id, summary: `IRP push failed for ${row.invoice_no}: ${err.message}`, payload: { mode: config.mode, details: err.details }, ip });
+    throw new ImsError(err.status, err.message, err.details.length ? err.details : undefined);
+  }
+
+  const stored = await tx(deps.db, async (conn) => {
+    const cur = await loadInvoiceRow(conn, actor.tenantId, id, true);
+    if (cur.irn) return false;
+    await exec(
+      conn,
+      `UPDATE ims_invoices SET irn = :irn, ack_no = :ackNo, ack_at = FROM_UNIXTIME(:ackEpoch), signed_qr = :signedQr, einv_status = 'pushed'
+       WHERE tenant_id = :tenantId AND id = :id`,
+      { tenantId: actor.tenantId, id: row.id, irn: result.irn, ackNo: result.ackNo || null, ackEpoch: Math.floor(Date.parse(result.ackAt) / 1000), signedQr: result.signedQr || null },
+    );
+    await addActivity(conn, actor, {
+      invoiceId: row.id,
+      partyId: row.customer_id,
+      partyName: row.customer_name,
+      kind: "e_invoice",
+      message: `IRN generated via GSP (${result.mode})${result.ackNo ? ` · Ack ${result.ackNo}` : ""}${result.mode === "sandbox" ? " — simulated, not registered with the IRP" : ""}`,
+      status: "pushed",
+    });
+    return true;
+  });
+  if (!stored) return;
+  await logSync(deps.db, actor, { provider: "gsp", direction: "export", entity: "irn-push", status: "success", records: 1, message: `${row.invoice_no} → IRN ${result.irn.slice(0, 12)}… (${result.mode})` });
+  await noteGspOutcome(deps.db, actor.tenantId, "success");
+  await recordEvent(deps, actor, {
+    type: "invoice.einvoice",
+    entityType: "invoice",
+    entityId: row.id,
+    summary: `Pushed ${row.invoice_no} to the IRP via GSP (${result.mode})`,
+    payload: { irn: result.irn, ackNo: result.ackNo, mode: result.mode },
+    ip,
+  });
+}
+
+/** Push right after issue when the tenant opted in. Never throws — a failure leaves the invoice issued and marked for retry. */
+async function autoPushIrn(deps: ImsDeps, actor: ImsActor, id: string, ip?: string): Promise<void> {
+  try {
+    const gsp = await loadGsp(deps.db, actor.tenantId);
+    if (!gsp.enabled || !gsp.config?.autoPushOnIssue) return;
+    const row = await loadInvoiceRow(deps.db, actor.tenantId, id);
+    if (row.status !== "issued" || row.irn || !einvEligible(row)) return;
+    await pushInvoiceIrn(deps, actor, id, ip);
+  } catch (err) {
+    console.warn("[ims] e-invoice auto-push failed", err instanceof Error ? err.message : err);
+  }
+}
 
 export function registerSales(router: Router, deps: ImsDeps): void {
   /* Invoice list with status tabs, KPIs and filters. */
@@ -1232,7 +1407,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
            shipping_charges = :shippingCharges, shipping_gst_rate = :shippingGstRate, shipping_tax = :shippingTax,
            retention_pct = :retentionPct, retention_amount = :retentionAmount,
            progress_pct = :progressPct, progress_label = :progressLabel,
-           round_off = :roundOff, grand_total = :grandTotal, round_to_rupee = :roundToRupee,
+           round_off = :roundOff, grand_total = :grandTotal, currency_code = :currencyCode, fx_rate = :fxRate, fx_base_total = :fxBaseTotal, round_to_rupee = :roundToRupee,
            account_manager_id = :accountManagerId, account_manager_name = :accountManagerName,
            notes = :notes, terms = :terms
          WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`,
@@ -1268,6 +1443,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
         entityId: row.id,
         summary: `Issued invoice ${invoiceNo} to ${row.customer_name} (${formatINR(money(row.grand_total))})${row.source_tool && row.source_tool !== "pos" ? ` · from ${row.source_tool}` : ""}`,
       });
+      await autoPushIrn(deps, actor, row.id, req.ip);
     }
     res.json(await invoiceDetail(deps, actor.tenantId, row.id));
   });
@@ -1293,6 +1469,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       entityId: row.id,
       summary: `Approved and issued ${invoiceNo} to ${row.customer_name} (${formatINR(money(row.grand_total))})${note ? ` — ${note}` : ""}`,
     });
+    await autoPushIrn(deps, actor, row.id, req.ip);
     res.json(await invoiceDetail(deps, actor.tenantId, row.id));
   });
 
@@ -1448,8 +1625,13 @@ export function registerSales(router: Router, deps: ImsDeps): void {
         id: r.id,
         reason: input.reason,
       });
+      await cancelInvoicePlan(conn, actor.tenantId, r.id);
       // Drop links so the same DCs can attach to a new invoice (unique dc_id). Stock messaging uses cancel event / BOM source.
       await exec(conn, `DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId AND invoice_id = :id`, {
+        tenantId: actor.tenantId,
+        id: r.id,
+      });
+      await exec(conn, `DELETE FROM ims_invoice_so_dc_links WHERE tenant_id = :tenantId AND invoice_id = :id`, {
         tenantId: actor.tenantId,
         id: r.id,
       });
@@ -1529,6 +1711,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       roundToRupee: Boolean(src.round_to_rupee),
       notes: src.notes,
       terms: src.terms,
+      ...srcFx(src),
     });
     const id = randomUUID();
     await insertInvoice(deps.db, actor, id, values, { docKind: "tax_invoice" });
@@ -1536,7 +1719,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     res.status(201).json(await invoiceDetail(deps, actor.tenantId, id));
   });
 
-  /** Associate IRN / Ack details generated outside IMS (portal or GSP) — Wave 2 until live IRP push. */
+  /** Offline fallback: associate IRN / Ack details generated outside IMS (GST portal or another GSP). */
   router.post("/invoices/:id/e-invoice/associate", async (req, res) => {
     const actor = actorOf(res);
     requireAnyPerm(res, ["sales", "integrations", "audit"]);
@@ -1592,10 +1775,33 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     res.json(await invoiceDetail(deps, actor.tenantId, req.params.id));
   });
 
+  /** Generate the IRN through the connected GSP (sandbox or live). Needs Integrations → GSP / e-Invoice enabled. */
+  router.post("/invoices/:id/e-invoice/push", async (req, res) => {
+    const actor = actorOf(res);
+    requireAnyPerm(res, ["sales", "integrations", "audit"]);
+    await pushInvoiceIrn(deps, actor, req.params.id, req.ip);
+    res.json(await invoiceDetail(deps, actor.tenantId, req.params.id));
+  });
+
   router.post("/invoices/:id/e-invoice/mark-cancelled", async (req, res) => {
     const actor = actorOf(res);
     requireAnyPerm(res, ["sales", "integrations", "audit"]);
     const input = parse(z.object({ reason: optText(255) }), req.body ?? {});
+    // With a GSP connected, try the IRP cancel first; the local status is updated either way.
+    let gspNote: string | null = null;
+    const pre = await loadInvoiceRow(deps.db, actor.tenantId, req.params.id);
+    const gsp = pre.irn && pre.einv_status !== "marked_cancelled" ? await loadGsp(deps.db, actor.tenantId) : null;
+    if (pre.irn && gsp?.enabled && gsp.config) {
+      try {
+        const out = await cancelIrn(gsp.config, pre.irn, input.reason || "Cancelled in IMS");
+        gspNote = out.mode === "live" ? "Cancelled with the IRP via GSP." : "Sandbox cancel recorded (simulated).";
+        await logSync(deps.db, actor, { provider: "gsp", direction: "export", entity: "irn-cancel", status: "success", records: 1, message: `${pre.invoice_no} (${out.mode})` });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "GSP cancel failed";
+        gspNote = `GSP cancel failed: ${msg}. Cancel on the GST portal if still active.`;
+        await logSync(deps.db, actor, { provider: "gsp", direction: "export", entity: "irn-cancel", status: "failed", records: 0, message: `${pre.invoice_no}: ${msg}` });
+      }
+    }
     await tx(deps.db, async (conn) => {
       const row = await loadInvoiceRow(conn, actor.tenantId, req.params.id, true);
       if (!row.irn) throw conflict("No IRN is associated with this document");
@@ -1608,7 +1814,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
         partyId: row.customer_id,
         partyName: row.customer_name,
         kind: "e_invoice",
-        message: `e-Invoice marked cancelled in IMS${input.reason ? ` — ${input.reason}` : ""}. Cancel on the GST portal if still active.`,
+        message: `e-Invoice marked cancelled in IMS${input.reason ? ` — ${input.reason}` : ""}. ${gspNote ?? "Cancel on the GST portal if still active."}`,
         status: "marked_cancelled",
       });
     });
@@ -1649,6 +1855,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       terms: src.terms,
       accountManagerId: src.account_manager_id,
       accountManagerName: src.account_manager_name,
+      ...srcFx(src),
     });
     const id = randomUUID();
     await insertInvoice(deps.db, actor, id, values, { docKind: "tax_invoice", sourceTool: "proforma", sourceRef: src.id });
@@ -1697,6 +1904,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       roundToRupee: Boolean(src.round_to_rupee),
       notes: body.notes ?? `Debit note against ${src.invoice_no}`,
       terms: src.terms,
+      ...srcFx(src),
     });
     const id = randomUUID();
     await insertInvoice(deps.db, actor, id, values, {
@@ -1764,6 +1972,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       roundToRupee: Boolean(src.round_to_rupee),
       notes: body.notes ?? `Credit note against ${src.invoice_no}${body.restock ? " · restock on issue (stock IN handled via Returns)" : ""}`,
       terms: src.terms,
+      ...srcFx(src),
     });
     const id = randomUUID();
     await insertInvoice(deps.db, actor, id, values, {
@@ -1788,6 +1997,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     await tx(deps.db, async (conn) => {
       await exec(conn, `DELETE FROM ims_ar_activity WHERE tenant_id = :tenantId AND invoice_id = :id`, { tenantId: actor.tenantId, id: row.id });
       await exec(conn, `DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId AND invoice_id = :id`, { tenantId: actor.tenantId, id: row.id });
+      await exec(conn, `DELETE FROM ims_invoice_so_dc_links WHERE tenant_id = :tenantId AND invoice_id = :id`, { tenantId: actor.tenantId, id: row.id });
       await exec(conn, `DELETE FROM ims_invoices WHERE tenant_id = :tenantId AND id = :id AND status = 'draft'`, { tenantId: actor.tenantId, id: row.id });
       if (row.source_tool && row.source_ref) {
         await exec(conn, `DELETE FROM ims_links WHERE tenant_id = :tenantId AND target_type = 'invoice' AND target_id = :id`, { tenantId: actor.tenantId, id: row.id });
@@ -1916,6 +2126,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       await assertDayOpen(conn, actor.tenantId, isoOf(p.paid_on));
       if (p.doc_type === "invoice" && p.doc_id) {
         await exec(conn, `UPDATE ims_invoices SET amount_paid = GREATEST(0, amount_paid - :amount) WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id: p.doc_id, amount: money(p.amount) });
+        await deallocateInvoicePlanPayment(conn, actor.tenantId, p.doc_id, money(p.amount), p.created_at ?? null);
       } else if (p.doc_type === "bill" && p.doc_id) {
         await exec(conn, `UPDATE ims_bills SET amount_paid = GREATEST(0, amount_paid - :amount) WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id: p.doc_id, amount: money(p.amount) });
       }
@@ -2146,6 +2357,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       managers: members.filter((m) => m.active).map((m) => ({ userId: m.userId, name: m.name ?? m.email ?? `User ${m.userId}`, isAccountManager: m.isAccountManager })),
       reminders: settings.reminders,
       ruleMatches,
+      dunning: { levels: settings.dunningSequences, last: await lastDunningByCustomer(deps.db, actor.tenantId) },
     });
   });
 

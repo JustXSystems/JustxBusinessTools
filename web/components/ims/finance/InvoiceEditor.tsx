@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, Field, FormGrid, Input, Select, Switch, Textarea } from "@/components/bos";
 import type { PartyOption } from "@/lib/ims/api";
 import { ims } from "@/lib/ims/api";
-import { finance, gstStateName, GST_STATES, intraStateFor, type InvoiceDetail, type InvoiceInput } from "@/lib/ims/finance";
-import { addDaysISO, computeTotals, dateLabel, inrExact, qtyText, round2 } from "@/lib/ims/format";
+import { COMMON_CURRENCIES, finance, fxPreview, gstStateName, GST_STATES, intraStateFor, normalizeCurrencyCode, parseCurrencyCode, type InvoiceDetail, type InvoiceInput } from "@/lib/ims/finance";
+import { addDaysISO, computeTotals, dateLabel, inrExact, moneyFmt, qtyText, round2 } from "@/lib/ims/format";
 import { DocRefLink } from "../bom/DocRefLink";
 import { ErrorBlock, LoadingBlock, PageHeader, Stack, useIms, useImsAction, useImsData } from "../core";
 import { blankLine, lineKey, LineEditor, toLineInputs, type EditableLine } from "../shared/LineEditor";
@@ -76,9 +76,18 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const [roundToRupee, setRoundToRupee] = useState(inv?.roundToRupee ?? true);
   const [notes, setNotes] = useState(inv?.notes ?? "");
   const [terms, setTerms] = useState(inv?.terms ?? settings.terms ?? "");
+  const baseCurrency = normalizeCurrencyCode(settings.baseCurrency);
+  const currencyChoices = useMemo(() => [...new Set<string>([baseCurrency, ...COMMON_CURRENCIES])], [baseCurrency]);
+  const startCurrency = normalizeCurrencyCode(inv?.currencyCode, baseCurrency);
+  const [currencyChoice, setCurrencyChoice] = useState<string>(currencyChoices.includes(startCurrency) ? startCurrency : "__other");
+  const [currencyCustom, setCurrencyCustom] = useState(currencyChoices.includes(startCurrency) ? "" : startCurrency);
+  const [fxRate, setFxRate] = useState(inv && startCurrency !== baseCurrency && inv.fxRate > 0 ? String(inv.fxRate) : "");
   const [touched, setTouched] = useState(false);
   const [forceRelatedFill, setForceRelatedFill] = useState(false);
   const isCreditNote = inv?.docKind === "credit_note" || inv?.docKind === "debit_note";
+  const currencyCode = currencyChoice === "__other" ? (parseCurrencyCode(currencyCustom) ?? "") : currencyChoice;
+  const foreign = currencyCode !== "" && currencyCode !== baseCurrency;
+  const fxRateNum = Number(fxRate);
 
   const effectivePos = placeOfSupply || party?.state || gstStateName(gstin) || settings.state || "";
   const intraState = intraStateFor(settings, effectivePos);
@@ -137,8 +146,11 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
     lines: !toLineInputs(lines).length ? "Add at least one line with a quantity" : null,
     due: dueDate && dueDate < invoiceDate ? "The due date can't be before the invoice date" : null,
     gstin: gstinError,
+    currency: currencyChoice === "__other" && !currencyCode ? "Enter a 3-letter currency code (e.g. SGD)" : null,
+    fx: foreign && !(fxRateNum > 0) ? "Enter the locked FX rate (base currency per 1 unit)" : null,
   };
   const invalid = Object.values(errors).some(Boolean);
+  const fx = fxPreview({ currencyCode: currencyCode || baseCurrency, fxRate: fxRateNum, baseCurrency, grandTotal: totals.grandTotal });
 
   const applyTerms = (days: number, from = invoiceDate) => {
     setTermsDays(days);
@@ -187,6 +199,8 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
     progressLabel: progressLabel.trim() || null,
     accountManagerId: salesperson ? salesperson.userId : salespersonId === "" ? null : Number(salespersonId) || null,
     accountManagerName: salesperson ? salesperson.name || null : null,
+    currencyCode: currencyCode || baseCurrency,
+    fxRate: foreign ? fxRateNum : 1,
     lines: toLineInputs(lines),
     roundToRupee,
     notes: notes.trim() || null,
@@ -429,6 +443,37 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
                   />
                 )}
               </Field>
+              <Field label="Currency" error={touched ? (errors.currency ?? undefined) : undefined} hint={isCreditNote ? "Matches the original invoice" : `Base currency is ${baseCurrency}`}>
+                {({ id, describedBy }) => (
+                  <Select id={id} aria-describedby={describedBy} value={currencyChoice} disabled={isCreditNote} onChange={(e) => setCurrencyChoice(e.target.value)}>
+                    {currencyChoices.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                        {c === baseCurrency ? " (base)" : ""}
+                      </option>
+                    ))}
+                    <option value="__other">Other…</option>
+                  </Select>
+                )}
+              </Field>
+              {currencyChoice === "__other" ? (
+                <Field label="Currency code">
+                  {({ id, describedBy }) => (
+                    <Input id={id} aria-describedby={describedBy} className="ims-mono" maxLength={3} placeholder="SGD" disabled={isCreditNote} value={currencyCustom} onChange={(e) => setCurrencyCustom(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} />
+                  )}
+                </Field>
+              ) : null}
+              {foreign ? (
+                <Field
+                  label={`FX rate (${baseCurrency} per 1 ${currencyCode})`}
+                  error={touched ? (errors.fx ?? undefined) : undefined}
+                  hint={fxRateNum > 0 ? `Locked on save · ${moneyFmt(totals.grandTotal, currencyCode)} ≈ ${moneyFmt(fx.fxBaseTotal, baseCurrency)}` : "Rate is locked on this document when you save"}
+                >
+                  {({ id, describedBy, invalid: bad }) => (
+                    <Input id={id} aria-describedby={describedBy} aria-invalid={bad} type="number" min={0} step="0.0001" inputMode="decimal" disabled={isCreditNote} value={fxRate} onChange={(e) => setFxRate(e.target.value)} placeholder="e.g. 83.25" />
+                  )}
+                </Field>
+              ) : null}
             </FormGrid>
             <div style={{ marginTop: 10 }}>
               <QuickChips
@@ -477,6 +522,8 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
             price="selling"
             roundToRupee={roundToRupee}
             readOnly={stockViaDc}
+            currencyCode={currencyCode || baseCurrency}
+            baseEquivalent={foreign && fxRateNum > 0 ? { code: baseCurrency, amount: fx.fxBaseTotal } : null}
           />
           {touched && errors.lines ? (
             <p className="ims-neg" role="alert" style={{ fontSize: 12.5, margin: 0 }}>
@@ -573,8 +620,9 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
 
       <div className="fin-sticky-actions">
         <span className="ims-muted" style={{ marginRight: "auto", alignSelf: "center", fontSize: 13 }}>
-          Total <b className="ims-num" style={{ fontSize: 16, color: "var(--bos-text)" }}>{inrExact(totals.grandTotal)}</b>
-          {totals.taxTotal ? ` · GST ${inrExact(totals.taxTotal)}` : ""}
+          Total <b className="ims-num" style={{ fontSize: 16, color: "var(--bos-text)" }}>{moneyFmt(totals.grandTotal, currencyCode || baseCurrency)}</b>
+          {totals.taxTotal ? ` · GST ${moneyFmt(totals.taxTotal, currencyCode || baseCurrency)}` : ""}
+          {foreign && fxRateNum > 0 ? ` · ≈ ${moneyFmt(fx.fxBaseTotal, baseCurrency)}` : ""}
         </span>
         <Button variant="ghost" onClick={() => onClose(draft?.invoice.id ?? null)} disabled={Boolean(busy)}>
           Cancel

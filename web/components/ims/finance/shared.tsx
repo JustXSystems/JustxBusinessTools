@@ -9,12 +9,13 @@ import {
   INVOICE_STAMP,
   PAY_METHOD_LABEL,
   PAY_METHODS,
+  normalizeCurrencyCode,
   upiPayIntent,
   type InvoiceDetail,
   type PayMethod,
   type PaymentInput,
 } from "@/lib/ims/finance";
-import { computeTotals, dateLabel, inrExact, num, PERIOD_OPTIONS, qtyText, round2 } from "@/lib/ims/format";
+import { computeTotals, dateLabel, inrExact, moneyFmt, num, PERIOD_OPTIONS, qtyText, round2 } from "@/lib/ims/format";
 import { DocRefLink } from "../bom/DocRefLink";
 import { DocumentPaper, type PaperParty } from "../shared/DocumentPaper";
 import { useIms } from "../core";
@@ -495,6 +496,15 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
     { label: "Due date", value: inv.dueDate ? dateLabel(inv.dueDate) : "On receipt" },
     { label: "Place of supply", value: inv.placeOfSupply || session.settings.state || "—" },
   ];
+  const docCurrency = normalizeCurrencyCode(inv.currencyCode);
+  const baseCurrency = normalizeCurrencyCode(session.settings.baseCurrency);
+  const foreignDoc = docCurrency !== baseCurrency;
+  const money = (n: number) => moneyFmt(n, docCurrency);
+  if (foreignDoc) {
+    meta.push({ label: "Currency", value: docCurrency });
+    meta.push({ label: "FX rate", value: `1 ${docCurrency} = ${inv.fxRate} ${baseCurrency}` });
+    meta.push({ label: `Total in ${baseCurrency}`, value: moneyFmt(inv.fxBaseTotal, baseCurrency) });
+  }
   if (inv.customerPoNo) meta.push({ label: "Customer PO", value: inv.customerPoNo });
   if (inv.againstInvoiceNo) meta.push({ label: "Against invoice", value: inv.againstInvoiceNo });
   if (inv.progressPct != null && inv.progressPct > 0) {
@@ -552,7 +562,7 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
       : null;
   const upi = session.settings.bankUpi?.trim() || null;
   const payIntent =
-    inv.status === "issued" && (inv.docKind || "tax_invoice") === "tax_invoice" && inv.balance > 0.005 && upi
+    inv.status === "issued" && (inv.docKind || "tax_invoice") === "tax_invoice" && inv.balance > 0.005 && upi && docCurrency === "INR"
       ? upiPayIntent({ vpa: upi, payeeName: session.settings.businessName, amount: inv.balance, note: inv.invoiceNo })
       : null;
   const bankBits = [session.settings.bankName, session.settings.bankAccountName, session.settings.bankAccountNo ? `A/c ${session.settings.bankAccountNo}` : null, session.settings.bankIfsc ? `IFSC ${session.settings.bankIfsc}` : null]
@@ -566,6 +576,7 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
       shipTo={shipTo}
       meta={meta}
       totals={totals}
+      currencyCode={docCurrency}
       intraState={inv.intraState}
       notes={inv.notes}
       terms={inv.terms}
@@ -599,16 +610,16 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
                       <td>{h.hsn}</td>
                       <td>{qtyText(h.qty, h.unit)}</td>
                       <td>{h.gstRate}%</td>
-                      <td>{inrExact(h.taxable)}</td>
+                      <td>{money(h.taxable)}</td>
                       {inv.intraState ? (
                         <>
-                          <td>{inrExact(round2(h.tax / 2))}</td>
-                          <td>{inrExact(round2(h.tax - round2(h.tax / 2)))}</td>
+                          <td>{money(round2(h.tax / 2))}</td>
+                          <td>{money(round2(h.tax - round2(h.tax / 2)))}</td>
                         </>
                       ) : (
-                        <td>{inrExact(h.tax)}</td>
+                        <td>{money(h.tax)}</td>
                       )}
-                      <td>{inrExact(h.tax)}</td>
+                      <td>{money(h.tax)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -617,15 +628,15 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
           ) : null}
           {inv.shippingCharges > 0.005 ? (
             <div>
-              Shipping {inrExact(inv.shippingCharges)}
-              {inv.shippingTax > 0.005 ? ` + GST ${inrExact(inv.shippingTax)} (${inv.shippingGstRate}%)` : ""}
+              Shipping {money(inv.shippingCharges)}
+              {inv.shippingTax > 0.005 ? ` + GST ${money(inv.shippingTax)} (${inv.shippingGstRate}%)` : ""}
             </div>
           ) : null}
           {inv.status === "issued" && (inv.docKind || "tax_invoice") === "tax_invoice" ? (
             <div>
-              Received {inrExact(inv.amountPaid)}
-              {inv.creditApplied > 0.005 ? ` · Credits ${inrExact(inv.creditApplied)}` : ""}
-              {" · "}Balance {inrExact(inv.balance)}
+              Received {money(inv.amountPaid)}
+              {inv.creditApplied > 0.005 ? ` · Credits ${money(inv.creditApplied)}` : ""}
+              {" · "}Balance {money(inv.balance)}
               {inv.payMode ? ` · Last paid by ${inv.payMode.toUpperCase()}` : ""}
             </div>
           ) : null}

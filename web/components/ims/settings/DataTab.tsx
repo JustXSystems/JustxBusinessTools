@@ -95,6 +95,8 @@ const settingsSheet = (s: ImsSettings): SheetSpec => ({
     ["BOM schedule columns", s.bomScheduleColumns?.length ? s.bomScheduleColumns.join(", ") : "Pack defaults"],
     ["PO approval limit", s.poApprovalLimit],
     ["Invoice approval limit", s.invoiceApprovalLimit],
+    ["Base currency", s.baseCurrency],
+    ["Dunning levels", (s.dunningSequences ?? []).map((l) => `${l.key}: ${l.label} (${l.minDaysOverdue}d, ${l.tone})`).join("; ")],
     ["MSME / UDYAM", s.msmeRegistered ? s.msmeUdyam || "Registered" : "No"],
     ["Default payment terms (days)", s.paymentTermsDays],
     ["Default GST %", s.defaultGstRate],

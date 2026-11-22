@@ -2,14 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { Alert, Badge, Button, Checkbox, Dialog, Field, FormGrid, Input, Select, Switch, Textarea } from "@/components/bos";
-import type { ReminderSettings } from "@/lib/ims/api";
+import type { DunningLevel, ReminderSettings } from "@/lib/ims/api";
 import {
   AR_PRIORITY_BADGE,
   AR_STATUS_BADGE,
   CHANNEL_LABEL,
+  DEFAULT_DUNNING_LEVELS,
+  DUNNING_TONE_LABEL,
+  dunningCopy,
   finance,
   INVOICE_BADGE,
   methodLabel,
+  normalizeCurrencyCode,
+  pickDunningLevel,
   renderTemplate,
   reminderVars,
   type ArCustomer,
@@ -18,7 +23,7 @@ import {
   type ReminderChannel,
   type SentReminder,
 } from "@/lib/ims/finance";
-import { dateLabel, inrExact, num, round2, stampLabel } from "@/lib/ims/format";
+import { dateLabel, inrExact, moneyFmt, num, round2, stampLabel } from "@/lib/ims/format";
 import { Loaded, StatusBadge, useIms, useImsAction, useImsData, usePrint } from "../core";
 import { activityTone, KeyValues, MethodSelect, PaymentDialog, QuickChips, ReasonDialog, Stats, Timeline, type TimelineItem } from "./shared";
 
@@ -660,33 +665,81 @@ export function CollectionsPanel({
   );
 }
 
-/** Formal overdue notice for print / PDF (SAP-style dunning letter light). */
+/**
+ * Multi-level overdue letter (L1 friendly → L3 final notice by default; levels live in Settings → Reminders).
+ * "Print letter" logs a dunning run for the customer first, so Receivables can show what was sent and when.
+ */
 export function DunningLetterDialog({
   customer,
   invoices,
   businessName,
   today,
+  levels,
+  initialLevelKey,
+  onLogged,
   onClose,
 }: {
   customer: ArCustomer;
   invoices: ImsInvoice[];
   businessName: string;
   today: string;
+  /** Configured sequence; falls back to L1–L3 defaults. */
+  levels?: ReadonlyArray<DunningLevel>;
+  /** Level to open on (L1 when omitted). */
+  initialLevelKey?: string;
+  /** Called after a run is logged so the caller can refresh its "last letter" column. */
+  onLogged?: () => void;
   onClose: () => void;
 }) {
   const { session } = useIms();
+  const { run, busy } = useImsAction();
   const print = usePrint();
+  const sequence = levels?.length ? levels : DEFAULT_DUNNING_LEVELS;
   const overdue = invoices.filter((i) => i.daysOverdue > 0 && i.balance > 0.005).sort((a, b) => b.daysOverdue - a.daysOverdue);
   const open = invoices.filter((i) => i.balance > 0.005);
   const list = overdue.length ? overdue : open;
-  const total = round2(list.reduce((s, i) => s + i.balance, 0));
+  const baseCurrency = normalizeCurrencyCode(session.settings.baseCurrency);
+  // Mixed-currency customers: the headline total is the base-currency equivalent of every balance.
+  const total = round2(list.reduce((s, i) => s + i.balance * (i.fxRate > 0 ? i.fxRate : 1), 0));
+  const oldest = list.reduce((m, i) => Math.max(m, i.daysOverdue), 0);
+  const suggested = pickDunningLevel(sequence, oldest);
+  const [levelKey, setLevelKey] = useState(() => (sequence.some((l) => l.key === initialLevelKey) ? (initialLevelKey as string) : sequence[0].key));
+  const level = sequence.find((l) => l.key === levelKey) ?? sequence[0];
   const s = session.settings;
+  const copy = dunningCopy(level.tone, { total: moneyFmt(total, baseCurrency), asOf: dateLabel(today), count: list.length });
+  const history = useImsData(() => finance.dunningRuns({ customerId: customer.customerId, customerName: customer.name, limit: 6 }), [customer.key]);
+
+  const printLogged = async () => {
+    const out = await run(
+      "dunning",
+      () => finance.createDunningRun({ customerId: customer.customerId, customerName: customer.name, levelKey: level.key, invoiceIds: list.map((i) => i.id) }),
+      { success: `${level.key} letter logged`, refresh: false },
+    );
+    if (!out) return;
+    history.reload();
+    onLogged?.();
+    print();
+  };
 
   return (
-    <Dialog open onClose={onClose} title={`Payment reminder · ${customer.name}`} wide>
+    <Dialog open onClose={onClose} title={`${level.label} · ${customer.name}`} wide>
+      <div className="no-print" style={{ marginBottom: 12 }}>
+        <QuickChips
+          label="Letter level"
+          active={level.key}
+          options={sequence.map((l) => ({ key: l.key, label: `${l.key} · ${l.label}${suggested?.key === l.key ? " (suggested)" : ""}` }))}
+          onPick={setLevelKey}
+        />
+        <p className="ims-faint" style={{ fontSize: 12, margin: "6px 0 0" }}>
+          {oldest > 0 ? `Oldest invoice is ${oldest} day${oldest === 1 ? "" : "s"} overdue.` : "Nothing is overdue yet."} {DUNNING_TONE_LABEL[level.tone]} tone, from {level.minDaysOverdue}+ days.
+        </p>
+      </div>
       <div className="ims-row no-print" style={{ marginBottom: 12 }}>
-        <Button variant="primary" icon="printer" onClick={print}>
-          Print letter
+        <Button variant="primary" icon="printer" onClick={() => void printLogged()} disabled={busy === "dunning"}>
+          {busy === "dunning" ? "Logging…" : `Print ${level.key} letter`}
+        </Button>
+        <Button variant="ghost" onClick={print} title="Print without recording a dunning run">
+          Print only
         </Button>
         <Button variant="ghost" onClick={onClose}>
           Close
@@ -707,13 +760,12 @@ export function DunningLetterDialog({
           <div>{customer.name}</div>
           {customer.mobile ? <div>{customer.mobile}</div> : null}
         </div>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Subject: Outstanding dues — payment reminder</div>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Subject: {copy.subject}</div>
         <p style={{ fontSize: 13, lineHeight: 1.5 }}>
           Dear {customer.name},
           <br />
           <br />
-          This is a formal reminder that the following invoice{list.length === 1 ? " is" : "s are"} outstanding as of {dateLabel(today)}. Kindly arrange payment of{" "}
-          <b>{inrExact(total)}</b> at the earliest.
+          {copy.intro}
         </p>
         <table className="fin-table" style={{ width: "100%", marginTop: 12, marginBottom: 12, fontSize: 12 }}>
           <thead>
@@ -732,17 +784,17 @@ export function DunningLetterDialog({
                 <td>{dateLabel(i.invoiceDate)}</td>
                 <td>{i.dueDate ? dateLabel(i.dueDate) : "—"}</td>
                 <td style={{ textAlign: "right" }}>{i.daysOverdue || "—"}</td>
-                <td style={{ textAlign: "right" }}>{inrExact(i.balance)}</td>
+                <td style={{ textAlign: "right" }}>{moneyFmt(i.balance, i.currencyCode)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
               <td colSpan={4} style={{ textAlign: "right" }}>
-                <b>Total due</b>
+                <b>Total due{baseCurrency !== "INR" || list.some((i) => normalizeCurrencyCode(i.currencyCode) !== baseCurrency) ? ` (${baseCurrency})` : ""}</b>
               </td>
               <td style={{ textAlign: "right" }}>
-                <b>{inrExact(total)}</b>
+                <b>{moneyFmt(total, baseCurrency)}</b>
               </td>
             </tr>
           </tfoot>
@@ -758,7 +810,7 @@ export function DunningLetterDialog({
           </p>
         ) : null}
         <p style={{ fontSize: 13, marginTop: 16 }}>
-          Please ignore this notice if payment has already been made. For queries, contact {s.phone || s.email || "our accounts team"}.
+          {copy.closing} For queries, contact {s.phone || s.email || "our accounts team"}.
         </p>
         <p style={{ fontSize: 13, marginTop: 24 }}>
           Yours sincerely,
@@ -767,6 +819,36 @@ export function DunningLetterDialog({
           <br />
           Accounts
         </p>
+      </div>
+      <div className="no-print" style={{ marginTop: 14 }}>
+        <div className="fin-section-title" style={{ marginBottom: 6 }}>
+          Letter history
+        </div>
+        {history.data?.runs.length ? (
+          <div className="fin-table-wrap">
+            <table className="fin-table">
+              <tbody>
+                {history.data.runs.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <b>{r.levelKey}</b> · {r.levelLabel}
+                    </td>
+                    <td>{r.invoiceIds.length} invoice{r.invoiceIds.length === 1 ? "" : "s"}</td>
+                    <td className="is-num">{moneyFmt(r.totalDue, baseCurrency)}</td>
+                    <td className="ims-faint">
+                      {stampLabel(r.preparedAt)}
+                      {r.preparedByName ? ` · ${r.preparedByName}` : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="ims-faint" style={{ fontSize: 12.5, margin: 0 }}>
+            {history.loading && !history.data ? "Loading…" : "No letters logged for this customer yet."}
+          </p>
+        )}
       </div>
     </Dialog>
   );

@@ -20,6 +20,7 @@ export type ImsModuleKey =
   | "parties"
   | "purchase"
   | "approvals"
+  | "salesOrders"
   | "sales"
   | "bom"
   | "bomPackages"

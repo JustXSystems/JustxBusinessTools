@@ -20,6 +20,7 @@ import {
   type ReminderSettings,
   type Taxonomy,
 } from "./logic.js";
+import { DEFAULT_BASE_CURRENCY, normalizeCurrencyCode, normalizeDunningSequences, DUNNING_TONES, MAX_DUNNING_LEVELS, type DunningLevel } from "./wave6-logic.js";
 
 /** Canonical BOM document purposes (+ legacy aesthetic ids accepted on read). */
 export const BOM_PAPER_PURPOSES = ["proposal", "executive", "technical", "field", "share"] as const;
@@ -138,6 +139,8 @@ export type ImsSettings = {
   businessName: string;
   businessType: string;
   gstin: string | null;
+  /** ISO-4217 base currency for documents and reports (default INR). Foreign documents lock an FX rate against it. */
+  baseCurrency: string;
   state: string | null;
   stateCode: string | null;
   address: string | null;
@@ -158,6 +161,8 @@ export type ImsSettings = {
   dnPrefix: string;
   proformaPrefix: string;
   retainerPrefix: string;
+  soPrefix: string;
+  soDcPrefix: string;
   billPrefix: string;
   returnPrefix: string;
   checkPrefix: string;
@@ -177,6 +182,8 @@ export type ImsSettings = {
   poApprovalLimit: number;
   /** 0 = no invoice approval. At/above this grand total, Save & issue queues for Approvals. */
   invoiceApprovalLimit: number;
+  /** Multi-level dunning letters (L1 → L3 by days overdue). Never empty. */
+  dunningSequences: DunningLevel[];
   draftPoPurgeDays: number;
   paymentTermsDays: number;
   defaultGstRate: number;
@@ -194,6 +201,7 @@ type SettingsRow = {
   business_name: string | null;
   business_type: string;
   gstin: string | null;
+  base_currency?: string | null;
   state: string | null;
   state_code: string | null;
   address: string | null;
@@ -213,6 +221,8 @@ type SettingsRow = {
   dn_prefix?: string;
   proforma_prefix?: string;
   retainer_prefix?: string;
+  so_prefix?: string;
+  so_dc_prefix?: string;
   bill_prefix: string;
   return_prefix: string;
   check_prefix: string;
@@ -227,6 +237,7 @@ type SettingsRow = {
   bom_schedule_columns_json?: unknown;
   po_approval_limit: string | number;
   invoice_approval_limit?: string | number;
+  dunning_sequences?: unknown;
   draft_po_purge_days: number;
   payment_terms_days: number;
   default_gst_rate: string | number;
@@ -242,6 +253,7 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   businessName: r.business_name ?? "",
   businessType: r.business_type || "distributor",
   gstin: r.gstin,
+  baseCurrency: normalizeCurrencyCode(r.base_currency, DEFAULT_BASE_CURRENCY),
   state: r.state,
   stateCode: r.state_code,
   address: r.address,
@@ -261,6 +273,8 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   dnPrefix: r.dn_prefix || "DN",
   proformaPrefix: r.proforma_prefix || "PF",
   retainerPrefix: r.retainer_prefix || "RA",
+  soPrefix: r.so_prefix || "SO",
+  soDcPrefix: r.so_dc_prefix || "SODC",
   billPrefix: r.bill_prefix,
   returnPrefix: r.return_prefix,
   checkPrefix: r.check_prefix,
@@ -275,6 +289,7 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   bomScheduleColumns: normalizeBomScheduleColumnsSetting(r.bom_schedule_columns_json),
   poApprovalLimit: money(r.po_approval_limit),
   invoiceApprovalLimit: money(r.invoice_approval_limit ?? 0),
+  dunningSequences: normalizeDunningSequences(r.dunning_sequences),
   draftPoPurgeDays: Number(r.draft_po_purge_days) || 0,
   paymentTermsDays: Number(r.payment_terms_days) || 0,
   defaultGstRate: money(r.default_gst_rate),
@@ -318,6 +333,11 @@ const SettingsInput = z.object({
   businessName: z.string().trim().max(200).optional(),
   businessType: z.enum(BUSINESS_TYPES.map((b) => b.key) as [string, ...string[]]).optional(),
   gstin: optText(20),
+  baseCurrency: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{3}$/, "Use a 3-letter ISO currency code (e.g. INR, USD)")
+    .optional(),
   state: optText(80),
   stateCode: optText(4),
   address: optText(500),
@@ -337,6 +357,8 @@ const SettingsInput = z.object({
   dnPrefix: prefix.optional(),
   proformaPrefix: prefix.optional(),
   retainerPrefix: prefix.optional(),
+  soPrefix: prefix.optional(),
+  soDcPrefix: prefix.optional(),
   billPrefix: prefix.optional(),
   returnPrefix: prefix.optional(),
   checkPrefix: prefix.optional(),
@@ -351,6 +373,18 @@ const SettingsInput = z.object({
   bomScheduleColumns: z.array(z.enum(BOM_SCHEDULE_COLUMN_IDS)).max(16).nullable().optional(),
   poApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
   invoiceApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
+  dunningSequences: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(24),
+        label: z.string().trim().max(80),
+        minDaysOverdue: z.coerce.number().int().min(0).max(3650),
+        tone: z.enum(DUNNING_TONES),
+      }),
+    )
+    .min(1, "Keep at least one dunning level")
+    .max(MAX_DUNNING_LEVELS)
+    .optional(),
   draftPoPurgeDays: z.coerce.number().int().min(0).max(365).optional(),
   paymentTermsDays: z.coerce.number().int().min(0).max(365).optional(),
   defaultGstRate: z.coerce.number().min(0).max(100).optional(),
@@ -366,6 +400,7 @@ const COLUMN: Record<string, string> = {
   businessName: "business_name",
   businessType: "business_type",
   gstin: "gstin",
+  baseCurrency: "base_currency",
   state: "state",
   stateCode: "state_code",
   address: "address",
@@ -385,6 +420,8 @@ const COLUMN: Record<string, string> = {
   dnPrefix: "dn_prefix",
   proformaPrefix: "proforma_prefix",
   retainerPrefix: "retainer_prefix",
+  soPrefix: "so_prefix",
+  soDcPrefix: "so_dc_prefix",
   billPrefix: "bill_prefix",
   returnPrefix: "return_prefix",
   checkPrefix: "check_prefix",
@@ -399,6 +436,7 @@ const COLUMN: Record<string, string> = {
   bomScheduleColumns: "bom_schedule_columns_json",
   poApprovalLimit: "po_approval_limit",
   invoiceApprovalLimit: "invoice_approval_limit",
+  dunningSequences: "dunning_sequences",
   draftPoPurgeDays: "draft_po_purge_days",
   paymentTermsDays: "payment_terms_days",
   defaultGstRate: "default_gst_rate",
@@ -421,6 +459,8 @@ export async function updateSettings(deps: ImsDeps, actor: ImsActor, body: unkno
     if (key === "permissions") v = JSON.stringify(normalizePermissions(value));
     else if (key === "taxonomy") v = JSON.stringify(normalizeTaxonomy(value));
     else if (key === "reminders") v = JSON.stringify(normalizeReminders(value));
+    else if (key === "baseCurrency") v = normalizeCurrencyCode(value);
+    else if (key === "dunningSequences") v = JSON.stringify(normalizeDunningSequences(value));
     else if (key === "bomPaperTemplate") v = normalizeBomPaperTemplate(value);
     else if (key === "bomIndustryPack") v = normalizeBomIndustryPack(value);
     else if (key === "bomPaperTone") v = normalizeBomPaperTone(value);
@@ -549,7 +589,13 @@ const CLEAR_TABLES: ReadonlyArray<{ key: string; sql: string }> = [
   { key: "ledgerEntries", sql: "DELETE FROM ims_ledger_entries WHERE tenant_id = :tenantId" },
   { key: "expenses", sql: "DELETE FROM ims_expenses WHERE tenant_id = :tenantId" },
   { key: "dailyClosings", sql: "DELETE FROM ims_daily_closings WHERE tenant_id = :tenantId" },
+  { key: "dunningRuns", sql: "DELETE FROM ims_dunning_runs WHERE tenant_id = :tenantId" },
+  { key: "installmentSchedule", sql: "DELETE FROM ims_installment_schedule WHERE tenant_id = :tenantId" },
+  { key: "installmentPlans", sql: "DELETE FROM ims_installment_plans WHERE tenant_id = :tenantId" },
   { key: "invoiceDcLinks", sql: "DELETE FROM ims_invoice_dc_links WHERE tenant_id = :tenantId" },
+  { key: "invoiceSoDcLinks", sql: "DELETE FROM ims_invoice_so_dc_links WHERE tenant_id = :tenantId" },
+  { key: "soDcs", sql: "DELETE FROM ims_so_dcs WHERE tenant_id = :tenantId" },
+  { key: "salesOrders", sql: "DELETE FROM ims_sales_orders WHERE tenant_id = :tenantId" },
   { key: "bomDcReturnLines", sql: "DELETE FROM ims_bom_dc_return_lines WHERE tenant_id = :tenantId" },
   { key: "bomDcReturns", sql: "DELETE FROM ims_bom_dc_returns WHERE tenant_id = :tenantId" },
   { key: "bomDcLines", sql: "DELETE FROM ims_bom_dc_lines WHERE tenant_id = :tenantId" },

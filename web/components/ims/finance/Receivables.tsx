@@ -4,7 +4,7 @@ import "./finance.css";
 import { useMemo, useState } from "react";
 import { Alert, Button, Card, Checkbox, DataTable, EmptyState, Grid, KpiCard, SearchInput, Segmented, Select, WidgetCard, WidgetRow, type BosColumn } from "@/components/bos";
 import type { AgingKey } from "@/lib/ims/api";
-import { AR_PRIORITY_BADGE, AR_STATUS_BADGE, CHANNEL_LABEL, finance, type ArCustomer, type ArPriority, type ImsInvoice, type ReceivablesData } from "@/lib/ims/finance";
+import { AR_PRIORITY_BADGE, AR_STATUS_BADGE, CHANNEL_LABEL, DEFAULT_DUNNING_LEVELS, finance, type ArCustomer, type ArPriority, type ImsInvoice, type ReceivablesData } from "@/lib/ims/finance";
 import { dateLabel, downloadCsv, inr, inrCompact, inrExact, timeAgo } from "@/lib/ims/format";
 import { Loaded, PageHeader, RequirePerm, Stack, StatusBadge, useIms, useImsAction, useImsData } from "../core";
 import { AssignDialog, CollectionsPanel, DunningLetterDialog, ReceiptDialog, ReminderDialog } from "./ArDialogs";
@@ -33,7 +33,7 @@ export function ReceivablesModule() {
 }
 
 function ReceivablesBody({ data, intent }: { data: ReceivablesData; intent: string | null }) {
-  const { session } = useIms();
+  const { session, invalidate } = useIms();
   const { run, busy } = useImsAction();
   const [mode, setMode] = useState<ViewMode>("invoices");
   const [bucket, setBucket] = useState<Bucket>("");
@@ -51,6 +51,15 @@ function ReceivablesBody({ data, intent }: { data: ReceivablesData; intent: stri
   const [dunning, setDunning] = useState<ArCustomer | null>(null);
   const k = data.kpis;
   const today = data.today;
+  const dunningLevels = data.dunning?.levels?.length ? data.dunning.levels : DEFAULT_DUNNING_LEVELS;
+  const lastDunning = data.dunning?.last ?? {};
+  /** Letters escalate: reopen on the level after the last one sent (L1 when none sent yet). */
+  const nextLevelKey = (key: string): string | undefined => {
+    const last = lastDunning[key];
+    if (!last) return undefined;
+    const idx = dunningLevels.findIndex((l) => l.key === last.levelKey);
+    return (dunningLevels[idx + 1] ?? dunningLevels[idx])?.key;
+  };
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -158,7 +167,9 @@ function ReceivablesBody({ data, intent }: { data: ReceivablesData; intent: stri
       cell: (c) => (
         <span className="ims-cell-stack">
           <span className="ims-strong">{c.name}</span>
-          <small>{[c.accountManagerName ? `AM: ${c.accountManagerName}` : null, c.mobile].filter(Boolean).join(" · ") || "—"}</small>
+          <small>
+            {[c.accountManagerName ? `AM: ${c.accountManagerName}` : null, c.mobile, lastDunning[c.key] ? `Last letter ${lastDunning[c.key].levelKey} · ${timeAgo(lastDunning[c.key].preparedAt)}` : null].filter(Boolean).join(" · ") || "—"}
+          </small>
         </span>
       ),
     },
@@ -179,7 +190,7 @@ function ReceivablesBody({ data, intent }: { data: ReceivablesData; intent: stri
             Statement
           </Button>
           {c.overdue > 0 || c.outstanding > 0 ? (
-            <Button size="sm" variant="ghost" onClick={() => setDunning(c)}>
+            <Button size="sm" variant="ghost" onClick={() => setDunning(c)} title="Dunning letter — pick L1 / L2 / L3 inside">
               Letter
             </Button>
           ) : null}
@@ -542,6 +553,9 @@ function ReceivablesBody({ data, intent }: { data: ReceivablesData; intent: stri
           invoices={data.invoices.filter((i) => customerKeyOf(i) === dunning.key)}
           businessName={data.businessName}
           today={today}
+          levels={dunningLevels}
+          initialLevelKey={nextLevelKey(dunning.key)}
+          onLogged={invalidate}
           onClose={() => setDunning(null)}
         />
       ) : null}

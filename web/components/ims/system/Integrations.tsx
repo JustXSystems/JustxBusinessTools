@@ -9,6 +9,9 @@ import {
   imsSystem,
   saveBlob,
   SYNC_TONE,
+  type GspConfigInput,
+  type GspMode,
+  type GspTestResult,
   type IntegrationsOverview,
   type PosConfigInput,
   type PosFrequency,
@@ -29,7 +32,7 @@ import {
 import { Loaded, PageHeader, RequirePerm, Stack, SubTabs, useIms, useImsAction, useImsData } from "../core";
 import { ConfirmDialog, KeyValues, ToolHead } from "./shared";
 
-type Tab = "tally" | "pos" | "log";
+type Tab = "tally" | "pos" | "gsp" | "log";
 
 const FREQ_LABEL: Record<TallyFrequency, string> = { realtime: "After every change", "15m": "Every 15 minutes", hourly: "Hourly", daily: "Daily", manual: "Only when I press Sync now" };
 const FREQ_HOURS: Record<TallyFrequency, number | null> = { realtime: 0.25, "15m": 0.25, hourly: 1, daily: 24, manual: null };
@@ -46,7 +49,7 @@ const PAY_MODES: ReadonlyArray<{ value: PosPayMode; label: string }> = [
 export function IntegrationsModule() {
   const { takeIntent } = useIms();
   const [intent] = useState(() => takeIntent("integrations"));
-  const [tab, setTab] = useState<Tab>(intent === "pos" ? "pos" : intent === "log" ? "log" : "tally");
+  const [tab, setTab] = useState<Tab>(intent === "pos" ? "pos" : intent === "gsp" ? "gsp" : intent === "log" ? "log" : "tally");
   const focusImport = intent === "import";
   const state = useImsData(() => imsSystem.integrations(), []);
   return (
@@ -60,11 +63,12 @@ export function IntegrationsModule() {
           options={[
             { value: "tally", label: "Tally ERP" },
             { value: "pos", label: "POS" },
+            { value: "gsp", label: "GSP / e-Invoice" },
             { value: "log", label: "Sync log" },
           ]}
         />
         <Loaded state={state}>
-          {(d) => (tab === "tally" ? <TallyTab data={d} focusImport={focusImport} /> : tab === "pos" ? <PosTab data={d} /> : <LogTab log={d.log} />)}
+          {(d) => (tab === "tally" ? <TallyTab data={d} focusImport={focusImport} /> : tab === "pos" ? <PosTab data={d} /> : tab === "gsp" ? <GspTab data={d} /> : <LogTab log={d.log} />)}
         </Loaded>
       </Stack>
     </RequirePerm>
@@ -777,6 +781,134 @@ function PosTab({ data }: { data: IntegrationsOverview }) {
   );
 }
 
+/* ---------- GSP / IRP e-Invoice ---------- */
+
+function GspTab({ data }: { data: IntegrationsOverview }) {
+  const { can } = useIms();
+  const editable = can("integrations");
+  const { run, isBusy } = useImsAction();
+  const g = data.gsp;
+  const [form, setForm] = useState<GspConfigInput>(() => ({
+    mode: g.config?.mode ?? "sandbox",
+    baseUrl: g.config?.baseUrl ?? "",
+    apiKey: "",
+    gstin: g.config?.gstin ?? "",
+    autoPushOnIssue: g.config?.autoPushOnIssue ?? false,
+  }));
+  const [test, setTest] = useState<GspTestResult | null>(null);
+  const set = <K extends keyof GspConfigInput>(k: K, v: GspConfigInput[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const live = form.mode === "live";
+  const gspLog = data.log.filter((l) => l.provider === "gsp");
+  const payload = (): GspConfigInput => ({ ...form, baseUrl: form.baseUrl?.trim() || null, apiKey: form.apiKey?.trim() || null, gstin: form.gstin?.trim() || null });
+
+  return (
+    <Stack gap={16}>
+      <Grid cols={3} min={180}>
+        <KpiCard interactive={false} label="Status" value={g.enabled ? "Enabled" : "Off"} valueTone={g.enabled ? "emerald" : undefined} delta={g.config ? (g.config.mode === "live" ? "Live IRP" : "Sandbox (simulated)") : "Not set up"} deltaTone="muted" />
+        <KpiCard interactive={false} label="Auto-push on issue" value={g.config?.autoPushOnIssue ? "On" : "Off"} delta="B2B invoices with a GSTIN" deltaTone="info" />
+        <KpiCard interactive={false} label="Last push" value={g.lastSyncAt ? timeAgo(g.lastSyncAt) : "Never"} delta={g.lastStatus ?? "—"} deltaTone={g.lastStatus === "failed" ? "down" : "muted"} />
+      </Grid>
+
+      <Card interactive={false}>
+        <Stack gap={14}>
+          <ToolHead
+            glyph="🧾"
+            title="GSP / e-Invoice (IRP)"
+            sub="Generate the IRN, acknowledgement and signed QR straight from an issued B2B invoice. Without a GSP you can still associate an IRN by hand on the invoice."
+            aside={
+              editable && g.config ? (
+                <label className="ims-row" style={{ gap: 8 }}>
+                  <span className="ims-muted" style={{ fontSize: 13 }}>
+                    Enabled
+                  </span>
+                  <Switch checked={g.enabled} aria-label="GSP e-Invoice enabled" onChange={(on) => void run("gsp-toggle", () => imsSystem.saveGsp({ ...payload(), apiKey: null, enabled: on }), { success: on ? "GSP enabled" : "GSP disabled" })} />
+                </label>
+              ) : null
+            }
+          />
+          <Alert tone={live ? "amber" : "blue"} title={live ? "Live mode" : "Sandbox mode"}>
+            {live
+              ? "Invoices are sent to your GSP and registered with the IRP. Use Test first, and confirm the base URL and key with your GSP."
+              : "Nothing leaves IMS. Each push stores a realistic but simulated IRN, acknowledgement and QR so you can try the whole flow."}
+          </Alert>
+          <FormGrid>
+            <Field label="Mode">
+              {() => (
+                <Segmented
+                  size="sm"
+                  role="radio"
+                  aria-label="GSP mode"
+                  value={form.mode}
+                  onChange={(v: GspMode) => set("mode", v)}
+                  options={[
+                    { value: "sandbox" as GspMode, label: "Sandbox" },
+                    { value: "live" as GspMode, label: "Live" },
+                  ]}
+                />
+              )}
+            </Field>
+            <Field label="Seller GSTIN" hint="Optional — defaults to the GSTIN in Settings.">
+              {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} value={form.gstin ?? ""} disabled={!editable} onChange={(e) => set("gstin", e.target.value.toUpperCase())} placeholder="29ABCDE1234F1Z5" maxLength={15} />}
+            </Field>
+            <Field label="GSP base URL" hint={live ? "e.g. https://api.your-gsp.com — IMS posts to /einv/v2/Invoice." : "Only used in live mode."}>
+              {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} value={form.baseUrl ?? ""} disabled={!editable || !live} onChange={(e) => set("baseUrl", e.target.value)} placeholder="https://" />}
+            </Field>
+            <Field label="API key" hint={g.config?.hasApiKey ? `Saved (${g.config.apiKeyHint}). Leave blank to keep it.` : "Write-only — IMS never shows a saved key again."}>
+              {({ id, describedBy }) => (
+                <Input id={id} aria-describedby={describedBy} type="password" autoComplete="new-password" value={form.apiKey ?? ""} disabled={!editable || !live} onChange={(e) => set("apiKey", e.target.value)} placeholder={g.config?.hasApiKey ? "••••••••" : "Paste the key from your GSP"} />
+              )}
+            </Field>
+            <Field label="Auto-push on issue">
+              {({ id }) => (
+                <span className="ims-row" style={{ minHeight: 38 }}>
+                  <Switch id={id} checked={form.autoPushOnIssue} disabled={!editable} onChange={(v) => set("autoPushOnIssue", v)} aria-label="Auto-push on issue" />
+                  <span className="ims-muted" style={{ fontSize: 12.5 }}>
+                    {form.autoPushOnIssue ? "Issued B2B invoices go to the IRP automatically. If it fails the invoice stays issued — retry from the invoice." : "Push manually from each invoice"}
+                  </span>
+                </span>
+              )}
+            </Field>
+          </FormGrid>
+          {editable ? (
+            <div className="ims-row" style={{ flexWrap: "wrap" }}>
+              <Button variant="primary" icon="check" disabled={isBusy("gsp-save")} onClick={() => void run("gsp-save", () => imsSystem.saveGsp({ ...payload(), enabled: true }), { success: g.enabled ? "GSP settings saved" : "GSP enabled" })}>
+                {g.enabled ? "Save changes" : "Save & enable"}
+              </Button>
+              <Button
+                icon="refresh"
+                disabled={isBusy("gsp-test")}
+                onClick={async () => {
+                  const r = await run("gsp-test", () => imsSystem.testGsp(payload()));
+                  if (r) setTest(r);
+                }}
+              >
+                {isBusy("gsp-test") ? "Testing…" : "Test"}
+              </Button>
+            </div>
+          ) : (
+            <Alert tone="blue" title="View only">
+              Only users with the Tally & POS permission can change the GSP connection.
+            </Alert>
+          )}
+          {test ? (
+            <Alert tone={test.ok ? "emerald" : "coral"} title={test.ok ? `${test.mode === "live" ? "GSP reachable" : "Sandbox ready"}` : "GSP check failed"}>
+              {test.message}
+            </Alert>
+          ) : null}
+        </Stack>
+      </Card>
+
+      <Card interactive={false}>
+        <div className="ims-between" style={{ marginBottom: 10 }}>
+          <b>Recent e-Invoice activity</b>
+          <span className="ims-sys-mini">{gspLog.length ? `Last ${timeAgo(gspLog[0].createdAt)}` : ""}</span>
+        </div>
+        <LogTable rows={gspLog.slice(0, 20)} />
+      </Card>
+    </Stack>
+  );
+}
+
 type ManualLine = { code: string; qty: string; rate: string };
 
 function ManualSaleDialog({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: (r: PosSaleResult) => void }) {
@@ -931,7 +1063,7 @@ function LogTable({ rows }: { rows: ReadonlyArray<SyncLogEntry> }) {
         </span>
       ),
     },
-    { key: "provider", header: "System", cell: (r) => (r.provider === "tally" ? "Tally" : "POS") },
+    { key: "provider", header: "System", cell: (r) => (r.provider === "tally" ? "Tally" : r.provider === "gsp" ? "GSP" : "POS") },
     { key: "entity", header: "What", cell: (r) => <span className="ims-cell-stack"><span>{r.entity}</span><small>{r.direction === "export" ? "IMS → out" : "In → IMS"}</small></span> },
     { key: "status", header: "Result", cell: (r) => <Badge tone={SYNC_TONE[r.status] ?? "neutral"}>{r.status}</Badge> },
     { key: "records", header: "Records", align: "right", cell: (r) => <span className="ims-num">{r.records}</span> },
@@ -942,7 +1074,7 @@ function LogTable({ rows }: { rows: ReadonlyArray<SyncLogEntry> }) {
 }
 
 function LogTab({ log }: { log: SyncLogEntry[] }) {
-  const [provider, setProvider] = useState<"" | "tally" | "pos">("");
+  const [provider, setProvider] = useState<"" | "tally" | "pos" | "gsp">("");
   const [status, setStatus] = useState<"" | "success" | "partial" | "failed">("");
   const [limit, setLimit] = useState(60);
   const state = useImsData(() => (limit > 60 || provider ? imsSystem.syncLog(provider || undefined, limit).then((r) => r.log) : Promise.resolve(log)), [provider, limit, log]);
@@ -966,6 +1098,7 @@ function LogTab({ log }: { log: SyncLogEntry[] }) {
                 ["", "All systems"],
                 ["tally", "Tally"],
                 ["pos", "POS"],
+                ["gsp", "GSP"],
               ] as const
             ).map(([v, l]) => (
               <FilterChip key={v || "all"} active={provider === v} onClick={() => setProvider(v)}>

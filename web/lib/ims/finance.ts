@@ -3,7 +3,8 @@
  * payables (bills, payment runs), the party ledger and daily closing.
  * Built on the request helpers in `api.ts`; pure helpers mirror server/src/ims/logic.ts.
  */
-import { del, get, patch, post, type AgingKey, type DateRange, type Period, type ReminderSettings } from "./api";
+import { del, get, patch, post, type AgingKey, type DateRange, type DunningLevel, type DunningTone, type Period, type ReminderSettings } from "./api";
+import { withBasePath } from "@/lib/base-path";
 import type { BadgeView } from "./format";
 import type { ImsLine, ImsLineInput } from "./format";
 
@@ -85,6 +86,14 @@ export type ImsInvoice = {
   roundOff: number;
   roundToRupee: boolean;
   grandTotal: number;
+  /** Document currency (ISO-4217). `INR` unless the invoice was raised in a foreign currency. */
+  currencyCode: string;
+  /** Locked FX rate vs the base currency (1 when the document is in the base currency). */
+  fxRate: number;
+  /** Grand total in the base currency (= grandTotal when not foreign). */
+  fxBaseTotal: number;
+  /** Customer portal magic link is live (token itself is only in the invoice detail). */
+  portalEnabled: boolean;
   amountPaid: number;
   creditApplied: number;
   advanceApplied: number;
@@ -155,7 +164,7 @@ export type ArActivity = {
 
 export type HsnRow = { hsn: string; unit: string; gstRate: number; qty: number; taxable: number; tax: number };
 export type InvoiceDetail = {
-  invoice: ImsInvoice & { lines: ImsLine[]; dcIds?: string[]; dcLinks?: Array<{ id: string; docNo: string; status: string; stockPosted: boolean }> };
+  invoice: ImsInvoice & { lines: ImsLine[]; dcIds?: string[]; dcLinks?: Array<{ id: string; docNo: string; status: string; stockPosted: boolean }>; portalToken?: string | null };
   hsn: HsnRow[];
   payments: ImsPayment[];
   activity: ArActivity[];
@@ -201,6 +210,10 @@ export type InvoiceInput = {
   progressLabel?: string | null;
   accountManagerId?: number | null;
   accountManagerName?: string | null;
+  /** Document currency; omitted = the business base currency. */
+  currencyCode?: string;
+  /** Locked FX rate vs base. Forced to 1 by the server when currencyCode equals the base. */
+  fxRate?: number;
   lines: ImsLineInput[];
   roundToRupee?: boolean;
   notes?: string | null;
@@ -370,7 +383,75 @@ export type ReceivablesData = {
   managers: Array<{ userId: number; name: string; isAccountManager: boolean }>;
   reminders: ReminderSettings;
   ruleMatches: Array<{ invoiceId: string; rule: string; ruleLabel: string; templateKey: string | null }>;
+  /** Dunning sequence levels + the last letter prepared per customer key. */
+  dunning?: { levels: DunningLevel[]; last: Record<string, DunningLast> };
 };
+
+export type DunningLast = { levelKey: string; levelLabel: string; preparedAt: string | null; runs: number };
+
+export type DunningRun = {
+  id: string;
+  customerId: string | null;
+  customerName: string;
+  levelKey: string;
+  levelLabel: string;
+  tone: DunningTone;
+  totalDue: number;
+  invoiceIds: string[];
+  status: string;
+  preparedByName: string | null;
+  preparedAt: string | null;
+  notes: string | null;
+};
+
+export type DunningLetterPayload = {
+  levelKey: string;
+  levelLabel: string;
+  tone: DunningTone;
+  subject: string;
+  intro: string;
+  closing: string;
+  asOf: string;
+  customerName: string;
+  businessName: string;
+  totalDue: number;
+  invoices: Array<{ invoiceNo: string; invoiceDate: string; dueDate: string | null; daysOverdue: number; balance: number; currencyCode: string }>;
+};
+
+/* ---------- Installment plans ---------- */
+
+export type InstallmentStatus = "pending" | "partial" | "paid";
+export type ImsInstallment = {
+  id: string;
+  seqNo: number;
+  dueOn: string;
+  amount: number;
+  amountPaid: number;
+  balance: number;
+  status: InstallmentStatus;
+  overdue: boolean;
+  label: string | null;
+};
+export type ImsInstallmentPlan = {
+  id: string;
+  invoiceId: string;
+  label: string | null;
+  status: "active" | "completed" | "cancelled";
+  total: number;
+  paid: number;
+  createdByName: string | null;
+  createdAt: string | null;
+  installments: ImsInstallment[];
+};
+export type InstallmentDraft = { dueOn: string; amount: number; label?: string | null };
+
+/** Customer-portal link state for an invoice. `path` is app-relative (`/ims/portal/{token}`). */
+export type PortalState = { enabled: boolean; token: string | null; path: string | null };
+
+/** Absolute, base-path-aware URL a customer can open (call in the browser). */
+export function portalUrl(path: string): string {
+  return `${window.location.origin}${withBasePath(path)}`;
+}
 
 export type SentReminder = { invoiceId: string; invoiceNo: string; customerName: string; channel: ReminderChannel; to: string | null; message: string; subject: string | null; link: string };
 
@@ -415,6 +496,9 @@ export type ImsBill = {
   subtotal: number;
   taxTotal: number;
   grandTotal: number;
+  currencyCode: string;
+  fxRate: number;
+  fxBaseTotal: number;
   amountPaid: number;
   balance: number;
   status: BillStatus;
@@ -474,6 +558,8 @@ export type BillInput = {
   taxAmount?: number;
   category?: string | null;
   notes?: string | null;
+  currencyCode?: string;
+  fxRate?: number;
 };
 
 export type PaymentRun = {
@@ -747,6 +833,7 @@ export const finance = {
     id: string,
     input: { irn: string; ackNo?: string | null; ackAt?: string | null; signedQr?: string | null; ewayBillNo?: string | null; ewayValidUpto?: string | null },
   ) => post<InvoiceDetail>(`/invoices/${id}/e-invoice/associate`, input),
+  pushEInvoice: (id: string) => post<InvoiceDetail>(`/invoices/${id}/e-invoice/push`),
   markEInvoiceCancelled: (id: string, reason?: string | null) => post<InvoiceDetail>(`/invoices/${id}/e-invoice/mark-cancelled`, { reason }),
   deleteInvoice: (id: string) => del(`/invoices/${id}`),
 
@@ -777,6 +864,18 @@ export const finance = {
   addNote: (id: string, input: { kind: "note" | "call" | "escalation"; channel?: string | null; message: string }) => post<InvoiceDetail>(`/invoices/${id}/notes`, input),
   assign: (input: { invoiceIds: string[]; managerId: number | null; applyToCustomer?: boolean }) => post<{ ok: true; managerName: string | null }>("/receivables/assign", input),
   setAutoReminder: (invoiceIds: string[], enabled: boolean) => post<{ ok: true }>("/receivables/auto-reminder", { invoiceIds, enabled }),
+
+  /* Wave 6: dunning sequences, payment plans, customer portal */
+  dunningRuns: (params: { customerId?: string | null; customerName?: string | null; limit?: number } = {}) =>
+    get<{ runs: DunningRun[]; levels: DunningLevel[] }>("/receivables/dunning-runs", { customerId: params.customerId ?? undefined, customerName: params.customerName ?? undefined, limit: params.limit }),
+  createDunningRun: (input: { customerId?: string | null; customerName?: string; levelKey: string; invoiceIds?: string[]; notes?: string | null }) =>
+    post<{ run: DunningRun | null; suggestedLevelKey: string | null; letter: DunningLetterPayload }>("/receivables/dunning-runs", input),
+  installments: (invoiceId: string) => get<{ plan: ImsInstallmentPlan | null; balance: number }>(`/invoices/${invoiceId}/installments`),
+  createInstallments: (invoiceId: string, input: { label?: string | null; installments: InstallmentDraft[] }) => post<{ plan: ImsInstallmentPlan | null }>(`/invoices/${invoiceId}/installments`, input),
+  deleteInstallments: (invoiceId: string) => del(`/invoices/${invoiceId}/installments`),
+  invoicePortal: (invoiceId: string) => get<PortalState>(`/invoices/${invoiceId}/portal`),
+  enableInvoicePortal: (invoiceId: string, input: { regenerate?: boolean } = {}) => post<PortalState>(`/invoices/${invoiceId}/portal/enable`, input),
+  disableInvoicePortal: (invoiceId: string) => post<PortalState>(`/invoices/${invoiceId}/portal/disable`),
 
   bills: (params: BillQuery = {}) => get<BillList>("/bills", params),
   bill: (id: string) => get<BillDetail>(`/bills/${id}`),
@@ -961,4 +1060,108 @@ export function invoiceEmailShareLink(
   const body = invoiceShareText({ ...inv, lines }, seller).replace(/\*/g, "");
   const subject = `${DOC_KIND_LABEL[inv.docKind] || "Invoice"} ${inv.isDraftNo ? "draft" : inv.invoiceNo} — ${seller.name || "Invoice"}`;
   return reminderLink("email", email, body, subject);
+}
+
+/* ---------- Wave 6: currency + FX (mirrors server/src/ims/wave6-logic.ts) ---------- */
+
+export const COMMON_CURRENCIES = ["INR", "USD", "EUR", "AED", "GBP"] as const;
+
+/** Strict ISO-4217 shape (3 letters, upper-cased) or null. */
+export function parseCurrencyCode(v: unknown): string | null {
+  const s = String(v ?? "")
+    .trim()
+    .toUpperCase();
+  return /^[A-Z]{3}$/.test(s) ? s : null;
+}
+
+export const normalizeCurrencyCode = (v: unknown, fallback = "INR"): string => parseCurrencyCode(v) ?? parseCurrencyCode(fallback) ?? "INR";
+
+export type FxPreview = { currencyCode: string; fxRate: number; fxBaseTotal: number; foreign: boolean };
+
+/** Same rule as the server: base currency → rate 1; foreign → base total = round2(total × rate). */
+export function fxPreview(opts: { currencyCode?: string | null; fxRate?: number | string | null; baseCurrency?: string | null; grandTotal: number }): FxPreview {
+  const base = normalizeCurrencyCode(opts.baseCurrency);
+  const currencyCode = normalizeCurrencyCode(opts.currencyCode, base);
+  const total = Math.round((opts.grandTotal + Number.EPSILON) * 100) / 100;
+  if (currencyCode === base) return { currencyCode, fxRate: 1, fxBaseTotal: total, foreign: false };
+  const raw = Number(opts.fxRate);
+  const fxRate = Number.isFinite(raw) && raw > 0 ? Math.round(raw * 1e8) / 1e8 : 1;
+  return { currencyCode, fxRate, fxBaseTotal: Math.round((total * fxRate + Number.EPSILON) * 100) / 100, foreign: true };
+}
+
+/** True when a document is in a currency other than the given base. */
+export const isForeignCurrency = (code: string | null | undefined, base = "INR"): boolean => normalizeCurrencyCode(code, base) !== normalizeCurrencyCode(base);
+
+/* ---------- Wave 6: installment plans ---------- */
+
+/** `YYYY-MM-DD` plus whole months, clamping the day to the target month's length (31 Jan + 1 → 28/29 Feb). */
+export function addMonthsISO(iso: string, months: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const idx = (y! * 12 + (m! - 1)) + months;
+  const ty = Math.floor(idx / 12);
+  const tm = idx - ty * 12;
+  const last = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate();
+  return `${String(ty).padStart(4, "0")}-${String(tm + 1).padStart(2, "0")}-${String(Math.min(d!, last)).padStart(2, "0")}`;
+}
+
+/** N equal installments of `total` (to the paisa; the last absorbs rounding), due monthly from `firstDue`. */
+export function splitInstallments(total: number, count: number, firstDue: string, everyMonths = 1): InstallmentDraft[] {
+  const n = Math.max(1, Math.min(60, Math.floor(count) || 1));
+  const cents = Math.round(total * 100);
+  const each = Math.floor(cents / n);
+  const out: InstallmentDraft[] = [];
+  let used = 0;
+  for (let i = 0; i < n; i++) {
+    const c = i === n - 1 ? cents - used : each;
+    used += c;
+    out.push({ dueOn: addMonthsISO(firstDue, i * Math.max(1, everyMonths)), amount: c / 100, label: `Installment ${i + 1} of ${n}` });
+  }
+  return out;
+}
+
+/** Sum of drafted installments vs the balance — what the plan form validates before posting. */
+export function installmentGap(items: ReadonlyArray<Pick<InstallmentDraft, "amount">>, balance: number): number {
+  const sum = items.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  return Math.round((balance - sum) * 100) / 100;
+}
+
+/* ---------- Wave 6: dunning levels ---------- */
+
+export const DUNNING_TONE_LABEL: Record<DunningTone, string> = { friendly: "Friendly", firm: "Firm", final: "Final notice" };
+
+export const DEFAULT_DUNNING_LEVELS: ReadonlyArray<DunningLevel> = [
+  { key: "L1", label: "Friendly reminder", minDaysOverdue: 1, tone: "friendly" },
+  { key: "L2", label: "Firm reminder", minDaysOverdue: 15, tone: "firm" },
+  { key: "L3", label: "Final notice", minDaysOverdue: 30, tone: "final" },
+];
+
+/** The strictest level whose threshold has been reached, or null while none qualifies. */
+export function pickDunningLevel(levels: ReadonlyArray<DunningLevel>, daysOverdue: number): DunningLevel | null {
+  let picked: DunningLevel | null = null;
+  for (const l of [...levels].sort((a, b) => a.minDaysOverdue - b.minDaysOverdue)) if (daysOverdue >= l.minDaysOverdue) picked = l;
+  return picked;
+}
+
+/** Tone wording for the letter (server returns the same copy in the run payload). */
+export function dunningCopy(tone: DunningTone, v: { total: string; asOf: string; count: number }): { subject: string; intro: string; closing: string } {
+  const plural = v.count === 1 ? "invoice is" : "invoices are";
+  if (tone === "final") {
+    return {
+      subject: "FINAL NOTICE — immediate payment required",
+      intro: `Despite our earlier reminders, the following ${plural} still unpaid as of ${v.asOf}. Please clear ${v.total} immediately. Failing this, we may have to suspend supplies and take recovery action without further notice.`,
+      closing: "If payment has just been made, please share the transfer details so we can update our books at once.",
+    };
+  }
+  if (tone === "firm") {
+    return {
+      subject: "Second reminder — overdue payment",
+      intro: `We have not yet received payment for the following ${plural} overdue as of ${v.asOf}. Kindly arrange ${v.total} within the next 7 days.`,
+      closing: "Please reply with the payment date if it has already been released, or call us if there is any dispute.",
+    };
+  }
+  return {
+    subject: "Outstanding dues — friendly payment reminder",
+    intro: `This is a gentle reminder that the following ${plural} outstanding as of ${v.asOf}. Kindly arrange payment of ${v.total} at your earliest convenience.`,
+    closing: "Please ignore this note if payment has already been made. Thank you for your business.",
+  };
 }

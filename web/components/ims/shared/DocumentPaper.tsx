@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { publicAssetUrl } from "@/lib/base-path";
-import { inrExact, qtyText, rupeesInWords, type ImsLine, type ImsTotals } from "@/lib/ims/format";
+import { moneyFmt, qtyText, rupeesInWords, type ImsLine, type ImsTotals } from "@/lib/ims/format";
 
 export type PaperParty = {
   label: string;
@@ -97,6 +97,8 @@ export function DocumentPaper({
   showReceived,
   /** Own-company logo when `seller` is a counterparty (e.g. purchase bills). */
   brandLogoUrl,
+  /** Document currency; non-INR amounts print with their ISO code. */
+  currencyCode,
 }: {
   title: string;
   seller: PaperParty;
@@ -111,7 +113,10 @@ export function DocumentPaper({
   footer?: ReactNode;
   showReceived?: boolean;
   brandLogoUrl?: string | null;
+  currencyCode?: string | null;
 }) {
+  const money = (n: number) => moneyFmt(n, currencyCode);
+  const inrDoc = !currencyCode || currencyCode.trim().toUpperCase() === "INR";
   const lines: ImsLine[] = totals.lines;
   const logoUrl = brandLogoUrl ?? seller.logoUrl ?? null;
   const block = (p: PaperParty) => (
@@ -175,10 +180,10 @@ export function DocumentPaper({
                 <td>{l.hsn || "—"}</td>
                 <td>{qtyText(l.qty, l.unit)}</td>
                 {showReceived ? <td>{qtyText(l.receivedQty ?? 0)}</td> : null}
-                <td>{inrExact(l.rate)}</td>
+                <td>{money(l.rate)}</td>
                 <td>{l.discountPct ? `${l.discountPct}%` : "—"}</td>
                 <td>{l.gstRate}%</td>
-                <td>{inrExact(l.amount)}</td>
+                <td>{money(l.amount)}</td>
               </tr>
             ))
           ) : (
@@ -194,37 +199,37 @@ export function DocumentPaper({
       <div className="bos-inv-totals">
         <div className="bos-inv-totals-row">
           <span>Taxable value</span>
-          <span>{inrExact(totals.taxable)}</span>
+          <span>{money(totals.taxable)}</span>
         </div>
         {intraState ? (
           <>
             <div className="bos-inv-totals-row">
               <span>CGST</span>
-              <span>{inrExact(totals.cgst)}</span>
+              <span>{money(totals.cgst)}</span>
             </div>
             <div className="bos-inv-totals-row">
               <span>SGST</span>
-              <span>{inrExact(totals.sgst)}</span>
+              <span>{money(totals.sgst)}</span>
             </div>
           </>
         ) : (
           <div className="bos-inv-totals-row">
             <span>IGST</span>
-            <span>{inrExact(totals.igst)}</span>
+            <span>{money(totals.igst)}</span>
           </div>
         )}
         {totals.roundOff ? (
           <div className="bos-inv-totals-row">
             <span>Round off</span>
-            <span>{inrExact(totals.roundOff)}</span>
+            <span>{money(totals.roundOff)}</span>
           </div>
         ) : null}
         <div className="bos-inv-totals-row is-total">
           <span>Total</span>
-          <span>{inrExact(totals.grandTotal)}</span>
+          <span>{money(totals.grandTotal)}</span>
         </div>
       </div>
-      <div className="ims-paper-words">{rupeesInWords(totals.grandTotal)}</div>
+      {inrDoc ? <div className="ims-paper-words">{rupeesInWords(totals.grandTotal)}</div> : null}
 
       {notes ? <div className="bos-inv-notes">{notes}</div> : null}
       {terms ? (

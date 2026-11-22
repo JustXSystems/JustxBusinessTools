@@ -159,10 +159,15 @@ export type BomScheduleColumnId =
   | "amount"
   | "remarks";
 
+export type DunningTone = "friendly" | "firm" | "final";
+export type DunningLevel = { key: string; label: string; minDaysOverdue: number; tone: DunningTone };
+
 export type ImsSettings = {
   businessName: string;
   businessType: string;
   gstin: string | null;
+  /** ISO-4217 base currency (default INR). Foreign-currency documents lock an FX rate against it. */
+  baseCurrency: string;
   state: string | null;
   stateCode: string | null;
   address: string | null;
@@ -182,6 +187,8 @@ export type ImsSettings = {
   dnPrefix: string;
   proformaPrefix: string;
   retainerPrefix: string;
+  soPrefix: string;
+  soDcPrefix: string;
   billPrefix: string;
   returnPrefix: string;
   checkPrefix: string;
@@ -199,6 +206,8 @@ export type ImsSettings = {
   bomScheduleColumns?: BomScheduleColumnId[] | null;
   poApprovalLimit: number;
   invoiceApprovalLimit: number;
+  /** Multi-level dunning letter sequence (L1 → L3 by days overdue). */
+  dunningSequences: DunningLevel[];
   draftPoPurgeDays: number;
   paymentTermsDays: number;
   defaultGstRate: number;
@@ -232,6 +241,7 @@ export type ImsModuleKey =
   | "parties"
   | "purchase"
   | "approvals"
+  | "salesOrders"
   | "sales"
   | "bom"
   | "bomPackages"

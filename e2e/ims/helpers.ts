@@ -147,6 +147,7 @@ const MODULE_LABEL: Record<string, string> = {
   bomPackages: "Packages",
   bomRateCards: "Rate Cards",
   bomCompare: "Compare",
+  salesOrders: "Sales Orders",
   sales: "Invoices & Billing",
   receivables: "Accounts Receivable",
   payables: "Accounts Payable",
