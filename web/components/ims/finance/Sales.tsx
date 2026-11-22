@@ -1,16 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { Badge, Button, Card, DataTable, EmptyState, Grid, KpiCard, SearchInput, Segmented, Select, type BosColumn } from "@/components/bos";
-import { DOC_KIND_LABEL, finance, INVOICE_BADGE, type ImsInvoice, type InvoiceDisplayStatus, type InvoiceDocKind } from "@/lib/ims/finance";
+import { useEffect, useMemo, useState } from "react";
+import { Badge, Button, Card, DataTable, Dialog, EmptyState, Grid, KpiCard, SearchInput, Segmented, Select, type BosColumn } from "@/components/bos";
+import { DOC_KIND_LABEL, finance, INVOICE_BADGE, type ImsInvoice, type InvoiceDetail, type InvoiceDisplayStatus, type InvoiceDocKind } from "@/lib/ims/finance";
 import { dateLabel, downloadCsv, inr, inrCompact, inrExact, pct } from "@/lib/ims/format";
-import { Loaded, PageHeader, RequirePerm, Stack, StatusBadge, SubTabs, useIms, useImsData } from "../core";
+import { Loaded, PageHeader, RequirePerm, Stack, StatusBadge, SubTabs, useIms, useImsData, usePrint } from "../core";
 import { usePartyOptions } from "../shared/pickers";
 import { InvoiceEditor } from "./InvoiceEditor";
 import { InvoiceView } from "./InvoiceView";
 import { PosCounter } from "./Pos";
 import { RecurringPanel } from "./Recurring";
-import { PeriodSelect, type PeriodOrAll } from "./shared";
+import { InvoicePaper, PeriodSelect, type PeriodOrAll } from "./shared";
 
 type View = { kind: "list" } | { kind: "edit"; id: string | null } | { kind: "view"; id: string };
 type Tab = "invoices" | "recurring" | "pos";
@@ -18,6 +18,7 @@ type Tab = "invoices" | "recurring" | "pos";
 const STATUS_TABS: ReadonlyArray<{ value: "all" | InvoiceDisplayStatus; label: string }> = [
   { value: "all", label: "All" },
   { value: "draft", label: "Draft" },
+  { value: "pending_approval", label: "Pending approval" },
   { value: "unpaid", label: "Unpaid" },
   { value: "partial", label: "Partly paid" },
   { value: "paid", label: "Paid" },
@@ -115,6 +116,8 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
   const [customerId, setCustomerId] = useState("");
   const [source, setSource] = useState<"" | "pos" | "quotation" | "bom" | "tally">("");
   const [docKind, setDocKind] = useState<"" | InvoiceDocKind | "notes">("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [printIds, setPrintIds] = useState<string[] | null>(null);
   const customers = usePartyOptions("customer");
   const state = useImsData(
     () =>
@@ -128,6 +131,10 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
       }),
     [period, status, q, customerId, source, docKind],
   );
+  const liveSelected = useMemo(() => {
+    const rows = state.data?.invoices ?? [];
+    return new Set([...selected].filter((id) => rows.some((r) => r.id === id)));
+  }, [selected, state.data?.invoices]);
 
   const columns: BosColumn<ImsInvoice>[] = [
     {
@@ -261,6 +268,14 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
                 >
                   Export
                 </Button>
+                <Button
+                  size="sm"
+                  icon="printer"
+                  disabled={!liveSelected.size}
+                  onClick={() => setPrintIds([...liveSelected].slice(0, 25))}
+                >
+                  Print pack{liveSelected.size ? ` · ${Math.min(liveSelected.size, 25)}` : ""}
+                </Button>
               </div>
               <div className="ims-toolbar">
                 <PeriodSelect value={period} onChange={setPeriod} />
@@ -283,6 +298,7 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
                 rowKey={(i) => i.id}
                 onRowClick={(i) => onOpen(i.id)}
                 chevron
+                selection={{ selected: liveSelected, onChange: setSelected }}
                 empty={
                   <EmptyState
                     glyph="🧾"
@@ -298,10 +314,58 @@ function InvoiceList({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (
                 }
               />
             </Card>
+            {printIds ? <BatchInvoicePrint ids={printIds} onClose={() => setPrintIds(null)} /> : null}
           </Stack>
         );
       }}
     </Loaded>
+  );
+}
+
+function BatchInvoicePrint({ ids, onClose }: { ids: string[]; onClose: () => void }) {
+  const { session } = useIms();
+  const print = usePrint();
+  const [details, setDetails] = useState<InvoiceDetail[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const out: InvoiceDetail[] = [];
+        for (const id of ids) {
+          out.push(await finance.invoice(id));
+        }
+        if (!cancelled) setDetails(out);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Could not load invoices");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ids]);
+
+  return (
+    <Dialog open onClose={onClose} title={`Print pack · ${ids.length} invoice${ids.length === 1 ? "" : "s"}`} wide>
+      <div className="ims-row no-print" style={{ marginBottom: 12 }}>
+        <Button variant="primary" icon="printer" disabled={!details?.length} onClick={print}>
+          Print
+        </Button>
+        <Button variant="ghost" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+      {error ? <p className="ims-neg">{error}</p> : null}
+      {!details && !error ? <p className="ims-muted">Loading invoices…</p> : null}
+      <div className="bos-inv-paper" style={{ display: "grid", gap: 24 }}>
+        {(details ?? []).map((d, idx) => (
+          <div key={d.invoice.id} style={{ pageBreakAfter: idx < (details?.length ?? 0) - 1 ? "always" : "auto" }}>
+            <InvoicePaper detail={d} session={session} />
+          </div>
+        ))}
+      </div>
+    </Dialog>
   );
 }
 

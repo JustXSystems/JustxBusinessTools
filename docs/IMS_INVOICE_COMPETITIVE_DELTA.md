@@ -72,7 +72,7 @@ Legend: ❌ missing · 🟡 partial · ✅ present
 | 34 | **Document generation wizard** (batch invoice from deliveries) | 🟡 | ✅ | 🟡 | ❌ | ❌ | P1 | 5 |
 | 35 | **Packing slip from SO** | 🟡 | ✅ | 🟡 | ❌ | 🟡 DC | P2 | 5 |
 | 36 | **Reserve invoice** | ❌ | ✅ | ❌ | ❌ | ❌ | P2 | 6 |
-| 37 | **Batch print / PDF pack** | ✅ | ✅ | ✅ | ✅ | ❌ | P2 | 5 |
+| 37 | **Batch print / PDF pack** | ✅ | ✅ | ✅ | ✅ | 🟡 print pack | P2 | 5 |
 | 38 | **Invoice from timesheet / project** | ✅ | 🟡 | ❌ | ✅ | ❌ | P2 | 6 |
 | 39 | **Split payment on create** | ✅ | ✅ | ✅ | ✅ | 🟡 POS | P2 | 5 |
 | 40 | **MSME UDYAM on invoice** | 🟡 | ❌ | ✅ | — | ✅ | P2 | 5 |
@@ -132,3 +132,7 @@ Shared UI: `DocumentPaper`, `LineEditor`, `InvoicePaper`, Sales SubTabs (`Invoic
 ## Acceptance (Wave 5c)
 
 - [x] AR customer **Letter** → printable dunning / payment reminder with overdue lines + bank/UPI  
+
+## Acceptance (Wave 5d)
+
+- [x] Sales invoice list multi-select → **Print pack** (up to 25 papers)  
