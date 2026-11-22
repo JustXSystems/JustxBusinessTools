@@ -788,12 +788,23 @@ async function issueDraft(conn: PoolConnection, actor: ImsActor, settings: ImsSe
   }
   // stock_posted=1 when invoice moved stock, or when linked DCs already covered stock. Tally / CN / PF stay 0.
   const stockPosted = tallyImport || nonStockDoc ? 0 : 1;
-  await exec(conn, `UPDATE ims_invoices SET status = 'issued', invoice_no = :invoiceNo, stock_posted = :stockPosted, issued_at = CURRENT_TIMESTAMP WHERE tenant_id = :tenantId AND id = :id`, {
-    tenantId: actor.tenantId,
-    id,
-    invoiceNo,
-    stockPosted,
-  });
+  // B2B tax invoices / credit notes with a GSTIN are IRP-eligible — mark Yet-to-be-pushed until a GSP connector lands.
+  const einvEligible =
+    (docKind === "tax_invoice" || docKind === "credit_note" || docKind === "debit_note") && Boolean(row.customer_gstin?.trim());
+  const einvStatus = einvEligible && !row.irn ? "yet_to_push" : row.einv_status ?? null;
+  await exec(
+    conn,
+    `UPDATE ims_invoices SET status = 'issued', invoice_no = :invoiceNo, stock_posted = :stockPosted, issued_at = CURRENT_TIMESTAMP,
+       einv_status = COALESCE(einv_status, :einvStatus)
+     WHERE tenant_id = :tenantId AND id = :id`,
+    {
+      tenantId: actor.tenantId,
+      id,
+      invoiceNo,
+      stockPosted,
+      einvStatus,
+    },
+  );
 
   // Credit note: apply to the original tax invoice's AR balance (FIFO credit_applied).
   if (docKind === "credit_note" && row.against_invoice_id) {
@@ -1224,6 +1235,85 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     await insertInvoice(deps.db, actor, id, values, { docKind: "tax_invoice" });
     await recordEvent(deps, actor, { type: "invoice.created", entityType: "invoice", entityId: id, summary: `Duplicated ${src.invoice_no} as a new draft for ${src.customer_name}` });
     res.status(201).json(await invoiceDetail(deps, actor.tenantId, id));
+  });
+
+  /** Associate IRN / Ack details generated outside IMS (portal or GSP) — Wave 2 until live IRP push. */
+  router.post("/invoices/:id/e-invoice/associate", async (req, res) => {
+    const actor = actorOf(res);
+    requireAnyPerm(res, ["sales", "integrations", "audit"]);
+    const input = parse(
+      z.object({
+        irn: z.string().trim().min(8, "IRN looks too short").max(64),
+        ackNo: optText(64),
+        ackAt: isoDate.nullable().optional(),
+        signedQr: optText(8000),
+        ewayBillNo: optText(24),
+        ewayValidUpto: isoDate.nullable().optional(),
+      }),
+      req.body,
+    );
+    await tx(deps.db, async (conn) => {
+      const row = await loadInvoiceRow(conn, actor.tenantId, req.params.id, true);
+      if (row.status !== "issued") throw conflict("Only issued documents can carry an IRN");
+      const kind = row.doc_kind || "tax_invoice";
+      if (kind === "proforma") throw conflict("Proforma invoices are not e-Invoice eligible");
+      await exec(
+        conn,
+        `UPDATE ims_invoices SET irn = :irn, ack_no = :ackNo, ack_at = COALESCE(:ackAt, ack_at, CURRENT_TIMESTAMP),
+           signed_qr = COALESCE(:signedQr, signed_qr), eway_bill_no = COALESCE(:ewayBillNo, eway_bill_no),
+           eway_valid_upto = COALESCE(:ewayValidUpto, eway_valid_upto), einv_status = 'pushed'
+         WHERE tenant_id = :tenantId AND id = :id`,
+        {
+          tenantId: actor.tenantId,
+          id: row.id,
+          irn: input.irn,
+          ackNo: input.ackNo ?? null,
+          ackAt: input.ackAt ?? null,
+          signedQr: input.signedQr ?? null,
+          ewayBillNo: input.ewayBillNo ?? null,
+          ewayValidUpto: input.ewayValidUpto ?? null,
+        },
+      );
+      await addActivity(conn, actor, {
+        invoiceId: row.id,
+        partyId: row.customer_id,
+        partyName: row.customer_name,
+        kind: "e_invoice",
+        message: `IRN associated${input.ackNo ? ` · Ack ${input.ackNo}` : ""}`,
+        status: "pushed",
+      });
+    });
+    await recordEvent(deps, actor, {
+      type: "invoice.einvoice",
+      entityType: "invoice",
+      entityId: req.params.id,
+      summary: `Associated IRN on invoice`,
+      payload: { irn: input.irn, ackNo: input.ackNo },
+    });
+    res.json(await invoiceDetail(deps, actor.tenantId, req.params.id));
+  });
+
+  router.post("/invoices/:id/e-invoice/mark-cancelled", async (req, res) => {
+    const actor = actorOf(res);
+    requireAnyPerm(res, ["sales", "integrations", "audit"]);
+    const input = parse(z.object({ reason: optText(255) }), req.body ?? {});
+    await tx(deps.db, async (conn) => {
+      const row = await loadInvoiceRow(conn, actor.tenantId, req.params.id, true);
+      if (!row.irn) throw conflict("No IRN is associated with this document");
+      await exec(conn, `UPDATE ims_invoices SET einv_status = 'marked_cancelled' WHERE tenant_id = :tenantId AND id = :id`, {
+        tenantId: actor.tenantId,
+        id: row.id,
+      });
+      await addActivity(conn, actor, {
+        invoiceId: row.id,
+        partyId: row.customer_id,
+        partyName: row.customer_name,
+        kind: "e_invoice",
+        message: `e-Invoice marked cancelled in IMS${input.reason ? ` — ${input.reason}` : ""}. Cancel on the GST portal if still active.`,
+        status: "marked_cancelled",
+      });
+    });
+    res.json(await invoiceDetail(deps, actor.tenantId, req.params.id));
   });
 
   /** Create a draft credit note from an issued tax invoice (lines copied; edit then issue to apply AR credit). */

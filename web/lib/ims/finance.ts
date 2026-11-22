@@ -641,6 +641,11 @@ export const finance = {
   cancelInvoice: (id: string, reason: string) => post<InvoiceDetail>(`/invoices/${id}/cancel`, { reason }),
   duplicateInvoice: (id: string) => post<InvoiceDetail>(`/invoices/${id}/duplicate`),
   createCreditNote: (id: string, input?: { notes?: string | null; restock?: boolean }) => post<InvoiceDetail>(`/invoices/${id}/credit-note`, input ?? {}),
+  associateEInvoice: (
+    id: string,
+    input: { irn: string; ackNo?: string | null; ackAt?: string | null; signedQr?: string | null; ewayBillNo?: string | null; ewayValidUpto?: string | null },
+  ) => post<InvoiceDetail>(`/invoices/${id}/e-invoice/associate`, input),
+  markEInvoiceCancelled: (id: string, reason?: string | null) => post<InvoiceDetail>(`/invoices/${id}/e-invoice/mark-cancelled`, { reason }),
   deleteInvoice: (id: string) => del(`/invoices/${id}`),
   recordInvoicePayment: (id: string, input: PaymentInput) => post<InvoiceDetail>(`/invoices/${id}/payments`, input),
   recordReceipt: (input: PaymentInput & { partyId?: string | null; partyName: string; invoiceIds?: string[] }) =>

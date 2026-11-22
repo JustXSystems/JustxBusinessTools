@@ -104,10 +104,20 @@ OOTB UI components:
 
 ## Acceptance for Wave 1
 
-- [ ] Ship-to prints when set; blank ship-to hides block
-- [ ] Customer PO appears in paper meta
-- [ ] Settings UPI → QR on issued tax invoice when balance > 0
-- [ ] Create Credit Note from issued invoice; issue applies to AR balance
-- [ ] Proforma can be saved/issued without stock or AR impact
-- [ ] KPI / outstanding queries exclude CN / DN / proforma sales inflation
-- [ ] Unit tests for balance + credit application; smoke E2E still green
+- [x] Ship-to prints when set; blank ship-to hides block
+- [x] Customer PO appears in paper meta
+- [x] Settings UPI → QR on issued tax invoice when balance > 0
+- [x] Create Credit Note from issued invoice; issue applies to AR balance
+- [x] Proforma can be saved/issued without stock or AR impact
+- [x] KPI / outstanding queries exclude CN / DN / proforma sales inflation
+- [x] Unit tests for balance + credit application; smoke E2E still green
+
+## Wave 2 progress
+
+- [x] e-Invoice status on issue (`yet_to_push` for B2B)
+- [x] Associate IRN / Ack / e-Way from portal (manual) + mark cancelled
+- [ ] Live IRP/GSP push adapter
+- [ ] Shipping charges + GST in totals engine
+- [ ] Recurring invoice profiles
+- [ ] Sales Order → DC → Invoice
+- [ ] Invoice approval queue

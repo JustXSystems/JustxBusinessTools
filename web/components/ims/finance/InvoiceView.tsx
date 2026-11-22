@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Alert, Badge, Button, Card, Dialog, WidgetCard } from "@/components/bos";
+import { Alert, Badge, Button, Card, Dialog, Field, FormGrid, Input, WidgetCard } from "@/components/bos";
 import { bom, type BomDc } from "@/lib/ims/bom";
 import { finance, INVOICE_BADGE, invoiceShareText, methodLabel, whatsappShareLink, type InvoiceDetail } from "@/lib/ims/finance";
 import { dateLabel, inrExact, stampLabel } from "@/lib/ims/format";
@@ -10,7 +10,7 @@ import { Loaded, Stack, StatusBadge, useIms, useImsAction, useImsData, usePrint 
 import { DocRefLink } from "../bom/DocRefLink";
 import { activityTone, BackLink, ConfirmDialog, InvoicePaper, KeyValues, PaymentDialog, ReasonDialog, Stats, Timeline, type TimelineItem } from "./shared";
 
-type Dlg = null | "pay" | "cancel" | "delete" | "share" | { voidId: string; amount: number };
+type Dlg = null | "pay" | "cancel" | "delete" | "share" | "einvoice" | { voidId: string; amount: number };
 
 export function InvoiceView({ id, onBack, onEdit }: { id: string; onBack: () => void; onEdit: (id: string) => void }) {
   const state = useImsData(() => finance.invoice(id), [id]);
@@ -283,6 +283,51 @@ function InvoiceBody({
             </Alert>
           ) : null}
 
+          {isIssued && (inv.docKind || "tax_invoice") !== "proforma" ? (
+            <WidgetCard
+              title="e-Invoice / IRP"
+              note={inv.irn ? "Pushed" : inv.einvStatus === "yet_to_push" ? "Yet to push" : inv.einvStatus === "marked_cancelled" ? "Marked cancelled" : inv.customerGstin ? "Ready" : "B2C"}
+            >
+              <p className="fin-note" style={{ marginBottom: 8 }}>
+                {inv.irn
+                  ? "IRN is on this document. Live GSP push lands in a later wave — associate portal IRNs here today."
+                  : inv.customerGstin
+                    ? "B2B document is IRP-eligible. Associate an IRN from the portal, or wait for the live GSP connector."
+                    : "No buyer GSTIN — e-Invoice is not required for this B2C sale."}
+              </p>
+              {inv.irn ? (
+                <KeyValues
+                  rows={[
+                    ["IRN", <span key="irn" className="ims-mono" style={{ fontSize: 11 }}>{inv.irn}</span>],
+                    ...(inv.ackNo ? ([["Ack no.", inv.ackNo]] as Array<[string, ReactNode]>) : []),
+                    ...(inv.ewayBillNo ? ([["E-Way bill", inv.ewayBillNo]] as Array<[string, ReactNode]>) : []),
+                  ]}
+                />
+              ) : null}
+              <div className="ims-row" style={{ marginTop: 8 }}>
+                {canWrite || can("integrations") || can("audit") ? (
+                  <Button size="sm" variant="ghost" onClick={() => setDlg("einvoice")}>
+                    {inv.irn ? "Update IRN" : "Associate IRN"}
+                  </Button>
+                ) : null}
+                {inv.irn && inv.einvStatus !== "marked_cancelled" && (canWrite || can("integrations")) ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy === "einv-cancel"}
+                    onClick={() =>
+                      void run("einv-cancel", () => finance.markEInvoiceCancelled(inv.id, "Cancelled in IMS"), {
+                        success: "Marked cancelled in IMS — also cancel on the GST portal if needed",
+                      })
+                    }
+                  >
+                    Mark IRN cancelled
+                  </Button>
+                ) : null}
+              </div>
+            </WidgetCard>
+          ) : null}
+
           {isDraft && inv.sourceTool === "ims_bom" && inv.sourceRef && canWrite ? (
             <InvoiceBomDcLinks
               invoiceId={inv.id}
@@ -361,6 +406,17 @@ function InvoiceBody({
         busy={busy === "pay"}
         onSubmit={(input) => run("pay", () => finance.recordInvoicePayment(inv.id, input), { success: `Payment of ${inrExact(input.amount)} recorded` })}
       />
+      <EInvoiceAssociateDialog
+        open={dlg === "einvoice"}
+        onClose={() => setDlg(null)}
+        invoiceNo={inv.invoiceNo}
+        initial={{ irn: inv.irn, ackNo: inv.ackNo, ewayBillNo: inv.ewayBillNo }}
+        busy={busy === "einv"}
+        onSubmit={async (input) => {
+          const out = await run("einv", () => finance.associateEInvoice(inv.id, input), { success: "IRN associated" });
+          if (out) setDlg(null);
+        }}
+      />
       <ReasonDialog
         open={dlg === "cancel"}
         onClose={() => setDlg(null)}
@@ -433,6 +489,69 @@ function InvoiceBody({
         </div>
       </Dialog>
     </>
+  );
+}
+
+function EInvoiceAssociateDialog({
+  open,
+  onClose,
+  invoiceNo,
+  initial,
+  busy,
+  onSubmit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  invoiceNo: string;
+  initial: { irn: string | null; ackNo: string | null; ewayBillNo: string | null };
+  busy: boolean;
+  onSubmit: (input: { irn: string; ackNo?: string | null; ewayBillNo?: string | null }) => void | Promise<void>;
+}) {
+  const [irn, setIrn] = useState(initial.irn ?? "");
+  const [ackNo, setAckNo] = useState(initial.ackNo ?? "");
+  const [ewayBillNo, setEway] = useState(initial.ewayBillNo ?? "");
+  useEffect(() => {
+    if (!open) return;
+    setIrn(initial.irn ?? "");
+    setAckNo(initial.ackNo ?? "");
+    setEway(initial.ewayBillNo ?? "");
+  }, [open, initial.irn, initial.ackNo, initial.ewayBillNo]);
+  const trimmed = irn.trim();
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={`e-Invoice · ${invoiceNo}`}
+      description="Paste the IRN (and optional Ack / e-Way bill) from the IRP or your GSP. Live push arrives in a later wave."
+      actions={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={busy || trimmed.length < 8}
+            onClick={() => void onSubmit({ irn: trimmed, ackNo: ackNo.trim() || null, ewayBillNo: ewayBillNo.trim() || null })}
+          >
+            {busy ? "Saving…" : "Associate IRN"}
+          </Button>
+        </>
+      }
+    >
+      <FormGrid columns="1fr">
+        <Field label="IRN *">
+          {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} className="ims-mono" value={irn} maxLength={64} onChange={(e) => setIrn(e.target.value)} placeholder="64-char IRN" />}
+        </Field>
+        <FormGrid columns="1fr 1fr">
+          <Field label="Ack no.">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} className="ims-mono" value={ackNo} maxLength={64} onChange={(e) => setAckNo(e.target.value)} />}
+          </Field>
+          <Field label="E-Way bill no.">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} className="ims-mono" value={ewayBillNo} maxLength={24} onChange={(e) => setEway(e.target.value)} />}
+          </Field>
+        </FormGrid>
+      </FormGrid>
+    </Dialog>
   );
 }
 
