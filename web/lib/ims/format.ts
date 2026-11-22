@@ -205,7 +205,14 @@ export function computeTotals(input: ReadonlyArray<ImsLineInput>, intraState: bo
   return { lines, subtotal, discountTotal, taxable, taxTotal, cgst, sgst, igst, roundOff: round2(grandTotal - exact), grandTotal };
 }
 
-export const GST_RATES = [0, 0.25, 3, 5, 12, 18, 28] as const;
+/** Standard GST slabs — mirrors server `GST_SLABS`; the tenant list (`settings.gstRateOptions`) overrides it. */
+export const GST_RATES = [0, 0.1, 0.25, 1.5, 3, 5, 12, 18, 28, 40] as const;
+
+/** GST pick-list for a tenant: `settings.gstRateOptions` (else defaults) plus any rates already in use, ascending. */
+export function gstRatesFor(settings?: { gstRateOptions?: ReadonlyArray<number> | null } | null, extra: ReadonlyArray<number> = []): number[] {
+  const base = Array.isArray(settings?.gstRateOptions) && settings.gstRateOptions.length ? settings.gstRateOptions : GST_RATES;
+  return [...new Set([...base, ...extra].map((n) => Math.round(Number(n) * 100) / 100).filter((n) => Number.isFinite(n)))].sort((a, b) => a - b);
+}
 
 /* ---------- Export ---------- */
 

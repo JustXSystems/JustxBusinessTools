@@ -2,7 +2,7 @@
 
 import { Button, Checkbox, Input, Select } from "@/components/bos";
 import type { ImsPermission, ImsSettingsMeta, PermissionMatrix, Taxonomy } from "@/lib/ims/api";
-import { GST_RATES } from "@/lib/ims/format";
+import { gstRatesFor } from "@/lib/ims/format";
 import { EDITABLE_ROLES, ROLE_INFO, TAXONOMY_LISTS } from "@/lib/ims/settings";
 import { ChipList, SectionCard, type TabProps } from "./parts";
 
@@ -144,7 +144,7 @@ export function CatalogTab({ draft, set, errors, readOnly }: TabProps) {
                       <td style={{ width: 110 }}>
                         <Select size="sm" value={c.gstRate ?? ""} aria-label={`${c.name || "Category"} GST rate`} onChange={(e) => setCat(i, { gstRate: e.target.value === "" ? null : Number(e.target.value) })}>
                           <option value="">Default</option>
-                          {GST_RATES.map((r) => (
+                          {gstRatesFor(draft, c.gstRate == null ? [] : [c.gstRate]).map((r) => (
                             <option key={r} value={r}>
                               {r}%
                             </option>

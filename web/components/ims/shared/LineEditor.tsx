@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { BosIcon, Button, Input, Select, Segmented } from "@/components/bos";
 import type { ImsItem } from "@/lib/ims/api";
-import { computeTotals, GST_RATES, moneyFmt, num, type ImsLineInput, type ImsTotals } from "@/lib/ims/format";
+import { computeTotals, gstRatesFor, moneyFmt, num, type ImsLineInput, type ImsTotals } from "@/lib/ims/format";
+import { useIms } from "../core";
 import { ItemPickerDialog } from "./pickers";
 
 /** An editable document line; `key` keeps React rows stable while editing. */
@@ -65,6 +66,8 @@ export function LineEditor({
   baseEquivalent?: { code: string; amount: number } | null;
 }) {
   const money = (n: number) => moneyFmt(n, currencyCode);
+  const { session } = useIms();
+  const gstOptions = useMemo(() => gstRatesFor(session.settings), [session.settings]);
   const [picking, setPicking] = useState(false);
   const [q, setQ] = useState("");
   const [scope, setScope] = useState<Scope>("all");
@@ -153,7 +156,7 @@ export function LineEditor({
                 aria-label="Bulk GST rate"
               >
                 <option value="">GST…</option>
-                {GST_RATES.map((r) => (
+                {gstOptions.map((r) => (
                   <option key={r} value={r}>
                     {r}%
                   </option>
@@ -276,7 +279,7 @@ export function LineEditor({
                         onChange={(e) => update(l.key, { gstRate: Number(e.target.value) })}
                         aria-label={`Line ${i + 1} GST rate`}
                       >
-                        {[...new Set([...GST_RATES, num(l.gstRate)])].sort((a, b) => a - b).map((r) => (
+                        {gstRatesFor(session.settings, [num(l.gstRate)]).map((r) => (
                           <option key={r} value={r}>
                             {r}%
                           </option>

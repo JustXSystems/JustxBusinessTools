@@ -3,7 +3,7 @@
 import "./finance.css";
 import { useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, DataTable, Dialog, EmptyState, Field, FormGrid, Grid, Input, KpiCard, Select, Switch, Textarea, WidgetCard, type BosColumn } from "@/components/bos";
-import { finance, methodLabel, PAY_METHODS, type ClosingDay, type DayFigures, type ImsClosing, type ImsExpense, type PayMethod } from "@/lib/ims/finance";
+import { defaultPayMethodFor, finance, methodLabel, PAY_METHODS, type ClosingDay, type DayFigures, type ImsClosing, type ImsExpense, type PayMethod } from "@/lib/ims/finance";
 import { dateLabel, inrCompact, inrExact, num, round2, stampLabel } from "@/lib/ims/format";
 import { Loaded, PageHeader, RequirePerm, Stack, SubTabs, useIms, useImsAction, useImsData, usePrint } from "../core";
 import { PaperBrandHead } from "../shared/DocumentPaper";
@@ -395,7 +395,7 @@ function ExpenseDialog({ date, onClose }: { date: string; onClose: () => void })
   const [category, setCategory] = useState(categories[0] ?? "General");
   const [amount, setAmount] = useState("");
   const [gst, setGst] = useState("");
-  const [method, setMethod] = useState<PayMethod>("cash");
+  const [method, setMethod] = useState<PayMethod>(() => defaultPayMethodFor(session.settings));
   const [description, setDescription] = useState("");
   const [vendor, setVendor] = useState("");
   const [reference, setReference] = useState("");

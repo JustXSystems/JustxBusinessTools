@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Button, Card, Input, Switch } from "@/components/bos";
+import { Button, Card, Checkbox, Input, Switch } from "@/components/bos";
 import type { ImsSettings } from "@/lib/ims/api";
+import { parseNumberList } from "@/lib/ims/settings";
 
 export type SetDraft = <K extends keyof ImsSettings>(key: K, value: ImsSettings[K]) => void;
 export type SettingsErrors = Partial<Record<string, string>>;
@@ -102,6 +103,54 @@ export function ChipList({ values, onChange, placeholder, readOnly, label, max =
         </div>
       )}
       {duplicate ? <div className="bos-field-error">“{trimmed}” is already in the list.</div> : null}
+    </div>
+  );
+}
+
+/** Comma-separated number list (e.g. “0, 7, 15, 30”). Keeps the raw text while typing; commits parsed numbers. */
+export function NumberListInput({ id, values, onChange, readOnly, invalid, describedBy, placeholder }: { id?: string; values: ReadonlyArray<number>; onChange: (next: number[]) => void; readOnly?: boolean; invalid?: boolean; describedBy?: string; placeholder?: string }) {
+  const [text, setText] = useState(values.join(", "));
+  const [prev, setPrev] = useState(values);
+  // Re-sync when the list changes from outside (save / reset) rather than from typing here.
+  if (prev !== values) {
+    setPrev(values);
+    if (JSON.stringify(parseNumberList(text)) !== JSON.stringify(values)) setText(values.join(", "));
+  }
+  return (
+    <Input
+      id={id}
+      aria-describedby={describedBy}
+      aria-invalid={invalid}
+      value={text}
+      readOnly={readOnly}
+      placeholder={placeholder}
+      inputMode="decimal"
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange(parseNumberList(e.target.value));
+      }}
+    />
+  );
+}
+
+/** Check-list of payment methods; the last remaining method cannot be switched off. */
+export function MethodPicker({ options, values, onChange, readOnly, label }: { options: ReadonlyArray<{ value: string; label: string }>; values: ReadonlyArray<string>; onChange: (next: string[]) => void; readOnly?: boolean; label: string }) {
+  return (
+    <div className="ims-chips" role="group" aria-label={label}>
+      {options.map((o) => {
+        const on = values.includes(o.value);
+        return (
+          <label key={o.value} className="ims-chip" style={{ gap: 8, paddingRight: 10, cursor: readOnly ? "default" : "pointer" }}>
+            <Checkbox
+              checked={on}
+              disabled={readOnly || (on && values.length <= 1)}
+              onChange={(v) => onChange(options.map((x) => x.value).filter((m) => (m === o.value ? v : values.includes(m))))}
+              aria-label={`${label}: ${o.label}`}
+            />
+            <span>{o.label}</span>
+          </label>
+        );
+      })}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import "./inventory-a.css";
 import { useId, useMemo, useState } from "react";
 import { Button, Dialog, Field, FormGrid, Input, Select, Switch, Textarea } from "@/components/bos";
 import { ims, type ImsItem, type ItemInput, type ItemList } from "@/lib/ims/api";
-import { GST_RATES, inrExact, num, pct } from "@/lib/ims/format";
+import { gstRatesFor, inrExact, num, pct } from "@/lib/ims/format";
 import { generateEan13, isEan13, suggestSku } from "@/lib/ims/inventory-a";
 import { useIms, useImsAction } from "../core";
 import type { InventoryMeta } from "./ItemDetail";
@@ -290,7 +290,7 @@ function ItemForm({
         <Field label="GST rate" error={shown.gstRate}>
           {({ id, describedBy }) => (
             <Select id={id} aria-describedby={describedBy} value={f.gstRate} onChange={(e) => set("gstRate", e.target.value)}>
-              {[...new Set([...GST_RATES.map(String), f.gstRate])].map((r) => (
+              {[...new Set([...gstRatesFor(session.settings).map(String), f.gstRate])].map((r) => (
                 <option key={r} value={r}>
                   {r}%
                 </option>

@@ -1347,6 +1347,91 @@ export function rateWiseSummary(lines: ReadonlyArray<{ gstRate: number; taxable:
 /** Rates in use under Indian GST (including the 40% slab and the special 0.1% / 0.25% / 1.5% / 3% rates). */
 export const GST_SLABS = [0, 0.1, 0.25, 1.5, 3, 5, 12, 18, 28, 40] as const;
 
+/* ---------- Settings Wave 3: sales / payment defaults ---------- */
+
+export const DEFAULT_PAYMENT_TERM_PRESETS: ReadonlyArray<number> = [0, 7, 15, 30, 45, 60];
+export const DEFAULT_GST_RATE_OPTIONS: ReadonlyArray<number> = GST_SLABS;
+export const DEFAULT_PAY_METHODS: ReadonlyArray<PayMethod> = ["cash", "upi", "card", "bank", "cheque"];
+export const DEFAULT_PAY_METHOD: PayMethod = "cash";
+/** Methods the counter (POS) endpoint accepts. */
+export const POS_PAY_METHODS = ["cash", "upi", "card"] as const;
+export type PosPayMethod = (typeof POS_PAY_METHODS)[number];
+export const DEFAULT_POS_PAY_METHODS: ReadonlyArray<PosPayMethod> = POS_PAY_METHODS;
+export const DEFAULT_INSTALLMENT_COUNT = 3;
+export const DEFAULT_INSTALLMENT_EVERY_MONTHS = 1;
+/** Hard ceiling for installments per plan (the tenant `maxInstallments` can only lower it). */
+export const INSTALLMENTS_CEILING = 60;
+
+/** Accepts an array, or a JSON string / driver-parsed JSON column holding one. */
+function asList(raw: unknown): unknown[] | null {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Whole-day payment term chips: unique, ascending, 0–365, at most 12; empty/invalid → defaults. */
+export function normalizePaymentTermPresets(raw: unknown): number[] {
+  const list = asList(raw);
+  if (!list) return [...DEFAULT_PAYMENT_TERM_PRESETS];
+  const nums = [...new Set(list.map((x) => Math.floor(Number(x))).filter((n) => Number.isFinite(n) && n >= 0 && n <= 365))].sort((a, b) => a - b).slice(0, 12);
+  return nums.length ? nums : [...DEFAULT_PAYMENT_TERM_PRESETS];
+}
+
+/** GST rate pick-list: unique, ascending, 0–100 (2 dp), at most 20; empty/invalid → standard slabs. */
+export function normalizeGstRateOptions(raw: unknown): number[] {
+  const list = asList(raw);
+  if (!list) return [...DEFAULT_GST_RATE_OPTIONS];
+  const nums = [...new Set(list.map((x) => round2(Number(x))).filter((n) => Number.isFinite(n) && n >= 0 && n <= 100))].sort((a, b) => a - b).slice(0, 20);
+  return nums.length ? nums : [...DEFAULT_GST_RATE_OPTIONS];
+}
+
+function normalizeMethodList<T extends string>(raw: unknown, allowed: ReadonlyArray<T>, fallback: ReadonlyArray<T>): T[] {
+  const list = asList(raw);
+  if (!list) return [...fallback];
+  const out: T[] = [];
+  for (const x of list) {
+    const m = String(x ?? "").trim().toLowerCase() as T;
+    if (allowed.includes(m) && !out.includes(m)) out.push(m);
+  }
+  return out.length ? out : [...fallback];
+}
+
+/** Enabled receipt / payment methods (order kept). Only built-in methods are accepted. */
+export const normalizePayMethods = (raw: unknown): PayMethod[] => normalizeMethodList<PayMethod>(raw, PAY_METHODS, DEFAULT_PAY_METHODS);
+
+/** Methods offered at the counter — a subset of cash / UPI / card. */
+export const normalizePosPayMethods = (raw: unknown): PosPayMethod[] => normalizeMethodList<PosPayMethod>(raw, POS_PAY_METHODS, DEFAULT_POS_PAY_METHODS);
+
+/** Default method must be one of the enabled ones; otherwise the first enabled method. */
+export function normalizeDefaultPayMethod(raw: unknown, enabled: ReadonlyArray<PayMethod> = DEFAULT_PAY_METHODS): PayMethod {
+  const m = String(raw ?? "").trim().toLowerCase() as PayMethod;
+  if (enabled.includes(m)) return m;
+  return enabled.includes(DEFAULT_PAY_METHOD) ? DEFAULT_PAY_METHOD : (enabled[0] ?? DEFAULT_PAY_METHOD);
+}
+
+export type InstallmentDefaults = { defaultInstallmentCount: number; installmentEveryMonths: number; maxInstallments: number };
+
+/** Clamp installment defaults: max 1–60, default count 1–max, cadence 1–12 months. */
+export function normalizeInstallmentDefaults(raw: Partial<Record<keyof InstallmentDefaults, unknown>> | null | undefined): InstallmentDefaults {
+  const int = (v: unknown, fb: number) => {
+    const n = Math.floor(Number(v));
+    return Number.isFinite(n) && n > 0 ? n : fb;
+  };
+  const maxInstallments = Math.min(INSTALLMENTS_CEILING, int(raw?.maxInstallments, INSTALLMENTS_CEILING));
+  return {
+    maxInstallments,
+    defaultInstallmentCount: Math.min(maxInstallments, int(raw?.defaultInstallmentCount, DEFAULT_INSTALLMENT_COUNT)),
+    installmentEveryMonths: Math.min(12, int(raw?.installmentEveryMonths, DEFAULT_INSTALLMENT_EVERY_MONTHS)),
+  };
+}
+
 export function itemGstIssues(item: { hsn: string | null; gstRate: number }): string[] {
   const issues: string[] = [];
   const hsn = String(item.hsn ?? "").trim();

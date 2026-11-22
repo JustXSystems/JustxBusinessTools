@@ -54,6 +54,9 @@ describe("splitInstallments", () => {
 
   it("steps monthly and clamps to month end", () => {
     expect(splitInstallments(300, 3, "2026-01-31").map((p) => p.dueOn)).toEqual(["2026-01-31", "2026-02-28", "2026-03-31"]);
+    expect(splitInstallments(600, 3, "2026-01-15", 2).map((p) => p.dueOn)).toEqual(["2026-01-15", "2026-03-15", "2026-05-15"]);
+    expect(splitInstallments(600, 10, "2026-01-15", 1, 4)).toHaveLength(4);
+    expect(splitInstallments(600, 100, "2026-01-15")).toHaveLength(60);
     expect(addMonthsISO("2026-11-22", 3)).toBe("2027-02-22");
     expect(addMonthsISO("2026-12-31", 2)).toBe("2027-02-28");
   });

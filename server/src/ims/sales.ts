@@ -2170,11 +2170,13 @@ export function registerSales(router: Router, deps: ImsDeps): void {
         method: z.enum(["cash", "upi", "card"]),
         tendered: z.coerce.number().min(0).max(1e12).nullable().optional(),
         reference: optText(80),
-        roundToRupee: z.boolean().default(true),
+        roundToRupee: z.boolean().optional(),
       }),
       req.body,
     );
     const settings = await getSettings(deps, actor.tenantId);
+    if (!settings.posPayMethods.includes(input.method)) throw badRequest(`${input.method.toUpperCase()} isn't enabled at the counter (Settings → Documents → Sales & payment defaults)`);
+    const roundToRupee = input.roundToRupee ?? settings.posRoundToRupee;
     const today = todayISO();
     const values = await invoiceValues(deps.db, actor, settings, {
       customerId: input.customerId ?? null,
@@ -2184,7 +2186,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       invoiceDate: today,
       dueDate: today,
       lines: input.lines,
-      roundToRupee: input.roundToRupee,
+      roundToRupee,
       notes: "Counter sale",
       terms: null,
     });

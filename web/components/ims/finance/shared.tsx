@@ -8,8 +8,9 @@ import {
   DOC_KIND_LABEL,
   INVOICE_STAMP,
   PAY_METHOD_LABEL,
-  PAY_METHODS,
+  defaultPayMethodFor,
   normalizeCurrencyCode,
+  payMethodsFor,
   upiPayIntent,
   type InvoiceDetail,
   type PayMethod,
@@ -224,10 +225,14 @@ export function ReasonDialog({
   );
 }
 
-export function MethodSelect({ id, value, onChange, methods = PAY_METHODS, describedBy }: { id?: string; value: PayMethod; onChange: (m: PayMethod) => void; methods?: ReadonlyArray<PayMethod>; describedBy?: string }) {
+/** Payment-method picker: tenant-enabled methods (`settings.payMethods`) unless `methods` is passed; keeps the current value selectable. */
+export function MethodSelect({ id, value, onChange, methods, describedBy }: { id?: string; value: PayMethod; onChange: (m: PayMethod) => void; methods?: ReadonlyArray<PayMethod>; describedBy?: string }) {
+  const { session } = useIms();
+  const enabled = methods ?? payMethodsFor(session.settings);
+  const shown = enabled.includes(value) ? enabled : [...enabled, value];
   return (
     <Select id={id} aria-describedby={describedBy} value={value} onChange={(e) => onChange(e.target.value as PayMethod)}>
-      {methods.map((m) => (
+      {shown.map((m) => (
         <option key={m} value={m}>
           {PAY_METHOD_LABEL[m]}
         </option>
@@ -247,7 +252,7 @@ export function PaymentDialog({
   description,
   balance,
   today,
-  defaultMethod = "cash",
+  defaultMethod,
   confirmLabel = "Record payment",
   busy,
   onSubmit,
@@ -294,7 +299,7 @@ function PaymentForm({
   description?: ReactNode;
   balance: number | null;
   today: string;
-  defaultMethod: PayMethod;
+  defaultMethod?: PayMethod;
   confirmLabel: string;
   busy?: boolean;
   onClose: () => void;
@@ -302,7 +307,8 @@ function PaymentForm({
 }) {
   const [amount, setAmount] = useState(balance != null ? String(balance) : "");
   const [date, setDate] = useState(today);
-  const [method, setMethod] = useState<PayMethod>(defaultMethod);
+  const { session } = useIms();
+  const [method, setMethod] = useState<PayMethod>(defaultMethod ?? defaultPayMethodFor(session.settings));
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   const [touched, setTouched] = useState(false);

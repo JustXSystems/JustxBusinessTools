@@ -10,16 +10,26 @@ import {
   exciseApplies,
   IMS_PERMISSIONS,
   IMS_ROLES,
+  PAY_METHODS,
+  POS_PAY_METHODS,
   isImsRole,
   normalizePermissions,
   normalizeAgingBreaks,
   normalizeArPriorityThresholds,
+  normalizeDefaultPayMethod,
+  normalizeGstRateOptions,
+  normalizeInstallmentDefaults,
+  normalizePayMethods,
+  normalizePaymentTermPresets,
+  normalizePosPayMethods,
   normalizeReminders,
   normalizeTaxonomy,
   permissionsFor,
   type ArPriorityThresholds,
   type ImsRole,
+  type PayMethod,
   type PermissionMatrix,
+  type PosPayMethod,
   type ReminderSettings,
   type Taxonomy,
   DEFAULT_AGING_BREAKS,
@@ -206,6 +216,26 @@ export type ImsSettings = {
   arPriority: ArPriorityThresholds;
   /** Payables “due soon” window in days. */
   apDueSoonDays: number;
+  /** Quick-pick payment term chips (days) on invoices. */
+  paymentTermPresets: number[];
+  /** New invoices start with “round total to nearest rupee” on/off. */
+  defaultRoundToRupee: boolean;
+  /** Default retention % on new invoices (0 = none). */
+  defaultRetentionPct: number;
+  /** GST rates offered in pick-lists (line editor, items, settings). */
+  gstRateOptions: number[];
+  /** Enabled receipt / payment methods (subset of cash, upi, card, bank, cheque). */
+  payMethods: PayMethod[];
+  defaultPayMethod: PayMethod;
+  /** Methods offered at the counter (subset of cash, upi, card). */
+  posPayMethods: PosPayMethod[];
+  posRoundToRupee: boolean;
+  /** Prefill for the installment-plan form. */
+  defaultInstallmentCount: number;
+  /** Months between installments when auto-splitting. */
+  installmentEveryMonths: number;
+  /** Ceiling on installments per plan (1–60). */
+  maxInstallments: number;
   exciseEnabled: boolean;
   /** Derived: excise register is shown (enabled or a liquor / bar business type). */
   exciseActive: boolean;
@@ -270,6 +300,17 @@ type SettingsRow = {
   ar_priority_high_days?: number | null;
   ar_priority_medium_days?: number | null;
   ap_due_soon_days?: number | null;
+  payment_term_presets?: unknown;
+  default_round_to_rupee?: number | boolean | null;
+  default_retention_pct?: string | number | null;
+  gst_rate_options?: unknown;
+  pay_methods?: unknown;
+  default_pay_method?: string | null;
+  pos_pay_methods?: unknown;
+  pos_round_to_rupee?: number | boolean | null;
+  default_installment_count?: number | null;
+  installment_every_months?: number | null;
+  max_installments?: number | null;
   excise_enabled: number;
   permissions: unknown;
   taxonomy: unknown;
@@ -334,6 +375,19 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
     medium: r.ar_priority_medium_days ?? DEFAULT_AR_PRIORITY.medium,
   }),
   apDueSoonDays: Math.max(1, Math.min(365, Number(r.ap_due_soon_days) || DEFAULT_AP_DUE_SOON_DAYS)),
+  paymentTermPresets: normalizePaymentTermPresets(r.payment_term_presets),
+  defaultRoundToRupee: r.default_round_to_rupee == null ? true : Boolean(r.default_round_to_rupee),
+  defaultRetentionPct: Math.max(0, Math.min(100, money(r.default_retention_pct ?? 0))),
+  gstRateOptions: normalizeGstRateOptions(r.gst_rate_options),
+  payMethods: normalizePayMethods(r.pay_methods),
+  defaultPayMethod: normalizeDefaultPayMethod(r.default_pay_method, normalizePayMethods(r.pay_methods)),
+  posPayMethods: normalizePosPayMethods(r.pos_pay_methods),
+  posRoundToRupee: r.pos_round_to_rupee == null ? true : Boolean(r.pos_round_to_rupee),
+  ...normalizeInstallmentDefaults({
+    defaultInstallmentCount: r.default_installment_count,
+    installmentEveryMonths: r.installment_every_months,
+    maxInstallments: r.max_installments,
+  }),
   exciseEnabled: Boolean(r.excise_enabled),
   exciseActive: exciseApplies(r.business_type, Boolean(r.excise_enabled)),
   permissions: normalizePermissions(json(r.permissions, {})),
@@ -443,6 +497,17 @@ const SettingsInput = z.object({
     })
     .optional(),
   apDueSoonDays: z.coerce.number().int().min(1).max(365).optional(),
+  paymentTermPresets: z.array(z.coerce.number().int().min(0).max(365)).min(1, "Keep at least one payment term").max(12).optional(),
+  defaultRoundToRupee: z.boolean().optional(),
+  defaultRetentionPct: z.coerce.number().min(0).max(100).optional(),
+  gstRateOptions: z.array(z.coerce.number().min(0).max(100)).min(1, "Keep at least one GST rate").max(20).optional(),
+  payMethods: z.array(z.enum(PAY_METHODS)).min(1, "Keep at least one payment method").optional(),
+  defaultPayMethod: z.enum(PAY_METHODS).optional(),
+  posPayMethods: z.array(z.enum(POS_PAY_METHODS)).min(1, "Keep at least one counter payment method").optional(),
+  posRoundToRupee: z.boolean().optional(),
+  defaultInstallmentCount: z.coerce.number().int().min(1).max(60).optional(),
+  installmentEveryMonths: z.coerce.number().int().min(1).max(12).optional(),
+  maxInstallments: z.coerce.number().int().min(1).max(60).optional(),
   exciseEnabled: z.boolean().optional(),
   permissions: z.record(z.string(), z.record(z.string(), z.boolean())).optional(),
   taxonomy: z.record(z.string(), z.unknown()).optional(),
@@ -502,6 +567,17 @@ const COLUMN: Record<string, string> = {
   attachmentMaxBytes: "attachment_max_bytes",
   agingBreaks: "aging_breaks",
   apDueSoonDays: "ap_due_soon_days",
+  paymentTermPresets: "payment_term_presets",
+  defaultRoundToRupee: "default_round_to_rupee",
+  defaultRetentionPct: "default_retention_pct",
+  gstRateOptions: "gst_rate_options",
+  payMethods: "pay_methods",
+  defaultPayMethod: "default_pay_method",
+  posPayMethods: "pos_pay_methods",
+  posRoundToRupee: "pos_round_to_rupee",
+  defaultInstallmentCount: "default_installment_count",
+  installmentEveryMonths: "installment_every_months",
+  maxInstallments: "max_installments",
   exciseEnabled: "excise_enabled",
   permissions: "permissions",
   taxonomy: "taxonomy",
@@ -510,8 +586,23 @@ const COLUMN: Record<string, string> = {
 };
 
 export async function updateSettings(deps: ImsDeps, actor: ImsActor, body: unknown): Promise<ImsSettings> {
-  await getSettings(deps, actor.tenantId);
+  const current = await getSettings(deps, actor.tenantId);
   const input = parse(SettingsInput, body) as Record<string, unknown>;
+  // Keep cross-field rules consistent when only one side of a pair is sent.
+  if (input.payMethods !== undefined || input.defaultPayMethod !== undefined) {
+    const methods = input.payMethods !== undefined ? normalizePayMethods(input.payMethods) : current.payMethods;
+    input.payMethods = methods;
+    input.defaultPayMethod = normalizeDefaultPayMethod(input.defaultPayMethod ?? current.defaultPayMethod, methods);
+  }
+  if (input.defaultInstallmentCount !== undefined || input.maxInstallments !== undefined) {
+    const inst = normalizeInstallmentDefaults({
+      defaultInstallmentCount: input.defaultInstallmentCount ?? current.defaultInstallmentCount,
+      installmentEveryMonths: input.installmentEveryMonths ?? current.installmentEveryMonths,
+      maxInstallments: input.maxInstallments ?? current.maxInstallments,
+    });
+    input.defaultInstallmentCount = inst.defaultInstallmentCount;
+    input.maxInstallments = inst.maxInstallments;
+  }
   const sets: string[] = [];
   const params: Record<string, unknown> = { tenantId: actor.tenantId, updatedBy: actor.userId };
   if (input.arPriority !== undefined) {
@@ -531,6 +622,10 @@ export async function updateSettings(deps: ImsDeps, actor: ImsActor, body: unkno
     else if (key === "baseCurrency") v = normalizeCurrencyCode(value);
     else if (key === "dunningSequences") v = JSON.stringify(normalizeDunningSequences(value));
     else if (key === "agingBreaks") v = JSON.stringify(normalizeAgingBreaks(value));
+    else if (key === "paymentTermPresets") v = JSON.stringify(normalizePaymentTermPresets(value));
+    else if (key === "gstRateOptions") v = JSON.stringify(normalizeGstRateOptions(value));
+    else if (key === "payMethods") v = JSON.stringify(normalizePayMethods(value));
+    else if (key === "posPayMethods") v = JSON.stringify(normalizePosPayMethods(value));
     else if (key === "bomPaperTemplate") v = normalizeBomPaperTemplate(value);
     else if (key === "bomIndustryPack") v = normalizeBomIndustryPack(value);
     else if (key === "bomPaperTone") v = normalizeBomPaperTone(value);

@@ -234,6 +234,24 @@ export type ImsSettings = {
   arPriority: ArPriorityThresholds;
   /** Payables “due soon” window (days). */
   apDueSoonDays: number;
+  /** Quick-pick payment term chips (days) on invoices. */
+  paymentTermPresets: number[];
+  /** New invoices start with “round total to nearest rupee”. */
+  defaultRoundToRupee: boolean;
+  /** Default retention % on new invoices. */
+  defaultRetentionPct: number;
+  /** GST rates offered in line / item / settings pick-lists. */
+  gstRateOptions: number[];
+  /** Enabled payment methods (subset of cash, upi, card, bank, cheque). */
+  payMethods: string[];
+  defaultPayMethod: string;
+  /** Counter (POS) methods — subset of cash, upi, card. */
+  posPayMethods: string[];
+  posRoundToRupee: boolean;
+  defaultInstallmentCount: number;
+  installmentEveryMonths: number;
+  /** Ceiling on installments per plan (1–60). */
+  maxInstallments: number;
   exciseEnabled: boolean;
   /** Excise applies (enabled, or a liquor / bar business type). */
   exciseActive: boolean;

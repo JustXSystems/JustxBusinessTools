@@ -4,6 +4,8 @@
  * server/src/ims/logic.ts where the server enforces the same rule.
  */
 import { ims, type ImsRole, type ImsSettings, type ReminderRuleKey, type Taxonomy } from "./api";
+import { defaultPayMethodFor, installmentDefaultsFor, payMethodsFor, posPayMethodsFor } from "./finance";
+import { GST_RATES } from "./format";
 
 export const settingsApi = {
   meta: ims.settings,
@@ -232,11 +234,72 @@ export const unknownPlaceholders = (body: string): string[] => {
 
 export type SettingsPatch = Partial<Omit<ImsSettings, "exciseActive">>;
 
+export const DEFAULT_PAYMENT_TERM_PRESETS: ReadonlyArray<number> = [0, 7, 15, 30, 45, 60];
+
+/** Whole-day term chips: unique, ascending, 0–365, at most 12; empty/invalid → defaults. Mirrors server. */
+export function normalizePaymentTermPresets(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_PAYMENT_TERM_PRESETS];
+  const nums = [...new Set(raw.map((x) => Math.floor(Number(x))).filter((n) => Number.isFinite(n) && n >= 0 && n <= 365))].sort((a, b) => a - b).slice(0, 12);
+  return nums.length ? nums : [...DEFAULT_PAYMENT_TERM_PRESETS];
+}
+
+/** GST rate list: unique, ascending, 0–100 (2 dp), at most 20; empty/invalid → standard slabs. Mirrors server. */
+export function normalizeGstRateOptions(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [...GST_RATES];
+  const nums = [...new Set(raw.map((x) => Math.round(Number(x) * 100) / 100).filter((n) => Number.isFinite(n) && n >= 0 && n <= 100))].sort((a, b) => a - b).slice(0, 20);
+  return nums.length ? nums : [...GST_RATES];
+}
+
+/** Parse “0, 7, 15” style input; invalid tokens are dropped. */
+export const parseNumberList = (text: string): number[] =>
+  text
+    .split(/[,\s]+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map(Number)
+    .filter((n) => Number.isFinite(n));
+
+/** Label for a payment-term chip. */
+export const termChipLabel = (days: number): string => (days === 0 ? "On receipt" : `${days} days`);
+
+type Wave3Keys =
+  | "paymentTermPresets"
+  | "defaultRoundToRupee"
+  | "defaultRetentionPct"
+  | "gstRateOptions"
+  | "payMethods"
+  | "defaultPayMethod"
+  | "posPayMethods"
+  | "posRoundToRupee"
+  | "defaultInstallmentCount"
+  | "installmentEveryMonths"
+  | "maxInstallments";
+
+/** Fill Wave-3 sales / payment defaults when an older API payload omits them. */
+export function withSalesDefaults<T extends Partial<ImsSettings>>(settings: T): T & Pick<ImsSettings, Wave3Keys> {
+  return { ...settings, ...salesDefaultFields(settings) };
+}
+
+function salesDefaultFields(settings: Partial<ImsSettings>): Pick<ImsSettings, Wave3Keys> {
+  const inst = installmentDefaultsFor(settings);
+  return {
+    paymentTermPresets: normalizePaymentTermPresets(settings.paymentTermPresets),
+    defaultRoundToRupee: settings.defaultRoundToRupee ?? true,
+    defaultRetentionPct: Math.max(0, Math.min(100, Number(settings.defaultRetentionPct) || 0)),
+    gstRateOptions: normalizeGstRateOptions(settings.gstRateOptions),
+    payMethods: payMethodsFor(settings),
+    defaultPayMethod: defaultPayMethodFor(settings),
+    posPayMethods: posPayMethodsFor(settings),
+    posRoundToRupee: settings.posRoundToRupee ?? true,
+    ...inst,
+  };
+}
+
 /** Fill Wave-1+ ops fields when an older API payload omits them. */
 export function withOpsSettingsDefaults<T extends Partial<ImsSettings>>(
   settings: T,
 ): T &
-  Pick<ImsSettings, "bomPrefix" | "bomDcPrefix" | "bomDcReturnPrefix" | "printPackMax" | "attachmentMaxBytes" | "agingBreaks" | "arPriority" | "apDueSoonDays"> {
+  Pick<ImsSettings, "bomPrefix" | "bomDcPrefix" | "bomDcReturnPrefix" | "printPackMax" | "attachmentMaxBytes" | "agingBreaks" | "arPriority" | "apDueSoonDays" | Wave3Keys> {
   const reminders = settings.reminders
     ? {
         ...settings.reminders,
@@ -261,6 +324,7 @@ export function withOpsSettingsDefaults<T extends Partial<ImsSettings>>(
       medium: Math.max(1, Math.floor(Number(settings.arPriority?.medium) || 31)),
     },
     apDueSoonDays: Math.max(1, Math.min(365, Math.floor(Number(settings.apDueSoonDays) || 7))),
+    ...salesDefaultFields(settings),
   };
 }
 

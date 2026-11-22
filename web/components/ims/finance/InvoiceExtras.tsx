@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { Alert, Badge, Button, Field, FormGrid, Input, useToast, WidgetCard } from "@/components/bos";
-import { finance, installmentGap, portalUrl, splitInstallments, type ImsInstallment, type InstallmentDraft, type InvoiceDetail } from "@/lib/ims/finance";
+import { finance, installmentDefaultsFor, installmentGap, portalUrl, splitInstallments, type ImsInstallment, type InstallmentDraft, type InvoiceDetail } from "@/lib/ims/finance";
 import { addDaysISO, dateLabel, moneyFmt, round2 } from "@/lib/ims/format";
-import { Loaded, useImsAction, useImsData } from "../core";
+import { Loaded, useIms, useImsAction, useImsData } from "../core";
 
 type Inv = InvoiceDetail["invoice"];
 
@@ -22,7 +22,9 @@ export function PaymentPlanCard({ inv, today, canWrite }: { inv: Inv; today: str
   const state = useImsData(() => finance.installments(inv.id), [inv.id, inv.balance, inv.status]);
   const { run, busy } = useImsAction();
   const [editing, setEditing] = useState(false);
-  const [count, setCount] = useState("3");
+  const { session } = useIms();
+  const inst = installmentDefaultsFor(session.settings);
+  const [count, setCount] = useState(String(inst.defaultInstallmentCount));
   const [firstDue, setFirstDue] = useState(addDaysISO(today, 30));
   const [items, setItems] = useState<InstallmentDraft[]>([]);
   const money = (n: number) => moneyFmt(n, inv.currencyCode);
@@ -35,14 +37,13 @@ export function PaymentPlanCard({ inv, today, canWrite }: { inv: Inv; today: str
       {({ plan, balance }) => {
         if (!plan && balance <= 0.005) return null;
         const gap = installmentGap(items, balance);
+        const planCount = () => Math.max(1, Math.min(inst.maxInstallments, Math.floor(Number(count)) || inst.defaultInstallmentCount));
         const startEdit = () => {
-          const n = Math.max(2, Math.min(60, Math.floor(Number(count)) || 3));
-          setItems(splitInstallments(balance, n, firstDue));
+          setItems(splitInstallments(balance, planCount(), firstDue, inst.installmentEveryMonths, inst.maxInstallments));
           setEditing(true);
         };
         const regenerate = () => {
-          const n = Math.max(2, Math.min(60, Math.floor(Number(count)) || 3));
-          setItems(splitInstallments(balance, n, firstDue));
+          setItems(splitInstallments(balance, planCount(), firstDue, inst.installmentEveryMonths, inst.maxInstallments));
         };
         const patch = (i: number, p: Partial<InstallmentDraft>) => setItems((cur) => cur.map((x, j) => (j === i ? { ...x, ...p } : x)));
         const save = async () => {
@@ -126,7 +127,7 @@ export function PaymentPlanCard({ inv, today, canWrite }: { inv: Inv; today: str
             ) : (
               <div className="bos-stack" style={{ gap: 10 }}>
                 <FormGrid columns="1fr 1fr">
-                  <Field label="Installments">{({ id }) => <Input id={id} type="number" min={2} max={60} value={count} onChange={(e) => setCount(e.target.value)} />}</Field>
+                  <Field label="Installments">{({ id }) => <Input id={id} type="number" min={1} max={inst.maxInstallments} value={count} onChange={(e) => setCount(e.target.value)} />}</Field>
                   <Field label="First due">{({ id }) => <Input id={id} type="date" min={today} value={firstDue} onChange={(e) => setFirstDue(e.target.value)} />}</Field>
                 </FormGrid>
                 <div>

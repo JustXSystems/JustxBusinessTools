@@ -30,13 +30,13 @@ import {
   withCommercialSample,
   type BomScheduleColumn,
 } from "@/lib/ims/bom-paper";
-import { COMMON_CURRENCIES } from "@/lib/ims/finance";
-import { GST_RATES, inr } from "@/lib/ims/format";
+import { COMMON_CURRENCIES, methodLabel, PAY_METHODS, POS_PAY_METHODS } from "@/lib/ims/finance";
+import { gstRatesFor, inr } from "@/lib/ims/format";
 import { GST_STATES, MONTHS, PREFIX_FIELDS, docNoSample, fiscalYearLabel, gstinPlace } from "@/lib/ims/settings";
 import "../bom/bom.css";
 import { BomPaper } from "../bom/BomPaper";
 import { useIms } from "../core";
-import { SectionCard, ToggleRow, type TabProps } from "./parts";
+import { MethodPicker, NumberListInput, SectionCard, ToggleRow, type TabProps } from "./parts";
 
 export const EXCISE_TYPES = new Set(["liquor_retail", "bar_pub"]);
 
@@ -498,13 +498,11 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
           <Field label="Default GST rate" hint="Pre-filled on new items and blank lines">
             {({ id, describedBy }) => (
               <Select id={id} aria-describedby={describedBy} value={draft.defaultGstRate} onChange={(e) => set("defaultGstRate", Number(e.target.value))}>
-                {[...new Set<number>([...GST_RATES, draft.defaultGstRate])]
-                  .sort((a, b) => a - b)
-                  .map((r) => (
-                    <option key={r} value={r}>
-                      {r}%
-                    </option>
-                  ))}
+                {gstRatesFor(draft, [draft.defaultGstRate]).map((r) => (
+                  <option key={r} value={r}>
+                    {r}%
+                  </option>
+                ))}
               </Select>
             )}
           </Field>
@@ -512,6 +510,94 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
             {({ id, describedBy }) => <Textarea id={id} aria-describedby={describedBy} rows={4} maxLength={4000} value={draft.terms ?? ""} onChange={(e) => set("terms", e.target.value || null)} />}
           </Field>
         </FormGrid>
+      </SectionCard>
+
+      <SectionCard
+        title="Sales & payment defaults"
+        desc="Pre-fills for the invoice editor, counter (POS), payment dialogs and installment plans. Existing documents are never changed."
+      >
+        <FormGrid>
+          <Field label="Payment term chips (days)" error={errors.paymentTermPresets} hint="Quick-pick buttons on invoices; 0 shows as “On receipt”. Up to 12, each 0–365.">
+            {({ id, describedBy, invalid }) => (
+              <NumberListInput id={id} describedBy={describedBy} invalid={invalid} readOnly={readOnly} values={draft.paymentTermPresets ?? []} onChange={(v) => set("paymentTermPresets", v)} placeholder="0, 7, 15, 30, 45, 60" />
+            )}
+          </Field>
+          <Field label="GST rate options (%)" error={errors.gstRateOptions} hint="Offered in line editors, items, categories and the default GST list. Up to 20 rates.">
+            {({ id, describedBy, invalid }) => (
+              <NumberListInput id={id} describedBy={describedBy} invalid={invalid} readOnly={readOnly} values={draft.gstRateOptions ?? []} onChange={(v) => set("gstRateOptions", v)} placeholder="0, 5, 12, 18, 28" />
+            )}
+          </Field>
+          <Field label="Default retention %" error={errors.defaultRetentionPct} hint="Pre-filled on new invoices (0 = none)">
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="number" min={0} max={100} step="0.01" value={draft.defaultRetentionPct ?? 0} onChange={(e) => set("defaultRetentionPct", Number(e.target.value))} />
+            )}
+          </Field>
+          <Field label="Default payment method" error={errors.defaultPayMethod} hint="Pre-selected when recording receipts and expenses">
+            {({ id, describedBy, invalid }) => (
+              <Select id={id} aria-describedby={describedBy} aria-invalid={invalid} value={draft.defaultPayMethod} onChange={(e) => set("defaultPayMethod", e.target.value)}>
+                {(draft.payMethods ?? []).map((m) => (
+                  <option key={m} value={m}>
+                    {methodLabel(m)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label="Payment methods" full error={errors.payMethods} hint="Methods offered in payment dialogs. At least one stays on.">
+            {() => (
+              <MethodPicker
+                label="Payment methods"
+                readOnly={readOnly}
+                options={PAY_METHODS.map((m) => ({ value: m, label: methodLabel(m) }))}
+                values={draft.payMethods ?? []}
+                onChange={(next) => {
+                  set("payMethods", next);
+                  if (!next.includes(draft.defaultPayMethod)) set("defaultPayMethod", next.includes("cash") ? "cash" : (next[0] ?? "cash"));
+                }}
+              />
+            )}
+          </Field>
+          <Field label="Counter (POS) methods" full error={errors.posPayMethods} hint="Cash, UPI and card are the only methods the counter supports.">
+            {() => (
+              <MethodPicker
+                label="Counter methods"
+                readOnly={readOnly}
+                options={POS_PAY_METHODS.map((m) => ({ value: m, label: methodLabel(m) }))}
+                values={draft.posPayMethods ?? []}
+                onChange={(next) => set("posPayMethods", next)}
+              />
+            )}
+          </Field>
+          <Field label="Default installments" error={errors.defaultInstallmentCount} hint="Pre-filled in the payment-plan form (1–60, not above the maximum)">
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="number" min={1} max={60} value={draft.defaultInstallmentCount ?? 3} onChange={(e) => set("defaultInstallmentCount", Number(e.target.value))} />
+            )}
+          </Field>
+          <Field label="Months between installments" error={errors.installmentEveryMonths} hint="Gap used when a plan is split automatically (1–12)">
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="number" min={1} max={12} value={draft.installmentEveryMonths ?? 1} onChange={(e) => set("installmentEveryMonths", Number(e.target.value))} />
+            )}
+          </Field>
+          <Field label="Max installments per plan" error={errors.maxInstallments} hint="Ceiling enforced by the server (1–60)">
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="number" min={1} max={60} value={draft.maxInstallments ?? 60} onChange={(e) => set("maxInstallments", Number(e.target.value))} />
+            )}
+          </Field>
+        </FormGrid>
+        <ToggleRow
+          label="Round new invoices to the nearest rupee"
+          desc="Default for the “Round total” switch on new invoices"
+          checked={draft.defaultRoundToRupee ?? true}
+          disabled={readOnly}
+          onChange={(v) => set("defaultRoundToRupee", v)}
+        />
+        <ToggleRow
+          label="Round counter (POS) bills to the nearest rupee"
+          desc="Applies to every counter sale"
+          checked={draft.posRoundToRupee ?? true}
+          disabled={readOnly}
+          onChange={(v) => set("posRoundToRupee", v)}
+        />
       </SectionCard>
 
       <SectionCard title="Stock rules">

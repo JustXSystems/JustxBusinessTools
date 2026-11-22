@@ -3,7 +3,7 @@
 import "./finance.css";
 import { useMemo, useState } from "react";
 import { Badge, Button, Card, DataTable, Dialog, EmptyState, Field, FormGrid, Grid, Input, KpiCard, SearchInput, Segmented, Select, Textarea, type BosColumn } from "@/components/bos";
-import { finance, LEDGER_CATEGORY_LABEL, methodLabel, reminderLink, type LedgerData, type LedgerEntry, type LedgerEntryCategory, type PartyBalance, type PayMethod } from "@/lib/ims/finance";
+import { defaultPayMethodFor, finance, LEDGER_CATEGORY_LABEL, methodLabel, reminderLink, type LedgerData, type LedgerEntry, type LedgerEntryCategory, type PartyBalance, type PayMethod } from "@/lib/ims/finance";
 import { dateLabel, downloadCsv, inrCompact, inrExact, num, round2, stampLabel } from "@/lib/ims/format";
 import { Loaded, PageHeader, RequirePerm, Stack, useIms, useImsAction, useImsData } from "../core";
 import { fillRelated, ForceRelatedToggle, PartySelect } from "../shared/pickers";
@@ -465,7 +465,7 @@ function SettleDialog({ entry, onClose }: { entry: LedgerEntry; onClose: () => v
   const { session } = useIms();
   const { run, busy } = useImsAction();
   const [date, setDate] = useState(session.today);
-  const [method, setMethod] = useState<PayMethod>("cash");
+  const [method, setMethod] = useState<PayMethod>(() => defaultPayMethodFor(session.settings));
   return (
     <Dialog
       open

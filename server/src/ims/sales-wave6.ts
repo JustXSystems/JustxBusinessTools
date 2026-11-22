@@ -57,6 +57,7 @@ export function registerSalesWave6(router: Router, deps: ImsDeps): void {
     requirePerm(res, "sales");
     const input = parse(InstallmentInput, req.body);
     const today = todayISO();
+    const { maxInstallments } = await getSettings(deps, actor.tenantId);
     const planId = randomUUID();
     const invoiceNo = await tx(deps.db, async (conn) => {
       const r = await loadInvoiceRow(conn, actor.tenantId, req.params.id, true);
@@ -69,7 +70,7 @@ export function registerSalesWave6(router: Router, deps: ImsDeps): void {
         invoiceId: r.id,
       });
       if (existing) throw conflict("This invoice already has a payment plan. Remove it first to create a new one.");
-      const checked = validateInstallments(input.installments, balance);
+      const checked = validateInstallments(input.installments, balance, maxInstallments);
       if (!checked.ok) throw badRequest(checked.error);
       await exec(
         conn,

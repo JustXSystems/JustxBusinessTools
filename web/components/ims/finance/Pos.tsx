@@ -3,14 +3,14 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Alert, BosIcon, Button, Card, Dialog, Field, FormGrid, Input, Segmented, WidgetCard, WidgetRow } from "@/components/bos";
 import type { ImsItem } from "@/lib/ims/api";
-import { finance, gstStateName, intraStateFor, methodLabel, posChange, type InvoiceDetail } from "@/lib/ims/finance";
+import { defaultPayMethodFor, finance, gstStateName, intraStateFor, methodLabel, posChange, posPayMethodsFor, type InvoiceDetail, type PosPayMethod } from "@/lib/ims/finance";
 import { computeTotals, inr, inrExact, num, qtyText, round2, timeAgo, type ImsLineInput } from "@/lib/ims/format";
 import { Loaded, useIms, useImsAction, useImsData } from "../core";
 import { ItemSearch } from "../shared/pickers";
 import { QuickChips } from "./shared";
 
 type CartLine = { item: ImsItem; qty: number; rate: number };
-type Method = "cash" | "upi" | "card";
+type Method = PosPayMethod;
 
 /** Counter billing: scan or search items, take cash / UPI / card, issue a paid invoice in one step. */
 export function PosCounter({ onOpen }: { onOpen: (id: string) => void }) {
@@ -18,7 +18,13 @@ export function PosCounter({ onOpen }: { onOpen: (id: string) => void }) {
   const settings = session.settings;
   const { run, busy } = useImsAction();
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [method, setMethod] = useState<Method>("cash");
+  const posMethods = useMemo(() => posPayMethodsFor(settings), [settings]);
+  const startMethod = useMemo<Method>(() => {
+    const d = defaultPayMethodFor(settings);
+    return (posMethods as readonly string[]).includes(d) ? (d as Method) : posMethods[0]!;
+  }, [settings, posMethods]);
+  const roundToRupee = settings.posRoundToRupee ?? true;
+  const [method, setMethod] = useState<Method>(startMethod);
   const [tendered, setTendered] = useState("");
   const [reference, setReference] = useState("");
   const [showCustomer, setShowCustomer] = useState(false);
@@ -33,7 +39,7 @@ export function PosCounter({ onOpen }: { onOpen: (id: string) => void }) {
     () => cart.map((c) => ({ itemId: c.item.id, name: c.item.name, sku: c.item.sku, hsn: c.item.hsn, unit: c.item.unit, qty: c.qty, rate: c.rate, discountPct: 0, gstRate: c.item.gstRate })),
     [cart],
   );
-  const totals = useMemo(() => computeTotals(lines, intraState, true), [lines, intraState]);
+  const totals = useMemo(() => computeTotals(lines, intraState, roundToRupee), [lines, intraState, roundToRupee]);
   const tenderedValue = tendered.trim() === "" ? null : num(tendered);
   const change = method === "cash" ? posChange(totals.grandTotal, tenderedValue) : null;
   const short = method === "cash" && tenderedValue !== null && change === null;
@@ -54,7 +60,7 @@ export function PosCounter({ onOpen }: { onOpen: (id: string) => void }) {
     setCustomerMobile("");
     setCustomerGstin("");
     setShowCustomer(false);
-    setMethod("cash");
+    setMethod(startMethod);
   };
 
   const charge = async () => {
@@ -70,7 +76,7 @@ export function PosCounter({ onOpen }: { onOpen: (id: string) => void }) {
           method,
           tendered: method === "cash" ? tenderedValue : null,
           reference: reference.trim() || null,
-          roundToRupee: true,
+          roundToRupee,
         }),
       { success: "Sale complete" },
     );
@@ -179,11 +185,7 @@ export function PosCounter({ onOpen }: { onOpen: (id: string) => void }) {
               aria-label="Payment method"
               value={method}
               onChange={setMethod}
-              options={[
-                { value: "cash", label: "Cash" },
-                { value: "upi", label: "UPI" },
-                { value: "card", label: "Card" },
-              ]}
+              options={posMethods.map((m) => ({ value: m, label: methodLabel(m) }))}
             />
           </div>
 

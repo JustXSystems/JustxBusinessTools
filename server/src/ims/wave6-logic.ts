@@ -62,9 +62,12 @@ export type InstallmentChecked = { dueOn: string; amount: number; label: string 
 export function validateInstallments(
   items: ReadonlyArray<InstallmentDraft>,
   balance: number,
+  /** Tenant `maxInstallments`; never above the hard `MAX_INSTALLMENTS` ceiling. */
+  maxInstallments: number = MAX_INSTALLMENTS,
 ): { ok: true; items: InstallmentChecked[]; total: number } | { ok: false; error: string } {
+  const cap = Math.max(1, Math.min(MAX_INSTALLMENTS, Math.floor(Number(maxInstallments)) || MAX_INSTALLMENTS));
   if (!items.length) return { ok: false, error: "Add at least one installment" };
-  if (items.length > MAX_INSTALLMENTS) return { ok: false, error: `A plan can have at most ${MAX_INSTALLMENTS} installments` };
+  if (items.length > cap) return { ok: false, error: `A plan can have at most ${cap} installments` };
   const checked: InstallmentChecked[] = [];
   for (const [i, it] of items.entries()) {
     if (!ISO_DATE_RE.test(String(it.dueOn ?? ""))) return { ok: false, error: `Installment ${i + 1} needs a valid due date` };

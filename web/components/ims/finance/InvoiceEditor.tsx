@@ -5,6 +5,7 @@ import { Alert, Badge, Button, Card, Field, FormGrid, Input, Select, Switch, Tex
 import type { PartyOption } from "@/lib/ims/api";
 import { ims } from "@/lib/ims/api";
 import { COMMON_CURRENCIES, finance, fxPreview, gstStateName, GST_STATES, intraStateFor, normalizeCurrencyCode, parseCurrencyCode, type InvoiceDetail, type InvoiceInput } from "@/lib/ims/finance";
+import { normalizePaymentTermPresets, termChipLabel } from "@/lib/ims/settings";
 import { addDaysISO, computeTotals, dateLabel, inrExact, moneyFmt, qtyText, round2 } from "@/lib/ims/format";
 import { DocRefLink } from "../bom/DocRefLink";
 import { ErrorBlock, LoadingBlock, PageHeader, Stack, useIms, useImsAction, useImsData } from "../core";
@@ -14,7 +15,7 @@ import { SuggestInput } from "../shared/SuggestInput";
 import { BackLink, QuickChips } from "./shared";
 
 const GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-const TERM_OPTIONS = [0, 7, 15, 30, 45, 60];
+
 
 /** New invoice (id null) or edit a draft. `onClose(id)` opens the saved invoice; `onClose(null)` goes back. */
 export function InvoiceEditor({ id, onClose }: { id: string | null; onClose: (id: string | null) => void }) {
@@ -69,13 +70,14 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   );
   const [shippingCharges, setShippingCharges] = useState(String(inv?.shippingCharges ? inv.shippingCharges : ""));
   const [shippingGstRate, setShippingGstRate] = useState(String(inv?.shippingGstRate ?? settings.defaultGstRate));
-  const [retentionPct, setRetentionPct] = useState(String(inv?.retentionPct ? inv.retentionPct : ""));
+  const [retentionPct, setRetentionPct] = useState(String(inv ? (inv.retentionPct ? inv.retentionPct : "") : settings.defaultRetentionPct > 0 ? settings.defaultRetentionPct : ""));
   const [progressPct, setProgressPct] = useState(String(inv?.progressPct != null && inv.progressPct > 0 ? inv.progressPct : ""));
   const [progressLabel, setProgressLabel] = useState(inv?.progressLabel ?? "");
   const [salespersonId, setSalespersonId] = useState<string>(inv?.accountManagerId != null ? String(inv.accountManagerId) : "");
-  const [roundToRupee, setRoundToRupee] = useState(inv?.roundToRupee ?? true);
+  const [roundToRupee, setRoundToRupee] = useState(inv?.roundToRupee ?? settings.defaultRoundToRupee ?? true);
   const [notes, setNotes] = useState(inv?.notes ?? "");
   const [terms, setTerms] = useState(inv?.terms ?? settings.terms ?? "");
+  const termOptions = useMemo(() => normalizePaymentTermPresets(settings.paymentTermPresets), [settings.paymentTermPresets]);
   const baseCurrency = normalizeCurrencyCode(settings.baseCurrency);
   const currencyChoices = useMemo(() => [...new Set<string>([baseCurrency, ...COMMON_CURRENCIES])], [baseCurrency]);
   const startCurrency = normalizeCurrencyCode(inv?.currencyCode, baseCurrency);
@@ -479,7 +481,7 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
               <QuickChips
                 label="Payment terms"
                 active={termsDays === null ? "" : String(termsDays)}
-                options={TERM_OPTIONS.map((d) => ({ key: String(d), label: d === 0 ? "On receipt" : `${d} days` }))}
+                options={termOptions.map((d) => ({ key: String(d), label: termChipLabel(d) }))}
                 onPick={(k) => applyTerms(Number(k))}
               />
             </div>

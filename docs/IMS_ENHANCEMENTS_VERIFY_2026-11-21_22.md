@@ -328,7 +328,7 @@ Spot-check seeded world (full catalog also in `e2e-results/ims/MANUAL_VERIFY.md`
 | 18.18 | **Print only** | Prints without adding a history row |
 | 18.19 | Regression: GSP push, Sales Orders, bill attachments, invoice attachments | Unchanged |
 
-**Automated:** `server/src/ims/wave6-logic.test.ts` (fx base total, installment sum + allocation, dunning level pick, portal token/UPI), `web/lib/ims/__tests__/wave6.test.ts`, `public-paths.test.ts` (`/api/public/invoice-portal`).
+**Automated:** `server/src/ims/wave6-logic.test.ts` (fx base total, installment sum + allocation, dunning level pick, portal token/UPI), `web/lib/ims/__tests__/wave6.test.ts`, `server/src/ims/settings-sales-defaults.test.ts` + `web/lib/ims/__tests__/settings-ops.test.ts` (settings Wave 3), `public-paths.test.ts` (`/api/public/invoice-portal`).
 
 ---
 
@@ -351,6 +351,12 @@ Spot-check seeded world (full catalog also in `e2e-results/ims/MANUAL_VERIFY.md`
 | **AR priority days** | Reminders → Aging & priority | Critical/high/medium thresholds |
 | **AP due soon days** | Reminders → Aging & priority | Payables Due soon window |
 | **Base currency** | Business | Foreign documents lock FX against it |
+| **Payment term chips** | Documents → Sales & payment defaults (migration **062**) | New invoice term chips match the list (`0` = On receipt); empty/invalid falls back to 0, 7, 15, 30, 45, 60 |
+| **Default round-to-rupee / retention %** | Documents → Sales & payment defaults | New invoice opens with the switch and Retention % pre-filled; existing invoices unchanged |
+| **GST rate options** | Documents → Sales & payment defaults | Line editor, item dialog, category and default-GST selects show the list (rates already on a document stay selectable) |
+| **Payment methods + default** | Documents → Sales & payment defaults | Receipt / expense / settle dialogs show enabled methods; default is pre-selected (last method can't be unchecked) |
+| **POS methods + round-to-rupee** | Documents → Sales & payment defaults | Counter shows only enabled cash/UPI/card; server rejects a disabled method; bill rounding follows setting |
+| **Installments (default / every N months / max)** | Documents → Sales & payment defaults | Payment-plan form pre-fills count; auto-split uses month gap; plan above max is rejected (hard ceiling 60) |
 | **Dunning letter levels** | Reminders | AR Letter offers each level |
 
 ---

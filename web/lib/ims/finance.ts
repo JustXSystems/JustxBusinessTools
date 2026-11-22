@@ -15,6 +15,52 @@ export type PayMethod = (typeof PAY_METHODS)[number];
 export const PAY_METHOD_LABEL: Record<PayMethod, string> = { cash: "Cash", upi: "UPI", card: "Card", bank: "Bank transfer", cheque: "Cheque" };
 export const methodLabel = (m: string | null | undefined): string => (m && m in PAY_METHOD_LABEL ? PAY_METHOD_LABEL[m as PayMethod] : m ? m.toUpperCase() : "—");
 
+/** Methods the counter accepts (server `POS_PAY_METHODS`). */
+export const POS_PAY_METHODS = ["cash", "upi", "card"] as const;
+export type PosPayMethod = (typeof POS_PAY_METHODS)[number];
+
+function pickMethods<T extends string>(raw: unknown, allowed: ReadonlyArray<T>): T[] {
+  if (!Array.isArray(raw)) return [...allowed];
+  const out: T[] = [];
+  for (const x of raw) {
+    const m = String(x ?? "").trim().toLowerCase() as T;
+    if (allowed.includes(m) && !out.includes(m)) out.push(m);
+  }
+  return out.length ? out : [...allowed];
+}
+
+/** Enabled payment methods from `settings.payMethods` (built-ins only; empty/missing → all). */
+export const payMethodsFor = (settings?: { payMethods?: ReadonlyArray<string> | null } | null): PayMethod[] => pickMethods<PayMethod>(settings?.payMethods, PAY_METHODS);
+
+/** Default method — must be enabled, else cash when enabled, else the first enabled one. */
+export function defaultPayMethodFor(settings?: { payMethods?: ReadonlyArray<string> | null; defaultPayMethod?: string | null } | null): PayMethod {
+  const enabled = payMethodsFor(settings);
+  const m = String(settings?.defaultPayMethod ?? "").trim().toLowerCase() as PayMethod;
+  if (enabled.includes(m)) return m;
+  return enabled.includes("cash") ? "cash" : enabled[0]!;
+}
+
+/** Counter methods from `settings.posPayMethods` (cash / UPI / card only; empty/missing → all three). */
+export const posPayMethodsFor = (settings?: { posPayMethods?: ReadonlyArray<string> | null } | null): PosPayMethod[] => pickMethods<PosPayMethod>(settings?.posPayMethods, POS_PAY_METHODS);
+
+export const MAX_INSTALLMENTS = 60;
+
+/** Installment-plan form defaults, clamped (max 1–60, count 1–max, cadence 1–12 months). */
+export function installmentDefaultsFor(
+  settings?: { defaultInstallmentCount?: number | null; installmentEveryMonths?: number | null; maxInstallments?: number | null } | null,
+): { defaultInstallmentCount: number; installmentEveryMonths: number; maxInstallments: number } {
+  const int = (v: unknown, fb: number) => {
+    const n = Math.floor(Number(v));
+    return Number.isFinite(n) && n > 0 ? n : fb;
+  };
+  const maxInstallments = Math.min(MAX_INSTALLMENTS, int(settings?.maxInstallments, MAX_INSTALLMENTS));
+  return {
+    maxInstallments,
+    defaultInstallmentCount: Math.min(maxInstallments, int(settings?.defaultInstallmentCount, 3)),
+    installmentEveryMonths: Math.min(12, int(settings?.installmentEveryMonths, 1)),
+  };
+}
+
 export type ImsPayment = {
   id: string;
   direction: "in" | "out";
@@ -1105,8 +1151,8 @@ export function addMonthsISO(iso: string, months: number): string {
 }
 
 /** N equal installments of `total` (to the paisa; the last absorbs rounding), due monthly from `firstDue`. */
-export function splitInstallments(total: number, count: number, firstDue: string, everyMonths = 1): InstallmentDraft[] {
-  const n = Math.max(1, Math.min(60, Math.floor(count) || 1));
+export function splitInstallments(total: number, count: number, firstDue: string, everyMonths = 1, maxCount = MAX_INSTALLMENTS): InstallmentDraft[] {
+  const n = Math.max(1, Math.min(Math.max(1, Math.min(MAX_INSTALLMENTS, Math.floor(maxCount) || MAX_INSTALLMENTS)), Math.floor(count) || 1));
   const cents = Math.round(total * 100);
   const each = Math.floor(cents / n);
   const out: InstallmentDraft[] = [];

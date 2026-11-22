@@ -81,6 +81,17 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
   "agingBreaks",
   "arPriority",
   "apDueSoonDays",
+  "paymentTermPresets",
+  "defaultRoundToRupee",
+  "defaultRetentionPct",
+  "gstRateOptions",
+  "payMethods",
+  "defaultPayMethod",
+  "posPayMethods",
+  "posRoundToRupee",
+  "defaultInstallmentCount",
+  "installmentEveryMonths",
+  "maxInstallments",
   "exciseEnabled",
   "permissions",
   "taxonomy",
@@ -105,6 +116,15 @@ const ERROR_TAB: Record<string, Tab> = {
   agingBreaks: "reminders",
   arPriority: "reminders",
   apDueSoonDays: "reminders",
+  paymentTermPresets: "documents",
+  defaultRetentionPct: "documents",
+  gstRateOptions: "documents",
+  payMethods: "documents",
+  defaultPayMethod: "documents",
+  posPayMethods: "documents",
+  defaultInstallmentCount: "documents",
+  installmentEveryMonths: "documents",
+  maxInstallments: "documents",
   categories: "catalog",
   reminders: "reminders",
   ...Object.fromEntries(PREFIX_FIELDS.map((f) => [f.key, "documents"])),
@@ -138,6 +158,17 @@ function validate(d: ImsSettings): SettingsErrors {
     e.arPriority = "Critical > high > medium (whole days)";
   }
   if (!intIn(d.apDueSoonDays ?? 7, 1, 365)) e.apDueSoonDays = "Whole days, 1–365";
+  const terms = d.paymentTermPresets ?? [];
+  if (!terms.length || terms.length > 12 || terms.some((n) => !intIn(n, 0, 365))) e.paymentTermPresets = "1–12 whole-day terms, each 0–365";
+  if (!Number.isFinite(d.defaultRetentionPct) || d.defaultRetentionPct < 0 || d.defaultRetentionPct > 100) e.defaultRetentionPct = "Between 0 and 100";
+  const gst = d.gstRateOptions ?? [];
+  if (!gst.length || gst.length > 20 || gst.some((n) => !Number.isFinite(n) || n < 0 || n > 100)) e.gstRateOptions = "1–20 rates, each 0–100";
+  if (!(d.payMethods ?? []).length) e.payMethods = "Keep at least one payment method";
+  else if (!(d.payMethods ?? []).includes(d.defaultPayMethod)) e.defaultPayMethod = "Pick one of the enabled methods";
+  if (!(d.posPayMethods ?? []).length) e.posPayMethods = "Keep at least one counter method";
+  if (!intIn(d.maxInstallments ?? 60, 1, 60)) e.maxInstallments = "Whole number, 1–60";
+  if (!intIn(d.defaultInstallmentCount ?? 3, 1, Math.min(60, Number.isInteger(d.maxInstallments) ? d.maxInstallments : 60))) e.defaultInstallmentCount = "Whole number, 1 up to the maximum";
+  if (!intIn(d.installmentEveryMonths ?? 1, 1, 12)) e.installmentEveryMonths = "Whole months, 1–12";
   const offsets = d.reminders?.offsets;
   if (offsets) {
     const vals = Object.entries(offsets).filter(([k]) => k !== "due").map(([, v]) => v);
