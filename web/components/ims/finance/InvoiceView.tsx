@@ -225,16 +225,42 @@ function InvoiceBody({
             </div>
             <div className="ims-row" style={{ marginTop: 8 }}>
               {canWrite && isIssued && (inv.docKind || "tax_invoice") === "tax_invoice" ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy === "cn"}
+                    onClick={async () => {
+                      const out = await run("cn", () => finance.createCreditNote(inv.id), { success: "Credit note draft created" });
+                      if (out) onEdit(out.invoice.id);
+                    }}
+                  >
+                    {busy === "cn" ? "Creating…" : "Credit note"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy === "dn"}
+                    onClick={async () => {
+                      const out = await run("dn", () => finance.createDebitNote(inv.id), { success: "Debit note draft created" });
+                      if (out) onEdit(out.invoice.id);
+                    }}
+                  >
+                    {busy === "dn" ? "Creating…" : "Debit note"}
+                  </Button>
+                </>
+              ) : null}
+              {canWrite && (inv.docKind || "tax_invoice") === "proforma" && inv.status !== "cancelled" ? (
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={busy === "cn"}
+                  disabled={busy === "pf"}
                   onClick={async () => {
-                    const out = await run("cn", () => finance.createCreditNote(inv.id), { success: "Credit note draft created" });
+                    const out = await run("pf", () => finance.convertProforma(inv.id), { success: "Tax invoice draft created from proforma" });
                     if (out) onEdit(out.invoice.id);
                   }}
                 >
-                  {busy === "cn" ? "Creating…" : "Credit note"}
+                  {busy === "pf" ? "Converting…" : "Convert to tax invoice"}
                 </Button>
               ) : null}
               {canWrite ? (

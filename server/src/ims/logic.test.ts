@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addDaysISO,
+  advanceRecurringDate,
   agingBucket,
   apPriority,
   arPriority,
@@ -190,6 +191,17 @@ describe("receivables & payables", () => {
     expect(withShip.shippingCharges).toBe(50);
     expect(withShip.shippingTax).toBe(9);
     expect(withShip.grandTotal).toBe(round2(base.grandTotal + 50 + 9));
+  });
+
+  it("advances recurring schedule dates", () => {
+    expect(advanceRecurringDate("2026-01-31", "months", 1)).toBe("2026-02-28");
+    expect(advanceRecurringDate("2026-01-15", "weeks", 2)).toBe("2026-01-29");
+    expect(advanceRecurringDate("2026-11-22", "days", 10)).toBe("2026-12-02");
+    expect(advanceRecurringDate("2026-11-22", "years", 1)).toBe("2027-11-22");
+  });
+
+  it("withholds retention from invoice balance", () => {
+    expect(invoiceBalance({ status: "issued", grandTotal: 1000, amountPaid: 0, retentionAmount: 100 })).toBe(900);
   });
 
   it("derives bill status and urgency", () => {

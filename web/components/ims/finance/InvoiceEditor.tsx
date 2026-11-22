@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Alert, Badge, Button, Card, Field, FormGrid, Input, Switch, Textarea } from "@/components/bos";
+import { Alert, Badge, Button, Card, Field, FormGrid, Input, Select, Switch, Textarea } from "@/components/bos";
 import type { PartyOption } from "@/lib/ims/api";
+import { ims } from "@/lib/ims/api";
 import { finance, gstStateName, GST_STATES, intraStateFor, type InvoiceDetail, type InvoiceInput } from "@/lib/ims/finance";
 import { addDaysISO, computeTotals, dateLabel, inrExact, qtyText, round2 } from "@/lib/ims/format";
 import { DocRefLink } from "../bom/DocRefLink";
@@ -39,8 +40,10 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const settings = session.settings;
   const { run, busy } = useImsAction();
   const catalog = useItemCatalog();
+  const team = useImsData(() => ims.team(), []);
   const inv = draft?.invoice ?? null;
   const today = session.today;
+  const salespeople = (team.data?.members ?? []).filter((m) => m.active !== false);
 
   const [customer, setCustomer] = useState<{ id: string | null; name: string }>({ id: inv?.customerId ?? null, name: inv?.customerName ?? "" });
   const [party, setParty] = useState<PartyOption | null>(null);
@@ -64,6 +67,8 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   );
   const [shippingCharges, setShippingCharges] = useState(String(inv?.shippingCharges ? inv.shippingCharges : ""));
   const [shippingGstRate, setShippingGstRate] = useState(String(inv?.shippingGstRate ?? settings.defaultGstRate));
+  const [retentionPct, setRetentionPct] = useState(String(inv?.retentionPct ? inv.retentionPct : ""));
+  const [salespersonId, setSalespersonId] = useState<string>(inv?.accountManagerId != null ? String(inv.accountManagerId) : "");
   const [roundToRupee, setRoundToRupee] = useState(inv?.roundToRupee ?? true);
   const [notes, setNotes] = useState(inv?.notes ?? "");
   const [terms, setTerms] = useState(inv?.terms ?? settings.terms ?? "");
@@ -75,6 +80,7 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const intraState = intraStateFor(settings, effectivePos);
   const shipAmt = Math.max(0, Number(shippingCharges) || 0);
   const shipGst = Math.max(0, Math.min(100, Number(shippingGstRate) || 0));
+  const retPct = Math.max(0, Math.min(100, Number(retentionPct) || 0));
   const totals = useMemo(() => {
     const base = computeTotals(toLineInputs(lines), intraState, false);
     const shipTax = shipAmt > 0.005 && shipGst > 0 ? round2((shipAmt * shipGst) / 100) : 0;
@@ -96,8 +102,10 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
       roundOff = round2(rounded - grandTotal);
       grandTotal = rounded;
     }
-    return { ...base, taxTotal, cgst, sgst, igst, roundOff, grandTotal, shippingCharges: shipAmt, shippingTax: shipTax };
-  }, [lines, intraState, roundToRupee, shipAmt, shipGst]);
+    const retentionAmount = retPct > 0 ? round2((grandTotal * retPct) / 100) : 0;
+    return { ...base, taxTotal, cgst, sgst, igst, roundOff, grandTotal, shippingCharges: shipAmt, shippingTax: shipTax, retentionAmount };
+  }, [lines, intraState, roundToRupee, shipAmt, shipGst, retPct]);
+  const salesperson = salespeople.find((m) => String(m.userId) === salespersonId) ?? null;
 
   const summary = useImsData(() => (customer.id ? finance.customerSummary(customer.id) : Promise.resolve(null)), [customer.id]);
   const creditWarning = useMemo(() => {
@@ -170,6 +178,9 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
     docKind: isCreditNote ? inv?.docKind : docKind,
     shippingCharges: shipAmt,
     shippingGstRate: shipGst,
+    retentionPct: retPct,
+    accountManagerId: salesperson ? salesperson.userId : salespersonId === "" ? null : Number(salespersonId) || null,
+    accountManagerName: salesperson ? salesperson.name || null : null,
     lines: toLineInputs(lines),
     roundToRupee,
     notes: notes.trim() || null,
@@ -500,6 +511,24 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
                 value={shippingGstRate}
                 onChange={(e) => setShippingGstRate(e.target.value)}
               />
+            )}
+          </Field>
+          <Field label="Retention %" hint={retPct > 0 ? `Withheld ${inrExact(totals.retentionAmount ?? 0)} — not due yet` : "Contract retention (Zoho / SAP parity)"}>
+            {({ id, describedBy }) => (
+              <Input id={id} aria-describedby={describedBy} type="number" min={0} max={100} step="0.01" value={retentionPct} onChange={(e) => setRetentionPct(e.target.value)} placeholder="0" />
+            )}
+          </Field>
+          <Field label="Salesperson">
+            {({ id, describedBy }) => (
+              <Select id={id} aria-describedby={describedBy} value={salespersonId} onChange={(e) => setSalespersonId(e.target.value)}>
+                <option value="">From customer / none</option>
+                {salespeople.map((m) => (
+                  <option key={m.userId} value={String(m.userId)}>
+                    {m.name || m.email || `User ${m.userId}`}
+                    {m.isAccountManager ? " · AM" : ""}
+                  </option>
+                ))}
+              </Select>
             )}
           </Field>
           <Field label="Notes (printed)">{({ id, describedBy }) => <Textarea id={id} aria-describedby={describedBy} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={4000} placeholder="Thank you for your business!" />}</Field>

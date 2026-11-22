@@ -77,6 +77,9 @@ export type ImsInvoice = {
   shippingCharges: number;
   shippingGstRate: number;
   shippingTax: number;
+  retentionPct: number;
+  retentionAmount: number;
+  recurringId: string | null;
   roundOff: number;
   roundToRupee: boolean;
   grandTotal: number;
@@ -186,10 +189,85 @@ export type InvoiceInput = {
   docKind?: InvoiceDocKind;
   shippingCharges?: number;
   shippingGstRate?: number;
+  retentionPct?: number;
+  accountManagerId?: number | null;
+  accountManagerName?: string | null;
   lines: ImsLineInput[];
   roundToRupee?: boolean;
   notes?: string | null;
   terms?: string | null;
+};
+
+export type RecurringProfile = {
+  id: string;
+  profileName: string;
+  status: "active" | "paused" | "ended";
+  frequency: "days" | "weeks" | "months" | "years";
+  repeatEvery: number;
+  startOn: string;
+  nextRunOn: string;
+  endOn: string | null;
+  autoIssue: boolean;
+  customerId: string | null;
+  customerName: string;
+  customerGstin: string | null;
+  customerAddress: string | null;
+  customerMobile: string | null;
+  placeOfSupply: string | null;
+  intraState: boolean;
+  customerPoNo: string | null;
+  shipToName: string | null;
+  shipToGstin: string | null;
+  shipToAddress: string | null;
+  shipToState: string | null;
+  shipToMobile: string | null;
+  lines: ImsLineInput[];
+  shippingCharges: number;
+  shippingGstRate: number;
+  roundToRupee: boolean;
+  paymentTermsDays: number | null;
+  accountManagerId: number | null;
+  accountManagerName: string | null;
+  notes: string | null;
+  terms: string | null;
+  lastRunOn: string | null;
+  lastInvoiceId: string | null;
+  lastInvoiceNo: string | null;
+  runCount: number;
+  createdByName: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type RecurringInput = {
+  profileName: string;
+  frequency: "days" | "weeks" | "months" | "years";
+  repeatEvery?: number;
+  startOn?: string;
+  endOn?: string | null;
+  autoIssue?: boolean;
+  customerId?: string | null;
+  customerName: string;
+  customerGstin?: string | null;
+  customerAddress?: string | null;
+  customerMobile?: string | null;
+  placeOfSupply?: string | null;
+  customerPoNo?: string | null;
+  shipToName?: string | null;
+  shipToGstin?: string | null;
+  shipToAddress?: string | null;
+  shipToState?: string | null;
+  shipToMobile?: string | null;
+  lines: ImsLineInput[];
+  shippingCharges?: number;
+  shippingGstRate?: number;
+  roundToRupee?: boolean;
+  paymentTermsDays?: number | null;
+  accountManagerId?: number | null;
+  accountManagerName?: string | null;
+  notes?: string | null;
+  terms?: string | null;
+  status?: "active" | "paused" | "ended";
 };
 
 export type CustomerSummary = { outstanding: number; overdue: number; openCount: number; lastInvoiceDate: string | null; creditLimit: number | null };
@@ -646,12 +724,26 @@ export const finance = {
   cancelInvoice: (id: string, reason: string) => post<InvoiceDetail>(`/invoices/${id}/cancel`, { reason }),
   duplicateInvoice: (id: string) => post<InvoiceDetail>(`/invoices/${id}/duplicate`),
   createCreditNote: (id: string, input?: { notes?: string | null; restock?: boolean }) => post<InvoiceDetail>(`/invoices/${id}/credit-note`, input ?? {}),
+  createDebitNote: (id: string, input?: { notes?: string | null }) => post<InvoiceDetail>(`/invoices/${id}/debit-note`, input ?? {}),
+  convertProforma: (id: string) => post<InvoiceDetail>(`/invoices/${id}/convert-proforma`),
   associateEInvoice: (
     id: string,
     input: { irn: string; ackNo?: string | null; ackAt?: string | null; signedQr?: string | null; ewayBillNo?: string | null; ewayValidUpto?: string | null },
   ) => post<InvoiceDetail>(`/invoices/${id}/e-invoice/associate`, input),
   markEInvoiceCancelled: (id: string, reason?: string | null) => post<InvoiceDetail>(`/invoices/${id}/e-invoice/mark-cancelled`, { reason }),
   deleteInvoice: (id: string) => del(`/invoices/${id}`),
+
+  recurringProfiles: () => get<{ profiles: RecurringProfile[] }>("/recurring-invoices"),
+  recurringProfile: (id: string) => get<{ profile: RecurringProfile }>(`/recurring-invoices/${id}`),
+  createRecurring: (input: RecurringInput) => post<{ profile: RecurringProfile }>("/recurring-invoices", input),
+  updateRecurring: (id: string, input: Partial<RecurringInput> & { nextRunOn?: string; status?: "active" | "paused" | "ended" }) =>
+    patch<{ profile: RecurringProfile }>(`/recurring-invoices/${id}`, input),
+  runRecurring: (id: string, input?: { issue?: boolean }) =>
+    post<{ invoice: InvoiceDetail; profile: RecurringProfile }>(`/recurring-invoices/${id}/run`, input ?? {}),
+  tickRecurring: () =>
+    post<{ today: string; due: number; created: Array<{ profileId: string; invoiceId: string; invoiceNo: string }>; errors: Array<{ profileId: string; error: string }> }>(
+      "/recurring-invoices/tick",
+    ),
   recordInvoicePayment: (id: string, input: PaymentInput) => post<InvoiceDetail>(`/invoices/${id}/payments`, input),
   recordReceipt: (input: PaymentInput & { partyId?: string | null; partyName: string; invoiceIds?: string[] }) =>
     post<{ applied: Array<{ invoiceId: string; invoiceNo: string; amount: number }>; onAccount: number }>("/receipts", input),

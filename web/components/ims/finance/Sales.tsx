@@ -9,10 +9,11 @@ import { usePartyOptions } from "../shared/pickers";
 import { InvoiceEditor } from "./InvoiceEditor";
 import { InvoiceView } from "./InvoiceView";
 import { PosCounter } from "./Pos";
+import { RecurringPanel } from "./Recurring";
 import { PeriodSelect, type PeriodOrAll } from "./shared";
 
 type View = { kind: "list" } | { kind: "edit"; id: string | null } | { kind: "view"; id: string };
-type Tab = "invoices" | "pos";
+type Tab = "invoices" | "recurring" | "pos";
 
 const STATUS_TABS: ReadonlyArray<{ value: "all" | InvoiceDisplayStatus; label: string }> = [
   { value: "all", label: "All" },
@@ -65,17 +66,33 @@ export function SalesModule() {
         <InvoiceView id={view.id} onBack={() => setView({ kind: "list" })} onEdit={(id) => setView({ kind: "edit", id })} />
       ) : (
         <Stack>
-          <PageHeader title="Invoices & Billing" sub="GST tax invoices, payments and the POS counter." actions={tab === "invoices" ? <NewInvoiceButton onClick={() => setView({ kind: "edit", id: null })} /> : null} />
+          <PageHeader
+            title="Invoices & Billing"
+            sub="GST tax invoices, recurring schedules, payments and the POS counter."
+            actions={tab === "invoices" ? <NewInvoiceButton onClick={() => setView({ kind: "edit", id: null })} /> : null}
+          />
           <SubTabs
             label="Sales sections"
             value={tab}
             onChange={setTab}
             options={[
               { value: "invoices", label: "Invoices" },
+              { value: "recurring", label: "Recurring" },
               { value: "pos", label: "POS counter" },
             ]}
           />
-          {tab === "invoices" ? <InvoiceList onOpen={(id) => setView({ kind: "view", id })} onNew={() => setView({ kind: "edit", id: null })} /> : <PosCounter onOpen={(id) => setView({ kind: "view", id })} />}
+          {tab === "invoices" ? (
+            <InvoiceList onOpen={(id) => setView({ kind: "view", id })} onNew={() => setView({ kind: "edit", id: null })} />
+          ) : tab === "recurring" ? (
+            <RecurringPanel
+              onOpenInvoice={(id) => {
+                setTab("invoices");
+                setView({ kind: "view", id });
+              }}
+            />
+          ) : (
+            <PosCounter onOpen={(id) => setView({ kind: "view", id })} />
+          )}
         </Stack>
       )}
     </RequirePerm>

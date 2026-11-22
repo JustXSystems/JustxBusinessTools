@@ -341,7 +341,7 @@ export const INVOICE_DOC_KINDS = ["tax_invoice", "proforma", "credit_note", "deb
 
 /** True when the document contributes to sales KPIs and AR outstanding. */
 export function isArTaxInvoice(kind: string | null | undefined): boolean {
-  return !kind || kind === "tax_invoice";
+  return !kind || kind === "tax_invoice" || kind === "debit_note";
 }
 
 export function invoiceBalance(inv: {
@@ -349,13 +349,39 @@ export function invoiceBalance(inv: {
   grandTotal: number;
   amountPaid: number;
   creditApplied?: number;
+  retentionAmount?: number;
   docKind?: string | null;
 }): number {
   if (inv.status !== "issued") return 0;
-  // Proforma never creates a receivable; CN/DN balances are tracked against the source invoice.
-  if (inv.docKind === "proforma" || inv.docKind === "credit_note" || inv.docKind === "debit_note") return 0;
+  // Proforma never creates a receivable; credit notes reduce AR on the source invoice instead.
+  if (inv.docKind === "proforma" || inv.docKind === "credit_note") return 0;
   const credit = Number(inv.creditApplied ?? 0) || 0;
-  return Math.max(0, round2(inv.grandTotal - inv.amountPaid - credit));
+  const retention = Number(inv.retentionAmount ?? 0) || 0;
+  // Retention is contractually withheld — not currently collectible.
+  return Math.max(0, round2(inv.grandTotal - inv.amountPaid - credit - retention));
+}
+
+/** Advance a recurring schedule date by frequency × repeatEvery (UTC calendar). */
+export function advanceRecurringDate(
+  iso: string,
+  frequency: "days" | "weeks" | "months" | "years",
+  repeatEvery = 1,
+): string {
+  const n = Math.max(1, Math.floor(Number(repeatEvery) || 1));
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (frequency === "days") dt.setUTCDate(dt.getUTCDate() + n);
+  else if (frequency === "weeks") dt.setUTCDate(dt.getUTCDate() + 7 * n);
+  else if (frequency === "years") dt.setUTCFullYear(dt.getUTCFullYear() + n);
+  else {
+    // months — clamp day for short months
+    const day = dt.getUTCDate();
+    dt.setUTCDate(1);
+    dt.setUTCMonth(dt.getUTCMonth() + n);
+    const last = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() + 1, 0)).getUTCDate();
+    dt.setUTCDate(Math.min(day, last));
+  }
+  return dt.toISOString().slice(0, 10);
 }
 
 export function invoiceDisplayStatus(
@@ -365,7 +391,7 @@ export function invoiceDisplayStatus(
   if (inv.status === "draft") return "draft";
   if (inv.status === "cancelled") return "cancelled";
   if (inv.docKind === "proforma") return inv.status === "issued" ? "paid" : "draft";
-  if (inv.docKind === "credit_note" || inv.docKind === "debit_note") {
+  if (inv.docKind === "credit_note") {
     return inv.status === "issued" ? "paid" : inv.status === "cancelled" ? "cancelled" : "draft";
   }
   const balance = invoiceBalance(inv);
