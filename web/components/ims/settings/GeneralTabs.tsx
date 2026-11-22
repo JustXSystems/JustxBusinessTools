@@ -30,13 +30,13 @@ import {
   withCommercialSample,
   type BomScheduleColumn,
 } from "@/lib/ims/bom-paper";
-import { COMMON_CURRENCIES, methodLabel, PAY_METHODS, POS_PAY_METHODS } from "@/lib/ims/finance";
+import { commonCurrenciesFor, methodLabel, PAY_METHODS, POS_PAY_METHODS } from "@/lib/ims/finance";
 import { gstRatesFor, inr } from "@/lib/ims/format";
 import { GST_STATES, MONTHS, PREFIX_FIELDS, docNoSample, fiscalYearLabel, gstinPlace } from "@/lib/ims/settings";
 import "../bom/bom.css";
 import { BomPaper } from "../bom/BomPaper";
 import { useIms } from "../core";
-import { MethodPicker, NumberListInput, SectionCard, ToggleRow, type TabProps } from "./parts";
+import { CodeListInput, MethodPicker, NumberListInput, SectionCard, ToggleRow, type TabProps } from "./parts";
 
 export const EXCISE_TYPES = new Set(["liquor_retail", "bar_pub"]);
 
@@ -149,10 +149,15 @@ export function BusinessTab({ draft, set, errors, readOnly, meta }: TabProps & {
             )}
           </Field>
           <datalist id="ims-base-currency-options">
-            {COMMON_CURRENCIES.map((c) => (
+            {commonCurrenciesFor(draft).map((c) => (
               <option key={c} value={c} />
             ))}
           </datalist>
+          <Field label="Common currencies" error={errors.commonCurrencies} hint="Suggested in the base-currency box and the invoice / bill currency pickers. Up to 12 three-letter codes, e.g. INR, USD, EUR.">
+            {({ id, describedBy, invalid }) => (
+              <CodeListInput id={id} describedBy={describedBy} invalid={invalid} readOnly={readOnly} values={draft.commonCurrencies ?? []} onChange={(v) => set("commonCurrencies", v)} placeholder="INR, USD, EUR, AED, GBP" />
+            )}
+          </Field>
           <Field label="UPI ID (VPA)" hint="Printed as a payment QR on issued tax invoices when a balance is due.">
             {({ id, describedBy }) => (
               <Input
@@ -613,6 +618,17 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
             Reports may show negative quantities until goods are received.
           </Alert>
         ) : null}
+        <FormGrid>
+          <Field
+            label="Reorder fallback (× minimum)"
+            error={errors.reorderFallbackFactor}
+            hint="Suggested reorder target for items with no max stock or reorder qty: this many times the minimum (default 2). Used by Restock, reorder drafts and Ask AI."
+          >
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="number" min={1} max={20} step="0.25" value={draft.reorderFallbackFactor ?? 2} onChange={(e) => set("reorderFallbackFactor", Number(e.target.value))} />
+            )}
+          </Field>
+        </FormGrid>
       </SectionCard>
 
       <SectionCard title="Print & attachments" desc="Batch printing and file upload limits used across Sales, Bills and Audit.">

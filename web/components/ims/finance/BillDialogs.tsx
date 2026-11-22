@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Alert, Button, Dialog, Field, FormGrid, Input, Segmented, Select, Switch, Textarea } from "@/components/bos";
 import type { PartyOption } from "@/lib/ims/api";
-import { BILL_BADGE, COMMON_CURRENCIES, finance, fxPreview, gstStateName, intraStateFor, methodLabel, normalizeCurrencyCode, parseCurrencyCode, RUN_BADGE, type BillInput, type ImsBill, type PaymentRun, type PayMethod } from "@/lib/ims/finance";
+import { BILL_BADGE, commonCurrenciesFor, finance, fxPreview, gstStateName, intraStateFor, methodLabel, normalizeCurrencyCode, parseCurrencyCode, RUN_BADGE, type BillInput, type ImsBill, type PaymentRun, type PayMethod } from "@/lib/ims/finance";
 import { addDaysISO, computeTotals, dateLabel, downloadCsv, inrExact, moneyFmt, num, round2 } from "@/lib/ims/format";
 import { Loaded, StatusBadge, useIms, useImsAction, useImsData } from "../core";
 import { lineKey, LineEditor, toLineInputs, type EditableLine } from "../shared/LineEditor";
@@ -30,7 +30,7 @@ export function BillEditorDialog({ bill, canApprove, onClose, onSaved }: { bill:
   const [notes, setNotes] = useState(bill?.notes ?? "");
   const [approveNow, setApproveNow] = useState(canApprove);
   const baseCurrency = normalizeCurrencyCode(settings.baseCurrency);
-  const currencyChoices = useMemo(() => [...new Set<string>([baseCurrency, ...COMMON_CURRENCIES])], [baseCurrency]);
+  const currencyChoices = useMemo(() => [...new Set<string>([baseCurrency, ...commonCurrenciesFor(settings)])], [baseCurrency, settings]);
   const startCurrency = normalizeCurrencyCode(bill?.currencyCode, baseCurrency);
   const [currencyChoice, setCurrencyChoice] = useState<string>(currencyChoices.includes(startCurrency) ? startCurrency : "__other");
   const [currencyCustom, setCurrencyCustom] = useState(currencyChoices.includes(startCurrency) ? "" : startCurrency);

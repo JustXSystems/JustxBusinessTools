@@ -92,6 +92,12 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
   "defaultInstallmentCount",
   "installmentEveryMonths",
   "maxInstallments",
+  "reorderFallbackFactor",
+  "bankMatchDefaults",
+  "auditRules",
+  "auditSeverityAmount",
+  "dunningFirmPayWithinDays",
+  "commonCurrencies",
   "exciseEnabled",
   "permissions",
   "taxonomy",
@@ -125,6 +131,12 @@ const ERROR_TAB: Record<string, Tab> = {
   defaultInstallmentCount: "documents",
   installmentEveryMonths: "documents",
   maxInstallments: "documents",
+  reorderFallbackFactor: "documents",
+  bankMatchDefaults: "reminders",
+  auditRules: "reminders",
+  auditSeverityAmount: "reminders",
+  dunningFirmPayWithinDays: "reminders",
+  commonCurrencies: "business",
   categories: "catalog",
   reminders: "reminders",
   ...Object.fromEntries(PREFIX_FIELDS.map((f) => [f.key, "documents"])),
@@ -169,6 +181,26 @@ function validate(d: ImsSettings): SettingsErrors {
   if (!intIn(d.maxInstallments ?? 60, 1, 60)) e.maxInstallments = "Whole number, 1–60";
   if (!intIn(d.defaultInstallmentCount ?? 3, 1, Math.min(60, Number.isInteger(d.maxInstallments) ? d.maxInstallments : 60))) e.defaultInstallmentCount = "Whole number, 1 up to the maximum";
   if (!intIn(d.installmentEveryMonths ?? 1, 1, 12)) e.installmentEveryMonths = "Whole months, 1–12";
+  const numIn = (n: unknown, min: number, max: number) => typeof n === "number" && Number.isFinite(n) && n >= min && n <= max;
+  if (!numIn(d.reorderFallbackFactor ?? 2, 1, 20)) e.reorderFallbackFactor = "Between 1 and 20";
+  const bm = d.bankMatchDefaults;
+  if (bm) {
+    if (!intIn(bm.windowDays, 1, 30)) e.bankMatchDefaults = "Match window: whole days, 1–30";
+    else if (!intIn(bm.autoScore, 50, 100)) e.bankMatchDefaults = "Auto-match score: whole number, 50–100";
+    else if (!numIn(bm.amountTolerance, 0, 10)) e.bankMatchDefaults = "Amount tolerance: ₹0–10";
+  }
+  const ar2 = d.auditRules;
+  if (ar2) {
+    if (!intIn(ar2.overdueArDays, 1, 3650) || !intIn(ar2.overdueApDays, 1, 3650)) e.auditRules = "Overdue days: whole days, 1–3650";
+    else if (!intIn(ar2.unreconciledDays, 0, 365)) e.auditRules = "Unreconciled days: whole days, 0–365";
+    else if (!numIn(ar2.largeAdjustment, 1, 1e9) || !numIn(ar2.largeWriteOff, 1, 1e9) || !numIn(ar2.b2cLargeLimit, 1, 1e9)) e.auditRules = "Amounts must be between ₹1 and ₹100 crore";
+    else if (!numIn(ar2.gstTolerance, 0, 100)) e.auditRules = "GST tolerance: ₹0–100";
+  }
+  const sev = d.auditSeverityAmount;
+  if (sev && !(numIn(sev.high, 1, 1e9 - 1) && numIn(sev.critical, 2, 1e9) && sev.critical > sev.high)) e.auditSeverityAmount = "Critical amount must be above the high amount";
+  if (!intIn(d.dunningFirmPayWithinDays ?? 7, 1, 90)) e.dunningFirmPayWithinDays = "Whole days, 1–90";
+  const cur = d.commonCurrencies;
+  if (cur && (!cur.length || cur.length > 12 || cur.some((c) => !/^[A-Za-z]{3}$/.test(c)))) e.commonCurrencies = "1–12 three-letter codes, e.g. INR, USD";
   const offsets = d.reminders?.offsets;
   if (offsets) {
     const vals = Object.entries(offsets).filter(([k]) => k !== "due").map(([, v]) => v);

@@ -269,7 +269,7 @@ export function registerSalesWave6(router: Router, deps: ImsDeps): void {
       payload: { levelKey: level.key, invoices: list.map((i) => i.invoiceNo) },
     });
     const business = settings.businessName || "Accounts team";
-    const copy = dunningCopy(level.tone, { customer: customerName, total: formatINR(totalDue), asOf: dateText(today), count: list.length, business });
+    const copy = dunningCopy(level.tone, { customer: customerName, total: formatINR(totalDue), asOf: dateText(today), count: list.length, business, payWithinDays: settings.dunningFirmPayWithinDays });
     res.status(201).json({
       run: run ? mapDunningRun(run) : null,
       suggestedLevelKey: pickDunningLevel(settings.dunningSequences, maxDays)?.key ?? settings.dunningSequences[0]?.key ?? null,

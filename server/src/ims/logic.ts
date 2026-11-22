@@ -253,10 +253,26 @@ export function stockStatus(current: number, min: number, max?: number | null): 
   return "GOOD";
 }
 
-/** Suggested reorder quantity: the item's reorder qty, else enough to reach max (or 2× min). */
-export function reorderQty(item: { current: number; min: number; max?: number | null; reorderQty?: number | null }): number {
+/** Settings Wave 4: multiple of the minimum used as the reorder target when an item has no max / reorder qty. */
+export const DEFAULT_REORDER_FALLBACK_FACTOR = 2;
+export const MIN_REORDER_FALLBACK_FACTOR = 1;
+export const MAX_REORDER_FALLBACK_FACTOR = 20;
+
+/** Clamp the tenant factor to 1–20 (2 dp); missing / non-numeric / non-positive → 2. */
+export function normalizeReorderFallbackFactor(raw: unknown): number {
+  if (raw == null || raw === "" || typeof raw === "boolean") return DEFAULT_REORDER_FALLBACK_FACTOR;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_REORDER_FALLBACK_FACTOR;
+  return Math.round(Math.min(MAX_REORDER_FALLBACK_FACTOR, Math.max(MIN_REORDER_FALLBACK_FACTOR, n)) * 100) / 100;
+}
+
+/** Suggested reorder quantity: the item's reorder qty, else enough to reach max (or `fallbackFactor`× min — 2× by default). */
+export function reorderQty(
+  item: { current: number; min: number; max?: number | null; reorderQty?: number | null },
+  fallbackFactor: number = DEFAULT_REORDER_FALLBACK_FACTOR,
+): number {
   if (item.reorderQty && item.reorderQty > 0) return item.reorderQty;
-  const target = item.max && item.max > 0 ? item.max : Math.max(item.min * 2, 1);
+  const target = item.max && item.max > 0 ? item.max : Math.max(item.min * normalizeReorderFallbackFactor(fallbackFactor), 1);
   return round3(Math.max(0, target - item.current));
 }
 
@@ -1430,6 +1446,31 @@ export function normalizeInstallmentDefaults(raw: Partial<Record<keyof Installme
     defaultInstallmentCount: Math.min(maxInstallments, int(raw?.defaultInstallmentCount, DEFAULT_INSTALLMENT_COUNT)),
     installmentEveryMonths: Math.min(12, int(raw?.installmentEveryMonths, DEFAULT_INSTALLMENT_EVERY_MONTHS)),
   };
+}
+
+/* ---------- Settings Wave 4: ops thresholds (helpers) ---------- */
+
+/** Accepts a plain object, or a JSON string / driver-parsed JSON column holding one (arrays are rejected). */
+export function asObject(raw: unknown): Record<string, unknown> | null {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Number clamped to [min, max]; missing / non-numeric → fallback. `int` floors, otherwise rounds to 2 dp. */
+export function boundedNumber(raw: unknown, min: number, max: number, fallback: number, int = false): number {
+  if (raw == null || raw === "" || typeof raw === "boolean") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  const v = int ? Math.floor(n) : Math.round(n * 100) / 100;
+  return Math.min(max, Math.max(min, v));
 }
 
 export function itemGstIssues(item: { hsn: string | null; gstRate: number }): string[] {
@@ -3045,10 +3086,34 @@ export type BankSuggestion = { candidate: BankCandidate; score: number; dayGap: 
 
 export const BANK_MATCH_DEFAULTS = { windowDays: 5, minAutoScore: 75, amountTolerance: 0.5 } as const;
 
-/** Same direction, amount within 50 paise and dated within the window; nearer dates and matching references score higher. */
-export function scoreBankMatch(txn: BankTxnInput, c: BankCandidate, windowDays: number = BANK_MATCH_DEFAULTS.windowDays): BankSuggestion | null {
+/** Settings Wave 4: tenant-tunable bank match knobs (`autoScore` is `minAutoScore` in code). */
+export type BankMatchSettings = { windowDays: number; autoScore: number; amountTolerance: number };
+export const DEFAULT_BANK_MATCH_SETTINGS: Readonly<BankMatchSettings> = {
+  windowDays: BANK_MATCH_DEFAULTS.windowDays,
+  autoScore: BANK_MATCH_DEFAULTS.minAutoScore,
+  amountTolerance: BANK_MATCH_DEFAULTS.amountTolerance,
+};
+
+/** Window 1–30 days, auto-match score 50–100, amount tolerance ₹0–10; anything else falls back per field. */
+export function normalizeBankMatchDefaults(raw: unknown): BankMatchSettings {
+  const o = asObject(raw);
+  const d = DEFAULT_BANK_MATCH_SETTINGS;
+  return {
+    windowDays: boundedNumber(o?.windowDays, 1, 30, d.windowDays, true),
+    autoScore: boundedNumber(o?.autoScore, 50, 100, d.autoScore, true),
+    amountTolerance: boundedNumber(o?.amountTolerance, 0, 10, d.amountTolerance),
+  };
+}
+
+/** Same direction, amount within the tolerance (50 paise by default) and dated within the window; nearer dates and matching references score higher. */
+export function scoreBankMatch(
+  txn: BankTxnInput,
+  c: BankCandidate,
+  windowDays: number = BANK_MATCH_DEFAULTS.windowDays,
+  amountTolerance: number = BANK_MATCH_DEFAULTS.amountTolerance,
+): BankSuggestion | null {
   if (txn.direction !== c.direction) return null;
-  if (Math.abs(round2(txn.amount) - round2(c.amount)) > BANK_MATCH_DEFAULTS.amountTolerance) return null;
+  if (Math.abs(round2(txn.amount) - round2(c.amount)) > amountTolerance) return null;
   if (!isISODate(txn.date) || !isISODate(c.date)) return null;
   const dayGap = Math.abs(daysBetween(c.date, txn.date));
   if (dayGap > windowDays) return null;
@@ -3072,9 +3137,9 @@ export function scoreBankMatch(txn: BankTxnInput, c: BankCandidate, windowDays: 
   return { candidate: c, score: Math.round(clamp(score, 0, 100)), dayGap, reasons };
 }
 
-export function suggestBankMatches(txn: BankTxnInput, candidates: ReadonlyArray<BankCandidate>, limit = 3, windowDays?: number): BankSuggestion[] {
+export function suggestBankMatches(txn: BankTxnInput, candidates: ReadonlyArray<BankCandidate>, limit = 3, windowDays?: number, amountTolerance?: number): BankSuggestion[] {
   return candidates
-    .map((c) => scoreBankMatch(txn, c, windowDays))
+    .map((c) => scoreBankMatch(txn, c, windowDays, amountTolerance))
     .filter((s): s is BankSuggestion => s !== null)
     .sort((a, b) => b.score - a.score || a.dayGap - b.dayGap)
     .slice(0, limit);
@@ -3087,12 +3152,12 @@ export function suggestBankMatches(txn: BankTxnInput, candidates: ReadonlyArray<
 export function autoMatchBank(
   txns: ReadonlyArray<BankTxnInput & { id: string }>,
   candidates: ReadonlyArray<BankCandidate>,
-  opts: { minScore?: number; windowDays?: number } = {},
+  opts: { minScore?: number; windowDays?: number; amountTolerance?: number } = {},
 ): Array<{ txnId: string; candidateId: string; type: BankCandidate["type"]; score: number }> {
   const minScore = opts.minScore ?? BANK_MATCH_DEFAULTS.minAutoScore;
   const proposals: Array<{ txnId: string; candidate: BankCandidate; score: number }> = [];
   for (const t of txns) {
-    const [best, second] = suggestBankMatches(t, candidates, 2, opts.windowDays);
+    const [best, second] = suggestBankMatches(t, candidates, 2, opts.windowDays, opts.amountTolerance);
     if (!best || best.score < minScore) continue;
     if (second && second.score === best.score) continue;
     proposals.push({ txnId: t.id, candidate: best.candidate, score: best.score });
@@ -3140,6 +3205,81 @@ export const AUDIT_RULES = {
   b2cLargeLimit: 100_000,
 } as const;
 
+/** Resolved rule thresholds, same keys as `AUDIT_RULES` but tenant-overridable (plain numbers). */
+export type AuditRules = { -readonly [K in keyof typeof AUDIT_RULES]: number };
+
+/**
+ * Settings Wave 4: tenant ops preferences for the audit rule engine. Keys mirror `AUDIT_RULES`
+ * (`overdueArDays` = `overdueReceivableDays`, `largeAdjustment` = `largeAdjustmentValue`, …).
+ * Statutory GST slabs / CGST-SGST split are never configurable.
+ */
+export type AuditRuleSettings = {
+  overdueArDays: number;
+  overdueApDays: number;
+  largeAdjustment: number;
+  largeWriteOff: number;
+  gstTolerance: number;
+  unreconciledDays: number;
+  b2cLargeLimit: number;
+};
+
+export const DEFAULT_AUDIT_RULE_SETTINGS: Readonly<AuditRuleSettings> = {
+  overdueArDays: AUDIT_RULES.overdueReceivableDays,
+  overdueApDays: AUDIT_RULES.overduePayableDays,
+  largeAdjustment: AUDIT_RULES.largeAdjustmentValue,
+  largeWriteOff: AUDIT_RULES.largeWriteOffValue,
+  gstTolerance: AUDIT_RULES.gstTolerance,
+  unreconciledDays: AUDIT_RULES.unreconciledAfterDays,
+  b2cLargeLimit: AUDIT_RULES.b2cLargeLimit,
+};
+
+/** Clamp every threshold; missing / invalid fields fall back to the built-in value individually. */
+export function normalizeAuditRules(raw: unknown): AuditRuleSettings {
+  const o = asObject(raw);
+  const d = DEFAULT_AUDIT_RULE_SETTINGS;
+  return {
+    overdueArDays: boundedNumber(o?.overdueArDays, 1, 3650, d.overdueArDays, true),
+    overdueApDays: boundedNumber(o?.overdueApDays, 1, 3650, d.overdueApDays, true),
+    largeAdjustment: boundedNumber(o?.largeAdjustment, 1, 1e9, d.largeAdjustment),
+    largeWriteOff: boundedNumber(o?.largeWriteOff, 1, 1e9, d.largeWriteOff),
+    gstTolerance: boundedNumber(o?.gstTolerance, 0, 100, d.gstTolerance),
+    unreconciledDays: boundedNumber(o?.unreconciledDays, 0, 365, d.unreconciledDays, true),
+    b2cLargeLimit: boundedNumber(o?.b2cLargeLimit, 1, 1e9, d.b2cLargeLimit),
+  };
+}
+
+/** Settings-shaped thresholds → the `AUDIT_RULES` key shape the rule engine reads. */
+export function resolveAuditRules(raw?: unknown): AuditRules {
+  const s = normalizeAuditRules(raw);
+  return {
+    overdueReceivableDays: s.overdueArDays,
+    overduePayableDays: s.overdueApDays,
+    largeAdjustmentValue: s.largeAdjustment,
+    largeWriteOffValue: s.largeWriteOff,
+    gstTolerance: s.gstTolerance,
+    unreconciledAfterDays: s.unreconciledDays,
+    b2cLargeLimit: s.b2cLargeLimit,
+  };
+}
+
+/** Amount cut-offs (₹) that lift an audit finding to `high` / `critical` severity. */
+export type AuditSeverityAmount = { critical: number; high: number };
+export const DEFAULT_AUDIT_SEVERITY_AMOUNT: Readonly<AuditSeverityAmount> = { critical: 500_000, high: 100_000 };
+
+/** high ₹1–₹1e9-1, critical strictly above high (up to ₹1e9). */
+export function normalizeAuditSeverityAmount(raw: unknown): AuditSeverityAmount {
+  const o = asObject(raw);
+  const d = DEFAULT_AUDIT_SEVERITY_AMOUNT;
+  const high = boundedNumber(o?.high, 1, 1e9 - 1, d.high);
+  const critical = Math.min(1e9, Math.max(high + 1, boundedNumber(o?.critical, 1, 1e9, d.critical)));
+  return { critical, high };
+}
+
+/** Severity from an amount: ≥ critical → critical, ≥ high → high, else medium. */
+export function auditSeverityByAmount(amount: number, t: AuditSeverityAmount = DEFAULT_AUDIT_SEVERITY_AMOUNT): "critical" | "high" | "medium" {
+  return amount >= t.critical ? "critical" : amount >= t.high ? "high" : "medium";
+}
+
 export type AuditIssue = {
   /** Stable rule key (`gst-tax:<invoiceId>`) so a reviewer's verdict sticks across runs. */
   key: string;
@@ -3173,7 +3313,7 @@ export type AuditInvoice = {
   grandTotal: number;
 };
 
-export function invoiceGstIssues(inv: AuditInvoice, tolerance: number = AUDIT_RULES.gstTolerance): AuditIssue[] {
+export function invoiceGstIssues(inv: AuditInvoice, tolerance: number = AUDIT_RULES.gstTolerance, b2cLargeLimit: number = AUDIT_RULES.b2cLargeLimit): AuditIssue[] {
   const out: AuditIssue[] = [];
   const base = { category: "gst" as const, entityType: "invoice", entityId: inv.id, entityLabel: inv.invoiceNo, amount: round2(inv.grandTotal), date: inv.date };
   const fmt = (n: number) => `₹${round2(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -3195,7 +3335,7 @@ export function invoiceGstIssues(inv: AuditInvoice, tolerance: number = AUDIT_RU
     out.push({ ...base, key: `gst-gstin:${inv.id}`, severity: "medium", title: `Invalid GSTIN on ${inv.invoiceNo}`, detail: `"${gstin}" isn't a valid 15-character GSTIN, so the buyer can't claim input credit.` });
   } else if (!gstin && String(inv.partyGstin ?? "").trim()) {
     out.push({ ...base, key: `gst-b2b:${inv.id}`, severity: "medium", title: `B2B invoice without GSTIN`, detail: `${inv.customerName} is registered (${String(inv.partyGstin).toUpperCase()}) but ${inv.invoiceNo} was issued without their GSTIN.` });
-  } else if (!gstin && !inv.intraState && inv.grandTotal > AUDIT_RULES.b2cLargeLimit) {
+  } else if (!gstin && !inv.intraState && inv.grandTotal > b2cLargeLimit) {
     out.push({ ...base, key: `gst-b2cl:${inv.id}`, severity: "low", title: `Large inter-state B2C invoice`, detail: `${inv.invoiceNo} (${fmt(inv.grandTotal)}) to an unregistered buyer out of state is reported as B2C (Large) in GSTR-1 — confirm the buyer has no GSTIN.` });
   }
   const noHsn = inv.lines.filter((l) => !String(l.hsn ?? "").trim()).length;

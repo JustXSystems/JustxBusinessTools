@@ -479,6 +479,7 @@ export function registerPurchase(router: Router, deps: ImsDeps): void {
     const supplierId = qstr(req.query.supplierId, 36) || "none";
     const supplier = supplierId === "none" ? null : await loadParty(deps.db, actor.tenantId, supplierId);
     if (supplierId !== "none" && !supplier) throw notFound("Supplier");
+    const settings = await getSettings(deps, actor.tenantId);
     const items = await rows<{
       id: string;
       name: string;
@@ -501,7 +502,7 @@ export function registerPurchase(router: Router, deps: ImsDeps): void {
     const lines = items
       .map((i) => {
         const current = round3(money(i.current_stock));
-        const qty = reorderQty({ current, min: money(i.min_stock), max: i.max_stock == null ? null : money(i.max_stock), reorderQty: i.reorder_qty == null ? null : money(i.reorder_qty) });
+        const qty = reorderQty({ current, min: money(i.min_stock), max: i.max_stock == null ? null : money(i.max_stock), reorderQty: i.reorder_qty == null ? null : money(i.reorder_qty) }, settings.reorderFallbackFactor);
         return {
           itemId: i.id,
           name: i.name,

@@ -66,7 +66,7 @@ export type ItemRow = {
 
 export type ImsItem = ReturnType<typeof mapItem>;
 
-export function mapItem(r: ItemRow, today = todayISO(), agingBreaks?: ReadonlyArray<number>) {
+export function mapItem(r: ItemRow, today = todayISO(), agingBreaks?: ReadonlyArray<number>, reorderFallbackFactor?: number) {
   const current = round3(money(r.current_stock));
   const min = round3(money(r.min_stock));
   const max = r.max_stock == null ? null : round3(money(r.max_stock));
@@ -94,7 +94,8 @@ export function mapItem(r: ItemRow, today = todayISO(), agingBreaks?: ReadonlyAr
     minStock: min,
     maxStock: max,
     reorderQty: r.reorder_qty == null ? null : round3(money(r.reorder_qty)),
-    suggestedReorder: status === "LOW" || status === "OUT_OF_STOCK" ? reorderQty({ current, min, max, reorderQty: r.reorder_qty == null ? null : money(r.reorder_qty) }) : 0,
+    suggestedReorder:
+      status === "LOW" || status === "OUT_OF_STOCK" ? reorderQty({ current, min, max, reorderQty: r.reorder_qty == null ? null : money(r.reorder_qty) }, reorderFallbackFactor) : 0,
     location: r.location,
     volumeMl: r.volume_ml == null ? null : Number(r.volume_ml),
     exciseCategory: r.excise_category,
@@ -121,7 +122,7 @@ export async function getItem(deps: ImsDeps, tenantId: number, id: string) {
     one<ItemRow>(deps.db, `${ITEM_SELECT} WHERE i.tenant_id = :tenantId AND i.id = :id LIMIT 1`, { tenantId, id, since30: addDays(today, -29) }),
     getSettings(deps, tenantId),
   ]);
-  return r ? mapItem(r, today, settings.agingBreaks) : null;
+  return r ? mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor) : null;
 }
 const ItemInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(200),
@@ -499,7 +500,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     }
     if (req.query.includeInactive !== "1") where.push("i.active = 1");
     const settings = await getSettings(deps, actor.tenantId);
-    const list = (await rows<ItemRow>(deps.db, `${ITEM_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.name LIMIT 5000`, params)).map((r) => mapItem(r, today, settings.agingBreaks));
+    const list = (await rows<ItemRow>(deps.db, `${ITEM_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.name LIMIT 5000`, params)).map((r) => mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor));
     const status = qstr(req.query.status, 20).toUpperCase();
     const filtered = status === "ATTENTION" ? list.filter((i) => i.status === "LOW" || i.status === "OUT_OF_STOCK") : status ? list.filter((i) => i.status === status) : list;
     const facets = await rows<{ category: string | null; brand: string | null; unit: string }>(
@@ -538,7 +539,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       code,
       since30: addDays(today, -29),
     });
-    res.json({ item: r ? mapItem(r, today, settings.agingBreaks) : null });
+    res.json({ item: r ? mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor) : null });
   });
 
   router.get("/items/:id", async (req, res) => {
@@ -963,7 +964,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
         tenantId: actor.tenantId,
         since30: addDays(today, -29),
       })
-    ).map((r) => mapItem(r, today, settings.agingBreaks));
+    ).map((r) => mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor));
     const groups = new Map<string, { supplierId: string | null; supplierName: string; items: typeof list; value: number }>();
     for (const i of list) {
       const key = i.supplierId ?? "none";
@@ -1219,7 +1220,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
        FROM ims_movements WHERE tenant_id = :tenantId AND type IN ('DAMAGE', 'WRITE_OFF') AND movement_date >= :monthStart`,
       { tenantId: actor.tenantId, monthStart },
     );
-    const quarantined = quarantine.map((r) => mapItem(r, today, settings.agingBreaks));
+    const quarantined = quarantine.map((r) => mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor));
     res.json({
       returns: list.map(mapReturn),
       damage: damage.map(mapMovement),

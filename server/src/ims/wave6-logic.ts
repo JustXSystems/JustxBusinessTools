@@ -24,6 +24,32 @@ export function normalizeCurrencyCode(v: unknown, fallback: string = DEFAULT_BAS
   return parseCurrencyCode(v) ?? parseCurrencyCode(fallback) ?? DEFAULT_BASE_CURRENCY;
 }
 
+/** Settings Wave 4: currency suggestions offered in the Business tab, invoice editor and bill dialogs. */
+export const DEFAULT_COMMON_CURRENCIES: ReadonlyArray<string> = ["INR", "USD", "EUR", "AED", "GBP"];
+export const MAX_COMMON_CURRENCIES = 12;
+
+/** Valid 3-letter codes, upper-cased, unique, in the given order, at most 12. Empty / invalid → defaults. */
+export function normalizeCommonCurrencies(raw: unknown): string[] {
+  let list: unknown[] | null = null;
+  if (Array.isArray(raw)) list = raw;
+  else if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {
+      list = null;
+    }
+  }
+  if (!list) return [...DEFAULT_COMMON_CURRENCIES];
+  const out: string[] = [];
+  for (const x of list) {
+    const code = parseCurrencyCode(x);
+    if (code && !out.includes(code)) out.push(code);
+    if (out.length >= MAX_COMMON_CURRENCIES) break;
+  }
+  return out.length ? out : [...DEFAULT_COMMON_CURRENCIES];
+}
+
 export type FxResolved = {
   currencyCode: string;
   fxRate: number;
@@ -191,9 +217,24 @@ export const findDunningLevel = (levels: ReadonlyArray<DunningLevel>, key: strin
 
 export type DunningCopy = { subject: string; intro: string; closing: string };
 
+/** Settings Wave 4: the "pay within N days" window quoted in firm-tone letters (default 7). */
+export const DEFAULT_DUNNING_FIRM_PAY_WITHIN_DAYS = 7;
+
+/** Whole days 1–90; missing / invalid → 7. */
+export function normalizeDunningFirmPayWithinDays(raw: unknown): number {
+  if (raw == null || raw === "" || typeof raw === "boolean") return DEFAULT_DUNNING_FIRM_PAY_WITHIN_DAYS;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n)) return DEFAULT_DUNNING_FIRM_PAY_WITHIN_DAYS;
+  return Math.min(90, Math.max(1, n));
+}
+
 /** Tone-specific wording shared by the API payload (and mirrored in the web letter dialog). */
-export function dunningCopy(tone: DunningTone, v: { customer: string; total: string; asOf: string; count: number; business: string }): DunningCopy {
+export function dunningCopy(
+  tone: DunningTone,
+  v: { customer: string; total: string; asOf: string; count: number; business: string; /** Firm tone only; tenant `dunningFirmPayWithinDays`. */ payWithinDays?: number },
+): DunningCopy {
   const plural = v.count === 1 ? "invoice is" : "invoices are";
+  const days = normalizeDunningFirmPayWithinDays(v.payWithinDays);
   if (tone === "final") {
     return {
       subject: "FINAL NOTICE — immediate payment required",
@@ -204,7 +245,7 @@ export function dunningCopy(tone: DunningTone, v: { customer: string; total: str
   if (tone === "firm") {
     return {
       subject: "Second reminder — overdue payment",
-      intro: `We have not yet received payment for the following ${plural} overdue as of ${v.asOf}. Kindly arrange ${v.total} within the next 7 days.`,
+      intro: `We have not yet received payment for the following ${plural} overdue as of ${v.asOf}. Kindly arrange ${v.total} within the next ${days === 1 ? "day" : `${days} days`}.`,
       closing: "Please reply with the payment date if it has already been released, or call us if there is any dispute.",
     };
   }

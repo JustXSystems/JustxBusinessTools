@@ -3,8 +3,8 @@
  * numbering previews, pick-list metadata and reminder templates. Mirrors
  * server/src/ims/logic.ts where the server enforces the same rule.
  */
-import { ims, type ImsRole, type ImsSettings, type ReminderRuleKey, type Taxonomy } from "./api";
-import { defaultPayMethodFor, installmentDefaultsFor, payMethodsFor, posPayMethodsFor } from "./finance";
+import { ims, type AuditRuleSettings, type AuditSeverityAmount, type BankMatchSettings, type ImsRole, type ImsSettings, type ReminderRuleKey, type Taxonomy } from "./api";
+import { commonCurrenciesFor, defaultPayMethodFor, dunningPayWithinDaysFor, installmentDefaultsFor, payMethodsFor, posPayMethodsFor } from "./finance";
 import { GST_RATES } from "./format";
 
 export const settingsApi = {
@@ -259,6 +259,16 @@ export const parseNumberList = (text: string): number[] =>
     .map(Number)
     .filter((n) => Number.isFinite(n));
 
+/** Parse “INR, usd  EUR” style input into unique upper-case tokens (shape is checked by validation, not here). */
+export const parseCodeList = (text: string): string[] => [
+  ...new Set(
+    text
+      .split(/[,\s]+/)
+      .map((t) => t.trim().toUpperCase())
+      .filter(Boolean),
+  ),
+];
+
 /** Label for a payment-term chip. */
 export const termChipLabel = (days: number): string => (days === 0 ? "On receipt" : `${days} days`);
 
@@ -295,11 +305,91 @@ function salesDefaultFields(settings: Partial<ImsSettings>): Pick<ImsSettings, W
   };
 }
 
+/* ---------- Settings Wave 4: ops thresholds (mirrors server/src/ims/logic.ts + wave6-logic.ts) ---------- */
+
+export const DEFAULT_REORDER_FALLBACK_FACTOR = 2;
+export const DEFAULT_BANK_MATCH_SETTINGS: Readonly<BankMatchSettings> = { windowDays: 5, autoScore: 75, amountTolerance: 0.5 };
+export const DEFAULT_AUDIT_RULE_SETTINGS: Readonly<AuditRuleSettings> = {
+  overdueArDays: 90,
+  overdueApDays: 30,
+  largeAdjustment: 25_000,
+  largeWriteOff: 10_000,
+  gstTolerance: 1,
+  unreconciledDays: 7,
+  b2cLargeLimit: 100_000,
+};
+export const DEFAULT_AUDIT_SEVERITY_AMOUNT: Readonly<AuditSeverityAmount> = { critical: 500_000, high: 100_000 };
+
+/** Number clamped to [min, max]; missing / non-numeric → fallback. `int` floors, otherwise rounds to 2 dp. */
+export function boundedNumber(raw: unknown, min: number, max: number, fallback: number, int = false): number {
+  if (raw == null || raw === "" || typeof raw === "boolean") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  const v = int ? Math.floor(n) : Math.round(n * 100) / 100;
+  return Math.min(max, Math.max(min, v));
+}
+
+const objectOf = (raw: unknown): Record<string, unknown> | null => (raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null);
+
+/** Factor 1–20 (2 dp); missing / non-positive → 2. */
+export function normalizeReorderFallbackFactor(raw: unknown): number {
+  if (raw == null || raw === "" || typeof raw === "boolean") return DEFAULT_REORDER_FALLBACK_FACTOR;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_REORDER_FALLBACK_FACTOR;
+  return Math.round(Math.min(20, Math.max(1, n)) * 100) / 100;
+}
+
+export function normalizeBankMatchDefaults(raw: unknown): BankMatchSettings {
+  const o = objectOf(raw);
+  const d = DEFAULT_BANK_MATCH_SETTINGS;
+  return {
+    windowDays: boundedNumber(o?.windowDays, 1, 30, d.windowDays, true),
+    autoScore: boundedNumber(o?.autoScore, 50, 100, d.autoScore, true),
+    amountTolerance: boundedNumber(o?.amountTolerance, 0, 10, d.amountTolerance),
+  };
+}
+
+export function normalizeAuditRules(raw: unknown): AuditRuleSettings {
+  const o = objectOf(raw);
+  const d = DEFAULT_AUDIT_RULE_SETTINGS;
+  return {
+    overdueArDays: boundedNumber(o?.overdueArDays, 1, 3650, d.overdueArDays, true),
+    overdueApDays: boundedNumber(o?.overdueApDays, 1, 3650, d.overdueApDays, true),
+    largeAdjustment: boundedNumber(o?.largeAdjustment, 1, 1e9, d.largeAdjustment),
+    largeWriteOff: boundedNumber(o?.largeWriteOff, 1, 1e9, d.largeWriteOff),
+    gstTolerance: boundedNumber(o?.gstTolerance, 0, 100, d.gstTolerance),
+    unreconciledDays: boundedNumber(o?.unreconciledDays, 0, 365, d.unreconciledDays, true),
+    b2cLargeLimit: boundedNumber(o?.b2cLargeLimit, 1, 1e9, d.b2cLargeLimit),
+  };
+}
+
+export function normalizeAuditSeverityAmount(raw: unknown): AuditSeverityAmount {
+  const o = objectOf(raw);
+  const d = DEFAULT_AUDIT_SEVERITY_AMOUNT;
+  const high = boundedNumber(o?.high, 1, 1e9 - 1, d.high);
+  const critical = Math.min(1e9, Math.max(high + 1, boundedNumber(o?.critical, 1, 1e9, d.critical)));
+  return { critical, high };
+}
+
+type Wave4Keys = "reorderFallbackFactor" | "bankMatchDefaults" | "auditRules" | "auditSeverityAmount" | "dunningFirmPayWithinDays" | "commonCurrencies";
+
+/** Fill Wave-4 ops thresholds when an older API payload omits them. */
+function opsThresholdFields(settings: Partial<ImsSettings>): Pick<ImsSettings, Wave4Keys> {
+  return {
+    reorderFallbackFactor: normalizeReorderFallbackFactor(settings.reorderFallbackFactor),
+    bankMatchDefaults: normalizeBankMatchDefaults(settings.bankMatchDefaults),
+    auditRules: normalizeAuditRules(settings.auditRules),
+    auditSeverityAmount: normalizeAuditSeverityAmount(settings.auditSeverityAmount),
+    dunningFirmPayWithinDays: dunningPayWithinDaysFor(settings.dunningFirmPayWithinDays),
+    commonCurrencies: commonCurrenciesFor(settings),
+  };
+}
+
 /** Fill Wave-1+ ops fields when an older API payload omits them. */
 export function withOpsSettingsDefaults<T extends Partial<ImsSettings>>(
   settings: T,
 ): T &
-  Pick<ImsSettings, "bomPrefix" | "bomDcPrefix" | "bomDcReturnPrefix" | "printPackMax" | "attachmentMaxBytes" | "agingBreaks" | "arPriority" | "apDueSoonDays" | Wave3Keys> {
+  Pick<ImsSettings, "bomPrefix" | "bomDcPrefix" | "bomDcReturnPrefix" | "printPackMax" | "attachmentMaxBytes" | "agingBreaks" | "arPriority" | "apDueSoonDays" | Wave3Keys | Wave4Keys> {
   const reminders = settings.reminders
     ? {
         ...settings.reminders,
@@ -325,6 +415,7 @@ export function withOpsSettingsDefaults<T extends Partial<ImsSettings>>(
     },
     apDueSoonDays: Math.max(1, Math.min(365, Math.floor(Number(settings.apDueSoonDays) || 7))),
     ...salesDefaultFields(settings),
+    ...opsThresholdFields(settings),
   };
 }
 

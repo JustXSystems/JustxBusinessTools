@@ -1122,6 +1122,20 @@ export function parseCurrencyCode(v: unknown): string | null {
 
 export const normalizeCurrencyCode = (v: unknown, fallback = "INR"): string => parseCurrencyCode(v) ?? parseCurrencyCode(fallback) ?? "INR";
 
+export const MAX_COMMON_CURRENCIES = 12;
+
+/** Currency suggestions from `settings.commonCurrencies`: valid codes, unique, ≤ 12; empty/missing → `COMMON_CURRENCIES`. Mirrors server. */
+export function commonCurrenciesFor(settings?: { commonCurrencies?: ReadonlyArray<unknown> | null } | null): string[] {
+  const list = Array.isArray(settings?.commonCurrencies) ? settings!.commonCurrencies! : [];
+  const out: string[] = [];
+  for (const x of list) {
+    const code = parseCurrencyCode(x);
+    if (code && !out.includes(code)) out.push(code);
+    if (out.length >= MAX_COMMON_CURRENCIES) break;
+  }
+  return out.length ? out : [...COMMON_CURRENCIES];
+}
+
 export type FxPreview = { currencyCode: string; fxRate: number; fxBaseTotal: number; foreign: boolean };
 
 /** Same rule as the server: base currency → rate 1; foreign → base total = round2(total × rate). */
@@ -1188,9 +1202,20 @@ export function pickDunningLevel(levels: ReadonlyArray<DunningLevel>, daysOverdu
   return picked;
 }
 
+export const DEFAULT_DUNNING_FIRM_PAY_WITHIN_DAYS = 7;
+
+/** Whole days 1–90; missing / invalid → 7. Mirrors server `normalizeDunningFirmPayWithinDays`. */
+export function dunningPayWithinDaysFor(raw: unknown): number {
+  if (raw == null || raw === "" || typeof raw === "boolean") return DEFAULT_DUNNING_FIRM_PAY_WITHIN_DAYS;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n)) return DEFAULT_DUNNING_FIRM_PAY_WITHIN_DAYS;
+  return Math.min(90, Math.max(1, n));
+}
+
 /** Tone wording for the letter (server returns the same copy in the run payload). */
-export function dunningCopy(tone: DunningTone, v: { total: string; asOf: string; count: number }): { subject: string; intro: string; closing: string } {
+export function dunningCopy(tone: DunningTone, v: { total: string; asOf: string; count: number; /** Firm tone only; `settings.dunningFirmPayWithinDays` (1–90, default 7). */ payWithinDays?: number }): { subject: string; intro: string; closing: string } {
   const plural = v.count === 1 ? "invoice is" : "invoices are";
+  const days = dunningPayWithinDaysFor(v.payWithinDays);
   if (tone === "final") {
     return {
       subject: "FINAL NOTICE — immediate payment required",
@@ -1201,7 +1226,7 @@ export function dunningCopy(tone: DunningTone, v: { total: string; asOf: string;
   if (tone === "firm") {
     return {
       subject: "Second reminder — overdue payment",
-      intro: `We have not yet received payment for the following ${plural} overdue as of ${v.asOf}. Kindly arrange ${v.total} within the next 7 days.`,
+      intro: `We have not yet received payment for the following ${plural} overdue as of ${v.asOf}. Kindly arrange ${v.total} within the next ${days === 1 ? "day" : `${days} days`}.`,
       closing: "Please reply with the payment date if it has already been released, or call us if there is any dispute.",
     };
   }

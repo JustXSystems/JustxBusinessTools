@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Button, Card, Checkbox, Input, Switch } from "@/components/bos";
 import type { ImsSettings } from "@/lib/ims/api";
-import { parseNumberList } from "@/lib/ims/settings";
+import { parseCodeList, parseNumberList } from "@/lib/ims/settings";
 
 export type SetDraft = <K extends keyof ImsSettings>(key: K, value: ImsSettings[K]) => void;
 export type SettingsErrors = Partial<Record<string, string>>;
@@ -128,6 +128,31 @@ export function NumberListInput({ id, values, onChange, readOnly, invalid, descr
       onChange={(e) => {
         setText(e.target.value);
         onChange(parseNumberList(e.target.value));
+      }}
+    />
+  );
+}
+
+/** Comma-separated code list (e.g. “INR, USD”). Keeps the raw text while typing; commits upper-cased unique tokens. */
+export function CodeListInput({ id, values, onChange, readOnly, invalid, describedBy, placeholder }: { id?: string; values: ReadonlyArray<string>; onChange: (next: string[]) => void; readOnly?: boolean; invalid?: boolean; describedBy?: string; placeholder?: string }) {
+  const [text, setText] = useState(values.join(", "));
+  const [prev, setPrev] = useState(values);
+  if (prev !== values) {
+    setPrev(values);
+    if (JSON.stringify(parseCodeList(text)) !== JSON.stringify(values)) setText(values.join(", "));
+  }
+  return (
+    <Input
+      id={id}
+      aria-describedby={describedBy}
+      aria-invalid={invalid}
+      className="ims-mono"
+      value={text}
+      readOnly={readOnly}
+      placeholder={placeholder}
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange(parseCodeList(e.target.value));
       }}
     />
   );

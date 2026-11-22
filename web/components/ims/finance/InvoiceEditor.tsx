@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, Field, FormGrid, Input, Select, Switch, Textarea } from "@/components/bos";
 import type { PartyOption } from "@/lib/ims/api";
 import { ims } from "@/lib/ims/api";
-import { COMMON_CURRENCIES, finance, fxPreview, gstStateName, GST_STATES, intraStateFor, normalizeCurrencyCode, parseCurrencyCode, type InvoiceDetail, type InvoiceInput } from "@/lib/ims/finance";
+import { commonCurrenciesFor, finance, fxPreview, gstStateName, GST_STATES, intraStateFor, normalizeCurrencyCode, parseCurrencyCode, type InvoiceDetail, type InvoiceInput } from "@/lib/ims/finance";
 import { normalizePaymentTermPresets, termChipLabel } from "@/lib/ims/settings";
 import { addDaysISO, computeTotals, dateLabel, inrExact, moneyFmt, qtyText, round2 } from "@/lib/ims/format";
 import { DocRefLink } from "../bom/DocRefLink";
@@ -79,7 +79,7 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const [terms, setTerms] = useState(inv?.terms ?? settings.terms ?? "");
   const termOptions = useMemo(() => normalizePaymentTermPresets(settings.paymentTermPresets), [settings.paymentTermPresets]);
   const baseCurrency = normalizeCurrencyCode(settings.baseCurrency);
-  const currencyChoices = useMemo(() => [...new Set<string>([baseCurrency, ...COMMON_CURRENCIES])], [baseCurrency]);
+  const currencyChoices = useMemo(() => [...new Set<string>([baseCurrency, ...commonCurrenciesFor(settings)])], [baseCurrency, settings]);
   const startCurrency = normalizeCurrencyCode(inv?.currencyCode, baseCurrency);
   const [currencyChoice, setCurrencyChoice] = useState<string>(currencyChoices.includes(startCurrency) ? startCurrency : "__other");
   const [currencyCustom, setCurrencyCustom] = useState(currencyChoices.includes(startCurrency) ? "" : startCurrency);

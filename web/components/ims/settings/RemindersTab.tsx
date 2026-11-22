@@ -2,10 +2,13 @@
 
 import { useRef, useState } from "react";
 import { Alert, Button, Checkbox, Field, FilterChip, FormGrid, Input, Select, Textarea } from "@/components/bos";
-import type { DunningLevel, DunningTone, ReminderSettings, ReminderTemplate } from "@/lib/ims/api";
+import type { AuditRuleSettings, DunningLevel, DunningTone, ReminderSettings, ReminderTemplate } from "@/lib/ims/api";
 import { DEFAULT_DUNNING_LEVELS, DUNNING_TONE_LABEL } from "@/lib/ims/finance";
 import { addDaysISO, dateLabel, inrExact } from "@/lib/ims/format";
 import {
+  DEFAULT_AUDIT_RULE_SETTINGS,
+  DEFAULT_AUDIT_SEVERITY_AMOUNT,
+  DEFAULT_BANK_MATCH_SETTINGS,
   DEFAULT_REMINDER_OFFSETS,
   REMINDER_CHANNELS,
   REMINDER_PLACEHOLDERS,
@@ -42,6 +45,10 @@ export function RemindersTab({ draft, set, errors, readOnly }: TabProps) {
     set("agingBreaks", next);
   };
   const ar = draft.arPriority ?? { critical: 91, high: 61, medium: 31 };
+  const bm = draft.bankMatchDefaults ?? DEFAULT_BANK_MATCH_SETTINGS;
+  const rules = draft.auditRules ?? DEFAULT_AUDIT_RULE_SETTINGS;
+  const setRule = (key: keyof AuditRuleSettings, raw: string) => set("auditRules", { ...rules, [key]: Number(raw) });
+  const severity = draft.auditSeverityAmount ?? DEFAULT_AUDIT_SEVERITY_AMOUNT;
 
   const setTpl = (patch: Partial<ReminderTemplate>) => update({ templates: r.templates.map((t, i) => (i === index ? { ...t, ...patch } : t)) });
   const addTpl = () => {
@@ -110,6 +117,72 @@ export function RemindersTab({ draft, set, errors, readOnly }: TabProps) {
             {({ id, describedBy, invalid }) => (
               <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="number" min={1} max={365} value={draft.apDueSoonDays ?? 7} onChange={(e) => set("apDueSoonDays", Number(e.target.value))} />
             )}
+          </Field>
+        </FormGrid>
+      </SectionCard>
+
+      <SectionCard
+        title="Audit & bank rules"
+        desc="Thresholds the Auditor workspace uses to raise findings and match bank statement lines. Statutory GST slabs and the CGST / SGST split are fixed by law and not editable here."
+        actions={
+          readOnly ? null : (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                set("bankMatchDefaults", { ...DEFAULT_BANK_MATCH_SETTINGS });
+                set("auditRules", { ...DEFAULT_AUDIT_RULE_SETTINGS });
+                set("auditSeverityAmount", { ...DEFAULT_AUDIT_SEVERITY_AMOUNT });
+              }}
+            >
+              Reset to defaults
+            </Button>
+          )
+        }
+      >
+        {errors.bankMatchDefaults || errors.auditRules || errors.auditSeverityAmount ? (
+          <div style={{ marginBottom: 12 }}>
+            <Alert tone="coral" title="Fix the audit & bank rules">
+              {[errors.bankMatchDefaults, errors.auditRules, errors.auditSeverityAmount].filter(Boolean).join(" · ")}
+            </Alert>
+          </div>
+        ) : null}
+        <FormGrid>
+          <Field label="Bank match window (± days)" hint="How far apart a statement line and a receipt / payment can be (1–30)">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={1} max={30} value={bm.windowDays} onChange={(e) => set("bankMatchDefaults", { ...bm, windowDays: Number(e.target.value) })} />}
+          </Field>
+          <Field label="Auto-match min score" hint="Auto-match only pairs lines scoring at least this (50–100)">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={50} max={100} value={bm.autoScore} onChange={(e) => set("bankMatchDefaults", { ...bm, autoScore: Number(e.target.value) })} />}
+          </Field>
+          <Field label="Bank amount tolerance (₹)" hint="Largest amount difference still treated as the same amount (0–10)">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={0} max={10} step="0.05" value={bm.amountTolerance} onChange={(e) => set("bankMatchDefaults", { ...bm, amountTolerance: Number(e.target.value) })} />}
+          </Field>
+          <Field label="Overdue receivable after (days)" hint="Flag unpaid invoices past due by more than this">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={1} max={3650} value={rules.overdueArDays} onChange={(e) => setRule("overdueArDays", e.target.value)} />}
+          </Field>
+          <Field label="Overdue payable after (days)" hint="Flag unpaid supplier bills past due by more than this">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={1} max={3650} value={rules.overdueApDays} onChange={(e) => setRule("overdueApDays", e.target.value)} />}
+          </Field>
+          <Field label="Unreconciled bank line after (days)" hint="Unmatched statement lines older than this are flagged (0–365)">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={0} max={365} value={rules.unreconciledDays} onChange={(e) => setRule("unreconciledDays", e.target.value)} />}
+          </Field>
+          <Field label="Large stock adjustment (₹)" hint="Adjustments at or above this value are flagged">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={1} step={1000} value={rules.largeAdjustment} onChange={(e) => setRule("largeAdjustment", e.target.value)} />}
+          </Field>
+          <Field label="Large write-off (₹)" hint="Write-offs, and expenses without a voucher, at or above this are flagged">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={1} step={1000} value={rules.largeWriteOff} onChange={(e) => setRule("largeWriteOff", e.target.value)} />}
+          </Field>
+          <Field label="GST mismatch tolerance (₹)" hint="Invoice tax may differ from the recomputed tax by up to this much (0–100)">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={0} max={100} step="0.5" value={rules.gstTolerance} onChange={(e) => setRule("gstTolerance", e.target.value)} />}
+          </Field>
+          <Field label="Large B2C inter-state invoice (₹)" hint="Audit warning only — GSTR-1 B2CL reporting stays at the statutory limit">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={1} step={1000} value={rules.b2cLargeLimit} onChange={(e) => setRule("b2cLargeLimit", e.target.value)} />}
+          </Field>
+          <Field label="High severity from (₹)" hint="Overdue receivables / payables at or above this rate High">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={1} step={1000} value={severity.high} onChange={(e) => set("auditSeverityAmount", { ...severity, high: Number(e.target.value) })} />}
+          </Field>
+          <Field label="Critical severity from (₹)" hint="Overdue receivables at or above this rate Critical (must exceed High)">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={2} step={1000} value={severity.critical} onChange={(e) => set("auditSeverityAmount", { ...severity, critical: Number(e.target.value) })} />}
           </Field>
         </FormGrid>
       </SectionCard>
@@ -275,6 +348,13 @@ export function RemindersTab({ draft, set, errors, readOnly }: TabProps) {
             </Alert>
           </div>
         ) : null}
+        <FormGrid>
+          <Field label="Firm letter: pay within (days)" error={errors.dunningFirmPayWithinDays} hint="Firm-tone letters ask for payment “within the next N days” (1–90, default 7).">
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="number" min={1} max={90} value={draft.dunningFirmPayWithinDays ?? 7} onChange={(e) => set("dunningFirmPayWithinDays", Number(e.target.value))} />
+            )}
+          </Field>
+        </FormGrid>
         <div className="bos-stack" style={{ gap: 10 }}>
           {levels.map((l, i) => (
             <FormGrid key={i} columns="90px 1fr 130px 150px auto">

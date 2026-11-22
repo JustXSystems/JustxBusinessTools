@@ -119,6 +119,17 @@ const settingsSheet = (s: ImsSettings): SheetSpec => ({
     ["Default installments", s.defaultInstallmentCount],
     ["Installment every (months)", s.installmentEveryMonths],
     ["Max installments", s.maxInstallments],
+    ["Reorder fallback (× min)", s.reorderFallbackFactor],
+    ["Bank match (window days / auto score / amount tolerance)", s.bankMatchDefaults ? `${s.bankMatchDefaults.windowDays} / ${s.bankMatchDefaults.autoScore} / ${s.bankMatchDefaults.amountTolerance}` : null],
+    [
+      "Audit rules (AR days / AP days / large adj / large write-off / GST tol / unreconciled days / B2C limit)",
+      s.auditRules
+        ? [s.auditRules.overdueArDays, s.auditRules.overdueApDays, s.auditRules.largeAdjustment, s.auditRules.largeWriteOff, s.auditRules.gstTolerance, s.auditRules.unreconciledDays, s.auditRules.b2cLargeLimit].join(" / ")
+        : null,
+    ],
+    ["Audit severity (critical / high ₹)", s.auditSeverityAmount ? `${s.auditSeverityAmount.critical} / ${s.auditSeverityAmount.high}` : null],
+    ["Dunning firm: pay within (days)", s.dunningFirmPayWithinDays],
+    ["Common currencies", (s.commonCurrencies ?? []).join(", ")],
     ["Categories", s.taxonomy.categories.map((c) => c.name).join(", ")],
   ],
 });

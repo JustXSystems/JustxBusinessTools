@@ -13,14 +13,14 @@ import {
   AUDIT_CATEGORIES,
   AUDIT_CATEGORY_AREA,
   AUDIT_ITEM_STATUSES,
-  AUDIT_RULES,
   AUDIT_SEVERITIES,
-  BANK_MATCH_DEFAULTS,
+  DEFAULT_BANK_MATCH_SETTINGS,
   IMS_ROLE_LABELS,
   addDaysISO,
   agingBucket,
   appendThread,
   auditHealth,
+  auditSeverityByAmount,
   autoMatchBank,
   computeTotals,
   daysBetween,
@@ -31,6 +31,7 @@ import {
   isIntraState,
   normalizeBankRows,
   periodRange,
+  resolveAuditRules,
   round2,
   round3,
   scoreBankMatch,
@@ -41,6 +42,7 @@ import {
   type AuditIssue,
   type AuditSeverity,
   type BankCandidate,
+  type BankMatchSettings,
   type BankTxnInput,
   type ImsLineInput,
   type ThreadEntry,
@@ -75,9 +77,12 @@ async function verdicts(db: Queryable, tenantId: number): Promise<Map<string, Ve
   return new Map(list.map((v) => [v.rule_key, { id: v.id, status: v.status, kind: v.kind, title: v.title }]));
 }
 
-const severityByAmount = (amount: number): AuditSeverity => (amount >= 500_000 ? "critical" : amount >= 100_000 ? "high" : "medium");
+/** Tenant audit thresholds (Settings → Reminders → Audit & bank rules); code defaults when absent. */
+const auditRulesOf = (settings: Pick<ImsSettings, "auditRules">) => resolveAuditRules(settings.auditRules);
 
 async function detectIssues(db: Queryable, tenantId: number, range: Range, today: string, settings: ImsSettings): Promise<AuditIssue[]> {
+  const rules = auditRulesOf(settings);
+  const severityByAmount = (amount: number) => auditSeverityByAmount(amount, settings.auditSeverityAmount);
   const out: AuditIssue[] = [];
   const push = (list: AuditIssue[]) => out.push(...list.slice(0, PER_CATEGORY_LIMIT));
 
@@ -109,28 +114,32 @@ async function detectIssues(db: Queryable, tenantId: number, range: Range, today
   const gst: AuditIssue[] = [];
   for (const inv of invoices) {
     gst.push(
-      ...invoiceGstIssues({
-        id: inv.id,
-        invoiceNo: inv.invoice_no,
-        date: isoOf(inv.invoice_date),
-        customerName: inv.customer_name,
-        customerGstin: inv.customer_gstin,
-        partyGstin: inv.party_gstin,
-        intraState: Boolean(inv.intra_state),
-        lines: json<ImsLineInput[]>(inv.lines, []),
-        taxTotal: money(inv.tax_total),
-        cgst: money(inv.cgst),
-        sgst: money(inv.sgst),
-        igst: money(inv.igst),
-        grandTotal: money(inv.grand_total),
-      }),
+      ...invoiceGstIssues(
+        {
+          id: inv.id,
+          invoiceNo: inv.invoice_no,
+          date: isoOf(inv.invoice_date),
+          customerName: inv.customer_name,
+          customerGstin: inv.customer_gstin,
+          partyGstin: inv.party_gstin,
+          intraState: Boolean(inv.intra_state),
+          lines: json<ImsLineInput[]>(inv.lines, []),
+          taxTotal: money(inv.tax_total),
+          cgst: money(inv.cgst),
+          sgst: money(inv.sgst),
+          igst: money(inv.igst),
+          grandTotal: money(inv.grand_total),
+        },
+        rules.gstTolerance,
+        rules.b2cLargeLimit,
+      ),
     );
   }
   gst.sort((a, b) => AUDIT_SEVERITIES.indexOf(b.severity) - AUDIT_SEVERITIES.indexOf(a.severity));
   push(gst);
 
-  /* Receivables > 90 days past due */
-  const arCutoff = addDaysISO(today, -AUDIT_RULES.overdueReceivableDays);
+  /* Receivables past the overdue-AR threshold (default 90 days) */
+  const arCutoff = addDaysISO(today, -rules.overdueReceivableDays);
   const ar = await rows<{ id: string; invoice_no: string; customer_name: string; due_date: string; balance: string }>(
     db,
     `SELECT id, invoice_no, customer_name, due_date, grand_total - amount_paid AS balance FROM ims_invoices
@@ -146,7 +155,7 @@ async function detectIssues(db: Queryable, tenantId: number, range: Range, today
         category: "ar" as const,
         severity: severityByAmount(bal),
         title: `${r.invoice_no} unpaid ${days} days past due`,
-        detail: `${r.customer_name} owes ${fmtInr(bal)} since ${isoOf(r.due_date)}. Above ${AUDIT_RULES.overdueReceivableDays} days, consider a provision for doubtful debts.`,
+        detail: `${r.customer_name} owes ${fmtInr(bal)} since ${isoOf(r.due_date)}. Above ${rules.overdueReceivableDays} days, consider a provision for doubtful debts.`,
         entityType: "invoice",
         entityId: r.id,
         entityLabel: r.invoice_no,
@@ -156,8 +165,8 @@ async function detectIssues(db: Queryable, tenantId: number, range: Range, today
     }),
   );
 
-  /* Payables > 30 days past due */
-  const apCutoff = addDaysISO(today, -AUDIT_RULES.overduePayableDays);
+  /* Payables past the overdue-AP threshold (default 30 days) */
+  const apCutoff = addDaysISO(today, -rules.overduePayableDays);
   const ap = await rows<{ id: string; bill_no: string; supplier_name: string; due_date: string; balance: string; status: string }>(
     db,
     `SELECT id, bill_no, supplier_name, due_date, grand_total - amount_paid AS balance, status FROM ims_bills
@@ -171,7 +180,7 @@ async function detectIssues(db: Queryable, tenantId: number, range: Range, today
       return {
         key: `ap:${r.id}`,
         category: "ap" as const,
-        severity: bal >= 100_000 ? "high" : "medium",
+        severity: bal >= settings.auditSeverityAmount.high ? "high" : "medium",
         title: `Bill ${r.bill_no} overdue ${days} days`,
         detail: `${fmtInr(bal)} to ${r.supplier_name} was due ${isoOf(r.due_date)}${r.status === "on_hold" ? " and is on hold" : ""}. Late payment can attract interest and MSME (43B(h)) disallowance.`,
         entityType: "bill",
@@ -304,7 +313,7 @@ async function detectIssues(db: Queryable, tenantId: number, range: Range, today
   }
   for (const e of expenses) {
     const amount = money(e.amount);
-    if (Number(e.docs) > 0 || amount < AUDIT_RULES.largeWriteOffValue) continue;
+    if (Number(e.docs) > 0 || amount < rules.largeWriteOffValue) continue;
     docs.push({
       key: `doc-exp:${e.id}`,
       category: "documents",
@@ -360,14 +369,14 @@ async function detectIssues(db: Queryable, tenantId: number, range: Range, today
      WHERE tenant_id = :tenantId AND movement_date BETWEEN :from AND :to
        AND ((type = 'ADJUSTMENT' AND (value >= :adj OR reason IS NULL OR reason = '')) OR (type = 'WRITE_OFF' AND value >= :wo) OR movement_date < DATE_SUB(DATE(created_at), INTERVAL 7 DAY))
      ORDER BY value DESC LIMIT ${PER_CATEGORY_LIMIT}`,
-    { tenantId, ...range, adj: AUDIT_RULES.largeAdjustmentValue, wo: AUDIT_RULES.largeWriteOffValue },
+    { tenantId, ...range, adj: rules.largeAdjustmentValue, wo: rules.largeWriteOffValue },
   );
   for (const m of moves) {
     const value = money(m.value);
     const date = isoOf(m.movement_date);
     const created = isoOf(m.created_at);
     const base = { category: "unusual" as const, entityType: "item", entityId: m.item_id, entityLabel: m.item_name, amount: round2(value), date };
-    if (m.type === "ADJUSTMENT" && value >= AUDIT_RULES.largeAdjustmentValue) {
+    if (m.type === "ADJUSTMENT" && value >= rules.largeAdjustmentValue) {
       unusual.push({ ...base, key: `unusual-adj:${m.id}`, severity: "high", title: `Large stock adjustment on ${m.item_name}`, detail: `${round3(money(m.delta))} units (${fmtInr(value)}) adjusted on ${date} by ${m.actor_name ?? "someone"}${m.reason ? ` — “${m.reason}”` : " with no reason"}.` });
     } else if (m.type === "ADJUSTMENT") {
       unusual.push({ ...base, key: `unusual-noreason:${m.id}`, severity: "low", title: `Stock adjustment without a reason`, detail: `${m.item_name}: ${round3(money(m.delta))} units on ${date} by ${m.actor_name ?? "someone"}. Ask for the reason and evidence.` });
@@ -492,7 +501,7 @@ async function detectIssues(db: Queryable, tenantId: number, range: Range, today
   const bank = await rows<{ id: string; txn_date: string; description: string; amount: string; direction: string }>(
     db,
     `SELECT id, txn_date, description, amount, direction FROM ims_bank_txns WHERE tenant_id = :tenantId AND status = 'unmatched' AND txn_date <= :cutoff ORDER BY amount DESC LIMIT ${PER_CATEGORY_LIMIT}`,
-    { tenantId, cutoff: addDaysISO(today, -AUDIT_RULES.unreconciledAfterDays) },
+    { tenantId, cutoff: addDaysISO(today, -rules.unreconciledAfterDays) },
   );
   push(
     bank.map((b) => ({
@@ -509,7 +518,6 @@ async function detectIssues(db: Queryable, tenantId: number, range: Range, today
     })),
   );
 
-  void settings;
   return out;
 }
 
@@ -731,14 +739,14 @@ async function applyMatch(db: Queryable, tenantId: number, txnId: string, c: { t
   );
 }
 
-async function runAutoMatch(db: Queryable, tenantId: number, by: string | null): Promise<number> {
+async function runAutoMatch(db: Queryable, tenantId: number, by: string | null, bank: BankMatchSettings = DEFAULT_BANK_MATCH_SETTINGS): Promise<number> {
   const open = await rows<BankRow>(db, `SELECT * FROM ims_bank_txns WHERE tenant_id = :tenantId AND status = 'unmatched' ORDER BY txn_date LIMIT 5000`, { tenantId });
   if (!open.length) return 0;
   const dates = open.map((o) => isoOf(o.txn_date)).sort();
-  const pad = BANK_MATCH_DEFAULTS.windowDays + 1;
+  const pad = bank.windowDays + 1;
   const candidates = await bankCandidates(db, tenantId, addDaysISO(dates[0], -pad), addDaysISO(dates[dates.length - 1], pad));
   const byKey = new Map(candidates.map((c) => [`${c.type}:${c.id}`, c]));
-  const matches = autoMatchBank(open.map(bankInput), candidates);
+  const matches = autoMatchBank(open.map(bankInput), candidates, { minScore: bank.autoScore, windowDays: bank.windowDays, amountTolerance: bank.amountTolerance });
   for (const m of matches) {
     const c = byKey.get(`${m.type}:${m.candidateId}`);
     if (c) await applyMatch(db, tenantId, m.txnId, c, m.score, by ? `Auto-match (${by})` : "Auto-match");
@@ -828,7 +836,7 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
         `SELECT COALESCE(SUM(grand_total - amount_paid), 0) AS total, COALESCE(SUM(CASE WHEN due_date < :today THEN grand_total - amount_paid END), 0) AS overdue,
                 COALESCE(SUM(CASE WHEN due_date < :old THEN grand_total - amount_paid END), 0) AS old
          FROM ims_invoices WHERE tenant_id = :tenantId AND status = 'issued' AND grand_total - amount_paid > 0.005`,
-        { tenantId: t, today, old: addDaysISO(today, -AUDIT_RULES.overdueReceivableDays) },
+        { tenantId: t, today, old: addDaysISO(today, -auditRulesOf(settings).overdueReceivableDays) },
       ),
       one<{ total: string; overdue: string }>(
         deps.db,
@@ -874,7 +882,7 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
       const change = round2(((salesTotal - prevTotal) / prevTotal) * 100);
       if (Math.abs(change) >= 20) insights.push({ tone: change < 0 ? "amber" : "emerald", text: `Sales are ${change > 0 ? "up" : "down"} ${Math.abs(change)}% against the previous ${span} days (${fmtInr(prevTotal)} → ${fmtInr(salesTotal)}).` });
     }
-    if (receivable > 0 && oldAr > 0) insights.push({ tone: "coral", text: `${fmtInr(oldAr)} (${Math.round((oldAr / receivable) * 100)}% of receivables) is over ${AUDIT_RULES.overdueReceivableDays} days past due — review for a doubtful-debt provision.` });
+    if (receivable > 0 && oldAr > 0) insights.push({ tone: "coral", text: `${fmtInr(oldAr)} (${Math.round((oldAr / receivable) * 100)}% of receivables) is over ${auditRulesOf(settings).overdueReceivableDays} days past due — review for a doubtful-debt provision.` });
     if (topCustomer && salesTotal > 0 && money(topCustomer.total) / salesTotal >= 0.3) {
       insights.push({ tone: "amber", text: `${topCustomer.name} accounts for ${Math.round((money(topCustomer.total) / salesTotal) * 100)}% of sales this period — a customer-concentration risk worth noting.` });
     }
@@ -936,7 +944,7 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
     const show = qstr(req.query.show, 8) || "open";
     const list = all.filter((i) => (!category || i.category === category) && (show === "all" || (show === "open" ? i.open : !i.open)));
     list.sort((a, b) => AUDIT_SEVERITIES.indexOf(b.severity) - AUDIT_SEVERITIES.indexOf(a.severity) || (b.amount ?? 0) - (a.amount ?? 0));
-    res.json({ range, issues: list, categories: categorySummary(all), health: auditHealth(all.filter((i) => i.open)), rules: AUDIT_RULES, canWrite: can(res, "audit") });
+    res.json({ range, issues: list, categories: categorySummary(all), health: auditHealth(all.filter((i) => i.open)), rules: auditRulesOf(settings), canWrite: can(res, "audit") });
   });
 
   /** Record a reviewer's verdict on an auto-detected issue (verified / dismissed / reopened), kept by rule key. */
@@ -1284,7 +1292,7 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
     if (!(TRACE_TYPES as ReadonlyArray<string>).includes(type)) throw badRequest("This record type can't be traced");
     const id = String(req.params.id).slice(0, 64);
     const { range, settings, today } = await rangeOf(deps, req, actor.tenantId);
-    const [trace, issues] = await Promise.all([loadTrace(deps.db, actor.tenantId, type as TraceType, id, today), issuesWithVerdicts(deps.db, actor.tenantId, range, today, settings)]);
+    const [trace, issues] = await Promise.all([loadTrace(deps.db, actor.tenantId, type as TraceType, id, today, auditRulesOf(settings)), issuesWithVerdicts(deps.db, actor.tenantId, range, today, settings)]);
     if (!trace) throw notFound("Record not found");
     res.json({ trace, findings: issues.filter((i) => i.entityId === id) });
   });
@@ -1293,9 +1301,9 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
     const actor = actorOf(res);
     requireAuditView(res);
     const { rows: portal } = parse(z.object({ rows: z.array(Gstr2bRowSchema).min(1, "The file has no B2B invoices").max(20_000) }), req.body);
-    const { range } = await rangeOf(deps, req, actor.tenantId, "lastmonth");
+    const { range, settings } = await rangeOf(deps, req, actor.tenantId, "lastmonth");
     const bills = await loadBookBills(deps.db, actor.tenantId, range);
-    res.json({ range, ...reconcileGstr2b(bills, portal) });
+    res.json({ range, ...reconcileGstr2b(bills, portal, auditRulesOf(settings).gstTolerance) });
   });
 
   router.get("/audit/ask", async (req, res) => {
@@ -1415,9 +1423,12 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
     const unmatched = list.filter((r) => r.status === "unmatched");
     let suggestions = new Map<string, ReturnType<typeof suggestBankMatches>>();
     if (unmatched.length) {
+      // Suggestions look twice as far as auto-match (10 days at the default 5-day window).
+      const { windowDays, amountTolerance } = (await getSettings(deps, t)).bankMatchDefaults;
+      const suggestWindow = windowDays * 2;
       const dates = unmatched.map((r) => isoOf(r.txn_date)).sort();
-      const candidates = await bankCandidates(deps.db, t, addDaysISO(dates[0], -10), addDaysISO(dates[dates.length - 1], 10));
-      suggestions = new Map(unmatched.slice(0, 500).map((r) => [r.id, suggestBankMatches(bankInput(r), candidates, 3, 10)]));
+      const candidates = await bankCandidates(deps.db, t, addDaysISO(dates[0], -suggestWindow), addDaysISO(dates[dates.length - 1], suggestWindow));
+      suggestions = new Map(unmatched.slice(0, 500).map((r) => [r.id, suggestBankMatches(bankInput(r), candidates, 3, suggestWindow, amountTolerance)]));
     }
     const summary = await one<{ total: number; unmatched: number; matched: number; ignored: number; inflow: string; outflow: string; unmatched_value: string; last_import: string | null }>(
       deps.db,
@@ -1492,7 +1503,7 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
       }
       return { imported, duplicates };
     });
-    const matched = body.autoMatch && result.imported ? await runAutoMatch(deps.db, actor.tenantId, actorName(actor)) : 0;
+    const matched = body.autoMatch && result.imported ? await runAutoMatch(deps.db, actor.tenantId, actorName(actor), (await getSettings(deps, actor.tenantId)).bankMatchDefaults) : 0;
     await recordEvent(deps, actor, {
       type: "audit.bank.imported",
       entityType: "bank",
@@ -1506,7 +1517,7 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
   router.post("/audit/bank/auto-match", async (req, res) => {
     const actor = actorOf(res);
     requireAuditWrite(res);
-    const matched = await runAutoMatch(deps.db, actor.tenantId, actorName(actor));
+    const matched = await runAutoMatch(deps.db, actor.tenantId, actorName(actor), (await getSettings(deps, actor.tenantId)).bankMatchDefaults);
     if (matched) await recordEvent(deps, actor, { type: "audit.bank.automatch", entityType: "bank", entityId: "auto", summary: `Auto-matched ${matched} bank line${matched === 1 ? "" : "s"}`, ip: req.ip });
     res.json({ matched });
   });
@@ -1517,14 +1528,15 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
     const row = await one<BankRow>(deps.db, `SELECT * FROM ims_bank_txns WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id: req.params.id });
     if (!row) throw notFound("Bank line");
     const txn = bankInput(row);
+    const tolerance = (await getSettings(deps, actor.tenantId)).bankMatchDefaults.amountTolerance;
     const q = qstr(req.query.q).toLowerCase();
     const list = await bankCandidates(deps.db, actor.tenantId, addDaysISO(txn.date, -45), addDaysISO(txn.date, 45), row.id);
     const scored = list
       .filter((c) => c.direction === txn.direction && (!q || `${c.label} ${c.reference ?? ""}`.toLowerCase().includes(q) || String(c.amount).includes(q)))
-      .map((c) => ({ c, s: scoreBankMatch(txn, c, 45) }))
+      .map((c) => ({ c, s: scoreBankMatch(txn, c, 45, tolerance) }))
       .sort((a, b) => (b.s?.score ?? 0) - (a.s?.score ?? 0) || Math.abs(a.c.amount - txn.amount) - Math.abs(b.c.amount - txn.amount))
       .slice(0, 30);
-    res.json({ candidates: scored.map(({ c, s }) => ({ type: c.type, id: c.id, label: c.label, date: c.date, amount: c.amount, score: s?.score ?? 0, reasons: s?.reasons ?? [Math.abs(c.amount - txn.amount) < 0.5 ? "Amount matches" : `Amount differs by ${fmtInr(Math.abs(c.amount - txn.amount))}`] })) });
+    res.json({ candidates: scored.map(({ c, s }) => ({ type: c.type, id: c.id, label: c.label, date: c.date, amount: c.amount, score: s?.score ?? 0, reasons: s?.reasons ?? [Math.abs(c.amount - txn.amount) <= tolerance ? "Amount matches" : `Amount differs by ${fmtInr(Math.abs(c.amount - txn.amount))}`] })) });
   });
 
   router.post("/audit/bank/:id/match", async (req, res) => {
@@ -1543,7 +1555,7 @@ export function registerAudit(router: Router, deps: ImsDeps): void {
     const c = (await bankCandidates(deps.db, actor.tenantId, "1970-01-01", "2999-12-31", row.id)).find((x) => x.type === input.type && x.id === input.id);
     if (!c) throw notFound(input.type === "payment" ? "Payment" : "Expense");
     if (c.direction !== row.direction) throw badRequest(`This is a ${row.direction === "in" ? "credit" : "debit"} — match it to a ${row.direction === "in" ? "receipt" : "payment or expense"}`);
-    const s = scoreBankMatch(bankInput(row), c, 3650);
+    const s = scoreBankMatch(bankInput(row), c, 3650, (await getSettings(deps, actor.tenantId)).bankMatchDefaults.amountTolerance);
     await applyMatch(deps.db, actor.tenantId, row.id, c, s?.score ?? null, actorName(actor));
     await recordEvent(deps, actor, { type: "audit.bank.matched", entityType: "bank", entityId: row.id, summary: `Matched bank line “${row.description.slice(0, 60)}” (${fmtInr(money(row.amount))}) to ${c.label}`, ip: req.ip });
     res.json({ ok: true });

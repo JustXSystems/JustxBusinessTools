@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { defaultPayMethodFor, installmentDefaultsFor, payMethodsFor, posPayMethodsFor } from "../finance";
+import { commonCurrenciesFor, defaultPayMethodFor, dunningCopy, dunningPayWithinDaysFor, installmentDefaultsFor, payMethodsFor, posPayMethodsFor } from "../finance";
 import { GST_RATES, gstRatesFor } from "../format";
-import { PREFIX_FIELDS, normalizeGstRateOptions, normalizePaymentTermPresets, parseNumberList, termChipLabel, withOpsSettingsDefaults, withSalesDefaults } from "../settings";
+import {
+  PREFIX_FIELDS,
+  normalizeAuditRules,
+  normalizeAuditSeverityAmount,
+  normalizeBankMatchDefaults,
+  normalizeGstRateOptions,
+  normalizePaymentTermPresets,
+  normalizeReorderFallbackFactor,
+  parseCodeList,
+  parseNumberList,
+  termChipLabel,
+  withOpsSettingsDefaults,
+  withSalesDefaults,
+} from "../settings";
 
 describe("withOpsSettingsDefaults", () => {
   it("fills BOM/DC/RTN prefixes and print/attachment knobs when missing", () => {
@@ -130,5 +143,79 @@ describe("Wave-3 helpers", () => {
     const out = withSalesDefaults({ bomPrefix: "X" });
     expect(out.bomPrefix).toBe("X");
     expect(out.maxInstallments).toBe(60);
+  });
+});
+
+describe("Wave-4 ops thresholds", () => {
+  it("withOpsSettingsDefaults fills every Wave-4 default when missing", () => {
+    const filled = withOpsSettingsDefaults({});
+    expect(filled.reorderFallbackFactor).toBe(2);
+    expect(filled.bankMatchDefaults).toEqual({ windowDays: 5, autoScore: 75, amountTolerance: 0.5 });
+    expect(filled.auditRules).toEqual({ overdueArDays: 90, overdueApDays: 30, largeAdjustment: 25_000, largeWriteOff: 10_000, gstTolerance: 1, unreconciledDays: 7, b2cLargeLimit: 100_000 });
+    expect(filled.auditSeverityAmount).toEqual({ critical: 500_000, high: 100_000 });
+    expect(filled.dunningFirmPayWithinDays).toBe(7);
+    expect(filled.commonCurrencies).toEqual(["INR", "USD", "EUR", "AED", "GBP"]);
+  });
+
+  it("preserves explicit values and normalises partial objects", () => {
+    const filled = withOpsSettingsDefaults({
+      reorderFallbackFactor: 3,
+      bankMatchDefaults: { windowDays: 9, autoScore: 80, amountTolerance: 0 },
+      auditRules: { overdueArDays: 60 } as never,
+      auditSeverityAmount: { critical: 900_000, high: 200_000 },
+      dunningFirmPayWithinDays: 14,
+      commonCurrencies: ["usd", "sgd", "usd"],
+    });
+    expect(filled.reorderFallbackFactor).toBe(3);
+    expect(filled.bankMatchDefaults).toEqual({ windowDays: 9, autoScore: 80, amountTolerance: 0 });
+    expect(filled.auditRules).toMatchObject({ overdueArDays: 60, overdueApDays: 30, b2cLargeLimit: 100_000 });
+    expect(filled.auditSeverityAmount).toEqual({ critical: 900_000, high: 200_000 });
+    expect(filled.dunningFirmPayWithinDays).toBe(14);
+    expect(filled.commonCurrencies).toEqual(["USD", "SGD"]);
+  });
+
+  it("normalises the reorder factor like the server", () => {
+    expect(normalizeReorderFallbackFactor(undefined)).toBe(2);
+    expect(normalizeReorderFallbackFactor(0)).toBe(2);
+    expect(normalizeReorderFallbackFactor(0.5)).toBe(1);
+    expect(normalizeReorderFallbackFactor(3.456)).toBe(3.46);
+    expect(normalizeReorderFallbackFactor(100)).toBe(20);
+  });
+
+  it("normalises bank match settings (zero tolerance is valid)", () => {
+    expect(normalizeBankMatchDefaults(null)).toEqual({ windowDays: 5, autoScore: 75, amountTolerance: 0.5 });
+    expect(normalizeBankMatchDefaults({ windowDays: 0, autoScore: 10, amountTolerance: 99 })).toEqual({ windowDays: 1, autoScore: 50, amountTolerance: 10 });
+    expect(normalizeBankMatchDefaults({ amountTolerance: 0 }).amountTolerance).toBe(0);
+    expect(normalizeBankMatchDefaults({ windowDays: 7.9 }).windowDays).toBe(7);
+  });
+
+  it("normalises audit rules and severity cut-offs", () => {
+    expect(normalizeAuditRules({ overdueArDays: 0, overdueApDays: 99999, gstTolerance: 0, unreconciledDays: 0 })).toMatchObject({ overdueArDays: 1, overdueApDays: 3650, gstTolerance: 0, unreconciledDays: 0 });
+    expect(normalizeAuditRules("junk")).toMatchObject({ overdueArDays: 90, largeWriteOff: 10_000 });
+    expect(normalizeAuditSeverityAmount({ critical: 1000, high: 5000 })).toEqual({ critical: 5001, high: 5000 });
+    expect(normalizeAuditSeverityAmount(null)).toEqual({ critical: 500_000, high: 100_000 });
+  });
+
+  it("clamps the firm-letter window and words the letter with it", () => {
+    expect(dunningPayWithinDaysFor(undefined)).toBe(7);
+    expect(dunningPayWithinDaysFor(0)).toBe(1);
+    expect(dunningPayWithinDaysFor(365)).toBe(90);
+    const v = { total: "₹1,000.00", asOf: "22 Nov 2026", count: 2 };
+    expect(dunningCopy("firm", v).intro).toContain("within the next 7 days.");
+    expect(dunningCopy("firm", { ...v, payWithinDays: 14 }).intro).toContain("within the next 14 days.");
+    expect(dunningCopy("firm", { ...v, payWithinDays: 1 }).intro).toContain("within the next day.");
+    expect(dunningCopy("friendly", { ...v, payWithinDays: 14 })).toEqual(dunningCopy("friendly", v));
+  });
+
+  it("commonCurrenciesFor validates codes and falls back to the defaults", () => {
+    expect(commonCurrenciesFor(null)).toEqual(["INR", "USD", "EUR", "AED", "GBP"]);
+    expect(commonCurrenciesFor({ commonCurrencies: [] })).toEqual(["INR", "USD", "EUR", "AED", "GBP"]);
+    expect(commonCurrenciesFor({ commonCurrencies: ["usd", "bad!", "EUR", "USD", "jpy"] })).toEqual(["USD", "EUR", "JPY"]);
+    expect(commonCurrenciesFor({ commonCurrencies: Array.from({ length: 20 }, (_, i) => `A${String.fromCharCode(65 + i)}A`) })).toHaveLength(12);
+  });
+
+  it("parses comma / space separated code lists", () => {
+    expect(parseCodeList("inr, usd  EUR,usd,")).toEqual(["INR", "USD", "EUR"]);
+    expect(parseCodeList("")).toEqual([]);
   });
 });

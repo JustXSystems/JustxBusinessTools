@@ -127,6 +127,23 @@ export type ReminderSettings = {
 
 export type ArPriorityThresholds = { critical: number; high: number; medium: number };
 
+/** Bank statement matching knobs (mirrors server `BankMatchSettings`). */
+export type BankMatchSettings = { windowDays: number; autoScore: number; amountTolerance: number };
+
+/** Audit rule thresholds (tenant ops prefs; statutory GST stays in code). */
+export type AuditRuleSettings = {
+  overdueArDays: number;
+  overdueApDays: number;
+  largeAdjustment: number;
+  largeWriteOff: number;
+  gstTolerance: number;
+  unreconciledDays: number;
+  b2cLargeLimit: number;
+};
+
+/** ₹ cut-offs that lift an audit finding to high / critical severity. */
+export type AuditSeverityAmount = { critical: number; high: number };
+
 export type BomPaperTemplateId =
   | "proposal"
   | "executive"
@@ -252,6 +269,15 @@ export type ImsSettings = {
   installmentEveryMonths: number;
   /** Ceiling on installments per plan (1–60). */
   maxInstallments: number;
+  /** Reorder target = this × min stock when an item has no max / reorder qty (1–20, default 2). */
+  reorderFallbackFactor: number;
+  bankMatchDefaults: BankMatchSettings;
+  auditRules: AuditRuleSettings;
+  auditSeverityAmount: AuditSeverityAmount;
+  /** Firm-tone dunning letters say “within the next N days” (1–90, default 7). */
+  dunningFirmPayWithinDays: number;
+  /** ISO currency suggestions on the Business tab and invoice / bill editors. */
+  commonCurrencies: string[];
   exciseEnabled: boolean;
   /** Excise applies (enabled, or a liquor / bar business type). */
   exciseActive: boolean;

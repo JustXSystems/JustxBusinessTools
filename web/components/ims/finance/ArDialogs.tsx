@@ -706,7 +706,7 @@ export function DunningLetterDialog({
   const [levelKey, setLevelKey] = useState(() => (sequence.some((l) => l.key === initialLevelKey) ? (initialLevelKey as string) : sequence[0].key));
   const level = sequence.find((l) => l.key === levelKey) ?? sequence[0];
   const s = session.settings;
-  const copy = dunningCopy(level.tone, { total: moneyFmt(total, baseCurrency), asOf: dateLabel(today), count: list.length });
+  const copy = dunningCopy(level.tone, { total: moneyFmt(total, baseCurrency), asOf: dateLabel(today), count: list.length, payWithinDays: s.dunningFirmPayWithinDays });
   const history = useImsData(() => finance.dunningRuns({ customerId: customer.customerId, customerName: customer.name, limit: 6 }), [customer.key]);
 
   const printLogged = async () => {

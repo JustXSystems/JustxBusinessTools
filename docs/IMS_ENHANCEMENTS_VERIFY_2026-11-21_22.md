@@ -328,6 +328,8 @@ Spot-check seeded world (full catalog also in `e2e-results/ims/MANUAL_VERIFY.md`
 | 18.18 | **Print only** | Prints without adding a history row |
 | 18.19 | Regression: GSP push, Sales Orders, bill attachments, invoice attachments | Unchanged |
 
+**Settings Wave 4 (migration `063`):** `server/src/ims/settings-ops-thresholds.test.ts` (reorder factor, bank match, audit rules, severity amounts, dunning window, currency list normalizers + consumers) and the “Wave-4 ops thresholds” block in `web/lib/ims/__tests__/settings-ops.test.ts`. Manual checks are in section D.
+
 **Automated:** `server/src/ims/wave6-logic.test.ts` (fx base total, installment sum + allocation, dunning level pick, portal token/UPI), `web/lib/ims/__tests__/wave6.test.ts`, `server/src/ims/settings-sales-defaults.test.ts` + `web/lib/ims/__tests__/settings-ops.test.ts` (settings Wave 3), `public-paths.test.ts` (`/api/public/invoice-portal`).
 
 ---
@@ -358,12 +360,18 @@ Spot-check seeded world (full catalog also in `e2e-results/ims/MANUAL_VERIFY.md`
 | **POS methods + round-to-rupee** | Documents → Sales & payment defaults | Counter shows only enabled cash/UPI/card; server rejects a disabled method; bill rounding follows setting |
 | **Installments (default / every N months / max)** | Documents → Sales & payment defaults | Payment-plan form pre-fills count; auto-split uses month gap; plan above max is rejected (hard ceiling 60) |
 | **Dunning letter levels** | Reminders | AR Letter offers each level |
+| **Reorder fallback (× min)** | Documents → Stock rules (migration **063**) | Default 2. Item with min 5, no max / reorder qty, stock 2 suggests 8; set 3 → 13 on Restock list, item suggested reorder, PO reorder draft and Ask AI. Items with a max or reorder qty are unchanged. Range 1–20 |
+| **Bank match window / min score / amount tolerance** | Reminders → Audit & bank rules | Defaults 5 days / 75 / ₹0.50. Auditor → Bank: Auto-match and import auto-match use them (suggestions look 2× the window); tolerance 0 = exact amounts only |
+| **Audit rule thresholds** (overdue AR / AP days, large adjustment, large write-off, GST tolerance, unreconciled days, large B2C) | Reminders → Audit & bank rules | Defaults 90 / 30 / ₹25,000 / ₹10,000 / ₹1 / 7 days / ₹1,00,000. Auditor findings, Overview insight text, GSTR-2B reconcile tolerance and record trace follow them. GSTR-1 B2CL reporting, GST slabs and the CGST / SGST split are **not** configurable |
+| **Audit severity amounts** (high / critical) | Reminders → Audit & bank rules | Defaults ₹1,00,000 / ₹5,00,000. Overdue AR rates high / critical by balance; overdue AP rates high. Critical must exceed High (Save blocked otherwise) |
+| **Firm letter: pay within (days)** | Reminders → Dunning letter levels | Default 7. A firm-tone letter (L2) reads “within the next N days”; friendly / final wording unchanged. 1 shows “within the next day” |
+| **Common currencies** | Business | Default INR, USD, EUR, AED, GBP. Feeds the base-currency datalist and the invoice / bill currency pickers (base currency is always offered); invalid codes block Save, empty list falls back to defaults |
 
 ---
 
 ## E. Suggested smoke path (30–40 min)
 
-1. Apply migrations 053–059.  
+1. Apply migrations 053–059 (and 060–063 for the Settings waves; **063** adds the Wave 4 ops-threshold columns).  
 2. Settings: UPI, MSME+UDYAM, invoice approval limit ₹10,000.  
 3. Sales: Recurring tab → Run now once.  
 4. New tax invoice ≥ limit → pending → Approvals Invoices → Approve.  

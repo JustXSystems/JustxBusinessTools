@@ -2,7 +2,7 @@ import type { Router } from "express";
 import { z } from "zod";
 import { actorOf, can, parse, type ImsDeps } from "./context.js";
 import { isoOf, money, rows, type Queryable } from "./db.js";
-import { addDaysISO, AUDIT_CATEGORIES, AUDIT_SEVERITIES, daysBetween, round2, todayISO, type AuditCategory, type AuditIssue } from "./logic.js";
+import { addDaysISO, AUDIT_CATEGORIES, AUDIT_SEVERITIES, daysBetween, DEFAULT_REORDER_FALLBACK_FACTOR, normalizeReorderFallbackFactor, round2, todayISO, type AuditCategory, type AuditIssue } from "./logic.js";
 import { getSettings } from "./settings.js";
 
 /* ---------- Ask AI: built-in answers from the tenant's own data, plus a compact data summary for an optional LLM ---------- */
@@ -37,6 +37,8 @@ export type AssistantSnapshot = {
   receivables?: AssistantDoc[];
   payables?: AssistantDoc[];
   pos?: AssistantPo[];
+  /** Tenant `reorderFallbackFactor` (× min) for items without a max / reorder qty. */
+  reorderFallbackFactor?: number;
 };
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
@@ -48,7 +50,8 @@ const bullets = <T>(list: ReadonlyArray<T>, f: (x: T) => string, n = 8) =>
     .join("\n");
 const value = (i: AssistantItem) => Math.max(0, i.stock) * i.cost;
 const isLow = (i: AssistantItem) => i.stock <= i.min && (i.min > 0 || i.stock <= 0);
-const reorderQty = (i: AssistantItem) => Math.max(1, Math.ceil(i.reorderQty ?? (i.max ?? i.min * 2) - i.stock));
+const reorderQty = (i: AssistantItem, factor: number = DEFAULT_REORDER_FALLBACK_FACTOR) =>
+  Math.max(1, Math.ceil(i.reorderQty ?? (i.max ?? i.min * normalizeReorderFallbackFactor(factor)) - i.stock));
 const groupSum = <T>(list: ReadonlyArray<T>, key: (x: T) => string, amount: (x: T) => number) => {
   const m = new Map<string, number>();
   for (const x of list) m.set(key(x), (m.get(key(x)) ?? 0) + amount(x));
@@ -143,16 +146,16 @@ export function assistantAnswer(question: string, snap: AssistantSnapshot): stri
     }
     if (/value/.test(s) && /below|low|minimum/.test(s)) {
       if (!low.length) return "Nothing is at or below its minimum stock right now.";
-      return `**${low.length} items are at or below minimum.** Refilling them would cost about ${inr(sum(low, (i) => reorderQty(i) * i.cost))} at purchase price. Stock still on hand in these items is worth ${inr(sum(low, value))}.`;
+      return `**${low.length} items are at or below minimum.** Refilling them would cost about ${inr(sum(low, (i) => reorderQty(i, snap.reorderFallbackFactor) * i.cost))} at purchase price. Stock still on hand in these items is worth ${inr(sum(low, value))}.`;
     }
     if (/reorder|running low|low stock|below min|out.of.stock|restock/.test(s)) {
       if (!low.length) return "Nothing is at or below its minimum stock right now.";
       if (/supplier|group/.test(s)) {
         const g = new Map<string, AssistantItem[]>();
         for (const i of low) g.set(i.supplier ?? "No supplier", [...(g.get(i.supplier ?? "No supplier") ?? []), i]);
-        return `**Reorder list by supplier** (${low.length} items):\n${[...g.entries()].map(([k, v]) => `- **${k}**: ${v.map((i) => `${i.name} (${i.stock} left, order ~${reorderQty(i)})`).join("; ")}`).join("\n")}`;
+        return `**Reorder list by supplier** (${low.length} items):\n${[...g.entries()].map(([k, v]) => `- **${k}**: ${v.map((i) => `${i.name} (${i.stock} left, order ~${reorderQty(i, snap.reorderFallbackFactor)})`).join("; ")}`).join("\n")}`;
       }
-      return `**${low.length} items are at or below minimum.** Most urgent first:\n${bullets(low, (i) => `${i.name} — ${i.stock}/${i.min} ${i.unit}, supplier ${i.supplier ?? "-"}, order about ${reorderQty(i)}`, 10)}`;
+      return `**${low.length} items are at or below minimum.** Most urgent first:\n${bullets(low, (i) => `${i.name} — ${i.stock}/${i.min} ${i.unit}, supplier ${i.supplier ?? "-"}, order about ${reorderQty(i, snap.reorderFallbackFactor)}`, 10)}`;
     }
     if (/not moving|dead|slow|no movement|not moved|haven'?t moved|no sales/.test(s)) {
       const z = items.filter((i) => i.sold30 === 0 && i.stock > 0).sort((a, b) => value(b) - value(a));
@@ -404,6 +407,7 @@ export function registerAssistant(router: Router, deps: ImsDeps): void {
     const parts = new Set<AssistantPart>(page.parts.filter((part) => PART_PERMS[part]?.some((perm) => can(res, perm)) ?? true));
     const settings = await getSettings(deps, actor.tenantId);
     const snap = await loadSnapshot(deps.db, actor.tenantId, settings.businessName || "this business", parts);
+    snap.reorderFallbackFactor = settings.reorderFallbackFactor;
     res.json({
       page: input.page,
       title: page.title,

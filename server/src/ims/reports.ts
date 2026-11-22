@@ -351,7 +351,7 @@ async function lowStock(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportResult, 
   const suppliers = new Set<string>();
   const out = list.map((r) => {
     const f = itemFacts(r, ctx.today);
-    const suggested = reorderQty({ current: f.current, min: f.min, max: f.max, reorderQty: r.reorder_qty == null ? null : money(r.reorder_qty) });
+    const suggested = reorderQty({ current: f.current, min: f.min, max: f.max, reorderQty: r.reorder_qty == null ? null : money(r.reorder_qty) }, ctx.settings.reorderFallbackFactor);
     const v = round2(suggested * f.cost);
     reorderValue += v;
     if (f.status === "OUT_OF_STOCK") out0 += 1;

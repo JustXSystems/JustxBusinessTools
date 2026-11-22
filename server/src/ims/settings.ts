@@ -16,6 +16,9 @@ import {
   normalizePermissions,
   normalizeAgingBreaks,
   normalizeArPriorityThresholds,
+  normalizeAuditRules,
+  normalizeAuditSeverityAmount,
+  normalizeBankMatchDefaults,
   normalizeDefaultPayMethod,
   normalizeGstRateOptions,
   normalizeInstallmentDefaults,
@@ -23,9 +26,13 @@ import {
   normalizePaymentTermPresets,
   normalizePosPayMethods,
   normalizeReminders,
+  normalizeReorderFallbackFactor,
   normalizeTaxonomy,
   permissionsFor,
   type ArPriorityThresholds,
+  type AuditRuleSettings,
+  type AuditSeverityAmount,
+  type BankMatchSettings,
   type ImsRole,
   type PayMethod,
   type PermissionMatrix,
@@ -36,7 +43,17 @@ import {
   DEFAULT_AP_DUE_SOON_DAYS,
   DEFAULT_AR_PRIORITY,
 } from "./logic.js";
-import { DEFAULT_BASE_CURRENCY, normalizeCurrencyCode, normalizeDunningSequences, DUNNING_TONES, MAX_DUNNING_LEVELS, type DunningLevel } from "./wave6-logic.js";
+import {
+  DEFAULT_BASE_CURRENCY,
+  MAX_COMMON_CURRENCIES,
+  normalizeCommonCurrencies,
+  normalizeCurrencyCode,
+  normalizeDunningFirmPayWithinDays,
+  normalizeDunningSequences,
+  DUNNING_TONES,
+  MAX_DUNNING_LEVELS,
+  type DunningLevel,
+} from "./wave6-logic.js";
 
 /** Canonical BOM document purposes (+ legacy aesthetic ids accepted on read). */
 export const BOM_PAPER_PURPOSES = ["proposal", "executive", "technical", "field", "share"] as const;
@@ -236,6 +253,18 @@ export type ImsSettings = {
   installmentEveryMonths: number;
   /** Ceiling on installments per plan (1–60). */
   maxInstallments: number;
+  /** Reorder target = this × min stock when an item has no max / reorder qty (1–20, default 2). */
+  reorderFallbackFactor: number;
+  /** Bank statement matching: date window (days), auto-match min score, amount tolerance (₹). */
+  bankMatchDefaults: BankMatchSettings;
+  /** Audit rule engine thresholds (tenant ops prefs; statutory GST stays in code). */
+  auditRules: AuditRuleSettings;
+  /** Amount cut-offs (₹) for high / critical audit severity. */
+  auditSeverityAmount: AuditSeverityAmount;
+  /** Firm-tone dunning letters say “within the next N days” (1–90, default 7). */
+  dunningFirmPayWithinDays: number;
+  /** ISO currency suggestions (Business tab, invoice / bill editors). Never empty. */
+  commonCurrencies: string[];
   exciseEnabled: boolean;
   /** Derived: excise register is shown (enabled or a liquor / bar business type). */
   exciseActive: boolean;
@@ -311,6 +340,12 @@ type SettingsRow = {
   default_installment_count?: number | null;
   installment_every_months?: number | null;
   max_installments?: number | null;
+  reorder_fallback_factor?: string | number | null;
+  bank_match_defaults?: unknown;
+  audit_rules?: unknown;
+  audit_severity_amount?: unknown;
+  dunning_firm_pay_within_days?: number | null;
+  common_currencies?: unknown;
   excise_enabled: number;
   permissions: unknown;
   taxonomy: unknown;
@@ -388,6 +423,12 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
     installmentEveryMonths: r.installment_every_months,
     maxInstallments: r.max_installments,
   }),
+  reorderFallbackFactor: normalizeReorderFallbackFactor(r.reorder_fallback_factor),
+  bankMatchDefaults: normalizeBankMatchDefaults(r.bank_match_defaults),
+  auditRules: normalizeAuditRules(r.audit_rules),
+  auditSeverityAmount: normalizeAuditSeverityAmount(r.audit_severity_amount),
+  dunningFirmPayWithinDays: normalizeDunningFirmPayWithinDays(r.dunning_firm_pay_within_days),
+  commonCurrencies: normalizeCommonCurrencies(r.common_currencies),
   exciseEnabled: Boolean(r.excise_enabled),
   exciseActive: exciseApplies(r.business_type, Boolean(r.excise_enabled)),
   permissions: normalizePermissions(json(r.permissions, {})),
@@ -508,6 +549,38 @@ const SettingsInput = z.object({
   defaultInstallmentCount: z.coerce.number().int().min(1).max(60).optional(),
   installmentEveryMonths: z.coerce.number().int().min(1).max(12).optional(),
   maxInstallments: z.coerce.number().int().min(1).max(60).optional(),
+  reorderFallbackFactor: z.coerce.number().min(1).max(20).optional(),
+  bankMatchDefaults: z
+    .object({
+      windowDays: z.coerce.number().int().min(1).max(30),
+      autoScore: z.coerce.number().int().min(50).max(100),
+      amountTolerance: z.coerce.number().min(0).max(10),
+    })
+    .optional(),
+  auditRules: z
+    .object({
+      overdueArDays: z.coerce.number().int().min(1).max(3650),
+      overdueApDays: z.coerce.number().int().min(1).max(3650),
+      largeAdjustment: z.coerce.number().min(1).max(1e9),
+      largeWriteOff: z.coerce.number().min(1).max(1e9),
+      gstTolerance: z.coerce.number().min(0).max(100),
+      unreconciledDays: z.coerce.number().int().min(0).max(365),
+      b2cLargeLimit: z.coerce.number().min(1).max(1e9),
+    })
+    .optional(),
+  auditSeverityAmount: z
+    .object({
+      critical: z.coerce.number().min(2).max(1e9),
+      high: z.coerce.number().min(1).max(1e9),
+    })
+    .refine((v) => v.critical > v.high, "Critical amount must be above the high amount")
+    .optional(),
+  dunningFirmPayWithinDays: z.coerce.number().int().min(1).max(90).optional(),
+  commonCurrencies: z
+    .array(z.string().trim().regex(/^[A-Za-z]{3}$/, "Use 3-letter ISO currency codes (e.g. INR, USD)"))
+    .min(1, "Keep at least one currency")
+    .max(MAX_COMMON_CURRENCIES)
+    .optional(),
   exciseEnabled: z.boolean().optional(),
   permissions: z.record(z.string(), z.record(z.string(), z.boolean())).optional(),
   taxonomy: z.record(z.string(), z.unknown()).optional(),
@@ -578,6 +651,12 @@ const COLUMN: Record<string, string> = {
   defaultInstallmentCount: "default_installment_count",
   installmentEveryMonths: "installment_every_months",
   maxInstallments: "max_installments",
+  reorderFallbackFactor: "reorder_fallback_factor",
+  bankMatchDefaults: "bank_match_defaults",
+  auditRules: "audit_rules",
+  auditSeverityAmount: "audit_severity_amount",
+  dunningFirmPayWithinDays: "dunning_firm_pay_within_days",
+  commonCurrencies: "common_currencies",
   exciseEnabled: "excise_enabled",
   permissions: "permissions",
   taxonomy: "taxonomy",
@@ -626,6 +705,12 @@ export async function updateSettings(deps: ImsDeps, actor: ImsActor, body: unkno
     else if (key === "gstRateOptions") v = JSON.stringify(normalizeGstRateOptions(value));
     else if (key === "payMethods") v = JSON.stringify(normalizePayMethods(value));
     else if (key === "posPayMethods") v = JSON.stringify(normalizePosPayMethods(value));
+    else if (key === "reorderFallbackFactor") v = normalizeReorderFallbackFactor(value);
+    else if (key === "bankMatchDefaults") v = JSON.stringify(normalizeBankMatchDefaults(value));
+    else if (key === "auditRules") v = JSON.stringify(normalizeAuditRules(value));
+    else if (key === "auditSeverityAmount") v = JSON.stringify(normalizeAuditSeverityAmount(value));
+    else if (key === "dunningFirmPayWithinDays") v = normalizeDunningFirmPayWithinDays(value);
+    else if (key === "commonCurrencies") v = JSON.stringify(normalizeCommonCurrencies(value));
     else if (key === "bomPaperTemplate") v = normalizeBomPaperTemplate(value);
     else if (key === "bomIndustryPack") v = normalizeBomIndustryPack(value);
     else if (key === "bomPaperTone") v = normalizeBomPaperTone(value);

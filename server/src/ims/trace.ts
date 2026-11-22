@@ -1,5 +1,8 @@
 import { isoOf, json, money, one, rows, tsOf, type Queryable } from "./db.js";
-import { AUDIT_RULES, daysBetween, isValidGstin, round2, type ImsLine } from "./logic.js";
+import { AUDIT_RULES, daysBetween, isValidGstin, round2, type AuditRules, type ImsLine } from "./logic.js";
+
+/** Tenant audit thresholds the trace steps read (Settings Wave 4); code defaults when omitted. */
+export type TraceRules = Pick<AuditRules, "b2cLargeLimit" | "largeWriteOffValue">;
 
 /* ---------- Document trail: follows one record through order → stock → bill / invoice → payment → bank → GST → Tally ---------- */
 
@@ -81,7 +84,7 @@ export type InvoiceFacts = {
   today: string;
 };
 
-export function invoiceTrace(f: InvoiceFacts): Omit<Trace, "events"> {
+export function invoiceTrace(f: InvoiceFacts, rules: TraceRules = AUDIT_RULES): Omit<Trace, "events"> {
   const issued = f.status === "issued";
   const tax = round2(f.cgst + f.sgst + f.igst);
   const steps: TraceStep[] = [];
@@ -126,8 +129,8 @@ export function invoiceTrace(f: InvoiceFacts): Omit<Trace, "events"> {
         ? { label: "GST", title: "Wrong tax type", detail: f.intraState ? "Same-state sale but IGST charged" : "Inter-state sale but CGST/SGST charged", state: "bad" }
         : f.gstin && !gstinOk
           ? { label: "GST", title: "Invalid customer GSTIN", detail: `${f.gstin} doesn't pass the GSTIN check`, state: "bad" }
-          : !f.gstin && f.total > AUDIT_RULES.b2cLargeLimit && !f.intraState
-            ? { label: "GST", title: "Large B2C inter-state sale", detail: `Over ${inr(AUDIT_RULES.b2cLargeLimit)} — reported invoice-wise in GSTR-1 (B2CL)`, state: "warn" }
+          : !f.gstin && f.total > rules.b2cLargeLimit && !f.intraState
+            ? { label: "GST", title: "Large B2C inter-state sale", detail: `Over ${inr(rules.b2cLargeLimit)} — reported invoice-wise in GSTR-1 (B2CL)`, state: "warn" }
             : { label: "GST", title: f.gstin ? "B2B" : "B2C", detail: f.intraState ? `CGST ${inr(f.cgst)} + SGST ${inr(f.sgst)}` : `IGST ${inr(f.igst)}`, state: "ok" },
   );
   steps.push(docStep(f.docs, false));
@@ -332,7 +335,7 @@ export function paymentTrace(f: PaymentFacts): Omit<Trace, "events"> {
 
 export type ExpenseFacts = { id: string; date: string; category: string; description: string | null; vendor: string | null; amount: number; gst: number; method: string; reference: string | null; by: string | null; bank: TraceBank[]; docs: number };
 
-export function expenseTrace(f: ExpenseFacts): Omit<Trace, "events"> {
+export function expenseTrace(f: ExpenseFacts, rules: TraceRules = AUDIT_RULES): Omit<Trace, "events"> {
   const pay: TracePay = { id: f.id, date: f.date, amount: f.amount, method: f.method, reference: f.reference };
   return {
     type: "expense",
@@ -350,7 +353,7 @@ export function expenseTrace(f: ExpenseFacts): Omit<Trace, "events"> {
     ],
     steps: [
       { label: "Expense", title: inr(f.amount), detail: `${f.date} · ${f.category}${f.vendor ? ` · ${f.vendor}` : ""}`, state: "ok" },
-      docStep(f.docs, f.amount >= AUDIT_RULES.largeWriteOffValue || f.gst > 0),
+      docStep(f.docs, f.amount >= rules.largeWriteOffValue || f.gst > 0),
       f.gst > 0 ? { label: "GST input credit", title: inr(f.gst), detail: f.docs > 0 ? "Supported by an attached bill" : "Needs the supplier's tax invoice to claim", state: f.docs > 0 ? "ok" : "warn" } : { label: "GST input credit", title: "None", detail: "No GST recorded", state: "na" },
       bankStep([pay], f.bank),
     ],
@@ -513,7 +516,7 @@ async function poFacts(db: Queryable, tenantId: number, poId: string) {
 }
 
 /** Null when the record doesn't exist for this tenant. Read-only. */
-export async function loadTrace(db: Queryable, tenantId: number, type: TraceType, id: string, today: string): Promise<Trace | null> {
+export async function loadTrace(db: Queryable, tenantId: number, type: TraceType, id: string, today: string, rules: TraceRules = AUDIT_RULES): Promise<Trace | null> {
   let base: Omit<Trace, "events"> | null = null;
   if (type === "invoice") {
     const r = await one<{
@@ -584,7 +587,7 @@ export async function loadTrace(db: Queryable, tenantId: number, type: TraceType
       docs,
       tally,
       today,
-    });
+    }, rules);
   } else if (type === "bill") {
     const r = await one<{
       id: string;
@@ -750,7 +753,7 @@ export async function loadTrace(db: Queryable, tenantId: number, type: TraceType
       by: r.created_by_name,
       bank,
       docs,
-    });
+    }, rules);
   }
   return { ...base, events: await events(db, tenantId, type, id) };
 }
