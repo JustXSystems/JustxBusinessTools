@@ -5,7 +5,7 @@ import "./inventory-a.css";
 import { useState, type ReactNode } from "react";
 import { Alert, Badge, Button, DataTable, Dialog, KpiCard, Skeleton, useToast, type BosColumn, type BosKpi } from "@/components/bos";
 import { ims, type AgingKey, type ImsItem, type ImsMovement, type MovementType } from "@/lib/ims/api";
-import { AGING_BUCKETS, MOVEMENT_LABEL, dateLabel, inr, inrExact, movementBadge, pct, qtyText, signedQty, stampLabel, stockBadge, timeAgo, toneFor } from "@/lib/ims/format";
+import { AGING_BUCKETS, buildAgingBuckets, MOVEMENT_LABEL, dateLabel, inr, inrExact, movementBadge, pct, qtyText, signedQty, stampLabel, stockBadge, timeAgo, toneFor } from "@/lib/ims/format";
 import { isEan13, scanCodeOf } from "@/lib/ims/inventory-a";
 import { ErrorBlock, StatusBadge, useIms, useImsAction, useImsData } from "../core";
 
@@ -56,12 +56,14 @@ export function ItemCell({ item, sub }: { item: Pick<ImsItem, "name" | "category
   );
 }
 
-export function agingOf(key: AgingKey) {
-  return AGING_BUCKETS.find((b) => b.key === key) ?? AGING_BUCKETS[0];
+export function agingOf(key: AgingKey, buckets: typeof AGING_BUCKETS = AGING_BUCKETS) {
+  return buckets.find((b) => b.key === key) ?? buckets[0]!;
 }
 
 export function AgingChip({ bucket, days }: { bucket: AgingKey; days?: number }) {
-  const b = agingOf(bucket);
+  const { session } = useIms();
+  const buckets = buildAgingBuckets(session.settings.agingBreaks) ?? AGING_BUCKETS;
+  const b = agingOf(bucket, buckets);
   return (
     <span className="ims-inv-aging" style={{ color: b.color }} title={days !== undefined ? `${days} days since last movement` : undefined}>
       {b.label}

@@ -295,37 +295,99 @@ export function reducesStock(type: MovementType, qty: number): boolean {
 
 /* ---------- Aging ---------- */
 
-export const AGING_BUCKETS = [
-  { key: "0-15", label: "0–15 days", min: 0, max: 15, color: "#1FA679" },
-  { key: "16-30", label: "16–30 days", min: 16, max: 30, color: "#3A80EE" },
-  { key: "31-60", label: "31–60 days", min: 31, max: 60, color: "#D98A1F" },
-  { key: "61-90", label: "61–90 days", min: 61, max: 90, color: "#F2711C" },
-  { key: "90+", label: "90+ days", min: 91, max: Number.POSITIVE_INFINITY, color: "#E1483F" },
-] as const;
-export type AgingKey = (typeof AGING_BUCKETS)[number]["key"];
+/** Upper bounds (days) for the first four AR/stock aging buckets; the fifth is open-ended. */
+export const DEFAULT_AGING_BREAKS = [15, 30, 60, 90] as const;
+export const AGING_BUCKET_COLORS = ["#1FA679", "#3A80EE", "#D98A1F", "#F2711C", "#E1483F"] as const;
 
-export function agingBucket(days: number): AgingKey {
-  const d = Math.max(0, Math.floor(days));
-  return (AGING_BUCKETS.find((b) => d >= b.min && d <= b.max) ?? AGING_BUCKETS[AGING_BUCKETS.length - 1]).key;
+export type AgingBucketDef = { key: string; label: string; min: number; max: number; color: string };
+export type AgingKey = string;
+
+/** Normalize tenant aging breaks to exactly four ascending day caps (1–3650). */
+export function normalizeAgingBreaks(raw: unknown): number[] {
+  const fallback = [...DEFAULT_AGING_BREAKS];
+  let arr: unknown[] = [];
+  if (Array.isArray(raw)) arr = raw;
+  else if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) arr = parsed;
+    } catch {
+      arr = [];
+    }
+  }
+  if (arr.length !== 4) return fallback;
+  const nums = arr.map((x) => Math.floor(Number(x)));
+  if (nums.some((n) => !Number.isFinite(n) || n < 1 || n > 3650)) return fallback;
+  for (let i = 1; i < nums.length; i++) if (nums[i]! <= nums[i - 1]!) return fallback;
+  return nums;
 }
 
-/** Collection priority from days overdue (≥91 critical, ≥61 high, ≥31 medium). */
+export function buildAgingBuckets(breaks: ReadonlyArray<number> = DEFAULT_AGING_BREAKS): AgingBucketDef[] {
+  const caps = normalizeAgingBreaks(breaks);
+  const out: AgingBucketDef[] = [];
+  let prev = -1;
+  for (let i = 0; i < caps.length; i++) {
+    const max = caps[i]!;
+    const min = prev + 1;
+    out.push({
+      key: `${min}-${max}`,
+      label: `${min}–${max} days`,
+      min,
+      max,
+      color: AGING_BUCKET_COLORS[i] ?? AGING_BUCKET_COLORS[AGING_BUCKET_COLORS.length - 1],
+    });
+    prev = max;
+  }
+  out.push({
+    key: `${prev}+`,
+    label: `${prev}+ days`,
+    min: prev + 1,
+    max: Number.POSITIVE_INFINITY,
+    color: AGING_BUCKET_COLORS[4],
+  });
+  return out;
+}
+
+/** Default buckets (legacy labels) — prefer `buildAgingBuckets(settings.agingBreaks)`. */
+export const AGING_BUCKETS = buildAgingBuckets();
+
+export function agingBucket(days: number, breaks?: ReadonlyArray<number>): AgingKey {
+  const buckets = breaks ? buildAgingBuckets(breaks) : AGING_BUCKETS;
+  const d = Math.max(0, Math.floor(days));
+  return (buckets.find((b) => d >= b.min && d <= b.max) ?? buckets[buckets.length - 1]!).key;
+}
+
+/** Collection priority thresholds (days overdue). */
 export type ArPriority = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
-export function arPriority(daysOverdue: number): ArPriority {
-  if (daysOverdue >= 91) return "CRITICAL";
-  if (daysOverdue >= 61) return "HIGH";
-  if (daysOverdue >= 31) return "MEDIUM";
+export type ArPriorityThresholds = { critical: number; high: number; medium: number };
+export const DEFAULT_AR_PRIORITY: ArPriorityThresholds = { critical: 91, high: 61, medium: 31 };
+
+export function normalizeArPriorityThresholds(raw: Partial<ArPriorityThresholds> | null | undefined): ArPriorityThresholds {
+  const critical = Math.max(1, Math.min(3650, Math.floor(Number(raw?.critical) || DEFAULT_AR_PRIORITY.critical)));
+  const high = Math.max(1, Math.min(critical - 1, Math.floor(Number(raw?.high) || DEFAULT_AR_PRIORITY.high)));
+  const medium = Math.max(1, Math.min(high - 1, Math.floor(Number(raw?.medium) || DEFAULT_AR_PRIORITY.medium)));
+  return { critical, high, medium };
+}
+
+export function arPriority(daysOverdue: number, thresholds: ArPriorityThresholds = DEFAULT_AR_PRIORITY): ArPriority {
+  const t = normalizeArPriorityThresholds(thresholds);
+  if (daysOverdue >= t.critical) return "CRITICAL";
+  if (daysOverdue >= t.high) return "HIGH";
+  if (daysOverdue >= t.medium) return "MEDIUM";
   return "LOW";
 }
 
-/** Payables urgency: overdue / due today / due within 7 days / upcoming. */
+/** Payables urgency: overdue / due today / due within N days / upcoming. */
 export type ApPriority = "OVERDUE" | "DUE_TODAY" | "DUE_SOON" | "UPCOMING";
-export function apPriority(dueDate: string | null, today: string): ApPriority {
+export const DEFAULT_AP_DUE_SOON_DAYS = 7;
+
+export function apPriority(dueDate: string | null, today: string, dueSoonDays = DEFAULT_AP_DUE_SOON_DAYS): ApPriority {
   if (!dueDate) return "UPCOMING";
   const diff = daysBetween(today, dueDate);
+  const soon = Math.max(1, Math.min(365, Math.floor(Number(dueSoonDays) || DEFAULT_AP_DUE_SOON_DAYS)));
   if (diff < 0) return "OVERDUE";
   if (diff === 0) return "DUE_TODAY";
-  if (diff <= 7) return "DUE_SOON";
+  if (diff <= soon) return "DUE_SOON";
   return "UPCOMING";
 }
 
@@ -657,24 +719,62 @@ export function normalizeTaxonomy(raw: unknown): Taxonomy {
 
 /* ---------- Collections reminders ---------- */
 
-export const REMINDER_RULES = [
-  { key: "3b", label: "3 days before due date", offset: -3 },
-  { key: "due", label: "On due date", offset: 0 },
-  { key: "7d", label: "7 days overdue", offset: 7 },
-  { key: "15d", label: "15 days overdue", offset: 15 },
-  { key: "30d", label: "30 days overdue", offset: 30 },
-  { key: "60d", label: "60 days overdue", offset: 60 },
-  { key: "90d", label: "90 days overdue", offset: 90 },
-] as const;
-export type ReminderRuleKey = (typeof REMINDER_RULES)[number]["key"];
+export const REMINDER_RULE_KEYS = ["3b", "due", "7d", "15d", "30d", "60d", "90d"] as const;
+export type ReminderRuleKey = (typeof REMINDER_RULE_KEYS)[number];
+
+export const DEFAULT_REMINDER_OFFSETS: Record<ReminderRuleKey, number> = {
+  "3b": -3,
+  due: 0,
+  "7d": 7,
+  "15d": 15,
+  "30d": 30,
+  "60d": 60,
+  "90d": 90,
+};
+
+export function reminderRuleLabel(key: ReminderRuleKey, offset: number): string {
+  if (key === "due" || offset === 0) return "On due date";
+  if (offset < 0) return `${Math.abs(offset)} day${Math.abs(offset) === 1 ? "" : "s"} before due date`;
+  return `${offset} day${offset === 1 ? "" : "s"} overdue`;
+}
+
+/** Normalize tenant offsets; keys stay stable, values are day deltas vs due date. */
+export function normalizeReminderOffsets(raw: unknown): Record<ReminderRuleKey, number> {
+  const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const out = { ...DEFAULT_REMINDER_OFFSETS };
+  for (const key of REMINDER_RULE_KEYS) {
+    if (src[key] == null) continue;
+    const n = Math.floor(Number(src[key]));
+    if (!Number.isFinite(n) || n < -365 || n > 3650) continue;
+    out[key] = n;
+  }
+  // Keep "due" pinned at 0 so before/after semantics stay clear.
+  out.due = 0;
+  return out;
+}
+
+export function reminderRulesFromOffsets(offsets: Record<ReminderRuleKey, number> = DEFAULT_REMINDER_OFFSETS) {
+  return REMINDER_RULE_KEYS.map((key) => ({ key, offset: offsets[key], label: reminderRuleLabel(key, offsets[key]) }));
+}
+
+/** @deprecated Prefer reminderRulesFromOffsets(settings.reminders.offsets) — default catalogue. */
+export const REMINDER_RULES = reminderRulesFromOffsets();
 
 export type ReminderTemplate = { key: string; label: string; channel: "whatsapp" | "sms" | "email"; subject?: string; body: string };
 
-export type ReminderSettings = { autoEnabled: boolean; rules: Record<ReminderRuleKey, boolean>; channels: Array<"whatsapp" | "sms" | "email">; templates: ReminderTemplate[] };
+export type ReminderSettings = {
+  autoEnabled: boolean;
+  rules: Record<ReminderRuleKey, boolean>;
+  /** Day delta vs due date for each rule key (due is always 0). */
+  offsets: Record<ReminderRuleKey, number>;
+  channels: Array<"whatsapp" | "sms" | "email">;
+  templates: ReminderTemplate[];
+};
 
 export const DEFAULT_REMINDERS: ReminderSettings = {
   autoEnabled: false,
   rules: { "3b": true, due: true, "7d": true, "15d": true, "30d": true, "60d": false, "90d": false },
+  offsets: { ...DEFAULT_REMINDER_OFFSETS },
   channels: ["whatsapp"],
   templates: [
     {
@@ -708,7 +808,8 @@ export const DEFAULT_REMINDERS: ReminderSettings = {
 export function normalizeReminders(raw: unknown): ReminderSettings {
   const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const rulesSrc = src.rules && typeof src.rules === "object" ? (src.rules as Record<string, unknown>) : {};
-  const rules = Object.fromEntries(REMINDER_RULES.map((r) => [r.key, typeof rulesSrc[r.key] === "boolean" ? rulesSrc[r.key] : DEFAULT_REMINDERS.rules[r.key]])) as Record<ReminderRuleKey, boolean>;
+  const rules = Object.fromEntries(REMINDER_RULE_KEYS.map((key) => [key, typeof rulesSrc[key] === "boolean" ? rulesSrc[key] : DEFAULT_REMINDERS.rules[key]])) as Record<ReminderRuleKey, boolean>;
+  const offsets = normalizeReminderOffsets(src.offsets);
   const channels = Array.isArray(src.channels) ? (src.channels as unknown[]).filter((c): c is "whatsapp" | "sms" | "email" => c === "whatsapp" || c === "sms" || c === "email") : DEFAULT_REMINDERS.channels;
   const templates = Array.isArray(src.templates)
     ? (src.templates as Array<Record<string, unknown>>)
@@ -722,7 +823,13 @@ export function normalizeReminders(raw: unknown): ReminderSettings {
         }))
         .slice(0, 20)
     : DEFAULT_REMINDERS.templates;
-  return { autoEnabled: Boolean(src.autoEnabled), rules, channels: channels.length ? channels : ["whatsapp"], templates: templates.length ? templates : DEFAULT_REMINDERS.templates };
+  return {
+    autoEnabled: Boolean(src.autoEnabled),
+    rules,
+    offsets,
+    channels: channels.length ? channels : ["whatsapp"],
+    templates: templates.length ? templates : DEFAULT_REMINDERS.templates,
+  };
 }
 
 /** Fills `{customer}`, `{invoice}`, `{amount}`… placeholders; unknown placeholders are left as typed. */
@@ -731,9 +838,14 @@ export function renderTemplate(body: string, vars: Record<string, string | numbe
 }
 
 /** The reminder rule an open invoice matches today (by days relative to due date), if any. */
-export function reminderRuleFor(dueDate: string, today: string): ReminderRuleKey | null {
+export function reminderRuleFor(
+  dueDate: string,
+  today: string,
+  offsets: Record<ReminderRuleKey, number> = DEFAULT_REMINDER_OFFSETS,
+): ReminderRuleKey | null {
   const diff = daysBetween(dueDate, today);
-  return REMINDER_RULES.find((r) => r.offset === diff)?.key ?? null;
+  const catalogue = reminderRulesFromOffsets(offsets);
+  return catalogue.find((r) => r.offset === diff)?.key ?? null;
 }
 
 export function formatINR(amount: number): string {

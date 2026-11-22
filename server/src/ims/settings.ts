@@ -12,13 +12,19 @@ import {
   IMS_ROLES,
   isImsRole,
   normalizePermissions,
+  normalizeAgingBreaks,
+  normalizeArPriorityThresholds,
   normalizeReminders,
   normalizeTaxonomy,
   permissionsFor,
+  type ArPriorityThresholds,
   type ImsRole,
   type PermissionMatrix,
   type ReminderSettings,
   type Taxonomy,
+  DEFAULT_AGING_BREAKS,
+  DEFAULT_AP_DUE_SOON_DAYS,
+  DEFAULT_AR_PRIORITY,
 } from "./logic.js";
 import { DEFAULT_BASE_CURRENCY, normalizeCurrencyCode, normalizeDunningSequences, DUNNING_TONES, MAX_DUNNING_LEVELS, type DunningLevel } from "./wave6-logic.js";
 
@@ -195,6 +201,11 @@ export type ImsSettings = {
   printPackMax: number;
   /** Max upload size for invoice/bill/audit attachments (bytes). */
   attachmentMaxBytes: number;
+  /** Four ascending day caps for AR/stock aging buckets (fifth is open-ended). */
+  agingBreaks: number[];
+  arPriority: ArPriorityThresholds;
+  /** Payables “due soon” window in days. */
+  apDueSoonDays: number;
   exciseEnabled: boolean;
   /** Derived: excise register is shown (enabled or a liquor / bar business type). */
   exciseActive: boolean;
@@ -254,6 +265,11 @@ type SettingsRow = {
   allow_negative_stock: number;
   print_pack_max?: number | null;
   attachment_max_bytes?: number | null;
+  aging_breaks?: unknown;
+  ar_priority_critical_days?: number | null;
+  ar_priority_high_days?: number | null;
+  ar_priority_medium_days?: number | null;
+  ap_due_soon_days?: number | null;
   excise_enabled: number;
   permissions: unknown;
   taxonomy: unknown;
@@ -311,6 +327,13 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   allowNegativeStock: Boolean(r.allow_negative_stock),
   printPackMax: Math.max(1, Math.min(200, Number(r.print_pack_max) || 25)),
   attachmentMaxBytes: Math.max(256 * 1024, Math.min(20 * 1024 * 1024, Number(r.attachment_max_bytes) || 2 * 1024 * 1024)),
+  agingBreaks: normalizeAgingBreaks(r.aging_breaks ?? DEFAULT_AGING_BREAKS),
+  arPriority: normalizeArPriorityThresholds({
+    critical: r.ar_priority_critical_days ?? DEFAULT_AR_PRIORITY.critical,
+    high: r.ar_priority_high_days ?? DEFAULT_AR_PRIORITY.high,
+    medium: r.ar_priority_medium_days ?? DEFAULT_AR_PRIORITY.medium,
+  }),
+  apDueSoonDays: Math.max(1, Math.min(365, Number(r.ap_due_soon_days) || DEFAULT_AP_DUE_SOON_DAYS)),
   exciseEnabled: Boolean(r.excise_enabled),
   exciseActive: exciseApplies(r.business_type, Boolean(r.excise_enabled)),
   permissions: normalizePermissions(json(r.permissions, {})),
@@ -411,6 +434,15 @@ const SettingsInput = z.object({
   allowNegativeStock: z.boolean().optional(),
   printPackMax: z.coerce.number().int().min(1).max(200).optional(),
   attachmentMaxBytes: z.coerce.number().int().min(256 * 1024).max(20 * 1024 * 1024).optional(),
+  agingBreaks: z.array(z.coerce.number().int().min(1).max(3650)).length(4).optional(),
+  arPriority: z
+    .object({
+      critical: z.coerce.number().int().min(2).max(3650),
+      high: z.coerce.number().int().min(1).max(3650),
+      medium: z.coerce.number().int().min(1).max(3650),
+    })
+    .optional(),
+  apDueSoonDays: z.coerce.number().int().min(1).max(365).optional(),
   exciseEnabled: z.boolean().optional(),
   permissions: z.record(z.string(), z.record(z.string(), z.boolean())).optional(),
   taxonomy: z.record(z.string(), z.unknown()).optional(),
@@ -468,6 +500,8 @@ const COLUMN: Record<string, string> = {
   allowNegativeStock: "allow_negative_stock",
   printPackMax: "print_pack_max",
   attachmentMaxBytes: "attachment_max_bytes",
+  agingBreaks: "aging_breaks",
+  apDueSoonDays: "ap_due_soon_days",
   exciseEnabled: "excise_enabled",
   permissions: "permissions",
   taxonomy: "taxonomy",
@@ -480,6 +514,14 @@ export async function updateSettings(deps: ImsDeps, actor: ImsActor, body: unkno
   const input = parse(SettingsInput, body) as Record<string, unknown>;
   const sets: string[] = [];
   const params: Record<string, unknown> = { tenantId: actor.tenantId, updatedBy: actor.userId };
+  if (input.arPriority !== undefined) {
+    const t = normalizeArPriorityThresholds(input.arPriority as ArPriorityThresholds);
+    sets.push("ar_priority_critical_days = :arPriorityCritical", "ar_priority_high_days = :arPriorityHigh", "ar_priority_medium_days = :arPriorityMedium");
+    params.arPriorityCritical = t.critical;
+    params.arPriorityHigh = t.high;
+    params.arPriorityMedium = t.medium;
+    delete input.arPriority;
+  }
   for (const [key, value] of Object.entries(input)) {
     if (value === undefined || !COLUMN[key]) continue;
     let v: unknown = value;
@@ -488,6 +530,7 @@ export async function updateSettings(deps: ImsDeps, actor: ImsActor, body: unkno
     else if (key === "reminders") v = JSON.stringify(normalizeReminders(value));
     else if (key === "baseCurrency") v = normalizeCurrencyCode(value);
     else if (key === "dunningSequences") v = JSON.stringify(normalizeDunningSequences(value));
+    else if (key === "agingBreaks") v = JSON.stringify(normalizeAgingBreaks(value));
     else if (key === "bomPaperTemplate") v = normalizeBomPaperTemplate(value);
     else if (key === "bomIndustryPack") v = normalizeBomIndustryPack(value);
     else if (key === "bomPaperTone") v = normalizeBomPaperTone(value);

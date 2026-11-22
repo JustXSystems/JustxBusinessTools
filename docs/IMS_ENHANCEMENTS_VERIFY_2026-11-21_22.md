@@ -346,6 +346,10 @@ Spot-check seeded world (full catalog also in `e2e-results/ims/MANUAL_VERIFY.md`
 | **Invoice approval limit** | Documents | Queues large invoices |
 | PO approval limit | Documents | Unchanged PO behaviour |
 | Reminder rules | Reminders | AR “Send reminders” still works |
+| **Reminder day offsets** | Reminders | Editable day deltas; matching uses Settings offsets (migration **061**) |
+| **Aging breaks (4 caps)** | Reminders → Aging & priority | AR/stock charts rename buckets from caps |
+| **AR priority days** | Reminders → Aging & priority | Critical/high/medium thresholds |
+| **AP due soon days** | Reminders → Aging & priority | Payables Due soon window |
 | **Base currency** | Business | Foreign documents lock FX against it |
 | **Dunning letter levels** | Reminders | AR Letter offers each level |
 

@@ -5,7 +5,14 @@ import { Alert, Button, Checkbox, Field, FilterChip, FormGrid, Input, Select, Te
 import type { DunningLevel, DunningTone, ReminderSettings, ReminderTemplate } from "@/lib/ims/api";
 import { DEFAULT_DUNNING_LEVELS, DUNNING_TONE_LABEL } from "@/lib/ims/finance";
 import { addDaysISO, dateLabel, inrExact } from "@/lib/ims/format";
-import { REMINDER_CHANNELS, REMINDER_PLACEHOLDERS, REMINDER_RULES, renderTemplate, unknownPlaceholders } from "@/lib/ims/settings";
+import {
+  DEFAULT_REMINDER_OFFSETS,
+  REMINDER_CHANNELS,
+  REMINDER_PLACEHOLDERS,
+  reminderRulesFromOffsets,
+  renderTemplate,
+  unknownPlaceholders,
+} from "@/lib/ims/settings";
 import { useIms } from "../core";
 import { SectionCard, ToggleRow, type TabProps } from "./parts";
 
@@ -15,7 +22,9 @@ const CHANNEL_LABEL: Record<Channel, string> = { whatsapp: "WhatsApp", sms: "SMS
 export function RemindersTab({ draft, set, errors, readOnly }: TabProps) {
   const { session } = useIms();
   const r = draft.reminders;
-  const update = (patch: Partial<ReminderSettings>) => set("reminders", { ...r, ...patch });
+  const offsets = { ...DEFAULT_REMINDER_OFFSETS, ...(r.offsets ?? {}), due: 0 };
+  const ruleCatalogue = reminderRulesFromOffsets(offsets);
+  const update = (patch: Partial<ReminderSettings>) => set("reminders", { ...r, offsets, ...patch });
   const [active, setActive] = useState(0);
   const index = Math.min(active, r.templates.length - 1);
   const tpl = r.templates[index];
@@ -26,6 +35,13 @@ export function RemindersTab({ draft, set, errors, readOnly }: TabProps) {
     const last = levels[levels.length - 1];
     set("dunningSequences", [...levels, { key: `L${levels.length + 1}`, label: `Level ${levels.length + 1}`, minDaysOverdue: (last?.minDaysOverdue ?? 0) + 15, tone: "final" }]);
   };
+  const agingBreaks = draft.agingBreaks ?? [15, 30, 60, 90];
+  const setBreak = (i: number, raw: string) => {
+    const next = [...agingBreaks];
+    next[i] = Number(raw);
+    set("agingBreaks", next);
+  };
+  const ar = draft.arPriority ?? { critical: 91, high: 61, medium: 31 };
 
   const setTpl = (patch: Partial<ReminderTemplate>) => update({ templates: r.templates.map((t, i) => (i === index ? { ...t, ...patch } : t)) });
   const addTpl = () => {
@@ -61,15 +77,67 @@ export function RemindersTab({ draft, set, errors, readOnly }: TabProps) {
 
   return (
     <fieldset className="ims-set-fieldset" disabled={readOnly}>
+      <SectionCard title="Aging & priority" desc="Day caps used by Receivables, Payables and stock aging charts. Changing breaks renames the five buckets.">
+        <FormGrid>
+          {(["1st", "2nd", "3rd", "4th"] as const).map((label, i) => (
+            <Field key={label} label={`${label} bucket ends (days)`} error={i === 0 ? errors.agingBreaks : undefined}>
+              {({ id, describedBy, invalid }) => (
+                <Input
+                  id={id}
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                  type="number"
+                  min={1}
+                  max={3650}
+                  value={agingBreaks[i] ?? ""}
+                  onChange={(e) => setBreak(i, e.target.value)}
+                />
+              )}
+            </Field>
+          ))}
+          <Field label="AR critical ≥ (days)" error={errors.arPriority} hint="High and medium must be lower">
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="number" min={2} max={3650} value={ar.critical} onChange={(e) => set("arPriority", { ...ar, critical: Number(e.target.value) })} />
+            )}
+          </Field>
+          <Field label="AR high ≥ (days)">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={1} max={3650} value={ar.high} onChange={(e) => set("arPriority", { ...ar, high: Number(e.target.value) })} />}
+          </Field>
+          <Field label="AR medium ≥ (days)">
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="number" min={1} max={3650} value={ar.medium} onChange={(e) => set("arPriority", { ...ar, medium: Number(e.target.value) })} />}
+          </Field>
+          <Field label="AP due soon (days)" error={errors.apDueSoonDays} hint="Bills due within this many days show as Due soon">
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} type="number" min={1} max={365} value={draft.apDueSoonDays ?? 7} onChange={(e) => set("apDueSoonDays", Number(e.target.value))} />
+            )}
+          </Field>
+        </FormGrid>
+      </SectionCard>
+
       <SectionCard title="Collection reminders" desc="Nudge customers about unpaid invoices on a schedule. Receivables uses these rules and templates when sending reminders.">
         <ToggleRow label="Send reminders automatically" desc="When off, reminders are suggested in Receivables and sent by hand." checked={r.autoEnabled} disabled={readOnly} onChange={(v) => update({ autoEnabled: v })} />
         <div className="ims-toggle-row" style={{ alignItems: "flex-start", flexDirection: "column" }}>
           <div className="ims-toggle-row-label">When to remind</div>
-          <div className="ims-chips" style={{ gap: 14 }}>
-            {REMINDER_RULES.map((rule) => (
-              <label key={rule.key} className="ims-row" style={{ gap: 8, fontSize: 13 }}>
+          <div className="ims-chips" style={{ gap: 14, flexDirection: "column", alignItems: "stretch" }}>
+            {ruleCatalogue.map((rule) => (
+              <label key={rule.key} className="ims-row" style={{ gap: 8, fontSize: 13, flexWrap: "wrap" }}>
                 <Checkbox checked={r.rules[rule.key]} disabled={readOnly} onChange={(v) => update({ rules: { ...r.rules, [rule.key]: v } })} aria-label={rule.label} />
-                {rule.label}
+                <span style={{ minWidth: 160 }}>{rule.label}</span>
+                {rule.key === "due" ? (
+                  <span className="ims-faint">day 0</span>
+                ) : (
+                  <Input
+                    size="sm"
+                    type="number"
+                    min={-365}
+                    max={3650}
+                    disabled={readOnly}
+                    value={offsets[rule.key]}
+                    aria-label={`${rule.key} offset days`}
+                    onChange={(e) => update({ offsets: { ...offsets, [rule.key]: Number(e.target.value), due: 0 } })}
+                    style={{ width: 88 }}
+                  />
+                )}
               </label>
             ))}
           </div>

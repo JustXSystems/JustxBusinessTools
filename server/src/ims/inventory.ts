@@ -66,7 +66,7 @@ export type ItemRow = {
 
 export type ImsItem = ReturnType<typeof mapItem>;
 
-export function mapItem(r: ItemRow, today = todayISO()) {
+export function mapItem(r: ItemRow, today = todayISO(), agingBreaks?: ReadonlyArray<number>) {
   const current = round3(money(r.current_stock));
   const min = round3(money(r.min_stock));
   const max = r.max_stock == null ? null : round3(money(r.max_stock));
@@ -103,7 +103,7 @@ export function mapItem(r: ItemRow, today = todayISO()) {
     status,
     stockValue: round2(Math.max(0, current) * purchasePrice),
     idleDays,
-    agingBucket: agingBucket(idleDays),
+    agingBucket: agingBucket(idleDays, agingBreaks),
     movement30d: round3(money(r.moved_30d)),
     lastMovementAt: tsOf(r.last_movement_at),
     createdAt: tsOf(r.created_at),
@@ -117,8 +117,11 @@ const ITEM_SELECT = `SELECT i.*, p.name AS supplier_name,
 
 export async function getItem(deps: ImsDeps, tenantId: number, id: string) {
   const today = todayISO();
-  const r = await one<ItemRow>(deps.db, `${ITEM_SELECT} WHERE i.tenant_id = :tenantId AND i.id = :id LIMIT 1`, { tenantId, id, since30: addDays(today, -29) });
-  return r ? mapItem(r, today) : null;
+  const [r, settings] = await Promise.all([
+    one<ItemRow>(deps.db, `${ITEM_SELECT} WHERE i.tenant_id = :tenantId AND i.id = :id LIMIT 1`, { tenantId, id, since30: addDays(today, -29) }),
+    getSettings(deps, tenantId),
+  ]);
+  return r ? mapItem(r, today, settings.agingBreaks) : null;
 }
 const ItemInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(200),
@@ -495,7 +498,8 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       params.supplierId = supplierId;
     }
     if (req.query.includeInactive !== "1") where.push("i.active = 1");
-    const list = (await rows<ItemRow>(deps.db, `${ITEM_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.name LIMIT 5000`, params)).map((r) => mapItem(r, today));
+    const settings = await getSettings(deps, actor.tenantId);
+    const list = (await rows<ItemRow>(deps.db, `${ITEM_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.name LIMIT 5000`, params)).map((r) => mapItem(r, today, settings.agingBreaks));
     const status = qstr(req.query.status, 20).toUpperCase();
     const filtered = status === "ATTENTION" ? list.filter((i) => i.status === "LOW" || i.status === "OUT_OF_STOCK") : status ? list.filter((i) => i.status === status) : list;
     const facets = await rows<{ category: string | null; brand: string | null; unit: string }>(
@@ -528,12 +532,13 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     const code = qstr(req.query.code, 64);
     if (!code) throw new ImsError(400, "Scan or type a code");
     const today = todayISO();
+    const settings = await getSettings(deps, actor.tenantId);
     const r = await one<ItemRow>(deps.db, `${ITEM_SELECT} WHERE i.tenant_id = :tenantId AND (i.barcode = :code OR i.sku = :code OR i.id = :code) LIMIT 1`, {
       tenantId: actor.tenantId,
       code,
       since30: addDays(today, -29),
     });
-    res.json({ item: r ? mapItem(r, today) : null });
+    res.json({ item: r ? mapItem(r, today, settings.agingBreaks) : null });
   });
 
   router.get("/items/:id", async (req, res) => {
@@ -952,12 +957,13 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
   router.get("/low-stock", async (_req, res) => {
     const actor = actorOf(res);
     const today = todayISO();
+    const settings = await getSettings(deps, actor.tenantId);
     const list = (
       await rows<ItemRow>(deps.db, `${ITEM_SELECT} WHERE i.tenant_id = :tenantId AND i.active = 1 AND i.current_stock <= i.min_stock ORDER BY i.current_stock / NULLIF(i.min_stock, 0)`, {
         tenantId: actor.tenantId,
         since30: addDays(today, -29),
       })
-    ).map((r) => mapItem(r, today));
+    ).map((r) => mapItem(r, today, settings.agingBreaks));
     const groups = new Map<string, { supplierId: string | null; supplierName: string; items: typeof list; value: number }>();
     for (const i of list) {
       const key = i.supplierId ?? "none";
@@ -1188,6 +1194,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       { tenantId: actor.tenantId, restoreReason: RESTORE_REASON },
     );
     const today = todayISO();
+    const settings = await getSettings(deps, actor.tenantId);
     const quarantine = await rows<ItemRow>(deps.db, `${ITEM_SELECT} WHERE i.tenant_id = :tenantId AND i.damaged_stock > 0 ORDER BY i.name`, {
       tenantId: actor.tenantId,
       since30: addDays(today, -29),
@@ -1212,7 +1219,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
        FROM ims_movements WHERE tenant_id = :tenantId AND type IN ('DAMAGE', 'WRITE_OFF') AND movement_date >= :monthStart`,
       { tenantId: actor.tenantId, monthStart },
     );
-    const quarantined = quarantine.map((r) => mapItem(r, today));
+    const quarantined = quarantine.map((r) => mapItem(r, today, settings.agingBreaks));
     res.json({
       returns: list.map(mapReturn),
       damage: damage.map(mapMovement),

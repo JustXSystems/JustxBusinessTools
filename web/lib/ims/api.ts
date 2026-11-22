@@ -99,7 +99,8 @@ export type DateRange = { from: string; to: string };
 
 export type StockStatus = "GOOD" | "LOW" | "OUT_OF_STOCK" | "OVERSTOCK";
 export type MovementType = "OPENING" | "IN" | "OUT" | "DAMAGE" | "ADJUSTMENT" | "RETURN_IN" | "RETURN_OUT" | "WRITE_OFF";
-export type AgingKey = "0-15" | "16-30" | "31-60" | "61-90" | "90+";
+/** Aging bucket key derived from Settings → aging breaks (e.g. `0-15`, `90+`). */
+export type AgingKey = string;
 
 export type Taxonomy = {
   categories: Array<{ name: string; hsn?: string | null; gstRate?: number | null }>;
@@ -115,7 +116,16 @@ export type Taxonomy = {
 
 export type ReminderRuleKey = "3b" | "due" | "7d" | "15d" | "30d" | "60d" | "90d";
 export type ReminderTemplate = { key: string; label: string; channel: "whatsapp" | "sms" | "email"; subject?: string; body: string };
-export type ReminderSettings = { autoEnabled: boolean; rules: Record<ReminderRuleKey, boolean>; channels: Array<"whatsapp" | "sms" | "email">; templates: ReminderTemplate[] };
+export type ReminderSettings = {
+  autoEnabled: boolean;
+  rules: Record<ReminderRuleKey, boolean>;
+  /** Day delta vs due date for each rule (`due` is always 0). */
+  offsets?: Record<ReminderRuleKey, number>;
+  channels: Array<"whatsapp" | "sms" | "email">;
+  templates: ReminderTemplate[];
+};
+
+export type ArPriorityThresholds = { critical: number; high: number; medium: number };
 
 export type BomPaperTemplateId =
   | "proposal"
@@ -219,6 +229,11 @@ export type ImsSettings = {
   printPackMax: number;
   /** Max attachment upload size in bytes. */
   attachmentMaxBytes: number;
+  /** Four ascending day caps for AR/stock aging; fifth bucket is open-ended. */
+  agingBreaks: number[];
+  arPriority: ArPriorityThresholds;
+  /** Payables “due soon” window (days). */
+  apDueSoonDays: number;
   exciseEnabled: boolean;
   /** Excise applies (enabled, or a liquor / bar business type). */
   exciseActive: boolean;

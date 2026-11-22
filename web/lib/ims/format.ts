@@ -122,13 +122,25 @@ export function signedQty(delta: number): string {
   return `${delta > 0 ? "+" : "−"}${Math.abs(delta).toLocaleString("en-IN", { maximumFractionDigits: 3 })}`;
 }
 
-export const AGING_BUCKETS: ReadonlyArray<{ key: AgingKey; label: string; color: string }> = [
-  { key: "0-15", label: "0–15 days", color: "#1FA679" },
-  { key: "16-30", label: "16–30 days", color: "#3A80EE" },
-  { key: "31-60", label: "31–60 days", color: "#D98A1F" },
-  { key: "61-90", label: "61–90 days", color: "#F2711C" },
-  { key: "90+", label: "90+ days", color: "#E1483F" },
-];
+export const DEFAULT_AGING_BREAKS = [15, 30, 60, 90] as const;
+export const AGING_BUCKET_COLORS = ["#1FA679", "#3A80EE", "#D98A1F", "#F2711C", "#E1483F"] as const;
+
+export function buildAgingBuckets(breaks: ReadonlyArray<number> = DEFAULT_AGING_BREAKS): ReadonlyArray<{ key: AgingKey; label: string; color: string; min: number; max: number }> {
+  const caps = breaks.length === 4 ? breaks.map((n) => Math.floor(Number(n))) : [...DEFAULT_AGING_BREAKS];
+  const out: Array<{ key: AgingKey; label: string; color: string; min: number; max: number }> = [];
+  let prev = -1;
+  for (let i = 0; i < caps.length; i++) {
+    const max = caps[i]!;
+    const min = prev + 1;
+    out.push({ key: `${min}-${max}`, label: `${min}–${max} days`, color: AGING_BUCKET_COLORS[i]!, min, max });
+    prev = max;
+  }
+  out.push({ key: `${prev}+`, label: `${prev}+ days`, color: AGING_BUCKET_COLORS[4], min: prev + 1, max: Number.POSITIVE_INFINITY });
+  return out;
+}
+
+/** Default buckets — prefer `buildAgingBuckets(session.settings.agingBreaks)`. */
+export const AGING_BUCKETS = buildAgingBuckets();
 
 /* ---------- Roles ---------- */
 

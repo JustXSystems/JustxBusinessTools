@@ -5,7 +5,7 @@ import "./inventory-a.css";
 import { useMemo, useState } from "react";
 import { Badge, Button, Card, DataTable, EmptyState, FilterChip, Grid, KpiCard, Pagination, SearchInput, Select, Switch, WidgetCard, type BosBadgeTone, type BosColumn } from "@/components/bos";
 import { ims, type AgingKey, type ImsItem, type StockStatus } from "@/lib/ims/api";
-import { AGING_BUCKETS, STOCK_STATUS_LABEL, downloadCsv, downloadXlsx, inr, inrCompact, inrExact, pct, qtyText, stockBadge, timeAgo, todayLocal, type ExportColumn } from "@/lib/ims/format";
+import { AGING_BUCKETS, buildAgingBuckets, STOCK_STATUS_LABEL, downloadCsv, downloadXlsx, inr, inrCompact, inrExact, pct, qtyText, stockBadge, timeAgo, todayLocal, type ExportColumn } from "@/lib/ims/format";
 import { VELOCITY_LABEL, velocityTiers, type Velocity } from "@/lib/ims/inventory-a";
 import { Loaded, PageHeader, Stack, StatusBadge, useIms, useImsData } from "../core";
 import { ItemDialog, type ItemEditorState } from "./ItemDialog";
@@ -28,13 +28,14 @@ const PAGE_SIZE = 50;
 const retailOf = (i: ImsItem) => Math.max(0, i.currentStock) * i.sellingPrice;
 
 type Intent = { open?: string; aging?: AgingKey; status?: StockStatus; category?: string; velocity?: Velocity };
+type AgingBucketList = ReturnType<typeof buildAgingBuckets>;
 
-function parseIntent(raw: string | null): Intent {
+function parseIntent(raw: string | null, buckets: AgingBucketList = AGING_BUCKETS): Intent {
   if (!raw) return {};
   const [kind, ...rest] = raw.split(":");
   const value = rest.join(":");
   if (kind === "open") return { open: value };
-  if (kind === "aging" && AGING_BUCKETS.some((b) => b.key === value)) return { aging: value as AgingKey };
+  if (kind === "aging" && buckets.some((b) => b.key === value)) return { aging: value as AgingKey };
   if (kind === "status" && (STATUSES as readonly string[]).includes(value)) return { status: value as StockStatus };
   if (kind === "category") return { category: value };
   if (kind === "velocity" && value in VELOCITY_LABEL) return { velocity: value as Velocity };
@@ -42,8 +43,9 @@ function parseIntent(raw: string | null): Intent {
 }
 
 export function FullStockModule() {
-  const { can, navigate, takeIntent } = useIms();
-  const [intent] = useState(() => parseIntent(takeIntent("stock")));
+  const { can, navigate, takeIntent, session } = useIms();
+  const agingBuckets = useMemo(() => buildAgingBuckets(session.settings.agingBreaks) ?? AGING_BUCKETS, [session.settings.agingBreaks]);
+  const [intent] = useState(() => parseIntent(takeIntent("stock"), agingBuckets));
   const list = useImsData(() => ims.items(), []);
   const meta = useInventoryMeta();
   const canSeeCost = meta.data?.canSeeCost ?? true;
@@ -135,7 +137,7 @@ export function FullStockModule() {
     { header: "Selling price", value: (i) => i.sellingPrice },
     { header: "Retail value", value: (i) => retailOf(i) },
     { header: "Idle days", value: (i) => i.idleDays },
-    { header: "Aging", value: (i) => agingOf(i.agingBucket).label },
+    { header: "Aging", value: (i) => agingOf(i.agingBucket, agingBuckets).label },
     { header: "Out (30 days)", value: (i) => i.movement30d },
     { header: "Velocity", value: (i) => (tiers.get(i.id) ? VELOCITY_LABEL[tiers.get(i.id) as Velocity] : "—") },
     { header: "Location", value: (i) => i.location },
@@ -317,7 +319,7 @@ export function FullStockModule() {
                 <FilterChip active={aging === "ALL"} onClick={() => reset(setAging)("ALL")}>
                   Any
                 </FilterChip>
-                {AGING_BUCKETS.map((b) => (
+                {agingBuckets.map((b) => (
                   <FilterChip key={b.key} active={aging === b.key} onClick={() => reset(setAging)(aging === b.key ? "ALL" : b.key)}>
                     <span className="ims-inv-dot" style={{ background: b.color }} />
                     {b.label} <span className="ims-faint">{stocked.filter((i) => i.agingBucket === b.key).length}</span>

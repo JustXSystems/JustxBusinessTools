@@ -2,7 +2,7 @@ import type { Router } from "express";
 import { moduleAllowed } from "../lib/ims-profile-modules.js";
 import { accessOf, actorOf, enabledModulesOf, qint, qstr, type ImsDeps } from "./context.js";
 import { isoOf, likeOf, money, rows, tsOf } from "./db.js";
-import { AGING_BUCKETS, IMS_ROLE_LABELS, addDaysISO, agingBucket, daysBetween, monthStartISO, periodRange, round2, round3, stockStatus, todayISO, type AgingKey } from "./logic.js";
+import { IMS_ROLE_LABELS, addDaysISO, agingBucket, buildAgingBuckets, daysBetween, monthStartISO, periodRange, round2, round3, stockStatus, todayISO, type AgingKey } from "./logic.js";
 import { getSettings } from "./settings.js";
 
 /** Web module keys — deep links are `?m=<module>&open=<id>`. Mirrors web/components/ims/modules.ts. */
@@ -246,8 +246,10 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
     let missingHsn = 0;
     let missingPrice = 0;
     const statusCount = { GOOD: 0, LOW: 0, OUT_OF_STOCK: 0, OVERSTOCK: 0 };
-    const aging: Record<AgingKey, { items: number; value: number }> = Object.fromEntries(AGING_BUCKETS.map((b) => [b.key, { items: 0, value: 0 }])) as Record<AgingKey, { items: number; value: number }>;
+    const agingBuckets = buildAgingBuckets(settings.agingBreaks);
+    const aging: Record<AgingKey, { items: number; value: number }> = Object.fromEntries(agingBuckets.map((b) => [b.key, { items: 0, value: 0 }])) as Record<AgingKey, { items: number; value: number }>;
     const byCategory = new Map<string, { category: string; items: number; units: number; value: number }>();
+    const deadIdleDays = settings.agingBreaks[settings.agingBreaks.length - 1] ?? 90;
     for (const i of items) {
       const cur = money(i.current_stock);
       const value = Math.max(0, cur) * money(i.purchase_price);
@@ -260,10 +262,10 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       if (cur > 0) {
         totalUnits += cur;
         const idle = daysBetween(isoOf(i.last_movement_at ?? i.created_at), today);
-        const bucket = agingBucket(idle);
+        const bucket = agingBucket(idle, settings.agingBreaks);
         aging[bucket].items += 1;
         aging[bucket].value += value;
-        if (idle > 90) {
+        if (idle > deadIdleDays) {
           dead.items += 1;
           dead.value += value;
         } else if (!moved30.get(i.id)) {
@@ -393,7 +395,7 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
         checks: Number(pending[0]?.checks ?? 0),
         dcs: Number(pending[0]?.dcs ?? 0),
       },
-      aging: AGING_BUCKETS.map((b) => ({ key: b.key, label: b.label, color: b.color, items: aging[b.key].items, value: round2(aging[b.key].value) })),
+      aging: agingBuckets.map((b) => ({ key: b.key, label: b.label, color: b.color, items: aging[b.key].items, value: round2(aging[b.key].value) })),
       categories: [...byCategory.values()].map((c) => ({ ...c, units: round3(c.units), value: round2(c.value) })).sort((a, b) => b.value - a.value),
       series: fullSeries,
       topMovers: topMovers.map((m) => ({ itemId: m.item_id, name: m.item_name, qty: round3(money(m.qty)), value: round2(money(m.value)) })),

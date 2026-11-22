@@ -9,6 +9,9 @@ describe("withOpsSettingsDefaults", () => {
     expect(filled.bomDcReturnPrefix).toBe("RTN");
     expect(filled.printPackMax).toBe(25);
     expect(filled.attachmentMaxBytes).toBe(2 * 1024 * 1024);
+    expect(filled.agingBreaks).toEqual([15, 30, 60, 90]);
+    expect(filled.arPriority).toEqual({ critical: 91, high: 61, medium: 31 });
+    expect(filled.apDueSoonDays).toBe(7);
   });
 
   it("clamps print pack and attachment size", () => {

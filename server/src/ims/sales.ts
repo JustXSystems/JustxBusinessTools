@@ -6,14 +6,13 @@ import { actorName, actorOf, can, isoDate, optText, parse, qint, qstr, recordEve
 import { exec, isoOf, json, likeOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js";
 import { ImsError, badRequest, conflict, notFound, type ImsActor } from "./host.js";
 import {
-  AGING_BUCKETS,
   PAY_METHODS,
-  REMINDER_RULES,
   addDaysISO,
   agingBucket,
   allocateFifo,
   arPriority,
   arStatus,
+  buildAgingBuckets,
   computeTotals,
   daysBetween,
   dsoDays,
@@ -32,6 +31,7 @@ import {
   posChange,
   reminderLink,
   reminderRuleFor,
+  reminderRulesFromOffsets,
   renderTemplate,
   round2,
   todayISO,
@@ -282,7 +282,19 @@ function invoiceSourceLabel(r: Pick<InvoiceRow, "source_tool" | "source_ref" | "
   return ref;
 }
 
-export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
+export type InvoiceMapOpts = {
+  withLines?: boolean;
+  agingBreaks?: ReadonlyArray<number>;
+  arPriority?: import("./logic.js").ArPriorityThresholds;
+};
+
+export function invoiceMapOptsFromSettings(settings: ImsSettings, withLines = false): InvoiceMapOpts {
+  return { withLines, agingBreaks: settings.agingBreaks, arPriority: settings.arPriority };
+}
+
+export function mapInvoice(r: InvoiceRow, today: string, opts: boolean | InvoiceMapOpts = false) {
+  const o: InvoiceMapOpts = typeof opts === "boolean" ? { withLines: opts } : opts;
+  const withLines = Boolean(o.withLines);
   const grandTotal = round2(money(r.grand_total));
   const amountPaid = round2(money(r.amount_paid));
   const creditApplied = round2(money(r.credit_applied ?? 0));
@@ -391,8 +403,8 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     ewayValidUpto: tsOf(r.eway_valid_upto),
     daysOverdue,
     ageDays: Math.max(0, daysBetween(invoiceDate, today)),
-    agingBucket: agingBucket(daysOverdue),
-    priority: arPriority(daysOverdue) as ArPriority,
+    agingBucket: agingBucket(daysOverdue, o.agingBreaks),
+    priority: arPriority(daysOverdue, o.arPriority) as ArPriority,
     arStatus: arStatus({ disputed: Boolean(r.disputed), promiseDate, dueDate, amountPaid: amountPaid + creditApplied + advanceApplied }, today),
     lineCount: lines.length,
     ...(withLines ? { lines } : {}),
@@ -481,8 +493,8 @@ export async function addActivity(
 
 export async function invoiceDetail(deps: ImsDeps, tenantId: number, id: string) {
   const today = todayISO();
-  const r = await loadInvoiceRow(deps.db, tenantId, id);
-  const invoice = mapInvoice(r, today, true);
+  const [r, settings] = await Promise.all([loadInvoiceRow(deps.db, tenantId, id), getSettings(deps, tenantId)]);
+  const invoice = mapInvoice(r, today, invoiceMapOptsFromSettings(settings, true));
   const [payments, activity, dcLinkRows] = await Promise.all([
     rows<PaymentRow>(deps.db, `SELECT * FROM ims_payments WHERE tenant_id = :tenantId AND doc_type = 'invoice' AND doc_id = :id ORDER BY paid_on DESC, created_at DESC`, { tenantId, id }),
     rows<ActivityRow>(deps.db, `SELECT * FROM ims_ar_activity WHERE tenant_id = :tenantId AND invoice_id = :id ORDER BY created_at DESC LIMIT 200`, { tenantId, id }),
@@ -1270,7 +1282,9 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       );
       params.q = likeOf(q);
     }
-    const list = (await rows<InvoiceRow>(deps.db, `${INVOICE_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.invoice_date DESC, i.created_at DESC LIMIT :limit`, params)).map((r) => mapInvoice(r, today));
+    const list = (await rows<InvoiceRow>(deps.db, `${INVOICE_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.invoice_date DESC, i.created_at DESC LIMIT :limit`, params)).map((r) =>
+      mapInvoice(r, today, invoiceMapOptsFromSettings(settings)),
+    );
     const counts: Record<string, number> = { all: list.length, draft: 0, pending_approval: 0, unpaid: 0, partial: 0, paid: 0, overdue: 0, cancelled: 0 };
     for (const inv of list) counts[inv.displayStatus] = (counts[inv.displayStatus] ?? 0) + 1;
     const status = qstr(req.query.status, 24);
@@ -2250,7 +2264,8 @@ export function registerSales(router: Router, deps: ImsDeps): void {
       }),
       listMembers(deps, actor).catch(() => []),
     ]);
-    const invoices = openRows.map((r) => mapInvoice(r, today));
+    const mapOpts = invoiceMapOptsFromSettings(settings);
+    const invoices = openRows.map((r) => mapInvoice(r, today, mapOpts));
     const sum = (list: ImsInvoice[], pick: (i: ImsInvoice) => number = (i) => i.balance) => round2(list.reduce((s, i) => s + pick(i), 0));
     const overdue = invoices.filter((i) => i.dueDate && i.dueDate < today);
     const weekEnd = addDaysISO(today, 7);
@@ -2258,7 +2273,8 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     const promises = invoices.filter((i) => i.promiseDate && i.promiseDate <= today);
     const missed = invoices.filter((i) => i.promiseDate && i.promiseDate < today);
     const totalOutstanding = sum(invoices);
-    const aging = AGING_BUCKETS.map((b) => {
+    const agingBuckets = buildAgingBuckets(settings.agingBreaks);
+    const aging = agingBuckets.map((b) => {
       const inBucket = overdue.filter((i) => i.agingBucket === b.key);
       return { key: b.key, label: b.label, color: b.color, amount: sum(inBucket), count: inBucket.length, customers: new Set(inBucket.map((i) => i.customerId ?? i.customerName)).size };
     });
@@ -2317,14 +2333,15 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     }
 
     const ruleOn = settings.reminders.rules;
+    const ruleCatalogue = reminderRulesFromOffsets(settings.reminders.offsets);
     const ruleMatches = invoices
       .filter((i) => i.autoReminder && !i.disputed && i.dueDate && !(i.lastReminderAt && i.lastReminderAt.slice(0, 10) === today))
-      .map((i) => ({ invoice: i, rule: reminderRuleFor(i.dueDate as string, today) }))
+      .map((i) => ({ invoice: i, rule: reminderRuleFor(i.dueDate as string, today, settings.reminders.offsets) }))
       .filter((m): m is { invoice: ImsInvoice; rule: ReminderRuleKey } => m.rule !== null && ruleOn[m.rule])
       .map((m) => ({
         invoiceId: m.invoice.id,
         rule: m.rule,
-        ruleLabel: REMINDER_RULES.find((r) => r.key === m.rule)?.label ?? m.rule,
+        ruleLabel: ruleCatalogue.find((r) => r.key === m.rule)?.label ?? m.rule,
         templateKey: templateForRule(m.rule, settings.reminders.templates),
       }));
 
@@ -2338,7 +2355,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
         customerCount: byCustomer.size,
         overdue: sum(overdue),
         overdueCount: overdue.length,
-        overdue90: sum(overdue.filter((i) => i.daysOverdue >= 91)),
+        overdue90: sum(overdue.filter((i) => i.daysOverdue >= settings.arPriority.critical)),
         dueThisWeek: sum(dueWeek),
         dueThisWeekCount: dueWeek.length,
         collectedThisMonth: round2(money(collected?.total)),
@@ -2381,7 +2398,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
     const template = settings.reminders.templates.find((t) => t.key === input.templateKey) ?? settings.reminders.templates.find((t) => t.channel === input.channel) ?? settings.reminders.templates[0];
     const list = (
       await rows<InvoiceRow>(deps.db, `${INVOICE_SELECT} WHERE i.tenant_id = :tenantId AND i.id IN (:ids) AND i.status = 'issued'`, { tenantId: actor.tenantId, ids: input.invoiceIds })
-    ).map((r) => mapInvoice(r, today));
+    ).map((r) => mapInvoice(r, today, invoiceMapOptsFromSettings(settings)));
     if (!list.length) throw notFound("Open invoice");
     const sent: Array<{ invoiceId: string; invoiceNo: string; customerName: string; channel: ReminderChannel; to: string | null; message: string; subject: string | null; link: string }> = [];
     await tx(deps.db, async (conn) => {

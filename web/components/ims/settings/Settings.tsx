@@ -78,6 +78,9 @@ const SAVE_KEYS: ReadonlyArray<keyof SettingsPatch> = [
   "allowNegativeStock",
   "printPackMax",
   "attachmentMaxBytes",
+  "agingBreaks",
+  "arPriority",
+  "apDueSoonDays",
   "exciseEnabled",
   "permissions",
   "taxonomy",
@@ -99,6 +102,9 @@ const ERROR_TAB: Record<string, Tab> = {
   paymentTermsDays: "documents",
   printPackMax: "documents",
   attachmentMaxBytes: "documents",
+  agingBreaks: "reminders",
+  arPriority: "reminders",
+  apDueSoonDays: "reminders",
   categories: "catalog",
   reminders: "reminders",
   ...Object.fromEntries(PREFIX_FIELDS.map((f) => [f.key, "documents"])),
@@ -122,6 +128,21 @@ function validate(d: ImsSettings): SettingsErrors {
   if (!intIn(d.printPackMax ?? 25, 1, 200)) e.printPackMax = "Whole number, 1–200";
   if (!Number.isFinite(d.attachmentMaxBytes) || d.attachmentMaxBytes < 256 * 1024 || d.attachmentMaxBytes > 20 * 1024 * 1024) {
     e.attachmentMaxBytes = "Between 0.25 MB and 20 MB";
+  }
+  const breaks = d.agingBreaks ?? [];
+  if (breaks.length !== 4 || breaks.some((n, i) => !Number.isInteger(n) || n < 1 || n > 3650 || (i > 0 && n <= breaks[i - 1]!))) {
+    e.agingBreaks = "Enter four ascending day caps (1–3650)";
+  }
+  const ap = d.arPriority;
+  if (!ap || !Number.isInteger(ap.critical) || !Number.isInteger(ap.high) || !Number.isInteger(ap.medium) || !(ap.critical > ap.high && ap.high > ap.medium && ap.medium >= 1)) {
+    e.arPriority = "Critical > high > medium (whole days)";
+  }
+  if (!intIn(d.apDueSoonDays ?? 7, 1, 365)) e.apDueSoonDays = "Whole days, 1–365";
+  const offsets = d.reminders?.offsets;
+  if (offsets) {
+    const vals = Object.entries(offsets).filter(([k]) => k !== "due").map(([, v]) => v);
+    if (vals.some((v) => !Number.isInteger(v) || v < -365 || v > 3650)) e.reminders = "Reminder offsets must be whole days (−365…3650)";
+    else if (new Set(vals).size !== vals.length) e.reminders = "Reminder day offsets must be unique";
   }
   const names = d.taxonomy.categories.map((c) => c.name.trim().toLowerCase());
   if (names.some((n) => !n)) e.categories = "Every category needs a name";

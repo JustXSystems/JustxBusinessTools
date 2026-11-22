@@ -5,7 +5,6 @@ import { actorName, actorOf, can, isoDate, parse, parsePatch, qstr, recordEvent,
 import { exec, isoOf, json, likeOf, money, one, rows } from "./db.js";
 import { ImsError, conflict, forbidden, notFound, type ImsActor } from "./host.js";
 import {
-  AGING_BUCKETS,
   PERIODS,
   REPORT_SCHEDULES,
   REPORT_TYPES,
@@ -13,6 +12,7 @@ import {
   average,
   billBalance,
   billDisplayStatus,
+  buildAgingBuckets,
   daysBetween,
   daysOverdue,
   durationLabel,
@@ -396,11 +396,13 @@ async function deadStock(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportResult,
   const byCat = new Map<string, number>();
   let units = 0;
   let value = 0;
+  const breaks = ctx.settings.agingBreaks;
+  const agingBuckets = buildAgingBuckets(breaks);
   const out = dead.map(({ r, f }) => {
     units += f.current;
     value += f.value;
     bump(byCat, r.category || "Uncategorised", f.value);
-    const bucket = AGING_BUCKETS.find((b) => b.key === agingBucket(f.idleDays));
+    const bucket = agingBuckets.find((b) => b.key === agingBucket(f.idleDays, breaks));
     return { item: r.name, sku: r.sku, category: r.category, stock: f.current, unit: r.unit, value: f.value, lastMove: f.lastMove, idle: f.idleDays, bucket: bucket?.label ?? "" };
   });
   return {
@@ -700,8 +702,8 @@ async function salesRegister(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportRes
   };
 }
 
-function agingStack(map: Map<string, number>): NonNullable<ReportChart>["data"] {
-  return AGING_BUCKETS.map((b) => ({ label: b.label, value: round2(map.get(b.key) ?? 0), color: b.color }));
+function agingStack(map: Map<string, number>, breaks?: ReadonlyArray<number>): NonNullable<ReportChart>["data"] {
+  return buildAgingBuckets(breaks).map((b) => ({ label: b.label, value: round2(map.get(b.key) ?? 0), color: b.color }));
 }
 
 async function receivablesAging(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportResult, "type" | "title" | "asOf" | "generatedAt">> {
@@ -712,6 +714,8 @@ async function receivablesAging(deps: ImsDeps, ctx: RunCtx): Promise<Omit<Report
     params.partyId = ctx.filters.partyId;
   }
   const list = await invoiceRows(deps, ctx.tenantId, where, params);
+  const breaks = ctx.settings.agingBreaks;
+  const agingBuckets = buildAgingBuckets(breaks);
   const buckets = new Map<string, number>();
   const customers = new Set<string>();
   let total = 0;
@@ -723,7 +727,7 @@ async function receivablesAging(deps: ImsDeps, ctx: RunCtx): Promise<Omit<Report
       const days = daysOverdue(due, isoOf(r.invoice_date), ctx.today);
       const balance = round2(money(r.grand_total) - money(r.amount_paid));
       const isOver = due ? due < ctx.today : false;
-      const key = agingBucket(days);
+      const key = agingBucket(days, breaks);
       total += balance;
       if (isOver) overdue += balance;
       if (days > 90) critical += balance;
@@ -735,7 +739,7 @@ async function receivablesAging(deps: ImsDeps, ctx: RunCtx): Promise<Omit<Report
         date: isoOf(r.invoice_date),
         due,
         days: isOver || !due ? days : 0,
-        bucket: AGING_BUCKETS.find((b) => b.key === key)?.label ?? key,
+        bucket: agingBuckets.find((b) => b.key === key)?.label ?? key,
         total: round2(money(r.grand_total)),
         paid: round2(money(r.amount_paid)),
         balance,
@@ -764,7 +768,7 @@ async function receivablesAging(deps: ImsDeps, ctx: RunCtx): Promise<Omit<Report
       { label: "Over 90 days", value: round2(critical), kind: "money", tone: critical ? "coral" : undefined },
       { label: "Open invoices", value: out.length, kind: "number", hint: `${customers.size} customers` },
     ],
-    chart: { kind: "stack", title: "Outstanding by age", valueKind: "money", data: agingStack(buckets) },
+    chart: { kind: "stack", title: "Outstanding by age", valueKind: "money", data: agingStack(buckets, breaks) },
     notes: [`As of ${ctx.today}. Age counts from the due date (or invoice date when no due date is set).`],
   };
 }
@@ -801,6 +805,8 @@ async function payablesAging(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportRes
      FROM ims_bills WHERE ${where.join(" AND ")} ORDER BY due_date IS NULL, due_date LIMIT 10000`,
     params,
   );
+  const breaks = ctx.settings.agingBreaks;
+  const agingBuckets = buildAgingBuckets(breaks);
   const buckets = new Map<string, number>();
   let total = 0;
   let overdue = 0;
@@ -814,7 +820,7 @@ async function payablesAging(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportRes
     total += balance;
     if (isOver) overdue += balance;
     else if (due && daysBetween(ctx.today, due) <= 7) dueSoon += balance;
-    const key = agingBucket(isOver ? days : 0);
+    const key = agingBucket(isOver ? days : 0, breaks);
     bump(buckets, key, balance);
     return {
       supplier: r.supplier_name,
@@ -823,7 +829,7 @@ async function payablesAging(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportRes
       date: isoOf(r.bill_date),
       due,
       days: isOver ? days : 0,
-      bucket: AGING_BUCKETS.find((b) => b.key === key)?.label ?? key,
+      bucket: agingBuckets.find((b) => b.key === key)?.label ?? key,
       total: round2(bill.grandTotal),
       paid: round2(bill.amountPaid),
       balance,
@@ -852,7 +858,7 @@ async function payablesAging(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportRes
       { label: "Due in 7 days", value: round2(dueSoon), kind: "money", tone: dueSoon ? "amber" : undefined },
       { label: "Open bills", value: out.length, kind: "number" },
     ],
-    chart: { kind: "stack", title: "Payable by age past due", valueKind: "money", data: agingStack(buckets) },
+    chart: { kind: "stack", title: "Payable by age past due", valueKind: "money", data: agingStack(buckets, breaks) },
     notes: [`As of ${ctx.today}. Bills not yet due sit in the first bucket.`],
   };
 }

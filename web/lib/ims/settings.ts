@@ -175,15 +175,34 @@ export const TAXONOMY_LISTS: ReadonlyArray<{ key: StringListKey; label: string; 
 
 /* ---------- Reminders ---------- */
 
-export const REMINDER_RULES: ReadonlyArray<{ key: ReminderRuleKey; label: string; offset: number }> = [
-  { key: "3b", label: "3 days before due date", offset: -3 },
-  { key: "due", label: "On due date", offset: 0 },
-  { key: "7d", label: "7 days overdue", offset: 7 },
-  { key: "15d", label: "15 days overdue", offset: 15 },
-  { key: "30d", label: "30 days overdue", offset: 30 },
-  { key: "60d", label: "60 days overdue", offset: 60 },
-  { key: "90d", label: "90 days overdue", offset: 90 },
-];
+export const DEFAULT_REMINDER_OFFSETS: Record<ReminderRuleKey, number> = {
+  "3b": -3,
+  due: 0,
+  "7d": 7,
+  "15d": 15,
+  "30d": 30,
+  "60d": 60,
+  "90d": 90,
+};
+
+export function reminderRuleLabel(key: ReminderRuleKey, offset: number): string {
+  if (key === "due" || offset === 0) return "On due date";
+  if (offset < 0) return `${Math.abs(offset)} day${Math.abs(offset) === 1 ? "" : "s"} before due date`;
+  return `${offset} day${offset === 1 ? "" : "s"} overdue`;
+}
+
+export function reminderRulesFromOffsets(offsets: Partial<Record<ReminderRuleKey, number>> | null | undefined = DEFAULT_REMINDER_OFFSETS): ReadonlyArray<{ key: ReminderRuleKey; label: string; offset: number }> {
+  const merged = { ...DEFAULT_REMINDER_OFFSETS, ...(offsets ?? {}) };
+  merged.due = 0;
+  return (Object.keys(DEFAULT_REMINDER_OFFSETS) as ReminderRuleKey[]).map((key) => ({
+    key,
+    offset: merged[key],
+    label: reminderRuleLabel(key, merged[key]),
+  }));
+}
+
+/** Default catalogue — prefer `reminderRulesFromOffsets(settings.reminders.offsets)`. */
+export const REMINDER_RULES = reminderRulesFromOffsets();
 
 export const REMINDER_CHANNELS = [
   { value: "whatsapp", label: "WhatsApp" },
@@ -214,14 +233,34 @@ export const unknownPlaceholders = (body: string): string[] => {
 export type SettingsPatch = Partial<Omit<ImsSettings, "exciseActive">>;
 
 /** Fill Wave-1+ ops fields when an older API payload omits them. */
-export function withOpsSettingsDefaults<T extends Partial<ImsSettings>>(settings: T): T & Pick<ImsSettings, "bomPrefix" | "bomDcPrefix" | "bomDcReturnPrefix" | "printPackMax" | "attachmentMaxBytes"> {
+export function withOpsSettingsDefaults<T extends Partial<ImsSettings>>(
+  settings: T,
+): T &
+  Pick<ImsSettings, "bomPrefix" | "bomDcPrefix" | "bomDcReturnPrefix" | "printPackMax" | "attachmentMaxBytes" | "agingBreaks" | "arPriority" | "apDueSoonDays"> {
+  const reminders = settings.reminders
+    ? {
+        ...settings.reminders,
+        offsets: { ...DEFAULT_REMINDER_OFFSETS, ...(settings.reminders.offsets ?? {}), due: 0 as const },
+      }
+    : settings.reminders;
   return {
     ...settings,
+    ...(reminders ? { reminders } : {}),
     bomPrefix: settings.bomPrefix || "BOM",
     bomDcPrefix: settings.bomDcPrefix || "DC",
     bomDcReturnPrefix: settings.bomDcReturnPrefix || "RTN",
     printPackMax: Math.max(1, Math.min(200, Number(settings.printPackMax) || 25)),
     attachmentMaxBytes: Math.max(256 * 1024, Math.min(20 * 1024 * 1024, Number(settings.attachmentMaxBytes) || 2 * 1024 * 1024)),
+    agingBreaks:
+      Array.isArray(settings.agingBreaks) && settings.agingBreaks.length === 4
+        ? settings.agingBreaks.map((n) => Math.floor(Number(n)))
+        : [15, 30, 60, 90],
+    arPriority: {
+      critical: Math.max(2, Math.floor(Number(settings.arPriority?.critical) || 91)),
+      high: Math.max(1, Math.floor(Number(settings.arPriority?.high) || 61)),
+      medium: Math.max(1, Math.floor(Number(settings.arPriority?.medium) || 31)),
+    },
+    apDueSoonDays: Math.max(1, Math.min(365, Math.floor(Number(settings.apDueSoonDays) || 7))),
   };
 }
 

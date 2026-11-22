@@ -156,10 +156,12 @@ describe("receivables & payables", () => {
     expect(agingBucket(16)).toBe("16-30");
     expect(agingBucket(61)).toBe("61-90");
     expect(agingBucket(400)).toBe("90+");
+    expect(agingBucket(20, [10, 20, 40, 80])).toBe("11-20");
     expect(arPriority(95)).toBe("CRITICAL");
     expect(arPriority(61)).toBe("HIGH");
     expect(arPriority(31)).toBe("MEDIUM");
     expect(arPriority(3)).toBe("LOW");
+    expect(arPriority(45, { critical: 60, high: 40, medium: 20 })).toBe("HIGH");
   });
 
   it("derives invoice display status", () => {
@@ -231,6 +233,17 @@ describe("receivables & payables", () => {
     expect(reminderRuleFor("2026-10-12", "2026-10-12")).toBe("due");
     expect(reminderRuleFor("2026-09-12", "2026-10-12")).toBe("30d");
     expect(reminderRuleFor("2026-10-01", "2026-10-12")).toBeNull();
+    expect(
+      reminderRuleFor("2026-10-17", "2026-10-12", {
+        "3b": -5,
+        due: 0,
+        "7d": 7,
+        "15d": 15,
+        "30d": 30,
+        "60d": 60,
+        "90d": 90,
+      }),
+    ).toBe("3b");
     expect(renderTemplate("Hi {customer}, {invoice} {unknown}", { customer: "Asha", invoice: "INV/1" })).toBe("Hi Asha, INV/1 {unknown}");
   });
 

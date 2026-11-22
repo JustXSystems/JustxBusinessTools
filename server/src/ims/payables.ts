@@ -66,7 +66,9 @@ export type BillRow = {
   supplier_gstin?: string | null;
 };
 
-export function mapBill(r: BillRow, today: string, withLines = false) {
+export function mapBill(r: BillRow, today: string, opts: boolean | { withLines?: boolean; apDueSoonDays?: number } = false) {
+  const o = typeof opts === "boolean" ? { withLines: opts } : opts;
+  const withLines = Boolean(o.withLines);
   const grandTotal = round2(money(r.grand_total));
   const amountPaid = round2(money(r.amount_paid));
   const dueDate = r.due_date ? isoOf(r.due_date) : null;
@@ -97,7 +99,7 @@ export function mapBill(r: BillRow, today: string, withLines = false) {
     balance,
     status: r.status as (typeof BILL_STATUSES)[number],
     displayStatus: billDisplayStatus(base, today),
-    priority: apPriority(dueDate, today),
+    priority: apPriority(dueDate, today, o.apDueSoonDays),
     holdReason: r.hold_reason,
     scheduledOn: r.scheduled_on ? isoOf(r.scheduled_on) : null,
     payMethod: r.pay_method,
@@ -291,7 +293,10 @@ export function registerPayables(router: Router, deps: ImsDeps): void {
       where.push("(b.bill_no LIKE :q OR b.supplier_bill_no LIKE :q OR b.supplier_name LIKE :q OR b.po_no LIKE :q OR b.category LIKE :q)");
       params.q = likeOf(q);
     }
-    const all = (await rows<BillRow>(deps.db, `${BILL_SELECT} WHERE ${where.join(" AND ")} ORDER BY (b.due_date IS NULL), b.due_date ASC, b.bill_date DESC LIMIT :limit`, params)).map((r) => mapBill(r, today));
+    const settings = await getSettings(deps, actor.tenantId);
+    const all = (await rows<BillRow>(deps.db, `${BILL_SELECT} WHERE ${where.join(" AND ")} ORDER BY (b.due_date IS NULL), b.due_date ASC, b.bill_date DESC LIMIT :limit`, params)).map((r) =>
+      mapBill(r, today, { apDueSoonDays: settings.apDueSoonDays }),
+    );
     let bills = all;
     if (status && !(BILL_STATUSES as readonly string[]).includes(status)) {
       bills = status === "open" ? all.filter((b) => b.balance > 0.005) : all.filter((b) => b.displayStatus === status);
