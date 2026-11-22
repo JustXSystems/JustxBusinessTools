@@ -33,6 +33,7 @@ import {
   renderTemplate,
   round2,
   todayISO,
+  withShippingTotals,
   type ArPriority,
   type ImsLine,
   type InvoiceDocKind,
@@ -199,6 +200,9 @@ export type InvoiceRow = {
   cgst: string;
   sgst: string;
   igst: string;
+  shipping_charges?: string | number | null;
+  shipping_gst_rate?: string | number | null;
+  shipping_tax?: string | number | null;
   round_off: string;
   grand_total: string;
   amount_paid: string;
@@ -300,6 +304,9 @@ export function mapInvoice(r: InvoiceRow, today: string, withLines = false) {
     cgst: round2(money(r.cgst)),
     sgst: round2(money(r.sgst)),
     igst: round2(money(r.igst)),
+    shippingCharges: round2(money(r.shipping_charges ?? 0)),
+    shippingGstRate: round2(money(r.shipping_gst_rate ?? 0)),
+    shippingTax: round2(money(r.shipping_tax ?? 0)),
     roundOff: round2(money(r.round_off)),
     roundToRupee: Boolean(r.round_to_rupee),
     grandTotal,
@@ -485,6 +492,8 @@ const InvoiceInput = z.object({
   invoiceDate: isoDate,
   dueDate: isoDate.nullable().optional(),
   docKind: z.enum(["tax_invoice", "proforma", "credit_note", "debit_note"]).optional(),
+  shippingCharges: z.coerce.number().min(0).max(1e10).optional(),
+  shippingGstRate: z.coerce.number().min(0).max(100).optional(),
   lines: z.array(LineInput).min(1, "Add at least one line").max(300),
   roundToRupee: z.boolean().default(false),
   notes: optText(4000),
@@ -522,7 +531,13 @@ async function invoiceValues(db: Queryable, actor: ImsActor, settings: ImsSettin
   const gstin = input.customerGstin?.trim().toUpperCase() || party?.gstin || null;
   const placeOfSupply = input.placeOfSupply?.trim() || party?.state || gstStateName(gstin) || settings.state || null;
   const intra = intraStateFor(settings, placeOfSupply);
-  const totals = computeTotals(input.lines, intra, input.roundToRupee);
+  const baseTotals = computeTotals(input.lines, intra, false);
+  const totals = withShippingTotals(baseTotals, {
+    shippingCharges: input.shippingCharges ?? 0,
+    shippingGstRate: input.shippingGstRate ?? 0,
+    intraState: intra,
+    roundToRupee: input.roundToRupee,
+  });
   const dueDate = input.dueDate ?? dueDateFor(input.invoiceDate, party?.payment_terms_days ?? null, settings.paymentTermsDays);
   if (dueDate < input.invoiceDate) throw badRequest("The due date can't be before the invoice date");
   const address = input.customerAddress?.trim() || [party?.address, party?.city].filter(Boolean).join(", ") || null;
@@ -551,6 +566,9 @@ async function invoiceValues(db: Queryable, actor: ImsActor, settings: ImsSettin
     cgst: totals.cgst,
     sgst: totals.sgst,
     igst: totals.igst,
+    shippingCharges: totals.shippingCharges,
+    shippingGstRate: totals.shippingGstRate,
+    shippingTax: totals.shippingTax,
     roundOff: totals.roundOff,
     grandTotal: totals.grandTotal,
     roundToRupee: input.roundToRupee ? 1 : 0,
@@ -580,12 +598,14 @@ async function insertInvoice(
     `INSERT INTO ims_invoices
        (id, tenant_id, invoice_no, doc_kind, against_invoice_id, against_invoice_no, status, customer_id, customer_name, customer_gstin, customer_address, customer_mobile,
         customer_po_no, ship_to_name, ship_to_gstin, ship_to_address, ship_to_state, ship_to_mobile, place_of_supply, intra_state,
-        invoice_date, due_date, \`lines\`, subtotal, discount_total, tax_total, cgst, sgst, igst, round_off, grand_total, round_to_rupee,
+        invoice_date, due_date, \`lines\`, subtotal, discount_total, tax_total, cgst, sgst, igst, shipping_charges, shipping_gst_rate, shipping_tax,
+        round_off, grand_total, round_to_rupee,
         account_manager_id, account_manager_name, source_tool, source_ref, notes, terms, created_by, created_by_name)
      VALUES
        (:id, :tenantId, :invoiceNo, :docKind, :againstInvoiceId, :againstInvoiceNo, 'draft', :customerId, :customerName, :customerGstin, :customerAddress, :customerMobile,
         :customerPoNo, :shipToName, :shipToGstin, :shipToAddress, :shipToState, :shipToMobile, :placeOfSupply, :intraState,
-        :invoiceDate, :dueDate, :lines, :subtotal, :discountTotal, :taxTotal, :cgst, :sgst, :igst, :roundOff, :grandTotal, :roundToRupee,
+        :invoiceDate, :dueDate, :lines, :subtotal, :discountTotal, :taxTotal, :cgst, :sgst, :igst, :shippingCharges, :shippingGstRate, :shippingTax,
+        :roundOff, :grandTotal, :roundToRupee,
         :accountManagerId, :accountManagerName, :sourceTool, :sourceRef, :notes, :terms, :userId, :userName)`,
     {
       ...values,
@@ -1101,6 +1121,7 @@ export function registerSales(router: Router, deps: ImsDeps): void {
            ship_to_name = :shipToName, ship_to_gstin = :shipToGstin, ship_to_address = :shipToAddress, ship_to_state = :shipToState, ship_to_mobile = :shipToMobile,
            place_of_supply = :placeOfSupply, intra_state = :intraState, invoice_date = :invoiceDate, due_date = :dueDate,
            \`lines\` = :lines, subtotal = :subtotal, discount_total = :discountTotal, tax_total = :taxTotal, cgst = :cgst, sgst = :sgst, igst = :igst,
+           shipping_charges = :shippingCharges, shipping_gst_rate = :shippingGstRate, shipping_tax = :shippingTax,
            round_off = :roundOff, grand_total = :grandTotal, round_to_rupee = :roundToRupee,
            account_manager_id = COALESCE(account_manager_id, :accountManagerId), account_manager_name = COALESCE(account_manager_name, :accountManagerName),
            notes = :notes, terms = :terms

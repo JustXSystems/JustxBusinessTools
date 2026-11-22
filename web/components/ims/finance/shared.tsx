@@ -437,7 +437,45 @@ function InvoicePayQr({ intent, vpa }: { intent: string; vpa: string }) {
 export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; session: ImsSession }) {
   const { can } = useIms();
   const inv = detail.invoice;
-  const totals = computeTotals(inv.lines ?? [], inv.intraState, inv.roundToRupee);
+  const totals = (() => {
+    const base = computeTotals(inv.lines ?? [], inv.intraState, false);
+    const shipAmt = Number(inv.shippingCharges) || 0;
+    const shipTax = Number(inv.shippingTax) || 0;
+    let taxTotal = round2(base.taxTotal + shipTax);
+    let cgst = base.cgst;
+    let sgst = base.sgst;
+    let igst = base.igst;
+    if (shipTax > 0.005) {
+      if (inv.intraState) {
+        const half = round2(shipTax / 2);
+        cgst = round2(cgst + half);
+        sgst = round2(sgst + (shipTax - half));
+      } else {
+        igst = round2(igst + shipTax);
+      }
+    }
+    let grandTotal = round2(base.subtotal - base.discountTotal + taxTotal + shipAmt);
+    let roundOff = 0;
+    if (inv.roundToRupee) {
+      const rounded = Math.round(grandTotal);
+      roundOff = round2(rounded - grandTotal);
+      grandTotal = rounded;
+    }
+    // Prefer persisted totals when present so paper matches issued AR.
+    if (inv.grandTotal > 0) {
+      return {
+        ...base,
+        taxTotal: inv.taxTotal,
+        cgst: inv.cgst,
+        sgst: inv.sgst,
+        igst: inv.igst,
+        roundOff: inv.roundOff,
+        grandTotal: inv.grandTotal,
+        taxable: round2(base.subtotal - base.discountTotal + shipAmt),
+      };
+    }
+    return { ...base, taxTotal, cgst, sgst, igst, roundOff, grandTotal, taxable: round2(base.subtotal - base.discountTotal + shipAmt) };
+  })();
   const stamp = INVOICE_STAMP[inv.displayStatus] ?? (inv.displayStatus === "partial" ? { text: "PART PAID", color: "#D98A1F" } : null);
   const meta: Array<{ label: string; value: ReactNode }> = [
     { label: inv.docKind === "credit_note" ? "Credit note no." : inv.docKind === "proforma" ? "Proforma no." : "Invoice no.", value: inv.isDraftNo ? "Draft" : inv.invoiceNo },
@@ -557,6 +595,12 @@ export function InvoicePaper({ detail, session }: { detail: InvoiceDetail; sessi
                   ))}
                 </tbody>
               </table>
+            </div>
+          ) : null}
+          {inv.shippingCharges > 0.005 ? (
+            <div>
+              Shipping {inrExact(inv.shippingCharges)}
+              {inv.shippingTax > 0.005 ? ` + GST ${inrExact(inv.shippingTax)} (${inv.shippingGstRate}%)` : ""}
             </div>
           ) : null}
           {inv.status === "issued" && (inv.docKind || "tax_invoice") === "tax_invoice" ? (

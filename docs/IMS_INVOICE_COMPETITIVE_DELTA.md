@@ -117,7 +117,7 @@ OOTB UI components:
 - [x] e-Invoice status on issue (`yet_to_push` for B2B)
 - [x] Associate IRN / Ack / e-Way from portal (manual) + mark cancelled
 - [ ] Live IRP/GSP push adapter
-- [ ] Shipping charges + GST in totals engine
+- [x] Shipping charges + GST in totals engine
 - [ ] Recurring invoice profiles
 - [ ] Sales Order → DC → Invoice
 - [ ] Invoice approval queue

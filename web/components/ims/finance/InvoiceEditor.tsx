@@ -62,6 +62,8 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const [lines, setLines] = useState<EditableLine[]>(() =>
     inv?.lines?.length ? inv.lines.map((l) => ({ key: lineKey(), itemId: l.itemId ?? null, name: l.name, sku: l.sku ?? null, hsn: l.hsn ?? null, unit: l.unit ?? null, qty: l.qty, rate: l.rate, discountPct: l.discountPct, gstRate: l.gstRate })) : [],
   );
+  const [shippingCharges, setShippingCharges] = useState(String(inv?.shippingCharges ? inv.shippingCharges : ""));
+  const [shippingGstRate, setShippingGstRate] = useState(String(inv?.shippingGstRate ?? settings.defaultGstRate));
   const [roundToRupee, setRoundToRupee] = useState(inv?.roundToRupee ?? true);
   const [notes, setNotes] = useState(inv?.notes ?? "");
   const [terms, setTerms] = useState(inv?.terms ?? settings.terms ?? "");
@@ -71,7 +73,31 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
 
   const effectivePos = placeOfSupply || party?.state || gstStateName(gstin) || settings.state || "";
   const intraState = intraStateFor(settings, effectivePos);
-  const totals = useMemo(() => computeTotals(toLineInputs(lines), intraState, roundToRupee), [lines, intraState, roundToRupee]);
+  const shipAmt = Math.max(0, Number(shippingCharges) || 0);
+  const shipGst = Math.max(0, Math.min(100, Number(shippingGstRate) || 0));
+  const totals = useMemo(() => {
+    const base = computeTotals(toLineInputs(lines), intraState, false);
+    const shipTax = shipAmt > 0.005 && shipGst > 0 ? round2((shipAmt * shipGst) / 100) : 0;
+    let taxTotal = round2(base.taxTotal + shipTax);
+    let cgst = base.cgst;
+    let sgst = base.sgst;
+    let igst = base.igst;
+    if (intraState) {
+      const half = round2(shipTax / 2);
+      cgst = round2(cgst + half);
+      sgst = round2(sgst + (shipTax - half));
+    } else {
+      igst = round2(igst + shipTax);
+    }
+    let grandTotal = round2(base.subtotal - base.discountTotal + taxTotal + shipAmt);
+    let roundOff = 0;
+    if (roundToRupee) {
+      const rounded = Math.round(grandTotal);
+      roundOff = round2(rounded - grandTotal);
+      grandTotal = rounded;
+    }
+    return { ...base, taxTotal, cgst, sgst, igst, roundOff, grandTotal, shippingCharges: shipAmt, shippingTax: shipTax };
+  }, [lines, intraState, roundToRupee, shipAmt, shipGst]);
 
   const summary = useImsData(() => (customer.id ? finance.customerSummary(customer.id) : Promise.resolve(null)), [customer.id]);
   const creditWarning = useMemo(() => {
@@ -142,6 +168,8 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
     invoiceDate,
     dueDate: dueDate || null,
     docKind: isCreditNote ? inv?.docKind : docKind,
+    shippingCharges: shipAmt,
+    shippingGstRate: shipGst,
     lines: toLineInputs(lines),
     roundToRupee,
     notes: notes.trim() || null,
@@ -446,6 +474,34 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
 
       <Card interactive={false}>
         <FormGrid columns="1fr 1fr">
+          <Field label="Shipping charges (taxable)">
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                type="number"
+                min={0}
+                step="0.01"
+                value={shippingCharges}
+                onChange={(e) => setShippingCharges(e.target.value)}
+                placeholder="0"
+              />
+            )}
+          </Field>
+          <Field label="Shipping GST %" hint={shipAmt > 0 ? `Tax ${inrExact(totals.shippingTax ?? 0)}` : "Optional freight / delivery"}>
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={shippingGstRate}
+                onChange={(e) => setShippingGstRate(e.target.value)}
+              />
+            )}
+          </Field>
           <Field label="Notes (printed)">{({ id, describedBy }) => <Textarea id={id} aria-describedby={describedBy} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={4000} placeholder="Thank you for your business!" />}</Field>
           <Field label="Terms & conditions">{({ id, describedBy }) => <Textarea id={id} aria-describedby={describedBy} rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} maxLength={4000} />}</Field>
         </FormGrid>

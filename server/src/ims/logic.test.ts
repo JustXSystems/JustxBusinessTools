@@ -30,8 +30,10 @@ import {
   reminderRuleFor,
   renderTemplate,
   reorderQty,
+  round2,
   stockStatus,
   travelKm,
+  withShippingTotals,
 } from "./logic.js";
 
 describe("dates", () => {
@@ -180,6 +182,14 @@ describe("receivables & payables", () => {
       "upi://pay?pa=shop%40upi&pn=JustTestX&cu=INR&am=1250.50&tn=SI-1",
     );
     expect(upiPayIntent({ vpa: "bad" })).toBeNull();
+  });
+
+  it("applies shipping charges with GST onto totals", () => {
+    const base = computeTotals([{ name: "Item", qty: 1, rate: 100, gstRate: 18 }], true, false);
+    const withShip = withShippingTotals(base, { shippingCharges: 50, shippingGstRate: 18, intraState: true, roundToRupee: false });
+    expect(withShip.shippingCharges).toBe(50);
+    expect(withShip.shippingTax).toBe(9);
+    expect(withShip.grandTotal).toBe(round2(base.grandTotal + 50 + 9));
   });
 
   it("derives bill status and urgency", () => {

@@ -393,6 +393,35 @@ export function upiPayIntent(opts: {
   return `upi://pay?${q.toString()}`;
 }
 
+/** Apply taxable shipping + GST onto invoice totals (does not mutate line rows). */
+export function withShippingTotals(
+  totals: { subtotal: number; discountTotal: number; taxTotal: number; cgst: number; sgst: number; igst: number; roundOff: number; grandTotal: number; lines: ImsLine[] },
+  opts: { shippingCharges: number; shippingGstRate: number; intraState: boolean; roundToRupee: boolean },
+): typeof totals & { shippingCharges: number; shippingGstRate: number; shippingTax: number } {
+  const shippingCharges = Math.max(0, round2(opts.shippingCharges || 0));
+  const shippingGstRate = Math.max(0, Math.min(100, round2(opts.shippingGstRate || 0)));
+  const shippingTax = shippingCharges > 0.005 && shippingGstRate > 0 ? round2((shippingCharges * shippingGstRate) / 100) : 0;
+  let taxTotal = round2(totals.taxTotal + shippingTax);
+  let cgst = totals.cgst;
+  let sgst = totals.sgst;
+  let igst = totals.igst;
+  if (opts.intraState) {
+    const half = round2(shippingTax / 2);
+    cgst = round2(cgst + half);
+    sgst = round2(sgst + (shippingTax - half));
+  } else {
+    igst = round2(igst + shippingTax);
+  }
+  let grandTotal = round2(totals.subtotal - totals.discountTotal + taxTotal + shippingCharges);
+  let roundOff = totals.roundOff;
+  if (opts.roundToRupee) {
+    const rounded = Math.round(grandTotal);
+    roundOff = round2(rounded - grandTotal);
+    grandTotal = rounded;
+  }
+  return { ...totals, taxTotal, cgst, sgst, igst, roundOff, grandTotal, shippingCharges, shippingGstRate, shippingTax };
+}
+
 export const BILL_STATUSES = ["pending_approval", "approved", "on_hold", "scheduled", "cancelled"] as const;
 export type BillStatus = (typeof BILL_STATUSES)[number];
 export type BillDisplayStatus = BillStatus | "partial" | "paid" | "overdue";

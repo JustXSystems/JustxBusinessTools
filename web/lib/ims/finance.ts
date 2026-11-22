@@ -74,6 +74,9 @@ export type ImsInvoice = {
   cgst: number;
   sgst: number;
   igst: number;
+  shippingCharges: number;
+  shippingGstRate: number;
+  shippingTax: number;
   roundOff: number;
   roundToRupee: boolean;
   grandTotal: number;
@@ -181,6 +184,8 @@ export type InvoiceInput = {
   invoiceDate: string;
   dueDate?: string | null;
   docKind?: InvoiceDocKind;
+  shippingCharges?: number;
+  shippingGstRate?: number;
   lines: ImsLineInput[];
   roundToRupee?: boolean;
   notes?: string | null;
