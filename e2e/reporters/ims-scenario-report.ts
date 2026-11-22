@@ -9,6 +9,7 @@ import type {
   TestResult,
 } from "@playwright/test/reporter";
 import { IMS_JOURNEY_SCENARIOS, IMS_MODULE_SCENARIOS } from "../ims/modules.catalog";
+import { IMS_CRUD_SCENARIOS } from "../ims/crud.catalog";
 
 type Row = {
   scenarioId: string;
@@ -46,7 +47,8 @@ class ImsScenarioReporter implements Reporter {
     const manualRaw = ann(test, "manualChecks") || "";
     const known =
       IMS_MODULE_SCENARIOS.find((s) => s.id === scenarioId) ||
-      IMS_JOURNEY_SCENARIOS.find((s) => s.id === scenarioId);
+      IMS_JOURNEY_SCENARIOS.find((s) => s.id === scenarioId) ||
+      IMS_CRUD_SCENARIOS.find((s) => s.id === scenarioId);
     const manualChecks =
       manualRaw.split("|").map((s) => s.trim()).filter(Boolean) ||
       ("manualChecks" in (known ?? {}) ? (known as { manualChecks: string[] }).manualChecks : []);
@@ -58,7 +60,7 @@ class ImsScenarioReporter implements Reporter {
       durationMs: result.duration,
       mutates: ann(test, "mutates") === "true" || Boolean((known as { mutates?: boolean } | undefined)?.mutates),
       path: ann(test, "path"),
-      moduleKey: ann(test, "moduleKey"),
+      moduleKey: ann(test, "moduleKey") || (known && "module" in known ? (known as { module?: string }).module : undefined),
       error: result.error?.message,
       manualChecks:
         manualChecks.length > 0
@@ -75,6 +77,7 @@ class ImsScenarioReporter implements Reporter {
     const catalogIds = new Set([
       ...IMS_MODULE_SCENARIOS.map((s) => s.id),
       ...IMS_JOURNEY_SCENARIOS.map((s) => s.id),
+      ...IMS_CRUD_SCENARIOS.map((s) => s.id),
     ]);
     const ranIds = new Set(this.rows.map((r) => r.scenarioId));
     const notAutomated = [
@@ -84,6 +87,11 @@ class ImsScenarioReporter implements Reporter {
         manualChecks: s.manualChecks,
       })),
       ...IMS_JOURNEY_SCENARIOS.filter((s) => !ranIds.has(s.id)).map((s) => ({
+        id: s.id,
+        title: s.title,
+        manualChecks: s.manualChecks,
+      })),
+      ...IMS_CRUD_SCENARIOS.filter((s) => !ranIds.has(s.id)).map((s) => ({
         id: s.id,
         title: s.title,
         manualChecks: s.manualChecks,
@@ -107,6 +115,7 @@ class ImsScenarioReporter implements Reporter {
       catalog: {
         modules: IMS_MODULE_SCENARIOS,
         journeys: IMS_JOURNEY_SCENARIOS,
+        crud: IMS_CRUD_SCENARIOS,
       },
     };
 
@@ -182,6 +191,17 @@ function renderManualVerify(payload: {
     lines.push(`### ${j.id} — ${j.title} ${badge}`);
     lines.push(`- Mutates data: ${j.mutates ? "yes" : "no"}`);
     for (const c of j.manualChecks) lines.push(`- [ ] ${c}`);
+    lines.push("");
+  }
+  lines.push("## CRUD + tab-flow catalog");
+  lines.push("");
+  for (const c of IMS_CRUD_SCENARIOS) {
+    const auto = payload.results.find((r) => r.scenarioId === c.id);
+    const badge = auto ? `_(auto: ${auto.status})_` : "_(catalog)_";
+    lines.push(`### ${c.id} — ${c.title} ${badge}`);
+    lines.push(`- Module: \`${c.module}\``);
+    lines.push(`- Mutates data: ${c.mutates ? "yes" : "no"}`);
+    for (const check of c.manualChecks) lines.push(`- [ ] ${check}`);
     lines.push("");
   }
   lines.push("## How to re-run (on demand only)");

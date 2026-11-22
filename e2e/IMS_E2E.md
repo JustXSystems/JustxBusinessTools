@@ -131,8 +131,9 @@ npm run test:e2e:ims
 1. **Read-only matrix** — every entry in `IMS_MODULES` via `/ims?m=…`  
 2. **Shell** — login, JustTestX branch, nav, deep links, global search  
 3. **Journeys** — new invoice/PO editors, reports, small Stock In + Help Desk ticket marked `E2E-<timestamp>`  
+4. **CRUD + tab-flow suite** (`e2e/ims/crud.*.spec.ts`) — Items/Parties create, Stock In/Out post, invoice/PO draft save, and SubTabs walks across Sales, Approvals, Settings, GST, Audit, Field, Helpdesk, etc. Catalog: [`e2e/ims/crud.catalog.ts`](ims/crud.catalog.ts). Soft-skips when a module CTA is gated.
 
-Catalog: [`e2e/ims/modules.catalog.ts`](ims/modules.catalog.ts).
+Catalogs: [`e2e/ims/modules.catalog.ts`](ims/modules.catalog.ts), [`e2e/ims/crud.catalog.ts`](ims/crud.catalog.ts).
 
 Mutating tests are intentional on JustTestX for pre–go-live. Re-seed IMS on the VPS if you want a clean tenant afterward.
 

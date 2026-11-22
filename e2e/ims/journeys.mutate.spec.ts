@@ -81,9 +81,12 @@ test.describe("IMS business journeys (JustTestX)", () => {
     // Dialog title is a styled div (aria-labelledby), not a heading.
     const dialog = page.getByRole("dialog", { name: /Raise a ticket/i });
     await expect(dialog).toBeVisible({ timeout: 20_000 });
-    await dialog.getByLabel("Subject").fill(`E2E ticket ${note}`);
-    await dialog.getByLabel("Details").fill(`Automated IMS journey coverage ${note}`);
-    await dialog.getByRole("button", { name: /Raise ticket/i }).click();
+    await dialog.getByRole("textbox", { name: /^Subject$/i }).fill(`E2E ticket ${note}`);
+    // Details requires ≥10 chars; use textarea role so label/hint confusion cannot miss it.
+    await dialog.locator("textarea").fill(`Automated IMS journey coverage ${note}`);
+    const raise = dialog.getByRole("button", { name: /Raise ticket/i });
+    await expect(raise).toBeEnabled({ timeout: 10_000 });
+    await raise.click();
     await expect(page.getByText(note).first()).toBeVisible({ timeout: 20_000 });
   });
 });

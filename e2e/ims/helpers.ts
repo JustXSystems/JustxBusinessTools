@@ -62,30 +62,63 @@ export async function expectImsShell(page: Page, resumePath = "/ims") {
   await expect(page.getByText(/session has expired|UNAUTHENTICATED/i)).toHaveCount(0);
 }
 
+/** Close open dialogs / overlays so nav clicks are not intercepted. */
+export async function dismissImsOverlays(page: Page) {
+  for (let i = 0; i < 3; i++) {
+    const openOverlay = page.locator(".bos-overlay.is-open");
+    if ((await openOverlay.count()) === 0 || !(await openOverlay.first().isVisible().catch(() => false))) break;
+    const close = page.getByRole("dialog").getByRole("button", { name: /Close|Cancel|Done/i }).first();
+    if ((await close.count()) > 0 && (await close.isVisible().catch(() => false))) {
+      await close.click().catch(() => undefined);
+    } else {
+      await page.keyboard.press("Escape").catch(() => undefined);
+    }
+    await page.waitForTimeout(200);
+  }
+}
+
+function currentModuleKey(page: Page): string | null {
+  try {
+    return new URL(page.url()).searchParams.get("m");
+  } catch {
+    return null;
+  }
+}
+
 export async function gotoImsModule(page: Page, pathAndQuery: string) {
   const target = appPath(pathAndQuery);
   const onIms = page.url().includes("/ims");
+  const q = new URL(pathAndQuery, "http://local");
+  const m = q.searchParams.get("m");
+  const intent = q.searchParams.get("intent");
+
   // Prefer SPA sidebar navigation when already inside IMS (no full reload / auth churn).
-  if (onIms) {
-    const q = new URL(pathAndQuery, "http://local");
-    const m = q.searchParams.get("m");
-    const intent = q.searchParams.get("intent");
-    if (!m && !intent) {
+  if (onIms && !intent) {
+    await dismissImsOverlays(page);
+    if (!m) {
       const dash = page.locator('nav[aria-label="IMS modules"] button[title="Dashboard"]');
       if ((await dash.count()) > 0) {
         await dash.click();
         await assertNoModuleCrash(page);
         return;
       }
-    }
-    if (m && !intent) {
+    } else {
       const label = MODULE_LABEL[m];
       if (label) {
         const navBtn = page.locator(`nav[aria-label="IMS modules"] button[title="${label}"]`);
         if ((await navBtn.count()) > 0) {
+          // Always re-click even when m= already matches — compose/detail views share the same key.
           await navBtn.click();
-          await assertNoModuleCrash(page);
-          return;
+          try {
+            await page.waitForURL(
+              (url) => url.searchParams.get("m") === m && !url.searchParams.get("intent"),
+              { timeout: 5_000 },
+            );
+            await assertNoModuleCrash(page);
+            return;
+          } catch {
+            // fall through to full goto (clears compose/intent)
+          }
         }
       }
     }
