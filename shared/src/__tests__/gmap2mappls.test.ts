@@ -229,6 +229,21 @@ describe("gmap2mappls urls + samples", () => {
     const matter = buildBrandPlaybook("matter", paste);
     expect(matter?.brand.companionApp).toBeUndefined();
     expect(matter?.autoOpenUrl).toContain("mode=biking");
+
+    // Full matrix: every brand opens OEM package (or Mappls fallback) — never wrong target
+    for (const brand of OEM_BRANDS) {
+      const pb = buildBrandPlaybook(brand.id, paste);
+      expect(pb, brand.id).toBeTruthy();
+      expect(pb!.primary.kind).toBe("open");
+      expect(pb!.primary.href).toBe(pb!.autoOpenUrl);
+      expect(pb!.steps).toHaveLength(1);
+      if (brand.companionApp) {
+        expect(pb!.autoOpenUrl).toContain(`package=${brand.companionApp.packageId}`);
+        expect(pb!.autoOpenUrl).not.toMatch(/mappls\.com/);
+      } else {
+        expect(pb!.autoOpenUrl).toMatch(/mappls\.com/);
+      }
+    }
   });
 
   it("encodes Digipin offline for India coords", () => {

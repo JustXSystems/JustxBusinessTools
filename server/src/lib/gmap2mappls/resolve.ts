@@ -59,7 +59,7 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
       lat,
       lng,
       sampleMode: mappls.sampleMode,
-      tip: "SimpleOne: paste place name or Push via Google/geo — Pin/lat,lng search often wrong.",
+      tip: "Pick your brand → Find & open brand app → confirm / push navigation in that app.",
       paste: buildPasteKit(lat, lng, {
         mapplsPin: mappls.mapplsPin,
         digipin: mappls.digipin,
@@ -168,7 +168,7 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
     lat,
     lng,
     sampleMode: mappls.sampleMode || !getMapplsAccessToken(),
-    tip: "SimpleOne: paste place name or Push via Google/geo — Pin/lat,lng search often wrong.",
+    tip: "Pick your brand → Find & open brand app → confirm / push navigation in that app.",
     paste: buildPasteKit(lat, lng, {
       mapplsPin: mappls.mapplsPin,
       digipin: mappls.digipin,
@@ -203,7 +203,7 @@ export function resolveMeta() {
       input: s.input,
       coords: formatCoordPair(s.lat, s.lng),
     })),
-    tip: "SimpleOne: paste place name or Push via Google/geo — Pin/lat,lng search often wrong.",
+    tip: "Pick your brand → Find & open brand app → confirm / push navigation in that app.",
     sourceHint: sourceLabel,
     oem: buildOemHandoffSummary(),
   };
