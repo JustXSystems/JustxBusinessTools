@@ -34,15 +34,18 @@ Almost every listed OEM reuses **Mappls Autosuggest / NCASE destination search**
 Official Autosuggest: `query` = POI / house / keyword / place / Pin; `location=lat,lng` is **bias only**.  
 Ampere docs advertise Mappls PIN last-mile; **SimpleOne does not reliably resolve Pin in search** even when the Pin is correct on Mappls web.
 
-## Universal handoff (works across OEMs)
+## Simple UI flow (automated)
 
-| Priority | Action | Covers |
-|----------|--------|--------|
-| 1 | **Copy place name** → paste in OEM search | **SimpleOne** + any OEM without eLoc search |
-| 2 | **Open Google / geo → Share or Push to Simple Connect** | SimpleOne official Push / WhatsApp-location path |
-| 3 | **Copy Mappls Pin** (verify on mappls.com) | OEMs that entitle eLoc search (e.g. Ampere PIN last-mile) |
-| 4 | **Navigate Mappls · 2W / 4W** | Skips search; lat,lng in nav deep link |
-| 5 | Digipin / share text / QR | Backup |
+1. Paste Google link → **Find same point**  
+2. Tool **auto-opens Mappls** at the exact lat/lng (2W biking / 4W driving nav deep link; Google for Ola)  
+3. Pick **Your brand** in the dropdown  
+4. Tap the **one big button** and follow the **1–2 short steps** shown for that brand  
+
+| Brand type | Auto-open | One user action |
+|------------|-----------|-----------------|
+| SimpleOne | Mappls nav | Copy place name → paste in SimpleOne / Push |
+| Most Mappls OEMs | Mappls nav | Copy Mappls Pin → paste in vehicle search |
+| Ola Electric | Google Maps | Use that Google point in Ola |
 
 ## OEM coverage matrix
 

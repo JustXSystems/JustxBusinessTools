@@ -13,6 +13,7 @@ import {
   buildPasteKit,
   encodeDigipin,
   buildOemHandoffSummary,
+  buildBrandPlaybook,
   OEM_BRANDS,
 } from "../gmap2mappls/index";
 
@@ -193,6 +194,27 @@ describe("gmap2mappls urls + samples", () => {
     const summary = buildOemHandoffSummary();
     expect(summary.rules.searchBoxRejects.join(" ")).toMatch(/lat,lng/);
     expect(summary.brands.filter((b) => b.stack === "mappls").length).toBeGreaterThan(10);
+  });
+
+  it("builds a one-CTA playbook per brand with Mappls auto-open", () => {
+    const paste = buildPasteKit(12.877073, 77.613574, {
+      placeName: "Zigma Technologies",
+      locality: "Nyanappanahalli",
+      city: "Bengaluru",
+      mapplsPin: "kcf7zj",
+    });
+    const simple = buildBrandPlaybook("simple-energy", paste);
+    expect(simple?.autoOpenUrl).toContain("mode=biking");
+    expect(simple?.primary.kind).toBe("copy");
+    expect(simple?.primary.copyText).toContain("Zigma");
+    expect(simple?.steps.length).toBeLessThanOrEqual(2);
+
+    const mahindra = buildBrandPlaybook("mahindra", paste);
+    expect(mahindra?.autoOpenUrl).toContain("mode=driving");
+    expect(mahindra?.primary.copyText).toBe("kcf7zj");
+
+    const ola = buildBrandPlaybook("ola", paste);
+    expect(ola?.autoOpenUrl).toContain("google.com/maps");
   });
 
   it("encodes Digipin offline for India coords", () => {

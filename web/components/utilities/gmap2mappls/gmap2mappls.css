@@ -261,6 +261,81 @@
   align-items: flex-end;
 }
 
+.g2m-guide {
+  border-radius: var(--radius);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.08);
+  padding: 1.1rem 1.15rem 1.25rem;
+  animation: g2m-fade-up 0.45s ease both;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.g2m-guide h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.g2m-brand-label {
+  font-size: 0.8rem;
+  color: var(--text-mid);
+  font-weight: 600;
+}
+
+.g2m-brand-select {
+  width: 100%;
+  max-width: 28rem;
+  appearance: none;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-hi);
+  padding: 0.7rem 0.85rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.g2m-auto-note {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-mid);
+  line-height: 1.4;
+}
+
+.g2m-linkish {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.g2m-guide-steps {
+  margin: 0.15rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--text-hi);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.g2m-guide-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.g2m-guide-cta .btn {
+  min-height: 2.75rem;
+  font-size: 1rem;
+}
+
 .g2m-oem {
   border-radius: var(--radius);
   border: 1px solid var(--g2m-line);
