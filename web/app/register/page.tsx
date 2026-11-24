@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useSyncExternalStore } from "react";
-import { Alert, BosRoot, Button, Card, FormGrid, Input } from "@/components/bos";
+import { Alert, BosRoot, Button, Card, FormGrid, Input, Segmented } from "@/components/bos";
 import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { PlatformBrandMark } from "@/components/branding/PlatformBrandMark";
@@ -12,11 +12,11 @@ import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { HomeToolPicker } from "@/components/profile/HomeToolPicker";
 import { api } from "@/lib/api";
 import { publicAssetUrl } from "@/lib/base-path";
+import { type AccountType, validateRegisterForm } from "@/lib/register-form";
+import { GSTIN_RE } from "@/lib/register-gstin";
 import { INDIAN_STATES } from "@/lib/types/business-profile";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import "@/components/admin/admin-console.css";
-
-const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i;
 
 type GstinProfile = {
   businessName: string;
@@ -41,17 +41,23 @@ function stateFromGstin(gstin: string): [string, string] | null {
   return match ?? null;
 }
 
+const ACCOUNT_OPTIONS = [
+  { value: "individual" as const, label: "Individual" },
+  { value: "business" as const, label: "Business" },
+];
+
 export default function RegisterPage() {
   const { register } = useAuth();
   const router = useRouter();
   const { branding } = usePlatformBranding();
   const logoInputRef = useRef<HTMLInputElement>(null);
-  // false during SSR/hydration, true on the client (BosRoot reads theme from storage).
   const mounted = useSyncExternalStore(
     () => () => undefined,
     () => true,
     () => false,
   );
+
+  const [accountType, setAccountType] = useState<AccountType>("individual");
   const [gstin, setGstin] = useState("");
   const [lookup, setLookup] = useState<"idle" | "loading" | "done">("idle");
   const [lookedGstin, setLookedGstin] = useState("");
@@ -85,6 +91,12 @@ export default function RegisterPage() {
   const gstinNorm = gstin.trim().toUpperCase();
   const gstinValid = GSTIN_RE.test(gstinNorm);
   const locked = Boolean(existing);
+  const isIndividual = accountType === "individual";
+
+  function switchAccountType(next: AccountType) {
+    setAccountType(next);
+    setError("");
+  }
 
   async function lookupGstin(value = gstinNorm): Promise<{ ok: boolean; match: GstinProfile | null }> {
     if (!GSTIN_RE.test(value)) {
@@ -179,24 +191,78 @@ export default function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!gstinValid) {
+
+    if (isIndividual) {
+      const gate = validateRegisterForm({
+        accountType: "individual",
+        name,
+        phone,
+        email,
+        password,
+        gstin: "",
+        businessName: "",
+        joiningExisting: false,
+        homeToolIds: [],
+      });
+      if (!gate.ok) {
+        setError(gate.error);
+        return;
+      }
+      setLoading(true);
+      try {
+        const result = await register({
+          accountType: "individual",
+          email,
+          password,
+          name: name.trim(),
+          phone: phone || undefined,
+        });
+        if (!result.pending) {
+          router.replace("/");
+          return;
+        }
+        setPendingResult({
+          joinedExisting: result.joinedExisting,
+          email: result.email,
+          title: result.title,
+          message: result.message,
+          detail: result.detail,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Registration failed");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    const looked = await lookupGstin(gstinNorm);
+    if (!looked.ok && !gstinValid) {
       setError("Enter a valid 15-character GSTIN");
       return;
     }
-    const looked = await lookupGstin(gstinNorm);
     if (!looked.ok) return;
     const joining = Boolean(looked.match);
-    if (!joining && !businessName.trim()) {
-      setError("Business name is required for a new GSTIN");
+    const gate = validateRegisterForm({
+      accountType: "business",
+      name,
+      phone,
+      email,
+      password,
+      gstin: gstinNorm,
+      businessName,
+      joiningExisting: joining,
+      homeToolIds,
+    });
+    if (!gate.ok) {
+      setError(gate.error);
       return;
     }
-    if (!joining && homeToolIds.length === 0) {
-      setError("Select at least one tool to show on your home screen");
-      return;
-    }
+
     setLoading(true);
     try {
       const result = await register({
+        accountType: "business",
         email,
         password,
         name: name || undefined,
@@ -264,189 +330,321 @@ export default function RegisterPage() {
 
   return (
     <BosRoot canvas className="admin-bos" defaultTheme="dark" skin="bos">
-      <div className="admin-cc-login admin-cc-register">
-        <Card className="admin-cc-login-card admin-cc-register-card">
+      <div className={`admin-cc-login admin-cc-register ${isIndividual ? "is-individual" : "is-business"}`}>
+        <Card
+          className={`admin-cc-login-card admin-cc-register-card ${isIndividual ? "admin-cc-register-card--individual" : ""}`}
+        >
           <div className="admin-cc-login-brand">
             <PlatformBrandMark size="lg" showText={false} />
             <div>
-              <h1>Register</h1>
+              <h1>Create account</h1>
               <p>{branding.appName}</p>
             </div>
           </div>
-          <p className="admin-cc-note-text">
-            Enter GSTIN and tab out to load an existing business. New GSTIN creates an Owner account you can use
-            immediately (Justxsystems may review the Business Profile later). Joining an existing GSTIN sends a request
-            for the Business Owner to approve as Staff or Viewer.
+
+          <div className="admin-cc-register-type" role="group" aria-label="Account type">
+            <button
+              type="button"
+              className={`admin-cc-register-type-card ${isIndividual ? "is-active" : ""}`}
+              onClick={() => switchAccountType("individual")}
+              aria-pressed={isIndividual}
+            >
+              <span className="admin-cc-register-type-icon" aria-hidden>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.6" />
+                  <path
+                    d="M5 19.5c1.8-3.2 4.2-4.8 7-4.8s5.2 1.6 7 4.8"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </span>
+              <span className="admin-cc-register-type-copy">
+                <strong>Individual</strong>
+                <span>Personal tools — no GSTIN needed</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`admin-cc-register-type-card ${!isIndividual ? "is-active" : ""}`}
+              onClick={() => switchAccountType("business")}
+              aria-pressed={!isIndividual}
+            >
+              <span className="admin-cc-register-type-icon" aria-hidden>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M4 20V9.5L12 4l8 5.5V20"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinejoin="round"
+                  />
+                  <path d="M9 20v-5h6v5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <span className="admin-cc-register-type-copy">
+                <strong>Business</strong>
+                <span>GSTIN profile for your company</span>
+              </span>
+            </button>
+          </div>
+
+          <div className="admin-cc-register-segment">
+            <Segmented
+              block
+              role="radio"
+              aria-label="Account type"
+              options={ACCOUNT_OPTIONS}
+              value={accountType}
+              onChange={switchAccountType}
+            />
+          </div>
+
+          <p className="admin-cc-note-text admin-cc-register-lead" key={accountType}>
+            {isIndividual
+              ? "Register with your name, email and password. Start using tools right away — add a business profile later if you need GSTIN billing."
+              : "Enter GSTIN and tab out to load an existing business. New GSTIN creates an Owner account you can use immediately. Joining an existing GSTIN sends a request for the Business Owner to approve."}
           </p>
+
           <form onSubmit={handleSubmit} className="admin-cc-login-form">
-            <div className="admin-cc-register-grid">
-              <fieldset className="admin-cc-register-fieldset">
-                <legend>Business profile</legend>
-                <TextField
-                  label="GSTIN"
-                  value={gstin}
-                  onChange={(e) => onGstinChange(e.target.value)}
-                  onBlur={() => void lookupGstin()}
-                  placeholder="29ABCDE1234F1Z5"
-                  maxLength={15}
-                  required
-                  autoCapitalize="characters"
-                  spellCheck={false}
-                />
-                {lookup === "loading" ? <p className="admin-cc-note-text">Looking up GSTIN…</p> : null}
-                {locked ? (
-                  <Alert tone="blue" title="Existing business profile">
-                    This GSTIN already has a business profile. Details below are read-only. Enter your user details to
-                    request access — the Business Profile Owner will approve you as Staff or Viewer.
-                  </Alert>
-                ) : lookup === "done" && gstinValid ? (
-                  <Alert tone="emerald" title="New GSTIN">
-                    GSTIN not found. Enter the business profile details to create it. You will be signed in as Owner
-                    right away; Justxsystems can review the Business Profile later.
-                  </Alert>
-                ) : null}
-
-                <div className="bos-field">
-                  <span className="bos-field-label">Company logo</span>
-                  <div className="admin-cc-register-logo-row">
-                    <div className="admin-cc-register-logo" onDragOver={handleDragOver} onDrop={handleDrop}>
-                      {logo ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- tenant-supplied data URL / asset
-                        <img src={publicAssetUrl(logo)} alt="Logo preview" />
-                      ) : (
-                        <span aria-hidden>🏢</span>
-                      )}
-                    </div>
-                    {locked ? null : (
-                      <>
-                        <Button variant="secondary" size="sm" onClick={() => logoInputRef.current?.click()}>
-                          Upload logo
-                        </Button>
-                        <Input
-                          ref={logoInputRef}
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp,image/gif"
-                          style={{ display: "none" }}
-                          aria-label="Upload logo file"
-                          onChange={handleLogoUpload}
-                        />
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <TextField
-                  label="Business name"
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                  readOnly={locked}
-                  required={!locked}
-                  placeholder="Legal name as on GST certificate"
-                />
-                <TextField
-                  label="PAN"
-                  value={pan}
-                  onChange={(e) => setPan(e.target.value.toUpperCase())}
-                  readOnly={locked}
-                  maxLength={10}
-                />
-                <TextField
-                  label="Address"
-                  value={addressLine1}
-                  onChange={(e) => setAddressLine1(e.target.value)}
-                  readOnly={locked}
-                />
-                <TextField
-                  label="Address line 2"
-                  value={addressLine2}
-                  onChange={(e) => setAddressLine2(e.target.value)}
-                  readOnly={locked}
-                />
-                <SelectField
-                  label="State"
-                  value={stateCode}
-                  disabled={locked}
-                  onChange={(e) => {
-                    const code = e.target.value;
-                    const st = INDIAN_STATES.find(([, c]) => c === code);
-                    setStateCode(code);
-                    setStateName(st?.[0] ?? "");
-                  }}
-                >
-                  <option value="">Select state</option>
-                  {INDIAN_STATES.map(([label, code]) => (
-                    <option key={`${code}-${label}`} value={code}>
-                      {label}
-                    </option>
-                  ))}
-                </SelectField>
-                <FormGrid>
+            <div
+              className={`admin-cc-register-panels ${isIndividual ? "show-individual" : "show-business"}`}
+              key={accountType}
+            >
+              {isIndividual ? (
+                <fieldset className="admin-cc-register-fieldset admin-cc-register-fieldset--solo">
+                  <legend>Your details</legend>
                   <TextField
-                    label="Business phone"
-                    value={businessPhone}
-                    onChange={(e) => setBusinessPhone(e.target.value)}
-                    readOnly={locked}
+                    label="Your name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    autoComplete="name"
+                    autoFocus
                   />
                   <TextField
-                    label="Business email"
+                    label="Mobile"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    autoComplete="tel"
+                  />
+                  <TextField
+                    label="Email"
                     type="email"
-                    value={businessEmail}
-                    onChange={(e) => setBusinessEmail(e.target.value)}
-                    readOnly={locked}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
                   />
-                </FormGrid>
-                {!locked ? (
-                  <div className="bos-field">
-                    <span className="bos-field-label">Tools on home</span>
-                    <p className="admin-cc-note-text">
-                      Only selected tools appear after login. Subscription billing still lists every tool.
-                    </p>
-                    <HomeToolPicker selectedIds={homeToolIds} onChange={setHomeToolIds} />
-                  </div>
-                ) : null}
-              </fieldset>
+                  <TextField
+                    label="Password (min 8 characters)"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                  />
+                </fieldset>
+              ) : (
+                <div className="admin-cc-register-grid">
+                  <fieldset className="admin-cc-register-fieldset">
+                    <legend>Business profile</legend>
+                    <TextField
+                      label="GSTIN"
+                      value={gstin}
+                      onChange={(e) => onGstinChange(e.target.value)}
+                      onBlur={() => void lookupGstin()}
+                      placeholder="29ABCDE1234F1Z5"
+                      maxLength={15}
+                      required
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                    />
+                    {lookup === "loading" ? <p className="admin-cc-note-text">Looking up GSTIN…</p> : null}
+                    {locked ? (
+                      <Alert tone="blue" title="Existing business profile">
+                        This GSTIN already has a business profile. Details below are read-only. Enter your user details to
+                        request access — the Business Profile Owner will approve you as Staff or Viewer.
+                      </Alert>
+                    ) : lookup === "done" && gstinValid ? (
+                      <Alert tone="emerald" title="New GSTIN">
+                        GSTIN not found. Enter the business profile details to create it. You will be signed in as Owner
+                        right away; Justxsystems can review the Business Profile later.
+                      </Alert>
+                    ) : null}
 
-              <fieldset className="admin-cc-register-fieldset">
-                <legend>Your user</legend>
-                <TextField
-                  label="Your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  autoComplete="name"
-                />
-                <TextField
-                  label="Mobile"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  autoComplete="tel"
-                />
-                <TextField
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                />
-                <TextField
-                  label="Password (min 8 characters)"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                />
-              </fieldset>
+                    <div className="bos-field">
+                      <span className="bos-field-label">Company logo</span>
+                      <div className="admin-cc-register-logo-row">
+                        <div className="admin-cc-register-logo" onDragOver={handleDragOver} onDrop={handleDrop}>
+                          {logo ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- tenant-supplied data URL / asset
+                            <img src={publicAssetUrl(logo)} alt="Logo preview" />
+                          ) : (
+                            <span aria-hidden className="admin-cc-register-logo-fallback">
+                              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                                <path
+                                  d="M4 20V9.5L12 4l8 5.5V20"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinejoin="round"
+                                />
+                                <path
+                                  d="M9 20v-5h6v5"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </span>
+                          )}
+                        </div>
+                        {locked ? null : (
+                          <>
+                            <Button variant="secondary" size="sm" onClick={() => logoInputRef.current?.click()}>
+                              Upload logo
+                            </Button>
+                            <Input
+                              ref={logoInputRef}
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/gif"
+                              style={{ display: "none" }}
+                              aria-label="Upload logo file"
+                              onChange={handleLogoUpload}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <TextField
+                      label="Business name"
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      readOnly={locked}
+                      required={!locked}
+                      placeholder="Legal name as on GST certificate"
+                    />
+                    <TextField
+                      label="PAN"
+                      value={pan}
+                      onChange={(e) => setPan(e.target.value.toUpperCase())}
+                      readOnly={locked}
+                      maxLength={10}
+                    />
+                    <TextField
+                      label="Address"
+                      value={addressLine1}
+                      onChange={(e) => setAddressLine1(e.target.value)}
+                      readOnly={locked}
+                    />
+                    <TextField
+                      label="Address line 2"
+                      value={addressLine2}
+                      onChange={(e) => setAddressLine2(e.target.value)}
+                      readOnly={locked}
+                    />
+                    <SelectField
+                      label="State"
+                      value={stateCode}
+                      disabled={locked}
+                      onChange={(e) => {
+                        const code = e.target.value;
+                        const st = INDIAN_STATES.find(([, c]) => c === code);
+                        setStateCode(code);
+                        setStateName(st?.[0] ?? "");
+                      }}
+                    >
+                      <option value="">Select state</option>
+                      {INDIAN_STATES.map(([label, code]) => (
+                        <option key={`${code}-${label}`} value={code}>
+                          {label}
+                        </option>
+                      ))}
+                    </SelectField>
+                    <FormGrid>
+                      <TextField
+                        label="Business phone"
+                        value={businessPhone}
+                        onChange={(e) => setBusinessPhone(e.target.value)}
+                        readOnly={locked}
+                      />
+                      <TextField
+                        label="Business email"
+                        type="email"
+                        value={businessEmail}
+                        onChange={(e) => setBusinessEmail(e.target.value)}
+                        readOnly={locked}
+                      />
+                    </FormGrid>
+                    {!locked ? (
+                      <div className="bos-field">
+                        <span className="bos-field-label">Tools on home</span>
+                        <p className="admin-cc-note-text">
+                          Only selected tools appear after login. Subscription billing still lists every tool.
+                        </p>
+                        <HomeToolPicker selectedIds={homeToolIds} onChange={setHomeToolIds} />
+                      </div>
+                    ) : null}
+                  </fieldset>
+
+                  <fieldset className="admin-cc-register-fieldset">
+                    <legend>Your user</legend>
+                    <TextField
+                      label="Your name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                      autoComplete="name"
+                    />
+                    <TextField
+                      label="Mobile"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      autoComplete="tel"
+                    />
+                    <TextField
+                      label="Email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                    />
+                    <TextField
+                      label="Password (min 8 characters)"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                    />
+                  </fieldset>
+                </div>
+              )}
             </div>
+
             {error ? (
               <Alert tone="coral" title="Registration problem">
                 {error}
               </Alert>
             ) : null}
-            <Button type="submit" variant="primary" block disabled={loading || lookup === "loading"}>
-              {loading ? "Saving…" : locked ? "Request to join" : "Create account"}
+            <Button
+              type="submit"
+              variant="primary"
+              block
+              disabled={loading || (!isIndividual && lookup === "loading")}
+              className="admin-cc-register-submit"
+            >
+              {loading
+                ? "Saving…"
+                : isIndividual
+                  ? "Create account"
+                  : locked
+                    ? "Request to join"
+                    : "Create business account"}
             </Button>
           </form>
           <div className="admin-cc-login-foot">

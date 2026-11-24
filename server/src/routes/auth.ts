@@ -27,6 +27,7 @@ import {
   getTokenFromCookie,
   verifyPassword,
 } from "../lib/auth/session.js";
+import { validateRegisterPayload } from "../lib/auth/register-input.js";
 import { requireAuth } from "../middleware/require-auth.js";
 import {
   applyRegistrationPlaceholders,
@@ -82,20 +83,12 @@ router.get("/gstin", async (req, res) => {
 });
 
 router.post("/register", async (req, res) => {
-  const email = String(req.body?.email ?? "").trim().toLowerCase();
-  const password = String(req.body?.password ?? "");
-  const name = String(req.body?.name ?? "").trim();
-  const phone = blank(req.body?.phone);
-  const gstin = normalizeGstin(req.body?.gstin);
-
-  if (!email || password.length < 8) {
-    res.status(400).json({ error: "Email and password (min 8 chars) required" });
+  const parsed = validateRegisterPayload(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
     return;
   }
-  if (!isValidGstin(gstin)) {
-    res.status(400).json({ error: "A valid 15-character GSTIN is required" });
-    return;
-  }
+  const { accountType, email, password, name, phone, gstin } = parsed.data;
 
   const [existingUsers] = await pool.query(`SELECT id FROM users WHERE email = :email`, { email });
   if (Array.isArray(existingUsers) && existingUsers[0]) {
@@ -107,6 +100,89 @@ router.post("/register", async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+
+    // Individual: basic user details only — lightweight personal workspace (no GSTIN).
+    if (accountType === "individual") {
+      const displayName = name;
+      const [orgResult] = await conn.query(
+        `INSERT INTO organizations (name, owner_user_id) VALUES (:name, NULL)`,
+        { name: displayName },
+      );
+      const orgId = Number((orgResult as { insertId: number }).insertId);
+
+      const [profileResult] = await conn.query(
+        `INSERT INTO business_profiles
+          (organization_id, business_name, phone, email, home_tool_ids, is_default)
+         VALUES
+          (:orgId, :name, :phone, :email, NULL, 1)`,
+        { orgId, name: displayName, phone, email },
+      );
+      const profileId = Number((profileResult as { insertId: number }).insertId);
+
+      const [userResult] = await conn.query(
+        `INSERT INTO users (email, password_hash, name, phone, status)
+         VALUES (:email, :hash, :name, :phone, 'active')`,
+        { email, hash: passwordHash, name: displayName, phone },
+      );
+      const userId = Number((userResult as { insertId: number }).insertId);
+
+      await conn.query(
+        `INSERT IGNORE INTO user_verifications (user_id, kyc_status) VALUES (:userId, 'unverified')`,
+        { userId },
+      );
+      await conn.query(`UPDATE organizations SET owner_user_id = :userId WHERE id = :orgId`, {
+        userId,
+        orgId,
+      });
+      await conn.query(
+        `INSERT INTO org_members (organization_id, user_id, role) VALUES (:orgId, :userId, 'owner')`,
+        { orgId, userId },
+      );
+      await conn.query(
+        `INSERT IGNORE INTO branch_access (user_id, business_profile_id) VALUES (:userId, :profileId)`,
+        { userId, profileId },
+      );
+      await conn.query(
+        `INSERT INTO org_subscriptions (organization_id, plan_id, status) VALUES (:orgId, 'free', 'active')`,
+        { orgId },
+      );
+      await conn.query(
+        `INSERT INTO subscriptions (business_profile_id, plan_id, status) VALUES (:profileId, 'free', 'active')`,
+        { profileId },
+      );
+
+      await conn.commit();
+
+      const { ensureUserPlatformAdminFlag, isPlatformAdminEmail } = await import(
+        "../lib/platform-admin.js"
+      );
+      if (isPlatformAdminEmail(email)) {
+        await ensureUserPlatformAdminFlag(userId, email);
+      }
+
+      await logAudit(
+        "auth.register.individual",
+        "user",
+        String(userId),
+        { email, accountType: "individual", status: "active" },
+        req.ip,
+      );
+
+      const token = await createSession(userId, orgId, profileId);
+      setSessionCookie(res, token);
+      const user = await loadSessionUser(userId, orgId, profileId);
+      if (!user) {
+        res.status(500).json({ error: "Registration succeeded but session could not be created" });
+        return;
+      }
+      res.status(201).json({
+        pending: false,
+        joinedExisting: false,
+        email,
+        user,
+      });
+      return;
+    }
 
     let joinedExisting = false;
     let orgId: number;

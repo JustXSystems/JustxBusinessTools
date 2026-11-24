@@ -1,0 +1,69 @@
+import { isValidGstin, normalizeGstin } from "../gstin.js";
+
+export type AccountType = "individual" | "business";
+
+export type RegisterPayload = {
+  accountType: AccountType;
+  email: string;
+  password: string;
+  name: string;
+  phone: string | null;
+  gstin: string;
+};
+
+export type RegisterValidationOk = { ok: true; data: RegisterPayload };
+export type RegisterValidationErr = { ok: false; error: string };
+export type RegisterValidation = RegisterValidationOk | RegisterValidationErr;
+
+function blank(v: unknown): string | null {
+  const s = String(v ?? "").trim();
+  return s ? s : null;
+}
+
+/** Normalize client accountType; unknown values fall back to business. */
+export function normalizeAccountType(raw: unknown): AccountType {
+  const v = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  return v === "individual" ? "individual" : "business";
+}
+
+/**
+ * Validate the public registration body.
+ * Individual: email + password + name (no GSTIN).
+ * Business: email + password + valid GSTIN (name optional; business name checked later).
+ */
+export function validateRegisterPayload(body: unknown): RegisterValidation {
+  const src = body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+  const accountType = normalizeAccountType(src.accountType);
+  const email = String(src.email ?? "")
+    .trim()
+    .toLowerCase();
+  const password = String(src.password ?? "");
+  const name = String(src.name ?? "").trim();
+  const phone = blank(src.phone);
+  const gstin = normalizeGstin(src.gstin);
+
+  if (!email || password.length < 8) {
+    return { ok: false, error: "Email and password (min 8 chars) required" };
+  }
+
+  if (accountType === "individual") {
+    if (!name) {
+      return { ok: false, error: "Your name is required" };
+    }
+    return {
+      ok: true,
+      data: { accountType, email, password, name, phone, gstin: "" },
+    };
+  }
+
+  if (!isValidGstin(gstin)) {
+    return { ok: false, error: "A valid 15-character GSTIN is required" };
+  }
+
+  return {
+    ok: true,
+    data: { accountType, email, password, name, phone, gstin },
+  };
+}

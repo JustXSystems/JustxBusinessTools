@@ -1428,8 +1428,143 @@
   place-items: start center;
 }
 
+.bos.admin-bos .admin-cc-register::before {
+  height: 62%;
+  background:
+    radial-gradient(ellipse at 22% 35%, color-mix(in srgb, var(--bos-blue) 32%, transparent), transparent 58%),
+    radial-gradient(ellipse at 78% 18%, color-mix(in srgb, #00e5ff 22%, transparent), transparent 52%),
+    radial-gradient(ellipse at 55% 70%, color-mix(in srgb, #5b8cff 12%, transparent), transparent 48%);
+  animation: admin-cc-register-aurora 14s ease-in-out infinite alternate;
+}
+
+@keyframes admin-cc-register-aurora {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: translate3d(0, 2%, 0) scale(1.04);
+    opacity: 1;
+  }
+}
+
 .bos.admin-bos .admin-cc-register-card {
   width: min(980px, 100%);
+  border: 1px solid color-mix(in srgb, var(--bos-border) 70%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--bos-blue) 8%, transparent),
+    0 24px 60px color-mix(in srgb, #000 28%, transparent),
+    0 0 80px color-mix(in srgb, var(--bos-blue) 10%, transparent);
+  backdrop-filter: blur(10px);
+  transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
+}
+
+.bos.admin-bos .admin-cc-register-card--individual {
+  width: min(480px, 100%);
+}
+
+.bos.admin-bos .admin-cc-register-type {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.bos.admin-bos .admin-cc-register-type-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  padding: 14px 14px 13px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--bos-text);
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--bos-surface-raised, var(--bos-surface)) 92%, transparent), transparent),
+    var(--bos-surface);
+  border: 1px solid var(--bos-border-soft);
+  border-radius: 14px;
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    background 0.22s ease;
+}
+
+.bos.admin-bos .admin-cc-register-type-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--bos-blue) 45%, var(--bos-border));
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bos-blue) 14%, transparent);
+}
+
+.bos.admin-bos .admin-cc-register-type-card.is-active {
+  border-color: color-mix(in srgb, var(--bos-blue) 70%, var(--bos-border));
+  background:
+    linear-gradient(155deg, color-mix(in srgb, var(--bos-blue) 18%, transparent), transparent 55%),
+    var(--bos-surface);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--bos-blue) 35%, transparent),
+    0 12px 32px color-mix(in srgb, var(--bos-blue) 18%, transparent);
+}
+
+.bos.admin-bos .admin-cc-register-type-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--bos-blue);
+  background: color-mix(in srgb, var(--bos-blue) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bos-blue) 28%, transparent);
+}
+
+.bos.admin-bos .admin-cc-register-type-card.is-active .admin-cc-register-type-icon {
+  color: #fff;
+  background: linear-gradient(145deg, var(--bos-blue), color-mix(in srgb, #00dfff 55%, var(--bos-blue)));
+  border-color: transparent;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--bos-blue) 45%, transparent);
+}
+
+.bos.admin-bos .admin-cc-register-type-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.bos.admin-bos .admin-cc-register-type-copy strong {
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.bos.admin-bos .admin-cc-register-type-copy span {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--bos-text-muted);
+}
+
+.bos.admin-bos .admin-cc-register-segment {
+  display: none;
+}
+
+.bos.admin-bos .admin-cc-register-lead {
+  margin: 0;
+  animation: admin-cc-register-fade 0.35s ease;
+}
+
+.bos.admin-bos .admin-cc-register-panels {
+  animation: admin-cc-register-fade 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes admin-cc-register-fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .bos.admin-bos .admin-cc-register-grid {
@@ -1448,6 +1583,13 @@
   padding: 14px 16px 16px;
   border: 1px solid var(--bos-border-soft);
   border-radius: 14px;
+  background: color-mix(in srgb, var(--bos-surface) 55%, transparent);
+}
+
+.bos.admin-bos .admin-cc-register-fieldset--solo {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bos-blue) 6%, transparent), transparent 40%),
+    color-mix(in srgb, var(--bos-surface) 55%, transparent);
 }
 
 .bos.admin-bos .admin-cc-register-fieldset legend {
@@ -1475,12 +1617,64 @@
   background: var(--bos-surface);
   font-size: 28px;
   overflow: hidden;
+  color: var(--bos-text-muted);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bos.admin-bos .admin-cc-register-logo:hover {
+  border-color: color-mix(in srgb, var(--bos-blue) 50%, var(--bos-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bos-blue) 12%, transparent);
+}
+
+.bos.admin-bos .admin-cc-register-logo-fallback {
+  display: grid;
+  place-items: center;
+  opacity: 0.7;
 }
 
 .bos.admin-bos .admin-cc-register-logo img {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+.bos.admin-bos .admin-cc-register-submit {
+  position: relative;
+  overflow: hidden;
+}
+
+.bos.admin-bos .admin-cc-register-submit::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    color-mix(in srgb, #fff 22%, transparent) 50%,
+    transparent 60%
+  );
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+
+.bos.admin-bos .admin-cc-register-submit:not(:disabled):hover::after {
+  animation: admin-cc-register-sheen 0.9s ease;
+}
+
+@keyframes admin-cc-register-sheen {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+@media (max-width: 560px) {
+  .bos.admin-bos .admin-cc-register-type {
+    display: none;
+  }
+
+  .bos.admin-bos .admin-cc-register-segment {
+    display: block;
+  }
 }
 
 .bos.admin-bos .admin-cc-enter {

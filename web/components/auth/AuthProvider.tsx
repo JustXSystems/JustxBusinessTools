@@ -32,6 +32,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<SessionUser>;
   verifyOtp: (phone: string, code: string) => Promise<SessionUser>;
   register: (input: {
+    accountType?: "individual" | "business";
     email: string;
     password: string;
     name?: string;
@@ -140,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(
     async (input: {
+      accountType?: "individual" | "business";
       email: string;
       password: string;
       name?: string;
