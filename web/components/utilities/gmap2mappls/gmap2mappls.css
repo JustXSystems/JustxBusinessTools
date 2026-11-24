@@ -4,52 +4,68 @@
   Full-bleed app:
   html/body locked → shell 100dvh → canvas 0 padding →
   [nav | scroll | dock] stacked, each width 100%.
+
+  Critical for real phones: never let document width exceed the
+  layout viewport (blurred orbs / 100vw caused shrink-to-fit zoom-out).
 */
 html:has(.pinway-standalone-shell),
 html:has(.pinway-route-root),
 html:has(.pinway-standalone-shell) body,
 html:has(.pinway-route-root) body {
-  width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
   height: 100%;
-  max-width: 100%;
   max-height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  overflow-x: clip !important;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
 }
 
 html:has(.pinway-standalone-shell) body,
 html:has(.pinway-route-root) body {
   min-height: 0;
+  min-width: 0;
   background: var(--bos-ims-canvas, var(--bg-0, #f4f6fb));
+  position: relative;
 }
 
 .pinway-route-root {
   position: fixed;
   inset: 0;
   width: 100%;
-  max-width: 100vw;
+  max-width: none;
   height: 100%;
   height: 100dvh;
   height: 100svh;
   margin: 0;
   padding: 0;
   overflow: hidden;
+  overflow-x: clip;
+  contain: layout paint style;
   z-index: 1;
+  box-sizing: border-box;
 }
 
 .pinway-standalone-shell {
   position: absolute;
   inset: 0;
   width: 100%;
-  max-width: 100%;
+  max-width: none;
   height: 100%;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overflow-x: clip;
   overscroll-behavior: none;
+  contain: layout paint;
+  box-sizing: border-box;
 }
 
 .pinway-standalone-shell > .bos.pinway-ims {
@@ -171,13 +187,15 @@ html:has(.pinway-route-root) body {
   display: none;
 }
 
-/* Ambient spatial layer */
+/* Ambient layer — desktop only. Blurred oversized orbs expand
+   scrollable overflow on real mobile WebKit/Chrome → shrink-to-fit zoom-out. */
 .bos .g2m-space {
   pointer-events: none;
   position: absolute;
-  inset: -8% -12%;
+  inset: 0;
   z-index: 0;
   overflow: hidden;
+  contain: strict;
 }
 
 .bos .g2m-space::before {
@@ -194,24 +212,31 @@ html:has(.pinway-route-root) body {
 
 .bos .g2m-space-orb {
   position: absolute;
-  width: min(62vw, 520px);
-  height: min(62vw, 520px);
+  width: min(42%, 420px);
+  height: min(42%, 420px);
+  max-width: 100%;
   border-radius: 50%;
-  left: calc(var(--g2m-mx) - 20%);
-  top: calc(var(--g2m-my) - 25%);
+  left: calc(var(--g2m-mx) - 18%);
+  top: calc(var(--g2m-my) - 22%);
   background: radial-gradient(circle, color-mix(in srgb, var(--bos-ims-cyan) 34%, transparent), transparent 68%);
-  filter: blur(8px);
+  /* no filter:blur — expands overflow boxes on mobile */
   transition: left 0.45s var(--g2m-ease), top 0.45s var(--g2m-ease);
   animation: g2m-breathe 8s ease-in-out infinite;
 }
 
 .bos .g2m-space-orb--2 {
-  width: min(48vw, 380px);
-  height: min(48vw, 380px);
-  left: calc(var(--g2m-mx) + 8%);
-  top: calc(var(--g2m-my) + 18%);
+  width: min(34%, 300px);
+  height: min(34%, 300px);
+  left: calc(var(--g2m-mx) + 6%);
+  top: calc(var(--g2m-my) + 16%);
   background: radial-gradient(circle, color-mix(in srgb, var(--bos-blue) 28%, transparent), transparent 70%);
   animation-delay: -3s;
+}
+
+@media (max-width: 959px), (hover: none) {
+  .bos .g2m-space {
+    display: none !important;
+  }
 }
 
 /* Native-style app nav — full bleed, fixed in shell stack */
@@ -1053,7 +1078,7 @@ html:has(.pinway-route-root) body {
   color: var(--bos-text);
 }
 
-/* Phone / tablet: force full-bleed, no centered card column */
+/* Phone / tablet: force full-bleed + readable density */
 @media (max-width: 959px) {
   .bos .g2m-app--standalone,
   .bos.pinway-ims--standalone .g2m-app {
@@ -1067,21 +1092,22 @@ html:has(.pinway-route-root) body {
   }
 
   .bos .g2m-app--standalone {
-    --g2m-inset: 14px;
+    --g2m-inset: 12px;
   }
 
   .bos .g2m--standalone {
-    gap: 10px;
-    padding-top: 10px;
-    padding-bottom: 12px;
+    gap: 12px;
+    padding-top: 12px;
+    padding-bottom: 14px;
+    font-size: 16px;
   }
 
   .bos .g2m-title {
-    font-size: 1rem;
+    font-size: 1.125rem;
   }
 
   .bos .g2m-eyebrow {
-    font-size: 10.5px;
+    font-size: 12px;
   }
 
   .bos .g2m-tile {
@@ -1089,34 +1115,87 @@ html:has(.pinway-route-root) body {
   }
 
   .bos .g2m-tile > * {
-    padding: 12px 14px;
+    padding: 14px 14px;
+  }
+
+  .bos .g2m-field-label {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  .bos .g2m-beam-step {
+    min-height: 36px;
+    font-size: 13px;
   }
 
   .bos .g2m-secondary summary {
-    padding: 12px 14px;
+    padding: 14px;
+    font-size: 15px;
   }
 
   .bos .g2m-secondary .g2m-more {
-    padding: 0 14px 12px;
+    padding: 0 14px 14px;
   }
 
   .bos .g2m-spotlight textarea.bos-input {
-    min-height: 88px;
-    font-size: 16px; /* avoid iOS zoom */
+    min-height: 104px;
+    font-size: 16px; /* avoid iOS focus zoom */
+    line-height: 1.45;
+  }
+
+  .bos.pinway-ims select.bos-input:not([multiple]):not([size]),
+  .bos .g2m select.bos-input:not([multiple]):not([size]) {
+    min-height: 48px;
+    font-size: 16px;
   }
 
   .bos .g2m-loading--compact {
-    min-height: 56px;
-  }
-
-  .bos .g2m-space {
-    opacity: 0.28;
+    min-height: 64px;
   }
 
   .bos .g2m-island .bos-btn,
   .bos .g2m-island a.bos-btn {
-    min-height: 50px;
+    min-height: 52px;
+    font-size: 16px;
     border-radius: 12px !important;
+  }
+
+  .bos .g2m-lock {
+    padding: 14px;
+  }
+
+  .bos .g2m-lock strong {
+    font-size: 1.15rem;
+  }
+}
+
+/* Real touch phones: denser chrome, larger tap targets (DevTools desktop
+   resize keeps pointer:fine so it won't get this block). */
+@media (hover: none) and (pointer: coarse) {
+  .bos .g2m-app--standalone {
+    --g2m-inset: 12px;
+  }
+
+  .bos .g2m-nav {
+    padding-top: max(12px, env(safe-area-inset-top, 0px));
+    padding-bottom: 12px;
+  }
+
+  .bos .g2m-logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .bos .g2m-title {
+    font-size: 1.2rem;
+  }
+
+  .bos .g2m--standalone {
+    gap: 14px;
+  }
+
+  .bos .g2m-island-bar {
+    padding-top: 12px;
   }
 }
 

@@ -1,4 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { getBasePath } from "@/lib/base-path";
+
+const base = getBasePath();
+const iconPath = `${base}/icons/googlemaps2mappls-icon.png`;
+const manifestPath = `${base}/googlemaps2mappls/manifest`;
 
 export const metadata: Metadata = {
   title: "Google Maps to Mappls | GoogleMaps2Mappls",
@@ -22,21 +27,20 @@ export const metadata: Metadata = {
     title: "Google Maps to Mappls",
     description: "Convert a Google Maps link to a Mappls Pin and open your car app.",
     siteName: "GoogleMaps2Mappls",
-    images: [{ url: "/icons/googlemaps2mappls-icon.png", width: 512, height: 512, alt: "GoogleMaps2Mappls" }],
+    images: [{ url: iconPath, width: 512, height: 512, alt: "GoogleMaps2Mappls" }],
   },
   icons: {
-    icon: [{ url: "/icons/googlemaps2mappls-icon.png", type: "image/png", sizes: "512x512" }],
-    apple: "/icons/googlemaps2mappls-icon.png",
+    icon: [{ url: iconPath, type: "image/png", sizes: "512x512" }],
+    apple: iconPath,
   },
-  manifest: "/googlemaps2mappls/manifest.webmanifest",
+  manifest: manifestPath,
 };
 
 export const viewport: Viewport = {
   themeColor: "#4854EB",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  minimumScale: 1,
   viewportFit: "cover",
 };
 

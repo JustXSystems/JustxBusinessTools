@@ -72,6 +72,17 @@ export function openStandaloneAppWindow(
 ): Window | null {
   if (typeof window === "undefined") return null;
   const url = absoluteHref || href;
+
+  // Phones/tablets: same-tab navigation. Popup features are ignored or create
+  // oddly scaled windows on real mobile browsers.
+  const isTouchUi =
+    window.matchMedia("(hover: none) and (pointer: coarse)").matches ||
+    window.matchMedia("(max-width: 900px)").matches;
+  if (isTouchUi) {
+    window.location.assign(url);
+    return window;
+  }
+
   const features = STANDALONE_APP_WINDOW_FEATURES[toolId] || "popup=yes,width=440,height=860,resizable=yes,scrollbars=yes";
   const name = `jbt-app-${toolId}`;
   try {
