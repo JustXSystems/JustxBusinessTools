@@ -43,7 +43,7 @@
 
 .bos .g2m.g2m--embedded {
   max-width: 48rem;
-  padding-bottom: 32px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Ambient spatial layer */
@@ -267,14 +267,22 @@
   background: var(--bos-ims-grad-success);
 }
 
-/* Bento */
-.bos .g2m-bento {
-  position: relative;
-  z-index: 2;
+/* Command tile */
+.bos .g2m-command {
   display: grid;
   gap: 12px;
-  grid-template-columns: 1fr;
+  position: relative;
+  z-index: 2;
 }
+
+.bos .g2m-more {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.bos .g2m-live:empty { display: none; }
+.bos .g2m-live { display: grid; gap: 12px; }
 
 .bos .g2m-tile {
   position: relative;
@@ -307,10 +315,6 @@
   background:
     radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--bos-ims-cyan) 16%, transparent), transparent 55%),
     var(--g2m-glass);
-}
-
-.bos .g2m-tile--live {
-  min-height: 160px;
 }
 
 .bos .g2m-kicker {
@@ -480,6 +484,10 @@
   text-align: center;
   color: var(--bos-text-muted);
   font-weight: 650;
+}
+
+.bos .g2m-loading--compact {
+  min-height: 88px;
 }
 
 .bos .g2m-radar {
@@ -771,25 +779,8 @@
     padding: 0 0 24px;
   }
 
-  .bos .g2m--desktop.g2m--standalone .g2m-bento {
-    grid-template-columns: 1.15fr 0.85fr;
-    grid-template-areas:
-      "hero live"
-      "brand live"
-      "map map";
-  }
-
-  .bos .g2m--desktop.g2m--standalone .g2m-tile--hero { grid-area: hero; }
-  .bos .g2m--desktop.g2m--standalone .g2m-tile--brand { grid-area: brand; }
-  .bos .g2m--desktop.g2m--standalone .g2m-tile--live { grid-area: live; min-height: 100%; }
-  .bos .g2m--desktop.g2m--standalone .g2m-tile--map { grid-area: map; }
-
   .bos .g2m--desktop.g2m--standalone .g2m-island {
     width: min(520px, calc(100% - 48px));
-  }
-
-  .bos .g2m--desktop .g2m-guide-layout {
-    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .bos .g2m--desktop .g2m-map {
