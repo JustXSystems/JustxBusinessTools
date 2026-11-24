@@ -1,12 +1,18 @@
 "use client";
 
+import { ToastProvider } from "@/components/common/ToastProvider";
+import { SubscriptionProvider } from "@/components/subscription/SubscriptionProvider";
 import { Gmap2MapplsTool } from "@/components/utilities/Gmap2MapplsTool";
 
-/** Full-screen Pinway app (no JBT chrome). Same engine as /tools/gmap2mappls. */
+/** Full-screen Pinway app (no JBT chrome). Requires login + trial/subscription. */
 export function PinwayStandalone() {
   return (
     <div className="pinway-standalone">
-      <Gmap2MapplsTool variant="standalone" />
+      <ToastProvider>
+        <SubscriptionProvider>
+          <Gmap2MapplsTool variant="standalone" />
+        </SubscriptionProvider>
+      </ToastProvider>
     </div>
   );
 }

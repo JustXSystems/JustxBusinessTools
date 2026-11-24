@@ -77,8 +77,8 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const PUBLIC_PREFIXES = ["/login", "/register", "/status", "/q", "/bom/proposal"];
-/** Apps with their own shell (BOS / IMS sign-in, or public Pinway). */
-const SELF_GATED_ROOTS = ["/bos", "/ims", "/pinway"];
+/** Apps with their own sign-in screen (standalone BOS / IMS). Pinway requires JBT login + license. */
+const SELF_GATED_ROOTS = ["/bos", "/ims"];
 
 export function isPublicPath(pathname: string): boolean {
   return (

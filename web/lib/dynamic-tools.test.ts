@@ -44,7 +44,7 @@ describe("opt-in tools", () => {
     expect(getToolDefinition("qrgenerator")?.showOnHome).toBe(true);
     expect(homeIds([], null)).toContain("qrgenerator");
     expect(getToolDefinition("gmap2mappls")?.showOnHome).toBe(true);
-    expect(getToolDefinition("gmap2mappls")?.subscriptionExempt).toBe(true);
+    expect(getToolDefinition("gmap2mappls")?.subscriptionExempt).toBe(false);
     expect(homeIds([], null)).toContain("gmap2mappls");
   });
 });

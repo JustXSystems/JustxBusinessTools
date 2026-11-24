@@ -4,11 +4,20 @@
 
 Paste a **Google Maps share link**, a **full Indian address**, or **lat,lng**. Pinway finds that **same geographic point** on Mappls and opens the right OEM companion app (Simple Connect, Adrenox, Me4U, Bluelink, …).
 
+### Pricing
+
+| | |
+|--|--|
+| After registration | **14 days free** (auto-started on first open) |
+| Then | **₹100 / month** or **₹1000 / year** |
+
+Requires Justxsystems login. Resolve checks session + active trial/license.
+
 | Surface | URL |
 |---------|-----|
 | Standalone app (mobile / A2HS) | `/pinway` |
 | Embedded tool (redirects to standalone by default) | `/tools/gmap2mappls` |
-| API | `POST /api/public/gmap2mappls/resolve` · `GET /api/public/gmap2mappls/meta` |
+| API | `POST /api/public/gmap2mappls/resolve` (auth + license) · `GET /api/public/gmap2mappls/meta` |
 
 Internal catalog / API id remains `gmap2mappls`.
 

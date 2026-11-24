@@ -32,7 +32,19 @@ import {
   type ResolveResult,
 } from "@jbt/shared";
 import { apiUrl } from "@/lib/api-base";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useToast } from "@/components/common/ToastProvider";
 import "./gmap2mappls/gmap2mappls.css";
+
+const PINWAY_TOOL_ID = "gmap2mappls";
+
+function inr(n: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(n);
+}
 
 type QrState = { dataUrl: string; payload: string } | null;
 
@@ -121,8 +133,33 @@ export function Gmap2MapplsTool({
   const brandIdRef = useRef(brandId);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const appHelpTimerRef = useRef<number | null>(null);
+  const autoTrialRef = useRef(false);
+
+  const { subscription, loading: subLoading, isToolLicensed, startTrial, openUpgrade } =
+    useSubscription();
+  const { showToast } = useToast();
+  const pinwaySku = subscription?.catalog?.find((s) => s.toolId === PINWAY_TOOL_ID);
+  const pinwayLicensed = isToolLicensed(PINWAY_TOOL_ID);
+  const pinwayTrialEligible = Boolean(
+    pinwaySku?.trialEligible && (pinwaySku.trialDays ?? 0) > 0 && !pinwayLicensed,
+  );
+  const pinwayLocked = !subLoading && !pinwayLicensed;
 
   const brands = OEM_BRANDS;
+
+  // First open after registration: start the 14-day Pinway trial automatically.
+  useEffect(() => {
+    if (subLoading || pinwayLicensed || !pinwayTrialEligible || autoTrialRef.current) return;
+    autoTrialRef.current = true;
+    void startTrial(PINWAY_TOOL_ID)
+      .then(() => {
+        showToast("Pinway 14-day free trial started");
+      })
+      .catch((err) => {
+        autoTrialRef.current = false;
+        showToast(err instanceof Error ? err.message : "Could not start Pinway trial");
+      });
+  }, [subLoading, pinwayLicensed, pinwayTrialEligible, startTrial, showToast]);
 
   useEffect(() => {
     brandIdRef.current = brandId;
@@ -417,6 +454,23 @@ export function Gmap2MapplsTool({
         setResult(null);
         return;
       }
+      if (!isToolLicensed(PINWAY_TOOL_ID)) {
+        if (pinwayTrialEligible) {
+          try {
+            autoTrialRef.current = true;
+            await startTrial(PINWAY_TOOL_ID);
+            showToast("Pinway 14-day free trial started");
+          } catch (err) {
+            autoTrialRef.current = false;
+            setError(err instanceof Error ? err.message : "Could not start trial");
+            return;
+          }
+        } else {
+          setError("Subscribe to Pinway (₹100/mo or ₹1000/yr) to resolve places.");
+          openUpgrade(PINWAY_TOOL_ID);
+          return;
+        }
+      }
       const brandAtStart = brandIdRef.current;
       setLoading(true);
       setError(null);
@@ -431,10 +485,17 @@ export function Gmap2MapplsTool({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ input: q }),
         });
-        const data = (await res.json()) as ResolveResult | { ok: false; error: string };
+        const data = (await res.json()) as ResolveResult | { ok: false; error: string; code?: string };
         if (!res.ok || !data.ok) {
           setResult(null);
-          setError(("error" in data && data.error) || "Could not resolve that location.");
+          if ("code" in data && data.code === "license_required") {
+            setError(data.error || "Pinway subscription required.");
+            openUpgrade(PINWAY_TOOL_ID);
+          } else if ("code" in data && data.code === "auth_required") {
+            setError(data.error || "Sign in to use Pinway.");
+          } else {
+            setError(("error" in data && data.error) || "Could not resolve that location.");
+          }
           return;
         }
         setResult(data);
@@ -478,7 +539,16 @@ export function Gmap2MapplsTool({
         setLoading(false);
       }
     },
-    [openAutoUrl, pulsePinIfNeeded, rememberPlace],
+    [
+      openAutoUrl,
+      pulsePinIfNeeded,
+      rememberPlace,
+      isToolLicensed,
+      pinwayTrialEligible,
+      startTrial,
+      showToast,
+      openUpgrade,
+    ],
   );
 
   const pasteAndFind = useCallback(async () => {
@@ -637,6 +707,44 @@ export function Gmap2MapplsTool({
           );
         })}
       </ol>
+
+      {pinwayLocked ? (
+        <section className="g2m-paywall" aria-label="Pinway subscription">
+          <strong>{pinwayTrialEligible ? "Start your free trial" : "Subscribe to Pinway"}</strong>
+          <p className="g2m-auto-note">
+            {pinwayTrialEligible
+              ? "New accounts get 14 days free. After that: ₹100/month or ₹1000/year."
+              : "Your free trial has ended. Continue for ₹100/month or ₹1000/year."}
+          </p>
+          <div className="g2m-actions">
+            {pinwayTrialEligible ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  void startTrial(PINWAY_TOOL_ID)
+                    .then(() => showToast("Pinway 14-day free trial started"))
+                    .catch((err) =>
+                      showToast(err instanceof Error ? err.message : "Could not start trial"),
+                    );
+                }}
+              >
+                Start 14-day free trial
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => openUpgrade(PINWAY_TOOL_ID)}
+            >
+              Subscribe · {inr(pinwaySku?.priceInr ?? 100)}/mo
+              {pinwaySku?.annualPriceInr
+                ? ` or ${inr(pinwaySku.annualPriceInr)}/yr`
+                : " or ₹1,000/yr"}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="g2m-composer">
         <div className="g2m-brand-picker" aria-label="Vehicle brand">

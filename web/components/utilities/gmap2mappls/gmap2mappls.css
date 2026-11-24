@@ -382,6 +382,21 @@
   font-size: 0.92rem;
 }
 
+.g2m-paywall {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem 1.05rem;
+  border-radius: var(--pw-radius);
+  border: 1px solid rgba(61, 222, 199, 0.35);
+  background: linear-gradient(145deg, rgba(61, 222, 199, 0.12), rgba(26, 111, 140, 0.14));
+}
+
+.g2m-paywall strong {
+  font-family: var(--pw-font-display);
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
 .g2m-spinner {
   width: 1.05rem;
   height: 1.05rem;

@@ -21,5 +21,8 @@ export function isUnauthenticatedApiPath(pathname: string): boolean {
   );
 }
 
-/** Explicit public free-tool APIs (covered by /api/public/ prefix; listed for tests/docs). */
+/**
+ * Public-prefix APIs that still apply their own auth/license checks inside the route.
+ * Pinway meta stays open; resolve requires session + trial/subscription.
+ */
 export const PUBLIC_FREE_TOOL_PREFIXES = ["/api/public/gmap2mappls"] as const;

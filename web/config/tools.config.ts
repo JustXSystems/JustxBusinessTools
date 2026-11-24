@@ -60,7 +60,13 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
   { id: "notifications", name: "Notifications", category: "Utilities", icon: "🔔", desc: "Reminders across every tool" },
   { id: "qrscanner", name: "QR Code Scanner", category: "Utilities", icon: "🔳", desc: "Scan or generate QR codes" },
   { id: "qrgenerator", name: "QR Code Generator", category: "Utilities", icon: "🎨", desc: "Branded QR for UPI, Wi-Fi, vCard, maps & more" },
-  { id: "gmap2mappls", name: "Pinway", category: "Utilities", icon: "📍", desc: "Drop any Google place into your car app" },
+  {
+    id: "gmap2mappls",
+    name: "Pinway",
+    category: "Utilities",
+    icon: "📍",
+    desc: "Google place → car app · 14-day free trial, then ₹100/mo or ₹1000/yr",
+  },
   { id: "bosdesign", name: "Justxsystems BOS Design", category: "Utilities", icon: "🧩", desc: "Standard UI/UX system with live HR, Finance & Invoice samples" },
   { id: "bos", name: "Justxsystems BOS", category: "Utilities", icon: "🏢", desc: "Business Operating System — Finance, GST invoicing, HR & projects, synced with your tools" },
   { id: "imsdealer", name: "Justxsystems IMS — Dealer", category: "Utilities", icon: "📦", desc: "Inventory, purchasing, GST sales, receivables & field ops for dealers and distributors" },
@@ -136,6 +142,7 @@ export function getToolDefinition(id: string): ToolDefinition | undefined {
     id !== "quotationv1" &&
     id !== "sitesurveyv1" &&
     id !== "seo-meridian" &&
+    id !== "gmap2mappls" &&
     (type === "calculator" || type === "utility" || id === "notifications");
   return {
     ...entry,
