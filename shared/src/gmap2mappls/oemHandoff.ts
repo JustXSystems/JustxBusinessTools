@@ -320,6 +320,10 @@ export type BrandPlaybook = {
    * copy + app launch share one user gesture (Mahindra / Push-to-car).
    */
   deferAutoOpen?: boolean;
+  /** Android/iOS Web Share payload (Pin + Mappls link) when supported. */
+  share?: { title: string; text: string; url?: string };
+  /** Copy Pin for the vehicle’s built-in Mappls search (skip phone app). */
+  inCar?: { label: string; copyText: string };
 };
 
 function parsePasteCoords(paste: BrandPasteLinks): { lat: number; lng: number } {
@@ -381,6 +385,7 @@ export function buildBrandPlaybook(
           };
 
       if (pin) {
+        const dest = place || pin;
         return {
           brand,
           autoOpenUrl: launchUrl,
@@ -394,8 +399,17 @@ export function buildBrandPlaybook(
           qrPayload: pin,
           rejectLatLngPaste: true,
           deferAutoOpen: true,
+          share: {
+            title: `Mappls Pin ${pin}`,
+            text: `Destination: ${dest}\nMappls Pin: ${pin}\nPaste in ${app.name} or vehicle Mappls search → Push to car / Start. Never paste lat,lng.`,
+            url: paste.mapplsPinUrl,
+          },
+          inCar: {
+            label: `Copy Pin ${pin} for vehicle Mappls`,
+            copyText: pin,
+          },
           steps: [
-            `Tap the button (copies Pin + opens ${app.name}). Paste Pin “${pin}” in search → Push to car. Never paste lat,lng.`,
+            `Phone: tap button (copies Pin + opens ${app.name}) → paste “${pin}” → Push to car. Or already in the car: copy Pin into vehicle Mappls search. Never paste lat,lng.`,
           ],
           backup: mapplsBackup,
         };
@@ -417,6 +431,13 @@ export function buildBrandPlaybook(
         qrPayload: place || (coordsOk ? navUrl : paste.googleMapsUrl),
         rejectLatLngPaste: true,
         deferAutoOpen: true,
+        share: place
+          ? {
+              title: place,
+              text: `Destination: ${place}\nPaste in ${app.name} search → Push to car. Never paste lat,lng.`,
+              url: coordsOk ? navUrl : paste.googleMapsUrl,
+            }
+          : undefined,
         steps: [
           place
             ? `Pin unavailable. Tap the button (copies place name + opens ${app.name}). Paste “${place}” → Push to car. Use Mappls 4W backup to verify the exact point.`

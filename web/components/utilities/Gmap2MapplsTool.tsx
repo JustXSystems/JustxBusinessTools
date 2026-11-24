@@ -173,6 +173,26 @@ export function Gmap2MapplsTool() {
     return buildBrandPlaybook(brandId, result.paste);
   }, [result?.paste, brandId]);
 
+  const canNativeShare =
+    typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  const onShare = useCallback(async () => {
+    if (!playbook?.share || !canNativeShare) return;
+    try {
+      await navigator.share({
+        title: playbook.share.title,
+        text: playbook.share.text,
+        url: playbook.share.url,
+      });
+      setCopied("share");
+      window.setTimeout(() => setCopied((c) => (c === "share" ? null : c)), 1600);
+    } catch (err) {
+      // User cancel is fine; other errors fall back to clipboard of Pin/text.
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      if (playbook.autoCopyText) await onCopy("share", playbook.autoCopyText);
+    }
+  }, [playbook, canNativeShare, onCopy]);
+
   // QR: prefer playbook.qrPayload (Pin text / HTTPS). Avoid encoding LAUNCHER
   // intent:# URLs that many camera scanners reject.
   useEffect(() => {
@@ -531,6 +551,20 @@ export function Gmap2MapplsTool() {
                     : result.paste.mapplsPin && playbook.autoCopyText === result.paste.mapplsPin
                       ? `Copy Pin (${result.paste.mapplsPin})`
                       : "Copy again for paste"}
+                </button>
+              ) : null}
+              {canNativeShare && playbook.share ? (
+                <button type="button" className="btn btn-secondary" onClick={() => void onShare()}>
+                  {copied === "share" ? "Shared" : "Share Pin / link…"}
+                </button>
+              ) : null}
+              {playbook.inCar ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => void onCopy("incar", playbook.inCar?.copyText || "")}
+                >
+                  {copied === "incar" ? "Copied for vehicle" : playbook.inCar.label}
                 </button>
               ) : null}
             </div>

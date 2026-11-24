@@ -239,6 +239,10 @@ describe("gmap2mappls urls + samples", () => {
     expect(mahindra?.steps[0]).toMatch(/Push to car/i);
     expect(mahindra?.steps[0].toLowerCase()).toMatch(/never paste lat/);
     expect(mahindra?.backup?.href).toContain("mode=driving");
+    expect(mahindra?.share?.text).toContain("kcf7zj");
+    expect(mahindra?.share?.url).toBe("https://www.mappls.com/kcf7zj");
+    expect(mahindra?.inCar?.copyText).toBe("kcf7zj");
+    expect(mahindra?.inCar?.label).toMatch(/vehicle Mappls/i);
 
     // No Pin: STILL open Adrenox (not Mappls) — avoid Simple Connect “wrong app” bug
     const noPin = buildPasteKit(12.877073, 77.613574, {
