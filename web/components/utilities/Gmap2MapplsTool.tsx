@@ -34,6 +34,18 @@ import {
 import { apiUrl } from "@/lib/api-base";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/components/common/ToastProvider";
+import {
+  Alert,
+  BosRoot,
+  Button,
+  FilterChip,
+  Input,
+  Segmented,
+  Select,
+  Textarea,
+  ThemeToggle,
+  useBosTheme,
+} from "@/components/bos";
 import "./gmap2mappls/gmap2mappls.css";
 
 const PINWAY_TOOL_ID = "gmap2mappls";
@@ -104,6 +116,11 @@ function deviceClass(onAndroid: boolean, onIos: boolean): string {
   if (onAndroid) return "g2m--android";
   if (onIos) return "g2m--ios";
   return "g2m--desktop";
+}
+
+function PinwayThemeToggle() {
+  const { theme, setTheme } = useBosTheme();
+  return <ThemeToggle theme={theme} onChange={setTheme} />;
 }
 
 export function Gmap2MapplsTool({
@@ -660,30 +677,29 @@ export function Gmap2MapplsTool({
     }
   };
 
-  return (
+  const body = (
     <div
       className={`g2m tool-workspace ${deviceClass(onAndroid, onIos)} g2m--${variant}`}
     >
-      <section className="g2m-hero">
-        <div className="g2m-hero-top">
-          <div>
-            <p className="g2m-eyebrow">Justxsystems</p>
-            <h1 className="g2m-brand">{PINWAY_PRODUCT_NAME}</h1>
-            <p className="g2m-tag">{PINWAY_TAGLINE}</p>
-          </div>
-        </div>
-        {showA2hs ? (
-          <p className="g2m-a2hs" role="note">
-            <strong>Add to Home Screen</strong>
-            {onIos
-              ? " — Share → Add to Home Screen for a full-screen Pinway app."
-              : " — Browser menu → Install / Add to Home screen."}{" "}
-            <button type="button" className="g2m-linkish" onClick={dismissA2hs}>
-              Got it
-            </button>
-          </p>
-        ) : null}
-      </section>
+      <div className="g2m-topbar">
+        <section className="g2m-hero" style={{ flex: 1 }}>
+          <p className="g2m-eyebrow">Justxsystems</p>
+          <h1 className="g2m-brand">{PINWAY_PRODUCT_NAME}</h1>
+          <p className="g2m-tag">{PINWAY_TAGLINE}</p>
+          {showA2hs ? (
+            <p className="g2m-a2hs" role="note">
+              <strong>Add to Home Screen</strong>
+              {onIos
+                ? " — Share → Add to Home Screen for a full-screen Pinway app."
+                : " — Browser menu → Install / Add to Home screen."}{" "}
+              <button type="button" className="g2m-linkish" onClick={dismissA2hs}>
+                Got it
+              </button>
+            </p>
+          ) : null}
+        </section>
+        <PinwayThemeToggle />
+      </div>
 
       <ol className="g2m-stages" aria-label="Pinway steps">
         {(
@@ -718,9 +734,8 @@ export function Gmap2MapplsTool({
           </p>
           <div className="g2m-actions">
             {pinwayTrialEligible ? (
-              <button
-                type="button"
-                className="btn btn-primary"
+              <Button
+                variant="primary"
                 onClick={() => {
                   void startTrial(PINWAY_TOOL_ID)
                     .then(() => showToast("Pinway 14-day free trial started"))
@@ -730,72 +745,53 @@ export function Gmap2MapplsTool({
                 }}
               >
                 Start 14-day free trial
-              </button>
+              </Button>
             ) : null}
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => openUpgrade(PINWAY_TOOL_ID)}
-            >
+            <Button variant="secondary" onClick={() => openUpgrade(PINWAY_TOOL_ID)}>
               Subscribe · {inr(pinwaySku?.priceInr ?? 100)}/mo
               {pinwaySku?.annualPriceInr
                 ? ` or ${inr(pinwaySku.annualPriceInr)}/yr`
                 : " or ₹1,000/yr"}
-            </button>
+            </Button>
           </div>
         </section>
       ) : null}
 
       <section className="g2m-composer">
         <div className="g2m-brand-picker" aria-label="Vehicle brand">
-          <div className="g2m-seg" role="group" aria-label="Segment">
-            {(
-              [
-                ["all", "All"],
-                ["2W", "2W"],
-                ["4W", "4W"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={`g2m-seg-btn${segment === id ? " is-active" : ""}`}
-                aria-pressed={segment === id}
-                onClick={() => setSegment(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            aria-label="Segment"
+            role="radio"
+            size="sm"
+            value={segment}
+            onChange={setSegment}
+            options={[
+              { value: "all", label: "All" },
+              { value: "2W", label: "2W" },
+              { value: "4W", label: "4W" },
+            ]}
+          />
 
           {isMahindraFamily(brandId) || segment === "4W" ? (
             <div className="g2m-mahindra-row" role="group" aria-label="Mahindra app">
               <span className="g2m-brand-label">Mahindra</span>
-              <button
-                type="button"
-                className={`g2m-chip${brandId === "mahindra" ? " is-active" : ""}`}
-                aria-pressed={brandId === "mahindra"}
-                onClick={() => onBrandChange("mahindra", result?.paste)}
-              >
+              <FilterChip active={brandId === "mahindra"} onClick={() => onBrandChange("mahindra", result?.paste)}>
                 Adrenox · ICE
-              </button>
-              <button
-                type="button"
-                className={`g2m-chip${brandId === "mahindra-me4u" ? " is-active" : ""}`}
-                aria-pressed={brandId === "mahindra-me4u"}
+              </FilterChip>
+              <FilterChip
+                active={brandId === "mahindra-me4u"}
                 onClick={() => onBrandChange("mahindra-me4u", result?.paste)}
               >
                 Me4U · Born Electric
-              </button>
+              </FilterChip>
             </div>
           ) : null}
 
           <label className="g2m-brand-label" htmlFor="g2m-brand-filter">
             Search brands
           </label>
-          <input
+          <Input
             id="g2m-brand-filter"
-            className="g2m-brand-filter"
             type="search"
             value={brandQuery}
             onChange={(e) => setBrandQuery(e.target.value)}
@@ -805,16 +801,15 @@ export function Gmap2MapplsTool({
 
           <div className="g2m-brand-chips" role="listbox" aria-label="Quick brands">
             {filteredBrands.slice(0, 12).map((b) => (
-              <button
+              <FilterChip
                 key={b.id}
-                type="button"
                 role="option"
                 aria-selected={brandId === b.id}
-                className={`g2m-chip${brandId === b.id ? " is-active" : ""}`}
+                active={brandId === b.id}
                 onClick={() => onBrandChange(b.id, result?.paste)}
               >
                 {brandChipLabel(b)}
-              </button>
+              </FilterChip>
             ))}
           </div>
 
@@ -822,9 +817,8 @@ export function Gmap2MapplsTool({
             Vehicle brand
             {selectedBrand?.companionApp ? ` → ${selectedBrand.companionApp.name}` : ""}
           </label>
-          <select
+          <Select
             id="g2m-brand-top"
-            className="g2m-brand-select"
             value={brandId}
             onChange={(e) => onBrandChange(e.target.value, result?.paste)}
           >
@@ -858,17 +852,16 @@ export function Gmap2MapplsTool({
                 ) : null}
               </>
             )}
-          </select>
+          </Select>
         </div>
 
         <div className="g2m-input-wrap">
           <label className="sr-only" htmlFor="g2m-input">
             Google Maps link, address, or coordinates
           </label>
-          <textarea
+          <Textarea
             id="g2m-input"
             ref={inputRef}
-            className="g2m-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onFocus={() => void onInputFocus()}
@@ -892,12 +885,7 @@ export function Gmap2MapplsTool({
         </div>
 
         <div className="g2m-actions">
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={loading}
-            onClick={() => void resolve(input)}
-          >
+          <Button variant="primary" disabled={loading} onClick={() => void resolve(input)}>
             {loading ? (
               <>
                 <span className="g2m-spinner" aria-hidden />
@@ -906,23 +894,13 @@ export function Gmap2MapplsTool({
             ) : (
               findLabel
             )}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={loading}
-            onClick={() => void pasteAndFind()}
-          >
+          </Button>
+          <Button variant="secondary" disabled={loading} onClick={() => void pasteAndFind()}>
             Paste &amp; find
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={loading || (!input && !result)}
-            onClick={clearAll}
-          >
+          </Button>
+          <Button variant="ghost" disabled={loading || (!input && !result)} onClick={clearAll}>
             Clear
-          </button>
+          </Button>
         </div>
 
         {recents.length > 0 ? (
@@ -930,10 +908,8 @@ export function Gmap2MapplsTool({
             <span className="g2m-brand-label">Recent</span>
             <div className="g2m-chips">
               {recents.map((r) => (
-                <button
+                <FilterChip
                   key={`${r.at}-${r.lat}-${r.brandId}`}
-                  type="button"
-                  className="g2m-chip"
                   title={r.input}
                   onClick={() => {
                     if (r.brandId !== brandId) onBrandChange(r.brandId);
@@ -942,7 +918,7 @@ export function Gmap2MapplsTool({
                   }}
                 >
                   {r.pin ? `${r.label} · ${r.pin}` : r.label}
-                </button>
+                </FilterChip>
               ))}
             </div>
           </div>
@@ -950,17 +926,15 @@ export function Gmap2MapplsTool({
 
         <div className="g2m-chips" aria-label="Examples">
           {chips.map((c) => (
-            <button
+            <FilterChip
               key={c.id}
-              type="button"
-              className="g2m-chip"
               onClick={() => {
                 setInput(c.input);
                 void resolve(c.input);
               }}
             >
               {c.label}
-            </button>
+            </FilterChip>
           ))}
         </div>
 
@@ -974,11 +948,7 @@ export function Gmap2MapplsTool({
         ) : null}
       </section>
 
-      {error ? (
-        <div className="g2m-error" role="alert">
-          {error}
-        </div>
-      ) : null}
+      {error ? <Alert tone="coral" title={error} /> : null}
 
       {!result && !loading && !error ? (
         <div className="g2m-state g2m-walkthrough">
@@ -1032,15 +1002,15 @@ export function Gmap2MapplsTool({
                   <span className="g2m-banner-meta">Mappls Pin ready</span>
                   <span className="g2m-pin-code">{result.paste.mapplsPin}</span>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() =>
                     void onCopy("pinhero", result.paste.mapplsPin || "", result.paste.mapplsPin)
                   }
                 >
                   {copied === "pinhero" || pinPulse ? "Copied!" : "Copy Pin"}
-                </button>
+                </Button>
               </div>
             ) : null}
 
@@ -1066,7 +1036,7 @@ export function Gmap2MapplsTool({
                 <div className="g2m-guide-cta">
                   {playbook.primary.kind === "open" && playbook.primary.href ? (
                     <a
-                      className="btn btn-primary"
+                      className="bos-btn bos-btn-primary"
                       href={playbook.primary.href}
                       onClick={(e) => {
                         e.preventDefault();
@@ -1080,20 +1050,15 @@ export function Gmap2MapplsTool({
                       {playbook.primary.label}
                     </a>
                   ) : (
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => void runPrimary()}
-                    >
+                    <Button variant="primary" onClick={() => void runPrimary()}>
                       {copied === "primary" && playbook.primary.kind === "copy"
                         ? "Copied — paste in your app now"
                         : playbook.primary.label}
-                    </button>
+                    </Button>
                   )}
                   {playbook.autoCopyText ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
+                    <Button
+                      variant="secondary"
                       onClick={() =>
                         void onCopy(
                           "autocopy",
@@ -1108,7 +1073,7 @@ export function Gmap2MapplsTool({
                             playbook.autoCopyText === result.paste.mapplsPin
                           ? `Copy Pin (${result.paste.mapplsPin})`
                           : "Copy again for paste"}
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
 
@@ -1121,7 +1086,7 @@ export function Gmap2MapplsTool({
                     </p>
                     <div className="g2m-paste-row">
                       <a
-                        className="btn btn-secondary btn-sm"
+                        className="bos-btn bos-btn-secondary bos-btn-sm"
                         href={playStoreHref}
                         target="_blank"
                         rel="noreferrer"
@@ -1129,9 +1094,9 @@ export function Gmap2MapplsTool({
                         Install {appName}
                       </a>
                       {result.paste.mapplsPin ? (
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() =>
                             void onCopy(
                               "help-pin",
@@ -1141,15 +1106,11 @@ export function Gmap2MapplsTool({
                           }
                         >
                           {copied === "help-pin" ? "Copied Pin" : "Copy Pin instead"}
-                        </button>
+                        </Button>
                       ) : null}
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setShowAppHelp(false)}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => setShowAppHelp(false)}>
                         Dismiss
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : null}
@@ -1185,7 +1146,7 @@ export function Gmap2MapplsTool({
                 {canNativeShare && playbook.share ? (
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="bos-btn bos-btn-secondary bos-btn-sm"
                     onClick={() => void onShare()}
                   >
                     {copied === "share" ? "Shared" : "Share Pin / link…"}
@@ -1194,7 +1155,7 @@ export function Gmap2MapplsTool({
                 {playbook.inCar ? (
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="bos-btn bos-btn-secondary bos-btn-sm"
                     onClick={() =>
                       void onCopy(
                         "incar",
@@ -1208,7 +1169,7 @@ export function Gmap2MapplsTool({
                 ) : null}
                 {whatsappDriverUrl ? (
                   <a
-                    className="btn btn-secondary btn-sm"
+                    className="bos-btn bos-btn-secondary bos-btn-sm"
                     href={whatsappDriverUrl}
                     target="_blank"
                     rel="noreferrer"
@@ -1218,7 +1179,7 @@ export function Gmap2MapplsTool({
                 ) : null}
                 {playbook.backup?.href ? (
                   <a
-                    className="btn btn-secondary btn-sm"
+                    className="bos-btn bos-btn-secondary bos-btn-sm"
                     href={playbook.backup.href}
                     {...(/^(intent|geo|mappls):/i.test(playbook.backup.href)
                       ? {}
@@ -1236,7 +1197,7 @@ export function Gmap2MapplsTool({
                 {playbook.backup?.kind === "copy" && playbook.backup.copyText ? (
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="bos-btn bos-btn-secondary bos-btn-sm"
                     onClick={() => void onCopy("backup", playbook.backup?.copyText || "")}
                   >
                     {copied === "backup" ? "Copied" : playbook.backup.label}
@@ -1245,7 +1206,7 @@ export function Gmap2MapplsTool({
                 {result.paste.mapplsPin ? (
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="bos-btn bos-btn-secondary bos-btn-sm"
                     onClick={() =>
                       void onCopy("pin", result.paste.mapplsPin || "", result.paste.mapplsPin)
                     }
@@ -1255,7 +1216,7 @@ export function Gmap2MapplsTool({
                 ) : null}
                 {result.paste.mapplsPinUrl ? (
                   <a
-                    className="btn btn-secondary btn-sm"
+                    className="bos-btn bos-btn-secondary bos-btn-sm"
                     href={result.paste.mapplsPinUrl}
                     target="_blank"
                     rel="noreferrer"
@@ -1266,7 +1227,7 @@ export function Gmap2MapplsTool({
                 {result.paste.searchQuery ? (
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="bos-btn bos-btn-secondary bos-btn-sm"
                     onClick={() => void onCopy("search", result.paste.searchQuery || "")}
                   >
                     {copied === "search" ? "Copied place name" : "Copy place name"}
@@ -1274,7 +1235,7 @@ export function Gmap2MapplsTool({
                 ) : null}
                 {playStoreHref ? (
                   <a
-                    className="btn btn-secondary btn-sm"
+                    className="bos-btn bos-btn-secondary bos-btn-sm"
                     href={playStoreHref}
                     target="_blank"
                     rel="noreferrer"
@@ -1283,7 +1244,7 @@ export function Gmap2MapplsTool({
                   </a>
                 ) : null}
                 <a
-                  className="btn btn-secondary btn-sm"
+                  className="bos-btn bos-btn-secondary bos-btn-sm"
                   href={result.paste.mapplsNavDrivingUrl}
                   target="_blank"
                   rel="noreferrer"
@@ -1291,7 +1252,7 @@ export function Gmap2MapplsTool({
                   Mappls 4W nav
                 </a>
                 <a
-                  className="btn btn-secondary btn-sm"
+                  className="bos-btn bos-btn-secondary bos-btn-sm"
                   href={result.paste.mapplsUrl}
                   target="_blank"
                   rel="noreferrer"
@@ -1299,7 +1260,7 @@ export function Gmap2MapplsTool({
                   Verify on Mappls
                 </a>
                 <a
-                  className="btn btn-secondary btn-sm"
+                  className="bos-btn bos-btn-secondary bos-btn-sm"
                   href={result.paste.googleMapsUrl}
                   target="_blank"
                   rel="noreferrer"
@@ -1325,7 +1286,7 @@ export function Gmap2MapplsTool({
           <div className="g2m-dock-inner">
             {result && playbook?.primary.href ? (
               <a
-                className="btn btn-primary"
+                className="bos-btn bos-btn-primary"
                 href={playbook.primary.href}
                 onClick={(e) => {
                   e.preventDefault();
@@ -1340,28 +1301,29 @@ export function Gmap2MapplsTool({
               </a>
             ) : (
               <>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={loading}
-                  onClick={() => void resolve(input)}
-                >
+                <Button variant="primary" disabled={loading} onClick={() => void resolve(input)}>
                   {loading ? "Finding…" : findLabel}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={loading}
-                  onClick={() => void pasteAndFind()}
-                >
+                </Button>
+                <Button variant="secondary" disabled={loading} onClick={() => void pasteAndFind()}>
                   Paste
-                </button>
+                </Button>
               </>
             )}
           </div>
         </div>
       ) : null}
     </div>
+  );
+
+  return (
+    <BosRoot
+      skin="ims"
+      canvas={variant === "standalone"}
+      className={variant === "standalone" ? "pinway-ims" : "pinway-ims pinway-ims--embedded"}
+      defaultTheme="light"
+    >
+      {body}
+    </BosRoot>
   );
 }
 

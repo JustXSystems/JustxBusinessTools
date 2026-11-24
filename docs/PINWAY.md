@@ -13,6 +13,8 @@ Paste a **Google Maps share link**, a **full Indian address**, or **lat,lng**. P
 
 Requires Justxsystems login. Resolve checks session + active trial/license.
 
+UI uses the **Justxsystems IMS** BosRoot skin (light + dark via theme toggle). Brand `<select>` uses opaque `--bos-ims-surface-solid` so native option lists stay readable in both themes.
+
 | Surface | URL |
 |---------|-----|
 | Standalone app (mobile / A2HS) | `/pinway` |
