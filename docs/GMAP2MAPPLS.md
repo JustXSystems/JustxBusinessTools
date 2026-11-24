@@ -49,7 +49,7 @@ Ampere docs advertise Mappls PIN last-mile; **SimpleOne does not reliably resolv
 | Ampere | Ampere Connect | `com.greavesmobility.app` |
 | TVS | TVS Connect | `com.tvsm.connect` |
 | Ola Electric | Ola Electric | `com.olaelectric.companion` |
-| Mahindra | Adrenox Connect — launch app + Mappls Pin (QR/clipboard) → Push to car; never lat,lng; Mappls 4W if Pin missing | `com.mahindra.adrenox` |
+| Mahindra | Adrenox Connect — tap copies Pin + opens app → Push to car (never auto-open without Pin; never lat,lng; Mappls 4W backup only) | `com.mahindra.adrenox` |
 | Tata | iRA | `com.tatamotors.oneapp` |
 | Hyundai | Bluelink | `com.hyundai.india.bluelink.prd` |
 | Kia | Kia Connect | `com.kia.uvo.in.prd` |

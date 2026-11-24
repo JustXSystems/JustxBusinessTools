@@ -230,7 +230,9 @@ export function oemPackageGeoIntentUrl(
  */
 export function oemPackageLaunchUrl(packageId: string): string {
   const fallback = encodeURIComponent(playStoreUrl(packageId));
-  return `intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${packageId};S.browser_fallback_url=${fallback};end`;
+  // Prefer intent://#Intent (same family as Simple Connect geo Intents) so
+  // Android Chrome + our top-level <a> launcher treat it consistently.
+  return `intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${packageId};S.browser_fallback_url=${fallback};end`;
 }
 
 /**

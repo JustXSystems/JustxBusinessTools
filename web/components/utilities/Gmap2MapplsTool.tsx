@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   OEM_BRANDS,
@@ -59,6 +59,11 @@ function isAndroidUa(): boolean {
   return /Android/i.test(navigator.userAgent);
 }
 
+function isIosUa(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 function shortenCopied(text: string, pin?: string): string {
   if (pin && text === pin) return `Pin ${pin}`;
   return text.length > 40 ? `${text.slice(0, 37)}…` : text;
@@ -73,14 +78,22 @@ export function Gmap2MapplsTool() {
   const [copied, setCopied] = useState<string | null>(null);
   const [qr, setQr] = useState<QrState | null>(null);
   const [brandId, setBrandId] = useState("simple-energy");
-  const [autoOpenStatus, setAutoOpenStatus] = useState<"opened" | "blocked" | null>(null);
+  const [autoOpenStatus, setAutoOpenStatus] = useState<"opened" | "blocked" | "ready" | null>(null);
   const [autoCopied, setAutoCopied] = useState<string | null>(null);
   const [onAndroid, setOnAndroid] = useState(false);
+  const [onIos, setOnIos] = useState(false);
+  const brandIdRef = useRef(brandId);
 
-  const brands = meta?.oem?.brands?.length ? meta.oem.brands : OEM_BRANDS;
+  // Always use client OEM_BRANDS so companionApp / handoff never lag a stale meta payload.
+  const brands = OEM_BRANDS;
+
+  useEffect(() => {
+    brandIdRef.current = brandId;
+  }, [brandId]);
 
   useEffect(() => {
     setOnAndroid(isAndroidUa());
+    setOnIos(isIosUa());
     try {
       const saved = window.localStorage.getItem(BRAND_STORAGE_KEY);
       if (saved && OEM_BRANDS.some((b) => b.id === saved)) setBrandId(saved);
@@ -107,22 +120,9 @@ export function Gmap2MapplsTool() {
     setAutoOpenStatus(w ? "opened" : "blocked");
   }, []);
 
-  const autoAssistPaste = useCallback(async (paste: ResolveResult["paste"], id: string) => {
-    const guide = buildBrandPlaybook(id, paste);
-    const text = guide?.autoCopyText;
-    if (!text) {
-      setAutoCopied(null);
-      return;
-    }
-    // Best-effort after resolve — may fail without lasting user-gesture.
-    // Primary CTA always re-copies under a fresh tap (Mahindra-critical).
-    const ok = await copyText(text);
-    setAutoCopied(ok ? shortenCopied(text, paste.mapplsPin) : null);
-  }, []);
-
   const runOpenPrimary = useCallback(
     async (href: string, copyTextValue?: string, pin?: string) => {
-      // Re-copy under the same tap as open — clipboard after async fetch is flaky.
+      // Copy under the same tap as open — clipboard after async fetch is flaky.
       if (copyTextValue) {
         const ok = await copyText(copyTextValue);
         if (ok) setAutoCopied(shortenCopied(copyTextValue, pin));
@@ -135,18 +135,31 @@ export function Gmap2MapplsTool() {
   const onBrandChange = useCallback(
     (id: string, paste?: ResolveResult["paste"]) => {
       setBrandId(id);
+      brandIdRef.current = id;
       try {
         window.localStorage.setItem(BRAND_STORAGE_KEY, id);
       } catch {
         /* ignore */
       }
-      if (paste) {
-        const guide = buildBrandPlaybook(id, paste);
-        if (guide) openAutoUrl(guide.autoOpenUrl);
-        void autoAssistPaste(paste, id);
+      if (!paste) return;
+      const guide = buildBrandPlaybook(id, paste);
+      if (!guide) return;
+      // Pin-paste OEMs: copy+open in one gesture. Geo OEMs (Simple Connect): open now.
+      if (guide.deferAutoOpen) {
+        setAutoOpenStatus("ready");
+        void runOpenPrimary(guide.autoOpenUrl, guide.autoCopyText, paste.mapplsPin);
+      } else {
+        openAutoUrl(guide.autoOpenUrl);
+        if (guide.autoCopyText) {
+          void copyText(guide.autoCopyText).then((ok) => {
+            if (ok) setAutoCopied(shortenCopied(guide.autoCopyText!, paste.mapplsPin));
+          });
+        } else {
+          setAutoCopied(null);
+        }
       }
     },
-    [openAutoUrl, autoAssistPaste],
+    [openAutoUrl, runOpenPrimary],
   );
 
   const onCopy = useCallback(async (label: string, text: string) => {
@@ -211,6 +224,8 @@ export function Gmap2MapplsTool() {
       setResult(null);
       return;
     }
+    // Capture brand at click time — avoid opening wrong OEM if user changes brand mid-fetch.
+    const brandAtStart = brandIdRef.current;
     setLoading(true);
     setError(null);
     setAutoOpenStatus(null);
@@ -229,16 +244,32 @@ export function Gmap2MapplsTool() {
         return;
       }
       setResult(data);
-      const guide = buildBrandPlaybook(brandId, data.paste);
-      if (guide) openAutoUrl(guide.autoOpenUrl);
-      void autoAssistPaste(data.paste, brandId);
+      const guide = buildBrandPlaybook(brandAtStart, data.paste);
+      if (!guide) return;
+      if (guide.deferAutoOpen) {
+        // Mahindra: wait for primary tap so Pin copy + Adrenox open share one gesture.
+        setAutoOpenStatus("ready");
+        if (guide.autoCopyText) {
+          // Best-effort preview copy; primary tap re-copies reliably.
+          void copyText(guide.autoCopyText).then((ok) => {
+            if (ok) setAutoCopied(shortenCopied(guide.autoCopyText!, data.paste.mapplsPin));
+          });
+        }
+      } else {
+        openAutoUrl(guide.autoOpenUrl);
+        if (guide.autoCopyText) {
+          void copyText(guide.autoCopyText).then((ok) => {
+            if (ok) setAutoCopied(shortenCopied(guide.autoCopyText!, data.paste.mapplsPin));
+          });
+        }
+      }
     } catch {
       setResult(null);
       setError("Network error — try again in a moment.");
     } finally {
       setLoading(false);
     }
-  }, [brandId, openAutoUrl, autoAssistPaste]);
+  }, [openAutoUrl]);
 
   const chips = meta?.samples?.length
     ? meta.samples
@@ -270,21 +301,26 @@ export function Gmap2MapplsTool() {
 
   const statusNote = (() => {
     if (!playbook) return "";
+    if (onIos) {
+      return isPinPasteBrand && pinReady
+        ? `iPhone: Android Intents won’t open ${appName}. Copy/scan Pin “${result?.paste.mapplsPin}”, open ${appName} manually → Push to car.`
+        : `iPhone: open ${appName} from the App Store / home screen, then use the copied Pin or place name.`;
+    }
     if (!onAndroid) {
       return isPinPasteBrand && pinReady
-        ? `On desktop: scan the QR for Pin “${result?.paste.mapplsPin}”, then open ${appName} on Android and Push to car.`
-        : "On desktop: scan the QR with your Android phone (app must be installed).";
+        ? `Desktop: scan QR for Pin “${result?.paste.mapplsPin}”, open ${appName} on Android → paste → Push to car.`
+        : "Desktop: scan the QR with your Android phone (app must be installed).";
     }
     if (autoOpenStatus === "blocked") return "Open was blocked — tap the button below.";
     if (isPinPasteBrand) {
-      if (pinReady) {
-        return autoOpenStatus === "opened"
+      if (autoOpenStatus === "opened") {
+        return pinReady
           ? `${appName} opened. Paste Pin “${result?.paste.mapplsPin}” in search → Push to car.`
-          : `Opens ${appName}. Paste the Pin (auto-copied) → Push to car — never paste lat,lng.`;
+          : `${appName} opened. Follow the step below — never paste lat,lng.`;
       }
-      return autoOpenStatus === "opened"
-        ? `Opened handoff for ${appName}. Follow the step below (never paste lat,lng).`
-        : `Preparing ${appName} handoff…`;
+      return pinReady
+        ? `Tap the button to copy Pin “${result?.paste.mapplsPin}” and open ${appName}, then Push to car.`
+        : `Tap the button to open ${appName}, then set destination → Push to car.`;
     }
     if (autoOpenStatus === "opened") {
       return `${appName} should have opened with this location.`;

@@ -315,6 +315,11 @@ export type BrandPlaybook = {
   qrPayload?: string;
   /** True when this brand must never paste lat,lng into OEM search. */
   rejectLatLngPaste?: boolean;
+  /**
+   * If true, UI must NOT auto-open after resolve. User taps primary so Pin
+   * copy + app launch share one user gesture (Mahindra / Push-to-car).
+   */
+  deferAutoOpen?: boolean;
 };
 
 function parsePasteCoords(paste: BrandPasteLinks): { lat: number; lng: number } {
@@ -360,13 +365,20 @@ export function buildBrandPlaybook(
 
     // Mahindra Adrenox / Mappls NCASE “Push to car” path.
     // Lessons from Simple Connect applied here:
-    // - Do NOT open Mappls as primary (wrong app).
+    // - Do NOT open Mappls as primary (wrong app) — even when Pin is missing.
     // - Do NOT paste lat,lng into search (Autosuggest fails).
     // - Adrenox does NOT take WhatsApp geo like Simple Connect → launch app + Pin.
-    // - Clipboard after async fetch is flaky → UI re-copies on primary tap.
+    // - Clipboard after async fetch is flaky → deferAutoOpen; primary tap copies+opens.
     // - QR scanners often fail on intent:#Intent → QR uses Pin text / HTTPS.
     if (app.handoff === "geo_with_pin") {
       const launchUrl = oemPackageLaunchUrl(app.packageId);
+      const mapplsBackup = coordsOk
+        ? { kind: "open" as const, label: "Open exact point on Mappls (4W)", href: navUrl }
+        : {
+            kind: "open" as const,
+            label: "Open Google Maps",
+            href: paste.googleMapsUrl,
+          };
 
       if (pin) {
         return {
@@ -375,73 +387,42 @@ export function buildBrandPlaybook(
           autoOpenLabel: `Open ${app.name}`,
           primary: {
             kind: "open",
-            label: `Open ${app.name} · Pin ${pin} ready`,
+            label: `Copy Pin ${pin} & open ${app.name}`,
             href: launchUrl,
           },
           autoCopyText: pin,
           qrPayload: pin,
           rejectLatLngPaste: true,
+          deferAutoOpen: true,
           steps: [
-            `Only remaining step: in ${app.name}, paste Pin “${pin}” → Push to car. Never paste lat,lng.`,
+            `Tap the button (copies Pin + opens ${app.name}). Paste Pin “${pin}” in search → Push to car. Never paste lat,lng.`,
           ],
-          backup: {
-            kind: "open",
-            label: "Open exact point on Mappls (4W)",
-            href: navUrl,
-          },
+          backup: mapplsBackup,
         };
       }
 
-      // No Pin: Mappls 4W nav deep link is the accurate coordinate path;
-      // place name is best-effort for Adrenox search.
-      if (coordsOk) {
-        return {
-          brand,
-          autoOpenUrl: navUrl,
-          autoOpenLabel: "Open exact point on Mappls (4W)",
-          primary: {
-            kind: "open",
-            label: place
-              ? `Open Mappls 4W · place name ready for ${app.name}`
-              : `Open Mappls 4W navigation`,
-            href: navUrl,
-          },
-          autoCopyText: place,
-          qrPayload: navUrl,
-          rejectLatLngPaste: true,
-          steps: [
-            place
-              ? `Pin unavailable. Mappls shows the exact point. In ${app.name}, paste “${place}” → Push to car (not lat,lng).`
-              : `Pin unavailable. Use Mappls 4W navigation for the exact point, then set the same destination in ${app.name} → Push to car.`,
-          ],
-          backup: {
-            kind: "open",
-            label: `Open ${app.name}`,
-            href: launchUrl,
-          },
-        };
-      }
-
+      // No Pin: still open Adrenox (OEM app), not Mappls. Place name / Mappls are assists.
       return {
         brand,
         autoOpenUrl: launchUrl,
         autoOpenLabel: `Open ${app.name}`,
         primary: {
           kind: "open",
-          label: `Open ${app.name}`,
+          label: place
+            ? `Copy place name & open ${app.name}`
+            : `Open ${app.name}`,
           href: launchUrl,
         },
         autoCopyText: place,
-        qrPayload: paste.mapplsUrl || paste.googleMapsUrl,
+        qrPayload: place || (coordsOk ? navUrl : paste.googleMapsUrl),
         rejectLatLngPaste: true,
+        deferAutoOpen: true,
         steps: [
-          `Only remaining step: in ${app.name}, set the destination → Push to car. Never paste lat,lng.`,
+          place
+            ? `Pin unavailable. Tap the button (copies place name + opens ${app.name}). Paste “${place}” → Push to car. Use Mappls 4W backup to verify the exact point.`
+            : `Pin unavailable. Open ${app.name} and set the destination → Push to car. Use Mappls 4W backup for the exact point. Never paste lat,lng.`,
         ],
-        backup: {
-          kind: "open",
-          label: "Open Google Maps",
-          href: paste.googleMapsUrl,
-        },
+        backup: mapplsBackup,
       };
     }
 

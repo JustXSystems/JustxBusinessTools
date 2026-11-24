@@ -227,27 +227,34 @@ describe("gmap2mappls urls + samples", () => {
     const mahindra = buildBrandPlaybook("mahindra", paste);
     expect(mahindra?.brand.companionApp?.handoff).toBe("geo_with_pin");
     expect(mahindra?.autoOpenUrl).toContain("package=com.mahindra.adrenox");
+    expect(mahindra?.autoOpenUrl).toMatch(/^intent:\/\//);
     expect(mahindra?.autoOpenUrl).toContain("action=android.intent.action.MAIN");
     expect(mahindra?.autoOpenUrl).not.toMatch(/mappls\.com/);
     expect(mahindra?.primary.kind).toBe("open");
-    expect(mahindra?.primary.label).toMatch(/Adrenox Connect/);
+    expect(mahindra?.primary.label).toMatch(/Copy Pin.*Adrenox Connect/i);
     expect(mahindra?.autoCopyText).toBe("kcf7zj");
     expect(mahindra?.qrPayload).toBe("kcf7zj"); // scannable Pin text, not LAUNCHER intent
     expect(mahindra?.rejectLatLngPaste).toBe(true);
+    expect(mahindra?.deferAutoOpen).toBe(true); // must tap to copy+open
     expect(mahindra?.steps[0]).toMatch(/Push to car/i);
     expect(mahindra?.steps[0].toLowerCase()).toMatch(/never paste lat/);
     expect(mahindra?.backup?.href).toContain("mode=driving");
 
-    // No Pin: fall back to Mappls 4W exact nav (not lat,lng paste)
+    // No Pin: STILL open Adrenox (not Mappls) — avoid Simple Connect “wrong app” bug
     const noPin = buildPasteKit(12.877073, 77.613574, {
       placeName: "Zigma Technologies",
       locality: "Nyanappanahalli",
     });
     const mahindraNoPin = buildBrandPlaybook("mahindra", noPin);
-    expect(mahindraNoPin?.autoOpenUrl).toContain("mode=driving");
+    expect(mahindraNoPin?.autoOpenUrl).toContain("package=com.mahindra.adrenox");
+    expect(mahindraNoPin?.autoOpenUrl).not.toMatch(/mappls\.com/);
     expect(mahindraNoPin?.autoCopyText).toMatch(/Zigma/);
+    expect(mahindraNoPin?.deferAutoOpen).toBe(true);
     expect(mahindraNoPin?.rejectLatLngPaste).toBe(true);
-    expect(mahindraNoPin?.backup?.href).toContain("package=com.mahindra.adrenox");
+    expect(mahindraNoPin?.backup?.href).toContain("mode=driving");
+
+    // Simple Connect still auto-opens (geo carries the destination)
+    expect(simple?.deferAutoOpen).toBeFalsy();
 
     const ola = buildBrandPlaybook("ola", paste);
     expect(ola?.autoOpenUrl).toContain("package=com.olaelectric.companion");
