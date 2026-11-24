@@ -19,6 +19,7 @@ import {
   looksLikeMapsInput,
   parseRecentPlaces,
   playStoreUrlForBrand,
+  PINWAY_BRAND_NAME,
   PINWAY_PRODUCT_NAME,
   PINWAY_TAGLINE,
   pushRecentPlace,
@@ -164,17 +165,17 @@ export function Gmap2MapplsTool({
 
   const brands = OEM_BRANDS;
 
-  // First open after registration: start the 14-day Pinway trial automatically.
+  // First open after registration: start the 14-day trial automatically.
   useEffect(() => {
     if (subLoading || pinwayLicensed || !pinwayTrialEligible || autoTrialRef.current) return;
     autoTrialRef.current = true;
     void startTrial(PINWAY_TOOL_ID)
       .then(() => {
-        showToast("Pinway 14-day free trial started");
+        showToast(`${PINWAY_PRODUCT_NAME} 14-day free trial started`);
       })
       .catch((err) => {
         autoTrialRef.current = false;
-        showToast(err instanceof Error ? err.message : "Could not start Pinway trial");
+        showToast(err instanceof Error ? err.message : `Could not start ${PINWAY_PRODUCT_NAME} trial`);
       });
   }, [subLoading, pinwayLicensed, pinwayTrialEligible, startTrial, showToast]);
 
@@ -476,14 +477,14 @@ export function Gmap2MapplsTool({
           try {
             autoTrialRef.current = true;
             await startTrial(PINWAY_TOOL_ID);
-            showToast("Pinway 14-day free trial started");
+            showToast(`${PINWAY_PRODUCT_NAME} 14-day free trial started`);
           } catch (err) {
             autoTrialRef.current = false;
             setError(err instanceof Error ? err.message : "Could not start trial");
             return;
           }
         } else {
-          setError("Subscribe to Pinway (₹100/mo or ₹1000/yr) to resolve places.");
+          setError(`Subscribe to ${PINWAY_PRODUCT_NAME} (₹100/mo or ₹1000/yr) to resolve places.`);
           openUpgrade(PINWAY_TOOL_ID);
           return;
         }
@@ -506,10 +507,10 @@ export function Gmap2MapplsTool({
         if (!res.ok || !data.ok) {
           setResult(null);
           if ("code" in data && data.code === "license_required") {
-            setError(data.error || "Pinway subscription required.");
+            setError(data.error || `${PINWAY_PRODUCT_NAME} subscription required.`);
             openUpgrade(PINWAY_TOOL_ID);
           } else if ("code" in data && data.code === "auth_required") {
-            setError(data.error || "Sign in to use Pinway.");
+            setError(data.error || `Sign in to use ${PINWAY_PRODUCT_NAME}.`);
           } else {
             setError(("error" in data && data.error) || "Could not resolve that location.");
           }
@@ -690,7 +691,7 @@ export function Gmap2MapplsTool({
             <p className="g2m-a2hs" role="note">
               <strong>Add to Home Screen</strong>
               {onIos
-                ? " — Share → Add to Home Screen for a full-screen Pinway app."
+                ? ` — Share → Add to Home Screen for a full-screen ${PINWAY_BRAND_NAME} app.`
                 : " — Browser menu → Install / Add to Home screen."}{" "}
               <button type="button" className="g2m-linkish" onClick={dismissA2hs}>
                 Got it
@@ -701,7 +702,7 @@ export function Gmap2MapplsTool({
         <PinwayThemeToggle />
       </div>
 
-      <ol className="g2m-stages" aria-label="Pinway steps">
+      <ol className="g2m-stages" aria-label={`${PINWAY_PRODUCT_NAME} steps`}>
         {(
           [
             ["brand", "Brand"],
@@ -725,8 +726,8 @@ export function Gmap2MapplsTool({
       </ol>
 
       {pinwayLocked ? (
-        <section className="g2m-paywall" aria-label="Pinway subscription">
-          <strong>{pinwayTrialEligible ? "Start your free trial" : "Subscribe to Pinway"}</strong>
+        <section className="g2m-paywall" aria-label={`${PINWAY_PRODUCT_NAME} subscription`}>
+          <strong>{pinwayTrialEligible ? "Start your free trial" : `Subscribe to ${PINWAY_PRODUCT_NAME}`}</strong>
           <p className="g2m-auto-note">
             {pinwayTrialEligible
               ? "New accounts get 14 days free. After that: ₹100/month or ₹1000/year."
@@ -738,7 +739,7 @@ export function Gmap2MapplsTool({
                 variant="primary"
                 onClick={() => {
                   void startTrial(PINWAY_TOOL_ID)
-                    .then(() => showToast("Pinway 14-day free trial started"))
+                    .then(() => showToast(`${PINWAY_PRODUCT_NAME} 14-day free trial started`))
                     .catch((err) =>
                       showToast(err instanceof Error ? err.message : "Could not start trial"),
                     );
@@ -952,7 +953,7 @@ export function Gmap2MapplsTool({
 
       {!result && !loading && !error ? (
         <div className="g2m-state g2m-walkthrough">
-          <strong>How Pinway works</strong>
+          <strong>How {PINWAY_PRODUCT_NAME} works</strong>
           <ol className="g2m-walk-steps">
             {G2M_WALKTHROUGH.map((step) => (
               <li key={step.id}>
@@ -1327,5 +1328,5 @@ export function Gmap2MapplsTool({
   );
 }
 
-/** Preferred export name for the Pinway product UI. */
+/** Preferred export name for the Google Maps to Mappls product UI. */
 export { Gmap2MapplsTool as PinwayApp };

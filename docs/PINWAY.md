@@ -1,8 +1,14 @@
-# Pinway (JBT free utility)
+# Google Maps to Mappls (GoogleMaps2Mappls)
 
-**Drop any Google place into your car.**
+**Convert a Google Maps link to a Mappls Pin and open your car app.**
 
-Paste a **Google Maps share link**, a **full Indian address**, or **lat,lng**. Pinway finds that **same geographic point** on Mappls and opens the right OEM companion app (Simple Connect, Adrenox, Me4U, Bluelink, …).
+Paste a **Google Maps share link**, a **full Indian address**, or **lat,lng**. **Google Maps to Mappls** finds that **same geographic point** on Mappls and opens the right OEM companion app (Simple Connect, Adrenox, Me4U, Bluelink, …).
+
+| | |
+|--|--|
+| Product name | **Google Maps to Mappls** |
+| Brand | **GoogleMaps2Mappls** |
+| Short URL | `/pinway` (legacy vanity path) |
 
 ### Pricing
 
@@ -55,7 +61,7 @@ Almost every listed OEM reuses **Mappls Autosuggest / NCASE destination search**
 2. **Place** — paste Google link or **Paste & find** from clipboard
 3. **Open** — companion app Intent, or for Pin OEMs one-tap copy Pin + open
 
-Extras: recents, WhatsApp Pinway link to the driver’s phone, Pin pulse, “App didn’t open?” → Play Store, desktop QR / Android Intent emphasis, Add to Home Screen.
+Extras: recents, WhatsApp share link to the driver’s phone, Pin pulse, “App didn’t open?” → Play Store, desktop QR / Android Intent emphasis, Add to Home Screen.
 
 ### Deep links
 
@@ -69,7 +75,7 @@ Aliases: `oem=` for brand, `input=` for `q=`. Legacy `/tools/gmap2mappls?…` re
 
 ### Mahindra Mappls Auto NCASE (Adrenox + Me4U)
 
-| Model family | Phone app | Package | What Pinway does |
+| Model family | Phone app | Package | What the tool does |
 |--------------|-----------|---------|------------------|
 | XUV700, Scorpio-N, connected ICE | **Adrenox Connect** | `com.mahindra.adrenox` | Copy Mappls Pin + open Adrenox → Push to car |
 | Born Electric (BE.05 / BE.06 / XEV 9e, …) | **Me4U** | `com.mahindra.inglo` | Copy Mappls Pin + open Me4U → Send to vehicle |

@@ -5,7 +5,7 @@ import {
   type ParsedCoords,
 } from "@jbt/shared";
 
-const UA = "Justxsystems-JBT-Pinway/1.0";
+const UA = "Justxsystems-JBT-GoogleMaps2Mappls/1.0";
 
 /**
  * Follow redirects for short Google Maps links, only onto Google hosts.

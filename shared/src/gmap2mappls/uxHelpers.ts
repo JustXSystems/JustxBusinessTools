@@ -1,14 +1,16 @@
 /**
- * UI helpers for Pinway (tool id gmap2mappls) — pure functions so mobile/OEM
- * flows stay testable without a browser. The React app owns clipboard / Intent side effects.
+ * UI helpers for Google Maps to Mappls (tool id gmap2mappls) — pure functions so
+ * mobile/OEM flows stay testable without a browser. The React app owns clipboard / Intent side effects.
  */
 import { OEM_BRANDS, getOemBrand, resolveOemBrandId, type OemBrand } from "./oemHandoff";
 import { playStoreUrl } from "./types";
 
-/** Product name shown in UI, WhatsApp, A2HS. */
-export const PINWAY_PRODUCT_NAME = "Pinway";
-export const PINWAY_TAGLINE = "Drop any Google place into your car.";
-/** Standalone app path (no JBT chrome). */
+/** SEO-facing product name (titles, H1, catalog, WhatsApp). */
+export const PINWAY_PRODUCT_NAME = "Google Maps to Mappls";
+/** Compact brand for PWA short_name / applicationName. */
+export const PINWAY_BRAND_NAME = "GoogleMaps2Mappls";
+export const PINWAY_TAGLINE = "Convert a Google Maps link to a Mappls Pin and open your car app.";
+/** Standalone app path (no JBT chrome). Legacy `/pinway` kept for short links. */
 export const PINWAY_APP_PATH = "/pinway";
 /** Stable catalog / API tool id — do not rename without a migration. */
 export const PINWAY_TOOL_ID = "gmap2mappls";

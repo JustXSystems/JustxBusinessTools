@@ -62,10 +62,10 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
   { id: "qrgenerator", name: "QR Code Generator", category: "Utilities", icon: "🎨", desc: "Branded QR for UPI, Wi-Fi, vCard, maps & more" },
   {
     id: "gmap2mappls",
-    name: "Pinway",
+    name: "Google Maps to Mappls",
     category: "Utilities",
     icon: "📍",
-    desc: "Google place → car app · 14-day free trial, then ₹100/mo or ₹1000/yr",
+    desc: "GoogleMaps2Mappls · Google link → Mappls Pin → car app · 14-day free trial, then ₹100/mo or ₹1000/yr",
   },
   { id: "bosdesign", name: "Justxsystems BOS Design", category: "Utilities", icon: "🧩", desc: "Standard UI/UX system with live HR, Finance & Invoice samples" },
   { id: "bos", name: "Justxsystems BOS", category: "Utilities", icon: "🏢", desc: "Business Operating System — Finance, GST invoicing, HR & projects, synced with your tools" },

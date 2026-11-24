@@ -24,7 +24,7 @@ function localityFocusedQuery(address: string): string | null {
   return `${parts.join(" ")}, India`;
 }
 
-const UA = "Justxsystems-JBT-Pinway/1.0 (https://justxsystems.com; maps-utility)";
+const UA = "Justxsystems-JBT-GoogleMaps2Mappls/1.0 (https://justxsystems.com; maps-utility)";
 
 type PhotonFeature = {
   geometry?: { coordinates?: [number, number] };

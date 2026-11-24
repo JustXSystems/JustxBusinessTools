@@ -1,7 +1,7 @@
 {
-  "name": "Pinway",
-  "short_name": "Pinway",
-  "description": "Drop any Google place into your car app.",
+  "name": "Google Maps to Mappls",
+  "short_name": "GoogleMaps2Mappls",
+  "description": "Convert a Google Maps link to a Mappls Pin and open your car app.",
   "start_url": "/pinway",
   "scope": "/pinway",
   "display": "standalone",

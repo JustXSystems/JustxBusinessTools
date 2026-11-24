@@ -1,13 +1,27 @@
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "Pinway",
-  description: "Drop any Google place into your car app.",
-  applicationName: "Pinway",
+  title: "Google Maps to Mappls | GoogleMaps2Mappls",
+  description:
+    "Convert a Google Maps share link, address, or lat/lng to a Mappls Pin and open your car companion app (Adrenox, Me4U, Bluelink, and more).",
+  applicationName: "GoogleMaps2Mappls",
+  keywords: [
+    "Google Maps to Mappls",
+    "GoogleMaps2Mappls",
+    "convert Google Maps to Mappls",
+    "Google Maps link to Mappls Pin",
+    "Mappls Pin converter",
+    "send Google Maps to car India",
+  ],
   appleWebApp: {
     capable: true,
-    title: "Pinway",
+    title: "GoogleMaps2Mappls",
     statusBarStyle: "black-translucent",
+  },
+  openGraph: {
+    title: "Google Maps to Mappls",
+    description: "Convert a Google Maps link to a Mappls Pin and open your car app.",
+    siteName: "GoogleMaps2Mappls",
   },
   manifest: "/pinway/manifest.webmanifest",
 };

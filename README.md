@@ -26,7 +26,7 @@ Multi-tenant business tools for quotations, site surveys, and more — by **Just
 | **Justxsystems BOS app** (Finance, HR, Projects — `/tools/bos` + `/bos`) | [`docs/BOS_APP.md`](docs/BOS_APP.md) |
 | **JustTestX BOS seed** (disposable 1-year prod QA tenant) | [`docs/JUSTTESTX_BOS_SEED.md`](docs/JUSTTESTX_BOS_SEED.md) |
 | **JustTestX IMS seed** (disposable ≥2-year IMS Dealer QA tenant) | [`docs/JUSTTESTX_IMS_SEED.md`](docs/JUSTTESTX_IMS_SEED.md) |
-| **Pinway** (Google place → car app; 14-day trial, then ₹100/mo or ₹1000/yr) | [`docs/PINWAY.md`](docs/PINWAY.md) |
+| **Google Maps to Mappls** / GoogleMaps2Mappls (14-day trial, then ₹100/mo or ₹1000/yr) | [`docs/PINWAY.md`](docs/PINWAY.md) |
 | Desktop UNC sync | [`desktop-sync-agent/README.md`](desktop-sync-agent/README.md) |
 
 ## Local development

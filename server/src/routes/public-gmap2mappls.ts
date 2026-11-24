@@ -16,7 +16,7 @@ router.post("/resolve", async (req, res) => {
   if (!userId) {
     res.status(401).json({
       ok: false,
-      error: "Sign in to use Pinway. New accounts get 14 days free.",
+      error: "Sign in to use Google Maps to Mappls. New accounts get 14 days free.",
       code: "auth_required",
     });
     return;
@@ -27,7 +27,7 @@ router.post("/resolve", async (req, res) => {
   if (!entitled) {
     res.status(402).json({
       ok: false,
-      error: "Pinway needs an active trial or subscription (₹100/mo or ₹1000/yr).",
+      error: "Google Maps to Mappls needs an active trial or subscription (₹100/mo or ₹1000/yr).",
       code: "license_required",
       toolId: PINWAY_TOOL_ID,
     });

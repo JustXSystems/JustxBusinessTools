@@ -35,6 +35,7 @@ import {
   emptyStateHint,
   G2M_RECENT_MAX,
   normalizePinwayAppPath,
+  PINWAY_BRAND_NAME,
   PINWAY_PRODUCT_NAME,
   PINWAY_APP_PATH,
 } from "../gmap2mappls/index";
@@ -523,6 +524,9 @@ describe("gmap2mappls UX helpers (mobile / OEM usability)", () => {
     expect(deep).not.toContain("oem=");
     expect(deep).not.toContain("input=");
     expect(deep).not.toContain("/tools/gmap2mappls");
+
+    expect(PINWAY_PRODUCT_NAME).toBe("Google Maps to Mappls");
+    expect(PINWAY_BRAND_NAME).toBe("GoogleMaps2Mappls");
 
     const wa = buildWhatsAppToolShareUrl(deep, "Me4U");
     expect(wa.startsWith("https://wa.me/?text=")).toBe(true);

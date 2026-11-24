@@ -69,7 +69,7 @@ export const DEFAULT_TOOL_SKUS: Array<
   { toolId: "notifications", name: "Notifications", category: "Utilities", priceInr: 0, includedFree: true },
   { toolId: "qrscanner", name: "QR Code Scanner", category: "Utilities", priceInr: 0, includedFree: true },
   { toolId: "qrgenerator", name: "QR Code Generator", category: "Utilities", priceInr: 0, includedFree: true },
-  { toolId: "gmap2mappls", name: "Pinway", category: "Utilities", priceInr: 100, includedFree: false },
+  { toolId: "gmap2mappls", name: "Google Maps to Mappls", category: "Utilities", priceInr: 100, includedFree: false },
   {
     toolId: "seo-meridian",
     name: "Meridian SEO",
@@ -190,7 +190,7 @@ export async function ensureToolSkuSchema(): Promise<void> {
         console.warn("[tool-skus] commerce_defaults_v1 skipped:", err);
       }
 
-      // Pinway: ₹100/mo or ₹1000/yr, 14-day trial after registration (hard lock).
+      // Google Maps to Mappls (GoogleMaps2Mappls): ₹100/mo or ₹1000/yr, 14-day trial (hard lock).
       try {
         const [pinwayFlags] = await pool.query(
           `SELECT config_key FROM platform_config WHERE config_key = 'pinway_commerce_v1' LIMIT 1`,
@@ -198,7 +198,7 @@ export async function ensureToolSkuSchema(): Promise<void> {
         if (!Array.isArray(pinwayFlags) || pinwayFlags.length === 0) {
           await pool.query(
             `UPDATE tool_skus
-             SET name = 'Pinway',
+             SET name = 'Google Maps to Mappls',
                  category = 'Utilities',
                  price_inr = 100,
                  annual_price_inr = 1000,
@@ -207,8 +207,8 @@ export async function ensureToolSkuSchema(): Promise<void> {
                  available = 1,
                  trial_days = 14,
                  access_policy = 'hard_lock',
-                 tagline = 'Drop any Google place into your car.',
-                 description = '14-day free trial after registration, then ₹100/month or ₹1000/year.'
+                 tagline = 'Convert a Google Maps link to a Mappls Pin and open your car app.',
+                 description = 'GoogleMaps2Mappls — 14-day free trial after registration, then ₹100/month or ₹1000/year.'
              WHERE tool_id = 'gmap2mappls'`,
           );
           await pool.query(
@@ -227,6 +227,34 @@ export async function ensureToolSkuSchema(): Promise<void> {
         }
       } catch (err) {
         console.warn("[tool-skus] pinway_commerce_v1 skipped:", err);
+      }
+
+      // Rename Pinway → Google Maps to Mappls / GoogleMaps2Mappls (display only).
+      try {
+        const [renameFlags] = await pool.query(
+          `SELECT config_key FROM platform_config WHERE config_key = 'googlemaps2mappls_rename_v1' LIMIT 1`,
+        );
+        if (!Array.isArray(renameFlags) || renameFlags.length === 0) {
+          await pool.query(
+            `UPDATE tool_skus
+             SET name = 'Google Maps to Mappls',
+                 tagline = 'Convert a Google Maps link to a Mappls Pin and open your car app.',
+                 description = 'GoogleMaps2Mappls — 14-day free trial after registration, then ₹100/month or ₹1000/year.'
+             WHERE tool_id = 'gmap2mappls'`,
+          );
+          await pool.query(
+            `INSERT INTO platform_config (config_key, value)
+             VALUES ('googlemaps2mappls_rename_v1', CAST(:value AS JSON))`,
+            {
+              value: JSON.stringify({
+                productName: "Google Maps to Mappls",
+                brandName: "GoogleMaps2Mappls",
+              }),
+            },
+          );
+        }
+      } catch (err) {
+        console.warn("[tool-skus] googlemaps2mappls_rename_v1 skipped:", err);
       }
     })().catch((err: unknown) => {
       schemaReady = null;

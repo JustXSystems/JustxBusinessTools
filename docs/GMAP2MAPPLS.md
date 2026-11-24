@@ -1,6 +1,6 @@
-# GMAP2MAPPLS → Pinway
+# GMAP2MAPPLS → Google Maps to Mappls
 
-This utility was renamed to **Pinway**.
+This utility is branded **GoogleMaps2Mappls** with product name **Google Maps to Mappls**.
 
 See **[PINWAY.md](./PINWAY.md)** for the current product docs.
 
