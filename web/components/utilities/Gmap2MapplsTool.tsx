@@ -91,12 +91,49 @@ export function Gmap2MapplsTool() {
     brandIdRef.current = brandId;
   }, [brandId]);
 
+  const bootstrappedRef = useRef(false);
+
   useEffect(() => {
     setOnAndroid(isAndroidUa());
     setOnIos(isIosUa());
+    let pendingQ: string | null = null;
     try {
       const saved = window.localStorage.getItem(BRAND_STORAGE_KEY);
-      if (saved && OEM_BRANDS.some((b) => b.id === saved)) setBrandId(saved);
+      if (saved && OEM_BRANDS.some((b) => b.id === saved)) {
+        setBrandId(saved);
+        brandIdRef.current = saved;
+      }
+      // Deep link: /tools/gmap2mappls?brand=mahindra&q=https://maps.app.goo.gl/…
+      const sp = new URLSearchParams(window.location.search);
+      const brandParam = (sp.get("brand") || sp.get("oem") || "").trim().toLowerCase();
+      if (brandParam && OEM_BRANDS.some((b) => b.id === brandParam)) {
+        setBrandId(brandParam);
+        brandIdRef.current = brandParam;
+        window.localStorage.setItem(BRAND_STORAGE_KEY, brandParam);
+      }
+      const qParam = (sp.get("q") || sp.get("input") || "").trim();
+      if (qParam) {
+        setInput(qParam);
+        pendingQ = qParam;
+      }
+    } catch {
+      /* ignore */
+    }
+    // Auto-resolve once when deep-linked with q= (support / WhatsApp links).
+    if (pendingQ && !bootstrappedRef.current) {
+      bootstrappedRef.current = true;
+      window.setTimeout(() => {
+        void resolve(pendingQ!);
+      }, 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap once on mount
+  }, []);
+
+  const syncBrandToUrl = useCallback((id: string) => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("brand", id);
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
     } catch {
       /* ignore */
     }
@@ -141,6 +178,7 @@ export function Gmap2MapplsTool() {
       } catch {
         /* ignore */
       }
+      syncBrandToUrl(id);
       if (!paste) return;
       const guide = buildBrandPlaybook(id, paste);
       if (!guide) return;
@@ -159,7 +197,7 @@ export function Gmap2MapplsTool() {
         }
       }
     },
-    [openAutoUrl, runOpenPrimary],
+    [openAutoUrl, runOpenPrimary, syncBrandToUrl],
   );
 
   const onCopy = useCallback(async (label: string, text: string) => {
@@ -318,29 +356,31 @@ export function Gmap2MapplsTool() {
   const appName = playbook?.brand.companionApp?.name || playbook?.brand.name;
   const isPinPasteBrand = playbook?.brand.companionApp?.handoff === "geo_with_pin";
   const pinReady = Boolean(playbook?.autoCopyText && result?.paste.mapplsPin);
+  const finalAction =
+    playbook?.brand.companionApp?.finalAction?.trim() || "Push to car";
 
   const statusNote = (() => {
     if (!playbook) return "";
     if (onIos) {
       return isPinPasteBrand && pinReady
-        ? `iPhone: Android Intents won’t open ${appName}. Copy/scan Pin “${result?.paste.mapplsPin}”, open ${appName} manually → Push to car.`
+        ? `iPhone: Android Intents won’t open ${appName}. Copy/scan Pin “${result?.paste.mapplsPin}”, open ${appName} manually → ${finalAction}.`
         : `iPhone: open ${appName} from the App Store / home screen, then use the copied Pin or place name.`;
     }
     if (!onAndroid) {
       return isPinPasteBrand && pinReady
-        ? `Desktop: scan QR for Pin “${result?.paste.mapplsPin}”, open ${appName} on Android → paste → Push to car.`
+        ? `Desktop: scan QR for Pin “${result?.paste.mapplsPin}”, open ${appName} on Android → paste → ${finalAction}.`
         : "Desktop: scan the QR with your Android phone (app must be installed).";
     }
     if (autoOpenStatus === "blocked") return "Open was blocked — tap the button below.";
     if (isPinPasteBrand) {
       if (autoOpenStatus === "opened") {
         return pinReady
-          ? `${appName} opened. Paste Pin “${result?.paste.mapplsPin}” in search → Push to car.`
+          ? `${appName} opened. Paste Pin “${result?.paste.mapplsPin}” in search → ${finalAction}.`
           : `${appName} opened. Follow the step below — never paste lat,lng.`;
       }
       return pinReady
-        ? `Tap the button to copy Pin “${result?.paste.mapplsPin}” and open ${appName}, then Push to car.`
-        : `Tap the button to open ${appName}, then set destination → Push to car.`;
+        ? `Tap the button to copy Pin “${result?.paste.mapplsPin}” and open ${appName}, then ${finalAction}.`
+        : `Tap the button to open ${appName}, then set destination → ${finalAction}.`;
     }
     if (autoOpenStatus === "opened") {
       return `${appName} should have opened with this location.`;

@@ -49,25 +49,31 @@ Ampere docs advertise Mappls PIN last-mile; **SimpleOne does not reliably resolv
 | Ampere | Ampere Connect | `com.greavesmobility.app` |
 | TVS | TVS Connect | `com.tvsm.connect` |
 | Ola Electric | Ola Electric | `com.olaelectric.companion` |
-| Mahindra | Adrenox — tap copies Pin + opens app → Push to car; **Share Pin…** (Android share sheet); **Copy Pin for vehicle Mappls** (in-car path) | `com.mahindra.adrenox` |
-| Tata | iRA | `com.tatamotors.oneapp` |
-| Hyundai | Bluelink | `com.hyundai.india.bluelink.prd` |
-| Kia | Kia Connect | `com.kia.uvo.in.prd` |
-| MG | iSMART | `com.saicmotor.iov.india` |
-| Maruti | Suzuki Connect | `com.msil.suzukiconnect_generation_2` |
+| Mahindra | Adrenox — Pin copy + open → **Push to car**; Share…; in-car Pin | `com.mahindra.adrenox` |
+| Tata | iRA — Pin copy + open → **Send to car**; Share…; in-car Pin | `com.tatamotors.oneapp` |
+| Hyundai | Bluelink — Pin copy + open → **Send to car**; Share…; in-car Pin | `com.hyundai.india.bluelink.prd` |
+| Kia | Kia Connect — Pin copy + open → **Send to car**; Share…; in-car Pin | `com.kia.uvo.in.prd` |
+| MG | iSMART — Pin copy + open → **Push POI to car**; Share…; in-car Pin | `com.saicmotor.iov.india` |
+| Maruti | Suzuki Connect — Pin copy + open → **vehicle Mappls search**; Share…; in-car Pin | `com.msil.suzukiconnect_generation_2` |
 | Matter / Tork / Suzuki 2W | Mappls nav (no public companion package) | — |
+
+### Tool deep link (web)
+
+Prefill brand (and optional Google link) for support / WhatsApp:
+
+`/tools/gmap2mappls?brand=mahindra`
+
+`/tools/gmap2mappls?brand=hyundai&q=https://maps.app.goo.gl/…`
+
+Aliases: `oem=` for brand, `input=` for `q=`. Changing the brand dropdown updates `?brand=` in the URL.
 
 ### OEM app deep link (Android)
 
-WhatsApp-style geo:
+**Simple Connect (geo):** WhatsApp-style location Intent into `com.sepl.android`.
 
-`geo:{lat},{lng}?q={lat},{lng}(Place+Name)`
+**4W send-to-car apps (Pin):** launch companion app + clipboard/QR Mappls Pin → search → Send/Push to car. Never paste lat,lng.
 
-Forced into the selected OEM package:
-
-`intent://{lat},{lng}?q=…#Intent;scheme=geo;package={oemPackage};S.browser_fallback_url=…;end`
-
-Use on an **Android phone with that brand’s app installed**. Desktop cannot open OEM apps — scan the on-page QR. Mappls stays under Secondary options for point verification / Pin copy.
+Use on an **Android phone with that brand’s app installed**. Desktop: scan the on-page QR. Mappls stays under Secondary / in-car CTA.
 
 ## OEM coverage matrix
 
@@ -84,11 +90,11 @@ Sources: MapmyIndia investor go-lives (FY23–FY27), Mappls Auto / Ampere case p
 | Suzuki Motorcycles | 2W | Mappls | **Mappls Pin**; Navigate 2W |
 | TVS (e.g. Apache RTR 160) | 2W | Mixed | Pin for Mappls path; **Open Google** for Connect Google Maps EV path |
 | Ola Electric | 2W | Ola Maps | **Open Google** / geo: (not Mappls Autosuggest) |
-| Mahindra (Scorpio-N, XUV700, XUV400, Born Electric, …) | 4W | Mappls + Adrenox | **Open Adrenox Connect** + auto-copy **Mappls Pin** → search → **Push to car** |
-| Tata (Harrier, Safari, Sierra EV) | 4W | Mappls | **Mappls Pin**; Navigate 4W |
-| Hyundai / Kia connected lines | 4W | Mappls | **Mappls Pin**; Navigate 4W |
-| MG Hector | 4W | Mappls | **Mappls Pin**; Navigate 4W |
-| Maruti (e-Vitara, Brezza NCASE) | 4W | Mappls | **Mappls Pin**; Navigate 4W |
+| Mahindra (Scorpio-N, XUV700, XUV400, Born Electric, …) | 4W | Mappls + Adrenox | **Adrenox** + Mappls Pin → **Push to car** (Share… / in-car Pin) |
+| Tata (Harrier, Safari, Sierra EV) | 4W | Mappls + iRA | **iRA** + Mappls Pin → **Send to car** |
+| Hyundai / Kia connected lines | 4W | Mappls + Bluelink / Kia Connect | **App** + Mappls Pin → **Send to car** |
+| MG Hector | 4W | Mappls + iSMART | **iSMART** + Mappls Pin → **Push POI to car** |
+| Maruti (e-Vitara, Brezza NCASE) | 4W | Mappls + Suzuki Connect | **Pin** for vehicle Mappls / Suzuki Connect assist |
 
 Private OEM schemes such as `simpleone://navigate?…` are **not** publicly documented; until OEMs publish them, **Mappls Pin + Mappls navigation deep links** are the portable solution.
 

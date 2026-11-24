@@ -39,10 +39,15 @@ export type OemCompanionApp = {
   /**
    * geo = WhatsApp-style geo Intent into the package (Simple Connect style).
    * maps = maps.google.com Intent into the package (Ola / Google-path brands).
-   * geo_with_pin = open OEM app via geo + auto-copy Mappls Pin for search → Push to car
-   *   (Mahindra Adrenox / Mappls NCASE apps that search Pin then push to vehicle).
+   * geo_with_pin = launch OEM app + auto-copy Mappls Pin → search → send/push to vehicle
+   *   (Mahindra Adrenox, Hyundai Bluelink, Kia Connect, Tata iRA, MG iSMART, …).
    */
   handoff: "geo" | "maps" | "geo_with_pin";
+  /**
+   * Final in-app action after pasting Pin (default: "Push to car").
+   * Examples: "Send to car", "Push POI to car".
+   */
+  finalAction?: string;
 };
 
 export type OemBrand = {
@@ -182,6 +187,7 @@ export const OEM_BRANDS: OemBrand[] = [
       name: "Adrenox Connect",
       packageId: "com.mahindra.adrenox",
       handoff: "geo_with_pin",
+      finalAction: "Push to car",
     },
   },
   {
@@ -190,9 +196,14 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "Harrier, Safari, Sierra EV",
     stack: "mappls",
-    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
-    note: "Open Tata iRA with destination; Pin as backup.",
-    companionApp: { name: "Tata Motors iRA", packageId: "com.tatamotors.oneapp", handoff: "geo" },
+    methods: ["mappls_pin", "mappls_nav_deep_link", "place_name", "geo_intent"],
+    note: "Tata iRA: send destination to car — launch app + Mappls Pin (not geo share, not lat,lng).",
+    companionApp: {
+      name: "Tata Motors iRA",
+      packageId: "com.tatamotors.oneapp",
+      handoff: "geo_with_pin",
+      finalAction: "Send to car",
+    },
   },
   {
     id: "hyundai",
@@ -200,9 +211,14 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "Connected vehicle lines",
     stack: "mappls",
-    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
-    note: "Open Bluelink with destination; Pin as backup.",
-    companionApp: { name: "Hyundai Bluelink", packageId: "com.hyundai.india.bluelink.prd", handoff: "geo" },
+    methods: ["mappls_pin", "mappls_nav_deep_link", "place_name", "geo_intent"],
+    note: "Bluelink Destination send to car — launch app + Mappls Pin (not geo share, not lat,lng).",
+    companionApp: {
+      name: "Hyundai Bluelink",
+      packageId: "com.hyundai.india.bluelink.prd",
+      handoff: "geo_with_pin",
+      finalAction: "Send to car",
+    },
   },
   {
     id: "kia",
@@ -210,9 +226,14 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "Connected vehicle lines",
     stack: "mappls",
-    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
-    note: "Open Kia Connect with destination; Pin as backup.",
-    companionApp: { name: "Kia Connect", packageId: "com.kia.uvo.in.prd", handoff: "geo" },
+    methods: ["mappls_pin", "mappls_nav_deep_link", "place_name", "geo_intent"],
+    note: "Kia Connect send destination to car — launch app + Mappls Pin (not geo share, not lat,lng).",
+    companionApp: {
+      name: "Kia Connect",
+      packageId: "com.kia.uvo.in.prd",
+      handoff: "geo_with_pin",
+      finalAction: "Send to car",
+    },
   },
   {
     id: "mg",
@@ -220,9 +241,14 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "Hector",
     stack: "mappls",
-    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
-    note: "Open MG iSMART with destination; Pin as backup.",
-    companionApp: { name: "MG iSMART", packageId: "com.saicmotor.iov.india", handoff: "geo" },
+    methods: ["mappls_pin", "mappls_nav_deep_link", "place_name", "geo_intent"],
+    note: "MG iSMART Push POI to car — launch app + Mappls Pin (not geo share, not lat,lng).",
+    companionApp: {
+      name: "MG iSMART",
+      packageId: "com.saicmotor.iov.india",
+      handoff: "geo_with_pin",
+      finalAction: "Push POI to car",
+    },
   },
   {
     id: "maruti",
@@ -230,9 +256,14 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "e-Vitara, Brezza (NCASE)",
     stack: "mappls",
-    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
-    note: "Open Suzuki Connect with destination; Pin as backup.",
-    companionApp: { name: "Suzuki Connect", packageId: "com.msil.suzukiconnect_generation_2", handoff: "geo" },
+    methods: ["mappls_pin", "mappls_nav_deep_link", "place_name", "geo_intent"],
+    note: "Suzuki Connect has limited send-to-car; prefer Mappls Pin in vehicle NCASE search. App launch + Pin copy still helps.",
+    companionApp: {
+      name: "Suzuki Connect",
+      packageId: "com.msil.suzukiconnect_generation_2",
+      handoff: "geo_with_pin",
+      finalAction: "paste Pin in vehicle Mappls search",
+    },
   },
 ];
 
@@ -376,6 +407,7 @@ export function buildBrandPlaybook(
     // - QR scanners often fail on intent:#Intent → QR uses Pin text / HTTPS.
     if (app.handoff === "geo_with_pin") {
       const launchUrl = oemPackageLaunchUrl(app.packageId);
+      const finalAction = app.finalAction?.trim() || "Push to car";
       const mapplsBackup = coordsOk
         ? { kind: "open" as const, label: "Open exact point on Mappls (4W)", href: navUrl }
         : {
@@ -401,7 +433,7 @@ export function buildBrandPlaybook(
           deferAutoOpen: true,
           share: {
             title: `Mappls Pin ${pin}`,
-            text: `Destination: ${dest}\nMappls Pin: ${pin}\nPaste in ${app.name} or vehicle Mappls search → Push to car / Start. Never paste lat,lng.`,
+            text: `Destination: ${dest}\nMappls Pin: ${pin}\nPaste in ${app.name} or vehicle Mappls search → ${finalAction}. Never paste lat,lng.`,
             url: paste.mapplsPinUrl,
           },
           inCar: {
@@ -409,13 +441,13 @@ export function buildBrandPlaybook(
             copyText: pin,
           },
           steps: [
-            `Phone: tap button (copies Pin + opens ${app.name}) → paste “${pin}” → Push to car. Or already in the car: copy Pin into vehicle Mappls search. Never paste lat,lng.`,
+            `Phone: tap button (copies Pin + opens ${app.name}) → paste “${pin}” → ${finalAction}. Or already in the car: copy Pin into vehicle Mappls search. Never paste lat,lng.`,
           ],
           backup: mapplsBackup,
         };
       }
 
-      // No Pin: still open Adrenox (OEM app), not Mappls. Place name / Mappls are assists.
+      // No Pin: still open OEM app, not Mappls. Place name / Mappls are assists.
       return {
         brand,
         autoOpenUrl: launchUrl,
@@ -434,14 +466,14 @@ export function buildBrandPlaybook(
         share: place
           ? {
               title: place,
-              text: `Destination: ${place}\nPaste in ${app.name} search → Push to car. Never paste lat,lng.`,
+              text: `Destination: ${place}\nPaste in ${app.name} search → ${finalAction}. Never paste lat,lng.`,
               url: coordsOk ? navUrl : paste.googleMapsUrl,
             }
           : undefined,
         steps: [
           place
-            ? `Pin unavailable. Tap the button (copies place name + opens ${app.name}). Paste “${place}” → Push to car. Use Mappls 4W backup to verify the exact point.`
-            : `Pin unavailable. Open ${app.name} and set the destination → Push to car. Use Mappls 4W backup for the exact point. Never paste lat,lng.`,
+            ? `Pin unavailable. Tap the button (copies place name + opens ${app.name}). Paste “${place}” → ${finalAction}. Use Mappls 4W backup to verify the exact point.`
+            : `Pin unavailable. Open ${app.name} and set the destination → ${finalAction}. Use Mappls 4W backup for the exact point. Never paste lat,lng.`,
         ],
         backup: mapplsBackup,
       };

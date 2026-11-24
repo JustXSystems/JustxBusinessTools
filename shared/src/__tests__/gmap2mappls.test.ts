@@ -260,6 +260,19 @@ describe("gmap2mappls urls + samples", () => {
     // Simple Connect still auto-opens (geo carries the destination)
     expect(simple?.deferAutoOpen).toBeFalsy();
 
+    // Other send-to-car 4W apps use the same Pin → vehicle path as Mahindra
+    for (const id of ["tata", "hyundai", "kia", "mg", "maruti"] as const) {
+      const pb = buildBrandPlaybook(id, paste);
+      expect(pb?.brand.companionApp?.handoff, id).toBe("geo_with_pin");
+      expect(pb?.deferAutoOpen, id).toBe(true);
+      expect(pb?.autoCopyText, id).toBe("kcf7zj");
+      expect(pb?.autoOpenUrl, id).toContain(`package=${pb!.brand.companionApp!.packageId}`);
+      expect(pb?.autoOpenUrl, id).not.toMatch(/mappls\.com/);
+      expect(pb?.inCar?.copyText, id).toBe("kcf7zj");
+    }
+    expect(buildBrandPlaybook("hyundai", paste)?.steps[0]).toMatch(/Send to car/i);
+    expect(buildBrandPlaybook("maruti", paste)?.steps[0]).toMatch(/vehicle Mappls/i);
+
     const ola = buildBrandPlaybook("ola", paste);
     expect(ola?.autoOpenUrl).toContain("package=com.olaelectric.companion");
     expect(ola?.autoOpenUrl).toContain("maps.google.com");
