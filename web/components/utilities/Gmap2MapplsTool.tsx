@@ -47,7 +47,6 @@ import {
   Segmented,
   Select,
   Textarea,
-  ThemeToggle,
   useBosTheme,
 } from "@/components/bos";
 import "./gmap2mappls/gmap2mappls.css";
@@ -124,7 +123,36 @@ function deviceClass(onAndroid: boolean, onIos: boolean): string {
 
 function PinwayThemeToggle() {
   const { theme, setTheme } = useBosTheme();
-  return <ThemeToggle theme={theme} onChange={setTheme} />;
+  const next = theme === "dark" ? "light" : "dark";
+  return (
+    <button
+      type="button"
+      className="g2m-theme-btn"
+      aria-label={next === "dark" ? "Switch to dark mode" : "Switch to light mode"}
+      onClick={() => setTheme(next)}
+    >
+      {theme === "dark" ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" />
+          <path
+            d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <path
+            d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+    </button>
+  );
 }
 
 export function Gmap2MapplsTool({
@@ -696,19 +724,43 @@ export function Gmap2MapplsTool({
   };
 
   const stageOrder = { brand: 0, place: 1, open: 2 } as const;
-  const primaryCtaLabel = loading
-    ? "Matching point…"
-    : result && playbook
-      ? playbook.primary.label
-      : "Convert & open";
 
   const liveState: "ready" | "busy" | "locked" = loading ? "busy" : result ? "locked" : "ready";
   const liveLabel = liveState === "busy" ? "Matching" : liveState === "locked" ? "Locked" : "Ready";
 
+  const nav = (
+    <header className="g2m-nav">
+      <div className="g2m-nav-main">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          className="g2m-logo"
+          src={withBasePath("/icons/googlemaps2mappls-icon.png")}
+          alt=""
+          width={36}
+          height={36}
+        />
+        <div className="g2m-brandmark-copy">
+          <h1 className="g2m-title">{PINWAY_BRAND_NAME}</h1>
+          <p className="g2m-eyebrow">{PINWAY_PRODUCT_NAME}</p>
+        </div>
+      </div>
+      <div className="g2m-nav-actions">
+        <span
+          className={`g2m-livepill${liveState === "busy" ? " is-busy" : ""}${liveState === "locked" ? " is-locked" : ""}`}
+          role="status"
+        >
+          <span className="g2m-livepill-dot" aria-hidden />
+          <span className="g2m-livepill-text">{liveLabel}</span>
+        </span>
+        <PinwayThemeToggle />
+      </div>
+    </header>
+  );
+
   const body = (
     <div
       ref={shellRef}
-      className={`g2m tool-workspace ${deviceClass(onAndroid, onIos)} g2m--${variant}`}
+      className={`g2m ${deviceClass(onAndroid, onIos)} g2m--${variant}`}
       style={{ "--g2m-mx": `${pointer.x}%`, "--g2m-my": `${pointer.y}%` } as CSSProperties}
       onPointerMove={onShellPointerMove}
     >
@@ -716,31 +768,6 @@ export function Gmap2MapplsTool({
         <span className="g2m-space-orb" />
         <span className="g2m-space-orb g2m-space-orb--2" />
       </div>
-
-      <header className="g2m-chrome">
-        <div className="g2m-brandmark">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className="g2m-logo"
-            src={withBasePath("/icons/googlemaps2mappls-icon.png")}
-            alt=""
-            width={44}
-            height={44}
-          />
-          <div className="g2m-brandmark-copy">
-            <p className="g2m-eyebrow">{PINWAY_BRAND_NAME}</p>
-            <h1 className="g2m-title">{PINWAY_PRODUCT_NAME}</h1>
-          </div>
-        </div>
-        <span
-          className={`g2m-livepill${liveState === "busy" ? " is-busy" : ""}${liveState === "locked" ? " is-locked" : ""}`}
-          role="status"
-        >
-          <span className="g2m-livepill-dot" aria-hidden />
-          {liveLabel}
-        </span>
-        <PinwayThemeToggle />
-      </header>
 
       {showA2hs ? (
         <p className="g2m-a2hs" role="note">
@@ -1152,7 +1179,7 @@ export function Gmap2MapplsTool({
       <div className="g2m-island" aria-label="Primary actions">
         {result && playbook?.primary.kind === "open" && playbook.primary.href ? (
           <a
-            className="bos-btn bos-btn-primary"
+            className="bos-btn bos-btn-primary g2m-cta"
             href={playbook.primary.href}
             onClick={(e) => {
               e.preventDefault();
@@ -1166,20 +1193,36 @@ export function Gmap2MapplsTool({
             {playbook.primary.label}
           </a>
         ) : result && playbook ? (
-          <Button variant="primary" disabled={loading || pinwayLocked} onClick={() => void runPrimary()}>
+          <Button
+            variant="primary"
+            className="g2m-cta"
+            disabled={loading || pinwayLocked}
+            onClick={() => void runPrimary()}
+          >
             {copied === "primary" && playbook.primary.kind === "copy"
               ? "Copied — paste in app"
               : playbook.primary.label}
           </Button>
         ) : (
-          <Button variant="primary" disabled={loading || pinwayLocked} onClick={() => void resolve(input)}>
+          <Button
+            variant="primary"
+            className="g2m-cta"
+            disabled={loading || pinwayLocked}
+            onClick={() => void resolve(input)}
+          >
             {loading ? "Matching…" : "Convert & open"}
           </Button>
         )}
-        <Button variant="secondary" disabled={loading || pinwayLocked} onClick={() => void pasteAndFind()}>
+        <Button
+          variant="secondary"
+          className="g2m-cta-secondary"
+          disabled={loading || pinwayLocked}
+          onClick={() => void pasteAndFind()}
+        >
           Paste
         </Button>
       </div>
+      <div className="g2m-home-indicator" aria-hidden />
     </div>
   );
 
@@ -1193,6 +1236,7 @@ export function Gmap2MapplsTool({
       defaultTheme="light"
     >
       <div className={`g2m-app g2m-app--${variant}`}>
+        {nav}
         {body}
         {island}
       </div>
