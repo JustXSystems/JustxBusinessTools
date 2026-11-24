@@ -26,7 +26,7 @@ describe("resolveGmap2Mappls sample mode", () => {
     expect(r.paste.geoUri).toContain("geo:12.8804,77.5958");
     expect(r.paste.mapplsUrl).toBe("https://www.mappls.com/@12.8804,77.5958");
     expect(r.paste.shareText).toContain("12.8804,77.5958");
-    expect(r.paste.tip.toLowerCase()).toMatch(/simpleone|mappls|geo/);
+    expect(r.paste.tip.toLowerCase()).toMatch(/simpleone|place name|geo|mappls/);
   });
 
   it("Zigma short link: pin !3d!4d, same Google/Mappls coords, Mappls Pin for SimpleOne", async () => {
@@ -45,7 +45,10 @@ describe("resolveGmap2Mappls sample mode", () => {
     expect(r.paste.mapplsPin).toBe("kcf7zj");
     expect(r.paste.mapplsPinUrl).toBe("https://www.mappls.com/kcf7zj");
     expect(r.paste.digipin || r.mappls.digipin).toBeTruthy();
-    expect(r.paste.tip.toLowerCase()).toMatch(/pin kcf7zj|mappls/);
+    // SimpleOne path: POI place name + Simple Connect geo intent (Pin alone fails in-app)
+    expect(r.mappls.placeName?.toLowerCase()).toContain("zigma");
+    expect(r.paste.searchQuery?.toLowerCase()).toContain("zigma");
+    expect(r.paste.simpleConnectIntentUrl).toContain("com.sepl.android");
     expect(r.paste.mapplsNavBikingUrl).toContain("mode=biking");
     expect(r.paste.mapplsNavDrivingUrl).toContain("mode=driving");
   }, 45_000);

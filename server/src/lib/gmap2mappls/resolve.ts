@@ -59,11 +59,14 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
       lat,
       lng,
       sampleMode: mappls.sampleMode,
-      tip: "Mappls OEMs: paste Mappls Pin into search — not lat,lng. Best Google input = Share → Copy link.",
+      tip: "SimpleOne: paste place name or Push via Google/geo — Pin/lat,lng search often wrong.",
       paste: buildPasteKit(lat, lng, {
         mapplsPin: mappls.mapplsPin,
         digipin: mappls.digipin,
         name: fixture.googleName,
+        placeName: mappls.placeName || fixture.googleName,
+        locality: mappls.locality || fixture.locality,
+        city: mappls.city || fixture.city,
       }),
       google: {
         input,
@@ -165,11 +168,14 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
     lat,
     lng,
     sampleMode: mappls.sampleMode || !getMapplsAccessToken(),
-    tip: "Mappls OEMs: paste Mappls Pin into search — not lat,lng. Best Google input = Share → Copy link.",
+    tip: "SimpleOne: paste place name or Push via Google/geo — Pin/lat,lng search often wrong.",
     paste: buildPasteKit(lat, lng, {
       mapplsPin: mappls.mapplsPin,
       digipin: mappls.digipin,
       name: googleName({ input, source, label, displayName }),
+      placeName: mappls.placeName || googleName({ input, source, label, displayName }),
+      locality: mappls.locality,
+      city: mappls.city,
     }),
     google: {
       input,
@@ -197,7 +203,7 @@ export function resolveMeta() {
       input: s.input,
       coords: formatCoordPair(s.lat, s.lng),
     })),
-    tip: "Mappls OEMs: paste Mappls Pin into search — not lat,lng. Best Google input = Share → Copy link.",
+    tip: "SimpleOne: paste place name or Push via Google/geo — Pin/lat,lng search often wrong.",
     sourceHint: sourceLabel,
     oem: buildOemHandoffSummary(),
   };

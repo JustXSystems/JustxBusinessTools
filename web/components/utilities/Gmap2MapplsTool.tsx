@@ -263,77 +263,62 @@ export function Gmap2MapplsTool() {
           </div>
 
           <section className="g2m-paste" aria-label="Open or paste into Mappls OEM apps">
-            <h3>Universal handoff (2W + 4W Mappls OEMs)</h3>
+            <h3>SimpleOne / OEM handoff (tested path)</h3>
             <p className="g2m-paste-tip" role="status">
               {result.paste?.tip ||
-                "Paste Mappls Pin into OEM search — never lat,lng. Or Navigate in Mappls (coords work in nav links)."}
+                "SimpleOne: paste place name, or Open Google → Share/Push to Simple Connect. Pin/lat,lng in search often land wrong."}
             </p>
-            {(result.paste?.mapplsPin || result.mappls.mapplsPin) ? (
+
+            {result.paste?.searchQuery ? (
               <div className="g2m-pin-hero">
                 <div>
                   <div className="g2m-banner-meta">
-                    Paste into SimpleOne / Chetak / OneApp / Mahindra / Tata / Hyundai / Kia / MG / Maruti / Ampere / …
+                    SimpleOne search — paste this place name (not Pin / not lat,lng)
                   </div>
-                  <strong className="g2m-pin-code">
-                    {result.paste?.mapplsPin || result.mappls.mapplsPin}
-                  </strong>
+                  <strong className="g2m-pin-code g2m-place-query">{result.paste.searchQuery}</strong>
                 </div>
                 <div className="g2m-paste-row">
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
-                    onClick={() =>
-                      void onCopy(
-                        "pin",
-                        result.paste?.mapplsPin || result.mappls.mapplsPin || "",
-                      )
-                    }
+                    onClick={() => void onCopy("search", result.paste?.searchQuery || "")}
                   >
-                    {copied === "pin"
-                      ? "Copied Mappls Pin"
-                      : `Copy Mappls Pin (${result.paste?.mapplsPin || result.mappls.mapplsPin})`}
+                    {copied === "search" ? "Copied place name" : "Copy place name"}
                   </button>
-                  {result.paste?.mapplsPinUrl ? (
-                    <a
-                      className="btn btn-secondary btn-sm"
-                      href={result.paste.mapplsPinUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open pin on Mappls
-                    </a>
-                  ) : null}
                 </div>
               </div>
             ) : (
               <p className="g2m-paste-warn">
-                Mappls Pin unavailable right now — use Navigate in Mappls / Google below (not OEM search).
+                Place name unavailable — use Open Google / geo → Share or Push to Simple Connect.
               </p>
             )}
+
+            <div className="g2m-steps" aria-label="SimpleOne steps">
+              <strong>SimpleOne (works when Pin search fails)</strong>
+              <ol>
+                <li>Copy place name → paste in SimpleOne / Simple Connect destination search, pick the matching POI.</li>
+                <li>
+                  Or on phone: Open Google / Open phone maps → Share or Push Navigation to Simple Connect
+                  (official “WhatsApp locations → Simple Connect” path).
+                </li>
+                <li>Do not paste Mappls Pin or lat,lng into SimpleOne search — Pin is correct on mappls.com but SimpleOne often fuzzy-matches the wrong place.</li>
+              </ol>
+            </div>
+
             <div className="g2m-paste-row">
               <a
                 className="btn btn-primary btn-sm"
-                href={result.paste?.mapplsNavBikingUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Navigate Mappls · 2W
-              </a>
-              <a
-                className="btn btn-primary btn-sm"
-                href={result.paste?.mapplsNavDrivingUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Navigate Mappls · 4W
-              </a>
-              <a
-                className="btn btn-secondary btn-sm"
                 href={result.paste?.googleMapsUrl || result.google.mapsUrl}
                 target="_blank"
                 rel="noreferrer"
               >
-                Open Google (Ola / TVS Google path)
+                Open Google → share to Simple Connect
+              </a>
+              <a
+                className="btn btn-primary btn-sm"
+                href={result.paste?.simpleConnectIntentUrl || result.paste?.geoUri}
+              >
+                Open Simple Connect (geo)
               </a>
               <a
                 className="btn btn-secondary btn-sm"
@@ -343,12 +328,49 @@ export function Gmap2MapplsTool() {
               </a>
               <a
                 className="btn btn-secondary btn-sm"
-                href={result.paste?.mapplsUrl || result.mappls.mapplsUrl}
+                href={result.paste?.mapplsNavBikingUrl}
                 target="_blank"
                 rel="noreferrer"
               >
-                Open Mappls @lat,lng
+                Navigate Mappls · 2W
               </a>
+              <a
+                className="btn btn-secondary btn-sm"
+                href={result.paste?.mapplsNavDrivingUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Navigate Mappls · 4W
+              </a>
+              {(result.paste?.mapplsPin || result.mappls.mapplsPin) ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    title="Correct on mappls.com — SimpleOne search may still fuzzy-match wrong"
+                    onClick={() =>
+                      void onCopy(
+                        "pin",
+                        result.paste?.mapplsPin || result.mappls.mapplsPin || "",
+                      )
+                    }
+                  >
+                    {copied === "pin"
+                      ? "Copied Mappls Pin"
+                      : `Copy Pin (${result.paste?.mapplsPin || result.mappls.mapplsPin}) — other OEMs`}
+                  </button>
+                  {result.paste?.mapplsPinUrl ? (
+                    <a
+                      className="btn btn-secondary btn-sm"
+                      href={result.paste.mapplsPinUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Verify pin on Mappls
+                    </a>
+                  ) : null}
+                </>
+              ) : null}
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
@@ -369,19 +391,10 @@ export function Gmap2MapplsTool() {
                     : `Copy Digipin (${result.paste?.digipin || result.mappls.digipin})`}
                 </button>
               ) : null}
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                title="For geo:/nav deep links only — do not paste into OEM Mappls search"
-                onClick={() => void onCopy("latlng", result.paste?.latLng || formatCoordPair(result.lat, result.lng))}
-              >
-                {copied === "latlng" ? "Copied lat,lng" : "Copy lat,lng (not for search)"}
-              </button>
             </div>
             <p className="g2m-paste-note">
-              One root cause across Mappls OEMs: Autosuggest <code>query</code> = place/Pin text;
-              <code>location=lat,lng</code> is bias only. Navigation deep links accept coordinates;
-              OEM search boxes do not. Ola MoveOS uses Ola Maps — open Google at the same point.
+              Verified: Mappls Pin <code>kcf7zj</code> opens Zigma on mappls.com. SimpleOne failure is
+              OEM search (no reliable eLoc), not the pin. Use place name or Push Navigation.
             </p>
             <div className="g2m-paste-footer">
               <code className="g2m-paste-code">
@@ -426,7 +439,15 @@ export function Gmap2MapplsTool() {
                         </td>
                         <td>{b.segment}</td>
                         <td>{b.stack === "mappls" ? "Mappls" : b.stack === "ola_maps" ? "Ola Maps" : b.stack === "mixed" ? "Mixed" : "—"}</td>
-                        <td>{b.methods.includes("mappls_pin") && b.stack !== "ola_maps" ? "Mappls Pin" : b.methods[0] === "google_maps" ? "Google / geo" : "Pin + Google"}</td>
+                        <td>
+                          {b.id === "simple-energy"
+                            ? "Place name / Push"
+                            : b.stack === "ola_maps"
+                              ? "Google / geo"
+                              : b.stack === "mixed"
+                                ? "Pin + Google"
+                                : "Pin / place name"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

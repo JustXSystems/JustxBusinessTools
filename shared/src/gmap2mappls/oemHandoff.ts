@@ -15,10 +15,12 @@
 export type OemMapStack = "mappls" | "ola_maps" | "mixed" | "unknown";
 
 export type OemHandoffMethod =
+  | "place_name"
   | "mappls_pin"
   | "mappls_nav_deep_link"
   | "mappls_pin_url"
   | "geo_intent"
+  | "simple_connect_push"
   | "google_maps"
   | "digipin";
 
@@ -35,12 +37,16 @@ export type OemBrand = {
 
 /** Universal playbook that covers Mappls NCASE / SDK / phone-projection OEMs. */
 export const MAPPLS_OEM_SEARCH_RULES = {
-  searchBoxAccepts: ["place name", "address text", "Mappls Pin (6-char eLoc)", "pincode / category"] as const,
-  searchBoxRejects: ["raw lat,lng", "geo: URI", "Google address paste as primary"] as const,
+  searchBoxAccepts: ["place name / POI", "address text", "Mappls Pin (only if OEM entitled eLoc search)", "pincode / category"] as const,
+  searchBoxRejects: ["raw lat,lng", "geo: URI", "Pin as fuzzy text when eLoc search disabled"] as const,
   whyLatLngFails:
     "Mappls Autosuggest `query` is text/POI/Pin. `location=lat,lng` is only a radial bias — pasting coordinates into the search field searches the wrong place.",
+  whyPinFailsOnSimpleOne:
+    "kcf7zj is correct on mappls.com (Zigma). SimpleOne search often lacks eLoc resolution, so typing the Pin fuzzy-matches an unrelated place. Use POI place name or Push Navigation via Google/geo → Simple Connect.",
   routingAccepts: ["Mappls Pin / eLoc", "WGS-84 lat,lng (API & navigation deep links)"] as const,
   ampereConfirms: "Ampere Nexus lists Last Mile Guidance with House Numbers & Mappls PIN.",
+  simpleConnectConfirms:
+    "Simple Connect: Push Location / Push Navigation + Share WhatsApp locations to Simple Connect for navigation.",
 } as const;
 
 /**
@@ -55,8 +61,8 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "2W",
     examples: "SimpleOne, Simple Connect",
     stack: "mappls",
-    methods: ["mappls_pin", "mappls_nav_deep_link", "mappls_pin_url", "geo_intent"],
-    note: "Dash uses Map My India navigation. Paste Mappls Pin into search; or push/open via Mappls nav / geo.",
+    methods: ["place_name", "simple_connect_push", "google_maps", "geo_intent", "mappls_nav_deep_link", "mappls_pin"],
+    note: "Pin is correct on Mappls web but SimpleOne search often fuzzy-mismatches eLoc. Prefer POI place name, or Open Google/geo → Share/Push to Simple Connect (official WhatsApp-location / Push Navigation path).",
   },
   {
     id: "bajaj",
@@ -197,10 +203,10 @@ export function buildOemHandoffSummary(): OemHandoffSummary {
     rules: MAPPLS_OEM_SEARCH_RULES,
     brands: OEM_BRANDS,
     universalSteps: [
-      "1. Copy Mappls Pin → paste into any Mappls OEM destination search (SimpleOne, Chetak, OneApp, Mahindra, Tata, Hyundai, Kia, MG, Maruti, Ampere, Matter, Tork, Suzuki, TVS Mappls path).",
-      "2. Or tap Navigate in Mappls (2W/4W) — official navigation deep link uses lat,lng and skips Autosuggest.",
-      "3. Or Open Mappls Pin URL / geo: / phone maps chooser.",
-      "4. Ola Electric / some TVS Google paths: Open Google Maps at the same lat,lng (not Mappls Pin search).",
+      "1. SimpleOne / Simple Connect: Copy place name into search — or Open Google / geo and Share/Push to Simple Connect (do not rely on Mappls Pin in search).",
+      "2. Other Mappls OEMs (if Pin search works): paste Mappls Pin; otherwise paste place name.",
+      "3. Navigate Mappls · 2W/4W — nav deep link uses lat,lng and skips Autosuggest.",
+      "4. Ola Electric / some TVS Google paths: Open Google Maps at the same lat,lng.",
     ],
   };
 }

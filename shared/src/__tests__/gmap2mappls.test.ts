@@ -147,18 +147,26 @@ describe("gmap2mappls urls + samples", () => {
     expect(googleMapsPointUrl(lat, lng)).toContain(formatCoordPair(lat, lng));
   });
 
-  it("builds geo URI + share text for OEM Mappls handoff", () => {
-    const kit = buildPasteKit(12.877073, 77.613574, { name: "Zigma Technologies", mapplsPin: "kcf7zj" });
+  it("builds geo URI + place-name search for SimpleOne handoff", () => {
+    const kit = buildPasteKit(12.877073, 77.613574, {
+      name: "Zigma Technologies",
+      placeName: "Zigma Technologies",
+      locality: "Nyanappanahalli",
+      city: "Bengaluru",
+      mapplsPin: "kcf7zj",
+    });
     expect(kit.geoUri.startsWith("geo:12.877073,77.613574")).toBe(true);
+    expect(kit.searchQuery).toContain("Zigma Technologies");
+    expect(kit.searchQuery).toContain("Nyanappanahalli");
+    expect(kit.simpleConnectIntentUrl).toContain("package=com.sepl.android");
+    expect(kit.simpleConnectIntentUrl).toContain("scheme=geo");
     expect(kit.shareText).toContain("Zigma Technologies");
     expect(kit.shareText).toContain("kcf7zj");
     expect(kit.mapplsUrl).toBe("https://www.mappls.com/@12.877073,77.613574");
     expect(kit.mapplsPinUrl).toBe("https://www.mappls.com/kcf7zj");
-    expect(kit.mapplsDirectionsUrl).toContain("direction?places=;12.877073,77.613574");
     expect(kit.mapplsNavBikingUrl).toContain("mode=biking");
-    expect(kit.mapplsNavDrivingUrl).toContain("mode=driving");
     expect(kit.googleMapsUrl).toContain("12.877073,77.613574");
-    expect(kit.tip.toLowerCase()).toMatch(/mappls/);
+    expect(kit.tip.toLowerCase()).toMatch(/place name|simpleone/);
   });
 
   it("covers listed 2W/4W OEMs in handoff matrix", () => {

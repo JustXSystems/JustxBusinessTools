@@ -64,10 +64,18 @@ function withOfflineDigipin(side: MapplsSide, lat: number, lng: number): MapplsS
   return side;
 }
 
+function applyClick(side: MapplsSide, click: Awaited<ReturnType<typeof fetchMapplsClickRevg>>): void {
+  if (!click) return;
+  side.mapplsPin = click.mapplsPin;
+  side.digipin = click.digipin || side.digipin;
+  side.placeName = click.name || side.placeName;
+  if (click.formattedAddress) side.formattedAddress = click.formattedAddress;
+}
+
 /**
  * Mappls Reverse Geocode only — never text / place search.
- * Always tries Mappls web click-revg for Mappls Pin (required for SimpleOne search).
- * Optionally enriches Digipin via token API; falls back to offline India Post encode.
+ * Always tries Mappls web click-revg for Pin + POI name (POI name is the reliable
+ * SimpleOne Autosuggest query when eLoc search is not entitled).
  */
 export async function reverseGeocodeMappls(lat: number, lng: number): Promise<MapplsSide> {
   const token = getMapplsAccessToken();
@@ -75,15 +83,7 @@ export async function reverseGeocodeMappls(lat: number, lng: number): Promise<Ma
 
   if (!token) {
     const sample = sampleMapplsSide(lat, lng);
-    const click = await clickPromise;
-    if (click) {
-      sample.mapplsPin = click.mapplsPin;
-      sample.digipin = click.digipin || sample.digipin;
-      if (click.formattedAddress && sample.sampleMode) {
-        // Prefer live place name/address from click-revg over generic sample copy
-        sample.formattedAddress = click.formattedAddress;
-      }
-    }
+    applyClick(sample, await clickPromise);
     return withOfflineDigipin(sample, lat, lng);
   }
 
@@ -105,11 +105,8 @@ export async function reverseGeocodeMappls(lat: number, lng: number): Promise<Ma
     if (!res.ok) {
       const sample = sampleMapplsSide(lat, lng);
       sample.formattedAddress = `${sample.formattedAddress} [Mappls HTTP ${res.status}]`;
-      if (click) {
-        sample.mapplsPin = click.mapplsPin;
-        sample.digipin = click.digipin || sample.digipin;
-        if (click.formattedAddress) sample.formattedAddress = click.formattedAddress;
-      } else {
+      if (click) applyClick(sample, click);
+      else {
         const digipin = await fetchDigipinApi(lat, lng, token);
         if (digipin) sample.digipin = digipin;
       }
@@ -120,11 +117,8 @@ export async function reverseGeocodeMappls(lat: number, lng: number): Promise<Ma
     const row = data.results?.[0];
     if (!row) {
       const sample = sampleMapplsSide(lat, lng);
-      if (click) {
-        sample.mapplsPin = click.mapplsPin;
-        sample.digipin = click.digipin || sample.digipin;
-        if (click.formattedAddress) sample.formattedAddress = click.formattedAddress;
-      } else {
+      if (click) applyClick(sample, click);
+      else {
         const digipin = await fetchDigipinApi(lat, lng, token);
         if (digipin) sample.digipin = digipin;
       }
@@ -146,6 +140,7 @@ export async function reverseGeocodeMappls(lat: number, lng: number): Promise<Ma
 
     return {
       formattedAddress: formatted,
+      placeName: click?.name || undefined,
       locality: row.locality || row.subLocality || row.village || undefined,
       city: row.city || undefined,
       state: row.state || undefined,
@@ -160,12 +155,7 @@ export async function reverseGeocodeMappls(lat: number, lng: number): Promise<Ma
     };
   } catch {
     const sample = sampleMapplsSide(lat, lng);
-    const click = await clickPromise.catch(() => null);
-    if (click) {
-      sample.mapplsPin = click.mapplsPin;
-      sample.digipin = click.digipin || sample.digipin;
-      if (click.formattedAddress) sample.formattedAddress = click.formattedAddress;
-    }
+    applyClick(sample, await clickPromise.catch(() => null));
     return withOfflineDigipin(sample, lat, lng);
   }
 }

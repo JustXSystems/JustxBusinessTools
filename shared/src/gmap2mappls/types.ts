@@ -26,6 +26,8 @@ export type GoogleSide = {
 
 export type MapplsSide = {
   formattedAddress: string;
+  /** Nearest POI / place name from Mappls click-revg (best OEM search text). */
+  placeName?: string;
   locality?: string;
   city?: string;
   state?: string;
@@ -48,7 +50,12 @@ export type PasteKit = {
   latLngSpaced: string;
   /** Android / many map apps: one-tap open at the shared point. */
   geoUri: string;
-  /** Same point on Google Maps (Ola / some TVS Google paths). */
+  /**
+   * Android intent that targets Simple Connect (`com.sepl.android`) with geo coords.
+   * Works when Simple Connect registers for geo / WhatsApp-location style opens.
+   */
+  simpleConnectIntentUrl: string;
+  /** Same point on Google Maps (Ola / TVS Google / share-to-Simple-Connect). */
   googleMapsUrl: string;
   /** Official Mappls web/share deep link (no Google-style 18z). */
   mapplsUrl: string;
@@ -63,6 +70,11 @@ export type PasteKit = {
   /** Native Android scheme (requires Mappls app). */
   mapplsNavDrivingUri: string;
   mapplsNavBikingUri: string;
+  /**
+   * Best string to type into OEM Autosuggest when eLoc/Pin search is NOT entitled
+   * (SimpleOne often falls in this bucket — Pin fuzzy-matches the wrong place).
+   */
+  searchQuery?: string;
   /** Ready-to-send WhatsApp / SMS / ticket text. */
   shareText: string;
   mapplsPin?: string;
@@ -153,9 +165,42 @@ export function geoPointUri(lat: number, lng: number, label?: string): string {
   return `geo:${roundCoord(lat)},${roundCoord(lng)}${q}`;
 }
 
+/**
+ * Chrome/Android intent URL that tries to open Simple Connect with the exact geo point.
+ * Package: com.sepl.android (Simple Connect). Falls back to geo chooser if unsupported.
+ */
+export function simpleConnectGeoIntentUrl(
+  lat: number,
+  lng: number,
+  label?: string,
+): string {
+  const la = roundCoord(lat);
+  const ln = roundCoord(lng);
+  const q = label?.trim()
+    ? `${la},${ln}(${encodeURIComponent(label.trim().slice(0, 80))})`
+    : `${la},${ln}`;
+  return `intent://${la},${ln}?q=${q}#Intent;scheme=geo;package=com.sepl.android;end`;
+}
+
+/** Best Autosuggest query: POI name (not Pin, not raw coords). */
+export function buildOemSearchQuery(opts?: {
+  placeName?: string;
+  locality?: string;
+  city?: string;
+}): string | undefined {
+  const name = opts?.placeName?.trim();
+  if (!name) return undefined;
+  const bits = [name];
+  const loc = opts?.locality?.trim();
+  const city = opts?.city?.trim();
+  if (loc && !name.toLowerCase().includes(loc.toLowerCase())) bits.push(loc);
+  if (city && !name.toLowerCase().includes(city.toLowerCase())) bits.push(city);
+  return bits.join(" ").replace(/\s+/g, " ").trim().slice(0, 120);
+}
+
 /** Short tip shown under OEM paste actions. */
 export const OEM_PASTE_TIP =
-  "All Mappls OEM apps (SimpleOne, Bajaj, Hero, Ampere, Mahindra, Tata, Hyundai, Kia, MG, Maruti, …): paste Mappls Pin into search — never lat,lng. Or use Navigate in Mappls (coords work in nav deep links).";
+  "SimpleOne: do NOT paste Mappls Pin / lat,lng into search (fuzzy wrong place). Copy place name, or Open Google/geo → Share/Push to Simple Connect. Other Mappls OEMs: try Pin or Navigate Mappls.";
 
 /** @deprecated Use OEM_PASTE_TIP */
 export const SIMPLEONE_PASTE_TIP = OEM_PASTE_TIP;
@@ -163,7 +208,13 @@ export const SIMPLEONE_PASTE_TIP = OEM_PASTE_TIP;
 export function buildShareText(
   lat: number,
   lng: number,
-  opts?: { name?: string; mapplsPin?: string; digipin?: string; mapplsUrl?: string },
+  opts?: {
+    name?: string;
+    searchQuery?: string;
+    mapplsPin?: string;
+    digipin?: string;
+    mapplsUrl?: string;
+  },
 ): string {
   const latLng = formatCoordPair(lat, lng);
   const lines = [
@@ -174,13 +225,16 @@ export function buildShareText(
     `Navigate 4W: ${mapplsNavigationUrl(lat, lng, { name: opts?.name, mode: "driving" })}`,
     `Google: ${googleMapsPointUrl(lat, lng)}`,
   ];
+  if (opts?.searchQuery) {
+    lines.push(`OEM search text: ${opts.searchQuery}`);
+  }
   if (opts?.mapplsPin) {
-    lines.push(`Mappls Pin: ${opts.mapplsPin}`);
+    lines.push(`Mappls Pin: ${opts.mapplsPin} (correct on mappls.com — SimpleOne search may not resolve eLoc)`);
     lines.push(`Pin link: ${mapplsPinUrl(opts.mapplsPin)}`);
   }
   if (opts?.digipin) lines.push(`Digipin: ${opts.digipin}`);
   lines.push(
-    "Mappls OEM search: paste Mappls Pin only. Ola / Google paths: open Google link. Never paste lat,lng into Mappls search.",
+    "SimpleOne: paste place name OR open Google/geo and Push/Share to Simple Connect — not Pin/lat,lng in search.",
   );
   return lines.join("\n");
 }
@@ -188,16 +242,29 @@ export function buildShareText(
 export function buildPasteKit(
   lat: number,
   lng: number,
-  opts?: { mapplsPin?: string; digipin?: string; name?: string },
+  opts?: {
+    mapplsPin?: string;
+    digipin?: string;
+    name?: string;
+    placeName?: string;
+    locality?: string;
+    city?: string;
+  },
 ): PasteKit {
   const latLng = formatCoordPair(lat, lng);
   const mapplsUrl = mapplsPointUrl(lat, lng);
   const pin = opts?.mapplsPin?.trim() || undefined;
-  const name = opts?.name;
+  const name = opts?.placeName?.trim() || opts?.name?.trim() || undefined;
+  const searchQuery = buildOemSearchQuery({
+    placeName: name,
+    locality: opts?.locality,
+    city: opts?.city,
+  });
   return {
     latLng,
     latLngSpaced: `${roundCoord(lat)}, ${roundCoord(lng)}`,
     geoUri: geoPointUri(lat, lng, name),
+    simpleConnectIntentUrl: simpleConnectGeoIntentUrl(lat, lng, name),
     googleMapsUrl: googleMapsPointUrl(lat, lng),
     mapplsUrl,
     mapplsPinUrl: pin ? mapplsPinUrl(pin) : undefined,
@@ -206,16 +273,18 @@ export function buildPasteKit(
     mapplsNavBikingUrl: mapplsNavigationUrl(lat, lng, { name, mode: "biking" }),
     mapplsNavDrivingUri: mapplsNavigationUrl(lat, lng, { name, mode: "driving", scheme: "mappls" }),
     mapplsNavBikingUri: mapplsNavigationUrl(lat, lng, { name, mode: "biking", scheme: "mappls" }),
+    searchQuery,
     shareText: buildShareText(lat, lng, {
       name,
+      searchQuery,
       mapplsPin: pin,
       digipin: opts?.digipin,
       mapplsUrl,
     }),
     mapplsPin: pin,
     digipin: opts?.digipin || undefined,
-    tip: pin
-      ? `All Mappls OEMs: paste Pin ${pin} into search. Or Navigate in Mappls (2W/4W). Ola: Open Google.`
+    tip: searchQuery
+      ? `SimpleOne: Copy place name “${searchQuery}” into search — or Open Google → Share/Push to Simple Connect. Pin may fuzzy-match wrong.`
       : OEM_PASTE_TIP,
   };
 }

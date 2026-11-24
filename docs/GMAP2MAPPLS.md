@@ -18,30 +18,31 @@ API: `POST /api/public/gmap2mappls/resolve` · `GET /api/public/gmap2mappls/meta
 
 `https://www.mappls.com/@{lat},{lng}` — do **not** append `,18z`.
 
-## Why lat,lng / geo: fails in OEM “search”
+## Why search fails (lat,lng **and** Pin on SimpleOne)
 
-Almost every listed OEM reuses **Mappls Autosuggest / NCASE destination search** (same contract as the Mappls app search bar: “Search for places & Mappls Pin”).
+Almost every listed OEM reuses **Mappls Autosuggest / NCASE destination search**.
 
 | Input | What the stack does | Result |
 |-------|---------------------|--------|
 | `12.877073,77.613574` / `geo:…` | Treated as **`query` text** | Wrong POI / city |
-| Mappls Pin e.g. `kcf7zj` | Resolved as **eLoc** | Correct place |
-| `mappls.com/navigation?places=lat,lng,Name&isNav=true` | **Navigation deep link** (not Autosuggest) | Correct point |
-| Google Maps URL | Opens Google / Ola Google path | Correct point on non-Mappls stacks |
+| Mappls Pin e.g. `kcf7zj` on **mappls.com** | Resolved as **eLoc** | Correct (verified: Zigma) |
+| Same Pin in **SimpleOne search** | Often **no eLoc entitlement** → fuzzy text match | **Wrong place** (field-tested) |
+| **POI place name** e.g. `Zigma Technologies Nyanappanahalli` | Normal Autosuggest POI | Correct when listed |
+| Google / geo → **Share / Push to Simple Connect** | Official Push Navigation / WhatsApp-location path | Correct point on dash |
+| `mappls.com/navigation?places=lat,lng,Name&isNav=true` | Nav deep link (not Autosuggest) | Correct point |
 
 Official Autosuggest: `query` = POI / house / keyword / place / Pin; `location=lat,lng` is **bias only**.  
-Ampere Nexus docs explicitly list **Last Mile Guidance (House Numbers & Mappls PIN)**.  
-Mappls Routing / Navigation SDK accept **eLoc or lat,lng** as *route endpoints* — that is not the same as the search text field.
+Ampere docs advertise Mappls PIN last-mile; **SimpleOne does not reliably resolve Pin in search** even when the Pin is correct on Mappls web.
 
 ## Universal handoff (works across OEMs)
 
 | Priority | Action | Covers |
 |----------|--------|--------|
-| 1 | **Copy Mappls Pin** → paste into OEM destination search | All Mappls NCASE / SDK / phone-projection OEMs |
-| 2 | **Navigate Mappls · 2W** (`mode=biking`) / **· 4W** (`mode=driving`) | Skips search; official nav deep link with lat,lng |
-| 3 | **Open pin on Mappls** / `@lat,lng` / **geo:** | Mappls app / OS chooser |
-| 4 | **Open Google** | Ola Electric (Ola Maps) + some TVS Connect Google paths |
-| 5 | Digipin / share text / QR | Backup identifiers |
+| 1 | **Copy place name** → paste in OEM search | **SimpleOne** + any OEM without eLoc search |
+| 2 | **Open Google / geo → Share or Push to Simple Connect** | SimpleOne official Push / WhatsApp-location path |
+| 3 | **Copy Mappls Pin** (verify on mappls.com) | OEMs that entitle eLoc search (e.g. Ampere PIN last-mile) |
+| 4 | **Navigate Mappls · 2W / 4W** | Skips search; lat,lng in nav deep link |
+| 5 | Digipin / share text / QR | Backup |
 
 ## OEM coverage matrix
 
@@ -49,7 +50,7 @@ Sources: MapmyIndia investor go-lives (FY23–FY27), Mappls Auto / Ampere case p
 
 | Brand | Segment | Stack | What to use from this tool |
 |-------|---------|-------|----------------------------|
-| Simple Energy / SimpleOne | 2W | Mappls | **Mappls Pin** in search; or Navigate 2W |
+| Simple Energy / SimpleOne | 2W | Mappls | **Place name** or **Google/geo → Push to Simple Connect** (Pin search often wrong) |
 | Bajaj (Chetak + ICE/EV) | 2W | Mappls | **Mappls Pin**; Navigate 2W |
 | Hero OneApp | 2W | Mappls | **Mappls Pin**; Navigate 2W |
 | Ampere (Greaves) | 2W | Mappls | **Mappls Pin** (docs: PIN last-mile); Navigate 2W |

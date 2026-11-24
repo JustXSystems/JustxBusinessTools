@@ -197,6 +197,35 @@
   color: var(--text-hi);
 }
 
+.g2m-place-query {
+  font-family: inherit;
+  font-size: clamp(1.05rem, 2.6vw, 1.35rem);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.g2m-steps {
+  margin: 0 0 0.85rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--g2m-line);
+  background: rgba(0, 0, 0, 0.12);
+  font-size: 0.84rem;
+  color: var(--text-mid);
+}
+
+.g2m-steps strong {
+  display: block;
+  color: var(--text-hi);
+  margin-bottom: 0.35rem;
+}
+
+.g2m-steps ol {
+  margin: 0;
+  padding-left: 1.15rem;
+  line-height: 1.45;
+}
+
 .g2m-paste-warn {
   margin: 0 0 0.75rem;
   color: #f0b429;

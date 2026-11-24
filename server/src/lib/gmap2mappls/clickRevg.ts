@@ -113,9 +113,54 @@ async function openMapplsSession(
   };
 }
 
+async function fetchRevgOnce(
+  la: number,
+  ln: number,
+): Promise<MapplsClickRevg | null> {
+  const { cookie, referer } = await openMapplsSession(la, ln);
+  const url = `https://www.mappls.com/get_click_revg?${la}&${ln}&18`;
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": UA,
+      Accept: "*/*",
+      Cookie: cookie,
+      Referer: referer,
+      "X-Requested-With": "XMLHttpRequest",
+    },
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!res.ok) return null;
+  const cipher = (await res.text()).trim();
+  // Mappls sometimes returns "FL" / short errors when session/rate-limited
+  if (!cipher.startsWith("U2FsdGVkX1")) return null;
+
+  const plain = decryptMapplsRevg(cipher);
+  // Response is often a JSON *string* (quoted), sometimes a bare object.
+  let data: RevgJson;
+  const parsed: unknown = JSON.parse(plain);
+  if (typeof parsed === "string") {
+    data = JSON.parse(parsed) as RevgJson;
+  } else {
+    data = parsed as RevgJson;
+  }
+
+  const mapplsPin = normalizePin(data.elc);
+  if (!mapplsPin) return null;
+
+  return {
+    mapplsPin,
+    digipin: normalizeDigipin(data.digipin),
+    name: data.name?.trim() || undefined,
+    formattedAddress: data.adrs?.trim() || data.add_place?.trim() || undefined,
+    lat: la,
+    lng: ln,
+  };
+}
+
 /**
- * Resolve Mappls Pin + Digipin for a WGS-84 point via Mappls web click reverse-geocode.
- * Soft-fails (returns null) on network / decrypt / parse errors.
+ * Resolve Mappls Pin + Digipin + POI name for a WGS-84 point via Mappls web
+ * click reverse-geocode. Soft-fails (returns null) on network / decrypt errors.
+ * Retries once — Mappls occasionally returns "FL" without a cipher.
  */
 export async function fetchMapplsClickRevg(
   lat: number,
@@ -124,44 +169,10 @@ export async function fetchMapplsClickRevg(
   const la = roundCoord(lat);
   const ln = roundCoord(lng);
   try {
-    const { cookie, referer } = await openMapplsSession(la, ln);
-    const url = `https://www.mappls.com/get_click_revg?${la}&${ln}&18`;
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": UA,
-        Accept: "*/*",
-        Cookie: cookie,
-        Referer: referer,
-        "X-Requested-With": "XMLHttpRequest",
-      },
-      signal: AbortSignal.timeout(12_000),
-    });
-    if (!res.ok) return null;
-    const cipher = (await res.text()).trim();
-    if (!cipher.startsWith("U2FsdGVkX1")) return null;
-
-    const plain = decryptMapplsRevg(cipher);
-    // Response is often a JSON *string* (quoted), sometimes a bare object.
-    let data: RevgJson;
-    const parsed: unknown = JSON.parse(plain);
-    if (typeof parsed === "string") {
-      data = JSON.parse(parsed) as RevgJson;
-    } else {
-      data = parsed as RevgJson;
-    }
-
-    const mapplsPin = normalizePin(data.elc);
-    if (!mapplsPin) return null;
-
-    return {
-      mapplsPin,
-      digipin: normalizeDigipin(data.digipin),
-      name: data.name?.trim() || undefined,
-      formattedAddress:
-        data.adrs?.trim() || data.add_place?.trim() || undefined,
-      lat: la,
-      lng: ln,
-    };
+    const first = await fetchRevgOnce(la, ln);
+    if (first) return first;
+    await new Promise((r) => setTimeout(r, 400));
+    return await fetchRevgOnce(la, ln);
   } catch {
     return null;
   }
