@@ -15,6 +15,7 @@ import {
   buildOemHandoffSummary,
   buildBrandPlaybook,
   normalizeMapplsPin,
+  resolveOemBrandId,
   OEM_BRANDS,
 } from "../gmap2mappls/index";
 
@@ -190,6 +191,7 @@ describe("gmap2mappls urls + samples", () => {
       "suzuki-2w",
       "tvs",
       "mahindra",
+      "mahindra-me4u",
       "tata",
       "hyundai",
       "kia",
@@ -198,6 +200,10 @@ describe("gmap2mappls urls + samples", () => {
     ]) {
       expect(ids.has(id)).toBe(true);
     }
+    expect(resolveOemBrandId("adrenox")).toBe("mahindra");
+    expect(resolveOemBrandId("me4u")).toBe("mahindra-me4u");
+    expect(resolveOemBrandId("born-electric")).toBe("mahindra-me4u");
+    expect(resolveOemBrandId("xuv700")).toBe("mahindra");
     const summary = buildOemHandoffSummary();
     expect(summary.rules.searchBoxRejects.join(" ")).toMatch(/lat,lng/);
     expect(summary.brands.filter((b) => b.stack === "mappls").length).toBeGreaterThan(10);
@@ -243,6 +249,17 @@ describe("gmap2mappls urls + samples", () => {
     expect(mahindra?.share?.url).toBe("https://www.mappls.com/kcf7zj");
     expect(mahindra?.inCar?.copyText).toBe("kcf7zj");
     expect(mahindra?.inCar?.label).toMatch(/vehicle Mappls/i);
+
+    // Born Electric Me4U (Mappls NCASE) — same Pin path, different package
+    const me4u = buildBrandPlaybook("mahindra-me4u", paste);
+    expect(me4u?.brand.companionApp?.packageId).toBe("com.mahindra.inglo");
+    expect(me4u?.autoOpenUrl).toContain("package=com.mahindra.inglo");
+    expect(me4u?.autoCopyText).toBe("kcf7zj");
+    expect(me4u?.deferAutoOpen).toBe(true);
+    expect(me4u?.steps[0]).toMatch(/Send to vehicle/i);
+    expect(me4u?.inCar?.copyText).toBe("kcf7zj");
+    expect(me4u?.backup?.href).toContain("mode=driving");
+    expect(buildBrandPlaybook("me4u", paste)?.brand.id).toBe("mahindra-me4u");
 
     // No Pin: STILL open Adrenox (not Mappls) — avoid Simple Connect “wrong app” bug
     const noPin = buildPasteKit(12.877073, 77.613574, {

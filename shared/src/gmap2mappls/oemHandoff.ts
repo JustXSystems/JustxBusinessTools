@@ -78,7 +78,7 @@ export const MAPPLS_OEM_SEARCH_RULES = {
   simpleConnectConfirms:
     "Simple Connect: Push Location / Push Navigation + Share WhatsApp locations to Simple Connect for navigation.",
   mahindraConfirms:
-    "Adrenox Connect: Push to car + Mappls Pin search (same Mappls stack as XUV700 / Scorpio-N NCASE).",
+    "Mahindra Mappls Auto NCASE: Adrenox Connect (XUV700 / Scorpio-N) and Me4U (Born Electric) — Mappls Pin search + push/send to vehicle; in-car multi-screen Mappls; EV routing on Born Electric.",
 } as const;
 
 /**
@@ -176,18 +176,34 @@ export const OEM_BRANDS: OemBrand[] = [
   },
   {
     id: "mahindra",
-    name: "Mahindra",
+    name: "Mahindra · Adrenox (XUV700 / Scorpio-N)",
     segment: "4W",
-    examples: "Scorpio-N, XUV400, Born Electric, BE6, 7X0, XUV700",
+    examples: "XUV700, Scorpio-N, XUV 3XO, connected ICE SUVs — Adrenox Connect + Mappls Auto NCASE",
     stack: "mappls",
     methods: ["mappls_pin", "mappls_nav_deep_link", "place_name", "geo_intent"],
     note:
-      "Adrenox Connect (Mappls NCASE): unlike Simple Connect, do NOT rely on geo share. Open Adrenox, paste Mappls Pin (auto-copied) → Push to car. Never paste lat,lng. Fallback: Mappls 4W nav deep link.",
+      "Adrenox Connect (com.mahindra.adrenox) + in-car Mappls NCASE. Paste Mappls Pin → Push to car. Never geo share / lat,lng. Backup: Mappls 4W nav + vehicle Mappls Pin search.",
     companionApp: {
       name: "Adrenox Connect",
       packageId: "com.mahindra.adrenox",
       handoff: "geo_with_pin",
       finalAction: "Push to car",
+    },
+  },
+  {
+    id: "mahindra-me4u",
+    name: "Mahindra · Me4U (Born Electric)",
+    segment: "4W",
+    examples: "BE.05, BE.06, XEV 9e, Born Electric eSUVs — Me4U + Mappls Auto NCASE (EV routing / multi-screen)",
+    stack: "mappls",
+    methods: ["mappls_pin", "mappls_nav_deep_link", "place_name", "geo_intent"],
+    note:
+      "Me4U (com.mahindra.inglo) for Born Electric: Mappls Pin search + send location to vehicle NCASE. Never lat,lng. Backup: Mappls 4W nav (EV routing verify) + in-car Pin.",
+    companionApp: {
+      name: "Me4U",
+      packageId: "com.mahindra.inglo",
+      handoff: "geo_with_pin",
+      finalAction: "Send to vehicle",
     },
   },
   {
@@ -273,21 +289,54 @@ export type OemHandoffSummary = {
   universalSteps: string[];
 };
 
+/** URL / support aliases → canonical OEM brand id. */
+export const OEM_BRAND_ALIASES: Record<string, string> = {
+  mahindra: "mahindra",
+  adrenox: "mahindra",
+  "mahindra-adrenox": "mahindra",
+  xuv700: "mahindra",
+  "scorpio-n": "mahindra",
+  scorpio: "mahindra",
+  "mahindra-me4u": "mahindra-me4u",
+  me4u: "mahindra-me4u",
+  inglo: "mahindra-me4u",
+  "born-electric": "mahindra-me4u",
+  "mahindra-bev": "mahindra-me4u",
+  be05: "mahindra-me4u",
+  "be.05": "mahindra-me4u",
+  be06: "mahindra-me4u",
+  "be.06": "mahindra-me4u",
+  xev: "mahindra-me4u",
+  xev9e: "mahindra-me4u",
+};
+
+/** Resolve deep-link / alias to a known OEM brand id. */
+export function resolveOemBrandId(raw: string | null | undefined): string | undefined {
+  if (!raw) return undefined;
+  const key = raw.trim().toLowerCase();
+  if (!key) return undefined;
+  if (OEM_BRANDS.some((b) => b.id === key)) return key;
+  const aliased = OEM_BRAND_ALIASES[key];
+  if (aliased && OEM_BRANDS.some((b) => b.id === aliased)) return aliased;
+  return undefined;
+}
+
 export function buildOemHandoffSummary(): OemHandoffSummary {
   return {
     rules: MAPPLS_OEM_SEARCH_RULES,
     brands: OEM_BRANDS,
     universalSteps: [
-      "1. Pick your vehicle brand.",
-      "2. Tap Open — that brand’s companion app opens with the destination (Android).",
-      "3. Confirm in the app and push / start navigation to the vehicle.",
+      "1. Pick your vehicle brand (Mahindra: Adrenox vs Me4U by model).",
+      "2. Tap Open — that brand’s companion app opens; Pin is ready when needed.",
+      "3. Confirm in the app / vehicle Mappls and push / send / start navigation.",
     ],
   };
 }
 
 export function getOemBrand(id: string | null | undefined): OemBrand | undefined {
-  if (!id) return undefined;
-  return OEM_BRANDS.find((b) => b.id === id);
+  const resolved = resolveOemBrandId(id) || id?.trim();
+  if (!resolved) return undefined;
+  return OEM_BRANDS.find((b) => b.id === resolved);
 }
 
 /** Minimal paste fields the brand playbook needs (avoids circular type deps). */

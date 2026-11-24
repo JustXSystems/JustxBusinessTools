@@ -7,6 +7,7 @@ import {
   SAMPLE_FIXTURES,
   buildBrandPlaybook,
   formatCoordPair,
+  resolveOemBrandId,
   type OemHandoffSummary,
   type ResolveResult,
 } from "@jbt/shared";
@@ -103,10 +104,10 @@ export function Gmap2MapplsTool() {
         setBrandId(saved);
         brandIdRef.current = saved;
       }
-      // Deep link: /tools/gmap2mappls?brand=mahindra&q=https://maps.app.goo.gl/…
+      // Deep link: /tools/gmap2mappls?brand=mahindra|me4u&q=https://maps.app.goo.gl/…
       const sp = new URLSearchParams(window.location.search);
-      const brandParam = (sp.get("brand") || sp.get("oem") || "").trim().toLowerCase();
-      if (brandParam && OEM_BRANDS.some((b) => b.id === brandParam)) {
+      const brandParam = resolveOemBrandId(sp.get("brand") || sp.get("oem") || "");
+      if (brandParam) {
         setBrandId(brandParam);
         brandIdRef.current = brandParam;
         window.localStorage.setItem(BRAND_STORAGE_KEY, brandParam);

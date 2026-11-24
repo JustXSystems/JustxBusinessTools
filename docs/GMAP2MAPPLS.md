@@ -49,7 +49,8 @@ Ampere docs advertise Mappls PIN last-mile; **SimpleOne does not reliably resolv
 | Ampere | Ampere Connect | `com.greavesmobility.app` |
 | TVS | TVS Connect | `com.tvsm.connect` |
 | Ola Electric | Ola Electric | `com.olaelectric.companion` |
-| Mahindra | Adrenox — Pin copy + open → **Push to car**; Share…; in-car Pin | `com.mahindra.adrenox` |
+| Mahindra · Adrenox (XUV700 / Scorpio-N) | Adrenox — Pin → **Push to car**; Share…; in-car NCASE Pin | `com.mahindra.adrenox` |
+| Mahindra · Me4U (Born Electric) | Me4U — Pin → **Send to vehicle**; Share…; in-car NCASE Pin / EV routing backup | `com.mahindra.inglo` |
 | Tata | iRA — Pin copy + open → **Send to car**; Share…; in-car Pin | `com.tatamotors.oneapp` |
 | Hyundai | Bluelink — Pin copy + open → **Send to car**; Share…; in-car Pin | `com.hyundai.india.bluelink.prd` |
 | Kia | Kia Connect — Pin copy + open → **Send to car**; Share…; in-car Pin | `com.kia.uvo.in.prd` |
@@ -63,9 +64,20 @@ Prefill brand (and optional Google link) for support / WhatsApp:
 
 `/tools/gmap2mappls?brand=mahindra`
 
+`/tools/gmap2mappls?brand=me4u` (Born Electric)
+
 `/tools/gmap2mappls?brand=hyundai&q=https://maps.app.goo.gl/…`
 
-Aliases: `oem=` for brand, `input=` for `q=`. Changing the brand dropdown updates `?brand=` in the URL.
+Aliases: `oem=` for brand, `input=` for `q=`. Mahindra aliases include `adrenox`, `xuv700`, `scorpio-n` → Adrenox; `me4u`, `born-electric`, `be05`, `xev` → Me4U. Changing the brand dropdown updates `?brand=` in the URL.
+
+### Mahindra Mappls Auto NCASE (Adrenox + Me4U)
+
+| Model family | Phone app | Package | What this tool does |
+|--------------|-----------|---------|---------------------|
+| XUV700, Scorpio-N, connected ICE | **Adrenox Connect** | `com.mahindra.adrenox` | Copy Mappls Pin + open Adrenox → Push to car; in-car Pin for NCASE |
+| Born Electric (BE.05 / BE.06 / XEV 9e, …) | **Me4U** | `com.mahindra.inglo` | Copy Mappls Pin + open Me4U → Send to vehicle; in-car Pin; Mappls 4W backup for EV routing verify |
+
+Both stacks use Mappls Pin (not lat,lng). Multi-screen in-car navigation uses the same Pin via **Copy Pin for vehicle Mappls**.
 
 ### OEM app deep link (Android)
 
@@ -90,7 +102,8 @@ Sources: MapmyIndia investor go-lives (FY23–FY27), Mappls Auto / Ampere case p
 | Suzuki Motorcycles | 2W | Mappls | **Mappls Pin**; Navigate 2W |
 | TVS (e.g. Apache RTR 160) | 2W | Mixed | Pin for Mappls path; **Open Google** for Connect Google Maps EV path |
 | Ola Electric | 2W | Ola Maps | **Open Google** / geo: (not Mappls Autosuggest) |
-| Mahindra (Scorpio-N, XUV700, XUV400, Born Electric, …) | 4W | Mappls + Adrenox | **Adrenox** + Mappls Pin → **Push to car** (Share… / in-car Pin) |
+| Mahindra ICE (XUV700, Scorpio-N, …) | 4W | Mappls NCASE + Adrenox | **Adrenox** + Mappls Pin → **Push to car** |
+| Mahindra Born Electric (BE.05 / XEV, …) | 4W | Mappls NCASE + Me4U | **Me4U** (`com.mahindra.inglo`) + Mappls Pin → **Send to vehicle** |
 | Tata (Harrier, Safari, Sierra EV) | 4W | Mappls + iRA | **iRA** + Mappls Pin → **Send to car** |
 | Hyundai / Kia connected lines | 4W | Mappls + Bluelink / Kia Connect | **App** + Mappls Pin → **Send to car** |
 | MG Hector | 4W | Mappls + iSMART | **iSMART** + Mappls Pin → **Push POI to car** |
