@@ -16,7 +16,24 @@ import {
   buildBrandPlaybook,
   normalizeMapplsPin,
   resolveOemBrandId,
+  oemPackageLaunchUrl,
+  oemPackageGeoIntentUrl,
+  mapplsNavigationUrl,
   OEM_BRANDS,
+  looksLikeMapsInput,
+  resolveFindButtonLabel,
+  playStoreUrlForBrand,
+  buildToolDeepLink,
+  buildWhatsAppToolShareUrl,
+  filterOemBrands,
+  brandChipLabel,
+  isMahindraFamily,
+  parseRecentPlaces,
+  pushRecentPlace,
+  recentPlaceLabel,
+  G2M_WALKTHROUGH,
+  emptyStateHint,
+  G2M_RECENT_MAX,
 } from "../gmap2mappls/index";
 
 describe("gmap2mappls parse", () => {
@@ -334,5 +351,239 @@ describe("gmap2mappls urls + samples", () => {
     expect(SAMPLE_FIXTURES[0].lat).toBe(12.8804);
     expect(SAMPLE_FIXTURES[0].lng).toBe(77.5958);
     expect(SAMPLE_FIXTURES[2].input.toLowerCase()).toContain("india gate");
+  });
+});
+
+describe("production invariants — Mahindra NCASE + Simple Connect", () => {
+  const paste = buildPasteKit(12.877073, 77.613574, {
+    placeName: "Zigma Technologies",
+    locality: "Nyanappanahalli",
+    city: "Bengaluru",
+    mapplsPin: "KCF7ZJ", // uppercase from APIs
+  });
+
+  it("normalizes Pin through PasteKit for Adrenox and Me4U", () => {
+    expect(paste.mapplsPin).toBe("kcf7zj");
+    expect(paste.mapplsPinUrl).toBe("https://www.mappls.com/kcf7zj");
+    expect(paste.mapplsUrl).not.toMatch(/18z/);
+    expect(paste.mapplsNavDrivingUrl).toContain("mode=driving");
+    expect(paste.mapplsNavDrivingUrl).toContain("12.877073");
+  });
+
+  it("never confuses Simple Connect with Mahindra packages", () => {
+    const sc = buildBrandPlaybook("simple-energy", paste)!;
+    const adrenox = buildBrandPlaybook("mahindra", paste)!;
+    const me4u = buildBrandPlaybook("mahindra-me4u", paste)!;
+    expect(sc.autoOpenUrl).toContain("com.sepl.android");
+    expect(sc.autoOpenUrl).toContain("scheme=geo");
+    expect(adrenox.autoOpenUrl).toContain("com.mahindra.adrenox");
+    expect(me4u.autoOpenUrl).toContain("com.mahindra.inglo");
+    expect(sc.autoOpenUrl).not.toContain("mahindra");
+    expect(adrenox.autoOpenUrl).not.toContain("com.sepl");
+    expect(me4u.autoOpenUrl).not.toContain("com.sepl");
+    expect(adrenox.autoOpenUrl).not.toContain("inglo");
+    expect(me4u.autoOpenUrl).not.toContain("adrenox");
+  });
+
+  it("resolves all Mahindra deep-link aliases to the correct app family", () => {
+    for (const a of ["mahindra", "adrenox", "mahindra-adrenox", "xuv700", "scorpio-n", "scorpio"]) {
+      expect(resolveOemBrandId(a), a).toBe("mahindra");
+      expect(buildBrandPlaybook(a, paste)?.brand.companionApp?.packageId, a).toBe(
+        "com.mahindra.adrenox",
+      );
+    }
+    for (const a of [
+      "mahindra-me4u",
+      "me4u",
+      "inglo",
+      "born-electric",
+      "mahindra-bev",
+      "be05",
+      "be.05",
+      "be06",
+      "be.06",
+      "xev",
+      "xev9e",
+    ]) {
+      expect(resolveOemBrandId(a), a).toBe("mahindra-me4u");
+      expect(buildBrandPlaybook(a, paste)?.brand.companionApp?.packageId, a).toBe(
+        "com.mahindra.inglo",
+      );
+    }
+    expect(resolveOemBrandId("unknown-oem")).toBeUndefined();
+    expect(buildBrandPlaybook("unknown-oem", paste)).toBeNull();
+  });
+
+  it("keeps Pin-paste OEMs on deferAutoOpen + rejectLatLng + driving backup", () => {
+    for (const id of ["mahindra", "mahindra-me4u", "tata", "hyundai", "kia", "mg", "maruti"]) {
+      const pb = buildBrandPlaybook(id, paste)!;
+      expect(pb.deferAutoOpen, id).toBe(true);
+      expect(pb.rejectLatLngPaste, id).toBe(true);
+      expect(pb.autoCopyText, id).toBe("kcf7zj");
+      expect(pb.qrPayload, id).toBe("kcf7zj");
+      expect(pb.share?.url, id).toBe("https://www.mappls.com/kcf7zj");
+      expect(pb.inCar?.copyText, id).toBe("kcf7zj");
+      expect(pb.backup?.href, id).toContain("mode=driving");
+      expect(pb.steps[0].toLowerCase(), id).toMatch(/never paste lat/);
+      // Must not auto-open Mappls as primary (Simple Connect wrong-app lesson)
+      expect(pb.autoOpenUrl, id).not.toMatch(/mappls\.com/);
+    }
+  });
+
+  it("Me4U no-Pin path still opens Me4U (not Mappls) with place-name assist", () => {
+    const noPin = buildPasteKit(12.877073, 77.613574, {
+      placeName: "Zigma Technologies",
+      locality: "Nyanappanahalli",
+    });
+    const pb = buildBrandPlaybook("mahindra-me4u", noPin)!;
+    expect(pb.autoOpenUrl).toContain("package=com.mahindra.inglo");
+    expect(pb.autoOpenUrl).not.toMatch(/mappls\.com/);
+    expect(pb.autoCopyText).toMatch(/Zigma/);
+    expect(pb.deferAutoOpen).toBe(true);
+    expect(pb.backup?.href).toContain("mode=driving");
+    expect(pb.steps[0]).toMatch(/Send to vehicle/i);
+  });
+
+  it("builds Intent helpers that Android Chrome can launch", () => {
+    const launch = oemPackageLaunchUrl("com.mahindra.adrenox");
+    expect(launch.startsWith("intent://#Intent;")).toBe(true);
+    expect(launch).toContain("package=com.mahindra.adrenox");
+    expect(launch).toContain("action=android.intent.action.MAIN");
+    expect(launch).toContain("category=android.intent.category.LAUNCHER");
+    expect(launch).toContain("S.browser_fallback_url=");
+    expect(launch.endsWith(";end")).toBe(true);
+
+    const geo = oemPackageGeoIntentUrl("com.sepl.android", 12.877073, 77.613574, "Zigma");
+    expect(geo).toContain("scheme=geo");
+    expect(geo).toContain("package=com.sepl.android");
+    expect(geo).toContain("12.877073,77.613574");
+
+    const nav = mapplsNavigationUrl(12.877073, 77.613574, {
+      name: "Zigma Technologies",
+      mode: "driving",
+    });
+    expect(nav).toContain("https://www.mappls.com/navigation?");
+    expect(nav).toContain("isNav=true");
+    expect(nav).toContain("mode=driving");
+    expect(nav).not.toMatch(/18z/);
+  });
+
+  it("Adrenox and Me4U share NCASE Pin contract but different final actions", () => {
+    const adrenox = buildBrandPlaybook("mahindra", paste)!;
+    const me4u = buildBrandPlaybook("mahindra-me4u", paste)!;
+    expect(adrenox.brand.companionApp?.finalAction).toBe("Push to car");
+    expect(me4u.brand.companionApp?.finalAction).toBe("Send to vehicle");
+    expect(adrenox.steps[0]).toContain("Push to car");
+    expect(me4u.steps[0]).toContain("Send to vehicle");
+    expect(adrenox.primary.href).toBe(adrenox.autoOpenUrl);
+    expect(me4u.primary.href).toBe(me4u.autoOpenUrl);
+  });
+});
+
+describe("gmap2mappls UX helpers (mobile / OEM usability)", () => {
+  it("detects pasteable Maps inputs without false positives", () => {
+    expect(looksLikeMapsInput("https://maps.app.goo.gl/abc")).toBe(true);
+    expect(looksLikeMapsInput("https://www.google.com/maps/@12.8,77.5,18z")).toBe(true);
+    expect(looksLikeMapsInput("12.877073, 77.613574")).toBe(true);
+    expect(looksLikeMapsInput("Zigma Technologies Nyanappanahalli")).toBe(true);
+    expect(looksLikeMapsInput("")).toBe(false);
+    expect(looksLikeMapsInput("ok")).toBe(false);
+    expect(looksLikeMapsInput("{json:true}")).toBe(false);
+  });
+
+  it("labels Find CTA by OEM handoff mode", () => {
+    expect(resolveFindButtonLabel("simple-energy")).toMatch(/Simple Connect/i);
+    expect(resolveFindButtonLabel("mahindra")).toMatch(/copy Pin.*Adrenox/i);
+    expect(resolveFindButtonLabel("mahindra-me4u")).toMatch(/copy Pin.*Me4U/i);
+    expect(resolveFindButtonLabel("matter")).toMatch(/Mappls/i);
+  });
+
+  it("builds Play Store + WhatsApp tool deep links", () => {
+    expect(playStoreUrlForBrand("mahindra")).toContain("com.mahindra.adrenox");
+    expect(playStoreUrlForBrand("mahindra-me4u")).toContain("com.mahindra.inglo");
+    expect(playStoreUrlForBrand("matter")).toBeUndefined();
+
+    const deep = buildToolDeepLink(
+      "https://app.example/tools/gmap2mappls?oem=old&input=x",
+      "me4u",
+      "https://maps.app.goo.gl/abc",
+    );
+    // Aliases canonicalize so driver phones always land on a stable brand id.
+    expect(deep).toContain("brand=mahindra-me4u");
+    expect(deep).not.toContain("brand=me4u");
+    expect(deep).toContain("q=");
+    expect(deep).not.toContain("oem=");
+    expect(deep).not.toContain("input=");
+
+    const wa = buildWhatsAppToolShareUrl(deep, "Me4U");
+    expect(wa.startsWith("https://wa.me/?text=")).toBe(true);
+    expect(decodeURIComponent(wa)).toContain("GMAP2MAPPLS");
+    expect(decodeURIComponent(wa)).toContain("brand=mahindra-me4u");
+  });
+
+  it("filters brands by segment + search (Mahindra clarity)", () => {
+    expect(filterOemBrands(OEM_BRANDS, { segment: "2W" }).every((b) => b.segment === "2W")).toBe(
+      true,
+    );
+    const mah = filterOemBrands(OEM_BRANDS, { query: "adrenox" });
+    expect(mah.some((b) => b.id === "mahindra")).toBe(true);
+    expect(mah.some((b) => b.id === "mahindra-me4u")).toBe(false);
+    const be = filterOemBrands(OEM_BRANDS, { query: "born electric" });
+    expect(be.some((b) => b.id === "mahindra-me4u")).toBe(true);
+    expect(brandChipLabel(OEM_BRANDS.find((b) => b.id === "mahindra")!)).toBe("Adrenox");
+    expect(brandChipLabel(OEM_BRANDS.find((b) => b.id === "mahindra-me4u")!)).toBe("Me4U");
+    expect(isMahindraFamily("mahindra")).toBe(true);
+    expect(isMahindraFamily("mahindra-me4u")).toBe(true);
+    expect(isMahindraFamily("hyundai")).toBe(false);
+  });
+
+  it("stores recent destinations with dedupe + cap", () => {
+    expect(parseRecentPlaces("not-json")).toEqual([]);
+    expect(parseRecentPlaces(null)).toEqual([]);
+    const a = pushRecentPlace([], {
+      input: "https://maps.app.goo.gl/a",
+      label: "Zigma",
+      lat: 12.877073,
+      lng: 77.613574,
+      pin: "kcf7zj",
+      brandId: "mahindra",
+      at: 100,
+    });
+    expect(a).toHaveLength(1);
+    const b = pushRecentPlace(a, {
+      input: "https://maps.app.goo.gl/b",
+      label: "Zigma again",
+      lat: 12.877073,
+      lng: 77.613574,
+      pin: "kcf7zj",
+      brandId: "mahindra",
+      at: 200,
+    });
+    expect(b).toHaveLength(1);
+    expect(b[0].label).toBe("Zigma again");
+    let list = b;
+    for (let i = 0; i < 8; i++) {
+      list = pushRecentPlace(list, {
+        input: `https://maps.app.goo.gl/${i}`,
+        label: `Place ${i}`,
+        lat: 12 + i * 0.01,
+        lng: 77,
+        brandId: "simple-energy",
+        at: 300 + i,
+      });
+    }
+    expect(list.length).toBe(G2M_RECENT_MAX);
+    expect(recentPlaceLabel({ placeName: "Zigma Technologies", lat: 1, lng: 2 })).toBe(
+      "Zigma Technologies",
+    );
+    expect(recentPlaceLabel({ pin: "kcf7zj", lat: 1, lng: 2 })).toBe("Pin kcf7zj");
+  });
+
+  it("ships walkthrough + empty-state hints per OEM", () => {
+    expect(G2M_WALKTHROUGH).toHaveLength(3);
+    expect(emptyStateHint("mahindra")).toMatch(/Pin/i);
+    expect(emptyStateHint("mahindra")).toMatch(/Push to car/i);
+    expect(emptyStateHint("simple-energy")).toMatch(/Simple Connect/i);
+    expect(emptyStateHint("matter")).toMatch(/Mappls/i);
   });
 });

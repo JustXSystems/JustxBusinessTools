@@ -36,10 +36,12 @@ Ampere docs advertise Mappls PIN last-mile; **SimpleOne does not reliably resolv
 
 ## Simple UI flow (automated)
 
-1. Pick **Your vehicle brand** (dropdown shows companion app, e.g. SimpleOne → Simple Connect)  
-2. Paste Google link → **Find point → open brand app**  
-3. Tool opens that brand’s **companion app** with the destination (Android Intent)  
-4. Confirm in the app and push / start navigation to the vehicle  
+1. Pick **Your vehicle brand** (2W/4W filter, search, chips; Mahindra: **Adrenox · ICE** vs **Me4U · Born Electric**)  
+2. Paste Google link (or **Paste & find** from clipboard) → mode-aware Find CTA  
+3. Tool opens that brand’s **companion app** with the destination (Android Intent), or for Pin OEMs waits for one-tap copy Pin + open  
+4. Confirm in the app and push / send / start navigation  
+
+Extras: recent destinations, WhatsApp tool deep link to the driver’s phone, Pin success pulse, “App didn’t open?” → Play Store, desktop promotes QR / Android promotes Intent CTA.
 
 | Brand | Opens app | Package |
 |-------|-----------|---------|
@@ -84,6 +86,8 @@ Both stacks use Mappls Pin (not lat,lng). Multi-screen in-car navigation uses th
 **Simple Connect (geo):** WhatsApp-style location Intent into `com.sepl.android`.
 
 **4W send-to-car apps (Pin):** launch companion app + clipboard/QR Mappls Pin → search → Send/Push to car. Never paste lat,lng.
+
+Pin-paste OEMs (`deferAutoOpen`): after resolve or brand switch the tool stays on **ready** and does **not** auto-launch the companion app — the primary CTA copies Pin + opens the app in one tap. Geo OEMs (Simple Connect) still auto-open on resolve / brand switch.
 
 Use on an **Android phone with that brand’s app installed**. Desktop: scan the on-page QR. Mappls stays under Secondary / in-car CTA.
 

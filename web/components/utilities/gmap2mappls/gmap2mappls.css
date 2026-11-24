@@ -129,6 +129,204 @@
   transform: translateY(-1px);
 }
 
+.g2m-chip.is-active {
+  color: var(--text-hi);
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.18);
+}
+
+.g2m-brand-picker {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.g2m-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.g2m-seg-btn {
+  border: 1px solid var(--g2m-line);
+  background: var(--g2m-surface);
+  color: var(--text-mid);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.g2m-seg-btn.is-active {
+  color: var(--text-hi);
+  border-color: rgba(var(--accent-rgb), 0.5);
+  background: rgba(var(--accent-rgb), 0.16);
+}
+
+.g2m-mahindra-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.g2m-brand-filter {
+  width: 100%;
+  max-width: 28rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text-hi);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.95rem;
+}
+
+.g2m-brand-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.g2m-clip-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.86rem;
+  color: var(--text-mid);
+}
+
+.g2m-recents {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.g2m-driver-share {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.g2m-walkthrough {
+  text-align: left;
+  max-width: 28rem;
+  margin-inline: auto;
+}
+
+.g2m-walk-steps {
+  margin: 0.75rem 0 0.85rem;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.65rem;
+  counter-reset: g2m-walk;
+}
+
+.g2m-walk-steps li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.75rem;
+  align-items: start;
+  counter-increment: g2m-walk;
+}
+
+.g2m-walk-steps li::before {
+  content: counter(g2m-walk);
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-hi);
+  background: rgba(var(--accent-rgb), 0.2);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  grid-row: span 2;
+}
+
+.g2m-walk-title {
+  font-weight: 700;
+  color: var(--text-hi);
+  font-size: 0.95rem;
+}
+
+.g2m-walk-body {
+  color: var(--text-mid);
+  font-size: 0.86rem;
+}
+
+.g2m-guide-layout {
+  display: grid;
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.g2m-guide-primary {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.g2m-app-help {
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(240, 180, 41, 0.35);
+  background: rgba(240, 180, 41, 0.08);
+  padding: 0.75rem 0.85rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.g2m-app-help strong {
+  font-size: 0.92rem;
+  color: var(--text-hi);
+}
+
+.g2m-pin-hero.is-pulse {
+  animation: g2m-pin-pulse 0.7s ease;
+  border-color: rgba(var(--accent-rgb), 0.7);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+}
+
+@keyframes g2m-pin-pulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Desktop: promote QR; Android: promote Intent CTA */
+.g2m--desktop .g2m-guide-layout {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.g2m--desktop .g2m-qr-panel {
+  order: 0;
+}
+
+.g2m--android .g2m-qr-panel,
+.g2m--ios .g2m-qr-panel {
+  order: 2;
+}
+
+.g2m--android .g2m-guide-cta .btn-primary {
+  flex: 1 1 100%;
+}
+
+@media (max-width: 720px) {
+  .g2m--desktop .g2m-guide-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .g2m-brand-select {
+    max-width: none;
+  }
+
+  .g2m-actions .btn-primary {
+    flex: 1 1 100%;
+  }
+}
+
 .g2m-banner {
   display: flex;
   flex-wrap: wrap;
