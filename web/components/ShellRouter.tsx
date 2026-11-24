@@ -38,6 +38,8 @@ export function ShellRouter({ children }: { children: ReactNode }) {
     pathname.startsWith("/bos/") ||
     pathname === "/ims" ||
     pathname.startsWith("/ims/") ||
+    pathname === "/googlemaps2mappls" ||
+    pathname.startsWith("/googlemaps2mappls/") ||
     pathname === "/pinway" ||
     pathname.startsWith("/pinway/")
   ) {

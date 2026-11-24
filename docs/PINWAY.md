@@ -8,7 +8,8 @@ Paste a **Google Maps share link**, a **full Indian address**, or **lat,lng**. *
 |--|--|
 | Product name | **Google Maps to Mappls** |
 | Brand | **GoogleMaps2Mappls** |
-| Short URL | `/pinway` (legacy vanity path) |
+| App URL | `/googlemaps2mappls` |
+| Legacy URL | `/pinway` → redirects to `/googlemaps2mappls` |
 
 ### Pricing
 
@@ -23,7 +24,7 @@ UI uses the **Justxsystems IMS** BosRoot skin (light + dark via theme toggle). B
 
 | Surface | URL |
 |---------|-----|
-| Standalone app (mobile / A2HS) | `/pinway` |
+| Standalone app (mobile / A2HS) | `/googlemaps2mappls` |
 | Embedded tool (redirects to standalone by default) | `/tools/gmap2mappls` |
 | API | `POST /api/public/gmap2mappls/resolve` (auth + license) · `GET /api/public/gmap2mappls/meta` |
 
@@ -65,13 +66,13 @@ Extras: recents, WhatsApp share link to the driver’s phone, Pin pulse, “App 
 
 ### Deep links
 
-`/pinway?brand=mahindra`
+`/googlemaps2mappls?brand=mahindra`
 
-`/pinway?brand=me4u` (Born Electric)
+`/googlemaps2mappls?brand=me4u` (Born Electric)
 
-`/pinway?brand=hyundai&q=https://maps.app.goo.gl/…`
+`/googlemaps2mappls?brand=hyundai&q=https://maps.app.goo.gl/…`
 
-Aliases: `oem=` for brand, `input=` for `q=`. Legacy `/tools/gmap2mappls?…` redirects to `/pinway`.
+Aliases: `oem=` for brand, `input=` for `q=`. Legacy `/tools/gmap2mappls?…` and `/pinway?…` redirect to `/googlemaps2mappls`.
 
 ### Mahindra Mappls Auto NCASE (Adrenox + Me4U)
 
@@ -102,7 +103,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000/pinway
+Open http://localhost:3000/googlemaps2mappls
 
 ```bash
 npm run test -w shared

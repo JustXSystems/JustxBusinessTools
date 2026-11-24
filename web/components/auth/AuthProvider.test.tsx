@@ -20,12 +20,13 @@ describe("isPublicPath", () => {
   });
 
   it("requires login for Pinway (paid utility with trial)", () => {
+    expect(isPublicPath("/googlemaps2mappls")).toBe(false);
+    expect(isGuestAllowedPath("/googlemaps2mappls")).toBe(false);
     expect(isPublicPath("/pinway")).toBe(false);
-    expect(isGuestAllowedPath("/pinway")).toBe(false);
   });
 
   it("does not open look-alike or operator routes", () => {
-    for (const p of ["/", "/boss", "/bosdesign", "/imsx", "/tools/bos", "/tools/bosdesign", "/tools/imsdealer", "/tools/gmap2mappls", "/pinway", "/invoices", "/admin/tools", "/settings"]) {
+    for (const p of ["/", "/boss", "/bosdesign", "/imsx", "/tools/bos", "/tools/bosdesign", "/tools/imsdealer", "/tools/gmap2mappls", "/googlemaps2mappls", "/pinway", "/invoices", "/admin/tools", "/settings"]) {
       expect(isPublicPath(p)).toBe(false);
     }
   });

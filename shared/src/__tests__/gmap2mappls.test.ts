@@ -510,14 +510,16 @@ describe("gmap2mappls UX helpers (mobile / OEM usability)", () => {
     expect(normalizePinwayAppPath("/tools/gmap2mappls")).toBe(PINWAY_APP_PATH);
     expect(normalizePinwayAppPath("/jbt/tools/gmap2mappls")).toBe(`/jbt${PINWAY_APP_PATH}`);
     expect(normalizePinwayAppPath("/pinway")).toBe(PINWAY_APP_PATH);
+    expect(normalizePinwayAppPath("/googlemaps2mappls")).toBe(PINWAY_APP_PATH);
+    expect(PINWAY_APP_PATH).toBe("/googlemaps2mappls");
 
     const deep = buildToolDeepLink(
       "https://app.example/tools/gmap2mappls?oem=old&input=x",
       "me4u",
       "https://maps.app.goo.gl/abc",
     );
-    // Aliases canonicalize; path lands on standalone Pinway app.
-    expect(deep).toContain("/pinway?");
+    // Aliases canonicalize; path lands on standalone GoogleMaps2Mappls app.
+    expect(deep).toContain("/googlemaps2mappls?");
     expect(deep).toContain("brand=mahindra-me4u");
     expect(deep).not.toContain("brand=me4u");
     expect(deep).toContain("q=");

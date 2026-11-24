@@ -22,7 +22,7 @@ describe("tool-launch", () => {
     });
     expect(resolveToolLaunch("gmap2mappls")).toEqual({
       mode: "standalone",
-      href: "/pinway",
+      href: "/googlemaps2mappls",
       openInNewWindow: true,
     });
   });
@@ -46,7 +46,7 @@ describe("tool-launch", () => {
   it("maps tool URLs onto standalone paths with query", () => {
     expect(toStandaloneHref("bos", "?ws=finance&m=invoices")).toBe("/bos?ws=finance&m=invoices");
     expect(toStandaloneHref("imsdealer", "m=purchase")).toBe("/ims?m=purchase");
-    expect(toStandaloneHref("gmap2mappls", "?brand=me4u")).toBe("/pinway?brand=me4u");
+    expect(toStandaloneHref("gmap2mappls", "?brand=me4u")).toBe("/googlemaps2mappls?brand=me4u");
     expect(toStandaloneHref("invoice")).toBeNull();
   });
 });

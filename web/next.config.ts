@@ -22,6 +22,20 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname, ".."),
   },
+  async redirects() {
+    return [
+      {
+        source: "/pinway",
+        destination: "/googlemaps2mappls",
+        permanent: true,
+      },
+      {
+        source: "/pinway/:path*",
+        destination: "/googlemaps2mappls/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

@@ -4,5 +4,5 @@ This utility is branded **GoogleMaps2Mappls** with product name **Google Maps to
 
 See **[PINWAY.md](./PINWAY.md)** for the current product docs.
 
-- Standalone app: `/pinway`
+- Standalone app: `/googlemaps2mappls` (legacy `/pinway` redirects here)
 - Catalog / API tool id (unchanged): `gmap2mappls`

@@ -5,7 +5,7 @@
 export const STANDALONE_APP_BY_TOOL: Readonly<Record<string, string>> = {
   bos: "/bos",
   imsdealer: "/ims",
-  gmap2mappls: "/pinway",
+  gmap2mappls: "/googlemaps2mappls",
 };
 
 export type ToolLaunchMode = "standalone" | "embedded";

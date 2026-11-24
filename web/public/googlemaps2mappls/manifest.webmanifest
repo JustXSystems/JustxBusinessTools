@@ -1,0 +1,19 @@
+{
+  "name": "Google Maps to Mappls",
+  "short_name": "GoogleMaps2Mappls",
+  "description": "Convert a Google Maps link to a Mappls Pin and open your car app.",
+  "start_url": "/googlemaps2mappls",
+  "scope": "/googlemaps2mappls",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#07141f",
+  "theme_color": "#0a1f2e",
+  "icons": [
+    {
+      "src": "/icons/justx-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

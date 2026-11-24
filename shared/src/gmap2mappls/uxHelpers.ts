@@ -10,8 +10,10 @@ export const PINWAY_PRODUCT_NAME = "Google Maps to Mappls";
 /** Compact brand for PWA short_name / applicationName. */
 export const PINWAY_BRAND_NAME = "GoogleMaps2Mappls";
 export const PINWAY_TAGLINE = "Convert a Google Maps link to a Mappls Pin and open your car app.";
-/** Standalone app path (no JBT chrome). Legacy `/pinway` kept for short links. */
-export const PINWAY_APP_PATH = "/pinway";
+/** Standalone app path (no JBT chrome). Matches brand GoogleMaps2Mappls. */
+export const PINWAY_APP_PATH = "/googlemaps2mappls";
+/** Legacy short path — redirects to PINWAY_APP_PATH. */
+export const PINWAY_LEGACY_APP_PATH = "/pinway";
 /** Stable catalog / API tool id — do not rename without a migration. */
 export const PINWAY_TOOL_ID = "gmap2mappls";
 
@@ -60,12 +62,15 @@ export function playStoreUrlForBrand(brandId: string | null | undefined): string
 }
 
 /**
- * Normalize any tool or legacy URL onto the standalone Pinway app path while
- * preserving origin and base-path prefixes (e.g. /jbt/tools/gmap2mappls → /jbt/pinway).
+ * Normalize any tool or legacy URL onto the standalone app path while
+ * preserving origin and base-path prefixes
+ * (e.g. /jbt/tools/gmap2mappls → /jbt/googlemaps2mappls, /pinway → /googlemaps2mappls).
  */
 export function normalizePinwayAppPath(pathname: string): string {
   const raw = (pathname || "/").replace(/\/+$/, "") || "/";
-  const m = raw.match(/^(.*?)(?:\/tools\/gmap2mappls|\/gmap2mappls|\/pinway)$/i);
+  const m = raw.match(
+    /^(.*?)(?:\/tools\/gmap2mappls|\/gmap2mappls|\/googlemaps2mappls|\/pinway)$/i,
+  );
   if (m) {
     const prefix = m[1] || "";
     return `${prefix}${PINWAY_APP_PATH}`;
