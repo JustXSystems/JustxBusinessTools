@@ -82,7 +82,7 @@ const ImsDealerTool = dynamic(
   },
 );
 
-/** When admin chooses standalone launch, bounce `/tools/bos|imsdealer` into the full-screen app (no JBT chrome). */
+/** When admin chooses standalone launch, bounce `/tools/bos|imsdealer|gmap2mappls` into the full-screen app (no JBT chrome). */
 function StandaloneRedirect({ toolId }: { toolId: string }) {
   useEffect(() => {
     const target = toStandaloneHref(toolId, window.location.search);

@@ -37,7 +37,9 @@ export function ShellRouter({ children }: { children: ReactNode }) {
     pathname === "/bos" ||
     pathname.startsWith("/bos/") ||
     pathname === "/ims" ||
-    pathname.startsWith("/ims/")
+    pathname.startsWith("/ims/") ||
+    pathname === "/pinway" ||
+    pathname.startsWith("/pinway/")
   ) {
     return (
       <ConfigProvider>

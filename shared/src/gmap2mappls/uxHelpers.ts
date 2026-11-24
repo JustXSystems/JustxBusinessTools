@@ -1,9 +1,17 @@
 /**
- * UI helpers for GMAP2MAPPLS — pure functions so mobile/OEM flows stay testable
- * without a browser. The React tool owns clipboard / Intent side effects.
+ * UI helpers for Pinway (tool id gmap2mappls) — pure functions so mobile/OEM
+ * flows stay testable without a browser. The React app owns clipboard / Intent side effects.
  */
 import { OEM_BRANDS, getOemBrand, resolveOemBrandId, type OemBrand } from "./oemHandoff";
 import { playStoreUrl } from "./types";
+
+/** Product name shown in UI, WhatsApp, A2HS. */
+export const PINWAY_PRODUCT_NAME = "Pinway";
+export const PINWAY_TAGLINE = "Drop any Google place into your car.";
+/** Standalone app path (no JBT chrome). */
+export const PINWAY_APP_PATH = "/pinway";
+/** Stable catalog / API tool id — do not rename without a migration. */
+export const PINWAY_TOOL_ID = "gmap2mappls";
 
 export const G2M_BRAND_STORAGE_KEY = "g2m.oemBrand";
 export const G2M_RECENT_STORAGE_KEY = "g2m.recentPlaces";
@@ -49,7 +57,22 @@ export function playStoreUrlForBrand(brandId: string | null | undefined): string
   return pkg ? playStoreUrl(pkg) : undefined;
 }
 
-/** Build shareable tool URL with brand (+ optional Google link). */
+/**
+ * Normalize any tool or legacy URL onto the standalone Pinway app path while
+ * preserving origin and base-path prefixes (e.g. /jbt/tools/gmap2mappls → /jbt/pinway).
+ */
+export function normalizePinwayAppPath(pathname: string): string {
+  const raw = (pathname || "/").replace(/\/+$/, "") || "/";
+  const m = raw.match(/^(.*?)(?:\/tools\/gmap2mappls|\/gmap2mappls|\/pinway)$/i);
+  if (m) {
+    const prefix = m[1] || "";
+    return `${prefix}${PINWAY_APP_PATH}`;
+  }
+  if (raw === "/") return PINWAY_APP_PATH;
+  return `${raw}${PINWAY_APP_PATH}`;
+}
+
+/** Build shareable Pinway URL with brand (+ optional Google link). */
 export function buildToolDeepLink(
   pageUrl: string,
   brandId: string,
@@ -61,6 +84,7 @@ export function buildToolDeepLink(
   } catch {
     url = new URL(pageUrl, "https://example.invalid");
   }
+  url.pathname = normalizePinwayAppPath(url.pathname);
   const brand = resolveOemBrandId(brandId) || brandId.trim();
   url.searchParams.set("brand", brand);
   const trimmed = (q || "").trim();
@@ -72,7 +96,7 @@ export function buildToolDeepLink(
 }
 
 export function buildWhatsAppToolShareUrl(toolDeepLink: string, brandLabel: string): string {
-  const text = `Open this place in ${brandLabel} via GMAP2MAPPLS:\n${toolDeepLink}`;
+  const text = `Open this place in ${brandLabel} via ${PINWAY_PRODUCT_NAME}:\n${toolDeepLink}`;
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 
@@ -180,10 +204,12 @@ export function recentPlaceLabel(opts: {
 
 /** Empty-state walkthrough steps (copy for UI). */
 export const G2M_WALKTHROUGH = [
-  { id: "brand", title: "Pick brand", body: "SimpleOne, Adrenox, Me4U, Bluelink…" },
-  { id: "paste", title: "Paste Google link", body: "Share link, address, or lat,lng" },
-  { id: "confirm", title: "Confirm in app", body: "Push / send / start navigation" },
+  { id: "brand", title: "Pick your car brand", body: "SimpleOne, Adrenox, Me4U, Bluelink…" },
+  { id: "paste", title: "Drop a Google place", body: "Share link, address, or lat,lng" },
+  { id: "confirm", title: "Open in your app", body: "Push / send / start navigation" },
 ] as const;
+
+export type PinwayStage = "brand" | "place" | "open";
 
 export function emptyStateHint(brandId: string | null | undefined): string {
   const brand = getOemBrand(brandId) || OEM_BRANDS[0];

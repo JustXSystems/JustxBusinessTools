@@ -77,8 +77,8 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const PUBLIC_PREFIXES = ["/login", "/register", "/status", "/q", "/bom/proposal"];
-/** Apps with their own sign-in screen (the standalone Justxsystems BOS and IMS apps). */
-const SELF_GATED_ROOTS = ["/bos", "/ims"];
+/** Apps with their own shell (BOS / IMS sign-in, or public Pinway). */
+const SELF_GATED_ROOTS = ["/bos", "/ims", "/pinway"];
 
 export function isPublicPath(pathname: string): boolean {
   return (

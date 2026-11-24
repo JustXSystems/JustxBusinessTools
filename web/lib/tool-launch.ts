@@ -5,6 +5,7 @@
 export const STANDALONE_APP_BY_TOOL: Readonly<Record<string, string>> = {
   bos: "/bos",
   imsdealer: "/ims",
+  gmap2mappls: "/pinway",
 };
 
 export type ToolLaunchMode = "standalone" | "embedded";
@@ -27,7 +28,7 @@ export function standaloneAppPath(toolId: string): string | null {
 
 /**
  * Resolve how a tool should open.
- * For BOS / IMS, standalone + new window is the default unless admin sets openStandalone=false.
+ * For BOS / IMS / Pinway, standalone + new window is the default unless admin sets openStandalone=false.
  */
 export function resolveToolLaunch(
   toolId: string,

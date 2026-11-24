@@ -19,6 +19,8 @@ import {
   looksLikeMapsInput,
   parseRecentPlaces,
   playStoreUrlForBrand,
+  PINWAY_PRODUCT_NAME,
+  PINWAY_TAGLINE,
   pushRecentPlace,
   recentPlaceLabel,
   resolveFindButtonLabel,
@@ -26,6 +28,7 @@ import {
   type BrandSegmentFilter,
   type G2mRecentPlace,
   type OemHandoffSummary,
+  type PinwayStage,
   type ResolveResult,
 } from "@jbt/shared";
 import { apiUrl } from "@/lib/api-base";
@@ -91,7 +94,11 @@ function deviceClass(onAndroid: boolean, onIos: boolean): string {
   return "g2m--desktop";
 }
 
-export function Gmap2MapplsTool() {
+export function Gmap2MapplsTool({
+  variant = "embedded",
+}: {
+  variant?: "embedded" | "standalone";
+} = {}) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +117,7 @@ export function Gmap2MapplsTool() {
   const [pinPulse, setPinPulse] = useState(false);
   const [showAppHelp, setShowAppHelp] = useState(false);
   const [clipboardHint, setClipboardHint] = useState(false);
+  const [showA2hs, setShowA2hs] = useState(false);
   const brandIdRef = useRef(brandId);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const appHelpTimerRef = useRef<number | null>(null);
@@ -123,8 +131,22 @@ export function Gmap2MapplsTool() {
   const bootstrappedRef = useRef(false);
 
   useEffect(() => {
-    setOnAndroid(isAndroidUa());
-    setOnIos(isIosUa());
+    const android = isAndroidUa();
+    const ios = isIosUa();
+    setOnAndroid(android);
+    setOnIos(ios);
+    try {
+      const standalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        // iOS Safari home-screen
+        ("standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
+      if (variant === "standalone" && (android || ios) && !standalone) {
+        const dismissed = window.localStorage.getItem("pinway.a2hsDismissed");
+        if (!dismissed) setShowA2hs(true);
+      }
+    } catch {
+      /* ignore */
+    }
     let pendingQ: string | null = null;
     try {
       const saved = window.localStorage.getItem(G2M_BRAND_STORAGE_KEY);
@@ -517,6 +539,8 @@ export function Gmap2MapplsTool() {
     playbook?.brand.companionApp?.finalAction?.trim() || "Push to car";
   const selectedBrand = brands.find((b) => b.id === brandId);
 
+  const stage: PinwayStage = result && playbook ? "open" : input.trim() ? "place" : "brand";
+
   const statusNote = (() => {
     if (!playbook) return "";
     if (onIos) {
@@ -557,18 +581,62 @@ export function Gmap2MapplsTool() {
     setPinPulse(false);
   };
 
+  const dismissA2hs = () => {
+    setShowA2hs(false);
+    try {
+      window.localStorage.setItem("pinway.a2hsDismissed", "1");
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
-    <div className={`g2m tool-workspace ${deviceClass(onAndroid, onIos)}`}>
+    <div
+      className={`g2m tool-workspace ${deviceClass(onAndroid, onIos)} g2m--${variant}`}
+    >
       <section className="g2m-hero">
-        <p className="tool-shell-eyebrow" style={{ margin: 0, color: "rgba(0,223,255,0.85)" }}>
-          Justxsystems · Free utility
-        </p>
-        <h1 className="g2m-brand">GMAP2MAPPLS</h1>
-        <p className="g2m-tag">
-          Pick brand → paste Google link → we open that brand’s app. You only confirm / push
-          navigation in the app.
-        </p>
+        <div className="g2m-hero-top">
+          <div>
+            <p className="g2m-eyebrow">Justxsystems</p>
+            <h1 className="g2m-brand">{PINWAY_PRODUCT_NAME}</h1>
+            <p className="g2m-tag">{PINWAY_TAGLINE}</p>
+          </div>
+        </div>
+        {showA2hs ? (
+          <p className="g2m-a2hs" role="note">
+            <strong>Add to Home Screen</strong>
+            {onIos
+              ? " — Share → Add to Home Screen for a full-screen Pinway app."
+              : " — Browser menu → Install / Add to Home screen."}{" "}
+            <button type="button" className="g2m-linkish" onClick={dismissA2hs}>
+              Got it
+            </button>
+          </p>
+        ) : null}
       </section>
+
+      <ol className="g2m-stages" aria-label="Pinway steps">
+        {(
+          [
+            ["brand", "Brand"],
+            ["place", "Place"],
+            ["open", "Open"],
+          ] as const
+        ).map(([id, label], i) => {
+          const order = { brand: 0, place: 1, open: 2 } as const;
+          const current = order[stage];
+          const mine = order[id];
+          return (
+            <li
+              key={id}
+              className={`g2m-stage${stage === id ? " is-active" : ""}${mine < current ? " is-done" : ""}`}
+            >
+              <span className="g2m-stage-num">{i + 1}</span>
+              {label}
+            </li>
+          );
+        })}
+      </ol>
 
       <section className="g2m-composer">
         <div className="g2m-brand-picker" aria-label="Vehicle brand">
@@ -806,7 +874,7 @@ export function Gmap2MapplsTool() {
 
       {!result && !loading && !error ? (
         <div className="g2m-state g2m-walkthrough">
-          <strong>How it works</strong>
+          <strong>How Pinway works</strong>
           <ol className="g2m-walk-steps">
             {G2M_WALKTHROUGH.map((step) => (
               <li key={step.id}>
@@ -1143,6 +1211,51 @@ export function Gmap2MapplsTool() {
           </div>
         </>
       ) : null}
+
+      {variant === "standalone" || onAndroid || onIos ? (
+        <div className="g2m-dock" aria-label="Primary actions">
+          <div className="g2m-dock-inner">
+            {result && playbook?.primary.href ? (
+              <a
+                className="btn btn-primary"
+                href={playbook.primary.href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void runOpenPrimary(
+                    playbook.primary.href!,
+                    playbook.autoCopyText,
+                    result.paste.mapplsPin,
+                  );
+                }}
+              >
+                {playbook.primary.label}
+              </a>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={loading}
+                  onClick={() => void resolve(input)}
+                >
+                  {loading ? "Finding…" : findLabel}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={loading}
+                  onClick={() => void pasteAndFind()}
+                >
+                  Paste
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
+
+/** Preferred export name for the Pinway product UI. */
+export { Gmap2MapplsTool as PinwayApp };

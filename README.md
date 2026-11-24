@@ -26,7 +26,7 @@ Multi-tenant business tools for quotations, site surveys, and more — by **Just
 | **Justxsystems BOS app** (Finance, HR, Projects — `/tools/bos` + `/bos`) | [`docs/BOS_APP.md`](docs/BOS_APP.md) |
 | **JustTestX BOS seed** (disposable 1-year prod QA tenant) | [`docs/JUSTTESTX_BOS_SEED.md`](docs/JUSTTESTX_BOS_SEED.md) |
 | **JustTestX IMS seed** (disposable ≥2-year IMS Dealer QA tenant) | [`docs/JUSTTESTX_IMS_SEED.md`](docs/JUSTTESTX_IMS_SEED.md) |
-| **GMAP2MAPPLS** (Google → same point on Mappls; free utility) | [`docs/GMAP2MAPPLS.md`](docs/GMAP2MAPPLS.md) |
+| **Pinway** (Google place → car app via Mappls Pin; free utility) | [`docs/PINWAY.md`](docs/PINWAY.md) |
 | Desktop UNC sync | [`desktop-sync-agent/README.md`](desktop-sync-agent/README.md) |
 
 ## Local development

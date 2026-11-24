@@ -1,0 +1,19 @@
+{
+  "name": "Pinway",
+  "short_name": "Pinway",
+  "description": "Drop any Google place into your car app.",
+  "start_url": "/pinway",
+  "scope": "/pinway",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#07141f",
+  "theme_color": "#0a1f2e",
+  "icons": [
+    {
+      "src": "/icons/justx-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

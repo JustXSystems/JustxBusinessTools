@@ -19,8 +19,14 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/ims/")).toBe(true);
   });
 
+  it("lets guests open the Pinway standalone app", () => {
+    expect(isPublicPath("/pinway")).toBe(true);
+    expect(isPublicPath("/pinway/")).toBe(true);
+    expect(isGuestAllowedPath("/pinway")).toBe(true);
+  });
+
   it("does not open look-alike or operator routes", () => {
-    for (const p of ["/", "/boss", "/bosdesign", "/imsx", "/tools/bos", "/tools/bosdesign", "/tools/imsdealer", "/invoices", "/admin/tools", "/settings"]) {
+    for (const p of ["/", "/boss", "/bosdesign", "/imsx", "/tools/bos", "/tools/bosdesign", "/tools/imsdealer", "/tools/gmap2mappls", "/invoices", "/admin/tools", "/settings"]) {
       expect(isPublicPath(p)).toBe(false);
     }
   });

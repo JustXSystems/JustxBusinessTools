@@ -34,6 +34,9 @@ import {
   G2M_WALKTHROUGH,
   emptyStateHint,
   G2M_RECENT_MAX,
+  normalizePinwayAppPath,
+  PINWAY_PRODUCT_NAME,
+  PINWAY_APP_PATH,
 } from "../gmap2mappls/index";
 
 describe("gmap2mappls parse", () => {
@@ -503,21 +506,27 @@ describe("gmap2mappls UX helpers (mobile / OEM usability)", () => {
     expect(playStoreUrlForBrand("mahindra-me4u")).toContain("com.mahindra.inglo");
     expect(playStoreUrlForBrand("matter")).toBeUndefined();
 
+    expect(normalizePinwayAppPath("/tools/gmap2mappls")).toBe(PINWAY_APP_PATH);
+    expect(normalizePinwayAppPath("/jbt/tools/gmap2mappls")).toBe(`/jbt${PINWAY_APP_PATH}`);
+    expect(normalizePinwayAppPath("/pinway")).toBe(PINWAY_APP_PATH);
+
     const deep = buildToolDeepLink(
       "https://app.example/tools/gmap2mappls?oem=old&input=x",
       "me4u",
       "https://maps.app.goo.gl/abc",
     );
-    // Aliases canonicalize so driver phones always land on a stable brand id.
+    // Aliases canonicalize; path lands on standalone Pinway app.
+    expect(deep).toContain("/pinway?");
     expect(deep).toContain("brand=mahindra-me4u");
     expect(deep).not.toContain("brand=me4u");
     expect(deep).toContain("q=");
     expect(deep).not.toContain("oem=");
     expect(deep).not.toContain("input=");
+    expect(deep).not.toContain("/tools/gmap2mappls");
 
     const wa = buildWhatsAppToolShareUrl(deep, "Me4U");
     expect(wa.startsWith("https://wa.me/?text=")).toBe(true);
-    expect(decodeURIComponent(wa)).toContain("GMAP2MAPPLS");
+    expect(decodeURIComponent(wa)).toContain(PINWAY_PRODUCT_NAME);
     expect(decodeURIComponent(wa)).toContain("brand=mahindra-me4u");
   });
 
