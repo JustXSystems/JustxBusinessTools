@@ -218,9 +218,15 @@ describe("gmap2mappls urls + samples", () => {
     expect(simple?.steps[0]).toMatch(/only remaining step/i);
 
     const mahindra = buildBrandPlaybook("mahindra", paste);
+    expect(mahindra?.brand.companionApp?.handoff).toBe("geo_with_pin");
     expect(mahindra?.autoOpenUrl).toContain("package=com.mahindra.adrenox");
+    expect(mahindra?.autoOpenUrl).toContain("action=android.intent.action.MAIN");
+    expect(mahindra?.autoOpenUrl).not.toMatch(/mappls\.com/);
     expect(mahindra?.primary.kind).toBe("open");
     expect(mahindra?.primary.label).toMatch(/Adrenox Connect/);
+    expect(mahindra?.autoCopyText).toBe("kcf7zj");
+    expect(mahindra?.steps[0]).toMatch(/Push to car/i);
+    expect(mahindra?.backup?.href).toContain("mode=driving");
 
     const ola = buildBrandPlaybook("ola", paste);
     expect(ola?.autoOpenUrl).toContain("package=com.olaelectric.companion");

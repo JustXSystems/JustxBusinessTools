@@ -14,6 +14,7 @@
 import {
   oemPackageGeoIntentUrl,
   oemPackageGoogleMapsIntentUrl,
+  oemPackageLaunchUrl,
 } from "./types";
 
 export type OemMapStack = "mappls" | "ola_maps" | "mixed" | "unknown";
@@ -35,10 +36,12 @@ export type OemCompanionApp = {
   /** Android applicationId. */
   packageId: string;
   /**
-   * geo = WhatsApp-style geo Intent into the package (preferred for location finder).
+   * geo = WhatsApp-style geo Intent into the package (Simple Connect style).
    * maps = maps.google.com Intent into the package (Ola / Google-path brands).
+   * geo_with_pin = open OEM app via geo + auto-copy Mappls Pin for search → Push to car
+   *   (Mahindra Adrenox / Mappls NCASE apps that search Pin then push to vehicle).
    */
-  handoff: "geo" | "maps";
+  handoff: "geo" | "maps" | "geo_with_pin";
 };
 
 export type OemBrand = {
@@ -165,11 +168,16 @@ export const OEM_BRANDS: OemBrand[] = [
     id: "mahindra",
     name: "Mahindra",
     segment: "4W",
-    examples: "Scorpio-N, XUV400, Born Electric, BE6, 7X0",
+    examples: "Scorpio-N, XUV400, Born Electric, BE6, 7X0, XUV700",
     stack: "mappls",
-    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
-    note: "Open Adrenox Connect with destination; Pin as backup.",
-    companionApp: { name: "Adrenox Connect", packageId: "com.mahindra.adrenox", handoff: "geo" },
+    methods: ["mappls_pin", "geo_intent", "mappls_nav_deep_link", "simple_connect_push"],
+    note:
+      "Adrenox Connect (Mappls): open app + paste Mappls Pin in search → Push to car. Pin is the reliable in-app destination (same Mappls stack as the SUV).",
+    companionApp: {
+      name: "Adrenox Connect",
+      packageId: "com.mahindra.adrenox",
+      handoff: "geo_with_pin",
+    },
   },
   {
     id: "tata",
@@ -289,6 +297,11 @@ export type BrandPlaybook = {
   steps: string[];
   /** Optional backup if primary fails. */
   backup?: BrandPlaybookAction;
+  /**
+   * Text auto-copied for Mappls Pin / place OEMs (e.g. Mahindra Adrenox
+   * search → Push to car). UI copies this when resolve/brand changes.
+   */
+  autoCopyText?: string;
 };
 
 function parsePasteCoords(paste: BrandPasteLinks): { lat: number; lng: number } {
@@ -327,6 +340,39 @@ export function buildBrandPlaybook(
       brand.id === "simple-energy" && paste.simpleConnectMapsIntentUrl
         ? paste.simpleConnectMapsIntentUrl
         : oemPackageGoogleMapsIntentUrl(app.packageId, lat, lng);
+
+    // Mahindra Adrenox (and similar Mappls NCASE apps): Adrenox does not
+    // advertise WhatsApp-style geo intake. Launch the app, auto-copy Mappls Pin
+    // (works in Adrenox / vehicle Mappls search), user Push-to-cars.
+    if (app.handoff === "geo_with_pin") {
+      const pinOrPlace = pin || place;
+      const launchUrl = oemPackageLaunchUrl(app.packageId);
+      return {
+        brand,
+        autoOpenUrl: launchUrl,
+        autoOpenLabel: `Open ${app.name}`,
+        primary: {
+          kind: "open",
+          label: pin
+            ? `Open ${app.name} (Pin ${pin} ready)`
+            : `Open ${app.name}`,
+          href: launchUrl,
+        },
+        autoCopyText: pinOrPlace,
+        steps: [
+          pin
+            ? `Only remaining step: in ${app.name}, paste Pin “${pin}” (auto-copied) → Push to car.`
+            : place
+              ? `Only remaining step: in ${app.name}, paste “${place}” (auto-copied) → Push to car.`
+              : `Only remaining step: in ${app.name}, set this destination → Push to car.`,
+        ],
+        backup: {
+          kind: "open",
+          label: "Open exact point on Mappls (4W verify)",
+          href: navUrl,
+        },
+      };
+    }
 
     return {
       brand,

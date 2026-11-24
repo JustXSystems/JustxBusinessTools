@@ -215,6 +215,16 @@ export function oemPackageGeoIntentUrl(
 }
 
 /**
+ * Launch an OEM companion app’s main activity (no location payload).
+ * Use when the app does not accept geo shares but supports in-app Pin search
+ * + Push to car (e.g. Mahindra Adrenox Connect).
+ */
+export function oemPackageLaunchUrl(packageId: string): string {
+  const fallback = encodeURIComponent(playStoreUrl(packageId));
+  return `intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${packageId};S.browser_fallback_url=${fallback};end`;
+}
+
+/**
  * Force a maps.google.com pin into a specific OEM package (WhatsApp location family).
  */
 export function oemPackageGoogleMapsIntentUrl(

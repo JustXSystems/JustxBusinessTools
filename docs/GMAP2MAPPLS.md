@@ -49,7 +49,7 @@ Ampere docs advertise Mappls PIN last-mile; **SimpleOne does not reliably resolv
 | Ampere | Ampere Connect | `com.greavesmobility.app` |
 | TVS | TVS Connect | `com.tvsm.connect` |
 | Ola Electric | Ola Electric | `com.olaelectric.companion` |
-| Mahindra | Adrenox Connect | `com.mahindra.adrenox` |
+| Mahindra | Adrenox Connect (launch + auto-copy Mappls Pin → Push to car) | `com.mahindra.adrenox` |
 | Tata | iRA | `com.tatamotors.oneapp` |
 | Hyundai | Bluelink | `com.hyundai.india.bluelink.prd` |
 | Kia | Kia Connect | `com.kia.uvo.in.prd` |
@@ -84,7 +84,7 @@ Sources: MapmyIndia investor go-lives (FY23–FY27), Mappls Auto / Ampere case p
 | Suzuki Motorcycles | 2W | Mappls | **Mappls Pin**; Navigate 2W |
 | TVS (e.g. Apache RTR 160) | 2W | Mixed | Pin for Mappls path; **Open Google** for Connect Google Maps EV path |
 | Ola Electric | 2W | Ola Maps | **Open Google** / geo: (not Mappls Autosuggest) |
-| Mahindra (Scorpio-N, XUV400, Born Electric, 7X0, …) | 4W | Mappls | **Mappls Pin**; Navigate 4W |
+| Mahindra (Scorpio-N, XUV700, XUV400, Born Electric, …) | 4W | Mappls + Adrenox | **Open Adrenox Connect** + auto-copy **Mappls Pin** → search → **Push to car** |
 | Tata (Harrier, Safari, Sierra EV) | 4W | Mappls | **Mappls Pin**; Navigate 4W |
 | Hyundai / Kia connected lines | 4W | Mappls | **Mappls Pin**; Navigate 4W |
 | MG Hector | 4W | Mappls | **Mappls Pin**; Navigate 4W |

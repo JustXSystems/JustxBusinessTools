@@ -104,12 +104,18 @@ export function Gmap2MapplsTool() {
 
   const autoAssistPaste = useCallback(async (paste: ResolveResult["paste"], id: string) => {
     const guide = buildBrandPlaybook(id, paste);
-    // Brands without companion deep link need Pin/place ready on clipboard
-    if (guide && !guide.brand.companionApp) {
-      const text = paste.mapplsPin || paste.searchQuery;
-      if (text) {
-        const ok = await copyText(text);
-        if (ok) setAutoCopied(paste.mapplsPin ? `Pin ${paste.mapplsPin}` : "place name");
+    // Pin/place OEMs (Mahindra Adrenox Push-to-car, Mappls fallback brands)
+    const text = guide?.autoCopyText || (!guide?.brand.companionApp ? paste.mapplsPin || paste.searchQuery : undefined);
+    if (text) {
+      const ok = await copyText(text);
+      if (ok) {
+        setAutoCopied(
+          paste.mapplsPin && text === paste.mapplsPin
+            ? `Pin ${paste.mapplsPin}`
+            : text.length > 40
+              ? `${text.slice(0, 37)}…`
+              : text,
+        );
         return;
       }
     }
