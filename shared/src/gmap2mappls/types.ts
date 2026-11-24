@@ -132,9 +132,18 @@ export function mapplsPointUrl(lat: number, lng: number): string {
   return `https://www.mappls.com/@${roundCoord(lat)},${roundCoord(lng)}`;
 }
 
+/** Normalize Mappls Pin / eLoc for clipboard + search (6-char, lowercase). */
+export function normalizeMapplsPin(pin: string | null | undefined): string | undefined {
+  const p = String(pin || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  return p.length >= 5 && p.length <= 8 ? p : undefined;
+}
+
 /** Share / open a place by its 6-char Mappls Pin (eLoc). */
 export function mapplsPinUrl(pin: string): string {
-  return `https://www.mappls.com/${String(pin).trim().toLowerCase()}`;
+  return `https://www.mappls.com/${normalizeMapplsPin(pin) || String(pin).trim().toLowerCase()}`;
 }
 
 /**
@@ -274,7 +283,7 @@ export function buildOemSearchQuery(opts?: {
 
 /** Short tip shown under OEM paste actions. */
 export const OEM_PASTE_TIP =
-  "SimpleOne: open Simple Connect via the geo Intent (not Mappls, not Pin/lat,lng in search). Other Mappls OEMs: Pin or Navigate Mappls.";
+  "Never paste lat,lng into OEM search. SimpleOne → Simple Connect geo Intent. Mahindra Adrenox → Mappls Pin then Push to car. Other Mappls OEMs → Pin or Mappls nav.";
 
 /** @deprecated Use OEM_PASTE_TIP */
 export const SIMPLEONE_PASTE_TIP = OEM_PASTE_TIP;
@@ -303,12 +312,12 @@ export function buildShareText(
     lines.push(`OEM search text: ${opts.searchQuery}`);
   }
   if (opts?.mapplsPin) {
-    lines.push(`Mappls Pin: ${opts.mapplsPin} (correct on mappls.com — SimpleOne search may not resolve eLoc)`);
+    lines.push(`Mappls Pin: ${opts.mapplsPin}`);
     lines.push(`Pin link: ${mapplsPinUrl(opts.mapplsPin)}`);
   }
   if (opts?.digipin) lines.push(`Digipin: ${opts.digipin}`);
   lines.push(
-    "SimpleOne: open Simple Connect with the geo Intent / WhatsApp-style location — not Mappls, not Pin/lat,lng in search.",
+    "Do NOT paste lat,lng into OEM search. SimpleOne → Simple Connect. Mahindra → Adrenox Pin search → Push to car.",
   );
   return lines.join("\n");
 }
@@ -327,7 +336,7 @@ export function buildPasteKit(
 ): PasteKit {
   const latLng = formatCoordPair(lat, lng);
   const mapplsUrl = mapplsPointUrl(lat, lng);
-  const pin = opts?.mapplsPin?.trim() || undefined;
+  const pin = normalizeMapplsPin(opts?.mapplsPin);
   const name = opts?.placeName?.trim() || opts?.name?.trim() || undefined;
   const searchQuery = buildOemSearchQuery({
     placeName: name,
@@ -361,9 +370,7 @@ export function buildPasteKit(
     }),
     mapplsPin: pin,
     digipin: opts?.digipin || undefined,
-    tip: searchQuery
-      ? `SimpleOne: Copy place name “${searchQuery}” into search — or Open Google → Share/Push to Simple Connect. Pin may fuzzy-match wrong.`
-      : OEM_PASTE_TIP,
+    tip: OEM_PASTE_TIP,
   };
 }
 

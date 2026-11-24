@@ -59,6 +59,11 @@ function isAndroidUa(): boolean {
   return /Android/i.test(navigator.userAgent);
 }
 
+function shortenCopied(text: string, pin?: string): string {
+  if (pin && text === pin) return `Pin ${pin}`;
+  return text.length > 40 ? `${text.slice(0, 37)}…` : text;
+}
+
 export function Gmap2MapplsTool() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -85,8 +90,8 @@ export function Gmap2MapplsTool() {
   }, []);
 
   const openAutoUrl = useCallback((url: string) => {
-    // intent:// and geo: must be top-level navigations — window.open(_blank)
-    // often fails on Android Chrome and never reaches the OEM app.
+    // intent://, intent:#Intent, geo:, mappls: need top-level navigation —
+    // window.open(_blank) often fails on Android Chrome (Simple Connect lesson).
     const isAppScheme = /^(intent|geo|mappls):/i.test(url);
     if (isAppScheme) {
       const a = document.createElement("a");
@@ -104,23 +109,28 @@ export function Gmap2MapplsTool() {
 
   const autoAssistPaste = useCallback(async (paste: ResolveResult["paste"], id: string) => {
     const guide = buildBrandPlaybook(id, paste);
-    // Pin/place OEMs (Mahindra Adrenox Push-to-car, Mappls fallback brands)
-    const text = guide?.autoCopyText || (!guide?.brand.companionApp ? paste.mapplsPin || paste.searchQuery : undefined);
-    if (text) {
-      const ok = await copyText(text);
-      if (ok) {
-        setAutoCopied(
-          paste.mapplsPin && text === paste.mapplsPin
-            ? `Pin ${paste.mapplsPin}`
-            : text.length > 40
-              ? `${text.slice(0, 37)}…`
-              : text,
-        );
-        return;
-      }
+    const text = guide?.autoCopyText;
+    if (!text) {
+      setAutoCopied(null);
+      return;
     }
-    setAutoCopied(null);
+    // Best-effort after resolve — may fail without lasting user-gesture.
+    // Primary CTA always re-copies under a fresh tap (Mahindra-critical).
+    const ok = await copyText(text);
+    setAutoCopied(ok ? shortenCopied(text, paste.mapplsPin) : null);
   }, []);
+
+  const runOpenPrimary = useCallback(
+    async (href: string, copyTextValue?: string, pin?: string) => {
+      // Re-copy under the same tap as open — clipboard after async fetch is flaky.
+      if (copyTextValue) {
+        const ok = await copyText(copyTextValue);
+        if (ok) setAutoCopied(shortenCopied(copyTextValue, pin));
+      }
+      openAutoUrl(href);
+    },
+    [openAutoUrl],
+  );
 
   const onBrandChange = useCallback(
     (id: string, paste?: ResolveResult["paste"]) => {
@@ -150,7 +160,8 @@ export function Gmap2MapplsTool() {
     return buildBrandPlaybook(brandId, result.paste);
   }, [result?.paste, brandId]);
 
-  // QR encodes the selected brand’s open URL (OEM Intent / geo / Mappls fallback)
+  // QR: prefer playbook.qrPayload (Pin text / HTTPS). Avoid encoding LAUNCHER
+  // intent:# URLs that many camera scanners reject.
   useEffect(() => {
     let cancelled = false;
     if (!playbook || !result?.paste) {
@@ -158,6 +169,7 @@ export function Gmap2MapplsTool() {
       return;
     }
     const payload =
+      playbook.qrPayload ||
       playbook.primary.href ||
       playbook.autoOpenUrl ||
       result.paste.whatsappGeoUri ||
@@ -244,11 +256,41 @@ export function Gmap2MapplsTool() {
       return;
     }
     if (playbook.primary.href) {
-      openAutoUrl(playbook.primary.href);
+      await runOpenPrimary(
+        playbook.primary.href,
+        playbook.autoCopyText,
+        result?.paste.mapplsPin,
+      );
     }
-  }, [playbook, onCopy, openAutoUrl]);
+  }, [playbook, onCopy, runOpenPrimary, result?.paste.mapplsPin]);
 
   const appName = playbook?.brand.companionApp?.name || playbook?.brand.name;
+  const isPinPasteBrand = playbook?.brand.companionApp?.handoff === "geo_with_pin";
+  const pinReady = Boolean(playbook?.autoCopyText && result?.paste.mapplsPin);
+
+  const statusNote = (() => {
+    if (!playbook) return "";
+    if (!onAndroid) {
+      return isPinPasteBrand && pinReady
+        ? `On desktop: scan the QR for Pin “${result?.paste.mapplsPin}”, then open ${appName} on Android and Push to car.`
+        : "On desktop: scan the QR with your Android phone (app must be installed).";
+    }
+    if (autoOpenStatus === "blocked") return "Open was blocked — tap the button below.";
+    if (isPinPasteBrand) {
+      if (pinReady) {
+        return autoOpenStatus === "opened"
+          ? `${appName} opened. Paste Pin “${result?.paste.mapplsPin}” in search → Push to car.`
+          : `Opens ${appName}. Paste the Pin (auto-copied) → Push to car — never paste lat,lng.`;
+      }
+      return autoOpenStatus === "opened"
+        ? `Opened handoff for ${appName}. Follow the step below (never paste lat,lng).`
+        : `Preparing ${appName} handoff…`;
+    }
+    if (autoOpenStatus === "opened") {
+      return `${appName} should have opened with this location.`;
+    }
+    return `Opening ${appName} with this location…`;
+  })();
 
   return (
     <div className="g2m tool-workspace">
@@ -403,15 +445,15 @@ export function Gmap2MapplsTool() {
             <h3>Your only step → {appName}</h3>
 
             <p className="g2m-auto-note" role="status">
-              {onAndroid
-                ? autoOpenStatus === "opened"
-                  ? `${appName} should have opened with this location.`
-                  : autoOpenStatus === "blocked"
-                    ? "Open was blocked — tap the button below."
-                    : `Opening ${appName} with this location…`
-                : "On desktop: scan the QR with your Android phone (app must be installed)."}
-              {autoCopied ? ` · Auto-copied ${autoCopied} for paste if needed.` : ""}
+              {statusNote}
+              {autoCopied ? ` · Clipboard: ${autoCopied}` : ""}
             </p>
+
+            {playbook.rejectLatLngPaste ? (
+              <p className="g2m-auto-note" role="note">
+                Do not paste coordinates into {appName} search — use Pin / place name only.
+              </p>
+            ) : null}
 
             <ol className="g2m-guide-steps">
               {playbook.steps.map((step) => (
@@ -426,7 +468,11 @@ export function Gmap2MapplsTool() {
                   href={playbook.primary.href}
                   onClick={(e) => {
                     e.preventDefault();
-                    openAutoUrl(playbook.primary.href!);
+                    void runOpenPrimary(
+                      playbook.primary.href!,
+                      playbook.autoCopyText,
+                      result.paste.mapplsPin,
+                    );
                   }}
                 >
                   {playbook.primary.label}
@@ -438,14 +484,40 @@ export function Gmap2MapplsTool() {
                     : playbook.primary.label}
                 </button>
               )}
+              {playbook.autoCopyText ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => void onCopy("autocopy", playbook.autoCopyText || "")}
+                >
+                  {copied === "autocopy"
+                    ? "Copied"
+                    : result.paste.mapplsPin && playbook.autoCopyText === result.paste.mapplsPin
+                      ? `Copy Pin (${result.paste.mapplsPin})`
+                      : "Copy again for paste"}
+                </button>
+              ) : null}
             </div>
 
             <div className="g2m-paste-footer">
               {qr ? (
                 <figure className="g2m-qr">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={qr.dataUrl} alt={`QR to open ${appName}`} width={140} height={140} />
-                  <figcaption>Scan → open {appName}</figcaption>
+                  <img
+                    src={qr.dataUrl}
+                    alt={
+                      isPinPasteBrand && pinReady
+                        ? `QR for Mappls Pin ${result.paste.mapplsPin}`
+                        : `QR to open ${appName}`
+                    }
+                    width={140}
+                    height={140}
+                  />
+                  <figcaption>
+                    {isPinPasteBrand && pinReady
+                      ? `Scan → Pin ${result.paste.mapplsPin}`
+                      : `Scan → open ${appName}`}
+                  </figcaption>
                 </figure>
               ) : null}
             </div>
@@ -460,6 +532,12 @@ export function Gmap2MapplsTool() {
                     {...(/^(intent|geo|mappls):/i.test(playbook.backup.href)
                       ? {}
                       : { target: "_blank", rel: "noreferrer" })}
+                    onClick={(e) => {
+                      if (/^(intent|geo|mappls):/i.test(playbook.backup?.href || "")) {
+                        e.preventDefault();
+                        openAutoUrl(playbook.backup!.href!);
+                      }
+                    }}
                   >
                     {playbook.backup.label}
                   </a>
@@ -482,6 +560,16 @@ export function Gmap2MapplsTool() {
                     {copied === "pin" ? "Copied Pin" : `Copy Pin (${result.paste.mapplsPin})`}
                   </button>
                 ) : null}
+                {result.paste.mapplsPinUrl ? (
+                  <a
+                    className="btn btn-secondary btn-sm"
+                    href={result.paste.mapplsPinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open Pin on Mappls
+                  </a>
+                ) : null}
                 {result.paste.searchQuery ? (
                   <button
                     type="button"
@@ -491,6 +579,14 @@ export function Gmap2MapplsTool() {
                     {copied === "search" ? "Copied place name" : "Copy place name"}
                   </button>
                 ) : null}
+                <a
+                  className="btn btn-secondary btn-sm"
+                  href={result.paste.mapplsNavDrivingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Mappls 4W nav
+                </a>
                 <a
                   className="btn btn-secondary btn-sm"
                   href={result.paste.mapplsUrl}

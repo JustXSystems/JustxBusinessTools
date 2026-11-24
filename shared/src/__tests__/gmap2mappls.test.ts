@@ -14,6 +14,7 @@ import {
   encodeDigipin,
   buildOemHandoffSummary,
   buildBrandPlaybook,
+  normalizeMapplsPin,
   OEM_BRANDS,
 } from "../gmap2mappls/index";
 
@@ -148,6 +149,12 @@ describe("gmap2mappls urls + samples", () => {
     expect(googleMapsPointUrl(lat, lng)).toContain(formatCoordPair(lat, lng));
   });
 
+  it("normalizes Mappls Pin for OEM clipboard paste", () => {
+    expect(normalizeMapplsPin("KCF7ZJ")).toBe("kcf7zj");
+    expect(normalizeMapplsPin(" kcf7zj ")).toBe("kcf7zj");
+    expect(normalizeMapplsPin("bad")).toBeUndefined();
+  });
+
   it("builds geo URI + place-name search for SimpleOne handoff", () => {
     const kit = buildPasteKit(12.877073, 77.613574, {
       name: "Zigma Technologies",
@@ -225,8 +232,22 @@ describe("gmap2mappls urls + samples", () => {
     expect(mahindra?.primary.kind).toBe("open");
     expect(mahindra?.primary.label).toMatch(/Adrenox Connect/);
     expect(mahindra?.autoCopyText).toBe("kcf7zj");
+    expect(mahindra?.qrPayload).toBe("kcf7zj"); // scannable Pin text, not LAUNCHER intent
+    expect(mahindra?.rejectLatLngPaste).toBe(true);
     expect(mahindra?.steps[0]).toMatch(/Push to car/i);
+    expect(mahindra?.steps[0].toLowerCase()).toMatch(/never paste lat/);
     expect(mahindra?.backup?.href).toContain("mode=driving");
+
+    // No Pin: fall back to Mappls 4W exact nav (not lat,lng paste)
+    const noPin = buildPasteKit(12.877073, 77.613574, {
+      placeName: "Zigma Technologies",
+      locality: "Nyanappanahalli",
+    });
+    const mahindraNoPin = buildBrandPlaybook("mahindra", noPin);
+    expect(mahindraNoPin?.autoOpenUrl).toContain("mode=driving");
+    expect(mahindraNoPin?.autoCopyText).toMatch(/Zigma/);
+    expect(mahindraNoPin?.rejectLatLngPaste).toBe(true);
+    expect(mahindraNoPin?.backup?.href).toContain("package=com.mahindra.adrenox");
 
     const ola = buildBrandPlaybook("ola", paste);
     expect(ola?.autoOpenUrl).toContain("package=com.olaelectric.companion");

@@ -12,6 +12,7 @@
  * (`mappls.com/navigation?places=lat,lng,…`, `@lat,lng`, geo:) bypass search.
  */
 import {
+  normalizeMapplsPin,
   oemPackageGeoIntentUrl,
   oemPackageGoogleMapsIntentUrl,
   oemPackageLaunchUrl,
@@ -65,10 +66,14 @@ export const MAPPLS_OEM_SEARCH_RULES = {
     "Mappls Autosuggest `query` is text/POI/Pin. `location=lat,lng` is only a radial bias — pasting coordinates into the search field searches the wrong place.",
   whyPinFailsOnSimpleOne:
     "kcf7zj is correct on mappls.com (Zigma). SimpleOne search often lacks eLoc resolution, so typing the Pin fuzzy-matches an unrelated place. Use POI place name or Push Navigation via Google/geo → Simple Connect.",
+  whyMahindraDiffersFromSimpleConnect:
+    "Adrenox Connect does not advertise WhatsApp-style geo intake. Reliable path: open Adrenox → paste Mappls Pin (Mappls NCASE entitled) → Push to car. Never paste lat,lng. If Pin is missing, open Mappls 4W nav (exact lat,lng deep link) and/or paste place name.",
   routingAccepts: ["Mappls Pin / eLoc", "WGS-84 lat,lng (API & navigation deep links)"] as const,
   ampereConfirms: "Ampere Nexus lists Last Mile Guidance with House Numbers & Mappls PIN.",
   simpleConnectConfirms:
     "Simple Connect: Push Location / Push Navigation + Share WhatsApp locations to Simple Connect for navigation.",
+  mahindraConfirms:
+    "Adrenox Connect: Push to car + Mappls Pin search (same Mappls stack as XUV700 / Scorpio-N NCASE).",
 } as const;
 
 /**
@@ -170,9 +175,9 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "Scorpio-N, XUV400, Born Electric, BE6, 7X0, XUV700",
     stack: "mappls",
-    methods: ["mappls_pin", "geo_intent", "mappls_nav_deep_link", "simple_connect_push"],
+    methods: ["mappls_pin", "mappls_nav_deep_link", "place_name", "geo_intent"],
     note:
-      "Adrenox Connect (Mappls): open app + paste Mappls Pin in search → Push to car. Pin is the reliable in-app destination (same Mappls stack as the SUV).",
+      "Adrenox Connect (Mappls NCASE): unlike Simple Connect, do NOT rely on geo share. Open Adrenox, paste Mappls Pin (auto-copied) → Push to car. Never paste lat,lng. Fallback: Mappls 4W nav deep link.",
     companionApp: {
       name: "Adrenox Connect",
       packageId: "com.mahindra.adrenox",
@@ -299,9 +304,17 @@ export type BrandPlaybook = {
   backup?: BrandPlaybookAction;
   /**
    * Text auto-copied for Mappls Pin / place OEMs (e.g. Mahindra Adrenox
-   * search → Push to car). UI copies this when resolve/brand changes.
+   * search → Push to car). UI must also re-copy on primary tap (clipboard
+   * after async fetch is unreliable).
    */
   autoCopyText?: string;
+  /**
+   * Preferred QR payload. Prefer HTTPS / plain Pin text — many scanners
+   * fail on intent:#Intent LAUNCHER URLs (unlike Simple Connect geo Intent).
+   */
+  qrPayload?: string;
+  /** True when this brand must never paste lat,lng into OEM search. */
+  rejectLatLngPaste?: boolean;
 };
 
 function parsePasteCoords(paste: BrandPasteLinks): { lat: number; lng: number } {
@@ -323,9 +336,13 @@ export function buildBrandPlaybook(
   const navUrl =
     brand.segment === "2W" ? paste.mapplsNavBikingUrl : paste.mapplsNavDrivingUrl;
   const place = paste.searchQuery?.trim();
-  const pin = paste.mapplsPin?.trim();
+  const pin = normalizeMapplsPin(paste.mapplsPin);
   const { lat, lng } = parsePasteCoords(paste);
   const app = brand.companionApp;
+  const coordsOk =
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    !(lat === 0 && lng === 0);
 
   // Preferred path: open the selected OEM companion app with this location
   if (app) {
@@ -341,35 +358,89 @@ export function buildBrandPlaybook(
         ? paste.simpleConnectMapsIntentUrl
         : oemPackageGoogleMapsIntentUrl(app.packageId, lat, lng);
 
-    // Mahindra Adrenox (and similar Mappls NCASE apps): Adrenox does not
-    // advertise WhatsApp-style geo intake. Launch the app, auto-copy Mappls Pin
-    // (works in Adrenox / vehicle Mappls search), user Push-to-cars.
+    // Mahindra Adrenox / Mappls NCASE “Push to car” path.
+    // Lessons from Simple Connect applied here:
+    // - Do NOT open Mappls as primary (wrong app).
+    // - Do NOT paste lat,lng into search (Autosuggest fails).
+    // - Adrenox does NOT take WhatsApp geo like Simple Connect → launch app + Pin.
+    // - Clipboard after async fetch is flaky → UI re-copies on primary tap.
+    // - QR scanners often fail on intent:#Intent → QR uses Pin text / HTTPS.
     if (app.handoff === "geo_with_pin") {
-      const pinOrPlace = pin || place;
       const launchUrl = oemPackageLaunchUrl(app.packageId);
+
+      if (pin) {
+        return {
+          brand,
+          autoOpenUrl: launchUrl,
+          autoOpenLabel: `Open ${app.name}`,
+          primary: {
+            kind: "open",
+            label: `Open ${app.name} · Pin ${pin} ready`,
+            href: launchUrl,
+          },
+          autoCopyText: pin,
+          qrPayload: pin,
+          rejectLatLngPaste: true,
+          steps: [
+            `Only remaining step: in ${app.name}, paste Pin “${pin}” → Push to car. Never paste lat,lng.`,
+          ],
+          backup: {
+            kind: "open",
+            label: "Open exact point on Mappls (4W)",
+            href: navUrl,
+          },
+        };
+      }
+
+      // No Pin: Mappls 4W nav deep link is the accurate coordinate path;
+      // place name is best-effort for Adrenox search.
+      if (coordsOk) {
+        return {
+          brand,
+          autoOpenUrl: navUrl,
+          autoOpenLabel: "Open exact point on Mappls (4W)",
+          primary: {
+            kind: "open",
+            label: place
+              ? `Open Mappls 4W · place name ready for ${app.name}`
+              : `Open Mappls 4W navigation`,
+            href: navUrl,
+          },
+          autoCopyText: place,
+          qrPayload: navUrl,
+          rejectLatLngPaste: true,
+          steps: [
+            place
+              ? `Pin unavailable. Mappls shows the exact point. In ${app.name}, paste “${place}” → Push to car (not lat,lng).`
+              : `Pin unavailable. Use Mappls 4W navigation for the exact point, then set the same destination in ${app.name} → Push to car.`,
+          ],
+          backup: {
+            kind: "open",
+            label: `Open ${app.name}`,
+            href: launchUrl,
+          },
+        };
+      }
+
       return {
         brand,
         autoOpenUrl: launchUrl,
         autoOpenLabel: `Open ${app.name}`,
         primary: {
           kind: "open",
-          label: pin
-            ? `Open ${app.name} (Pin ${pin} ready)`
-            : `Open ${app.name}`,
+          label: `Open ${app.name}`,
           href: launchUrl,
         },
-        autoCopyText: pinOrPlace,
+        autoCopyText: place,
+        qrPayload: paste.mapplsUrl || paste.googleMapsUrl,
+        rejectLatLngPaste: true,
         steps: [
-          pin
-            ? `Only remaining step: in ${app.name}, paste Pin “${pin}” (auto-copied) → Push to car.`
-            : place
-              ? `Only remaining step: in ${app.name}, paste “${place}” (auto-copied) → Push to car.`
-              : `Only remaining step: in ${app.name}, set this destination → Push to car.`,
+          `Only remaining step: in ${app.name}, set the destination → Push to car. Never paste lat,lng.`,
         ],
         backup: {
           kind: "open",
-          label: "Open exact point on Mappls (4W verify)",
-          href: navUrl,
+          label: "Open Google Maps",
+          href: paste.googleMapsUrl,
         },
       };
     }
@@ -383,6 +454,11 @@ export function buildBrandPlaybook(
         label: `Open ${app.name} with this location`,
         href: openUrl,
       },
+      qrPayload:
+        brand.id === "simple-energy"
+          ? paste.whatsappGeoUri || openUrl
+          : openUrl,
+      rejectLatLngPaste: true,
       steps: [
         `Only remaining step: in ${app.name}, confirm this place and push / start navigation to the vehicle.`,
       ],
@@ -404,11 +480,14 @@ export function buildBrandPlaybook(
       label: `Open Mappls navigation (${brand.name})`,
       href: navUrl,
     },
+    autoCopyText: pin || place,
+    qrPayload: pin || navUrl,
+    rejectLatLngPaste: true,
     steps: [
       pin
-        ? `Only remaining step: paste Pin “${pin}” in ${brand.name} search and start navigation (Pin is auto-copied).`
+        ? `Only remaining step: paste Pin “${pin}” in ${brand.name} search and start navigation (never lat,lng).`
         : place
-          ? `Only remaining step: paste “${place}” in ${brand.name} search and start navigation (name is auto-copied).`
+          ? `Only remaining step: paste “${place}” in ${brand.name} search and start navigation (never lat,lng).`
           : `Only remaining step: start navigation to this point in ${brand.name}.`,
     ],
     backup: pin
