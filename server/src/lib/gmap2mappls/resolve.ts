@@ -1,4 +1,5 @@
 import {
+  buildPasteKit,
   classifyInput,
   extractCoordsFromGoogleUrl,
   extractPlaceNameFromGoogleUrl,
@@ -58,6 +59,7 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
       lng,
       sampleMode: mappls.sampleMode,
       tip: "Best accuracy = Google Maps Share → Copy link",
+      paste: buildPasteKit(lat, lng, { mapplsPin: mappls.mapplsPin, digipin: mappls.digipin }),
       google: {
         input,
         name: fixture.googleName,
@@ -159,6 +161,7 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
     lng,
     sampleMode: mappls.sampleMode || !getMapplsAccessToken(),
     tip: "Best accuracy = Google Maps Share → Copy link",
+    paste: buildPasteKit(lat, lng, { mapplsPin: mappls.mapplsPin, digipin: mappls.digipin }),
     google: {
       input,
       name: googleName({ input, source, label, displayName }),

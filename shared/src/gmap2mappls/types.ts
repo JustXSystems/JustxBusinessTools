@@ -30,10 +30,25 @@ export type MapplsSide = {
   city?: string;
   state?: string;
   pincode?: string;
+  /** 6-char Mappls Pin / eLoc when the reverse API returns it. */
+  mapplsPin?: string;
+  /** India Post Digipin for the shared lat/lng (when Digipin API is enabled). */
+  digipin?: string;
   lat: number;
   lng: number;
   mapplsUrl: string;
   sampleMode: boolean;
+};
+
+/** Clipboard helpers for Mappls-integrated apps (SimpleOne, OEM apps, etc.). */
+export type PasteKit = {
+  /** Canonical shared point — best paste into Mappls / SimpleOne search. */
+  latLng: string;
+  /** Space-separated variant some map UIs prefer. */
+  latLngSpaced: string;
+  mapplsPin?: string;
+  digipin?: string;
+  tip: string;
 };
 
 export type ResolveResult = {
@@ -42,6 +57,7 @@ export type ResolveResult = {
   lng: number;
   google: GoogleSide;
   mappls: MapplsSide;
+  paste: PasteKit;
   sampleMode: boolean;
   tip?: string;
 };
@@ -76,6 +92,21 @@ export function googleMapsPointUrl(lat: number, lng: number): string {
  */
 export function mapplsPointUrl(lat: number, lng: number): string {
   return `https://www.mappls.com/@${roundCoord(lat)},${roundCoord(lng)}`;
+}
+
+export function buildPasteKit(
+  lat: number,
+  lng: number,
+  opts?: { mapplsPin?: string; digipin?: string },
+): PasteKit {
+  const latLng = formatCoordPair(lat, lng);
+  return {
+    latLng,
+    latLngSpaced: `${roundCoord(lat)}, ${roundCoord(lng)}`,
+    mapplsPin: opts?.mapplsPin || undefined,
+    digipin: opts?.digipin || undefined,
+    tip: "For SimpleOne / Mappls apps: paste lat,lng (or Mappls Pin) — not the Google address text.",
+  };
 }
 
 export function isFiniteLatLng(lat: number, lng: number): boolean {

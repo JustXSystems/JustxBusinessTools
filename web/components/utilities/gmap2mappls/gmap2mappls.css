@@ -153,6 +153,50 @@
   font-size: 0.85rem;
 }
 
+.g2m-paste {
+  border-radius: var(--radius);
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  background: rgba(var(--accent-rgb), 0.06);
+  padding: 1rem 1.1rem 1.15rem;
+  animation: g2m-fade-up 0.45s ease both;
+}
+
+.g2m-paste h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+
+.g2m-paste-tip {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--text-mid);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.g2m-paste-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.g2m-paste-note {
+  font-size: 0.78rem;
+  color: var(--text-low);
+  max-width: 22rem;
+}
+
+.g2m-paste-code {
+  display: inline-block;
+  margin-top: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
 .g2m-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

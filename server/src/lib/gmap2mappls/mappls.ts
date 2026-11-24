@@ -20,6 +20,9 @@ type MapplsRevResult = {
   subLocality?: string;
   lat?: string | number;
   lng?: string | number;
+  mapplsPin?: string;
+  eloc?: string;
+  eLoc?: string;
 };
 
 type MapplsRevResponse = {
@@ -27,8 +30,34 @@ type MapplsRevResponse = {
   results?: MapplsRevResult[];
 };
 
+async function fetchDigipin(lat: number, lng: number, token: string): Promise<string | undefined> {
+  try {
+    const url = new URL("https://sdk.mappls.com/map/api/digipin");
+    // API expects quoted "lat,lng" in some samples; also try bare pair.
+    url.searchParams.set("coordinates", `${lat},${lng}`);
+    url.searchParams.set("access_token", token);
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { digipin?: string };
+    const pin = data.digipin?.trim();
+    return pin || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function pickMapplsPin(row: MapplsRevResult): string | undefined {
+  const raw = row.mapplsPin || row.eloc || row.eLoc;
+  const pin = String(raw ?? "").trim();
+  return /^[A-Za-z0-9]{6}$/.test(pin) ? pin : undefined;
+}
+
 /**
  * Mappls Reverse Geocode only — never text / place search.
+ * Optionally enriches Digipin when the key allows Digipin Conversion.
  * Falls back to sample mode when token is missing or API fails soft.
  */
 export async function reverseGeocodeMappls(lat: number, lng: number): Promise<MapplsSide> {
@@ -49,15 +78,19 @@ export async function reverseGeocodeMappls(lat: number, lng: number): Promise<Ma
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) {
-      // Soft-fail to sample so the shared point still ships
       const sample = sampleMapplsSide(lat, lng);
       sample.formattedAddress = `${sample.formattedAddress} [Mappls HTTP ${res.status}]`;
+      const digipin = await fetchDigipin(lat, lng, token);
+      if (digipin) sample.digipin = digipin;
       return sample;
     }
     const data = (await res.json()) as MapplsRevResponse;
     const row = data.results?.[0];
     if (!row) {
-      return sampleMapplsSide(lat, lng);
+      const sample = sampleMapplsSide(lat, lng);
+      const digipin = await fetchDigipin(lat, lng, token);
+      if (digipin) sample.digipin = digipin;
+      return sample;
     }
     const formatted =
       row.formatted_address?.trim() ||
@@ -66,12 +99,16 @@ export async function reverseGeocodeMappls(lat: number, lng: number): Promise<Ma
         .join(", ") ||
       `${roundCoord(lat)}, ${roundCoord(lng)}`;
 
+    const digipin = await fetchDigipin(lat, lng, token);
+
     return {
       formattedAddress: formatted,
       locality: row.locality || row.subLocality || row.village || undefined,
       city: row.city || undefined,
       state: row.state || undefined,
       pincode: row.pincode || undefined,
+      mapplsPin: pickMapplsPin(row),
+      digipin,
       // Critical: echo the *requested* shared point, not Mappls's snapped lat/lng
       lat: roundCoord(lat),
       lng: roundCoord(lng),

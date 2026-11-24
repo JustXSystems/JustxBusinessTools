@@ -22,6 +22,8 @@ describe("resolveGmap2Mappls sample mode", () => {
     expect(r.mappls.mapplsUrl).not.toMatch(/18z/);
     expect(r.sampleMode).toBe(true);
     expect(r.mappls.formattedAddress.toLowerCase()).toMatch(/hulimavu|bannerghatta/);
+    expect(r.paste.latLng).toBe("12.8804,77.5958");
+    expect(r.paste.tip.toLowerCase()).toMatch(/simpleone|mappls/);
   });
 
   it("Zigma short link: pin !3d!4d, same Google/Mappls coords, Mappls URL without 18z", async () => {

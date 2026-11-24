@@ -24,6 +24,14 @@ Use the official share form (no Google-style zoom suffix):
 
 Do **not** append `,18z`. Mappls’s web app treats `@lat,lng,18z` as a broken path — the interstitial never opens the shared point. Plain `@lat,lng` loads the same pin Google uses.
 
+### Paste into SimpleOne / Mappls OEM apps
+
+Do **not** paste the Google address string into Mappls text search.
+
+1. Use **Copy lat,lng** from the tool (shared point).
+2. If shown, **Copy Mappls Pin** (6-char eLoc) or **Copy Digipin** (needs Digipin API on the key).
+3. In SimpleOne / vehicle apps: search or drop-pin with that lat,lng or Mappls Pin.
+
 ## Local run
 
 ```bash

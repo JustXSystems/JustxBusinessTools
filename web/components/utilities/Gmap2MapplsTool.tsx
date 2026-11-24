@@ -20,12 +20,41 @@ type Meta = {
   samples: Array<{ id: string; label: string; input: string; coords: string }>;
 };
 
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 export function Gmap2MapplsTool() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ResolveResult | null>(null);
   const [meta, setMeta] = useState<Meta | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const onCopy = useCallback(async (label: string, text: string) => {
+    const ok = await copyText(text);
+    setCopied(ok ? label : null);
+    if (ok) window.setTimeout(() => setCopied((c) => (c === label ? null : c)), 1600);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -203,6 +232,69 @@ export function Gmap2MapplsTool() {
               {result.sampleMode ? "Sample / offline Mappls address" : "Live Mappls reverse-geocode"}
             </div>
           </div>
+
+          <section className="g2m-paste" aria-label="Paste into SimpleOne or Mappls apps">
+            <h3>Paste into SimpleOne / Mappls apps</h3>
+            <p className="g2m-paste-tip">
+              {result.paste?.tip ||
+                "Paste lat,lng (or Mappls Pin) — not the Google address text."}
+            </p>
+            <div className="g2m-paste-row">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => void onCopy("latlng", result.paste?.latLng || formatCoordPair(result.lat, result.lng))}
+              >
+                {copied === "latlng" ? "Copied lat,lng" : "Copy lat,lng"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() =>
+                  void onCopy(
+                    "latlngSpaced",
+                    result.paste?.latLngSpaced || `${result.lat}, ${result.lng}`,
+                  )
+                }
+              >
+                {copied === "latlngSpaced" ? "Copied" : "Copy lat, lng"}
+              </button>
+              {result.paste?.mapplsPin || result.mappls.mapplsPin ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() =>
+                    void onCopy(
+                      "pin",
+                      result.paste?.mapplsPin || result.mappls.mapplsPin || "",
+                    )
+                  }
+                >
+                  {copied === "pin"
+                    ? "Copied Mappls Pin"
+                    : `Copy Mappls Pin (${result.paste?.mapplsPin || result.mappls.mapplsPin})`}
+                </button>
+              ) : null}
+              {result.paste?.digipin || result.mappls.digipin ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() =>
+                    void onCopy("digipin", result.paste?.digipin || result.mappls.digipin || "")
+                  }
+                >
+                  {copied === "digipin"
+                    ? "Copied Digipin"
+                    : `Copy Digipin (${result.paste?.digipin || result.mappls.digipin})`}
+                </button>
+              ) : (
+                <span className="g2m-paste-note">
+                  Mappls Pin / Digipin appear when MAPPLS_ACCESS_TOKEN has Digipin / reverse APIs enabled
+                </span>
+              )}
+            </div>
+            <code className="g2m-paste-code">{result.paste?.latLng || formatCoordPair(result.lat, result.lng)}</code>
+          </section>
 
           <div className="g2m-grid">
             <article className="g2m-card">
