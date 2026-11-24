@@ -1199,7 +1199,12 @@ html:has(.pinway-route-root) body {
   }
 }
 
-@media (min-width: 960px) {
+/*
+  Desktop-only column. Do NOT key this on min-width alone — when Android
+  fails to honor device-width, layout width is ~980px and the 28rem column
+  appears as a tiny centered card (the screenshot bug).
+*/
+@media (min-width: 960px) and (hover: hover) and (pointer: fine) {
   .bos .g2m-app--standalone {
     --g2m-inset: 20px;
     max-width: var(--g2m-desk);
@@ -1209,6 +1214,40 @@ html:has(.pinway-route-root) body {
   .bos .g2m--desktop .g2m-map {
     height: min(38vh, 340px);
   }
+}
+
+/* JS / early script sets this using screen.width (reliable on phones). */
+html.g2m-force-phone .bos .g2m-app--standalone,
+html.g2m-force-phone .bos .g2m-app,
+html.g2m-force-phone .pinway-standalone-shell,
+html.g2m-force-phone .pinway-route-root,
+html.g2m-force-phone .bos.pinway-ims--standalone.bos-canvas {
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+html.g2m-force-phone .bos .g2m-app--standalone {
+  --g2m-inset: 12px;
+}
+
+html.g2m-force-phone .bos .g2m-space {
+  display: none !important;
+}
+
+html.g2m-force-phone .bos .g2m--standalone {
+  font-size: 16px;
+}
+
+html.g2m-force-phone .bos .g2m-title {
+  font-size: 1.2rem;
+}
+
+html.g2m-force-phone .bos .g2m-island .bos-btn,
+html.g2m-force-phone .bos .g2m-island a.bos-btn {
+  min-height: 52px;
+  font-size: 16px;
 }
 
 @media (prefers-reduced-motion: reduce) {

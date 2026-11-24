@@ -41,9 +41,19 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   minimumScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
 };
 
+/** Runs before paint so phones never flash the desktop 28rem column. */
+const FORCE_PHONE_SCRIPT = `(function(){try{var s=Math.min(screen.width||0,screen.height||0);var c=window.matchMedia("(pointer: coarse)").matches;var n=window.matchMedia("(hover: none)").matches;if((c&&n)||(s>0&&s<=900))document.documentElement.classList.add("g2m-force-phone");var m=document.querySelector('meta[name="viewport"]');if(m)m.setAttribute("content","width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");}catch(e){}})();`;
+
 export default function GoogleMaps2MapplsLayout({ children }: { children: React.ReactNode }) {
-  return <div className="pinway-route-root">{children}</div>;
+  return (
+    <>
+      <script dangerouslySetInnerHTML={{ __html: FORCE_PHONE_SCRIPT }} />
+      <div className="pinway-route-root">{children}</div>
+    </>
+  );
 }
