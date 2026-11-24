@@ -1144,6 +1144,11 @@ export function Gmap2MapplsTool({
         </details>
       </section>
 
+    </div>
+  );
+
+  const island = (
+    <div className="g2m-island-bar">
       <div className="g2m-island" aria-label="Primary actions">
         {result && playbook?.primary.kind === "open" && playbook.primary.href ? (
           <a
@@ -1163,7 +1168,7 @@ export function Gmap2MapplsTool({
         ) : result && playbook ? (
           <Button variant="primary" disabled={loading || pinwayLocked} onClick={() => void runPrimary()}>
             {copied === "primary" && playbook.primary.kind === "copy"
-              ? "Copied — paste in app now"
+              ? "Copied — paste in app"
               : playbook.primary.label}
           </Button>
         ) : (
@@ -1188,6 +1193,7 @@ export function Gmap2MapplsTool({
       defaultTheme="light"
     >
       {body}
+      {island}
     </BosRoot>
   );
 }

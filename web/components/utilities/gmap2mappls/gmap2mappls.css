@@ -25,7 +25,16 @@
   background: var(--bos-ims-canvas) !important;
   color: var(--bos-text);
   position: relative;
-  overflow-x: clip;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.bos.pinway-ims--standalone.bos-canvas {
+  height: 100dvh;
+  height: 100svh;
+  max-height: 100dvh;
+  max-height: 100svh;
 }
 
 .bos .g2m {
@@ -36,14 +45,19 @@
   max-width: var(--g2m-max);
   width: 100%;
   margin: 0 auto;
-  padding: 16px 14px calc(110px + env(safe-area-inset-bottom, 0px));
+  padding: 16px 14px 20px;
   font-family: var(--bos-font-body);
   color: var(--bos-text);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .bos .g2m.g2m--embedded {
   max-width: 48rem;
-  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Ambient spatial layer */
@@ -96,9 +110,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   padding: 10px 12px 10px 10px;
   border-radius: 22px;
+  flex-wrap: wrap;
   border: 1px solid color-mix(in srgb, var(--bos-border-soft) 80%, transparent);
   background: var(--g2m-glass);
   box-shadow: var(--bos-shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.45);
@@ -179,6 +194,18 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--bos-text-muted);
+  margin-left: auto;
+}
+
+@media (max-width: 380px) {
+  .bos .g2m-livepill {
+    padding: 6px 8px;
+    font-size: 0;
+    gap: 0;
+  }
+  .bos .g2m-livepill-dot {
+    margin: 0;
+  }
 }
 
 .bos .g2m-livepill-dot {
@@ -714,37 +741,66 @@
   align-items: start;
 }
 
-/* Floating island CTA */
+/* Docked floating action bar — sibling of scroll pane (not position:fixed inside overflow) */
+.bos .g2m-island-bar {
+  flex: 0 0 auto;
+  z-index: 40;
+  width: 100%;
+  padding: 8px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  background:
+    linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--bos-bg) 55%, transparent) 28%, color-mix(in srgb, var(--bos-ims-surface-solid) 94%, transparent) 72%);
+  pointer-events: none;
+}
+
 .bos .g2m-island {
-  position: fixed;
-  left: 50%;
-  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
-  z-index: 50;
-  width: min(calc(100% - 24px), 420px);
+  pointer-events: auto;
+  position: relative;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  z-index: 1;
+  width: 100%;
+  max-width: var(--g2m-max);
+  margin: 0 auto;
   display: flex;
+  align-items: stretch;
   gap: 8px;
   padding: 8px;
-  border-radius: 22px;
+  border-radius: 20px;
   border: 1px solid color-mix(in srgb, var(--bos-border-soft) 85%, transparent);
-  background: color-mix(in srgb, var(--bos-ims-surface-solid) 82%, transparent);
-  box-shadow: var(--bos-shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
+  background: color-mix(in srgb, var(--bos-ims-surface-solid) 92%, transparent);
+  box-shadow: var(--bos-shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.28) inset;
   backdrop-filter: blur(20px) saturate(1.3);
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
-  animation: g2m-island-in 0.55s var(--g2m-spring) both;
 }
 
-.bos .g2m-island .bos-btn {
-  flex: 1;
-  min-height: 46px;
+.bos .g2m-island .bos-btn,
+.bos .g2m-island a.bos-btn {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 14px;
   font-weight: 750;
   border-radius: 14px !important;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.bos .g2m-island .bos-btn-primary {
-  flex: 1.6;
+.bos .g2m-island .bos-btn-primary,
+.bos .g2m-island a.bos-btn-primary {
+  flex: 1.75 1 0;
   position: relative;
   overflow: hidden;
+}
+
+.bos .g2m-island .bos-btn-secondary {
+  flex: 0 0 auto;
+  min-width: 5.5rem;
 }
 
 /* Native select opaque IMS solid */
@@ -766,21 +822,22 @@
 
 @media (min-width: 960px) {
   .bos.pinway-ims.bos-canvas {
-    display: grid;
-    place-items: start center;
-    padding: 28px 24px 40px;
+    padding: 28px 24px 0;
   }
 
   .bos .g2m--standalone,
   .bos .g2m--desktop.g2m--standalone {
-    --g2m-max: var(--g2m-desk);
-    width: min(100%, var(--g2m-desk));
-    margin-bottom: 24px;
+    --g2m-max: min(40rem, 100%);
+    width: min(100%, 40rem);
     padding: 0 0 24px;
   }
 
-  .bos .g2m--desktop.g2m--standalone .g2m-island {
-    width: min(520px, calc(100% - 48px));
+  .bos .g2m-island-bar {
+    padding-bottom: 20px;
+  }
+
+  .bos .g2m-island {
+    max-width: min(40rem, calc(100% - 48px));
   }
 
   .bos .g2m--desktop .g2m-map {
@@ -838,6 +895,6 @@
   40% { transform: scale(1.03); }
 }
 @keyframes g2m-island-in {
-  from { opacity: 0; transform: translate(-50%, 18px) scale(0.96); }
-  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
