@@ -42,18 +42,27 @@ export type MapplsSide = {
 
 /** Clipboard / open helpers for Mappls-integrated apps (SimpleOne, OEM apps, etc.). */
 export type PasteKit = {
-  /** Shared WGS-84 point — for geo: / Open Mappls, NOT for SimpleOne search box. */
+  /** Shared WGS-84 point — for geo: / nav deep links, NOT OEM Autosuggest search. */
   latLng: string;
   /** Space-separated variant some map UIs prefer. */
   latLngSpaced: string;
   /** Android / many map apps: one-tap open at the shared point. */
   geoUri: string;
+  /** Same point on Google Maps (Ola / some TVS Google paths). */
+  googleMapsUrl: string;
   /** Official Mappls web/share deep link (no Google-style 18z). */
   mapplsUrl: string;
   /** Mappls Pin deep link when pin is known — `mappls.com/{pin}`. */
   mapplsPinUrl?: string;
-  /** Directions deep link ending at the shared lat/lng. */
+  /** Directions widget ending at shared lat/lng. */
   mapplsDirectionsUrl: string;
+  /** Turn-by-turn nav deep link (4W / driving) — lat,lng works here. */
+  mapplsNavDrivingUrl: string;
+  /** Turn-by-turn nav deep link (2W / biking). */
+  mapplsNavBikingUrl: string;
+  /** Native Android scheme (requires Mappls app). */
+  mapplsNavDrivingUri: string;
+  mapplsNavBikingUri: string;
   /** Ready-to-send WhatsApp / SMS / ticket text. */
   shareText: string;
   mapplsPin?: string;
@@ -117,6 +126,26 @@ export function mapplsDirectionsUrl(lat: number, lng: number): string {
   return `https://www.mappls.com/direction?places=;${roundCoord(lat)},${roundCoord(lng)}`;
 }
 
+export type MapplsNavMode = "driving" | "biking" | "walking" | "trucking";
+
+/**
+ * Official Mappls navigation deep link — lat,lng IS valid here (unlike search).
+ * Docs: https://about.mappls.com/api/move-api/android
+ */
+export function mapplsNavigationUrl(
+  lat: number,
+  lng: number,
+  opts?: { name?: string; mode?: MapplsNavMode; scheme?: "https" | "mappls" },
+): string {
+  const mode = opts?.mode || "driving";
+  const label = (opts?.name || "Destination").replace(/[,&]/g, " ").trim().slice(0, 80) || "Destination";
+  const places = `${roundCoord(lat)},${roundCoord(lng)},${encodeURIComponent(label)}`;
+  const q = `places=${places}&isNav=true&mode=${mode}`;
+  return opts?.scheme === "mappls"
+    ? `mappls://navigation?${q}`
+    : `https://www.mappls.com/navigation?${q}`;
+}
+
 export function geoPointUri(lat: number, lng: number, label?: string): string {
   const q = label?.trim()
     ? `?q=${roundCoord(lat)},${roundCoord(lng)}(${encodeURIComponent(label.trim().slice(0, 80))})`
@@ -124,9 +153,12 @@ export function geoPointUri(lat: number, lng: number, label?: string): string {
   return `geo:${roundCoord(lat)},${roundCoord(lng)}${q}`;
 }
 
-/** Short tip shown under SimpleOne / OEM paste actions. */
-export const SIMPLEONE_PASTE_TIP =
-  "SimpleOne Mappls search = places & Mappls Pin only. Paste the 6-char Mappls Pin — do NOT paste lat,lng or geo: (Autosuggest treats those as text and jumps elsewhere).";
+/** Short tip shown under OEM paste actions. */
+export const OEM_PASTE_TIP =
+  "All Mappls OEM apps (SimpleOne, Bajaj, Hero, Ampere, Mahindra, Tata, Hyundai, Kia, MG, Maruti, …): paste Mappls Pin into search — never lat,lng. Or use Navigate in Mappls (coords work in nav deep links).";
+
+/** @deprecated Use OEM_PASTE_TIP */
+export const SIMPLEONE_PASTE_TIP = OEM_PASTE_TIP;
 
 export function buildShareText(
   lat: number,
@@ -138,6 +170,9 @@ export function buildShareText(
     opts?.name ? `Place: ${opts.name}` : "Shared map point (Google = Mappls)",
     `Coordinates: ${latLng}`,
     `Mappls: ${opts?.mapplsUrl || mapplsPointUrl(lat, lng)}`,
+    `Navigate 2W: ${mapplsNavigationUrl(lat, lng, { name: opts?.name, mode: "biking" })}`,
+    `Navigate 4W: ${mapplsNavigationUrl(lat, lng, { name: opts?.name, mode: "driving" })}`,
+    `Google: ${googleMapsPointUrl(lat, lng)}`,
   ];
   if (opts?.mapplsPin) {
     lines.push(`Mappls Pin: ${opts.mapplsPin}`);
@@ -145,7 +180,7 @@ export function buildShareText(
   }
   if (opts?.digipin) lines.push(`Digipin: ${opts.digipin}`);
   lines.push(
-    "SimpleOne: paste Mappls Pin into search — never lat,lng / geo: / Google address text.",
+    "Mappls OEM search: paste Mappls Pin only. Ola / Google paths: open Google link. Never paste lat,lng into Mappls search.",
   );
   return lines.join("\n");
 }
@@ -158,15 +193,21 @@ export function buildPasteKit(
   const latLng = formatCoordPair(lat, lng);
   const mapplsUrl = mapplsPointUrl(lat, lng);
   const pin = opts?.mapplsPin?.trim() || undefined;
+  const name = opts?.name;
   return {
     latLng,
     latLngSpaced: `${roundCoord(lat)}, ${roundCoord(lng)}`,
-    geoUri: geoPointUri(lat, lng, opts?.name),
+    geoUri: geoPointUri(lat, lng, name),
+    googleMapsUrl: googleMapsPointUrl(lat, lng),
     mapplsUrl,
     mapplsPinUrl: pin ? mapplsPinUrl(pin) : undefined,
     mapplsDirectionsUrl: mapplsDirectionsUrl(lat, lng),
+    mapplsNavDrivingUrl: mapplsNavigationUrl(lat, lng, { name, mode: "driving" }),
+    mapplsNavBikingUrl: mapplsNavigationUrl(lat, lng, { name, mode: "biking" }),
+    mapplsNavDrivingUri: mapplsNavigationUrl(lat, lng, { name, mode: "driving", scheme: "mappls" }),
+    mapplsNavBikingUri: mapplsNavigationUrl(lat, lng, { name, mode: "biking", scheme: "mappls" }),
     shareText: buildShareText(lat, lng, {
-      name: opts?.name,
+      name,
       mapplsPin: pin,
       digipin: opts?.digipin,
       mapplsUrl,
@@ -174,8 +215,8 @@ export function buildPasteKit(
     mapplsPin: pin,
     digipin: opts?.digipin || undefined,
     tip: pin
-      ? `SimpleOne: Copy Mappls Pin (${pin}) and paste into search — not lat,lng.`
-      : SIMPLEONE_PASTE_TIP,
+      ? `All Mappls OEMs: paste Pin ${pin} into search. Or Navigate in Mappls (2W/4W). Ola: Open Google.`
+      : OEM_PASTE_TIP,
   };
 }
 

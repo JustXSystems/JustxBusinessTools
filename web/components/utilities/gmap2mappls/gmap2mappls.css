@@ -232,6 +232,59 @@
   align-items: flex-end;
 }
 
+.g2m-oem {
+  border-radius: var(--radius);
+  border: 1px solid var(--g2m-line);
+  background: var(--g2m-surface);
+  padding: 1rem 1.1rem 1.15rem;
+  animation: g2m-fade-up 0.5s ease both;
+}
+
+.g2m-oem h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.g2m-oem-steps {
+  margin: 0.55rem 0 0.85rem;
+  padding-left: 1.15rem;
+  color: var(--text-mid);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.g2m-oem-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.g2m-oem-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.g2m-oem-table th,
+.g2m-oem-table td {
+  text-align: left;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--g2m-line);
+  vertical-align: top;
+}
+
+.g2m-oem-table th {
+  color: var(--text-low);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.g2m-oem-ex {
+  color: var(--text-low);
+  font-size: 0.72rem;
+  margin-top: 0.15rem;
+}
+
 .g2m-paste-code {
   display: inline-block;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

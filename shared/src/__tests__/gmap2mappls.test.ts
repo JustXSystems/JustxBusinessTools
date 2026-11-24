@@ -12,6 +12,8 @@ import {
   googleMapsPointUrl,
   buildPasteKit,
   encodeDigipin,
+  buildOemHandoffSummary,
+  OEM_BRANDS,
 } from "../gmap2mappls/index";
 
 describe("gmap2mappls parse", () => {
@@ -153,8 +155,36 @@ describe("gmap2mappls urls + samples", () => {
     expect(kit.mapplsUrl).toBe("https://www.mappls.com/@12.877073,77.613574");
     expect(kit.mapplsPinUrl).toBe("https://www.mappls.com/kcf7zj");
     expect(kit.mapplsDirectionsUrl).toContain("direction?places=;12.877073,77.613574");
-    expect(kit.tip.toLowerCase()).toMatch(/mappls pin/);
-    expect(kit.tip.toLowerCase()).not.toMatch(/paste lat/);
+    expect(kit.mapplsNavBikingUrl).toContain("mode=biking");
+    expect(kit.mapplsNavDrivingUrl).toContain("mode=driving");
+    expect(kit.googleMapsUrl).toContain("12.877073,77.613574");
+    expect(kit.tip.toLowerCase()).toMatch(/mappls/);
+  });
+
+  it("covers listed 2W/4W OEMs in handoff matrix", () => {
+    const ids = new Set(OEM_BRANDS.map((b) => b.id));
+    for (const id of [
+      "simple-energy",
+      "bajaj",
+      "hero",
+      "ampere",
+      "matter",
+      "ola",
+      "tork",
+      "suzuki-2w",
+      "tvs",
+      "mahindra",
+      "tata",
+      "hyundai",
+      "kia",
+      "mg",
+      "maruti",
+    ]) {
+      expect(ids.has(id)).toBe(true);
+    }
+    const summary = buildOemHandoffSummary();
+    expect(summary.rules.searchBoxRejects.join(" ")).toMatch(/lat,lng/);
+    expect(summary.brands.filter((b) => b.stack === "mappls").length).toBeGreaterThan(10);
   });
 
   it("encodes Digipin offline for India coords", () => {

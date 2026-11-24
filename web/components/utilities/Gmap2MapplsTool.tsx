@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { SAMPLE_FIXTURES, formatCoordPair, type ResolveResult } from "@jbt/shared";
+import {
+  SAMPLE_FIXTURES,
+  formatCoordPair,
+  type OemHandoffSummary,
+  type ResolveResult,
+} from "@jbt/shared";
 import { apiUrl } from "@/lib/api-base";
 import "./gmap2mappls/gmap2mappls.css";
 
@@ -20,6 +25,7 @@ type Meta = {
   hasToken: boolean;
   tip: string;
   samples: Array<{ id: string; label: string; input: string; coords: string }>;
+  oem?: OemHandoffSummary;
 };
 
 async function copyText(text: string): Promise<boolean> {
@@ -148,7 +154,7 @@ export function Gmap2MapplsTool() {
           geographic point and open that same point on Mappls.
         </p>
         <div className="g2m-tip" role="note">
-          Best accuracy = Google Maps Share → Copy link
+          Best accuracy = Google Maps Share → Copy link · Mappls OEMs need Mappls Pin (not lat,lng)
         </div>
       </section>
 
@@ -257,15 +263,17 @@ export function Gmap2MapplsTool() {
           </div>
 
           <section className="g2m-paste" aria-label="Open or paste into Mappls OEM apps">
-            <h3>SimpleOne / Mappls OEM handoff</h3>
+            <h3>Universal handoff (2W + 4W Mappls OEMs)</h3>
             <p className="g2m-paste-tip" role="status">
               {result.paste?.tip ||
-                "SimpleOne search accepts places & Mappls Pin only — never paste lat,lng into the search box."}
+                "Paste Mappls Pin into OEM search — never lat,lng. Or Navigate in Mappls (coords work in nav links)."}
             </p>
             {(result.paste?.mapplsPin || result.mappls.mapplsPin) ? (
               <div className="g2m-pin-hero">
                 <div>
-                  <div className="g2m-banner-meta">Paste this into SimpleOne search</div>
+                  <div className="g2m-banner-meta">
+                    Paste into SimpleOne / Chetak / OneApp / Mahindra / Tata / Hyundai / Kia / MG / Maruti / Ampere / …
+                  </div>
                   <strong className="g2m-pin-code">
                     {result.paste?.mapplsPin || result.mappls.mapplsPin}
                   </strong>
@@ -299,10 +307,34 @@ export function Gmap2MapplsTool() {
               </div>
             ) : (
               <p className="g2m-paste-warn">
-                Mappls Pin unavailable right now — use Open Mappls / Directions below (not in-app search).
+                Mappls Pin unavailable right now — use Navigate in Mappls / Google below (not OEM search).
               </p>
             )}
             <div className="g2m-paste-row">
+              <a
+                className="btn btn-primary btn-sm"
+                href={result.paste?.mapplsNavBikingUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Navigate Mappls · 2W
+              </a>
+              <a
+                className="btn btn-primary btn-sm"
+                href={result.paste?.mapplsNavDrivingUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Navigate Mappls · 4W
+              </a>
+              <a
+                className="btn btn-secondary btn-sm"
+                href={result.paste?.googleMapsUrl || result.google.mapsUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Google (Ola / TVS Google path)
+              </a>
               <a
                 className="btn btn-secondary btn-sm"
                 href={result.paste?.geoUri || `geo:${result.lat},${result.lng}?q=${result.lat},${result.lng}`}
@@ -316,17 +348,6 @@ export function Gmap2MapplsTool() {
                 rel="noreferrer"
               >
                 Open Mappls @lat,lng
-              </a>
-              <a
-                className="btn btn-secondary btn-sm"
-                href={
-                  result.paste?.mapplsDirectionsUrl ||
-                  `https://www.mappls.com/direction?places=;${result.lat},${result.lng}`
-                }
-                target="_blank"
-                rel="noreferrer"
-              >
-                Mappls directions
               </a>
               <button
                 type="button"
@@ -351,15 +372,16 @@ export function Gmap2MapplsTool() {
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
-                title="For geo:/deep links only — do not paste into SimpleOne search"
+                title="For geo:/nav deep links only — do not paste into OEM Mappls search"
                 onClick={() => void onCopy("latlng", result.paste?.latLng || formatCoordPair(result.lat, result.lng))}
               >
                 {copied === "latlng" ? "Copied lat,lng" : "Copy lat,lng (not for search)"}
               </button>
             </div>
             <p className="g2m-paste-note">
-              Why lat,lng fails in SimpleOne: Mappls Autosuggest <code>query</code> is place/Pin text;
-              coordinates belong in the <code>location</code> bias param — pasting them searches wrong places.
+              One root cause across Mappls OEMs: Autosuggest <code>query</code> = place/Pin text;
+              <code>location=lat,lng</code> is bias only. Navigation deep links accept coordinates;
+              OEM search boxes do not. Ola MoveOS uses Ola Maps — open Google at the same point.
             </p>
             <div className="g2m-paste-footer">
               <code className="g2m-paste-code">
@@ -376,6 +398,42 @@ export function Gmap2MapplsTool() {
               ) : null}
             </div>
           </section>
+
+          {meta?.oem ? (
+            <section className="g2m-oem" aria-label="OEM coverage matrix">
+              <h3>OEM coverage — what to use where</h3>
+              <ol className="g2m-oem-steps">
+                {meta.oem.universalSteps.map((step) => (
+                  <li key={step}>{step.replace(/^\d+\.\s*/, "")}</li>
+                ))}
+              </ol>
+              <div className="g2m-oem-table-wrap">
+                <table className="g2m-oem-table">
+                  <thead>
+                    <tr>
+                      <th>Brand</th>
+                      <th>Seg</th>
+                      <th>Stack</th>
+                      <th>Use</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {meta.oem.brands.map((b) => (
+                      <tr key={b.id}>
+                        <td>
+                          <strong>{b.name}</strong>
+                          <div className="g2m-oem-ex">{b.examples}</div>
+                        </td>
+                        <td>{b.segment}</td>
+                        <td>{b.stack === "mappls" ? "Mappls" : b.stack === "ola_maps" ? "Ola Maps" : b.stack === "mixed" ? "Mixed" : "—"}</td>
+                        <td>{b.methods.includes("mappls_pin") && b.stack !== "ola_maps" ? "Mappls Pin" : b.methods[0] === "google_maps" ? "Google / geo" : "Pin + Google"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
 
           <div className="g2m-grid">
             <article className="g2m-card">

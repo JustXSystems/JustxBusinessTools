@@ -45,7 +45,9 @@ describe("resolveGmap2Mappls sample mode", () => {
     expect(r.paste.mapplsPin).toBe("kcf7zj");
     expect(r.paste.mapplsPinUrl).toBe("https://www.mappls.com/kcf7zj");
     expect(r.paste.digipin || r.mappls.digipin).toBeTruthy();
-    expect(r.paste.tip.toLowerCase()).toMatch(/mappls pin/);
+    expect(r.paste.tip.toLowerCase()).toMatch(/pin kcf7zj|mappls/);
+    expect(r.paste.mapplsNavBikingUrl).toContain("mode=biking");
+    expect(r.paste.mapplsNavDrivingUrl).toContain("mode=driving");
   }, 45_000);
 
   it("acceptance 2: Brindavan / Hulimavu address stays Bengaluru area", async () => {
