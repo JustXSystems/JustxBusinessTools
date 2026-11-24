@@ -1,9 +1,10 @@
-/* GoogleMaps2Mappls layout — visuals from BosRoot skin="ims" tokens */
+/* GoogleMaps2Mappls — corporate IMS command surface */
 
 .bos.pinway-ims,
 .bos .g2m {
-  --g2m-max: 28rem;
-  --g2m-desk: 58rem;
+  --g2m-max: 26.5rem;
+  --g2m-desk: 72rem;
+  --g2m-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .bos.pinway-ims.bos-canvas {
@@ -16,327 +17,402 @@
 
 .bos.pinway-ims--standalone.bos-canvas {
   padding: 0;
+  position: relative;
+  overflow-x: clip;
+}
+
+.bos.pinway-ims--standalone.bos-canvas::before {
+  content: "";
+  position: fixed;
+  inset: -20% auto auto -10%;
+  width: min(58vw, 640px);
+  height: min(58vw, 640px);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--bos-ims-cyan) 22%, transparent), transparent 68%);
+  pointer-events: none;
+  z-index: 0;
+  animation: g2m-orb 12s var(--g2m-ease) infinite alternate;
+}
+
+.bos.pinway-ims--standalone.bos-canvas::after {
+  content: "";
+  position: fixed;
+  inset: auto -8% -18% auto;
+  width: min(48vw, 520px);
+  height: min(48vw, 520px);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--bos-blue) 18%, transparent), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .bos .g2m {
   position: relative;
+  z-index: 1;
   display: grid;
-  gap: 14px;
+  gap: 16px;
   max-width: var(--g2m-max);
   width: 100%;
   margin: 0 auto;
-  padding: 16px 16px calc(88px + env(safe-area-inset-bottom, 0px));
+  padding: 18px 16px calc(96px + env(safe-area-inset-bottom, 0px));
   color: var(--bos-text);
   font-family: var(--bos-font-body);
 }
 
 .bos .g2m.g2m--embedded {
-  max-width: 40rem;
-  padding-bottom: 24px;
+  max-width: 42rem;
+  padding-bottom: 28px;
 }
 
-.bos .g2m-topbar {
+/* —— Header —— */
+.bos .g2m-chrome {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.bos .g2m-hero {
-  position: relative;
-  overflow: hidden;
-  border-radius: var(--bos-r-xl);
-  padding: 18px 18px 16px;
-  background: var(--bos-ims-grad);
-  color: #fff;
-  box-shadow: var(--bos-ims-glow);
-}
-
-.bos .g2m-hero-row {
+.bos .g2m-brandmark {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .bos .g2m-logo {
-  flex: 0 0 auto;
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   object-fit: cover;
-  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.35);
   background: #0b1b3a;
+  box-shadow: var(--bos-ims-glow);
+  flex: 0 0 auto;
 }
 
-.bos .g2m-hero-copy {
+.bos .g2m-brandmark-copy {
   min-width: 0;
-  flex: 1;
 }
 
-.bos .g2m-auto-promise {
-  margin: 12px 0 0;
-  padding: 8px 10px;
-  border-radius: var(--bos-r-sm);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: rgba(0, 0, 0, 0.14);
-  font-size: 0.82rem;
-  line-height: 1.35;
-  color: rgba(255, 255, 255, 0.95);
-  font-weight: 600;
-}
-
-.bos .g2m-hero .g2m-eyebrow {
+.bos .g2m-eyebrow {
   margin: 0;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.1em;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  opacity: 0.88;
-  color: #fff;
+  color: var(--bos-text-faint);
 }
 
-.bos .g2m-brand {
-  margin: 4px 0 0;
+.bos .g2m-title {
+  margin: 2px 0 0;
   font-family: var(--bos-font-display);
-  font-size: clamp(1.85rem, 7vw, 2.35rem);
+  font-size: clamp(1.05rem, 3.6vw, 1.25rem);
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 0.98;
-  color: #fff;
-}
-
-.bos .g2m-tag {
-  margin: 8px 0 0;
-  max-width: 18rem;
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 0.95rem;
-  line-height: 1.4;
+  line-height: 1.15;
+  color: var(--bos-text);
 }
 
 .bos .g2m-a2hs {
-  margin: 12px 0 0;
-  padding: 8px 10px;
-  border-radius: var(--bos-r-sm);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: rgba(0, 0, 0, 0.12);
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--bos-r-md);
+  border: 1px solid color-mix(in srgb, var(--bos-blue) 22%, transparent);
+  background: var(--bos-ims-grad-soft);
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--bos-text-muted);
   line-height: 1.35;
 }
 
-.bos .g2m-a2hs .g2m-linkish {
-  color: #fff;
-  font-weight: 700;
-}
-
-.bos .g2m-stages {
+/* —— Progress —— */
+.bos .g2m-rail {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+  position: relative;
 }
 
-.bos .g2m-stage {
+.bos .g2m-rail::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 14px;
+  height: 2px;
+  background: var(--bos-ims-tile-border);
+  z-index: 0;
+}
+
+.bos .g2m-rail-step {
+  position: relative;
+  z-index: 1;
   display: grid;
-  gap: 2px;
-  padding: 8px 6px;
-  border-radius: var(--bos-r-md);
-  border: 1px solid transparent;
+  justify-items: center;
+  gap: 6px;
   text-align: center;
   color: var(--bos-text-faint);
   font-size: 11px;
   font-weight: 650;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.bos .g2m-rail-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
   background: var(--bos-ims-tile);
+  border: 1px solid var(--bos-ims-tile-border);
+  color: var(--bos-text-muted);
+  transition: background 0.25s var(--g2m-ease), color 0.25s var(--g2m-ease), border-color 0.25s var(--g2m-ease), transform 0.25s var(--g2m-ease);
 }
 
-.bos .g2m-stage.is-active {
-  color: var(--bos-blue-600);
-  border-color: var(--bos-ims-tile-border);
-  background: var(--bos-ims-grad-soft);
+.bos .g2m-rail-step.is-active .g2m-rail-dot {
+  background: var(--bos-ims-grad);
+  border-color: transparent;
+  color: #fff;
+  transform: scale(1.06);
+  box-shadow: var(--bos-ims-glow);
 }
 
-.bos .g2m-stage.is-done {
+.bos .g2m-rail-step.is-done .g2m-rail-dot {
+  background: var(--bos-emerald-100);
+  border-color: color-mix(in srgb, var(--bos-emerald) 35%, transparent);
   color: var(--bos-emerald-600);
 }
 
-.bos .g2m-stage-num {
-  display: block;
-  font-size: 14px;
-  letter-spacing: 0;
-  font-weight: 700;
-  color: inherit;
-}
-
-.bos .g2m-composer,
-.bos .g2m-brand-picker,
-.bos .g2m-guide,
-.bos .g2m-paywall,
-.bos .g2m-state {
+/* —— Panels —— */
+.bos .g2m-shell {
   display: grid;
-  gap: 10px;
+  gap: 14px;
 }
 
-.bos .g2m-brand-picker,
-.bos .g2m-guide,
-.bos .g2m-paywall,
-.bos .g2m-state,
-.bos .g2m-banner {
-  padding: 14px;
-  border-radius: var(--bos-r-lg);
+.bos .g2m-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--bos-r-xl);
   border: 1px solid var(--bos-ims-tile-border);
-  background: var(--bos-ims-tile);
+  background: color-mix(in srgb, var(--bos-ims-tile) 92%, transparent);
   box-shadow: var(--bos-shadow-sm);
   backdrop-filter: var(--bos-ims-glass-blur);
   -webkit-backdrop-filter: var(--bos-ims-glass-blur);
 }
 
-.bos .g2m-brand-label {
+.bos .g2m-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bos .g2m-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bos-text-faint);
+}
+
+.bos .g2m-hint {
+  margin: 0;
   font-size: 12.5px;
-  font-weight: 500;
+  color: var(--bos-text-muted);
+  line-height: 1.4;
+}
+
+.bos .g2m-field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--bos-text-muted);
 }
 
+.bos .g2m-segment-row,
 .bos .g2m-mahindra-row,
-.bos .g2m-brand-chips,
-.bos .g2m-chips,
 .bos .g2m-actions,
 .bos .g2m-paste-row,
-.bos .g2m-guide-cta {
+.bos .g2m-guide-cta,
+.bos .g2m-recent-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
 
-.bos .g2m-recents {
-  display: grid;
-  gap: 6px;
-}
-
-.bos .g2m-input-wrap {
+.bos .g2m-destination {
   position: relative;
 }
 
-.bos .g2m-clip-hint,
-.bos .g2m-auto-note,
-.bos .g2m-driver-share,
-.bos .g2m-banner-meta {
-  margin: 0;
+.bos .g2m-destination .bos-input,
+.bos .g2m-destination textarea.bos-input {
+  min-height: 96px;
+  resize: vertical;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.bos .g2m-clip-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: var(--bos-r-md);
+  border: 1px solid color-mix(in srgb, var(--bos-ims-cyan) 40%, transparent);
+  background: var(--bos-ims-cyan-100);
+  color: var(--bos-pastel-sage-ink);
   font-size: 13px;
-  color: var(--bos-text-muted);
-  line-height: 1.4;
+  font-weight: 600;
+  animation: g2m-rise 0.35s var(--g2m-ease);
 }
 
-.bos .g2m-linkish {
-  display: inline;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--bos-blue);
-  font: inherit;
-  font-weight: 650;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
+.bos .g2m-actions .bos-btn-primary {
+  min-height: 46px;
+  flex: 1 1 12rem;
 }
 
-.bos .g2m-walk-steps {
-  margin: 8px 0 0;
+.bos .g2m-paywall {
+  border-color: color-mix(in srgb, var(--bos-blue) 28%, transparent);
+  background: linear-gradient(160deg, var(--bos-ims-grad-soft), var(--bos-ims-tile));
+}
+
+.bos .g2m-paywall strong {
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+/* —— Idle insight —— */
+.bos .g2m-insight {
+  display: grid;
+  gap: 14px;
+}
+
+.bos .g2m-insight-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--bos-text);
+}
+
+.bos .g2m-flow {
+  margin: 0;
   padding: 0;
   list-style: none;
   display: grid;
   gap: 10px;
-  counter-reset: g2m-walk;
 }
 
-.bos .g2m-walk-steps li {
+.bos .g2m-flow li {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px 10px;
-  counter-increment: g2m-walk;
+  grid-template-columns: 36px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: var(--bos-r-md);
+  background: var(--bos-ims-well);
+  border: 1px solid transparent;
+  transition: border-color 0.2s var(--g2m-ease), transform 0.2s var(--g2m-ease);
 }
 
-.bos .g2m-walk-steps li::before {
-  content: counter(g2m-walk);
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
+.bos .g2m-flow li:hover {
+  border-color: var(--bos-ims-tile-border);
+  transform: translateY(-1px);
+}
+
+.bos .g2m-flow-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
-  font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 13px;
   color: #fff;
   background: var(--bos-ims-grad);
-  grid-row: span 2;
+  box-shadow: 0 8px 18px -10px rgba(72, 84, 235, 0.55);
 }
 
-.bos .g2m-walk-title {
-  font-weight: 700;
-  color: var(--bos-text);
-  font-size: 14px;
-}
-
-.bos .g2m-walk-body {
-  color: var(--bos-text-muted);
-  font-size: 12.5px;
-}
-
-.bos .g2m-error {
-  border: 1px solid color-mix(in srgb, var(--bos-coral) 35%, transparent);
-  background: var(--bos-coral-100);
-  color: var(--bos-coral-600);
-  border-radius: var(--bos-r-sm);
-  padding: 10px 12px;
+.bos .g2m-flow strong {
+  display: block;
   font-size: 13.5px;
+  color: var(--bos-text);
+}
+
+.bos .g2m-flow span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--bos-text-muted);
+  line-height: 1.35;
+}
+
+.bos .g2m-loading {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 180px;
+  text-align: center;
+  color: var(--bos-text-muted);
+  font-weight: 650;
 }
 
 .bos .g2m-spinner {
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 1.7rem;
+  height: 1.7rem;
   border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--bos-blue) 25%, transparent);
+  border: 2.5px solid color-mix(in srgb, var(--bos-blue) 22%, transparent);
   border-top-color: var(--bos-blue);
   animation: g2m-spin 0.7s linear infinite;
-  display: inline-block;
-  vertical-align: -0.2rem;
-  margin-right: 0.35rem;
 }
 
-.bos .g2m-banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: var(--bos-ims-grad-soft);
-  border-color: color-mix(in srgb, var(--bos-blue) 28%, transparent);
+/* —— Result —— */
+.bos .g2m-result {
+  display: grid;
+  gap: 14px;
+  animation: g2m-rise 0.4s var(--g2m-ease);
 }
 
-.bos .g2m-banner strong {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  font-size: 15px;
-  color: var(--bos-text);
+.bos .g2m-lock {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: var(--bos-r-lg);
+  background: var(--bos-ims-grad);
+  color: #fff;
+  box-shadow: var(--bos-ims-glow);
 }
 
-.bos .g2m-guide h3 {
+.bos .g2m-lock-meta {
   margin: 0;
-  font-size: 16px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--bos-text);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.88;
 }
 
-.bos .g2m-guide-steps {
+.bos .g2m-lock strong {
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.bos .g2m-lock p {
   margin: 0;
-  padding-left: 1.15rem;
-  color: var(--bos-text);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 13px;
+  opacity: 0.9;
+  line-height: 1.35;
 }
 
 .bos .g2m-pin-hero {
@@ -345,8 +421,8 @@
   gap: 10px 14px;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
-  border-radius: var(--bos-r-md);
+  padding: 14px 16px;
+  border-radius: var(--bos-r-lg);
   border: 1px solid color-mix(in srgb, var(--bos-blue) 28%, transparent);
   background: var(--bos-ims-grad-soft);
 }
@@ -360,29 +436,33 @@
   display: block;
   margin-top: 2px;
   font-family: var(--bos-font-mono);
-  font-size: clamp(1.45rem, 5.5vw, 1.85rem);
-  letter-spacing: 0.1em;
+  font-size: clamp(1.5rem, 5vw, 1.9rem);
+  letter-spacing: 0.12em;
   color: var(--bos-text);
+  font-weight: 700;
 }
 
-.bos .g2m-guide-layout {
-  display: grid;
-  gap: 12px;
-  align-items: start;
+.bos .g2m-status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bos-text-muted);
+  line-height: 1.45;
 }
 
-.bos .g2m-guide-primary {
-  display: grid;
-  gap: 10px;
+.bos .g2m-guide-cta .bos-btn-primary,
+.bos .g2m-guide-cta a.bos-btn-primary {
+  min-height: 48px;
+  flex: 1 1 100%;
+  font-weight: 700;
 }
 
 .bos .g2m-app-help {
   border-radius: var(--bos-r-md);
   border: 1px solid color-mix(in srgb, var(--bos-amber) 40%, transparent);
   background: var(--bos-amber-100);
-  padding: 10px 12px;
+  padding: 12px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .bos .g2m-app-help strong {
@@ -394,7 +474,7 @@
   border-radius: var(--bos-r-md);
   border: 1px solid var(--bos-border-soft);
   background: var(--bos-ims-well);
-  padding: 4px 12px 8px;
+  padding: 2px 12px 8px;
 }
 
 .bos .g2m-secondary summary {
@@ -403,7 +483,7 @@
   font-size: 13px;
   font-weight: 650;
   color: var(--bos-text-muted);
-  padding: 8px 0;
+  padding: 10px 0;
   user-select: none;
 }
 
@@ -428,30 +508,49 @@
 
 .bos .g2m-qr img {
   display: block;
-  border-radius: 12px;
+  border-radius: 14px;
   background: #fff;
-  padding: 7px;
+  padding: 8px;
   margin-inline: auto;
+  box-shadow: var(--bos-shadow-sm);
 }
 
 .bos .g2m-qr figcaption {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 11.5px;
   color: var(--bos-text-faint);
 }
 
 .bos .g2m-map-panel {
-  border-radius: var(--bos-r-lg);
+  border-radius: var(--bos-r-xl);
   border: 1px solid var(--bos-ims-tile-border);
   overflow: hidden;
   background: var(--bos-ims-well);
+  box-shadow: var(--bos-shadow-sm);
 }
 
 .bos .g2m-map {
   width: 100%;
-  height: min(36vh, 280px);
-  min-height: 180px;
+  height: min(34vh, 260px);
+  min-height: 170px;
   background: var(--bos-ims-well);
+}
+
+.bos .g2m-linkish {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--bos-blue);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.bos .g2m-linkish:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .bos .g2m-dock {
@@ -460,16 +559,15 @@
   right: 0;
   bottom: 0;
   z-index: 40;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bos-bg) 92%, transparent) 28%);
-  backdrop-filter: blur(10px);
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bos-bg) 94%, transparent) 36%);
+  backdrop-filter: blur(12px);
   display: none;
 }
 
 .bos .g2m--standalone .g2m-dock,
 .bos .g2m--android .g2m-dock,
-.bos .g2m--ios .g2m-dock,
-.bos .g2m--desktop.g2m--standalone .g2m-dock {
+.bos .g2m--ios .g2m-dock {
   display: block;
 }
 
@@ -482,18 +580,17 @@
 
 .bos .g2m-dock .bos-btn {
   flex: 1;
-  min-height: 44px;
+  min-height: 48px;
+  font-weight: 700;
 }
 
-.bos .g2m--desktop .g2m-guide-layout {
-  grid-template-columns: minmax(0, 1fr) auto;
+.bos .g2m-guide-layout {
+  display: grid;
+  gap: 12px;
+  align-items: start;
 }
 
-.bos .g2m--android .g2m-guide-cta .bos-btn-primary {
-  flex: 1 1 100%;
-}
-
-/* Native selects inside Pinway must use opaque IMS solid (dropdown fix) */
+/* Native select opaque IMS solid */
 .bos.pinway-ims select.bos-input:not([multiple]):not([size]),
 .bos .g2m select.bos-input:not([multiple]):not([size]) {
   background-color: var(--bos-ims-surface-solid);
@@ -509,73 +606,50 @@
   color: var(--bos-text);
 }
 
-@media (max-width: 720px) {
-  .bos .g2m--desktop .g2m-guide-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .bos .g2m-actions .bos-btn-primary {
-    flex: 1 1 100%;
-  }
-}
-
-@media (min-width: 860px) {
+@media (min-width: 900px) {
   .bos.pinway-ims.bos-canvas {
     display: grid;
     place-items: start center;
-    padding: 28px 24px 40px;
-    background: var(--bos-ims-canvas) !important;
+    padding: 36px 28px 48px;
   }
 
   .bos .g2m--standalone,
   .bos .g2m--desktop.g2m--standalone {
     --g2m-max: var(--g2m-desk);
     width: min(100%, var(--g2m-desk));
-    margin-bottom: 32px;
-    padding: 8px 8px calc(96px + env(safe-area-inset-bottom, 0px));
+    margin-bottom: 28px;
+    padding: 0 0 calc(28px + env(safe-area-inset-bottom, 0px));
     display: grid;
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-    gap: 16px 20px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 18px 22px;
     align-items: start;
   }
 
-  .bos .g2m--desktop.g2m--standalone > .g2m-topbar {
-    grid-column: 1 / -1;
-  }
-
-  .bos .g2m--desktop.g2m--standalone > .g2m-stages {
-    grid-column: 1 / -1;
-  }
-
+  .bos .g2m--desktop.g2m--standalone > .g2m-chrome,
+  .bos .g2m--desktop.g2m--standalone > .g2m-a2hs,
+  .bos .g2m--desktop.g2m--standalone > .g2m-rail,
   .bos .g2m--desktop.g2m--standalone > .g2m-paywall {
     grid-column: 1 / -1;
   }
 
-  .bos .g2m--desktop.g2m--standalone > .g2m-composer {
+  .bos .g2m--desktop.g2m--standalone > .g2m-command {
     grid-column: 1;
   }
 
-  .bos .g2m--desktop.g2m--standalone > .g2m-state,
-  .bos .g2m--desktop.g2m--standalone > .g2m-error,
-  .bos .g2m--desktop.g2m--standalone > [class*="bos-alert"],
-  .bos .g2m--desktop.g2m--standalone > .g2m-banner,
-  .bos .g2m--desktop.g2m--standalone > .g2m-guide,
-  .bos .g2m--desktop.g2m--standalone > .g2m-map-panel,
-  .bos .g2m--desktop.g2m--standalone > .g2m-result-col {
+  .bos .g2m--desktop.g2m--standalone > .g2m-stage-panel {
     grid-column: 2;
   }
 
-  .bos .g2m--desktop.g2m--standalone > .g2m-result-col {
-    display: grid;
-    gap: 14px;
+  .bos .g2m--desktop.g2m--standalone .g2m-dock {
+    display: none;
   }
 
-  .bos .g2m--desktop.g2m--standalone > .g2m-dock {
-    grid-column: 1 / -1;
+  .bos .g2m--desktop .g2m-guide-layout {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .bos .g2m--desktop .g2m-map {
-    height: min(42vh, 360px);
+    height: min(40vh, 320px);
   }
 
   .bos .g2m-dock-inner {
@@ -590,13 +664,31 @@
 }
 
 @keyframes g2m-pin-pulse {
-  0% {
+  0%,
+  100% {
     transform: scale(1);
   }
   40% {
     transform: scale(1.02);
   }
-  100% {
-    transform: scale(1);
+}
+
+@keyframes g2m-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes g2m-orb {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(4%, 6%) scale(1.08);
   }
 }
