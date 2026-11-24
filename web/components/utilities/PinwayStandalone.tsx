@@ -11,7 +11,9 @@ export function PinwayStandalone() {
     <ConfigProvider>
       <ToastProvider>
         <SubscriptionProvider>
-          <Gmap2MapplsTool variant="standalone" />
+          <div className="pinway-standalone-shell">
+            <Gmap2MapplsTool variant="standalone" />
+          </div>
         </SubscriptionProvider>
       </ToastProvider>
     </ConfigProvider>

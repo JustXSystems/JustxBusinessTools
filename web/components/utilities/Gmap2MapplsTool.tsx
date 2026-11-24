@@ -1191,6 +1191,7 @@ export function Gmap2MapplsTool({
         variant === "standalone" ? "pinway-ims pinway-ims--standalone" : "pinway-ims pinway-ims--embedded"
       }
       defaultTheme="light"
+      style={{ minHeight: "100dvh" }}
     >
       {body}
       {island}

@@ -1,5 +1,11 @@
 /* GoogleMaps2Mappls — OOTB futuristic UI on IMS tokens + BOS controls */
 
+.pinway-standalone-shell {
+  min-height: 100dvh;
+  min-height: 100svh;
+  width: 100%;
+}
+
 .bos.pinway-ims,
 .bos .g2m {
   --g2m-max: 28rem;
@@ -18,6 +24,7 @@
   --g2m-glass-edge: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03));
 }
 
+/* Normal document flow — avoid flex+min-height:0 collapse on mobile WebViews */
 .bos.pinway-ims.bos-canvas {
   min-height: 100dvh;
   min-height: 100svh;
@@ -25,16 +32,10 @@
   background: var(--bos-ims-canvas) !important;
   color: var(--bos-text);
   position: relative;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.bos.pinway-ims--standalone.bos-canvas {
-  height: 100dvh;
-  height: 100svh;
-  max-height: 100dvh;
-  max-height: 100svh;
+  display: block;
+  /* Must NOT clip — overflow clip/hidden makes position:fixed attach to this box */
+  overflow: visible !important;
+  overflow-x: visible !important;
 }
 
 .bos .g2m {
@@ -44,16 +45,11 @@
   gap: 14px;
   max-width: var(--g2m-max);
   width: 100%;
+  box-sizing: border-box;
   margin: 0 auto;
-  padding: 16px 14px 20px;
+  padding: 16px 14px calc(108px + env(safe-area-inset-bottom, 0px));
   font-family: var(--bos-font-body);
   color: var(--bos-text);
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
 }
 
 .bos .g2m.g2m--embedded {
@@ -300,6 +296,17 @@
   gap: 12px;
   position: relative;
   z-index: 2;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.bos .g2m-command .bos-input,
+.bos .g2m-command select.bos-input,
+.bos .g2m-command textarea.bos-input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .bos .g2m-more {
@@ -741,34 +748,39 @@
   align-items: start;
 }
 
-/* Docked floating action bar — sibling of scroll pane (not position:fixed inside overflow) */
+/* Viewport-fixed action bar (canvas overflow must stay visible) */
 .bos .g2m-island-bar {
-  flex: 0 0 auto;
-  z-index: 40;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
   width: 100%;
-  padding: 8px 14px calc(10px + env(safe-area-inset-bottom, 0px));
-  background:
-    linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--bos-bg) 55%, transparent) 28%, color-mix(in srgb, var(--bos-ims-surface-solid) 94%, transparent) 72%);
+  box-sizing: border-box;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--bos-bg) 40%, transparent) 35%,
+    color-mix(in srgb, var(--bos-ims-surface-solid) 96%, transparent) 78%
+  );
   pointer-events: none;
 }
 
 .bos .g2m-island {
   pointer-events: auto;
   position: relative;
-  left: auto;
-  bottom: auto;
-  transform: none;
-  z-index: 1;
   width: 100%;
   max-width: var(--g2m-max);
   margin: 0 auto;
+  box-sizing: border-box;
   display: flex;
   align-items: stretch;
   gap: 8px;
   padding: 8px;
   border-radius: 20px;
   border: 1px solid color-mix(in srgb, var(--bos-border-soft) 85%, transparent);
-  background: color-mix(in srgb, var(--bos-ims-surface-solid) 92%, transparent);
+  background: color-mix(in srgb, var(--bos-ims-surface-solid) 96%, transparent);
   box-shadow: var(--bos-shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.28) inset;
   backdrop-filter: blur(20px) saturate(1.3);
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
@@ -777,30 +789,34 @@
 .bos .g2m-island .bos-btn,
 .bos .g2m-island a.bos-btn {
   flex: 1 1 0;
-  display: inline-flex;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
   min-height: 48px;
-  padding: 0 14px;
+  min-width: 0;
+  padding: 0 12px;
   font-weight: 750;
+  font-size: 14px;
+  line-height: 1.2;
   border-radius: 14px !important;
   text-align: center;
   text-decoration: none;
-  white-space: nowrap;
+  white-space: normal;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
 .bos .g2m-island .bos-btn-primary,
 .bos .g2m-island a.bos-btn-primary {
-  flex: 1.75 1 0;
+  flex: 1.7 1 0;
   position: relative;
   overflow: hidden;
 }
 
 .bos .g2m-island .bos-btn-secondary {
   flex: 0 0 auto;
-  min-width: 5.5rem;
+  min-width: 4.75rem;
+  max-width: 7rem;
 }
 
 /* Native select opaque IMS solid */
@@ -822,22 +838,24 @@
 
 @media (min-width: 960px) {
   .bos.pinway-ims.bos-canvas {
-    padding: 28px 24px 0;
+    padding: 28px 24px 24px;
   }
 
   .bos .g2m--standalone,
   .bos .g2m--desktop.g2m--standalone {
     --g2m-max: min(40rem, 100%);
     width: min(100%, 40rem);
-    padding: 0 0 24px;
+    padding: 0 0 calc(108px + env(safe-area-inset-bottom, 0px));
   }
 
   .bos .g2m-island-bar {
+    padding-left: 24px;
+    padding-right: 24px;
     padding-bottom: 20px;
   }
 
   .bos .g2m-island {
-    max-width: min(40rem, calc(100% - 48px));
+    max-width: min(40rem, 100%);
   }
 
   .bos .g2m--desktop .g2m-map {
