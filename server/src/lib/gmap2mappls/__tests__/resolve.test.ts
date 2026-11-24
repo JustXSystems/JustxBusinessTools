@@ -29,7 +29,7 @@ describe("resolveGmap2Mappls sample mode", () => {
     expect(r.paste.tip.toLowerCase()).toMatch(/simpleone|mappls|geo/);
   });
 
-  it("Zigma short link: pin !3d!4d, same Google/Mappls coords, Mappls URL without 18z", async () => {
+  it("Zigma short link: pin !3d!4d, same Google/Mappls coords, Mappls Pin for SimpleOne", async () => {
     delete process.env.MAPPLS_ACCESS_TOKEN;
     const r = await resolveGmap2Mappls("https://maps.app.goo.gl/P3RTQ5woooJXgFGA6");
     expect(r.ok).toBe(true);
@@ -41,7 +41,12 @@ describe("resolveGmap2Mappls sample mode", () => {
     expect(r.google.name.toLowerCase()).toContain("zigma");
     expect(r.mappls.mapplsUrl).toBe(`https://www.mappls.com/@${r.lat},${r.lng}`);
     expect(r.google.mapsUrl).toContain(`${r.lat},${r.lng}`);
-  });
+    expect(r.mappls.mapplsPin).toBe("kcf7zj");
+    expect(r.paste.mapplsPin).toBe("kcf7zj");
+    expect(r.paste.mapplsPinUrl).toBe("https://www.mappls.com/kcf7zj");
+    expect(r.paste.digipin || r.mappls.digipin).toBeTruthy();
+    expect(r.paste.tip.toLowerCase()).toMatch(/mappls pin/);
+  }, 45_000);
 
   it("acceptance 2: Brindavan / Hulimavu address stays Bengaluru area", async () => {
     delete process.env.MAPPLS_ACCESS_TOKEN;

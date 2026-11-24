@@ -175,6 +175,35 @@
   line-height: 1.4;
 }
 
+.g2m-pin-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.12);
+}
+
+.g2m-pin-code {
+  display: block;
+  margin-top: 0.15rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(1.45rem, 3.5vw, 1.85rem);
+  letter-spacing: 0.08em;
+  color: var(--text-hi);
+}
+
+.g2m-paste-warn {
+  margin: 0 0 0.75rem;
+  color: #f0b429;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
 .g2m-paste-row {
   display: flex;
   flex-wrap: wrap;
@@ -183,9 +212,16 @@
 }
 
 .g2m-paste-note {
+  margin: 0.75rem 0 0;
   font-size: 0.78rem;
   color: var(--text-low);
-  max-width: 22rem;
+  max-width: 42rem;
+  line-height: 1.45;
+}
+
+.g2m-paste-note code {
+  font-size: 0.76rem;
+  color: var(--text-mid);
 }
 
 .g2m-paste-footer {

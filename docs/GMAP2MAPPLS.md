@@ -1,6 +1,6 @@
 # GMAP2MAPPLS (JBT free tool)
 
-Paste a **Google Maps share link**, a **full Indian address**, or **lat,lng**. The tool finds that **same geographic point** on Mappls.
+Paste a **Google Maps share link**, a **full Indian address**, or **lat,lng**. The tool finds that **same geographic point** on Mappls and hands you identifiers OEM apps (SimpleOne, etc.) can actually open.
 
 Live route (after login): `/tools/gmap2mappls`  
 API: `POST /api/public/gmap2mappls/resolve` · `GET /api/public/gmap2mappls/meta`
@@ -11,7 +11,7 @@ API: `POST /api/public/gmap2mappls/resolve` · `GET /api/public/gmap2mappls/meta
 
 1. Prefer coordinates from the Google Maps URL (`!3d!4d` pin, `/@lat,lng`, `q=lat,lng`, short `maps.app.goo.gl` expanded to Google hosts only).
 2. If only an address is given, geocode with Photon then Nominatim (India-biased) and validate neighbourhood tokens (e.g. Hulimavu must not resolve to Whitefield / Navi Mumbai).
-3. Call **Mappls Reverse Geocode only** at that lat/lng.
+3. Call **Mappls Reverse Geocode only** at that lat/lng (token API and/or Mappls web click-revg).
 4. **Never** use Mappls Text Search / place search as the primary matcher for full addresses.
 
 Mappls address wording may differ; the **map point must match**.
@@ -24,27 +24,44 @@ Use the official share form (no Google-style zoom suffix):
 
 Do **not** append `,18z`. Mappls’s web app treats `@lat,lng,18z` as a broken path — the interstitial never opens the shared point. Plain `@lat,lng` loads the same pin Google uses.
 
+## Why SimpleOne search fails with lat,lng / geo:
+
+SimpleOne (and other Mappls OEM shells) wire the destination box to **Mappls Autosuggest / Text Search**.
+
+| What you paste | What Mappls does | Result |
+|----------------|------------------|--------|
+| `12.877073,77.613574` or `geo:…` | Treated as **`query` text** (place name / keyword) | Wrong POI / city — **not** that coordinate |
+| Mappls Pin e.g. `kcf7zj` | Resolved as **eLoc / Mappls Pin** | Correct place |
+| Place name | Normal place search (biased by device location) | May or may not match Google |
+
+Official Autosuggest docs: `query` = POI / house / keyword / place; `location=lat,lng` is only a **bias** parameter — it is **not** “go to these coordinates.” Mappls web search placeholder: **“Search for places & Mappls Pin.”**
+
+So pasting Copy lat,lng or geo: into SimpleOne search is expected to fail. The tool’s primary SimpleOne action is **Copy Mappls Pin**.
+
 ### Best handoff to Mappls OEM apps (2W / 4W)
-
-Goal: open the **same Google point** inside any Mappls-integrated app (SimpleOne, Chetak, Hero OneApp, Mahindra/Tata/Hyundai connected maps, etc.).
-
-Do **not** paste the Google address string into Mappls text search.
 
 | Priority | Action | Why |
 |----------|--------|-----|
-| 1 | **Open on phone maps** (`geo:lat,lng`) | OS chooser → Mappls / OEM app if registered for geo intents |
-| 2 | **Open Mappls** (`mappls.com/@lat,lng`) | Official Mappls share deep link |
-| 3 | **Copy lat,lng** / **Mappls Pin** | Paste into SimpleOne / in-app search |
-| 4 | **Copy share text** / **QR** | WhatsApp, ticket, field staff |
+| 1 | **Copy Mappls Pin** → paste into SimpleOne search | Only search string OEM Autosuggest resolves to the doorstep |
+| 2 | **Open pin on Mappls** (`mappls.com/{pin}`) | Official Pin deep link |
+| 3 | **Open Mappls** (`mappls.com/@lat,lng`) / **Directions** | Coordinate deep links (not search) |
+| 4 | **Open on phone maps** (`geo:lat,lng`) | OS chooser if SimpleOne/Mappls registers for geo |
+| 5 | **Copy Digipin** / share text / QR | Backup identifiers |
 
-Ideal long-term (outside this tool): OEM partners expose a documented deep link such as `simpleone://navigate?lat=&lng=` or accept Mappls Pin natively — then GMAP2MAPPLS can add a one-tap “Open in SimpleOne” button.
+Ideal long-term (outside this tool): OEM partners expose `simpleone://navigate?lat=&lng=` or open Mappls Pin natively.
+
+## How we get Mappls Pin
+
+1. Mappls web `GET /get_click_revg?{lat}&{lng}&{zoom}` (AES payload → `elc` + Digipin) — works without `MAPPLS_ACCESS_TOKEN`.
+2. Token Reverse Geocode when `MAPPLS_ACCESS_TOKEN` is set (may also return pin depending on key entitlements).
+3. Digipin always filled from click-revg or offline India Post DIGIPIN encode.
 
 ## Local run
 
 ```bash
 # from repo root
 cp .env.example server/.env   # if needed
-# optional — without this, sample mode still works:
+# optional — without this, click-revg still supplies Mappls Pin:
 # MAPPLS_ACCESS_TOKEN=your_static_key
 
 npm install
@@ -80,16 +97,15 @@ sudoedit /var/www/jbt-shared/server.env
 pm2 reload justx-jbt-api   # or: pm2 reload ecosystem.config.cjs --only api
 ```
 
-Optional GitHub Actions secret: store `MAPPLS_ACCESS_TOKEN` in repo secrets for ops reference; the **runtime** source of truth is `server.env` on the VPS (same pattern as `JWT_SECRET`, payment keys).
-
-Without a token the tool runs in **sample mode**: shared coordinates still resolve; Mappls address text uses fixtures / sample copy.
+Without a token the tool still resolves shared coordinates and **Mappls Pin via click-revg**; formal Mappls address text may use sample copy.
 
 ## Acceptance checks
 
 1. `https://www.google.com/maps/@12.8804,77.5958,18z` → same coords; Hulimavu / Bannerghatta area.  
 2. Long Brindavan Enclaves / Hulimavu / Bannerghatta address → Bengaluru south, not Navi Mumbai / Whitefield.  
 3. `India Gate` → Delhi area.  
-4. Unset `MAPPLS_ACCESS_TOKEN` → sample mode still works.
+4. Zigma / `12.877073,77.613574` → Mappls Pin `kcf7zj` (SimpleOne paste).  
+5. Unset `MAPPLS_ACCESS_TOKEN` → Pin + Digipin still resolve via click-revg.
 
 ```bash
 npm run test -w shared

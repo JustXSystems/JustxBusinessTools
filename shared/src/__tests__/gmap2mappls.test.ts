@@ -11,6 +11,7 @@ import {
   mapplsPointUrl,
   googleMapsPointUrl,
   buildPasteKit,
+  encodeDigipin,
 } from "../gmap2mappls/index";
 
 describe("gmap2mappls parse", () => {
@@ -150,6 +151,18 @@ describe("gmap2mappls urls + samples", () => {
     expect(kit.shareText).toContain("Zigma Technologies");
     expect(kit.shareText).toContain("kcf7zj");
     expect(kit.mapplsUrl).toBe("https://www.mappls.com/@12.877073,77.613574");
+    expect(kit.mapplsPinUrl).toBe("https://www.mappls.com/kcf7zj");
+    expect(kit.mapplsDirectionsUrl).toContain("direction?places=;12.877073,77.613574");
+    expect(kit.tip.toLowerCase()).toMatch(/mappls pin/);
+    expect(kit.tip.toLowerCase()).not.toMatch(/paste lat/);
+  });
+
+  it("encodes Digipin offline for India coords", () => {
+    // India Post sample: 13.11179621, 80.20264269 → 4T396F42L7
+    expect(encodeDigipin(13.11179621, 80.20264269)?.replace(/\s+/g, "")).toBe("4T396F42L7");
+    expect(encodeDigipin(12.877073, 77.613574)).toMatch(
+      /^[23456789CJKLMPFT]{3} [23456789CJKLMPFT]{3} [23456789CJKLMPFT]{4}$/,
+    );
   });
 
   it("extracts place name from Google /place/ path", () => {

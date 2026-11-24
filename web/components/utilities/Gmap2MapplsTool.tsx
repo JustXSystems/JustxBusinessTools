@@ -257,25 +257,76 @@ export function Gmap2MapplsTool() {
           </div>
 
           <section className="g2m-paste" aria-label="Open or paste into Mappls OEM apps">
-            <h3>Best handoff to Mappls apps (2W / 4W)</h3>
-            <p className="g2m-paste-tip">
+            <h3>SimpleOne / Mappls OEM handoff</h3>
+            <p className="g2m-paste-tip" role="status">
               {result.paste?.tip ||
-                "Open with geo: or paste lat,lng / Mappls Pin — never Google address text."}
+                "SimpleOne search accepts places & Mappls Pin only — never paste lat,lng into the search box."}
             </p>
+            {(result.paste?.mapplsPin || result.mappls.mapplsPin) ? (
+              <div className="g2m-pin-hero">
+                <div>
+                  <div className="g2m-banner-meta">Paste this into SimpleOne search</div>
+                  <strong className="g2m-pin-code">
+                    {result.paste?.mapplsPin || result.mappls.mapplsPin}
+                  </strong>
+                </div>
+                <div className="g2m-paste-row">
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() =>
+                      void onCopy(
+                        "pin",
+                        result.paste?.mapplsPin || result.mappls.mapplsPin || "",
+                      )
+                    }
+                  >
+                    {copied === "pin"
+                      ? "Copied Mappls Pin"
+                      : `Copy Mappls Pin (${result.paste?.mapplsPin || result.mappls.mapplsPin})`}
+                  </button>
+                  {result.paste?.mapplsPinUrl ? (
+                    <a
+                      className="btn btn-secondary btn-sm"
+                      href={result.paste.mapplsPinUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open pin on Mappls
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <p className="g2m-paste-warn">
+                Mappls Pin unavailable right now — use Open Mappls / Directions below (not in-app search).
+              </p>
+            )}
             <div className="g2m-paste-row">
               <a
-                className="btn btn-primary btn-sm"
+                className="btn btn-secondary btn-sm"
                 href={result.paste?.geoUri || `geo:${result.lat},${result.lng}?q=${result.lat},${result.lng}`}
               >
                 Open on phone maps
               </a>
               <a
-                className="btn btn-primary btn-sm"
+                className="btn btn-secondary btn-sm"
                 href={result.paste?.mapplsUrl || result.mappls.mapplsUrl}
                 target="_blank"
                 rel="noreferrer"
               >
-                Open Mappls
+                Open Mappls @lat,lng
+              </a>
+              <a
+                className="btn btn-secondary btn-sm"
+                href={
+                  result.paste?.mapplsDirectionsUrl ||
+                  `https://www.mappls.com/direction?places=;${result.lat},${result.lng}`
+                }
+                target="_blank"
+                rel="noreferrer"
+              >
+                Mappls directions
               </a>
               <button
                 type="button"
@@ -284,29 +335,6 @@ export function Gmap2MapplsTool() {
               >
                 {copied === "share" ? "Copied share text" : "Copy share text"}
               </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => void onCopy("latlng", result.paste?.latLng || formatCoordPair(result.lat, result.lng))}
-              >
-                {copied === "latlng" ? "Copied lat,lng" : "Copy lat,lng"}
-              </button>
-              {result.paste?.mapplsPin || result.mappls.mapplsPin ? (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() =>
-                    void onCopy(
-                      "pin",
-                      result.paste?.mapplsPin || result.mappls.mapplsPin || "",
-                    )
-                  }
-                >
-                  {copied === "pin"
-                    ? "Copied Mappls Pin"
-                    : `Copy Mappls Pin (${result.paste?.mapplsPin || result.mappls.mapplsPin})`}
-                </button>
-              ) : null}
               {result.paste?.digipin || result.mappls.digipin ? (
                 <button
                   type="button"
@@ -319,14 +347,26 @@ export function Gmap2MapplsTool() {
                     ? "Copied Digipin"
                     : `Copy Digipin (${result.paste?.digipin || result.mappls.digipin})`}
                 </button>
-              ) : (
-                <span className="g2m-paste-note">
-                  Bind MAPPLS_ACCESS_TOKEN (+ Digipin) for live Mappls Pin / Digipin
-                </span>
-              )}
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                title="For geo:/deep links only — do not paste into SimpleOne search"
+                onClick={() => void onCopy("latlng", result.paste?.latLng || formatCoordPair(result.lat, result.lng))}
+              >
+                {copied === "latlng" ? "Copied lat,lng" : "Copy lat,lng (not for search)"}
+              </button>
             </div>
+            <p className="g2m-paste-note">
+              Why lat,lng fails in SimpleOne: Mappls Autosuggest <code>query</code> is place/Pin text;
+              coordinates belong in the <code>location</code> bias param — pasting them searches wrong places.
+            </p>
             <div className="g2m-paste-footer">
-              <code className="g2m-paste-code">{result.paste?.latLng || formatCoordPair(result.lat, result.lng)}</code>
+              <code className="g2m-paste-code">
+                {(result.paste?.mapplsPin || result.mappls.mapplsPin)
+                  ? `Pin ${result.paste?.mapplsPin || result.mappls.mapplsPin} · ${result.paste?.latLng || formatCoordPair(result.lat, result.lng)}`
+                  : result.paste?.latLng || formatCoordPair(result.lat, result.lng)}
+              </code>
               {qr ? (
                 <figure className="g2m-qr">
                   {/* eslint-disable-next-line @next/next/no-img-element */}

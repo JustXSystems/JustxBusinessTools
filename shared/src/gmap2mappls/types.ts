@@ -42,7 +42,7 @@ export type MapplsSide = {
 
 /** Clipboard / open helpers for Mappls-integrated apps (SimpleOne, OEM apps, etc.). */
 export type PasteKit = {
-  /** Canonical shared point — best paste into Mappls / SimpleOne search. */
+  /** Shared WGS-84 point — for geo: / Open Mappls, NOT for SimpleOne search box. */
   latLng: string;
   /** Space-separated variant some map UIs prefer. */
   latLngSpaced: string;
@@ -50,6 +50,10 @@ export type PasteKit = {
   geoUri: string;
   /** Official Mappls web/share deep link (no Google-style 18z). */
   mapplsUrl: string;
+  /** Mappls Pin deep link when pin is known — `mappls.com/{pin}`. */
+  mapplsPinUrl?: string;
+  /** Directions deep link ending at the shared lat/lng. */
+  mapplsDirectionsUrl: string;
   /** Ready-to-send WhatsApp / SMS / ticket text. */
   shareText: string;
   mapplsPin?: string;
@@ -100,12 +104,29 @@ export function mapplsPointUrl(lat: number, lng: number): string {
   return `https://www.mappls.com/@${roundCoord(lat)},${roundCoord(lng)}`;
 }
 
+/** Share / open a place by its 6-char Mappls Pin (eLoc). */
+export function mapplsPinUrl(pin: string): string {
+  return `https://www.mappls.com/${String(pin).trim().toLowerCase()}`;
+}
+
+/**
+ * Mappls directions widget ending at the shared coordinates.
+ * Prefer this over pasting lat,lng into Autosuggest/search.
+ */
+export function mapplsDirectionsUrl(lat: number, lng: number): string {
+  return `https://www.mappls.com/direction?places=;${roundCoord(lat)},${roundCoord(lng)}`;
+}
+
 export function geoPointUri(lat: number, lng: number, label?: string): string {
   const q = label?.trim()
     ? `?q=${roundCoord(lat)},${roundCoord(lng)}(${encodeURIComponent(label.trim().slice(0, 80))})`
     : `?q=${roundCoord(lat)},${roundCoord(lng)}`;
   return `geo:${roundCoord(lat)},${roundCoord(lng)}${q}`;
 }
+
+/** Short tip shown under SimpleOne / OEM paste actions. */
+export const SIMPLEONE_PASTE_TIP =
+  "SimpleOne Mappls search = places & Mappls Pin only. Paste the 6-char Mappls Pin — do NOT paste lat,lng or geo: (Autosuggest treats those as text and jumps elsewhere).";
 
 export function buildShareText(
   lat: number,
@@ -118,9 +139,14 @@ export function buildShareText(
     `Coordinates: ${latLng}`,
     `Mappls: ${opts?.mapplsUrl || mapplsPointUrl(lat, lng)}`,
   ];
-  if (opts?.mapplsPin) lines.push(`Mappls Pin: ${opts.mapplsPin}`);
+  if (opts?.mapplsPin) {
+    lines.push(`Mappls Pin: ${opts.mapplsPin}`);
+    lines.push(`Pin link: ${mapplsPinUrl(opts.mapplsPin)}`);
+  }
   if (opts?.digipin) lines.push(`Digipin: ${opts.digipin}`);
-  lines.push("Tip: In SimpleOne / OEM Mappls apps, paste coordinates or Mappls Pin — not the Google address text.");
+  lines.push(
+    "SimpleOne: paste Mappls Pin into search — never lat,lng / geo: / Google address text.",
+  );
   return lines.join("\n");
 }
 
@@ -131,20 +157,25 @@ export function buildPasteKit(
 ): PasteKit {
   const latLng = formatCoordPair(lat, lng);
   const mapplsUrl = mapplsPointUrl(lat, lng);
+  const pin = opts?.mapplsPin?.trim() || undefined;
   return {
     latLng,
     latLngSpaced: `${roundCoord(lat)}, ${roundCoord(lng)}`,
     geoUri: geoPointUri(lat, lng, opts?.name),
     mapplsUrl,
+    mapplsPinUrl: pin ? mapplsPinUrl(pin) : undefined,
+    mapplsDirectionsUrl: mapplsDirectionsUrl(lat, lng),
     shareText: buildShareText(lat, lng, {
       name: opts?.name,
-      mapplsPin: opts?.mapplsPin,
+      mapplsPin: pin,
       digipin: opts?.digipin,
       mapplsUrl,
     }),
-    mapplsPin: opts?.mapplsPin || undefined,
+    mapplsPin: pin,
     digipin: opts?.digipin || undefined,
-    tip: "Best: Open phone maps (geo:) or paste lat,lng / Mappls Pin into SimpleOne — never Google address text.",
+    tip: pin
+      ? `SimpleOne: Copy Mappls Pin (${pin}) and paste into search — not lat,lng.`
+      : SIMPLEONE_PASTE_TIP,
   };
 }
 

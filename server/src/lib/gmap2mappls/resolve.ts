@@ -58,7 +58,7 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
       lat,
       lng,
       sampleMode: mappls.sampleMode,
-      tip: "Best accuracy = Google Maps Share → Copy link",
+      tip: "SimpleOne: paste Mappls Pin into search — not lat,lng. Best Google input = Share → Copy link.",
       paste: buildPasteKit(lat, lng, {
         mapplsPin: mappls.mapplsPin,
         digipin: mappls.digipin,
@@ -164,7 +164,7 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
     lat,
     lng,
     sampleMode: mappls.sampleMode || !getMapplsAccessToken(),
-    tip: "Best accuracy = Google Maps Share → Copy link",
+    tip: "SimpleOne: paste Mappls Pin into search — not lat,lng. Best Google input = Share → Copy link.",
     paste: buildPasteKit(lat, lng, {
       mapplsPin: mappls.mapplsPin,
       digipin: mappls.digipin,
@@ -196,7 +196,7 @@ export function resolveMeta() {
       input: s.input,
       coords: formatCoordPair(s.lat, s.lng),
     })),
-    tip: "Best accuracy = Google Maps Share → Copy link",
+    tip: "SimpleOne: paste Mappls Pin into search — not lat,lng. Best Google input = Share → Copy link.",
     sourceHint: sourceLabel,
   };
 }
