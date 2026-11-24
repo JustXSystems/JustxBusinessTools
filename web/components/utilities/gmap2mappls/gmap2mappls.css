@@ -188,13 +188,38 @@
   max-width: 22rem;
 }
 
+.g2m-paste-footer {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
 .g2m-paste-code {
   display: inline-block;
-  margin-top: 0.75rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.95rem;
   color: var(--accent);
   letter-spacing: -0.02em;
+}
+
+.g2m-qr {
+  margin: 0;
+  text-align: center;
+}
+
+.g2m-qr img {
+  display: block;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px;
+}
+
+.g2m-qr figcaption {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-low);
 }
 
 .g2m-grid {

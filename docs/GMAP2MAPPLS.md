@@ -24,13 +24,20 @@ Use the official share form (no Google-style zoom suffix):
 
 Do **not** append `,18z`. Mappls’s web app treats `@lat,lng,18z` as a broken path — the interstitial never opens the shared point. Plain `@lat,lng` loads the same pin Google uses.
 
-### Paste into SimpleOne / Mappls OEM apps
+### Best handoff to Mappls OEM apps (2W / 4W)
+
+Goal: open the **same Google point** inside any Mappls-integrated app (SimpleOne, Chetak, Hero OneApp, Mahindra/Tata/Hyundai connected maps, etc.).
 
 Do **not** paste the Google address string into Mappls text search.
 
-1. Use **Copy lat,lng** from the tool (shared point).
-2. If shown, **Copy Mappls Pin** (6-char eLoc) or **Copy Digipin** (needs Digipin API on the key).
-3. In SimpleOne / vehicle apps: search or drop-pin with that lat,lng or Mappls Pin.
+| Priority | Action | Why |
+|----------|--------|-----|
+| 1 | **Open on phone maps** (`geo:lat,lng`) | OS chooser → Mappls / OEM app if registered for geo intents |
+| 2 | **Open Mappls** (`mappls.com/@lat,lng`) | Official Mappls share deep link |
+| 3 | **Copy lat,lng** / **Mappls Pin** | Paste into SimpleOne / in-app search |
+| 4 | **Copy share text** / **QR** | WhatsApp, ticket, field staff |
+
+Ideal long-term (outside this tool): OEM partners expose a documented deep link such as `simpleone://navigate?lat=&lng=` or accept Mappls Pin natively — then GMAP2MAPPLS can add a one-tap “Open in SimpleOne” button.
 
 ## Local run
 

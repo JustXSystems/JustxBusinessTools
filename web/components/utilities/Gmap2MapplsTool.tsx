@@ -6,6 +6,8 @@ import { SAMPLE_FIXTURES, formatCoordPair, type ResolveResult } from "@jbt/share
 import { apiUrl } from "@/lib/api-base";
 import "./gmap2mappls/gmap2mappls.css";
 
+type QrState = { dataUrl: string; payload: string } | null;
+
 const MapPreview = dynamic(
   () => import("./gmap2mappls/MapPreview").then((m) => m.MapPreview),
   {
@@ -49,12 +51,33 @@ export function Gmap2MapplsTool() {
   const [result, setResult] = useState<ResolveResult | null>(null);
   const [meta, setMeta] = useState<Meta | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [qr, setQr] = useState<QrState>(null);
 
   const onCopy = useCallback(async (label: string, text: string) => {
     const ok = await copyText(text);
     setCopied(ok ? label : null);
     if (ok) window.setTimeout(() => setCopied((c) => (c === label ? null : c)), 1600);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!result?.paste?.geoUri) {
+      setQr(null);
+      return;
+    }
+    const payload = result.paste.geoUri;
+    void import("qrcode")
+      .then((QRCode) => QRCode.toDataURL(payload, { margin: 1, width: 180, errorCorrectionLevel: "M" }))
+      .then((dataUrl) => {
+        if (!cancelled) setQr({ dataUrl, payload });
+      })
+      .catch(() => {
+        if (!cancelled) setQr(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [result?.paste?.geoUri]);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,31 +256,40 @@ export function Gmap2MapplsTool() {
             </div>
           </div>
 
-          <section className="g2m-paste" aria-label="Paste into SimpleOne or Mappls apps">
-            <h3>Paste into SimpleOne / Mappls apps</h3>
+          <section className="g2m-paste" aria-label="Open or paste into Mappls OEM apps">
+            <h3>Best handoff to Mappls apps (2W / 4W)</h3>
             <p className="g2m-paste-tip">
               {result.paste?.tip ||
-                "Paste lat,lng (or Mappls Pin) — not the Google address text."}
+                "Open with geo: or paste lat,lng / Mappls Pin — never Google address text."}
             </p>
             <div className="g2m-paste-row">
+              <a
+                className="btn btn-primary btn-sm"
+                href={result.paste?.geoUri || `geo:${result.lat},${result.lng}?q=${result.lat},${result.lng}`}
+              >
+                Open on phone maps
+              </a>
+              <a
+                className="btn btn-primary btn-sm"
+                href={result.paste?.mapplsUrl || result.mappls.mapplsUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Mappls
+              </a>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => void onCopy("latlng", result.paste?.latLng || formatCoordPair(result.lat, result.lng))}
+                className="btn btn-secondary btn-sm"
+                onClick={() => void onCopy("share", result.paste?.shareText || formatCoordPair(result.lat, result.lng))}
               >
-                {copied === "latlng" ? "Copied lat,lng" : "Copy lat,lng"}
+                {copied === "share" ? "Copied share text" : "Copy share text"}
               </button>
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
-                onClick={() =>
-                  void onCopy(
-                    "latlngSpaced",
-                    result.paste?.latLngSpaced || `${result.lat}, ${result.lng}`,
-                  )
-                }
+                onClick={() => void onCopy("latlng", result.paste?.latLng || formatCoordPair(result.lat, result.lng))}
               >
-                {copied === "latlngSpaced" ? "Copied" : "Copy lat, lng"}
+                {copied === "latlng" ? "Copied lat,lng" : "Copy lat,lng"}
               </button>
               {result.paste?.mapplsPin || result.mappls.mapplsPin ? (
                 <button
@@ -289,11 +321,20 @@ export function Gmap2MapplsTool() {
                 </button>
               ) : (
                 <span className="g2m-paste-note">
-                  Mappls Pin / Digipin appear when MAPPLS_ACCESS_TOKEN has Digipin / reverse APIs enabled
+                  Bind MAPPLS_ACCESS_TOKEN (+ Digipin) for live Mappls Pin / Digipin
                 </span>
               )}
             </div>
-            <code className="g2m-paste-code">{result.paste?.latLng || formatCoordPair(result.lat, result.lng)}</code>
+            <div className="g2m-paste-footer">
+              <code className="g2m-paste-code">{result.paste?.latLng || formatCoordPair(result.lat, result.lng)}</code>
+              {qr ? (
+                <figure className="g2m-qr">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={qr.dataUrl} alt="QR for geo coordinates" width={120} height={120} />
+                  <figcaption>Scan on phone → same point</figcaption>
+                </figure>
+              ) : null}
+            </div>
           </section>
 
           <div className="g2m-grid">

@@ -10,6 +10,7 @@ import {
   formatCoordPair,
   mapplsPointUrl,
   googleMapsPointUrl,
+  buildPasteKit,
 } from "../gmap2mappls/index";
 
 describe("gmap2mappls parse", () => {
@@ -141,6 +142,14 @@ describe("gmap2mappls urls + samples", () => {
     expect(mapplsPointUrl(lat, lng)).toBe("https://www.mappls.com/@12.8804,77.5958");
     expect(mapplsPointUrl(lat, lng)).not.toMatch(/18z/);
     expect(googleMapsPointUrl(lat, lng)).toContain(formatCoordPair(lat, lng));
+  });
+
+  it("builds geo URI + share text for OEM Mappls handoff", () => {
+    const kit = buildPasteKit(12.877073, 77.613574, { name: "Zigma Technologies", mapplsPin: "kcf7zj" });
+    expect(kit.geoUri.startsWith("geo:12.877073,77.613574")).toBe(true);
+    expect(kit.shareText).toContain("Zigma Technologies");
+    expect(kit.shareText).toContain("kcf7zj");
+    expect(kit.mapplsUrl).toBe("https://www.mappls.com/@12.877073,77.613574");
   });
 
   it("extracts place name from Google /place/ path", () => {
