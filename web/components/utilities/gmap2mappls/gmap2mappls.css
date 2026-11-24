@@ -336,6 +336,42 @@
   font-size: 1rem;
 }
 
+.g2m-secondary {
+  margin-top: 0.35rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--g2m-line);
+  background: rgba(0, 0, 0, 0.14);
+  padding: 0.35rem 0.75rem 0.55rem;
+}
+
+.g2m-secondary summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-mid);
+  padding: 0.45rem 0;
+  user-select: none;
+}
+
+.g2m-secondary summary::-webkit-details-marker {
+  display: none;
+}
+
+.g2m-secondary summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.g2m-secondary[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.g2m-secondary .g2m-paste-row {
+  padding: 0.25rem 0 0.35rem;
+}
+
 .g2m-oem {
   border-radius: var(--radius);
   border: 1px solid var(--g2m-line);

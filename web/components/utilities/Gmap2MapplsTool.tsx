@@ -382,17 +382,110 @@ export function Gmap2MapplsTool() {
                   ? "Copied — paste in your app now"
                   : playbook.primary.label}
               </button>
-              {playbook.backup?.href ? (
+            </div>
+
+            <details className="g2m-secondary">
+              <summary>Secondary options</summary>
+              <div className="g2m-paste-row">
+                {playbook.backup?.href ? (
+                  <a
+                    className="btn btn-secondary btn-sm"
+                    href={playbook.backup.href}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {playbook.backup.label}
+                  </a>
+                ) : null}
+                {playbook.backup?.kind === "copy" && playbook.backup.copyText ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => void onCopy("backup", playbook.backup?.copyText || "")}
+                  >
+                    {copied === "backup" ? "Copied" : playbook.backup.label}
+                  </button>
+                ) : null}
                 <a
-                  className="btn btn-secondary"
-                  href={playbook.backup.href}
+                  className="btn btn-secondary btn-sm"
+                  href={playbook.autoOpenUrl}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  {playbook.backup.label}
+                  {playbook.autoOpenLabel}
                 </a>
-              ) : null}
-            </div>
+                <a
+                  className="btn btn-secondary btn-sm"
+                  href={result.paste.mapplsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open Mappls map
+                </a>
+                <a
+                  className="btn btn-secondary btn-sm"
+                  href={result.paste.googleMapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open Google Maps
+                </a>
+                <a className="btn btn-secondary btn-sm" href={result.paste.geoUri}>
+                  Open phone maps (geo)
+                </a>
+                {result.paste.mapplsPin ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => void onCopy("pin", result.paste.mapplsPin || "")}
+                  >
+                    {copied === "pin" ? "Copied Pin" : `Copy Pin (${result.paste.mapplsPin})`}
+                  </button>
+                ) : null}
+                {result.paste.mapplsPinUrl ? (
+                  <a
+                    className="btn btn-secondary btn-sm"
+                    href={result.paste.mapplsPinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open pin on Mappls
+                  </a>
+                ) : null}
+                {result.paste.searchQuery ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => void onCopy("search", result.paste.searchQuery || "")}
+                  >
+                    {copied === "search" ? "Copied place name" : "Copy place name"}
+                  </button>
+                ) : null}
+                {result.paste.digipin ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => void onCopy("digipin", result.paste.digipin || "")}
+                  >
+                    {copied === "digipin" ? "Copied Digipin" : `Copy Digipin (${result.paste.digipin})`}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => void onCopy("share", result.paste.shareText)}
+                >
+                  {copied === "share" ? "Copied share text" : "Copy share text"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => void onCopy("latlng", result.paste.latLng)}
+                >
+                  {copied === "latlng" ? "Copied lat,lng" : "Copy lat,lng"}
+                </button>
+              </div>
+            </details>
 
             <div className="g2m-paste-footer">
               {qr ? (
