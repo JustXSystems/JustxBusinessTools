@@ -35,6 +35,14 @@ describe("tool-launch", () => {
     });
   });
 
+  it("forces GoogleMaps2Mappls as an independent standalone app", () => {
+    expect(resolveToolLaunch("gmap2mappls", { openStandalone: false })).toEqual({
+      mode: "standalone",
+      href: "/googlemaps2mappls",
+      openInNewWindow: true,
+    });
+  });
+
   it("keeps ordinary tools embedded", () => {
     expect(resolveToolLaunch("invoice")).toEqual({
       mode: "embedded",

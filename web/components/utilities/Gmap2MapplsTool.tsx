@@ -33,6 +33,7 @@ import {
   type ResolveResult,
 } from "@jbt/shared";
 import { apiUrl } from "@/lib/api-base";
+import { withBasePath } from "@/lib/base-path";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/components/common/ToastProvider";
 import {
@@ -232,6 +233,19 @@ export function Gmap2MapplsTool({
       window.setTimeout(() => {
         void resolve(pendingQ!);
       }, 0);
+    } else {
+      // Automation: offer clipboard Maps links without making the user hunt for Paste.
+      window.setTimeout(() => {
+        void (async () => {
+          try {
+            if (!navigator.clipboard?.readText) return;
+            const text = (await navigator.clipboard.readText()).trim();
+            if (looksLikeMapsInput(text)) setClipboardHint(true);
+          } catch {
+            /* permission / insecure context */
+          }
+        })();
+      }, 400);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap once on mount
   }, []);
@@ -684,9 +698,24 @@ export function Gmap2MapplsTool({
     >
       <div className="g2m-topbar">
         <section className="g2m-hero" style={{ flex: 1 }}>
-          <p className="g2m-eyebrow">Justxsystems</p>
-          <h1 className="g2m-brand">{PINWAY_PRODUCT_NAME}</h1>
-          <p className="g2m-tag">{PINWAY_TAGLINE}</p>
+          <div className="g2m-hero-row">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className="g2m-logo"
+              src={withBasePath("/icons/googlemaps2mappls-icon.png")}
+              alt=""
+              width={56}
+              height={56}
+            />
+            <div className="g2m-hero-copy">
+              <p className="g2m-eyebrow">{PINWAY_BRAND_NAME}</p>
+              <h1 className="g2m-brand">{PINWAY_PRODUCT_NAME}</h1>
+              <p className="g2m-tag">{PINWAY_TAGLINE}</p>
+            </div>
+          </div>
+          <p className="g2m-auto-promise" role="note">
+            Paste once → we match the exact Mappls point → open your car app automatically.
+          </p>
           {showA2hs ? (
             <p className="g2m-a2hs" role="note">
               <strong>Add to Home Screen</strong>
@@ -953,7 +982,7 @@ export function Gmap2MapplsTool({
 
       {!result && !loading && !error ? (
         <div className="g2m-state g2m-walkthrough">
-          <strong>How {PINWAY_PRODUCT_NAME} works</strong>
+          <strong>3 taps. Done.</strong>
           <ol className="g2m-walk-steps">
             {G2M_WALKTHROUGH.map((step) => (
               <li key={step.id}>
@@ -976,7 +1005,7 @@ export function Gmap2MapplsTool({
       ) : null}
 
       {result && playbook ? (
-        <>
+        <div className="g2m-result-col">
           <div className="g2m-banner" role="status">
             <div>
               <div className="g2m-banner-meta">Exact point locked</div>
@@ -1279,7 +1308,7 @@ export function Gmap2MapplsTool({
               lng={result.lng}
             />
           </div>
-        </>
+        </div>
       ) : null}
 
       {variant === "standalone" || onAndroid || onIos ? (
@@ -1319,8 +1348,10 @@ export function Gmap2MapplsTool({
   return (
     <BosRoot
       skin="ims"
-      canvas={variant === "standalone"}
-      className={variant === "standalone" ? "pinway-ims" : "pinway-ims pinway-ims--embedded"}
+      canvas
+      className={
+        variant === "standalone" ? "pinway-ims pinway-ims--standalone" : "pinway-ims pinway-ims--embedded"
+      }
       defaultTheme="light"
     >
       {body}

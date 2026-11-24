@@ -14,7 +14,7 @@ import { TrackerTool } from "@/components/tools/TrackerTool";
 import { resolveToolDefinition } from "@/lib/dynamic-tools";
 import { ToolPageHero } from "@/components/shell/ToolPageHero";
 import { withBasePath } from "@/lib/base-path";
-import { resolveToolLaunch, toStandaloneHref } from "@/lib/tool-launch";
+import { openStandaloneAppWindow, resolveToolLaunch, toStandaloneHref } from "@/lib/tool-launch";
 
 const QrGeneratorTool = dynamic(
   () => import("@/components/utilities/QrGeneratorTool").then((m) => m.QrGeneratorTool),
@@ -87,12 +87,19 @@ function StandaloneRedirect({ toolId }: { toolId: string }) {
   useEffect(() => {
     const target = toStandaloneHref(toolId, window.location.search);
     if (!target) return;
-    window.location.replace(withBasePath(target));
+    const abs = withBasePath(target);
+    // Prefer an independent app window; fall back to same-tab full-screen app.
+    const opened = openStandaloneAppWindow(target, toolId, abs);
+    if (opened) {
+      window.location.replace(withBasePath("/"));
+      return;
+    }
+    window.location.replace(abs);
   }, [toolId]);
   return (
     <div className="empty-state">
       <div className="es-icon">⤢</div>
-      <div className="es-title">Opening full-screen app…</div>
+      <div className="es-title">Opening independent app…</div>
     </div>
   );
 }

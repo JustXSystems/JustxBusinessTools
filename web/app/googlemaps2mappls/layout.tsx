@@ -22,6 +22,11 @@ export const metadata: Metadata = {
     title: "Google Maps to Mappls",
     description: "Convert a Google Maps link to a Mappls Pin and open your car app.",
     siteName: "GoogleMaps2Mappls",
+    images: [{ url: "/icons/googlemaps2mappls-icon.png", width: 512, height: 512, alt: "GoogleMaps2Mappls" }],
+  },
+  icons: {
+    icon: [{ url: "/icons/googlemaps2mappls-icon.png", type: "image/png", sizes: "512x512" }],
+    apple: "/icons/googlemaps2mappls-icon.png",
   },
   manifest: "/googlemaps2mappls/manifest.webmanifest",
 };

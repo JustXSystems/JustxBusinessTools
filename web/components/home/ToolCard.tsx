@@ -7,7 +7,7 @@ import { useToast } from "@/components/common/ToastProvider";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { useSubscription } from "@/hooks/useSubscription";
 import { withBasePath } from "@/lib/base-path";
-import { resolveToolLaunch } from "@/lib/tool-launch";
+import { openStandaloneAppWindow, resolveToolLaunch } from "@/lib/tool-launch";
 
 function inr(n: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -15,6 +15,16 @@ function inr(n: number) {
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(n);
+}
+
+function ToolIcon({ icon }: { icon: string }) {
+  if (icon.startsWith("/")) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- static public icon asset
+      <img className="tool-icon-img" src={withBasePath(icon)} alt="" width={40} height={40} />
+    );
+  }
+  return <>{icon}</>;
 }
 
 export function ToolCard({ tool }: { tool: ToolDefinition }) {
@@ -42,11 +52,20 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
     }
   }
 
+  function openIndependentApp(e: React.MouseEvent) {
+    e.preventDefault();
+    const href = withBasePath(launch.href);
+    const opened = openStandaloneAppWindow(launch.href, tool.id, href);
+    if (!opened) {
+      window.location.assign(href);
+    }
+  }
+
   const mainClass = "tool-card-main";
   const mainBody = (
     <>
       <div className="tool-icon" aria-hidden>
-        {tool.icon}
+        <ToolIcon icon={tool.icon} />
       </div>
       <div className="tool-card-copy">
         <div className="tool-name">{tool.name}</div>
@@ -66,9 +85,8 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
         <a
           href={withBasePath(launch.href)}
           className={mainClass}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Opens in a new window"
+          onClick={openIndependentApp}
+          title="Opens as an independent app window"
         >
           {mainBody}
         </a>

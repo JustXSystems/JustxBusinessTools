@@ -1,8 +1,21 @@
-/* Pinway layout helpers — visuals come from BosRoot skin="ims" tokens */
+/* GoogleMaps2Mappls layout — visuals from BosRoot skin="ims" tokens */
 
 .bos.pinway-ims,
 .bos .g2m {
   --g2m-max: 28rem;
+  --g2m-desk: 58rem;
+}
+
+.bos.pinway-ims.bos-canvas {
+  min-height: 100dvh;
+  min-height: 100svh;
+  width: 100%;
+  background: var(--bos-ims-canvas) !important;
+  color: var(--bos-text);
+}
+
+.bos.pinway-ims--standalone.bos-canvas {
+  padding: 0;
 }
 
 .bos .g2m {
@@ -10,6 +23,7 @@
   display: grid;
   gap: 14px;
   max-width: var(--g2m-max);
+  width: 100%;
   margin: 0 auto;
   padding: 16px 16px calc(88px + env(safe-area-inset-bottom, 0px));
   color: var(--bos-text);
@@ -17,13 +31,8 @@
 }
 
 .bos .g2m.g2m--embedded {
-  max-width: 36rem;
+  max-width: 40rem;
   padding-bottom: 24px;
-}
-
-.bos.pinway-ims.bos-canvas {
-  min-height: 100dvh;
-  min-height: 100svh;
 }
 
 .bos .g2m-topbar {
@@ -41,6 +50,39 @@
   background: var(--bos-ims-grad);
   color: #fff;
   box-shadow: var(--bos-ims-glow);
+}
+
+.bos .g2m-hero-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.bos .g2m-logo {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  object-fit: cover;
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.35);
+  background: #0b1b3a;
+}
+
+.bos .g2m-hero-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.bos .g2m-auto-promise {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--bos-r-sm);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.14);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
 }
 
 .bos .g2m-hero .g2m-eyebrow {
@@ -426,7 +468,8 @@
 
 .bos .g2m--standalone .g2m-dock,
 .bos .g2m--android .g2m-dock,
-.bos .g2m--ios .g2m-dock {
+.bos .g2m--ios .g2m-dock,
+.bos .g2m--desktop.g2m--standalone .g2m-dock {
   display: block;
 }
 
@@ -480,12 +523,63 @@
   .bos.pinway-ims.bos-canvas {
     display: grid;
     place-items: start center;
-    padding-top: 20px;
+    padding: 28px 24px 40px;
+    background: var(--bos-ims-canvas) !important;
   }
 
-  .bos .g2m--standalone {
-    width: min(100%, 28rem);
-    margin-bottom: 24px;
+  .bos .g2m--standalone,
+  .bos .g2m--desktop.g2m--standalone {
+    --g2m-max: var(--g2m-desk);
+    width: min(100%, var(--g2m-desk));
+    margin-bottom: 32px;
+    padding: 8px 8px calc(96px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    gap: 16px 20px;
+    align-items: start;
+  }
+
+  .bos .g2m--desktop.g2m--standalone > .g2m-topbar {
+    grid-column: 1 / -1;
+  }
+
+  .bos .g2m--desktop.g2m--standalone > .g2m-stages {
+    grid-column: 1 / -1;
+  }
+
+  .bos .g2m--desktop.g2m--standalone > .g2m-paywall {
+    grid-column: 1 / -1;
+  }
+
+  .bos .g2m--desktop.g2m--standalone > .g2m-composer {
+    grid-column: 1;
+  }
+
+  .bos .g2m--desktop.g2m--standalone > .g2m-state,
+  .bos .g2m--desktop.g2m--standalone > .g2m-error,
+  .bos .g2m--desktop.g2m--standalone > [class*="bos-alert"],
+  .bos .g2m--desktop.g2m--standalone > .g2m-banner,
+  .bos .g2m--desktop.g2m--standalone > .g2m-guide,
+  .bos .g2m--desktop.g2m--standalone > .g2m-map-panel,
+  .bos .g2m--desktop.g2m--standalone > .g2m-result-col {
+    grid-column: 2;
+  }
+
+  .bos .g2m--desktop.g2m--standalone > .g2m-result-col {
+    display: grid;
+    gap: 14px;
+  }
+
+  .bos .g2m--desktop.g2m--standalone > .g2m-dock {
+    grid-column: 1 / -1;
+  }
+
+  .bos .g2m--desktop .g2m-map {
+    height: min(42vh, 360px);
+  }
+
+  .bos .g2m-dock-inner {
+    max-width: var(--g2m-desk);
   }
 }
 

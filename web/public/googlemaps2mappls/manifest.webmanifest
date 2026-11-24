@@ -6,11 +6,11 @@
   "scope": "/googlemaps2mappls",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#07141f",
-  "theme_color": "#0a1f2e",
+  "background_color": "#0B1B3A",
+  "theme_color": "#4854EB",
   "icons": [
     {
-      "src": "/icons/justx-logo.png",
+      "src": "/icons/googlemaps2mappls-icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
