@@ -215,10 +215,10 @@ export default function RegisterPage() {
       try {
         const result = await register({
           accountType: "individual",
-          email,
-          password,
+          email: email.trim(),
+          password: password.trim(),
           name: name.trim(),
-          phone: phone || undefined,
+          phone: phone.trim() || undefined,
         });
         if (!result.pending) {
           router.replace("/");
@@ -266,12 +266,12 @@ export default function RegisterPage() {
     try {
       const result = await register({
         accountType: "business",
-        email,
-        password,
-        name: name || undefined,
-        phone: phone || undefined,
+        email: email.trim(),
+        password: password.trim(),
+        name: name.trim(),
+        phone: phone.trim() || undefined,
         gstin: gstinNorm,
-        businessName: businessName || undefined,
+        businessName: businessName.trim() || undefined,
         pan: pan || undefined,
         addressLine1: addressLine1 || undefined,
         addressLine2: addressLine2 || undefined,

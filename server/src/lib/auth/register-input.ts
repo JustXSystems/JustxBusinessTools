@@ -31,7 +31,7 @@ export function normalizeAccountType(raw: unknown): AccountType {
 /**
  * Validate the public registration body.
  * Individual: email + password + name (no GSTIN).
- * Business: email + password + valid GSTIN (name optional; business name checked later).
+ * Business: email + password + name + valid GSTIN (business name checked on create).
  */
 export function validateRegisterPayload(body: unknown): RegisterValidation {
   const src = body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
@@ -39,7 +39,7 @@ export function validateRegisterPayload(body: unknown): RegisterValidation {
   const email = String(src.email ?? "")
     .trim()
     .toLowerCase();
-  const password = String(src.password ?? "");
+  const password = String(src.password ?? "").trim();
   const name = String(src.name ?? "").trim();
   const phone = blank(src.phone);
   const gstin = normalizeGstin(src.gstin);
@@ -48,10 +48,11 @@ export function validateRegisterPayload(body: unknown): RegisterValidation {
     return { ok: false, error: "Email and password (min 8 chars) required" };
   }
 
+  if (!name) {
+    return { ok: false, error: "Your name is required" };
+  }
+
   if (accountType === "individual") {
-    if (!name) {
-      return { ok: false, error: "Your name is required" };
-    }
     return {
       ok: true,
       data: { accountType, email, password, name, phone, gstin: "" },
@@ -74,4 +75,10 @@ export function requireHomeToolsForNewBusiness(homeToolIds: string[] | null | un
     return "Select at least one tool to show on your home screen";
   }
   return null;
+}
+
+/** Legal / trading name required when creating a profile for a new GSTIN. */
+export function requireBusinessNameForNewGstin(raw: unknown): string | null {
+  const name = String(raw ?? "").trim();
+  return name ? null : "Business name is required for a new GSTIN";
 }

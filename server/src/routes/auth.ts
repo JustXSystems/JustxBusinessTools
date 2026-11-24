@@ -28,6 +28,7 @@ import {
   verifyPassword,
 } from "../lib/auth/session.js";
 import {
+  requireBusinessNameForNewGstin,
   requireHomeToolsForNewBusiness,
   validateRegisterPayload,
 } from "../lib/auth/register-input.js";
@@ -217,10 +218,16 @@ router.post("/register", async (req, res) => {
         res.status(400).json({ error: homeToolsError });
         return;
       }
+      const businessNameRaw = req.body?.businessName ?? req.body?.organizationName;
+      const businessNameError = requireBusinessNameForNewGstin(businessNameRaw);
+      if (businessNameError) {
+        await conn.rollback();
+        res.status(400).json({ error: businessNameError });
+        return;
+      }
+      const businessName = String(businessNameRaw).trim();
 
       await ensureHomeToolIdsColumn();
-      const businessName =
-        String(req.body?.businessName ?? req.body?.organizationName ?? "").trim() || name || "My Business";
       const pan = blank(req.body?.pan)?.toUpperCase() || panFromGstin(gstin);
       const logoUrl = await saveImageUpload(blank(req.body?.logo), "logos");
 
@@ -403,7 +410,7 @@ router.post("/register", async (req, res) => {
 
 router.post("/login", async (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase();
-  const password = String(req.body?.password ?? "");
+  const password = String(req.body?.password ?? "").trim();
 
   const [rows] = await pool.query(
     `SELECT u.id, u.password_hash, u.status, m.organization_id, m.role

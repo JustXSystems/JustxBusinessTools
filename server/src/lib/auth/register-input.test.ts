@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizeAccountType,
+  requireBusinessNameForNewGstin,
   requireHomeToolsForNewBusiness,
   validateRegisterPayload,
 } from "./register-input.js";
@@ -65,6 +66,29 @@ describe("validateRegisterPayload", () => {
     expect(result.data.accountType).toBe("business");
   });
 
+  it("requires name for business too", () => {
+    const result = validateRegisterPayload({
+      accountType: "business",
+      email: "a@b.co",
+      password: "secret123",
+      gstin: "29ABCDE1234F1Z5",
+      name: " ",
+    });
+    expect(result).toEqual({ ok: false, error: "Your name is required" });
+  });
+
+  it("trims password before length check", () => {
+    const result = validateRegisterPayload({
+      accountType: "individual",
+      email: "a@b.co",
+      password: "  secret123  ",
+      name: "Alex",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.password).toBe("secret123");
+  });
+
   it("rejects short passwords", () => {
     const result = validateRegisterPayload({
       accountType: "individual",
@@ -96,5 +120,17 @@ describe("requireHomeToolsForNewBusiness", () => {
 
   it("accepts a non-empty list", () => {
     expect(requireHomeToolsForNewBusiness(["gstcalc"])).toBeNull();
+  });
+});
+
+describe("requireBusinessNameForNewGstin", () => {
+  it("rejects blank business names", () => {
+    expect(requireBusinessNameForNewGstin("")).toMatch(/Business name/i);
+    expect(requireBusinessNameForNewGstin("   ")).toMatch(/Business name/i);
+    expect(requireBusinessNameForNewGstin(null)).toMatch(/Business name/i);
+  });
+
+  it("accepts a real business name", () => {
+    expect(requireBusinessNameForNewGstin("Acme Solar")).toBeNull();
   });
 });

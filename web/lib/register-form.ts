@@ -29,15 +29,18 @@ export function isValidRegisterGstin(gstin: string): boolean {
 /** Client-side gate before calling /auth/register. */
 export function validateRegisterForm(state: RegisterFormState): RegisterFormResult {
   const email = state.email.trim();
-  const password = state.password;
+  const password = state.password.trim();
   const name = state.name.trim();
 
   if (!email || password.length < 8) {
     return { ok: false, error: "Email and password (min 8 chars) required" };
   }
 
+  if (!name) {
+    return { ok: false, error: "Your name is required" };
+  }
+
   if (state.accountType === "individual") {
-    if (!name) return { ok: false, error: "Your name is required" };
     return { ok: true };
   }
 

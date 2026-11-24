@@ -33,6 +33,23 @@ describe("validateRegisterForm", () => {
     });
   });
 
+  it("requires name for business", () => {
+    expect(
+      validateRegisterForm({
+        ...individual,
+        accountType: "business",
+        name: "  ",
+        gstin: "29ABCDE1234F1Z5",
+        businessName: "Acme",
+        homeToolIds: ["gstcalc"],
+      }),
+    ).toEqual({ ok: false, error: "Your name is required" });
+  });
+
+  it("trims password before length check", () => {
+    expect(validateRegisterForm({ ...individual, password: "  secret123  " })).toEqual({ ok: true });
+  });
+
   it("requires GSTIN only for business", () => {
     expect(
       validateRegisterForm({

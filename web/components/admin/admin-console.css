@@ -2085,7 +2085,10 @@
   .bos.admin-bos textarea.bos-input,
   .bos.admin-bos .admin-cc-json-area,
   .bos.admin-bos .admin-cc-color-row .bos-input,
-  .bos.admin-bos .admin-cc-enter-list {
+  .bos.admin-bos .admin-cc-enter-list,
+  .bos.admin-bos .admin-cc-login .bos-input,
+  .bos.admin-bos .admin-cc-login select.bos-input,
+  .bos.admin-bos .admin-cc-login textarea.bos-input {
     font-size: 16px; /* stop iOS focus-zoom on custom-sized inputs */
   }
 

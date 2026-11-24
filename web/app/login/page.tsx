@@ -93,7 +93,7 @@ export default function LoginPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: username.trim(), password }),
+        body: JSON.stringify({ email: username.trim(), password: password.trim() }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
