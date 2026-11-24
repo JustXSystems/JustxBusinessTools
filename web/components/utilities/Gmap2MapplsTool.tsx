@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import dynamic from "next/dynamic";
 import {
   OEM_BRANDS,
@@ -142,8 +150,10 @@ export function Gmap2MapplsTool({
   const [showAppHelp, setShowAppHelp] = useState(false);
   const [clipboardHint, setClipboardHint] = useState(false);
   const [showA2hs, setShowA2hs] = useState(false);
+  const [pointer, setPointer] = useState({ x: 50, y: 28 });
   const brandIdRef = useRef(brandId);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const appHelpTimerRef = useRef<number | null>(null);
   const autoTrialRef = useRef(false);
 
@@ -675,6 +685,16 @@ export function Gmap2MapplsTool({
     }
   };
 
+  const onShellPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const el = shellRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+    setPointer({ x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+  };
+
   const stageOrder = { brand: 0, place: 1, open: 2 } as const;
   const primaryCtaLabel = loading
     ? "Matching point…"
@@ -682,8 +702,21 @@ export function Gmap2MapplsTool({
       ? playbook.primary.label
       : "Convert & open";
 
+  const liveState: "ready" | "busy" | "locked" = loading ? "busy" : result ? "locked" : "ready";
+  const liveLabel = liveState === "busy" ? "Matching" : liveState === "locked" ? "Locked" : "Ready";
+
   const body = (
-    <div className={`g2m tool-workspace ${deviceClass(onAndroid, onIos)} g2m--${variant}`}>
+    <div
+      ref={shellRef}
+      className={`g2m tool-workspace ${deviceClass(onAndroid, onIos)} g2m--${variant}`}
+      style={{ "--g2m-mx": `${pointer.x}%`, "--g2m-my": `${pointer.y}%` } as CSSProperties}
+      onPointerMove={onShellPointerMove}
+    >
+      <div className="g2m-space" aria-hidden>
+        <span className="g2m-space-orb" />
+        <span className="g2m-space-orb g2m-space-orb--2" />
+      </div>
+
       <header className="g2m-chrome">
         <div className="g2m-brandmark">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -699,6 +732,13 @@ export function Gmap2MapplsTool({
             <h1 className="g2m-title">{PINWAY_PRODUCT_NAME}</h1>
           </div>
         </div>
+        <span
+          className={`g2m-livepill${liveState === "busy" ? " is-busy" : ""}${liveState === "locked" ? " is-locked" : ""}`}
+          role="status"
+        >
+          <span className="g2m-livepill-dot" aria-hidden />
+          {liveLabel}
+        </span>
         <PinwayThemeToggle />
       </header>
 
@@ -712,22 +752,24 @@ export function Gmap2MapplsTool({
         </p>
       ) : null}
 
-      <ol className="g2m-rail" aria-label="Progress">
+      <ol className="g2m-beam" aria-label="Progress">
         {(
           [
             ["brand", "Brand"],
             ["place", "Place"],
             ["open", "Send"],
           ] as const
-        ).map(([id, label], i) => {
+        ).map(([id, label]) => {
           const mine = stageOrder[id];
           const current = stageOrder[stage];
           return (
             <li
               key={id}
-              className={`g2m-rail-step${stage === id ? " is-active" : ""}${mine < current ? " is-done" : ""}`}
+              className={`g2m-beam-step${stage === id ? " is-active" : ""}${mine < current ? " is-done" : ""}`}
             >
-              <span className="g2m-rail-dot">{mine < current ? "✓" : i + 1}</span>
+              <span className="g2m-beam-track" aria-hidden>
+                <span className="g2m-beam-fill" />
+              </span>
               {label}
             </li>
           );
@@ -735,7 +777,7 @@ export function Gmap2MapplsTool({
       </ol>
 
       {pinwayLocked ? (
-        <section className="g2m-panel g2m-paywall" aria-label={`${PINWAY_PRODUCT_NAME} subscription`}>
+        <section className="g2m-tile g2m-paywall" aria-label={`${PINWAY_PRODUCT_NAME} subscription`}>
           <strong>{pinwayTrialEligible ? "Start your free trial" : `Subscribe to continue`}</strong>
           <p className="g2m-hint">
             {pinwayTrialEligible
@@ -765,13 +807,107 @@ export function Gmap2MapplsTool({
         </section>
       ) : null}
 
-      <section className="g2m-panel g2m-command" aria-label="Command">
-        <div className="g2m-panel-head">
-          <p className="g2m-kicker">Command</p>
-          <p className="g2m-hint">{emptyStateHint(brandId)}</p>
-        </div>
+      <div className="g2m-bento">
+        <section className="g2m-tile g2m-tile--hero" aria-label="Destination">
+          <div className="g2m-tile-head">
+            <p className="g2m-kicker">Destination</p>
+            <p className="g2m-hint">{emptyStateHint(brandId)}</p>
+          </div>
 
-        <div>
+          <div className="g2m-spotlight">
+            <label className="g2m-field-label" htmlFor="g2m-input">
+              Google place
+            </label>
+            <Textarea
+              id="g2m-input"
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onFocus={() => void onInputFocus()}
+              placeholder="Paste Google Maps link, address, or lat,lng"
+              spellCheck={false}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  void resolve(input);
+                }
+              }}
+            />
+            {clipboardHint ? (
+              <div className="g2m-clip-banner" role="status">
+                <span>Maps link ready on clipboard</span>
+                <button type="button" className="g2m-linkish" onClick={() => void pasteAndFind()}>
+                  Use it
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="g2m-actions">
+            <Button
+              variant="primary"
+              disabled={loading || pinwayLocked}
+              onClick={() => {
+                if (result && playbook) void runPrimary();
+                else void resolve(input);
+              }}
+            >
+              {loading ? <span className="g2m-spinner" aria-hidden /> : null}
+              {primaryCtaLabel}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={loading || pinwayLocked}
+              onClick={() => void pasteAndFind()}
+            >
+              Paste
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={loading || (!input && !result)}
+              onClick={clearAll}
+            >
+              Clear
+            </Button>
+          </div>
+
+          {recents.length > 0 ? (
+            <div aria-label="Recent destinations">
+              <p className="g2m-field-label">Recent</p>
+              <div className="g2m-recent-row">
+                {recents.slice(0, 4).map((r) => (
+                  <FilterChip
+                    key={`${r.at}-${r.lat}-${r.brandId}`}
+                    title={r.input}
+                    onClick={() => {
+                      if (r.brandId !== brandId) onBrandChange(r.brandId);
+                      setInput(r.input);
+                      void resolve(r.input);
+                    }}
+                  >
+                    {r.pin ? `${r.label} · ${r.pin}` : r.label}
+                  </FilterChip>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {whatsappDriverUrl ? (
+            <p className="g2m-hint">
+              <a className="g2m-linkish" href={whatsappDriverUrl} target="_blank" rel="noreferrer">
+                WhatsApp to driver’s phone
+              </a>
+            </p>
+          ) : null}
+        </section>
+
+        <section className="g2m-tile g2m-tile--brand" aria-label="Vehicle brand">
+          <div className="g2m-tile-head">
+            <p className="g2m-kicker">Vehicle</p>
+          </div>
+
           <div className="g2m-segment-row">
             <Segmented
               aria-label="Vehicle segment"
@@ -788,7 +924,7 @@ export function Gmap2MapplsTool({
           </div>
 
           {(isMahindraFamily(brandId) || segment === "4W") && (
-            <div className="g2m-mahindra-row" role="group" aria-label="Mahindra app" style={{ marginTop: 10 }}>
+            <div className="g2m-mahindra-row" role="group" aria-label="Mahindra app">
               <FilterChip active={brandId === "mahindra"} onClick={() => onBrandChange("mahindra", result?.paste)}>
                 Adrenox · ICE
               </FilterChip>
@@ -801,7 +937,7 @@ export function Gmap2MapplsTool({
             </div>
           )}
 
-          <label className="g2m-field-label" htmlFor="g2m-brand-top" style={{ marginTop: 12 }}>
+          <label className="g2m-field-label" htmlFor="g2m-brand-top">
             Vehicle brand
             {selectedBrand?.companionApp ? ` → ${selectedBrand.companionApp.name}` : ""}
           </label>
@@ -841,372 +977,298 @@ export function Gmap2MapplsTool({
               </>
             )}
           </Select>
-        </div>
+        </section>
 
-        <div className="g2m-destination">
-          <label className="g2m-field-label" htmlFor="g2m-input">
-            Google place
-          </label>
-          <Textarea
-            id="g2m-input"
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onFocus={() => void onInputFocus()}
-            placeholder="Paste Google Maps link, address, or lat,lng"
-            spellCheck={false}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                void resolve(input);
-              }
-            }}
-          />
-          {clipboardHint ? (
-            <div className="g2m-clip-banner" role="status">
-              <span>Maps link ready on clipboard</span>
-              <button type="button" className="g2m-linkish" onClick={() => void pasteAndFind()}>
-                Use it
-              </button>
+        <section className="g2m-tile g2m-tile--live" aria-live="polite">
+          {error ? <Alert tone="coral" title={error} /> : null}
+
+          {loading && !result ? (
+            <div className="g2m-loading">
+              <span className="g2m-radar" aria-hidden />
+              Matching the same geographic point…
             </div>
           ) : null}
-        </div>
 
-        <div className="g2m-actions">
-          <Button
-            variant="primary"
-            disabled={loading || pinwayLocked}
-            onClick={() => {
-              if (result && playbook) void runPrimary();
-              else void resolve(input);
-            }}
-          >
-            {loading ? <span className="g2m-spinner" aria-hidden /> : null}
-            {primaryCtaLabel}
-          </Button>
-          <Button variant="secondary" disabled={loading || pinwayLocked} onClick={() => void pasteAndFind()}>
-            Paste
-          </Button>
-          <Button variant="ghost" disabled={loading || (!input && !result)} onClick={clearAll}>
-            Clear
-          </Button>
-        </div>
-
-        {recents.length > 0 ? (
-          <div aria-label="Recent destinations">
-            <p className="g2m-field-label">Recent</p>
-            <div className="g2m-recent-row">
-              {recents.slice(0, 4).map((r) => (
-                <FilterChip
-                  key={`${r.at}-${r.lat}-${r.brandId}`}
-                  title={r.input}
-                  onClick={() => {
-                    if (r.brandId !== brandId) onBrandChange(r.brandId);
-                    setInput(r.input);
-                    void resolve(r.input);
-                  }}
-                >
-                  {r.pin ? `${r.label} · ${r.pin}` : r.label}
-                </FilterChip>
-              ))}
+          {!result && !loading && !error ? (
+            <div className="g2m-insight">
+              <h2 className="g2m-insight-title">
+                Paste once. Send to <em>car</em>.
+              </h2>
+              {meta?.tip ? <p className="g2m-hint">{meta.tip}</p> : null}
+              <ol className="g2m-flow">
+                <li>
+                  <span className="g2m-flow-num">1</span>
+                  <div>
+                    <strong>Choose brand</strong>
+                    <span>SimpleOne, Adrenox, Me4U, Bluelink…</span>
+                  </div>
+                </li>
+                <li>
+                  <span className="g2m-flow-num">2</span>
+                  <div>
+                    <strong>Drop a Google place</strong>
+                    <span>Share link, address, or coordinates</span>
+                  </div>
+                </li>
+                <li>
+                  <span className="g2m-flow-num">3</span>
+                  <div>
+                    <strong>Open companion app</strong>
+                    <span>We lock the Mappls point and hand off</span>
+                  </div>
+                </li>
+              </ol>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        {whatsappDriverUrl ? (
-          <p className="g2m-hint">
-            <a className="g2m-linkish" href={whatsappDriverUrl} target="_blank" rel="noreferrer">
-              WhatsApp to driver’s phone
-            </a>
-          </p>
-        ) : null}
-      </section>
-
-      <section className="g2m-panel g2m-stage-panel" aria-live="polite">
-        {error ? <Alert tone="coral" title={error} /> : null}
-
-        {loading && !result ? (
-          <div className="g2m-loading">
-            <span className="g2m-spinner" aria-hidden />
-            Matching the same geographic point…
-          </div>
-        ) : null}
-
-        {!result && !loading && !error ? (
-          <div className="g2m-insight">
-            <h2 className="g2m-insight-title">Paste once. Send to car.</h2>
-            {meta?.tip ? <p className="g2m-hint">{meta.tip}</p> : null}
-            <ol className="g2m-flow">
-              <li>
-                <span className="g2m-flow-num">1</span>
-                <div>
-                  <strong>Choose brand</strong>
-                  <span>SimpleOne, Adrenox, Me4U, Bluelink…</span>
-                </div>
-              </li>
-              <li>
-                <span className="g2m-flow-num">2</span>
-                <div>
-                  <strong>Drop a Google place</strong>
-                  <span>Share link, address, or coordinates</span>
-                </div>
-              </li>
-              <li>
-                <span className="g2m-flow-num">3</span>
-                <div>
-                  <strong>Open companion app</strong>
-                  <span>We lock the Mappls point and hand off</span>
-                </div>
-              </li>
-            </ol>
-          </div>
-        ) : null}
-
-        {result && playbook ? (
-          <div className="g2m-result">
-            <div className="g2m-lock" role="status">
-              <p className="g2m-lock-meta">Exact point locked</p>
-              <strong>{formatCoordPair(result.lat, result.lng)}</strong>
-              <p>
-                {result.paste.mapplsPin
-                  ? `Mappls Pin ${result.paste.mapplsPin}`
-                  : result.paste.searchQuery || "Ready for handoff"}
-              </p>
-            </div>
-
-            {isPinPasteBrand && pinReady ? (
-              <div className={`g2m-pin-hero${pinPulse ? " is-pulse" : ""}`} role="status">
-                <div>
-                  <p className="g2m-kicker">Mappls Pin</p>
-                  <span className="g2m-pin-code">{result.paste.mapplsPin}</span>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() =>
-                    void onCopy("pinhero", result.paste.mapplsPin || "", result.paste.mapplsPin)
-                  }
-                >
-                  {copied === "pinhero" || pinPulse ? "Copied" : "Copy"}
-                </Button>
+          {result && playbook ? (
+            <div className="g2m-result">
+              <div className="g2m-lock" role="status">
+                <p className="g2m-lock-meta">Exact point locked</p>
+                <strong>{formatCoordPair(result.lat, result.lng)}</strong>
+                <p>
+                  {result.paste.mapplsPin
+                    ? `Mappls Pin ${result.paste.mapplsPin}`
+                    : result.paste.searchQuery || "Ready for handoff"}
+                </p>
               </div>
-            ) : null}
 
-            <p className="g2m-status">
-              {statusNote}
-              {autoCopied ? ` · Clipboard: ${autoCopied}` : ""}
-            </p>
+              {isPinPasteBrand && pinReady ? (
+                <div className={`g2m-pin-hero${pinPulse ? " is-pulse" : ""}`} role="status">
+                  <div>
+                    <p className="g2m-kicker">Mappls Pin</p>
+                    <span className="g2m-pin-code">{result.paste.mapplsPin}</span>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      void onCopy("pinhero", result.paste.mapplsPin || "", result.paste.mapplsPin)
+                    }
+                  >
+                    {copied === "pinhero" || pinPulse ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+              ) : null}
 
-            {playbook.rejectLatLngPaste ? (
-              <p className="g2m-hint" role="note">
-                Do not paste coordinates into {appName} — use Pin / place name only.
+              <p className="g2m-status">
+                {statusNote}
+                {autoCopied ? ` · Clipboard: ${autoCopied}` : ""}
               </p>
-            ) : null}
 
-            <div className="g2m-guide-layout">
-              <div>
-                <div className="g2m-guide-cta">
-                  {playbook.primary.kind === "open" && playbook.primary.href ? (
-                    <a
-                      className="bos-btn bos-btn-primary"
-                      href={playbook.primary.href}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        void runOpenPrimary(
-                          playbook.primary.href!,
-                          playbook.autoCopyText,
-                          result.paste.mapplsPin,
-                        );
-                      }}
-                    >
-                      {playbook.primary.label}
-                    </a>
-                  ) : (
-                    <Button variant="primary" onClick={() => void runPrimary()}>
-                      {copied === "primary" && playbook.primary.kind === "copy"
-                        ? "Copied — paste in app now"
-                        : playbook.primary.label}
-                    </Button>
-                  )}
-                  {playbook.autoCopyText ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        void onCopy(
-                          "autocopy",
-                          playbook.autoCopyText || "",
-                          result.paste.mapplsPin,
-                        )
-                      }
-                    >
-                      {copied === "autocopy"
-                        ? "Copied"
-                        : result.paste.mapplsPin && playbook.autoCopyText === result.paste.mapplsPin
-                          ? `Copy Pin`
-                          : "Copy again"}
-                    </Button>
+              {playbook.rejectLatLngPaste ? (
+                <p className="g2m-hint" role="note">
+                  Do not paste coordinates into {appName} — use Pin / place name only.
+                </p>
+              ) : null}
+
+              <div className="g2m-guide-layout">
+                <div>
+                  <div className="g2m-guide-cta">
+                    {playbook.primary.kind === "open" && playbook.primary.href ? (
+                      <a
+                        className="bos-btn bos-btn-primary"
+                        href={playbook.primary.href}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          void runOpenPrimary(
+                            playbook.primary.href!,
+                            playbook.autoCopyText,
+                            result.paste.mapplsPin,
+                          );
+                        }}
+                      >
+                        {playbook.primary.label}
+                      </a>
+                    ) : (
+                      <Button variant="primary" onClick={() => void runPrimary()}>
+                        {copied === "primary" && playbook.primary.kind === "copy"
+                          ? "Copied — paste in app now"
+                          : playbook.primary.label}
+                      </Button>
+                    )}
+                    {playbook.autoCopyText ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          void onCopy(
+                            "autocopy",
+                            playbook.autoCopyText || "",
+                            result.paste.mapplsPin,
+                          )
+                        }
+                      >
+                        {copied === "autocopy"
+                          ? "Copied"
+                          : result.paste.mapplsPin && playbook.autoCopyText === result.paste.mapplsPin
+                            ? `Copy Pin`
+                            : "Copy again"}
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  {showAppHelp && playStoreHref ? (
+                    <div className="g2m-app-help" role="status">
+                      <strong>App didn’t open?</strong>
+                      <p className="g2m-hint">Install {appName}, then tap Send again.</p>
+                      <div className="g2m-paste-row">
+                        <a
+                          className="bos-btn bos-btn-secondary bos-btn-sm"
+                          href={playStoreHref}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Play Store
+                        </a>
+                        <Button variant="ghost" size="sm" onClick={() => setShowAppHelp(false)}>
+                          Dismiss
+                        </Button>
+                      </div>
+                    </div>
                   ) : null}
                 </div>
 
-                {showAppHelp && playStoreHref ? (
-                  <div className="g2m-app-help" role="status" style={{ marginTop: 10 }}>
-                    <strong>App didn’t open?</strong>
-                    <p className="g2m-hint">Install {appName}, then tap Send again.</p>
-                    <div className="g2m-paste-row">
-                      <a
-                        className="bos-btn bos-btn-secondary bos-btn-sm"
-                        href={playStoreHref}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Play Store
-                      </a>
-                      <Button variant="ghost" size="sm" onClick={() => setShowAppHelp(false)}>
-                        Dismiss
-                      </Button>
-                    </div>
-                  </div>
+                {qr ? (
+                  <figure className="g2m-qr">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qr.dataUrl}
+                      alt={
+                        isPinPasteBrand && pinReady
+                          ? `QR for Mappls Pin ${result.paste.mapplsPin}`
+                          : `QR to open ${appName}`
+                      }
+                      width={128}
+                      height={128}
+                    />
+                    <figcaption>
+                      {isPinPasteBrand && pinReady
+                        ? `Scan → Pin ${result.paste.mapplsPin}`
+                        : `Scan → ${appName}`}
+                    </figcaption>
+                  </figure>
                 ) : null}
               </div>
 
-              {qr ? (
-                <figure className="g2m-qr">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={qr.dataUrl}
-                    alt={
-                      isPinPasteBrand && pinReady
-                        ? `QR for Mappls Pin ${result.paste.mapplsPin}`
-                        : `QR to open ${appName}`
-                    }
-                    width={128}
-                    height={128}
-                  />
-                  <figcaption>
-                    {isPinPasteBrand && pinReady
-                      ? `Scan → Pin ${result.paste.mapplsPin}`
-                      : `Scan → ${appName}`}
-                  </figcaption>
-                </figure>
-              ) : null}
-            </div>
-
-            <div className="g2m-map-panel">
-              <MapPreview key={`${result.lat},${result.lng}`} lat={result.lat} lng={result.lng} />
-            </div>
-
-            <details className="g2m-secondary">
-              <summary>More options</summary>
-              <div className="g2m-paste-row">
-                {canNativeShare && playbook.share ? (
-                  <button
-                    type="button"
-                    className="bos-btn bos-btn-secondary bos-btn-sm"
-                    onClick={() => void onShare()}
-                  >
-                    {copied === "share" ? "Shared" : "Share…"}
-                  </button>
-                ) : null}
-                {playbook.inCar ? (
-                  <button
-                    type="button"
-                    className="bos-btn bos-btn-secondary bos-btn-sm"
-                    onClick={() =>
-                      void onCopy("incar", playbook.inCar?.copyText || "", result.paste.mapplsPin)
-                    }
-                  >
-                    {copied === "incar" ? "Copied" : playbook.inCar.label}
-                  </button>
-                ) : null}
-                {whatsappDriverUrl ? (
+              <details className="g2m-secondary">
+                <summary>More options</summary>
+                <div className="g2m-paste-row">
+                  {canNativeShare && playbook.share ? (
+                    <button
+                      type="button"
+                      className="bos-btn bos-btn-secondary bos-btn-sm"
+                      onClick={() => void onShare()}
+                    >
+                      {copied === "share" ? "Shared" : "Share…"}
+                    </button>
+                  ) : null}
+                  {playbook.inCar ? (
+                    <button
+                      type="button"
+                      className="bos-btn bos-btn-secondary bos-btn-sm"
+                      onClick={() =>
+                        void onCopy("incar", playbook.inCar?.copyText || "", result.paste.mapplsPin)
+                      }
+                    >
+                      {copied === "incar" ? "Copied" : playbook.inCar.label}
+                    </button>
+                  ) : null}
+                  {whatsappDriverUrl ? (
+                    <a
+                      className="bos-btn bos-btn-secondary bos-btn-sm"
+                      href={whatsappDriverUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      WhatsApp driver
+                    </a>
+                  ) : null}
+                  {playbook.backup?.href ? (
+                    <a
+                      className="bos-btn bos-btn-secondary bos-btn-sm"
+                      href={playbook.backup.href}
+                      {...(/^(intent|geo|mappls):/i.test(playbook.backup.href)
+                        ? {}
+                        : { target: "_blank", rel: "noreferrer" })}
+                      onClick={(e) => {
+                        if (/^(intent|geo|mappls):/i.test(playbook.backup?.href || "")) {
+                          e.preventDefault();
+                          openAutoUrl(playbook.backup!.href!);
+                        }
+                      }}
+                    >
+                      {playbook.backup.label}
+                    </a>
+                  ) : null}
+                  {result.paste.mapplsPin ? (
+                    <button
+                      type="button"
+                      className="bos-btn bos-btn-secondary bos-btn-sm"
+                      onClick={() =>
+                        void onCopy("pin", result.paste.mapplsPin || "", result.paste.mapplsPin)
+                      }
+                    >
+                      {copied === "pin" ? "Copied Pin" : "Copy Pin"}
+                    </button>
+                  ) : null}
                   <a
                     className="bos-btn bos-btn-secondary bos-btn-sm"
-                    href={whatsappDriverUrl}
+                    href={result.paste.mapplsUrl}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    WhatsApp driver
+                    Verify Mappls
                   </a>
-                ) : null}
-                {playbook.backup?.href ? (
                   <a
                     className="bos-btn bos-btn-secondary bos-btn-sm"
-                    href={playbook.backup.href}
-                    {...(/^(intent|geo|mappls):/i.test(playbook.backup.href)
-                      ? {}
-                      : { target: "_blank", rel: "noreferrer" })}
-                    onClick={(e) => {
-                      if (/^(intent|geo|mappls):/i.test(playbook.backup?.href || "")) {
-                        e.preventDefault();
-                        openAutoUrl(playbook.backup!.href!);
-                      }
-                    }}
+                    href={result.paste.googleMapsUrl}
+                    target="_blank"
+                    rel="noreferrer"
                   >
-                    {playbook.backup.label}
+                    Verify Google
                   </a>
-                ) : null}
-                {result.paste.mapplsPin ? (
-                  <button
-                    type="button"
-                    className="bos-btn bos-btn-secondary bos-btn-sm"
-                    onClick={() =>
-                      void onCopy("pin", result.paste.mapplsPin || "", result.paste.mapplsPin)
-                    }
-                  >
-                    {copied === "pin" ? "Copied Pin" : "Copy Pin"}
-                  </button>
-                ) : null}
-                <a
-                  className="bos-btn bos-btn-secondary bos-btn-sm"
-                  href={result.paste.mapplsUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Verify Mappls
-                </a>
-                <a
-                  className="bos-btn bos-btn-secondary bos-btn-sm"
-                  href={result.paste.googleMapsUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Verify Google
-                </a>
-              </div>
-            </details>
-          </div>
+                </div>
+              </details>
+            </div>
+          ) : null}
+        </section>
+
+        {result ? (
+          <section className="g2m-tile g2m-tile--map" aria-label="Map preview">
+            <div className="g2m-map-panel">
+              <MapPreview key={`${result.lat},${result.lng}`} lat={result.lat} lng={result.lng} />
+            </div>
+          </section>
         ) : null}
-      </section>
+      </div>
 
       {variant === "standalone" || onAndroid || onIos ? (
-        <div className="g2m-dock" aria-label="Primary actions">
-          <div className="g2m-dock-inner">
-            {result && playbook?.primary.href ? (
-              <a
-                className="bos-btn bos-btn-primary"
-                href={playbook.primary.href}
-                onClick={(e) => {
-                  e.preventDefault();
-                  void runOpenPrimary(
-                    playbook.primary.href!,
-                    playbook.autoCopyText,
-                    result.paste.mapplsPin,
-                  );
-                }}
-              >
-                {playbook.primary.label}
-              </a>
-            ) : (
-              <>
-                <Button variant="primary" disabled={loading || pinwayLocked} onClick={() => void resolve(input)}>
-                  {loading ? "Matching…" : "Convert & open"}
-                </Button>
-                <Button variant="secondary" disabled={loading || pinwayLocked} onClick={() => void pasteAndFind()}>
-                  Paste
-                </Button>
-              </>
-            )}
-          </div>
+        <div className="g2m-island" aria-label="Primary actions">
+          {result && playbook?.primary.href ? (
+            <a
+              className="bos-btn bos-btn-primary"
+              href={playbook.primary.href}
+              onClick={(e) => {
+                e.preventDefault();
+                void runOpenPrimary(
+                  playbook.primary.href!,
+                  playbook.autoCopyText,
+                  result.paste.mapplsPin,
+                );
+              }}
+            >
+              {playbook.primary.label}
+            </a>
+          ) : (
+            <>
+              <Button variant="primary" disabled={loading || pinwayLocked} onClick={() => void resolve(input)}>
+                {loading ? "Matching…" : "Convert & open"}
+              </Button>
+              <Button variant="secondary" disabled={loading || pinwayLocked} onClick={() => void pasteAndFind()}>
+                Paste
+              </Button>
+            </>
+          )}
         </div>
       ) : null}
     </div>
