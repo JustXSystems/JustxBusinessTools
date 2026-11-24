@@ -103,34 +103,50 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
       source = classified.coords.source;
     } else if (classified.kind === "short_link") {
       const expanded = await expandGoogleShortLink(classified.url);
-      if (!expanded.coords) {
+      if (expanded.coords) {
+        lat = expanded.coords.lat;
+        lng = expanded.coords.lng;
+        source = "short_link";
+        label = expanded.coords.label;
+        displayName = expanded.placeName ?? undefined;
+      } else if (expanded.placeName) {
+        // Share links often expand to /place/Name/data=!…placeId… with no @lat,lng.
+        const geo = await geocodeIndiaAddress(expanded.placeName);
+        lat = geo.lat;
+        lng = geo.lng;
+        source = "geocode";
+        displayName = expanded.placeName;
+      } else {
         return {
           ok: false,
           error:
-            "Short link opened on Google but had no coordinates. Open the place in Google Maps → Share → Copy link (full URL with @lat,lng).",
+            "Short link opened on Google but had no place or coordinates. Open the place in Google Maps → Share → Copy link again.",
           code: "no_coords",
         };
       }
-      lat = expanded.coords.lat;
-      lng = expanded.coords.lng;
-      source = "short_link";
-      label = expanded.coords.label;
-      displayName = expanded.placeName ?? undefined;
     } else if (classified.kind === "google_url") {
       const coords = classified.coords ?? extractCoordsFromGoogleUrl(classified.url);
-      if (!coords) {
+      const placeName = extractPlaceNameFromGoogleUrl(classified.url);
+      if (coords) {
+        lat = coords.lat;
+        lng = coords.lng;
+        source = coords.source;
+        label = coords.label;
+        displayName = placeName ?? undefined;
+      } else if (placeName) {
+        const geo = await geocodeIndiaAddress(placeName);
+        lat = geo.lat;
+        lng = geo.lng;
+        source = "geocode";
+        displayName = placeName;
+      } else {
         return {
           ok: false,
           error:
-            "That Google Maps URL has no coordinates. Use Share → Copy link from the place pin, or paste lat,lng.",
+            "That Google Maps URL has no coordinates or place name. Use Share → Copy link from the place pin, or paste lat,lng.",
           code: "no_coords",
         };
       }
-      lat = coords.lat;
-      lng = coords.lng;
-      source = coords.source;
-      label = coords.label;
-      displayName = extractPlaceNameFromGoogleUrl(classified.url) ?? undefined;
     } else {
       // Full address — Photon/Nominatim only (never Mappls text search)
       const geo = await geocodeIndiaAddress(classified.address);

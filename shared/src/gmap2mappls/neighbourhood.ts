@@ -165,6 +165,15 @@ export function scoreCandidate(address: string, c: GeocodeCandidate): number {
     }
   }
 
+  // Long locality tokens (hosakerehalli, hanumangiri, …) must not lose to a
+  // similarly named layout across the metro (e.g. Sapthagiri Layout north).
+  const longTokens = tokens.filter((t) => t.length >= 8);
+  if (longTokens.length > 0) {
+    const longHits = longTokens.filter((t) => hay.includes(t)).length;
+    if (longHits === 0) score -= 28;
+    else score += longHits * 4;
+  }
+
   for (const h of hints) {
     if (hay.includes(h)) score += 8;
     else if (h === "bengaluru" && (hay.includes("bangalore") || hay.includes("bengaluru"))) score += 8;

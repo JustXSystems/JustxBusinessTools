@@ -24,6 +24,28 @@ function localityFocusedQuery(address: string): string | null {
   return `${parts.join(" ")}, India`;
 }
 
+/**
+ * Google /place/Name,A,B,City share links: prefer trailing locality+city segments.
+ * Leading POI / layout names alone often geocode to the wrong metro suburb.
+ */
+function placePathQueryVariants(address: string): string[] {
+  const parts = address
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return [];
+  const out: string[] = [];
+  if (parts.length >= 3) out.push(parts.slice(-3).join(", "));
+  if (parts.length >= 4) out.push(parts.slice(-4).join(", "));
+  out.push(parts.slice(1).join(", "));
+  // Distinctive locality just before city (Hosakerehalli, Bengaluru…)
+  const cityIdx = parts.findIndex((p) => /\b(bengaluru|bangalore|mumbai|delhi|chennai|hyderabad|pune)\b/i.test(p));
+  if (cityIdx > 0) {
+    out.push(parts.slice(Math.max(0, cityIdx - 1), cityIdx + 2).join(", "));
+  }
+  return out;
+}
+
 const UA = "Justxsystems-JBT-GoogleMaps2Mappls/1.0 (https://justxsystems.com; maps-utility)";
 
 type PhotonFeature = {
@@ -133,7 +155,13 @@ async function geocodeNominatim(address: string): Promise<GeocodeCandidate[]> {
 export async function geocodeIndiaAddress(address: string): Promise<GeocodeCandidate> {
   const cleaned = stripDoorNoise(address);
   const focused = localityFocusedQuery(address);
-  const queries = [...new Set([address, cleaned, focused].filter((q): q is string => Boolean(q && q.length >= 6)))];
+  const placeVariants = placePathQueryVariants(address);
+  // Prefer locality/city variants before the raw POI string (avoids wrong Layout hits).
+  const queries = [
+    ...new Set(
+      [...placeVariants, cleaned, focused, address].filter((q): q is string => Boolean(q && q.length >= 6)),
+    ),
+  ];
 
   const pool: GeocodeCandidate[] = [];
   const seen = new Set<string>();

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyInput,
   extractCoordsFromGoogleUrl,
+  extractCoordsFromMapsHtml,
   extractPlaceNameFromGoogleUrl,
   extractNeighbourhoodTokens,
   pickBestCandidate,
@@ -83,6 +84,43 @@ describe("gmap2mappls neighbourhood", () => {
     expect(tokens).toContain("hulimavu");
     expect(tokens).toContain("bannerghatta");
     expect(tokens).toContain("brindavan");
+  });
+
+  it("prefers Hosakerehalli over north Sapthagiri Layout for Hanumangiri place string", () => {
+    const address =
+      "Hanumangiri, Saptagiri Layout, Hosakerehalli, Bengaluru, Karnataka 560061";
+    const northLayout = scoreCandidate(address, {
+      lat: 13.105528,
+      lng: 77.6104158,
+      displayName: "Sapthagiri Layout Road, Akash Ward, Bengaluru, Karnataka, India",
+      city: "Bengaluru",
+      country: "India",
+    });
+    const hosakerehalli = scoreCandidate(address, {
+      lat: 12.9301881,
+      lng: 77.5378332,
+      displayName: "Hosakerehalli, Bengaluru, Karnataka 560085, India",
+      city: "Bengaluru",
+      country: "India",
+    });
+    expect(hosakerehalli).toBeGreaterThan(northLayout);
+    const picked = pickBestCandidate(address, [
+      {
+        lat: 13.105528,
+        lng: 77.6104158,
+        displayName: "Sapthagiri Layout Road, Akash Ward, Bengaluru, Karnataka, India",
+        city: "Bengaluru",
+        country: "India",
+      },
+      {
+        lat: 12.9301881,
+        lng: 77.5378332,
+        displayName: "Hosakerehalli, Bengaluru, Karnataka 560085, India",
+        city: "Bengaluru",
+        country: "India",
+      },
+    ]);
+    expect(picked?.candidate.lat).toBeCloseTo(12.9301881, 4);
   });
 
   it("rejects Whitefield / Navi Mumbai for Hulimavu address (acceptance 2)", () => {
@@ -349,6 +387,30 @@ describe("gmap2mappls urls + samples", () => {
         "https://www.google.com/maps/place/Zigma+Technologies/@12.87,77.61,16z/data=!3d12.8770726!4d77.6135744",
       ),
     ).toBe("Zigma Technologies");
+  });
+
+  it("extracts place name from share URLs that only have place id (no @lat,lng)", () => {
+    const url =
+      "https://www.google.com/maps/place/Hanumangiri,+Saptagiri+Layout,+Hosakerehalli,+Bengaluru,+Karnataka+560061/data=!4m2!3m1!1s0x3bae3fb518806a77:0xb632e3c78c9fcbd9!18m1!1e1";
+    expect(extractCoordsFromGoogleUrl(url)).toBeNull();
+    expect(extractPlaceNameFromGoogleUrl(url)).toMatch(/Hanumangiri/i);
+    expect(extractPlaceNameFromGoogleUrl(url)).toMatch(/Bengaluru/i);
+  });
+
+  it("scrapes !3d!4d and @ coords from Maps HTML blobs", () => {
+    expect(extractCoordsFromMapsHtml('...data=!3d12.8770726!4d77.6135744...')).toMatchObject({
+      lat: 12.8770726,
+      lng: 77.6135744,
+      source: "bang",
+    });
+    expect(extractCoordsFromMapsHtml("viewport @12.8804,77.5958,18z more")).toMatchObject({
+      lat: 12.8804,
+      lng: 77.5958,
+      source: "at",
+    });
+    expect(
+      extractCoordsFromMapsHtml('state:[null,null,12.97,77.59],title:"x"'),
+    ).toMatchObject({ lat: 12.97, lng: 77.59, source: "place" });
   });
 
   it("ships acceptance fixtures with shared coords", () => {

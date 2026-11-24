@@ -122,6 +122,41 @@ export function extractCoordsFromGoogleUrl(urlString: string): ParsedCoords | nu
   return null;
 }
 
+/**
+ * Scrape coordinates from Google Maps HTML (APP state / embedded data blobs).
+ * Used when short links land on /place/… pages that omit @lat,lng in the URL.
+ */
+export function extractCoordsFromMapsHtml(html: string): ParsedCoords | null {
+  if (!html) return null;
+
+  const bang = html.match(/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+  if (bang) {
+    const pair = parsePair(bang[1], bang[2]);
+    if (pair) return { ...pair, source: "bang" };
+  }
+
+  const at = html.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (at) {
+    const pair = parsePair(at[1], at[2]);
+    if (pair) return { ...pair, source: "at" };
+  }
+
+  // Common Maps JS blob: [null,null,lat,lng]
+  const blob = html.match(/\[null,null,(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)\]/);
+  if (blob) {
+    const pair = parsePair(blob[1], blob[2]);
+    if (pair) return { ...pair, source: "place" };
+  }
+
+  const center = html.match(/"center"\s*:\s*\{\s*"lat"\s*:\s*(-?\d{1,2}\.\d+)\s*,\s*"lng"\s*:\s*(-?\d{1,3}\.\d+)/i);
+  if (center) {
+    const pair = parsePair(center[1], center[2]);
+    if (pair) return { ...pair, source: "place" };
+  }
+
+  return null;
+}
+
 export function isShortGoogleMapsLink(input: string): boolean {
   const n = normalizeMapsUrl(input);
   if (!n) return false;
