@@ -1,15 +1,54 @@
 /* GoogleMaps2Mappls — OOTB futuristic UI on IMS tokens + BOS controls */
 
+/*
+  Mobile app shell:
+  html/body locked → shell = 100dvh → canvas fills → scroll pane + docked island.
+  Island is NOT position:fixed (avoids overflow containing-block bugs).
+*/
+html:has(.pinway-standalone-shell),
+html:has(.pinway-route-root),
+html:has(.pinway-standalone-shell) body,
+html:has(.pinway-route-root) body {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+html:has(.pinway-standalone-shell) body,
+html:has(.pinway-route-root) body {
+  min-height: 0;
+}
+
+.pinway-route-root {
+  height: 100%;
+  max-height: 100dvh;
+  max-height: 100svh;
+  overflow: hidden;
+}
+
 .pinway-standalone-shell {
-  min-height: 100dvh;
-  min-height: 100svh;
+  height: 100dvh;
+  height: 100svh;
+  max-height: 100dvh;
+  max-height: 100svh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.pinway-standalone-shell > .bos.pinway-ims {
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
 }
 
 .bos.pinway-ims,
-.bos .g2m {
+.bos .g2m,
+.bos .g2m-app {
   --g2m-max: 28rem;
-  --g2m-desk: 76rem;
+  --g2m-desk: 40rem;
   --g2m-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --g2m-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
   --g2m-mx: 50%;
@@ -19,41 +58,74 @@
 }
 
 .bos[data-bos-theme="dark"].pinway-ims,
-.bos[data-bos-theme="dark"] .g2m {
+.bos[data-bos-theme="dark"] .g2m,
+.bos[data-bos-theme="dark"] .g2m-app {
   --g2m-glass: color-mix(in srgb, var(--bos-ims-tile) 72%, transparent);
   --g2m-glass-edge: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03));
 }
 
-/* Normal document flow — avoid flex+min-height:0 collapse on mobile WebViews */
 .bos.pinway-ims.bos-canvas {
-  min-height: 100dvh;
-  min-height: 100svh;
   width: 100%;
   background: var(--bos-ims-canvas) !important;
   color: var(--bos-text);
   position: relative;
-  display: block;
-  /* Must NOT clip — overflow clip/hidden makes position:fixed attach to this box */
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden !important;
+}
+
+.bos.pinway-ims--embedded.bos-canvas {
+  height: auto;
+  min-height: min(100dvh, 100%);
   overflow: visible !important;
-  overflow-x: visible !important;
+}
+
+.bos .g2m-app {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: var(--g2m-max);
+  margin: 0 auto;
+}
+
+.bos .g2m-app--embedded {
+  max-width: 48rem;
+  height: auto;
+  min-height: 0;
 }
 
 .bos .g2m {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 14px;
-  max-width: var(--g2m-max);
+  align-content: start;
+  gap: 12px;
   width: 100%;
   box-sizing: border-box;
-  margin: 0 auto;
-  padding: 16px 14px calc(108px + env(safe-area-inset-bottom, 0px));
+  margin: 0;
+  padding: 12px 14px 16px;
   font-family: var(--bos-font-body);
   color: var(--bos-text);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .bos .g2m.g2m--embedded {
-  max-width: 48rem;
+  max-width: none;
+  overflow: visible;
+  flex: none;
+  min-height: auto;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Ambient spatial layer */
@@ -748,21 +820,19 @@
   align-items: start;
 }
 
-/* Viewport-fixed action bar (canvas overflow must stay visible) */
+/* Docked floating action bar — sits in the app shell, always visible */
 .bos .g2m-island-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 80;
+  position: relative;
+  z-index: 30;
+  flex: 0 0 auto;
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 14px calc(8px + env(safe-area-inset-bottom, 0px));
   background: linear-gradient(
     180deg,
     transparent 0%,
-    color-mix(in srgb, var(--bos-bg) 40%, transparent) 35%,
-    color-mix(in srgb, var(--bos-ims-surface-solid) 96%, transparent) 78%
+    color-mix(in srgb, var(--bos-ims-surface-solid) 55%, transparent) 40%,
+    color-mix(in srgb, var(--bos-ims-surface-solid) 98%, transparent) 100%
   );
   pointer-events: none;
 }
@@ -771,8 +841,6 @@
   pointer-events: auto;
   position: relative;
   width: 100%;
-  max-width: var(--g2m-max);
-  margin: 0 auto;
   box-sizing: border-box;
   display: flex;
   align-items: stretch;
@@ -780,8 +848,11 @@
   padding: 8px;
   border-radius: 20px;
   border: 1px solid color-mix(in srgb, var(--bos-border-soft) 85%, transparent);
-  background: color-mix(in srgb, var(--bos-ims-surface-solid) 96%, transparent);
-  box-shadow: var(--bos-shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.28) inset;
+  background: color-mix(in srgb, var(--bos-ims-surface-solid) 97%, transparent);
+  box-shadow:
+    0 -8px 28px -12px rgba(30, 40, 90, 0.28),
+    var(--bos-shadow-md),
+    0 0 0 1px rgba(255, 255, 255, 0.28) inset;
   backdrop-filter: blur(20px) saturate(1.3);
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
 }
@@ -819,6 +890,15 @@
   max-width: 7rem;
 }
 
+/* Embedded: keep island as viewport-fixed fallback */
+.bos .g2m-app--embedded .g2m-island-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+}
+
 /* Native select opaque IMS solid */
 .bos.pinway-ims select.bos-input:not([multiple]):not([size]),
 .bos .g2m select.bos-input:not([multiple]):not([size]) {
@@ -837,29 +917,72 @@
 }
 
 @media (min-width: 960px) {
-  .bos.pinway-ims.bos-canvas {
-    padding: 28px 24px 24px;
+  .bos.pinway-ims--standalone.bos-canvas {
+    padding: 20px 24px 0;
+  }
+
+  .bos .g2m-app--standalone {
+    --g2m-max: var(--g2m-desk);
+    max-width: var(--g2m-desk);
   }
 
   .bos .g2m--standalone,
   .bos .g2m--desktop.g2m--standalone {
-    --g2m-max: min(40rem, 100%);
-    width: min(100%, 40rem);
-    padding: 0 0 calc(108px + env(safe-area-inset-bottom, 0px));
+    padding: 8px 8px 16px;
   }
 
   .bos .g2m-island-bar {
-    padding-left: 24px;
-    padding-right: 24px;
-    padding-bottom: 20px;
-  }
-
-  .bos .g2m-island {
-    max-width: min(40rem, 100%);
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-bottom: 16px;
   }
 
   .bos .g2m--desktop .g2m-map {
     height: min(38vh, 340px);
+  }
+}
+
+/* Compact mobile chrome so command fits above the dock */
+@media (max-width: 720px) {
+  .bos .g2m {
+    gap: 10px;
+    padding: 10px 12px 12px;
+  }
+
+  .bos .g2m-chrome {
+    padding: 8px 10px 8px 8px;
+    border-radius: 18px;
+    gap: 6px;
+  }
+
+  .bos .g2m-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+  }
+
+  .bos .g2m-title {
+    font-size: 0.98rem;
+  }
+
+  .bos .g2m-beam {
+    gap: 6px;
+  }
+
+  .bos .g2m-tile,
+  .bos .g2m-command {
+    padding: 12px;
+    border-radius: 18px;
+    gap: 10px;
+  }
+
+  .bos .g2m-spotlight textarea.bos-input {
+    min-height: 72px;
+    font-size: 15px;
+  }
+
+  .bos .g2m-loading--compact {
+    min-height: 64px;
   }
 }
 

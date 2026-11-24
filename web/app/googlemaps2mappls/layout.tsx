@@ -32,13 +32,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a1f2e",
+  themeColor: "#4854EB",
   width: "device-width",
   initialScale: 1,
-  viewportFit: "cover",
   maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function GoogleMaps2MapplsLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <div className="pinway-route-root">{children}</div>;
 }
