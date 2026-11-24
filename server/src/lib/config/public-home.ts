@@ -777,7 +777,7 @@ export const DEFAULT_PUBLIC_HOME: PublicHomeConfig = {
       id: "cta",
       enabled: true,
       title: "Ready to modernize your operations?",
-      subtitle: "Create your business profile and start with the tools your team needs today.",
+      subtitle: "Register as an individual or business and start with the tools you need today.",
       actions: [
         cta({ id: "cta-reg", label: "Create account", href: "/register", variant: "primary" }),
         cta({ id: "cta-login", label: "Sign in", href: "/login", variant: "secondary" }),

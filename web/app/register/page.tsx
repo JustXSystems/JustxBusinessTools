@@ -96,6 +96,9 @@ export default function RegisterPage() {
   function switchAccountType(next: AccountType) {
     setAccountType(next);
     setError("");
+    if (next === "individual") {
+      setLookup("idle");
+    }
   }
 
   async function lookupGstin(value = gstinNorm): Promise<{ ok: boolean; match: GstinProfile | null }> {

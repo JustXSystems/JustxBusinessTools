@@ -389,7 +389,7 @@ export default function LoginPage() {
                   No account yet?
                 </p>
                 <Link href="/register" className="bos-btn bos-btn-secondary bos-btn-block">
-                  Register with GSTIN
+                  Create account
                 </Link>
               </div>
             </Card>

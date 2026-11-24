@@ -27,7 +27,10 @@ import {
   getTokenFromCookie,
   verifyPassword,
 } from "../lib/auth/session.js";
-import { validateRegisterPayload } from "../lib/auth/register-input.js";
+import {
+  requireHomeToolsForNewBusiness,
+  validateRegisterPayload,
+} from "../lib/auth/register-input.js";
 import { requireAuth } from "../middleware/require-auth.js";
 import {
   applyRegistrationPlaceholders,
@@ -110,11 +113,12 @@ router.post("/register", async (req, res) => {
       );
       const orgId = Number((orgResult as { insertId: number }).insertId);
 
+      // Match Google OAuth: omit home_tool_ids so NULL = show all tools (no schema race).
       const [profileResult] = await conn.query(
         `INSERT INTO business_profiles
-          (organization_id, business_name, phone, email, home_tool_ids, is_default)
+          (organization_id, business_name, phone, email, is_default)
          VALUES
-          (:orgId, :name, :phone, :email, NULL, 1)`,
+          (:orgId, :name, :phone, :email, 1)`,
         { orgId, name: displayName, phone, email },
       );
       const profileId = Number((profileResult as { insertId: number }).insertId);
@@ -206,12 +210,19 @@ router.post("/register", async (req, res) => {
       profileId = existing.id;
       joinedExisting = true;
     } else {
+      const homeToolIds = normalizeHomeToolIdsInput(req.body?.homeToolIds) ?? [];
+      const homeToolsError = requireHomeToolsForNewBusiness(homeToolIds);
+      if (homeToolsError) {
+        await conn.rollback();
+        res.status(400).json({ error: homeToolsError });
+        return;
+      }
+
       await ensureHomeToolIdsColumn();
       const businessName =
         String(req.body?.businessName ?? req.body?.organizationName ?? "").trim() || name || "My Business";
       const pan = blank(req.body?.pan)?.toUpperCase() || panFromGstin(gstin);
       const logoUrl = await saveImageUpload(blank(req.body?.logo), "logos");
-      const homeToolIds = normalizeHomeToolIdsInput(req.body?.homeToolIds) ?? [];
 
       const [orgResult] = await conn.query(
         `INSERT INTO organizations (name, owner_user_id) VALUES (:name, NULL)`,

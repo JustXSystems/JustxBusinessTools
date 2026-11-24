@@ -67,3 +67,11 @@ export function validateRegisterPayload(body: unknown): RegisterValidation {
     data: { accountType, email, password, name, phone, gstin },
   };
 }
+
+/** New business owners must pick at least one home tool (NULL = all; [] = none). */
+export function requireHomeToolsForNewBusiness(homeToolIds: string[] | null | undefined): string | null {
+  if (!homeToolIds || homeToolIds.length === 0) {
+    return "Select at least one tool to show on your home screen";
+  }
+  return null;
+}

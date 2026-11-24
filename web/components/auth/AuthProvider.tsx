@@ -171,7 +171,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         body: JSON.stringify(input),
       });
-      if (!data.pending && data.user) {
+      if (!data.pending) {
+        if (!data.user) {
+          throw new Error("Registration succeeded but session could not be created");
+        }
         setUser(data.user);
         return {
           pending: false as const,

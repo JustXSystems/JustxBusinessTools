@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { normalizeAccountType, validateRegisterPayload } from "./register-input.js";
+import {
+  normalizeAccountType,
+  requireHomeToolsForNewBusiness,
+  validateRegisterPayload,
+} from "./register-input.js";
 
 describe("normalizeAccountType", () => {
   it("accepts individual", () => {
@@ -80,5 +84,17 @@ describe("validateRegisterPayload", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/GSTIN/i);
+  });
+});
+
+describe("requireHomeToolsForNewBusiness", () => {
+  it("rejects empty or missing tool lists", () => {
+    expect(requireHomeToolsForNewBusiness([])).toMatch(/at least one tool/i);
+    expect(requireHomeToolsForNewBusiness(null)).toMatch(/at least one tool/i);
+    expect(requireHomeToolsForNewBusiness(undefined)).toMatch(/at least one tool/i);
+  });
+
+  it("accepts a non-empty list", () => {
+    expect(requireHomeToolsForNewBusiness(["gstcalc"])).toBeNull();
   });
 });
