@@ -11,6 +11,10 @@
  * is used. Mappls Pin (eLoc) is the searchable identity. Coordinate deep links
  * (`mappls.com/navigation?places=lat,lng,…`, `@lat,lng`, geo:) bypass search.
  */
+import {
+  oemPackageGeoIntentUrl,
+  oemPackageGoogleMapsIntentUrl,
+} from "./types";
 
 export type OemMapStack = "mappls" | "ola_maps" | "mixed" | "unknown";
 
@@ -24,6 +28,19 @@ export type OemHandoffMethod =
   | "google_maps"
   | "digipin";
 
+/** Public Play Store companion app used to hand off the destination. */
+export type OemCompanionApp = {
+  /** Button label, e.g. "Simple Connect". */
+  name: string;
+  /** Android applicationId. */
+  packageId: string;
+  /**
+   * geo = WhatsApp-style geo Intent into the package (preferred for location finder).
+   * maps = maps.google.com Intent into the package (Ola / Google-path brands).
+   */
+  handoff: "geo" | "maps";
+};
+
 export type OemBrand = {
   id: string;
   name: string;
@@ -33,6 +50,8 @@ export type OemBrand = {
   /** Ordered preferred methods for that OEM shell. */
   methods: OemHandoffMethod[];
   note: string;
+  /** When set, primary action opens this OEM app (not Mappls). */
+  companionApp?: OemCompanionApp;
 };
 
 /** Universal playbook that covers Mappls NCASE / SDK / phone-projection OEMs. */
@@ -61,8 +80,9 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "2W",
     examples: "SimpleOne, Simple Connect",
     stack: "mappls",
-    methods: ["place_name", "simple_connect_push", "google_maps", "geo_intent", "mappls_nav_deep_link", "mappls_pin"],
-    note: "Pin is correct on Mappls web but SimpleOne search often fuzzy-mismatches eLoc. Prefer POI place name, or Open Google/geo → Share/Push to Simple Connect (official WhatsApp-location / Push Navigation path).",
+    methods: ["simple_connect_push", "geo_intent", "google_maps", "place_name", "mappls_nav_deep_link", "mappls_pin"],
+    note: "Open Simple Connect location finder (geo Intent). Do not use Mappls / Pin search as primary.",
+    companionApp: { name: "Simple Connect", packageId: "com.sepl.android", handoff: "geo" },
   },
   {
     id: "bajaj",
@@ -70,17 +90,19 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "2W",
     examples: "Chetak + ICE/EV (Pulsar etc.)",
     stack: "mappls",
-    methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "Chetak app + ICE/EV Mappls go-lives. Same Autosuggest rule — Pin in search.",
+    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
+    note: "Open Chetak app with destination; Pin as backup in-app search.",
+    companionApp: { name: "Chetak", packageId: "com.bajajmychetak", handoff: "geo" },
   },
   {
     id: "hero",
     name: "Hero MotoCorp",
     segment: "2W",
-    examples: "OneApp",
+    examples: "Hero Connect / OneApp",
     stack: "mappls",
-    methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "OneApp Mappls go-live (FY23). Paste Pin into destination search.",
+    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
+    note: "Open Hero Connect with destination; Pin as backup.",
+    companionApp: { name: "Hero Connect", packageId: "com.invenzen.rollr.hmc", handoff: "geo" },
   },
   {
     id: "ampere",
@@ -88,8 +110,9 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "2W",
     examples: "Nexus, Magnus GMax",
     stack: "mappls",
-    methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "Mappls phone projection; docs explicitly advertise Mappls PIN last-mile.",
+    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
+    note: "Open Ampere Connect (navigation → console); Pin for last-mile backup.",
+    companionApp: { name: "Ampere Connect", packageId: "com.greavesmobility.app", handoff: "geo" },
   },
   {
     id: "matter",
@@ -98,7 +121,7 @@ export const OEM_BRANDS: OemBrand[] = [
     examples: "Matter connected line",
     stack: "mappls",
     methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "Cited Mappls go-live with Ampere / Simple Energy cohort.",
+    note: "No public companion package for location share — Mappls nav + Pin.",
   },
   {
     id: "tork",
@@ -107,7 +130,7 @@ export const OEM_BRANDS: OemBrand[] = [
     examples: "Tork connected EV",
     stack: "mappls",
     methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "Mappls go-live (FY23). Prefer Pin in OEM search.",
+    note: "No public companion package for location share — Mappls nav + Pin.",
   },
   {
     id: "suzuki-2w",
@@ -116,7 +139,7 @@ export const OEM_BRANDS: OemBrand[] = [
     examples: "Cluster phone-projection",
     stack: "mappls",
     methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "Mappls smartphone projection on cluster across vehicle lines.",
+    note: "Phone-projection Mappls path — Mappls nav + Pin.",
   },
   {
     id: "tvs",
@@ -124,8 +147,9 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "2W",
     examples: "Apache RTR 160, SmartXonnect / Connect",
     stack: "mixed",
-    methods: ["mappls_pin", "mappls_nav_deep_link", "google_maps", "geo_intent"],
-    note: "Apache RTR 160 Mappls go-live; TVS Connect also added Google Maps for some EV riders — use Pin for Mappls path, Google link for Google path.",
+    methods: ["geo_intent", "mappls_pin", "google_maps", "mappls_nav_deep_link"],
+    note: "Open TVS Connect with destination; Pin / Google as backup.",
+    companionApp: { name: "TVS Connect", packageId: "com.tvsm.connect", handoff: "geo" },
   },
   {
     id: "ola",
@@ -134,7 +158,8 @@ export const OEM_BRANDS: OemBrand[] = [
     examples: "MoveOS / Ola Maps",
     stack: "ola_maps",
     methods: ["google_maps", "geo_intent", "mappls_pin"],
-    note: "Primary stack is Ola Maps (not Mappls Autosuggest). Open Google / geo: for the shared point; Pin only helps if they also open Mappls.",
+    note: "Open Ola Electric app (Google Maps location family).",
+    companionApp: { name: "Ola Electric", packageId: "com.olaelectric.companion", handoff: "maps" },
   },
   {
     id: "mahindra",
@@ -142,8 +167,9 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "Scorpio-N, XUV400, Born Electric, BE6, 7X0",
     stack: "mappls",
-    methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "Multiple Mappls NCASE go-lives across ICE + Born Electric.",
+    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
+    note: "Open Adrenox Connect with destination; Pin as backup.",
+    companionApp: { name: "Adrenox Connect", packageId: "com.mahindra.adrenox", handoff: "geo" },
   },
   {
     id: "tata",
@@ -151,8 +177,9 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "Harrier, Safari, Sierra EV",
     stack: "mappls",
-    methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "Connected lines go-live with Mappls (Harrier/Safari/Sierra EV).",
+    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
+    note: "Open Tata iRA with destination; Pin as backup.",
+    companionApp: { name: "Tata Motors iRA", packageId: "com.tatamotors.oneapp", handoff: "geo" },
   },
   {
     id: "hyundai",
@@ -160,8 +187,9 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "Connected vehicle lines",
     stack: "mappls",
-    methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "Mappls across connected vehicle lines (FY25).",
+    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
+    note: "Open Bluelink with destination; Pin as backup.",
+    companionApp: { name: "Hyundai Bluelink", packageId: "com.hyundai.india.bluelink.prd", handoff: "geo" },
   },
   {
     id: "kia",
@@ -169,8 +197,9 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "Connected vehicle lines",
     stack: "mappls",
-    methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "Same Mappls connected-vehicle go-live cohort as Hyundai.",
+    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
+    note: "Open Kia Connect with destination; Pin as backup.",
+    companionApp: { name: "Kia Connect", packageId: "com.kia.uvo.in.prd", handoff: "geo" },
   },
   {
     id: "mg",
@@ -178,8 +207,9 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "Hector",
     stack: "mappls",
-    methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "MG Hector Mappls go-live (FY23).",
+    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
+    note: "Open MG iSMART with destination; Pin as backup.",
+    companionApp: { name: "MG iSMART", packageId: "com.saicmotor.iov.india", handoff: "geo" },
   },
   {
     id: "maruti",
@@ -187,8 +217,9 @@ export const OEM_BRANDS: OemBrand[] = [
     segment: "4W",
     examples: "e-Vitara, Brezza (NCASE)",
     stack: "mappls",
-    methods: ["mappls_pin", "mappls_nav_deep_link", "geo_intent"],
-    note: "e-Vitara / Brezza NCASE go-lives — Pin for in-car / app search.",
+    methods: ["geo_intent", "mappls_pin", "mappls_nav_deep_link"],
+    note: "Open Suzuki Connect with destination; Pin as backup.",
+    companionApp: { name: "Suzuki Connect", packageId: "com.msil.suzukiconnect_generation_2", handoff: "geo" },
   },
 ];
 
@@ -203,9 +234,9 @@ export function buildOemHandoffSummary(): OemHandoffSummary {
     rules: MAPPLS_OEM_SEARCH_RULES,
     brands: OEM_BRANDS,
     universalSteps: [
-      "1. Pick your brand.",
-      "2. Tap the one big button — Mappls is opened automatically.",
-      "3. Follow the single short step shown for that brand.",
+      "1. Pick your vehicle brand.",
+      "2. Tap Open — that brand’s companion app opens with the destination (Android).",
+      "3. Confirm in the app and push / start navigation to the vehicle.",
     ],
   };
 }
@@ -217,6 +248,8 @@ export function getOemBrand(id: string | null | undefined): OemBrand | undefined
 
 /** Minimal paste fields the brand playbook needs (avoids circular type deps). */
 export type BrandPasteLinks = {
+  lat: number;
+  lng: number;
   searchQuery?: string;
   mapplsPin?: string;
   mapplsPinUrl?: string;
@@ -226,13 +259,15 @@ export type BrandPasteLinks = {
   googleMapsUrl: string;
   geoUri: string;
   simpleConnectIntentUrl: string;
+  simpleConnectMapsIntentUrl?: string;
+  whatsappGeoUri?: string;
   latLng: string;
 };
 
 export type BrandPlaybookAction = {
   /** Button label */
   label: string;
-  /** Open this URL (Mappls / Google / geo / Simple Connect). */
+  /** Open this URL (OEM app Intent / Mappls / Google / geo). */
   href?: string;
   /** Copy this to clipboard (place name or Pin). */
   copyText?: string;
@@ -240,21 +275,30 @@ export type BrandPlaybookAction = {
 };
 
 /**
- * One automated Mappls open + one user action per brand.
- * Keeps the UI to a single CTA and 1–2 short steps.
+ * Pick brand → open that brand’s companion app with the destination.
+ * Mappls is only used when the brand has no public companion package.
  */
 export type BrandPlaybook = {
   brand: OemBrand;
-  /** Always open Mappls at the exact point (auto-push). */
+  /** Open target for the selected brand’s app (or Mappls fallback). */
   autoOpenUrl: string;
   autoOpenLabel: string;
-  /** The one thing the user must do in the OEM app. */
+  /** The one CTA — almost always “Open {OEM app}”. */
   primary: BrandPlaybookAction;
-  /** Max 2 short steps after auto-open. */
+  /** Max 2 short steps after open. */
   steps: string[];
   /** Optional backup if primary fails. */
   backup?: BrandPlaybookAction;
 };
+
+function parsePasteCoords(paste: BrandPasteLinks): { lat: number; lng: number } {
+  if (Number.isFinite(paste.lat) && Number.isFinite(paste.lng)) {
+    return { lat: paste.lat, lng: paste.lng };
+  }
+  const m = paste.latLng.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
+  return { lat: 0, lng: 0 };
+}
 
 export function buildBrandPlaybook(
   brandId: string,
@@ -267,108 +311,64 @@ export function buildBrandPlaybook(
     brand.segment === "2W" ? paste.mapplsNavBikingUrl : paste.mapplsNavDrivingUrl;
   const place = paste.searchQuery?.trim();
   const pin = paste.mapplsPin?.trim();
+  const { lat, lng } = parsePasteCoords(paste);
+  const app = brand.companionApp;
 
-  // SimpleOne: place name or Push — Pin search is unreliable
-  if (brand.id === "simple-energy") {
+  // Preferred path: open the selected OEM companion app with this location
+  if (app) {
+    const openUrl =
+      brand.id === "simple-energy" && paste.simpleConnectIntentUrl
+        ? paste.simpleConnectIntentUrl
+        : app.handoff === "maps"
+          ? oemPackageGoogleMapsIntentUrl(app.packageId, lat, lng)
+          : oemPackageGeoIntentUrl(app.packageId, lat, lng, place);
+
+    const mapsBackup =
+      brand.id === "simple-energy" && paste.simpleConnectMapsIntentUrl
+        ? paste.simpleConnectMapsIntentUrl
+        : oemPackageGoogleMapsIntentUrl(app.packageId, lat, lng);
+
     return {
       brand,
-      autoOpenUrl: navUrl,
-      autoOpenLabel: "Open exact point on Mappls",
-      primary: place
-        ? {
-            kind: "copy",
-            label: "Copy place name for SimpleOne",
-            copyText: place,
-          }
-        : {
-            kind: "open",
-            label: "Open Google → share to Simple Connect",
-            href: paste.googleMapsUrl,
-          },
-      steps: place
-        ? [
-            "Mappls already shows the exact point (opened for you).",
-            `In SimpleOne / Simple Connect search, paste “${place}” and pick that place — then Push Navigation to the scooter.`,
-          ]
-        : [
-            "Mappls already shows the exact point (opened for you).",
-            "On your phone: Open Google → Share / Push the location to Simple Connect.",
-          ],
-      backup: {
-        kind: "open",
-        label: "Open Simple Connect (geo)",
-        href: paste.simpleConnectIntentUrl || paste.geoUri,
-      },
-    };
-  }
-
-  // Ola: Google Maps, not Mappls search
-  if (brand.stack === "ola_maps") {
-    return {
-      brand,
-      autoOpenUrl: paste.googleMapsUrl,
-      autoOpenLabel: "Open exact point on Google",
+      autoOpenUrl: openUrl,
+      autoOpenLabel: `Open ${app.name}`,
       primary: {
         kind: "open",
-        label: "Open in Google Maps (Ola path)",
-        href: paste.googleMapsUrl,
+        label: `Open ${app.name} with this location`,
+        href: openUrl,
       },
       steps: [
-        "Google already shows the exact point.",
-        "In Ola / MoveOS, set destination from this Google location (or share the Google link into the Ola app).",
-      ],
-    };
-  }
-
-  // TVS mixed: prefer Mappls nav + Pin/place, Google backup
-  if (brand.id === "tvs") {
-    return {
-      brand,
-      autoOpenUrl: navUrl,
-      autoOpenLabel: "Open exact point on Mappls",
-      primary: pin
-        ? { kind: "copy", label: `Copy Mappls Pin (${pin})`, copyText: pin }
-        : place
-          ? { kind: "copy", label: "Copy place name", copyText: place }
-          : { kind: "open", label: "Open Google Maps", href: paste.googleMapsUrl },
-      steps: [
-        "Mappls already shows the exact point (opened for you).",
-        pin
-          ? `In TVS Mappls navigation search, paste Pin “${pin}”. If that fails (Google path on some EVs), use Open Google below.`
-          : "Use the copied place name in TVS navigation search, or Open Google for the Google Maps EV path.",
+        `Only remaining step: in ${app.name}, confirm this place and push / start navigation to the vehicle.`,
       ],
       backup: {
         kind: "open",
-        label: "Open Google (TVS Google path)",
-        href: paste.googleMapsUrl,
+        label: `Try Google Maps → ${app.name}`,
+        href: mapsBackup,
       },
     };
   }
 
-  // Default Mappls OEM: auto-open nav, copy Pin (or place name)
+  // No public companion package: Mappls nav + copy Pin/place for in-vehicle search
   return {
     brand,
     autoOpenUrl: navUrl,
-    autoOpenLabel: "Open exact point on Mappls",
-    primary: pin
-      ? { kind: "copy", label: `Copy Mappls Pin (${pin})`, copyText: pin }
-      : place
-        ? { kind: "copy", label: "Copy place name", copyText: place }
-        : {
-            kind: "open",
-            label: "Open Mappls navigation",
-            href: navUrl,
-          },
+    autoOpenLabel: `Open Mappls for ${brand.name}`,
+    primary: {
+      kind: "open",
+      label: `Open Mappls navigation (${brand.name})`,
+      href: navUrl,
+    },
     steps: [
-      "Mappls already shows the exact point (opened for you).",
       pin
-        ? `In your ${brand.name} app / vehicle navigation search, paste Pin “${pin}” and start navigation.`
+        ? `Only remaining step: paste Pin “${pin}” in ${brand.name} search and start navigation (Pin is auto-copied).`
         : place
-          ? `In your ${brand.name} app / vehicle navigation search, paste “${place}” and pick that place.`
-          : `In your ${brand.name} app, open the Mappls screen that just launched and start navigation to this point.`,
+          ? `Only remaining step: paste “${place}” in ${brand.name} search and start navigation (name is auto-copied).`
+          : `Only remaining step: start navigation to this point in ${brand.name}.`,
     ],
-    backup: paste.mapplsPinUrl
-      ? { kind: "open", label: "Open pin on Mappls", href: paste.mapplsPinUrl }
-      : { kind: "open", label: "Open Mappls map", href: paste.mapplsUrl },
+    backup: pin
+      ? { kind: "copy", label: `Copy Mappls Pin (${pin})`, copyText: pin }
+      : paste.mapplsPinUrl
+        ? { kind: "open", label: "Open pin on Mappls", href: paste.mapplsPinUrl }
+        : { kind: "open", label: "Open Mappls map", href: paste.mapplsUrl },
   };
 }

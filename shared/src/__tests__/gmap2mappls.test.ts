@@ -167,7 +167,7 @@ describe("gmap2mappls urls + samples", () => {
     expect(kit.mapplsPinUrl).toBe("https://www.mappls.com/kcf7zj");
     expect(kit.mapplsNavBikingUrl).toContain("mode=biking");
     expect(kit.googleMapsUrl).toContain("12.877073,77.613574");
-    expect(kit.tip.toLowerCase()).toMatch(/place name|simpleone/);
+    expect(kit.tip.toLowerCase()).toMatch(/simple connect|simpleone/);
   });
 
   it("covers listed 2W/4W OEMs in handoff matrix", () => {
@@ -196,25 +196,39 @@ describe("gmap2mappls urls + samples", () => {
     expect(summary.brands.filter((b) => b.stack === "mappls").length).toBeGreaterThan(10);
   });
 
-  it("builds a one-CTA playbook per brand with Mappls auto-open", () => {
+  it("builds a one-CTA playbook that opens each brand’s companion app", () => {
     const paste = buildPasteKit(12.877073, 77.613574, {
       placeName: "Zigma Technologies",
       locality: "Nyanappanahalli",
       city: "Bengaluru",
       mapplsPin: "kcf7zj",
     });
+    expect(paste.lat).toBe(12.877073);
+    expect(paste.lng).toBe(77.613574);
+
     const simple = buildBrandPlaybook("simple-energy", paste);
-    expect(simple?.autoOpenUrl).toContain("mode=biking");
-    expect(simple?.primary.kind).toBe("copy");
-    expect(simple?.primary.copyText).toContain("Zigma");
-    expect(simple?.steps.length).toBeLessThanOrEqual(2);
+    expect(simple?.brand.companionApp?.packageId).toBe("com.sepl.android");
+    expect(simple?.autoOpenUrl).toContain("package=com.sepl.android");
+    expect(simple?.autoOpenUrl).toContain("scheme=geo");
+    expect(simple?.autoOpenUrl).not.toMatch(/mappls\.com/);
+    expect(simple?.primary.kind).toBe("open");
+    expect(simple?.primary.href).toContain("com.sepl.android");
+    expect(simple?.autoOpenLabel.toLowerCase()).toMatch(/simple connect/);
+    expect(simple?.steps.length).toBe(1);
+    expect(simple?.steps[0]).toMatch(/only remaining step/i);
 
     const mahindra = buildBrandPlaybook("mahindra", paste);
-    expect(mahindra?.autoOpenUrl).toContain("mode=driving");
-    expect(mahindra?.primary.copyText).toBe("kcf7zj");
+    expect(mahindra?.autoOpenUrl).toContain("package=com.mahindra.adrenox");
+    expect(mahindra?.primary.kind).toBe("open");
+    expect(mahindra?.primary.label).toMatch(/Adrenox Connect/);
 
     const ola = buildBrandPlaybook("ola", paste);
-    expect(ola?.autoOpenUrl).toContain("google.com/maps");
+    expect(ola?.autoOpenUrl).toContain("package=com.olaelectric.companion");
+    expect(ola?.autoOpenUrl).toContain("maps.google.com");
+
+    const matter = buildBrandPlaybook("matter", paste);
+    expect(matter?.brand.companionApp).toBeUndefined();
+    expect(matter?.autoOpenUrl).toContain("mode=biking");
   });
 
   it("encodes Digipin offline for India coords", () => {

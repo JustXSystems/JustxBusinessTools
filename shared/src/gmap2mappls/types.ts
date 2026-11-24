@@ -44,6 +44,9 @@ export type MapplsSide = {
 
 /** Clipboard / open helpers for Mappls-integrated apps (SimpleOne, OEM apps, etc.). */
 export type PasteKit = {
+  /** Numeric WGS-84 — used to build per-brand OEM package Intents. */
+  lat: number;
+  lng: number;
   /** Shared WGS-84 point — for geo: / nav deep links, NOT OEM Autosuggest search. */
   latLng: string;
   /** Space-separated variant some map UIs prefer. */
@@ -51,10 +54,14 @@ export type PasteKit = {
   /** Android / many map apps: one-tap open at the shared point. */
   geoUri: string;
   /**
-   * Android intent that targets Simple Connect (`com.sepl.android`) with geo coords.
-   * Works when Simple Connect registers for geo / WhatsApp-location style opens.
+   * Chrome Intent that forces Simple Connect (`com.sepl.android`) with a WhatsApp-style
+   * geo: destination — preferred auto-open for SimpleOne brand.
    */
   simpleConnectIntentUrl: string;
+  /** Alternate: force Simple Connect via maps.google.com URL (WhatsApp location family). */
+  simpleConnectMapsIntentUrl: string;
+  /** Plain WhatsApp-style geo: URI (chooser → pick Simple Connect). */
+  whatsappGeoUri: string;
   /** Same point on Google Maps (Ola / TVS Google / share-to-Simple-Connect). */
   googleMapsUrl: string;
   /** Official Mappls web/share deep link (no Google-style 18z). */
@@ -165,21 +172,78 @@ export function geoPointUri(lat: number, lng: number, label?: string): string {
   return `geo:${roundCoord(lat)},${roundCoord(lng)}${q}`;
 }
 
+/** Simple Connect package id (Simple Energy companion app). */
+export const SIMPLE_CONNECT_PACKAGE = "com.sepl.android";
+
+export const SIMPLE_CONNECT_PLAY_STORE =
+  `https://play.google.com/store/apps/details?id=${SIMPLE_CONNECT_PACKAGE}`;
+
+export function playStoreUrl(packageId: string): string {
+  return `https://play.google.com/store/apps/details?id=${packageId}`;
+}
+
 /**
- * Chrome/Android intent URL that tries to open Simple Connect with the exact geo point.
- * Package: com.sepl.android (Simple Connect). Falls back to geo chooser if unsupported.
+ * WhatsApp-style geo URI — the format Simple Connect v2.4+ accepts via
+ * “Share WhatsApp locations to Simple Connect for navigation”.
+ * Example: geo:12.877073,77.613574?q=12.877073,77.613574(Zigma%20Technologies)
  */
-export function simpleConnectGeoIntentUrl(
+export function whatsappStyleGeoUri(
   lat: number,
   lng: number,
   label?: string,
 ): string {
   const la = roundCoord(lat);
   const ln = roundCoord(lng);
-  const q = label?.trim()
-    ? `${la},${ln}(${encodeURIComponent(label.trim().slice(0, 80))})`
-    : `${la},${ln}`;
-  return `intent://${la},${ln}?q=${q}#Intent;scheme=geo;package=com.sepl.android;end`;
+  const name = (label?.trim() || "Destination").replace(/[()]/g, " ").slice(0, 80);
+  return `geo:${la},${ln}?q=${la},${ln}(${encodeURIComponent(name)})`;
+}
+
+/**
+ * Chrome/Android Intent that opens a specific OEM package with a WhatsApp-style
+ * geo destination. Falls back to that app’s Play Store page if missing.
+ */
+export function oemPackageGeoIntentUrl(
+  packageId: string,
+  lat: number,
+  lng: number,
+  label?: string,
+): string {
+  const geo = whatsappStyleGeoUri(lat, lng, label);
+  const path = geo.replace(/^geo:/i, "");
+  const fallback = encodeURIComponent(playStoreUrl(packageId));
+  return `intent://${path}#Intent;scheme=geo;package=${packageId};S.browser_fallback_url=${fallback};end`;
+}
+
+/**
+ * Force a maps.google.com pin into a specific OEM package (WhatsApp location family).
+ */
+export function oemPackageGoogleMapsIntentUrl(
+  packageId: string,
+  lat: number,
+  lng: number,
+): string {
+  const la = roundCoord(lat);
+  const ln = roundCoord(lng);
+  const path = `maps.google.com/maps?q=${la}%2C${ln}&z=17`;
+  const fallback = encodeURIComponent(playStoreUrl(packageId));
+  return `intent://${path}#Intent;scheme=https;package=${packageId};S.browser_fallback_url=${fallback};end`;
+}
+
+/** @deprecated Prefer oemPackageGeoIntentUrl(SIMPLE_CONNECT_PACKAGE, …) */
+export function simpleConnectGeoIntentUrl(
+  lat: number,
+  lng: number,
+  label?: string,
+): string {
+  return oemPackageGeoIntentUrl(SIMPLE_CONNECT_PACKAGE, lat, lng, label);
+}
+
+/** @deprecated Prefer oemPackageGoogleMapsIntentUrl(SIMPLE_CONNECT_PACKAGE, …) */
+export function simpleConnectGoogleMapsIntentUrl(
+  lat: number,
+  lng: number,
+): string {
+  return oemPackageGoogleMapsIntentUrl(SIMPLE_CONNECT_PACKAGE, lat, lng);
 }
 
 /** Best Autosuggest query: POI name (not Pin, not raw coords). */
@@ -200,7 +264,7 @@ export function buildOemSearchQuery(opts?: {
 
 /** Short tip shown under OEM paste actions. */
 export const OEM_PASTE_TIP =
-  "SimpleOne: do NOT paste Mappls Pin / lat,lng into search (fuzzy wrong place). Copy place name, or Open Google/geo → Share/Push to Simple Connect. Other Mappls OEMs: try Pin or Navigate Mappls.";
+  "SimpleOne: open Simple Connect via the geo Intent (not Mappls, not Pin/lat,lng in search). Other Mappls OEMs: Pin or Navigate Mappls.";
 
 /** @deprecated Use OEM_PASTE_TIP */
 export const SIMPLEONE_PASTE_TIP = OEM_PASTE_TIP;
@@ -234,7 +298,7 @@ export function buildShareText(
   }
   if (opts?.digipin) lines.push(`Digipin: ${opts.digipin}`);
   lines.push(
-    "SimpleOne: paste place name OR open Google/geo and Push/Share to Simple Connect — not Pin/lat,lng in search.",
+    "SimpleOne: open Simple Connect with the geo Intent / WhatsApp-style location — not Mappls, not Pin/lat,lng in search.",
   );
   return lines.join("\n");
 }
@@ -261,10 +325,14 @@ export function buildPasteKit(
     city: opts?.city,
   });
   return {
+    lat,
+    lng,
     latLng,
     latLngSpaced: `${roundCoord(lat)}, ${roundCoord(lng)}`,
     geoUri: geoPointUri(lat, lng, name),
     simpleConnectIntentUrl: simpleConnectGeoIntentUrl(lat, lng, name),
+    simpleConnectMapsIntentUrl: simpleConnectGoogleMapsIntentUrl(lat, lng),
+    whatsappGeoUri: whatsappStyleGeoUri(lat, lng, name),
     googleMapsUrl: googleMapsPointUrl(lat, lng),
     mapplsUrl,
     mapplsPinUrl: pin ? mapplsPinUrl(pin) : undefined,

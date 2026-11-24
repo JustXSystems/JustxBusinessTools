@@ -36,16 +36,38 @@ Ampere docs advertise Mappls PIN last-mile; **SimpleOne does not reliably resolv
 
 ## Simple UI flow (automated)
 
-1. Paste Google link → **Find same point**  
-2. Tool **auto-opens Mappls** at the exact lat/lng (2W biking / 4W driving nav deep link; Google for Ola)  
-3. Pick **Your brand** in the dropdown  
-4. Tap the **one big button** and follow the **1–2 short steps** shown for that brand  
+1. Pick **Your vehicle brand** (dropdown shows companion app, e.g. SimpleOne → Simple Connect)  
+2. Paste Google link → **Find point → open brand app**  
+3. Tool opens that brand’s **companion app** with the destination (Android Intent)  
+4. Confirm in the app and push / start navigation to the vehicle  
 
-| Brand type | Auto-open | One user action |
-|------------|-----------|-----------------|
-| SimpleOne | Mappls nav | Copy place name → paste in SimpleOne / Push |
-| Most Mappls OEMs | Mappls nav | Copy Mappls Pin → paste in vehicle search |
-| Ola Electric | Google Maps | Use that Google point in Ola |
+| Brand | Opens app | Package |
+|-------|-----------|---------|
+| Simple Energy | Simple Connect | `com.sepl.android` |
+| Bajaj | Chetak | `com.bajajmychetak` |
+| Hero | Hero Connect | `com.invenzen.rollr.hmc` |
+| Ampere | Ampere Connect | `com.greavesmobility.app` |
+| TVS | TVS Connect | `com.tvsm.connect` |
+| Ola Electric | Ola Electric | `com.olaelectric.companion` |
+| Mahindra | Adrenox Connect | `com.mahindra.adrenox` |
+| Tata | iRA | `com.tatamotors.oneapp` |
+| Hyundai | Bluelink | `com.hyundai.india.bluelink.prd` |
+| Kia | Kia Connect | `com.kia.uvo.in.prd` |
+| MG | iSMART | `com.saicmotor.iov.india` |
+| Maruti | Suzuki Connect | `com.msil.suzukiconnect_generation_2` |
+| Matter / Tork / Suzuki 2W | Mappls nav (no public companion package) | — |
+
+### OEM app deep link (Android)
+
+WhatsApp-style geo:
+
+`geo:{lat},{lng}?q={lat},{lng}(Place+Name)`
+
+Forced into the selected OEM package:
+
+`intent://{lat},{lng}?q=…#Intent;scheme=geo;package={oemPackage};S.browser_fallback_url=…;end`
+
+Use on an **Android phone with that brand’s app installed**. Desktop cannot open OEM apps — scan the on-page QR. Mappls stays under Secondary options for point verification / Pin copy.
 
 ## OEM coverage matrix
 
@@ -53,7 +75,7 @@ Sources: MapmyIndia investor go-lives (FY23–FY27), Mappls Auto / Ampere case p
 
 | Brand | Segment | Stack | What to use from this tool |
 |-------|---------|-------|----------------------------|
-| Simple Energy / SimpleOne | 2W | Mappls | **Place name** or **Google/geo → Push to Simple Connect** (Pin search often wrong) |
+| Simple Energy / SimpleOne | 2W | Mappls + Simple Connect | **Open Simple Connect** (`com.sepl.android`) via geo Intent — not Mappls |
 | Bajaj (Chetak + ICE/EV) | 2W | Mappls | **Mappls Pin**; Navigate 2W |
 | Hero OneApp | 2W | Mappls | **Mappls Pin**; Navigate 2W |
 | Ampere (Greaves) | 2W | Mappls | **Mappls Pin** (docs: PIN last-mile); Navigate 2W |

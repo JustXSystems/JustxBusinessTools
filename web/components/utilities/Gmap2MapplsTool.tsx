@@ -54,6 +54,11 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+function isAndroidUa(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Android/i.test(navigator.userAgent);
+}
+
 export function Gmap2MapplsTool() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -64,10 +69,13 @@ export function Gmap2MapplsTool() {
   const [qr, setQr] = useState<QrState | null>(null);
   const [brandId, setBrandId] = useState("simple-energy");
   const [autoOpenStatus, setAutoOpenStatus] = useState<"opened" | "blocked" | null>(null);
+  const [autoCopied, setAutoCopied] = useState<string | null>(null);
+  const [onAndroid, setOnAndroid] = useState(false);
 
   const brands = meta?.oem?.brands?.length ? meta.oem.brands : OEM_BRANDS;
 
   useEffect(() => {
+    setOnAndroid(isAndroidUa());
     try {
       const saved = window.localStorage.getItem(BRAND_STORAGE_KEY);
       if (saved && OEM_BRANDS.some((b) => b.id === saved)) setBrandId(saved);
@@ -77,8 +85,35 @@ export function Gmap2MapplsTool() {
   }, []);
 
   const openAutoUrl = useCallback((url: string) => {
+    // intent:// and geo: must be top-level navigations — window.open(_blank)
+    // often fails on Android Chrome and never reaches the OEM app.
+    const isAppScheme = /^(intent|geo|mappls):/i.test(url);
+    if (isAppScheme) {
+      const a = document.createElement("a");
+      a.href = url;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setAutoOpenStatus("opened");
+      return;
+    }
     const w = window.open(url, "_blank", "noopener,noreferrer");
     setAutoOpenStatus(w ? "opened" : "blocked");
+  }, []);
+
+  const autoAssistPaste = useCallback(async (paste: ResolveResult["paste"], id: string) => {
+    const guide = buildBrandPlaybook(id, paste);
+    // Brands without companion deep link need Pin/place ready on clipboard
+    if (guide && !guide.brand.companionApp) {
+      const text = paste.mapplsPin || paste.searchQuery;
+      if (text) {
+        const ok = await copyText(text);
+        if (ok) setAutoCopied(paste.mapplsPin ? `Pin ${paste.mapplsPin}` : "place name");
+        return;
+      }
+    }
+    setAutoCopied(null);
   }, []);
 
   const onBrandChange = useCallback(
@@ -92,9 +127,10 @@ export function Gmap2MapplsTool() {
       if (paste) {
         const guide = buildBrandPlaybook(id, paste);
         if (guide) openAutoUrl(guide.autoOpenUrl);
+        void autoAssistPaste(paste, id);
       }
     },
-    [openAutoUrl],
+    [openAutoUrl, autoAssistPaste],
   );
 
   const onCopy = useCallback(async (label: string, text: string) => {
@@ -108,7 +144,7 @@ export function Gmap2MapplsTool() {
     return buildBrandPlaybook(brandId, result.paste);
   }, [result?.paste, brandId]);
 
-  // QR encodes the primary payload for the selected brand
+  // QR encodes the selected brand’s open URL (OEM Intent / geo / Mappls fallback)
   useEffect(() => {
     let cancelled = false;
     if (!playbook || !result?.paste) {
@@ -116,9 +152,9 @@ export function Gmap2MapplsTool() {
       return;
     }
     const payload =
-      playbook.primary.copyText ||
       playbook.primary.href ||
       playbook.autoOpenUrl ||
+      result.paste.whatsappGeoUri ||
       result.paste.geoUri;
     void import("qrcode")
       .then((QRCode) => QRCode.toDataURL(payload, { margin: 1, width: 180, errorCorrectionLevel: "M" }))
@@ -160,6 +196,7 @@ export function Gmap2MapplsTool() {
     setLoading(true);
     setError(null);
     setAutoOpenStatus(null);
+    setAutoCopied(null);
     try {
       const res = await fetch(apiUrl("/api/public/gmap2mappls/resolve"), {
         method: "POST",
@@ -174,16 +211,16 @@ export function Gmap2MapplsTool() {
         return;
       }
       setResult(data);
-      // Same user gesture as the Find click — auto-push Mappls for the selected brand
       const guide = buildBrandPlaybook(brandId, data.paste);
       if (guide) openAutoUrl(guide.autoOpenUrl);
+      void autoAssistPaste(data.paste, brandId);
     } catch {
       setResult(null);
       setError("Network error — try again in a moment.");
     } finally {
       setLoading(false);
     }
-  }, [brandId, openAutoUrl]);
+  }, [brandId, openAutoUrl, autoAssistPaste]);
 
   const chips = meta?.samples?.length
     ? meta.samples
@@ -201,9 +238,11 @@ export function Gmap2MapplsTool() {
       return;
     }
     if (playbook.primary.href) {
-      window.open(playbook.primary.href, "_blank", "noopener,noreferrer");
+      openAutoUrl(playbook.primary.href);
     }
-  }, [playbook, onCopy]);
+  }, [playbook, onCopy, openAutoUrl]);
+
+  const appName = playbook?.brand.companionApp?.name || playbook?.brand.name;
 
   return (
     <div className="g2m tool-workspace">
@@ -213,12 +252,43 @@ export function Gmap2MapplsTool() {
         </p>
         <h1 className="g2m-brand">GMAP2MAPPLS</h1>
         <p className="g2m-tag">
-          Paste a Google link → we lock the same point on Mappls → pick your vehicle brand → one
-          simple step to navigate there.
+          Pick brand → paste Google link → we open that brand’s app. You only confirm / push
+          navigation in the app.
         </p>
       </section>
 
       <section className="g2m-composer">
+        <label className="g2m-brand-label" htmlFor="g2m-brand-top">
+          Vehicle brand
+        </label>
+        <select
+          id="g2m-brand-top"
+          className="g2m-brand-select"
+          value={brandId}
+          onChange={(e) => onBrandChange(e.target.value, result?.paste)}
+        >
+          <optgroup label="2W">
+            {brands
+              .filter((b) => b.segment === "2W")
+              .map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                  {b.companionApp ? ` → ${b.companionApp.name}` : ""}
+                </option>
+              ))}
+          </optgroup>
+          <optgroup label="4W">
+            {brands
+              .filter((b) => b.segment === "4W")
+              .map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                  {b.companionApp ? ` → ${b.companionApp.name}` : ""}
+                </option>
+              ))}
+          </optgroup>
+        </select>
+
         <div className="g2m-input-wrap">
           <label className="sr-only" htmlFor="g2m-input">
             Google Maps link, address, or coordinates
@@ -228,7 +298,7 @@ export function Gmap2MapplsTool() {
             className="g2m-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="https://maps.app.goo.gl/…  or  full address  or  12.8804,77.5958"
+            placeholder="Paste Google Maps link, address, or lat,lng"
             spellCheck={false}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -251,7 +321,7 @@ export function Gmap2MapplsTool() {
                 Finding same point…
               </>
             ) : (
-              "Find same point"
+              "Find & open brand app"
             )}
           </button>
           <button
@@ -263,6 +333,7 @@ export function Gmap2MapplsTool() {
               setResult(null);
               setError(null);
               setAutoOpenStatus(null);
+              setAutoCopied(null);
             }}
           >
             Clear
@@ -311,7 +382,7 @@ export function Gmap2MapplsTool() {
         <>
           <div className="g2m-banner" role="status">
             <div>
-              <div className="g2m-banner-meta">Exact point locked (Google = Mappls)</div>
+              <div className="g2m-banner-meta">Exact point locked</div>
               <strong>{formatCoordPair(result.lat, result.lng)}</strong>
               {result.paste.searchQuery ? (
                 <div className="g2m-banner-meta">{result.paste.searchQuery}</div>
@@ -322,52 +393,18 @@ export function Gmap2MapplsTool() {
             </div>
           </div>
 
-          <section className="g2m-guide" aria-label="Send to your vehicle brand">
-            <h3>Send to your vehicle</h3>
-
-            <label className="g2m-brand-label" htmlFor="g2m-brand">
-              Your brand
-            </label>
-            <select
-              id="g2m-brand"
-              className="g2m-brand-select"
-              value={brandId}
-              onChange={(e) => onBrandChange(e.target.value, result.paste)}
-            >
-              <optgroup label="2W">
-                {brands
-                  .filter((b) => b.segment === "2W")
-                  .map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-              </optgroup>
-              <optgroup label="4W">
-                {brands
-                  .filter((b) => b.segment === "4W")
-                  .map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-              </optgroup>
-            </select>
+          <section className="g2m-guide" aria-label="Final action in brand app">
+            <h3>Your only step → {appName}</h3>
 
             <p className="g2m-auto-note" role="status">
-              {autoOpenStatus === "opened"
-                ? "Mappls opened with your exact point."
-                : autoOpenStatus === "blocked"
-                  ? "Popup blocked — tap below to open Mappls."
-                  : "Open Mappls for the exact point, then do the one step."}
-              {" "}
-              <button
-                type="button"
-                className="g2m-linkish"
-                onClick={() => openAutoUrl(playbook.autoOpenUrl)}
-              >
-                {playbook.autoOpenLabel}
-              </button>
+              {onAndroid
+                ? autoOpenStatus === "opened"
+                  ? `${appName} should have opened with this location.`
+                  : autoOpenStatus === "blocked"
+                    ? "Open was blocked — tap the button below."
+                    : `Opening ${appName} with this location…`
+                : "On desktop: scan the QR with your Android phone (app must be installed)."}
+              {autoCopied ? ` · Auto-copied ${autoCopied} for paste if needed.` : ""}
             </p>
 
             <ol className="g2m-guide-steps">
@@ -377,22 +414,46 @@ export function Gmap2MapplsTool() {
             </ol>
 
             <div className="g2m-guide-cta">
-              <button type="button" className="btn btn-primary" onClick={() => void runPrimary()}>
-                {copied === "primary" && playbook.primary.kind === "copy"
-                  ? "Copied — paste in your app now"
-                  : playbook.primary.label}
-              </button>
+              {playbook.primary.kind === "open" && playbook.primary.href ? (
+                <a
+                  className="btn btn-primary"
+                  href={playbook.primary.href}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    openAutoUrl(playbook.primary.href!);
+                  }}
+                >
+                  {playbook.primary.label}
+                </a>
+              ) : (
+                <button type="button" className="btn btn-primary" onClick={() => void runPrimary()}>
+                  {copied === "primary" && playbook.primary.kind === "copy"
+                    ? "Copied — paste in your app now"
+                    : playbook.primary.label}
+                </button>
+              )}
+            </div>
+
+            <div className="g2m-paste-footer">
+              {qr ? (
+                <figure className="g2m-qr">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={qr.dataUrl} alt={`QR to open ${appName}`} width={140} height={140} />
+                  <figcaption>Scan → open {appName}</figcaption>
+                </figure>
+              ) : null}
             </div>
 
             <details className="g2m-secondary">
-              <summary>Secondary options</summary>
+              <summary>Need a backup?</summary>
               <div className="g2m-paste-row">
                 {playbook.backup?.href ? (
                   <a
                     className="btn btn-secondary btn-sm"
                     href={playbook.backup.href}
-                    target="_blank"
-                    rel="noreferrer"
+                    {...(/^(intent|geo|mappls):/i.test(playbook.backup.href)
+                      ? {}
+                      : { target: "_blank", rel: "noreferrer" })}
                   >
                     {playbook.backup.label}
                   </a>
@@ -406,33 +467,6 @@ export function Gmap2MapplsTool() {
                     {copied === "backup" ? "Copied" : playbook.backup.label}
                   </button>
                 ) : null}
-                <a
-                  className="btn btn-secondary btn-sm"
-                  href={playbook.autoOpenUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {playbook.autoOpenLabel}
-                </a>
-                <a
-                  className="btn btn-secondary btn-sm"
-                  href={result.paste.mapplsUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open Mappls map
-                </a>
-                <a
-                  className="btn btn-secondary btn-sm"
-                  href={result.paste.googleMapsUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open Google Maps
-                </a>
-                <a className="btn btn-secondary btn-sm" href={result.paste.geoUri}>
-                  Open phone maps (geo)
-                </a>
                 {result.paste.mapplsPin ? (
                   <button
                     type="button"
@@ -441,16 +475,6 @@ export function Gmap2MapplsTool() {
                   >
                     {copied === "pin" ? "Copied Pin" : `Copy Pin (${result.paste.mapplsPin})`}
                   </button>
-                ) : null}
-                {result.paste.mapplsPinUrl ? (
-                  <a
-                    className="btn btn-secondary btn-sm"
-                    href={result.paste.mapplsPinUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open pin on Mappls
-                  </a>
                 ) : null}
                 {result.paste.searchQuery ? (
                   <button
@@ -461,41 +485,24 @@ export function Gmap2MapplsTool() {
                     {copied === "search" ? "Copied place name" : "Copy place name"}
                   </button>
                 ) : null}
-                {result.paste.digipin ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => void onCopy("digipin", result.paste.digipin || "")}
-                  >
-                    {copied === "digipin" ? "Copied Digipin" : `Copy Digipin (${result.paste.digipin})`}
-                  </button>
-                ) : null}
-                <button
-                  type="button"
+                <a
                   className="btn btn-secondary btn-sm"
-                  onClick={() => void onCopy("share", result.paste.shareText)}
+                  href={result.paste.mapplsUrl}
+                  target="_blank"
+                  rel="noreferrer"
                 >
-                  {copied === "share" ? "Copied share text" : "Copy share text"}
-                </button>
-                <button
-                  type="button"
+                  Verify on Mappls
+                </a>
+                <a
                   className="btn btn-secondary btn-sm"
-                  onClick={() => void onCopy("latlng", result.paste.latLng)}
+                  href={result.paste.googleMapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
                 >
-                  {copied === "latlng" ? "Copied lat,lng" : "Copy lat,lng"}
-                </button>
+                  Verify on Google
+                </a>
               </div>
             </details>
-
-            <div className="g2m-paste-footer">
-              {qr ? (
-                <figure className="g2m-qr">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={qr.dataUrl} alt="QR for this brand handoff" width={120} height={120} />
-                  <figcaption>Scan on phone</figcaption>
-                </figure>
-              ) : null}
-            </div>
           </section>
 
           <div className="g2m-map-panel">
