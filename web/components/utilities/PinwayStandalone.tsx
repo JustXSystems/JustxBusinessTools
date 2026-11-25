@@ -33,19 +33,6 @@ function currentPhoneCssWidth(): number {
   });
 }
 
-/** Keep the app shell inside the visible viewport when the soft keyboard opens. */
-function syncVisualViewport(): void {
-  const root = document.documentElement;
-  const vv = window.visualViewport;
-  if (!vv) {
-    root.style.setProperty("--g2m-vvh", `${window.innerHeight}px`);
-    root.style.setProperty("--g2m-vv-offset", "0px");
-    return;
-  }
-  root.style.setProperty("--g2m-vvh", `${Math.round(vv.height)}px`);
-  root.style.setProperty("--g2m-vv-offset", `${Math.round(vv.offsetTop)}px`);
-}
-
 function ensureViewportMeta(content: string): HTMLMetaElement {
   let meta = document.querySelector('meta[name="viewport"]');
   if (!meta) {
@@ -57,7 +44,7 @@ function ensureViewportMeta(content: string): HTMLMetaElement {
   return meta as HTMLMetaElement;
 }
 
-/** Clear any leftover document zoom from older Pinway builds. */
+/** Clear leftover document zoom from older Pinway builds. */
 function clearDocumentZoom(): void {
   const root = document.documentElement;
   const zoomStyle = root.style as CSSStyleDeclaration & { zoom?: string };
@@ -66,29 +53,32 @@ function clearDocumentZoom(): void {
   delete root.dataset.g2mZoom;
 }
 
+/**
+ * Phone shell: lock viewport meta to real CSS width, allow page scroll.
+ * No document zoom, no locked 100dvh flex dock (those caused the dead middle).
+ */
 function applyPhoneShell(): () => void {
   const html = document.documentElement;
   const body = document.body;
   const phone = isPhoneDevice();
 
   if (phone) html.classList.add(PHONE_CLASS);
+  clearDocumentZoom();
 
   const prev = {
-    htmlOverflow: html.style.overflow,
     htmlOverflowX: html.style.overflowX,
-    bodyOverflow: body.style.overflow,
     bodyOverflowX: body.style.overflowX,
     bodyWidth: body.style.width,
     bodyMaxWidth: body.style.maxWidth,
   };
 
-  html.style.overflow = "hidden";
   html.style.overflowX = "clip";
-  body.style.overflow = "hidden";
   body.style.overflowX = "clip";
   body.style.width = "100%";
   body.style.maxWidth = "100%";
-  clearDocumentZoom();
+  // Let the page scroll — do not lock html/body overflow:hidden
+  html.style.removeProperty("overflow");
+  body.style.removeProperty("overflow");
 
   const metaContent = phone
     ? phoneViewportMetaContent(currentPhoneCssWidth())
@@ -96,35 +86,26 @@ function applyPhoneShell(): () => void {
   const meta = ensureViewportMeta(metaContent);
   const prevViewport = meta.getAttribute("content");
 
-  syncVisualViewport();
-
-  const onVv = () => {
-    syncVisualViewport();
+  const onResize = () => {
     clearDocumentZoom();
     if (isPhoneDevice()) {
       document.documentElement.classList.add(PHONE_CLASS);
       ensureViewportMeta(phoneViewportMetaContent(currentPhoneCssWidth()));
     }
   };
-  window.visualViewport?.addEventListener("resize", onVv);
-  window.visualViewport?.addEventListener("scroll", onVv);
-  window.addEventListener("resize", onVv);
-  window.addEventListener("orientationchange", onVv);
+  window.addEventListener("resize", onResize);
+  window.addEventListener("orientationchange", onResize);
 
   return () => {
     html.classList.remove(PHONE_CLASS);
-    html.style.overflow = prev.htmlOverflow;
     html.style.overflowX = prev.htmlOverflowX;
-    body.style.overflow = prev.bodyOverflow;
     body.style.overflowX = prev.bodyOverflowX;
     body.style.width = prev.bodyWidth;
     body.style.maxWidth = prev.bodyMaxWidth;
     clearDocumentZoom();
     if (prevViewport != null) meta.setAttribute("content", prevViewport);
-    window.visualViewport?.removeEventListener("resize", onVv);
-    window.visualViewport?.removeEventListener("scroll", onVv);
-    window.removeEventListener("resize", onVv);
-    window.removeEventListener("orientationchange", onVv);
+    window.removeEventListener("resize", onResize);
+    window.removeEventListener("orientationchange", onResize);
     html.style.removeProperty("--g2m-vvh");
     html.style.removeProperty("--g2m-vv-offset");
   };
@@ -134,7 +115,6 @@ function applyPhoneShell(): () => void {
 export function PinwayStandalone() {
   useEffect(() => {
     const cleanup = applyPhoneShell();
-    // Re-lock after paint — Android WebView often restores a wide layout viewport.
     const timers = [50, 250, 800].map((ms) =>
       window.setTimeout(() => {
         clearDocumentZoom();
@@ -142,7 +122,6 @@ export function PinwayStandalone() {
           document.documentElement.classList.add(PHONE_CLASS);
           ensureViewportMeta(phoneViewportMetaContent(currentPhoneCssWidth()));
         }
-        syncVisualViewport();
       }, ms),
     );
     return () => {

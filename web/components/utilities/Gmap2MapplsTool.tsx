@@ -20,6 +20,7 @@ import {
   formatCoordPair,
   G2M_BRAND_STORAGE_KEY,
   G2M_RECENT_STORAGE_KEY,
+  G2M_WALKTHROUGH,
   isMahindraFamily,
   looksLikeMapsInput,
   parseRecentPlaces,
@@ -929,6 +930,71 @@ export function Gmap2MapplsTool({
           ) : null}
         </div>
 
+        {variant === "standalone" ? (
+          <div className="g2m-inline-actions" aria-label="Primary actions">
+            {result && playbook?.primary.kind === "open" && playbook.primary.href ? (
+              <a
+                className="bos-btn bos-btn-primary g2m-cta"
+                href={playbook.primary.href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void runOpenPrimary(
+                    playbook.primary.href!,
+                    playbook.autoCopyText,
+                    result.paste.mapplsPin,
+                  );
+                }}
+              >
+                {playbook.primary.label}
+              </a>
+            ) : result && playbook ? (
+              <Button
+                variant="primary"
+                className="g2m-cta"
+                disabled={loading || pinwayLocked}
+                onClick={() => void runPrimary()}
+              >
+                {copied === "primary" && playbook.primary.kind === "copy"
+                  ? "Copied — paste in app"
+                  : playbook.primary.label}
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                className="g2m-cta"
+                disabled={loading || pinwayLocked}
+                onClick={() => void resolve(input)}
+              >
+                {loading ? "Matching…" : "Convert & open"}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              className="g2m-cta-secondary"
+              disabled={loading || pinwayLocked}
+              onClick={() => void pasteAndFind()}
+            >
+              Paste
+            </Button>
+          </div>
+        ) : null}
+
+        {variant === "standalone" && !result && !loading && !error ? (
+          <ol className="g2m-howto" aria-label="How it works">
+            {G2M_WALKTHROUGH.map((step, i) => (
+              <li key={step.id}>
+                <span className="g2m-howto-num" aria-hidden>
+                  {i + 1}
+                </span>
+                <div>
+                  <strong>{step.title}</strong>
+                  <span>{step.body}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+
         <div aria-live="polite" className="g2m-live">
           {error ? <Alert tone="coral" title={error} /> : null}
 
@@ -1207,57 +1273,59 @@ export function Gmap2MapplsTool({
     </div>
   );
 
-  const island = (
-    <div className="g2m-island-bar">
-      <div className="g2m-island" aria-label="Primary actions">
-        {result && playbook?.primary.kind === "open" && playbook.primary.href ? (
-          <a
-            className="bos-btn bos-btn-primary g2m-cta"
-            href={playbook.primary.href}
-            onClick={(e) => {
-              e.preventDefault();
-              void runOpenPrimary(
-                playbook.primary.href!,
-                playbook.autoCopyText,
-                result.paste.mapplsPin,
-              );
-            }}
-          >
-            {playbook.primary.label}
-          </a>
-        ) : result && playbook ? (
+  /* Embedded tool page keeps a bottom dock; standalone phone is one column. */
+  const island =
+    variant === "embedded" ? (
+      <div className="g2m-island-bar">
+        <div className="g2m-island" aria-label="Primary actions">
+          {result && playbook?.primary.kind === "open" && playbook.primary.href ? (
+            <a
+              className="bos-btn bos-btn-primary g2m-cta"
+              href={playbook.primary.href}
+              onClick={(e) => {
+                e.preventDefault();
+                void runOpenPrimary(
+                  playbook.primary.href!,
+                  playbook.autoCopyText,
+                  result.paste.mapplsPin,
+                );
+              }}
+            >
+              {playbook.primary.label}
+            </a>
+          ) : result && playbook ? (
+            <Button
+              variant="primary"
+              className="g2m-cta"
+              disabled={loading || pinwayLocked}
+              onClick={() => void runPrimary()}
+            >
+              {copied === "primary" && playbook.primary.kind === "copy"
+                ? "Copied — paste in app"
+                : playbook.primary.label}
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              className="g2m-cta"
+              disabled={loading || pinwayLocked}
+              onClick={() => void resolve(input)}
+            >
+              {loading ? "Matching…" : "Convert & open"}
+            </Button>
+          )}
           <Button
-            variant="primary"
-            className="g2m-cta"
+            variant="secondary"
+            className="g2m-cta-secondary"
             disabled={loading || pinwayLocked}
-            onClick={() => void runPrimary()}
+            onClick={() => void pasteAndFind()}
           >
-            {copied === "primary" && playbook.primary.kind === "copy"
-              ? "Copied — paste in app"
-              : playbook.primary.label}
+            Paste
           </Button>
-        ) : (
-          <Button
-            variant="primary"
-            className="g2m-cta"
-            disabled={loading || pinwayLocked}
-            onClick={() => void resolve(input)}
-          >
-            {loading ? "Matching…" : "Convert & open"}
-          </Button>
-        )}
-        <Button
-          variant="secondary"
-          className="g2m-cta-secondary"
-          disabled={loading || pinwayLocked}
-          onClick={() => void pasteAndFind()}
-        >
-          Paste
-        </Button>
+        </div>
+        <div className="g2m-home-indicator" aria-hidden />
       </div>
-      <div className="g2m-home-indicator" aria-hidden />
-    </div>
-  );
+    ) : null;
 
   return (
     <BosRoot
@@ -1268,7 +1336,9 @@ export function Gmap2MapplsTool({
       }
       defaultTheme="light"
     >
-      <div className={`g2m-app g2m-app--${variant}`}>
+      <div
+        className={`g2m-app g2m-app--${variant}${variant === "standalone" ? " g2m-app--flow" : ""}`}
+      >
         {nav}
         {body}
         {island}
