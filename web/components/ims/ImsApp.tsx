@@ -495,6 +495,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
             collapsible
             collapsed={navCollapsed}
             onCollapsedChange={setCollapsed}
+            mobileNav={false}
             aria-label="IMS modules"
           >
             <ModuleBoundary moduleKey={current.key}>
@@ -517,7 +518,8 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
           </div>
         </div>
 
-        {mode === "standalone" ? <MobileNav available={moduleKeys} active={current.key} onSelect={(k) => navigate(k)} /> : null}
+        {/* Tool + standalone: curated floating dock (AppShell mobileNav is off for IMS). */}
+        <MobileNav available={moduleKeys} active={current.key} onSelect={(k) => navigate(k)} />
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} placeholder="Type a command or module…" />
         {askPage ? <PageAskAi key={askPage} page={askPage} open={askOpen} onClose={() => setAskOpen(false)} /> : null}
         <SearchDialog

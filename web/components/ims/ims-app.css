@@ -791,16 +791,19 @@
 .bos .ims-ai-form .bos-input { flex: 1; min-width: 0; }
 @media print { .bos .ims-ask-btn { display: none !important; } }
 
-/* Phone bottom bar (standalone only; inside JBT the host's own bottom nav is shown) */
+/* Phone floating module dock (tool + standalone). Lift clears JBT host bottom-nav when embedded. */
 .bos .ims-mnav { display: none; }
 @media (max-width: 767px) {
-  .bos.ims-standalone .ims-app { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+  .bos.ims-standalone .ims-app,
+  .bos.bos-bleed .ims-app {
+    padding-bottom: calc(88px + var(--bos-mnav-lift, env(safe-area-inset-bottom, 0px)));
+  }
   .bos .ims-mnav {
     position: fixed;
     left: 12px;
     right: 12px;
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-    z-index: 30;
+    bottom: calc(12px + var(--bos-mnav-lift, env(safe-area-inset-bottom, 0px)));
+    z-index: 35;
     display: flex;
     align-items: stretch;
     gap: 4px;
@@ -836,15 +839,16 @@
   .bos .ims-mnav-label { font-size: 10px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 }
 /* Android shrink-to-fit can report ~980px — still show IMS bottom bar */
-html.jbt-force-phone .bos.ims-standalone .ims-app {
-  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+html.jbt-force-phone .bos.ims-standalone .ims-app,
+html.jbt-force-phone .bos.bos-bleed .ims-app {
+  padding-bottom: calc(88px + var(--bos-mnav-lift, env(safe-area-inset-bottom, 0px)));
 }
 html.jbt-force-phone .bos .ims-mnav {
   position: fixed;
   left: 12px;
   right: 12px;
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  z-index: 30;
+  bottom: calc(12px + var(--bos-mnav-lift, env(safe-area-inset-bottom, 0px)));
+  z-index: 35;
   display: flex;
   align-items: stretch;
   gap: 4px;

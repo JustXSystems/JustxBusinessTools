@@ -241,6 +241,19 @@
 .bos .bos-nav-foot .bos-time-pill { width: 100%; justify-content: center; font-size: 10.5px; padding: 7px 10px; }
 .bos .bos-shell-main { background: var(--bos-bg); padding: var(--bos-s-6); overflow: auto; min-width: 0; max-width: 100%; }
 
+/* Phone floating module dock — desktop off; phone rules below turn it on. */
+.bos .bos-mnav { display: none; }
+.bos.admin-bos .bos-mnav { display: none !important; }
+
+/* Embedded in JBT tool chrome: lift dock above the host bottom tab bar. */
+.bos.bos-bleed {
+  --bos-mnav-lift: var(--chrome-bottom, env(safe-area-inset-bottom, 0px));
+}
+.bos.bos-app-standalone,
+.bos.ims-standalone {
+  --bos-mnav-lift: env(safe-area-inset-bottom, 0px);
+}
+
 /* ---------- Module header ---------- */
 .bos .bos-module-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--bos-s-4); margin-bottom: var(--bos-s-5); }
 .bos .bos-module-title { font-family: var(--bos-font-display); font-weight: 650; font-size: 18px; }
@@ -676,8 +689,102 @@
   .bos .bos-shell-fill { grid-template-rows: minmax(0, 1fr); }
   .bos .bos-shell-main { padding: var(--bos-s-4); }
 
-  /* Operator / IMS / tools: drop side nav — bottom menu is enough. */
+  /* Operator / BOS tools: drop side nav — floating bottom dock replaces it. */
   .bos:not(.admin-bos) .bos-nav { display: none !important; }
+
+  /* IMS-style floating module dock (phone). Hidden on desktop via base rule. */
+  .bos:not(.admin-bos) .bos-mnav {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    /* Sit above JBT host bottom-nav when embedded; safe-area alone when standalone. */
+    bottom: calc(12px + var(--bos-mnav-lift, env(safe-area-inset-bottom, 0px)));
+    z-index: 35;
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    height: 64px;
+    padding: 0 8px;
+    border-radius: 26px;
+    background: var(--bos-surface);
+    border: 1px solid var(--bos-border);
+    box-shadow: var(--bos-shadow-lg);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    overflow-x: auto;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+  .bos:not(.admin-bos) .bos-mnav::-webkit-scrollbar { display: none; }
+  .bos:not(.admin-bos) .bos-mnav-btn {
+    position: relative;
+    flex: 1 0 auto;
+    min-width: 64px;
+    max-width: 104px;
+    margin: 8px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border: 0;
+    border-radius: 16px;
+    background: transparent;
+    color: var(--bos-text-faint);
+    font: inherit;
+    cursor: pointer;
+    scroll-snap-align: start;
+    transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .bos:not(.admin-bos) .bos-mnav-btn:focus-visible { outline: 2px solid var(--bos-blue); outline-offset: 2px; }
+  .bos:not(.admin-bos) .bos-mnav-btn.is-active {
+    background: color-mix(in srgb, var(--bos-blue) 18%, var(--bos-surface));
+    color: var(--bos-blue-600);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--bos-blue) 28%, transparent);
+  }
+  .bos:not(.admin-bos) .bos-mnav-emerald .bos-mnav-btn.is-active {
+    background: color-mix(in srgb, var(--bos-emerald) 18%, var(--bos-surface));
+    color: var(--bos-emerald-600);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--bos-emerald) 28%, transparent);
+  }
+  .bos:not(.admin-bos) .bos-mnav-ic {
+    font-size: 16px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .bos:not(.admin-bos) .bos-mnav-ic svg { width: 16px; height: 16px; }
+  .bos:not(.admin-bos) .bos-mnav-label {
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    padding: 0 2px;
+  }
+  .bos:not(.admin-bos) .bos-mnav-badge {
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: var(--bos-coral);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 14px;
+    text-align: center;
+  }
+  .bos:not(.admin-bos) .bos-mnav-badge.is-amber { background: var(--bos-amber); }
+  .bos:not(.admin-bos) .bos-shell.has-bos-mnav .bos-shell-main {
+    padding-bottom: calc(88px + var(--bos-mnav-lift, env(safe-area-inset-bottom, 0px)));
+  }
 
   /* Admin has no bottom menu — keep a compact horizontal pill strip. */
   .bos.admin-bos .bos-shell-fill { grid-template-rows: auto minmax(0, 1fr); }
@@ -896,4 +1003,70 @@ html.jbt-force-phone .bos.admin-bos .bos-shell-fill {
   grid-template-rows: auto minmax(0, 1fr) !important;
 }
 html.jbt-force-phone .bos .bos-shell-main { padding: var(--bos-s-3); }
+
+/* Same floating dock when Android falsely reports ~980px layout width */
+html.jbt-force-phone .bos:not(.admin-bos) .bos-mnav {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + var(--bos-mnav-lift, env(safe-area-inset-bottom, 0px)));
+  z-index: 35;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 64px;
+  padding: 0 8px;
+  border-radius: 26px;
+  background: var(--bos-surface);
+  border: 1px solid var(--bos-border);
+  box-shadow: var(--bos-shadow-lg);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+html.jbt-force-phone .bos:not(.admin-bos) .bos-mnav-btn {
+  position: relative;
+  flex: 1 0 auto;
+  min-width: 64px;
+  max-width: 104px;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--bos-text-faint);
+  font: inherit;
+  cursor: pointer;
+}
+html.jbt-force-phone .bos:not(.admin-bos) .bos-mnav-btn.is-active {
+  background: color-mix(in srgb, var(--bos-blue) 18%, var(--bos-surface));
+  color: var(--bos-blue-600);
+}
+html.jbt-force-phone .bos:not(.admin-bos) .bos-mnav-emerald .bos-mnav-btn.is-active {
+  background: color-mix(in srgb, var(--bos-emerald) 18%, var(--bos-surface));
+  color: var(--bos-emerald-600);
+}
+html.jbt-force-phone .bos:not(.admin-bos) .bos-mnav-ic {
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+}
+html.jbt-force-phone .bos:not(.admin-bos) .bos-mnav-label {
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+html.jbt-force-phone .bos:not(.admin-bos) .bos-shell.has-bos-mnav .bos-shell-main {
+  padding-bottom: calc(88px + var(--bos-mnav-lift, env(safe-area-inset-bottom, 0px)));
+}
+
+@media print {
+  .bos .bos-mnav { display: none !important; }
+}
 

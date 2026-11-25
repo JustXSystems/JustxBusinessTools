@@ -34,6 +34,11 @@ export type BosAppShellProps<K extends string> = {
   collapsible?: boolean;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  /**
+   * Phone floating dock (IMS-style). Default on; set false when the host
+   * already mounts its own bottom nav (e.g. IMS standalone `ims-mnav`).
+   */
+  mobileNav?: boolean;
   children: ReactNode;
   "aria-label"?: string;
 };
@@ -53,14 +58,21 @@ export function AppShell<K extends string>({
   collapsible = false,
   collapsed = false,
   onCollapsedChange,
+  mobileNav = true,
   children,
   ...aria
 }: BosAppShellProps<K>) {
   const navRef = useRef<HTMLElement>(null);
+  const mnavRef = useRef<HTMLElement>(null);
+  const navLabelText = aria["aria-label"] ?? "Module navigation";
 
   useEffect(() => {
     revealInline(navRef.current, navRef.current?.querySelector(".bos-nav-item.is-active"));
   }, [active, collapsed]);
+
+  useEffect(() => {
+    revealInline(mnavRef.current, mnavRef.current?.querySelector(".bos-mnav-btn.is-active"));
+  }, [active]);
 
   return (
     <div
@@ -69,9 +81,10 @@ export function AppShell<K extends string>({
         size === "fixed" && "bos-shell-fixed",
         size === "fill" && "bos-shell-fill",
         collapsible && collapsed && "is-nav-collapsed",
+        mobileNav && items.length >= 2 && "has-bos-mnav",
       )}
     >
-      <nav ref={navRef} className={cx("bos-nav", accent === "emerald" && "bos-nav-emerald")} aria-label={aria["aria-label"] ?? "Module navigation"}>
+      <nav ref={navRef} className={cx("bos-nav", accent === "emerald" && "bos-nav-emerald")} aria-label={navLabelText}>
         <div className="bos-nav-head">
           {brand ? <div className="bos-nav-brand">{brand}</div> : <span />}
           {collapsible ? (
@@ -121,6 +134,32 @@ export function AppShell<K extends string>({
         {footer ? <div className="bos-nav-foot">{footer}</div> : null}
       </nav>
       <main className="bos-shell-main">{children}</main>
+      {mobileNav && items.length >= 2 ? (
+        <nav ref={mnavRef} className={cx("bos-mnav", accent === "emerald" && "bos-mnav-emerald")} aria-label={navLabelText}>
+          {items.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={cx("bos-mnav-btn", item.key === active && "is-active")}
+              aria-current={item.key === active ? "page" : undefined}
+              title={item.label}
+              onClick={() => onSelect(item.key)}
+            >
+              {item.icon ? (
+                <span className="bos-mnav-ic" aria-hidden="true">
+                  {item.icon}
+                </span>
+              ) : null}
+              <span className="bos-mnav-label">{item.label}</span>
+              {item.badge && item.badge.count > 0 ? (
+                <span className={cx("bos-mnav-badge", item.badge.tone === "amber" && "is-amber")} aria-hidden="true">
+                  {item.badge.count > 99 ? "99+" : item.badge.count}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </nav>
+      ) : null}
     </div>
   );
 }
