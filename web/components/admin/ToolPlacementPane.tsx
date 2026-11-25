@@ -9,6 +9,7 @@ import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { ensureToolsOnHome, removeToolsFromHome } from "@/lib/admin-home-tools";
 import { api } from "@/lib/api";
 import { supportsStandaloneApp } from "@/lib/tool-launch";
+import { defaultPersonalUsage, getToolDefinition } from "@/config/tools.config";
 
 function clampWidthPct(raw: unknown): number {
   const n = typeof raw === "number" ? raw : Number(raw);
@@ -43,12 +44,21 @@ export const ToolPlacementPane = forwardRef<
   },
   ref,
 ) {
-  const { refresh: refreshConfig } = usePlatformConfig();
+  const { config, refresh: refreshConfig } = usePlatformConfig();
   const [busy, setBusy] = useState(false);
   const [syncHome, setSyncHome] = useState(true);
   const [contentWidthPct, setContentWidthPct] = useState(90);
+  const staticDef = getToolDefinition(toolId);
+  const defaultPersonal = defaultPersonalUsage(toolId, staticDef?.type);
+  const [personalUsage, setPersonalUsage] = useState(
+    () => config?.toolPersonalUsage?.[toolId] ?? defaultPersonal,
+  );
   const canStandalone = supportsStandaloneApp(toolId);
   const isIms = toolId === "imsdealer";
+
+  useEffect(() => {
+    setPersonalUsage(config?.toolPersonalUsage?.[toolId] ?? defaultPersonal);
+  }, [toolId, config?.toolPersonalUsage, defaultPersonal]);
 
   useEffect(() => {
     if (!isIms) return;
@@ -64,12 +74,24 @@ export const ToolPlacementPane = forwardRef<
   }, [isIms]);
 
   async function save() {
-    if (businessProfileId == null) {
-      onSaved("Select a Business Profile before saving org placement", "error");
-      throw new Error("Business Profile required");
-    }
     setBusy(true);
     try {
+      // Platform-wide flag — does not need a Business Profile.
+      await api("/admin/config/tool-personal-usage", {
+        method: "PUT",
+        body: JSON.stringify({ toolId, personalUsage }),
+      });
+
+      if (businessProfileId == null) {
+        await refreshConfig().catch(() => undefined);
+        onSaved(
+          personalUsage
+            ? "Personal usage enabled (platform-wide). Select a Business Profile to edit Live/Hidden placement."
+            : "Personal usage disabled (platform-wide). Select a Business Profile to edit Live/Hidden placement.",
+        );
+        return;
+      }
+
       const width = clampWidthPct(contentWidthPct);
       await api(`/admin/catalog/${toolId}`, {
         method: "PUT",
@@ -90,8 +112,8 @@ export const ToolPlacementPane = forwardRef<
           body: JSON.stringify({ contentWidthPct: width }),
         });
         setContentWidthPct(clampWidthPct(layout.imsLayout.contentWidthPct));
-        await refreshConfig().catch(() => undefined);
       }
+      await refreshConfig().catch(() => undefined);
       onSaved(
         canStandalone
           ? isIms
@@ -138,7 +160,7 @@ export const ToolPlacementPane = forwardRef<
       label: () => "Save placement",
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- latest props closed over on each render
-    [busy, toolId, groupName, available, openStandalone, canStandalone, businessProfileId, contentWidthPct, isIms, syncHome],
+    [busy, toolId, groupName, available, openStandalone, canStandalone, businessProfileId, contentWidthPct, isIms, syncHome, personalUsage],
   );
 
   return (
@@ -170,6 +192,15 @@ export const ToolPlacementPane = forwardRef<
           >
             <option value="1">Live</option>
             <option value="0">Hidden</option>
+          </SelectField>
+          <SelectField
+            label="Personal usage"
+            value={personalUsage ? "1" : "0"}
+            onChange={(e) => setPersonalUsage(e.target.value === "1")}
+            hint="GSTIN-independent. Personal (no-GSTIN) accounts may only use tools marked Yes. Business users with GSTIN can use every Live tool."
+          >
+            <option value="1">Yes — allowed for personal accounts</option>
+            <option value="0">No — business / GSTIN only</option>
           </SelectField>
           {canStandalone ? (
             <SelectField

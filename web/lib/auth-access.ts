@@ -1,4 +1,5 @@
 import type { SessionUser } from "@/lib/types/auth";
+import { isPersonalAccount } from "@/lib/personal-account";
 
 export type OrgRole = "owner" | "admin" | "staff" | "viewer";
 
@@ -170,6 +171,11 @@ export function canAccessPath(
 ): boolean {
   const area = accessAreaForPath(pathname);
   if (!area) return true;
+  // Personal (no-GSTIN) users: Home, Profile, My tools / personal tools only.
+  if (isPersonalAccount(user)) {
+    if (area === "adminConsole") return canAccessArea(user, area);
+    return area === "home" || area === "businessProfile" || area === "myTools";
+  }
   return canAccessArea(user, area);
 }
 

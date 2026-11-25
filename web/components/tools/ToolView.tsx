@@ -11,10 +11,12 @@ import { QrTool } from "@/components/utilities/QrTool";
 import { QuotationGeneratorV1 } from "@/components/quotation-v1/QuotationGeneratorV1";
 import { SiteSurveyV1 } from "@/components/site-survey-v1/SiteSurveyV1";
 import { TrackerTool } from "@/components/tools/TrackerTool";
-import { resolveToolDefinition } from "@/lib/dynamic-tools";
+import { isPersonalUsageTool, resolveToolDefinition } from "@/lib/dynamic-tools";
 import { ToolPageHero } from "@/components/shell/ToolPageHero";
 import { withBasePath } from "@/lib/base-path";
 import { openStandaloneAppWindow, resolveToolLaunch, toStandaloneHref } from "@/lib/tool-launch";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { isPersonalAccount } from "@/lib/personal-account";
 
 const QrGeneratorTool = dynamic(
   () => import("@/components/utilities/QrGeneratorTool").then((m) => m.QrGeneratorTool),
@@ -105,11 +107,14 @@ function StandaloneRedirect({ toolId }: { toolId: string }) {
 }
 
 export function ToolView({ toolId }: { toolId: string }) {
+  const { user } = useAuth();
   const { config, loading } = usePlatformConfig();
   const platformTools = config?.tools ?? [];
   const tool = resolveToolDefinition(toolId, platformTools);
   const catalogRow = config?.catalog?.find((c) => c.id === toolId);
   const launch = resolveToolLaunch(toolId, catalogRow);
+  const personal = isPersonalAccount(user);
+  const personalAllowed = isPersonalUsageTool(toolId, tool, config?.toolPersonalUsage);
 
   if (loading && !tool) {
     return (
@@ -126,6 +131,22 @@ export function ToolView({ toolId }: { toolId: string }) {
         <div className="es-icon">🚧</div>
         <div className="es-title">Tool not found</div>
         <Link href="/" className="btn btn-secondary btn-sm">Back to home</Link>
+      </div>
+    );
+  }
+
+  if (personal && !personalAllowed) {
+    return (
+      <div className="empty-state">
+        <div className="es-icon">🔒</div>
+        <div className="es-title">Business tool</div>
+        <p className="section-note" style={{ maxWidth: 360, margin: "8px auto 16px" }}>
+          This tool needs a Business Profile with GSTIN. Personal accounts can only use
+          GSTIN-independent tools.
+        </p>
+        <Link href="/" className="btn btn-secondary btn-sm">
+          Back to home
+        </Link>
       </div>
     );
   }

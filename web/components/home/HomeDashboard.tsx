@@ -11,10 +11,14 @@ import {
   homeToolsByCategory,
   filterHomeToolsBySelection,
   filterHomeToolsByCatalog,
+  filterHomeToolsByPersonalAccount,
+  applyPersonalUsageOverrides,
   catalogEnabledOptInTools,
 } from "@/lib/dynamic-tools";
 import type { ToolDefinition } from "@/config/tools.config";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { isPersonalAccount } from "@/lib/personal-account";
 
 function filterMergedTools(query: string, tools: ToolDefinition[]): ToolDefinition[] {
   const q = query.trim().toLowerCase();
@@ -28,20 +32,25 @@ function filterMergedTools(query: string, tools: ToolDefinition[]): ToolDefiniti
 }
 
 export function HomeDashboard() {
+  const { user } = useAuth();
   const { config } = usePlatformConfig();
   const platformTools = config?.tools ?? [];
   const catalog = config?.catalog ?? [];
+  const personalUsage = config?.toolPersonalUsage ?? {};
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 200);
   const [businessName, setBusinessName] = useState("");
+  const [profileGstin, setProfileGstin] = useState<string | null>(null);
   const [homeToolIds, setHomeToolIds] = useState<string[] | null>(null);
   const [apiError, setApiError] = useState("");
+  const personal = isPersonalAccount(user, profileGstin);
 
   const loadProfile = useCallback(async () => {
     if (!config) return;
     try {
       const p = await fetchProfile();
       setBusinessName(p.businessName || "");
+      setProfileGstin(p.gstin ?? null);
       setHomeToolIds(p.homeToolIds ?? null);
       setApiError("");
     } catch (err) {
@@ -52,10 +61,14 @@ export function HomeDashboard() {
   useLiveRefresh(loadProfile, { intervalMs: 90_000, enabled: Boolean(config), deps: [Boolean(config)] });
 
   const allTools = useMemo(() => {
-    const merged = mergedHomeTools(platformTools);
+    const merged = applyPersonalUsageOverrides(mergedHomeTools(platformTools), personalUsage);
     const byCatalog = filterHomeToolsByCatalog(merged, catalog);
-    return [...filterHomeToolsBySelection(byCatalog, homeToolIds), ...catalogEnabledOptInTools(catalog)];
-  }, [platformTools, catalog, homeToolIds]);
+    const selected = [
+      ...filterHomeToolsBySelection(byCatalog, homeToolIds),
+      ...applyPersonalUsageOverrides(catalogEnabledOptInTools(catalog), personalUsage),
+    ];
+    return filterHomeToolsByPersonalAccount(selected, personal, personalUsage);
+  }, [platformTools, catalog, homeToolIds, personal, personalUsage]);
   const groupTools = config?.toolGrouping?.enabled !== false;
   const filtered = useMemo(() => filterMergedTools(debouncedSearch, allTools), [debouncedSearch, allTools]);
   const categorized = useMemo(

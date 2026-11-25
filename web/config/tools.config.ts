@@ -13,7 +13,37 @@ export type ToolDefinition = ToolCatalogEntry & {
   subscriptionExempt: boolean;
   route: string;
   showOnHome: boolean;
+  /**
+   * GSTIN-independent tools. Personal (no-GSTIN) users may only open these.
+   * Business users with GSTIN may use every tool.
+   */
+  personalUsage: boolean;
 };
+
+/**
+ * Built-in defaults for personal (GSTIN-independent) tools.
+ * Admin → Tools → Placement can override via platform `tool_personal_usage`.
+ */
+export const DEFAULT_PERSONAL_USAGE_TOOL_IDS: ReadonlySet<string> = new Set([
+  "gstcalc",
+  "tdscalc",
+  "taxcalc",
+  "profitcalc",
+  "emicalc",
+  "loancalc",
+  "solarroi",
+  "dealercommission",
+  "qrscanner",
+  "qrgenerator",
+  "gmap2mappls",
+  "visitors",
+]);
+
+export function defaultPersonalUsage(toolId: string, type?: ToolType): boolean {
+  if (DEFAULT_PERSONAL_USAGE_TOOL_IDS.has(toolId)) return true;
+  if (type === "calculator") return true;
+  return false;
+}
 
 export const TOOL_CATEGORIES = [
   "Sales & Business",
@@ -150,6 +180,7 @@ export function getToolDefinition(id: string): ToolDefinition | undefined {
     subscriptionExempt,
     route: external || (id === "notifications" ? "/notifications" : `/tools/${id}`),
     showOnHome: id !== "notifications" && !OPT_IN_TOOL_IDS.has(id),
+    personalUsage: defaultPersonalUsage(id, type),
   };
 }
 

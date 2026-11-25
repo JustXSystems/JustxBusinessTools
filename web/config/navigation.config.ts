@@ -1,5 +1,6 @@
 import type { SessionUser } from "@/lib/types/auth";
 import { canAccessPath } from "@/lib/auth-access";
+import { isPersonalAccount } from "@/lib/personal-account";
 
 export type NavIconId =
   | "home"
@@ -57,6 +58,19 @@ export const navigationConfig = {
     { href: "/subscription", label: "Tools", icon: "subscription" as const },
     { href: "/notifications", label: "Alerts", icon: "notifications" as const },
   ],
+  /** Personal (no-GSTIN) operator chrome — Home, Profile, My tools only. */
+  personalWorkspace: [
+    { href: "/", label: "Home", icon: "home" as const },
+    { href: "/profile", label: "Profile", icon: "profile" as const },
+  ],
+  personalAccount: [
+    { href: "/subscription", label: "My tools", icon: "subscription" as const },
+  ],
+  personalMobileBottom: [
+    { href: "/", label: "Home", icon: "home" as const },
+    { href: "/profile", label: "Profile", icon: "profile" as const },
+    { href: "/subscription", label: "Tools", icon: "subscription" as const },
+  ],
 } as const;
 
 /** Workspace + account nav items visible for the signed-in role. */
@@ -64,6 +78,11 @@ export function operatorNavForUser(user: SessionUser | null | undefined): {
   workspace: NavItem[];
   account: NavItem[];
 } {
+  if (isPersonalAccount(user)) {
+    const workspace = navigationConfig.personalWorkspace.filter((item) => canAccessPath(user, item.href));
+    const account = navigationConfig.personalAccount.filter((item) => canAccessPath(user, item.href));
+    return { workspace: [...workspace], account: [...account] };
+  }
   const workspace = navigationConfig.workspace.filter((item) => canAccessPath(user, item.href));
   const account = navigationConfig.account.filter((item) => canAccessPath(user, item.href));
   return { workspace: [...workspace], account: [...account] };
@@ -71,6 +90,9 @@ export function operatorNavForUser(user: SessionUser | null | undefined): {
 
 /** Mobile bottom bar — keep at most 4 items, prefer role-allowed entries. */
 export function mobileNavForUser(user: SessionUser | null | undefined): NavItem[] {
+  if (isPersonalAccount(user)) {
+    return navigationConfig.personalMobileBottom.filter((item) => canAccessPath(user, item.href));
+  }
   const allowed = navigationConfig.mobileBottom.filter((item) => canAccessPath(user, item.href));
   if (allowed.length <= 4) return [...allowed];
   // Prefer Home, primary work area, Tools, Alerts when trimming.

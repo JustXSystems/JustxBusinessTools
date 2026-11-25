@@ -8,6 +8,10 @@ import {
 import { getImsLayout, saveImsLayout } from "../../lib/config/ims-layout.js";
 import { getToolGrouping, saveToolGrouping } from "../../lib/config/tool-grouping.js";
 import {
+  getToolPersonalUsageMap,
+  setToolPersonalUsage,
+} from "../../lib/config/tool-personal-usage.js";
+import {
   getPublicHome,
   parsePublicHome,
   savePublicHome,
@@ -92,6 +96,30 @@ router.put("/tool-grouping", async (req, res) => {
       enabled: req.body?.enabled == null ? undefined : Boolean(req.body.enabled),
     });
     res.json({ toolGrouping });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Save failed" });
+  }
+});
+
+router.get("/tool-personal-usage", async (_req, res) => {
+  const tools = await listToolDefinitions();
+  const toolPersonalUsage = await getToolPersonalUsageMap(tools.map((t) => t.id));
+  res.json({ toolPersonalUsage });
+});
+
+router.put("/tool-personal-usage", async (req, res) => {
+  try {
+    const toolId = String(req.body?.toolId ?? "").trim();
+    if (!toolId) {
+      res.status(400).json({ error: "toolId required" });
+      return;
+    }
+    if (req.body?.personalUsage == null) {
+      res.status(400).json({ error: "personalUsage boolean required" });
+      return;
+    }
+    const toolPersonalUsage = await setToolPersonalUsage(toolId, Boolean(req.body.personalUsage));
+    res.json({ toolPersonalUsage });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : "Save failed" });
   }

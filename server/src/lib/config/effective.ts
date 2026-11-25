@@ -21,6 +21,11 @@ import {
   type FlashDisplaySettings,
 } from "../flash-display.js";
 import { getOrgFeatureSwitches, type FeatureSwitchState } from "../feature-switches.js";
+import {
+  DEFAULT_PERSONAL_USAGE_TOOL_IDS,
+  getToolPersonalUsageMap,
+  type ToolPersonalUsageMap,
+} from "./tool-personal-usage.js";
 
 async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
   await pool.query(
@@ -75,6 +80,8 @@ export async function getEffectiveConfig(): Promise<{
   clockDisplay: ClockDisplaySettings;
   flashDisplay: FlashDisplaySettings;
   features: FeatureSwitchState;
+  /** Platform map of toolId → allowed for personal (no-GSTIN) users. */
+  toolPersonalUsage: ToolPersonalUsageMap;
 }> {
   const orgId = getActiveOrgId();
   const profileId = getActiveProfileId();
@@ -116,7 +123,17 @@ export async function getEffectiveConfig(): Promise<{
   });
 
   await ensureBuiltinCatalogRows(orgId);
-  const [tools, catalog, features] = await Promise.all([listToolDefinitions(), listOrgCatalog(orgId), getOrgFeatureSwitches(orgId)]);
+  const [tools, catalog, features] = await Promise.all([
+    listToolDefinitions(),
+    listOrgCatalog(orgId),
+    getOrgFeatureSwitches(orgId),
+  ]);
+  const personalUsageIds = [
+    ...DEFAULT_PERSONAL_USAGE_TOOL_IDS,
+    ...tools.map((t) => t.id),
+    ...catalog.map((c) => c.id),
+  ];
+  const toolPersonalUsage = await getToolPersonalUsageMap([...new Set(personalUsageIds)]);
 
   // Opt Live V1 tools into branch home allowlists that were frozen before these tools existed.
   for (const row of catalog) {
@@ -147,6 +164,7 @@ export async function getEffectiveConfig(): Promise<{
     clockDisplay,
     flashDisplay,
     features,
+    toolPersonalUsage,
   };
 }
 

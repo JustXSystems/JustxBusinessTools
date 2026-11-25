@@ -84,6 +84,26 @@ describe("BAU org roles (live clients)", () => {
     expect(mobileNavForUser(u).some((i) => i.href === "/subscription")).toBe(true);
   });
 
+  it("personal (no-GSTIN) owner keeps Home, Profile, My tools only", () => {
+    const u = user({
+      role: "owner",
+      isPlatformAdmin: false,
+      branches: [{ id: 1, businessName: "Me", gstin: null, isDefault: true }],
+    });
+    expect(canAccessPath(u, "/")).toBe(true);
+    expect(canAccessPath(u, "/profile")).toBe(true);
+    expect(canAccessPath(u, "/subscription")).toBe(true);
+    expect(canAccessPath(u, "/tools/gstcalc")).toBe(true);
+    expect(canAccessPath(u, "/sync")).toBe(false);
+    expect(canAccessPath(u, "/email-outbox")).toBe(false);
+    expect(canAccessPath(u, "/notifications")).toBe(false);
+    const nav = operatorNavForUser(u);
+    expect(nav.workspace.map((i) => i.href)).toEqual(["/", "/profile"]);
+    expect(nav.workspace.find((i) => i.href === "/profile")?.label).toBe("Profile");
+    expect(nav.account.map((i) => i.href)).toEqual(["/subscription"]);
+    expect(mobileNavForUser(u).map((i) => i.href)).toEqual(["/", "/profile", "/subscription"]);
+  });
+
   it("ignores stale actAsRole on non-platform sessions", () => {
     const u = user({
       role: "owner",

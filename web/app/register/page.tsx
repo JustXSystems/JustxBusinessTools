@@ -15,7 +15,7 @@ import { publicAssetUrl } from "@/lib/base-path";
 import { type AccountType, validateRegisterForm } from "@/lib/register-form";
 import { GSTIN_RE } from "@/lib/register-gstin";
 import { INDIAN_STATES } from "@/lib/types/business-profile";
-import { mergedHomeTools } from "@/lib/dynamic-tools";
+import { filterHomeToolsByPersonalAccount, mergedHomeTools } from "@/lib/dynamic-tools";
 import "@/components/admin/admin-console.css";
 
 type GstinProfile = {
@@ -72,7 +72,7 @@ export default function RegisterPage() {
   const [businessEmail, setBusinessEmail] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
   const [homeToolIds, setHomeToolIds] = useState<string[]>(() =>
-    mergedHomeTools([]).map((t) => t.id),
+    filterHomeToolsByPersonalAccount(mergedHomeTools([]), true).map((t) => t.id),
   );
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -98,6 +98,9 @@ export default function RegisterPage() {
     setError("");
     if (next === "individual") {
       setLookup("idle");
+      setHomeToolIds(filterHomeToolsByPersonalAccount(mergedHomeTools([]), true).map((t) => t.id));
+    } else {
+      setHomeToolIds(mergedHomeTools([]).map((t) => t.id));
     }
   }
 
@@ -587,7 +590,11 @@ export default function RegisterPage() {
                         <p className="admin-cc-note-text">
                           Only selected tools appear after login. Subscription billing still lists every tool.
                         </p>
-                        <HomeToolPicker selectedIds={homeToolIds} onChange={setHomeToolIds} />
+                        <HomeToolPicker
+                          selectedIds={homeToolIds}
+                          onChange={setHomeToolIds}
+                          personalOnly={false}
+                        />
                       </div>
                     ) : null}
                   </fieldset>

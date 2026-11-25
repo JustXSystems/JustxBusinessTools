@@ -3,7 +3,12 @@
 import { useMemo } from "react";
 import type { PlatformToolDefinition } from "@/components/config/ConfigProvider";
 import { useOptionalPlatformConfig } from "@/components/config/ConfigProvider";
-import { mergedHomeTools, homeToolsByCategory } from "@/lib/dynamic-tools";
+import {
+  applyPersonalUsageOverrides,
+  filterHomeToolsByPersonalAccount,
+  homeToolsByCategory,
+  mergedHomeTools,
+} from "@/lib/dynamic-tools";
 
 type Props = {
   selectedIds: string[];
@@ -11,12 +16,27 @@ type Props = {
   disabled?: boolean;
   /** Admin-published tools; omit on public register (builtins only). */
   platformTools?: PlatformToolDefinition[];
+  /**
+   * When true, only GSTIN-independent (personalUsage) tools are listed —
+   * used for individual registration and personal /profile tool selection.
+   */
+  personalOnly?: boolean;
 };
 
-export function HomeToolPicker({ selectedIds, onChange, disabled, platformTools = [] }: Props) {
+export function HomeToolPicker({
+  selectedIds,
+  onChange,
+  disabled,
+  platformTools = [],
+  personalOnly = false,
+}: Props) {
   const configCtx = useOptionalPlatformConfig();
   const groupTools = configCtx?.config?.toolGrouping?.enabled !== false;
-  const allTools = useMemo(() => mergedHomeTools(platformTools), [platformTools]);
+  const personalUsage = configCtx?.config?.toolPersonalUsage ?? {};
+  const allTools = useMemo(() => {
+    const merged = applyPersonalUsageOverrides(mergedHomeTools(platformTools), personalUsage);
+    return filterHomeToolsByPersonalAccount(merged, personalOnly, personalUsage);
+  }, [platformTools, personalOnly, personalUsage]);
   const groups = useMemo(
     () => homeToolsByCategory(allTools, { group: groupTools }),
     [allTools, groupTools],
@@ -58,6 +78,7 @@ export function HomeToolPicker({ selectedIds, onChange, disabled, platformTools 
       <div className="home-tool-picker-toolbar">
         <span className="home-tool-picker-meta">
           {selectedIds.length} of {allTools.length} tools selected for home
+          {personalOnly ? " · personal tools only" : ""}
         </span>
         <button
           type="button"

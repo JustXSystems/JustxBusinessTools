@@ -42,7 +42,7 @@ import { ClockDisplaySettingsPanel } from "@/components/profile/ClockDisplaySett
 import { FlashDisplaySettingsPanel } from "@/components/profile/FlashDisplaySettingsPanel";
 import { normalizeClockDisplaySettings } from "@/lib/clock-display";
 import { normalizeFlashDisplaySettings } from "@/lib/flash-display";
-import { GSTIN_RE } from "@/lib/register-gstin";
+import { hasValidGstin } from "@/lib/personal-account";
 
 type ProfileTab =
   | "personal"
@@ -81,10 +81,6 @@ const TAB_SECTIONS: Record<ProfileTab, string[]> = {
   team: ["team"],
   legal: ["bank", "terms", "quoteTerms"],
 };
-
-function hasValidGstin(value: string | null | undefined): boolean {
-  return GSTIN_RE.test(String(value ?? "").trim().toUpperCase());
-}
 
 export default function ProfilePage() {
   const { user, refresh: refreshAuth } = useAuth();
@@ -318,7 +314,7 @@ export default function ProfilePage() {
         </div>
       ) : null}
 
-      <MfaSettingsPanel />
+      {hasBusinessGstin ? <MfaSettingsPanel /> : null}
 
       {error ? <div className="error-banner">{error}</div> : null}
       {message ? <div className="panel profile-success">{message}</div> : null}
@@ -800,6 +796,7 @@ export default function ProfilePage() {
         <HomeToolPicker
           selectedIds={profile.homeToolIds ?? []}
           platformTools={platformTools}
+          personalOnly={!hasBusinessGstin}
           onChange={(ids) => {
             if (!canEdit) return;
             setProfile({ ...profile, homeToolIds: ids });

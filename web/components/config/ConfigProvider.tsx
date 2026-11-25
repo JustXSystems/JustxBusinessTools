@@ -78,6 +78,11 @@ export type EffectiveConfig = {
   flashDisplay?: FlashDisplaySettings;
   /** Org feature switches (Admin → Tools → Switches). Missing keys are off. */
   features?: Record<string, boolean>;
+  /**
+   * Platform map of toolId → personal (GSTIN-independent) usage.
+   * Personal accounts may only use tools marked true.
+   */
+  toolPersonalUsage?: Record<string, boolean>;
 };
 
 type ConfigContextValue = {
@@ -107,6 +112,7 @@ const DEFAULT_CONFIG: EffectiveConfig = {
     errorSeconds: DEFAULT_FLASH_ERROR_SECONDS,
     okSeconds: DEFAULT_FLASH_OK_SECONDS,
   },
+  toolPersonalUsage: {},
 };
 
 function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefined): EffectiveConfig {
@@ -128,12 +134,22 @@ function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefi
     clockDisplay: normalizeClockDisplaySettings(data?.clockDisplay),
     flashDisplay: normalizeFlashDisplaySettings(data?.flashDisplay),
     features: normalizeFeatures(data?.features),
+    toolPersonalUsage: normalizeToolPersonalUsage(data?.toolPersonalUsage),
   };
 }
 
 function normalizeFeatures(raw: unknown): Record<string, boolean> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   return Object.fromEntries(Object.entries(raw).filter(([, v]) => v === true).map(([k]) => [k, true]));
+}
+
+function normalizeToolPersonalUsage(raw: unknown): Record<string, boolean> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, boolean> = {};
+  for (const [id, flag] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof flag === "boolean") out[id] = flag;
+  }
+  return out;
 }
 
 export function ConfigProvider({ children }: { children: ReactNode }) {

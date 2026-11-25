@@ -3,7 +3,9 @@ import { getToolDefinition, toolsByCategory } from "@/config/tools.config";
 import {
   catalogEnabledOptInTools,
   filterHomeToolsByCatalog,
+  filterHomeToolsByPersonalAccount,
   filterHomeToolsBySelection,
+  isPersonalUsageTool,
   mergedHomeTools,
   resolveToolDefinition,
 } from "@/lib/dynamic-tools";
@@ -46,5 +48,29 @@ describe("opt-in tools", () => {
     expect(getToolDefinition("gmap2mappls")?.showOnHome).toBe(true);
     expect(getToolDefinition("gmap2mappls")?.subscriptionExempt).toBe(false);
     expect(homeIds([], null)).toContain("gmap2mappls");
+  });
+});
+
+describe("personalUsage tools", () => {
+  it("marks calculators and Pinway as personal by default", () => {
+    expect(getToolDefinition("gstcalc")?.personalUsage).toBe(true);
+    expect(getToolDefinition("gmap2mappls")?.personalUsage).toBe(true);
+    expect(getToolDefinition("qrgenerator")?.personalUsage).toBe(true);
+    expect(getToolDefinition("invoice")?.personalUsage).toBe(false);
+    expect(getToolDefinition("bos")?.personalUsage).toBe(false);
+  });
+
+  it("filters home tools for personal accounts", () => {
+    const all = mergedHomeTools([]);
+    const personal = filterHomeToolsByPersonalAccount(all, true);
+    expect(personal.every((t) => t.personalUsage)).toBe(true);
+    expect(personal.some((t) => t.id === "gstcalc")).toBe(true);
+    expect(personal.some((t) => t.id === "invoice")).toBe(false);
+    expect(filterHomeToolsByPersonalAccount(all, false)).toHaveLength(all.length);
+  });
+
+  it("honors platform overrides", () => {
+    expect(isPersonalUsageTool("invoice", getToolDefinition("invoice"), { invoice: true })).toBe(true);
+    expect(isPersonalUsageTool("gstcalc", getToolDefinition("gstcalc"), { gstcalc: false })).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 import type { PlatformToolDefinition } from "@/components/config/ConfigProvider";
 import {
+  defaultPersonalUsage,
   getToolDefinition,
   OPT_IN_TOOL_IDS,
   TOOL_CATEGORIES,
@@ -119,7 +120,47 @@ export function buildToolFromPlatform(platform: PlatformToolDefinition): ToolDef
     subscriptionExempt,
     route: `/tools/${platform.id}`,
     showOnHome: def.showOnHome !== false,
+    personalUsage:
+      typeof def.personalUsage === "boolean" ? def.personalUsage : defaultPersonalUsage(platform.id, type),
   };
+}
+
+/** Resolve personal-usage flag (platform override map wins over static defaults). */
+export function isPersonalUsageTool(
+  toolId: string,
+  tool: Pick<ToolDefinition, "personalUsage"> | undefined,
+  overrides?: Record<string, boolean> | null,
+): boolean {
+  if (overrides && Object.prototype.hasOwnProperty.call(overrides, toolId)) {
+    return Boolean(overrides[toolId]);
+  }
+  if (tool && typeof tool.personalUsage === "boolean") return tool.personalUsage;
+  return defaultPersonalUsage(toolId);
+}
+
+/** Apply personal-usage overrides onto resolved tool definitions. */
+export function applyPersonalUsageOverrides(
+  tools: ToolDefinition[],
+  overrides?: Record<string, boolean> | null,
+): ToolDefinition[] {
+  if (!overrides || !Object.keys(overrides).length) return tools;
+  return tools.map((t) => ({
+    ...t,
+    personalUsage: isPersonalUsageTool(t.id, t, overrides),
+  }));
+}
+
+/**
+ * Personal (no-GSTIN) accounts only see / open personalUsage tools.
+ * Business users with GSTIN keep the full list.
+ */
+export function filterHomeToolsByPersonalAccount(
+  tools: ToolDefinition[],
+  personalAccount: boolean,
+  overrides?: Record<string, boolean> | null,
+): ToolDefinition[] {
+  if (!personalAccount) return tools;
+  return tools.filter((t) => isPersonalUsageTool(t.id, t, overrides));
 }
 
 export function resolveToolDefinition(
