@@ -9,6 +9,17 @@ import {
   homeToolsByCategory,
   mergedHomeTools,
 } from "@/lib/dynamic-tools";
+import { withBasePath } from "@/lib/base-path";
+
+function ChipIcon({ icon }: { icon: string }) {
+  if (icon.startsWith("/") || icon.startsWith("http") || icon.startsWith("data:")) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- catalog may use public path or remote/data URL
+      <img className="home-tool-chip-icon-img" src={icon.startsWith("/") ? withBasePath(icon) : icon} alt="" />
+    );
+  }
+  return <>{icon}</>;
+}
 
 type Props = {
   selectedIds: string[];
@@ -64,7 +75,9 @@ export function HomeToolPicker({
             aria-pressed={on}
             onClick={() => toggle(tool.id)}
           >
-            <span className="home-tool-chip-icon">{tool.icon}</span>
+            <span className="home-tool-chip-icon" aria-hidden>
+              <ChipIcon icon={tool.icon} />
+            </span>
             <span className="home-tool-chip-name">{tool.name}</span>
             {on ? <span className="home-tool-chip-check">✓</span> : null}
           </button>
