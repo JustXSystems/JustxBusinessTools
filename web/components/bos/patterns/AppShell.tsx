@@ -38,7 +38,7 @@ export type BosAppShellProps<K extends string> = {
   "aria-label"?: string;
 };
 
-/** Module workspace: 236px sidebar + main panel. Under 900px the sidebar becomes a scrolling pill strip. */
+/** Module workspace: 236px sidebar + main panel. Under 900px the sidebar is hidden (bottom menu); admin keeps a pill strip. */
 export function AppShell<K extends string>({
   brand,
   items,

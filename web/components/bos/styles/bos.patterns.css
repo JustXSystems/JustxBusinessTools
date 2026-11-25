@@ -667,13 +667,23 @@
   .bos .bos-segmented:not(.bos-segmented-block):not(.bos-segmented-wrap)::-webkit-scrollbar { display: none; }
   .bos .bos-segmented:not(.bos-segmented-block) .bos-segment { flex-shrink: 0; }
 
-  /* App shell: the sidebar becomes a horizontally scrolling pill strip above the content. */
-  .bos .bos-shell { grid-template-columns: minmax(0, 1fr); }
+  /* Phone/tablet: single-column shell. */
+  .bos .bos-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
   .bos .bos-shell-fixed { height: auto; }
-  .bos .bos-shell-fill { grid-template-rows: auto minmax(0, 1fr); }
-  .bos .bos-nav-collapse { display: none; }
-  .bos .bos-nav-head { display: contents; }
-  .bos .bos-nav {
+  .bos .bos-shell-fill { grid-template-rows: minmax(0, 1fr); }
+  .bos .bos-shell-main { padding: var(--bos-s-4); }
+
+  /* Operator / IMS / tools: drop side nav — bottom menu is enough. */
+  .bos:not(.admin-bos) .bos-nav { display: none !important; }
+
+  /* Admin has no bottom menu — keep a compact horizontal pill strip. */
+  .bos.admin-bos .bos-shell-fill { grid-template-rows: auto minmax(0, 1fr); }
+  .bos.admin-bos .bos-nav-collapse { display: none; }
+  .bos.admin-bos .bos-nav-head { display: contents; }
+  .bos.admin-bos .bos-nav {
     flex-direction: row;
     align-items: center;
     gap: 6px;
@@ -688,14 +698,14 @@
     -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
     mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
   }
-  .bos .bos-nav::-webkit-scrollbar { display: none; }
-  .bos .bos-nav-brand { padding: 0 6px 0 2px; flex-shrink: 0; }
-  .bos .bos-nav-brand-name,
-  .bos .bos-nav-search-label,
-  .bos .bos-nav-label,
-  .bos .bos-nav-foot { display: none; }
-  .bos button.bos-nav-search { width: auto; flex-shrink: 0; margin: 0; padding: 9px 11px; }
-  .bos .bos-nav-item {
+  .bos.admin-bos .bos-nav::-webkit-scrollbar { display: none; }
+  .bos.admin-bos .bos-nav-brand { padding: 0 6px 0 2px; flex-shrink: 0; }
+  .bos.admin-bos .bos-nav-brand-name,
+  .bos.admin-bos .bos-nav-search-label,
+  .bos.admin-bos .bos-nav-label,
+  .bos.admin-bos .bos-nav-foot { display: none; }
+  .bos.admin-bos button.bos-nav-search { width: auto; flex-shrink: 0; margin: 0; padding: 9px 11px; }
+  .bos.admin-bos .bos-nav-item {
     width: auto;
     flex: 0 0 auto;
     padding: 8px 13px;
@@ -704,9 +714,8 @@
     border-color: var(--bos-border-soft);
     scroll-snap-align: start;
   }
-  .bos .bos-nav-item-label { overflow: visible; }
-  .bos .bos-nav-item:last-of-type { margin-right: 22px; }
-  .bos .bos-shell-main { padding: var(--bos-s-4); }
+  .bos.admin-bos .bos-nav-item-label { overflow: visible; }
+  .bos.admin-bos .bos-nav-item:last-of-type { margin-right: 22px; }
 
   .bos .bos-module-head { flex-direction: column; gap: 4px; }
   .bos .bos-module-toolbar .bos-search { max-width: none; flex-basis: 100%; }
@@ -868,27 +877,23 @@
   .bos .bos-kanban-move { display: flex; }
 }
 
-/* Forced phone layout width — same single-column shell as ≤900px */
+/* Forced phone layout — no sidebar (bottom menu only) */
 html.jbt-force-phone .bos .bos-shell {
   grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
   border-radius: 0;
   border-left: 0;
   border-right: 0;
 }
 html.jbt-force-phone .bos .bos-shell-fill {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) !important;
   height: 100%;
 }
-html.jbt-force-phone .bos .bos-nav-collapse { display: none; }
-html.jbt-force-phone .bos .bos-nav {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  border-right: none;
-  border-bottom: 1px solid var(--bos-border-soft);
-  overflow-x: auto;
-  scrollbar-width: none;
+html.jbt-force-phone .bos:not(.admin-bos) .bos-nav {
+  display: none !important;
+}
+html.jbt-force-phone .bos.admin-bos .bos-shell-fill {
+  grid-template-rows: auto minmax(0, 1fr) !important;
 }
 html.jbt-force-phone .bos .bos-shell-main { padding: var(--bos-s-3); }
 

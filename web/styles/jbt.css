@@ -7190,13 +7190,45 @@ body:has(.mobile-menu) .float-dock {
     grid-template-columns: 1fr 1fr;
   }
 
-  .desktop-sidebar {
-    display: none;
+  /* Phone: left sidebar / float dock gone — bottom nav is the menu */
+  .desktop-sidebar,
+  .float-dock {
+    display: none !important;
   }
 
   .operator-layout {
     display: block;
+    grid-template-columns: 1fr;
   }
+
+  .operator-layout .operator-main,
+  .operator-layout[data-sidebar-mode="floating"] .operator-main,
+  .operator-layout[data-sidebar-mode="fixed"] .operator-main,
+  .operator-layout[data-sidebar-mode="mini"] .operator-main,
+  .operator-layout[data-sidebar-mode="docked"] .operator-main,
+  .operator-layout[data-sidebar-mode="normal"] .operator-main {
+    margin-left: 0 !important;
+  }
+}
+
+/* Same as ≤768px when Android falsely reports ~980px layout width */
+html.jbt-force-phone .desktop-sidebar,
+html.jbt-force-phone .float-dock {
+  display: none !important;
+}
+
+html.jbt-force-phone .operator-layout {
+  display: block;
+  grid-template-columns: 1fr;
+}
+
+html.jbt-force-phone .operator-layout .operator-main,
+html.jbt-force-phone .operator-layout[data-sidebar-mode] .operator-main {
+  margin-left: 0 !important;
+}
+
+html.jbt-force-phone .bottom-nav {
+  display: flex;
 }
 
 .sidebar-layout-root {

@@ -835,6 +835,56 @@
   .bos .ims-mnav-ic { font-size: 18px; line-height: 1; }
   .bos .ims-mnav-label { font-size: 10px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 }
+/* Android shrink-to-fit can report ~980px — still show IMS bottom bar */
+html.jbt-force-phone .bos.ims-standalone .ims-app {
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+html.jbt-force-phone .bos .ims-mnav {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 64px;
+  padding: 0 8px;
+  border-radius: 26px;
+  background: var(--bos-surface);
+  border: 1px solid var(--bos-border);
+  box-shadow: var(--bos-shadow-lg);
+}
+html.jbt-force-phone .bos .ims-mnav-btn {
+  flex: 1;
+  min-width: 0;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--bos-text-faint);
+  font: inherit;
+  cursor: pointer;
+}
+html.jbt-force-phone .bos .ims-mnav-btn.is-active {
+  background: var(--bos-ims-grad, var(--bos-blue));
+  color: #fff;
+  box-shadow: var(--bos-ims-glow, none);
+}
+html.jbt-force-phone .bos .ims-mnav-ic { font-size: 18px; line-height: 1; }
+html.jbt-force-phone .bos .ims-mnav-label {
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 @media print {
   .bos .ims-mnav { display: none !important; }
   .bos .bos-inv-paper .bos-inv-paper-title {
