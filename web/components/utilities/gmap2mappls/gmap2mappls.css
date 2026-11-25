@@ -454,7 +454,7 @@ html:has(.pinway-route-root) body {
   box-shadow: 0 1px 3px rgba(20, 30, 60, 0.12);
 }
 
-/* Grouped form surface — grows to fill leftover shell height on phone */
+/* Grouped form surface — natural height like the desktop card (do not stretch). */
 .bos .g2m-command {
   display: grid;
   gap: 0;
@@ -463,43 +463,22 @@ html:has(.pinway-route-root) body {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  flex: 0 0 auto;
 }
 
 .bos .g2m-app--standalone .g2m-beam,
 .bos .g2m-app--standalone .g2m-a2hs,
-.bos .g2m-app--standalone .g2m-tile.g2m-paywall {
-  flex: 0 0 auto;
-}
-
+.bos .g2m-app--standalone .g2m-tile.g2m-paywall,
 .bos .g2m-app--standalone .g2m-tile.g2m-command {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  /* keep auto min-height so expanded More options is not crushed */
-}
-
-.bos .g2m-app--standalone .g2m-tile.g2m-command > :not(.g2m-spotlight) {
-  flex: 0 0 auto;
-}
-
-.bos .g2m-app--standalone .g2m-tile.g2m-command > .g2m-spotlight {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.bos .g2m-app--standalone .g2m-spotlight > .g2m-field-label,
-.bos .g2m-app--standalone .g2m-spotlight > .g2m-clip-banner {
   flex: 0 0 auto;
 }
 
 .bos .g2m-app--standalone .g2m-spotlight textarea.bos-input {
-  flex: 1 1 auto;
-  /* Low floor so the field can shrink when the keyboard opens */
-  min-height: 96px;
-  height: auto !important;
-  resize: none;
+  min-height: 112px;
+  max-height: min(28vh, 220px);
+  resize: vertical;
+  font-size: 16px;
+  line-height: 1.45;
 }
 
 .bos .g2m-command .bos-input,
@@ -1216,16 +1195,25 @@ html:has(.pinway-route-root) body {
     padding: 0 16px 16px;
   }
 
+  .bos .g2m .bos-input,
+  .bos .g2m textarea.bos-input,
+  .bos .g2m select.bos-input {
+    font-size: 17px !important;
+    line-height: 1.45 !important;
+    padding: 14px 16px !important;
+  }
+
   .bos .g2m-spotlight textarea.bos-input {
-    min-height: 140px;
-    font-size: 16px; /* avoid iOS focus zoom */
+    min-height: 120px !important;
+    max-height: min(28vh, 220px) !important;
+    font-size: 17px !important;
     line-height: 1.45;
   }
 
   .bos.pinway-ims select.bos-input:not([multiple]):not([size]),
   .bos .g2m select.bos-input:not([multiple]):not([size]) {
-    min-height: 52px;
-    font-size: 16px;
+    min-height: 54px !important;
+    font-size: 17px !important;
   }
 
   .bos .g2m-loading--compact {
@@ -1305,9 +1293,17 @@ html:has(.pinway-route-root) body {
     font-size: 17px;
   }
 
+  .bos .g2m .bos-input,
+  .bos .g2m textarea.bos-input,
+  .bos .g2m select.bos-input {
+    font-size: 17px !important;
+    padding: 14px 16px !important;
+  }
+
   .bos .g2m-app--standalone .g2m-spotlight textarea.bos-input {
-    min-height: 150px;
-    font-size: 16px;
+    min-height: 120px !important;
+    max-height: min(28vh, 220px) !important;
+    font-size: 17px !important;
   }
 }
 
@@ -1398,24 +1394,38 @@ html.g2m-force-phone .bos .g2m-island-bar {
 }
 
 html.g2m-force-phone .bos .g2m-app--standalone .g2m-tile.g2m-command {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
 }
 
-html.g2m-force-phone .bos .g2m-app--standalone .g2m-spotlight textarea.bos-input,
+html.g2m-force-phone .bos .g2m .bos-input,
+html.g2m-force-phone .bos .g2m textarea.bos-input,
+html.g2m-force-phone .bos .g2m select.bos-input,
 html.g2m-force-phone .bos .g2m select.bos-input:not([multiple]):not([size]),
 html.g2m-force-phone .bos.pinway-ims select.bos-input:not([multiple]):not([size]) {
-  min-height: 52px;
-  font-size: 16px !important;
+  font-size: 17px !important;
+  line-height: 1.45 !important;
+  padding: 14px 16px !important;
+  min-height: 54px !important;
 }
 
 html.g2m-force-phone .bos .g2m-app--standalone .g2m-spotlight textarea.bos-input {
-  min-height: 150px;
+  min-height: 120px !important;
+  max-height: min(28vh, 220px) !important;
+  font-size: 17px !important;
 }
 
 html.g2m-force-phone .bos .g2m-island .bos-btn,
 html.g2m-force-phone .bos .g2m-island a.bos-btn {
   min-height: 54px;
   font-size: 17px !important;
+}
+
+html.g2m-force-phone .bos .g2m-clip-banner {
+  font-size: 15px !important;
+}
+
+html.g2m-force-phone .bos .g2m-hint {
+  font-size: 15px !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

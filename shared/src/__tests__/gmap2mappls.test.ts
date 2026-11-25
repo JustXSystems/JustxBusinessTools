@@ -42,7 +42,43 @@ import {
   PINWAY_BRAND_NAME,
   PINWAY_PRODUCT_NAME,
   PINWAY_APP_PATH,
+  isPhoneLikeDevice,
+  phoneCssWidth,
+  phoneViewportMetaContent,
+  shrinkToFitZoom,
 } from "../gmap2mappls/index";
+
+describe("gmap2mappls phone viewport", () => {
+  it("detects phones via coarse pointer or small screen edge", () => {
+    expect(
+      isPhoneLikeDevice({ screenWidth: 1080, screenHeight: 2400, coarsePointer: true, noHover: true }),
+    ).toBe(true);
+    expect(
+      isPhoneLikeDevice({ screenWidth: 390, screenHeight: 844, coarsePointer: false, noHover: false }),
+    ).toBe(true);
+    expect(
+      isPhoneLikeDevice({ screenWidth: 1440, screenHeight: 900, coarsePointer: false, noHover: false }),
+    ).toBe(false);
+  });
+
+  it("locks viewport meta to real screen CSS width (not device-width)", () => {
+    // Android screen.* is CSS px (~360–430), not physical px.
+    expect(phoneCssWidth({ screenWidth: 360, screenHeight: 800 })).toBe(360);
+    expect(phoneCssWidth({ screenWidth: 412, screenHeight: 915 })).toBe(412);
+    // When layout width wrongly reports ~980 but screen is phone-sized:
+    expect(phoneCssWidth({ screenWidth: 412, screenHeight: 915, innerWidth: 980 })).toBe(412);
+    const meta = phoneViewportMetaContent(412);
+    expect(meta).toContain("width=412");
+    expect(meta).not.toContain("device-width");
+    expect(meta).toContain("initial-scale=1");
+  });
+
+  it("computes shrink-to-fit corrective zoom for 980→360 layouts", () => {
+    expect(shrinkToFitZoom(360, 360)).toBe(1);
+    expect(shrinkToFitZoom(980, 360)).toBeCloseTo(360 / 980, 3);
+    expect(shrinkToFitZoom(400, 360)).toBe(1); // within 12% tolerance
+  });
+});
 
 describe("gmap2mappls parse", () => {
   it("extracts @lat,lng from Google Maps URL (acceptance 1)", () => {
