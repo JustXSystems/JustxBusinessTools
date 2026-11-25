@@ -86,10 +86,10 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const payload = data as { error?: string; limit?: number; details?: string[] };
+    const payload = data as { error?: string; code?: string; limit?: number; details?: string[] };
     const detailText = Array.isArray(payload.details) ? payload.details.join(", ") : "";
     const message = detailText || payload.error || "Request failed";
-    throw new ApiError(message, payload.error, payload.limit);
+    throw new ApiError(message, payload.code ?? payload.error, payload.limit);
   }
   return data as T;
 }

@@ -19,6 +19,7 @@ import {
 import { requestPhoneOtp, verifyPhoneOtp } from "../lib/auth/phone-otp.js";
 import {
   createSession,
+  destroyOtherSessionsForUser,
   destroySession,
   hashPassword,
   loadSessionUser,
@@ -27,6 +28,7 @@ import {
   getTokenFromCookie,
   verifyPassword,
 } from "../lib/auth/session.js";
+import { validatePasswordChangeInput } from "../lib/auth/change-password.js";
 import {
   requireBusinessNameForNewGstin,
   requireHomeToolsForNewBusiness,
@@ -594,6 +596,78 @@ router.post("/mfa/disable", requireAuth, async (req, res) => {
   }
   await logAudit("auth.mfa_disable", "user", String(ctx.userId), undefined, req.ip);
   res.json({ enabled: false });
+});
+
+/**
+ * Self-service password change for any signed-in user.
+ * Verifies the current password, optionally MFA, then revokes other sessions.
+ */
+router.post("/password/change", requireAuth, async (req, res) => {
+  const ctx = getRequestContext();
+  if (!ctx?.userId) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const parsed = validatePasswordChangeInput(req.body ?? {});
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  const [rows] = await pool.query(`SELECT password_hash FROM users WHERE id = :id LIMIT 1`, {
+    id: ctx.userId,
+  });
+  const row = Array.isArray(rows) ? (rows[0] as { password_hash: string | null } | undefined) : null;
+  if (!row?.password_hash) {
+    res.status(400).json({
+      error: "This account has no password to change. Sign in with email & password once, or ask an admin to set one.",
+    });
+    return;
+  }
+
+  const currentOk = await verifyPassword(parsed.currentPassword, row.password_hash);
+  if (!currentOk) {
+    res.status(401).json({ error: "Current password is incorrect" });
+    return;
+  }
+
+  const { isMfaEnabled, verifyUserTotp } = await import("../lib/auth/mfa.js");
+  if (await isMfaEnabled(ctx.userId)) {
+    const code = String(req.body?.mfaCode ?? "").trim();
+    if (!code) {
+      res.status(400).json({ error: "Authenticator code required", code: "MFA_REQUIRED" });
+      return;
+    }
+    const mfaOk = await verifyUserTotp(ctx.userId, code);
+    if (!mfaOk) {
+      res.status(401).json({ error: "Invalid authenticator code" });
+      return;
+    }
+  }
+
+  const nextHash = await hashPassword(parsed.newPassword);
+  await pool.query(`UPDATE users SET password_hash = :hash WHERE id = :id`, {
+    hash: nextHash,
+    id: ctx.userId,
+  });
+
+  const keepToken = getTokenFromCookie(req.headers.cookie);
+  const revoked = await destroyOtherSessionsForUser(ctx.userId, keepToken);
+
+  await logAudit(
+    "auth.password_change",
+    "user",
+    String(ctx.userId),
+    { revokedSessions: revoked },
+    req.ip,
+  );
+
+  res.json({
+    ok: true,
+    revokedSessions: revoked,
+    message: "Password updated. Other signed-in devices were signed out.",
+  });
 });
 
 router.post("/logout", requireAuth, async (req, res) => {

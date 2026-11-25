@@ -33,6 +33,7 @@ import { publicAssetUrl } from "@/lib/base-path";
 import { mergedHomeTools } from "@/lib/dynamic-tools";
 import { countCustomQuoteTerms, QuoteTermsPanel } from "@/components/profile/QuoteTermsPanel";
 import { DownloadFolderPanel } from "@/components/profile/DownloadFolderPanel";
+import { ChangePasswordPanel } from "@/components/profile/ChangePasswordPanel";
 import { MfaSettingsPanel } from "@/components/profile/MfaSettingsPanel";
 import { SendViaDefaultsPanel } from "@/components/profile/SendViaDefaultsPanel";
 import { FollowUpReminderPanel } from "@/components/profile/FollowUpReminderPanel";
@@ -314,6 +315,7 @@ export default function ProfilePage() {
         </div>
       ) : null}
 
+      <ChangePasswordPanel />
       {hasBusinessGstin ? <MfaSettingsPanel /> : null}
 
       {error ? <div className="error-banner">{error}</div> : null}

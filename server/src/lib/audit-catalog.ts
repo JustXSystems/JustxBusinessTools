@@ -55,6 +55,7 @@ const CATEGORY_BY_PREFIX: Array<{ prefix: string; category: AuditCategory }> = [
 
 const SEVERITY_BY_ACTION: Record<string, AuditSeverity> = {
   "auth.mfa_disable": "critical",
+  "auth.password_change": "high",
   "team.suspend": "critical",
   "org.suspend_access": "critical",
   "team.reset_password": "critical",
@@ -114,6 +115,7 @@ const LABEL_BY_ACTION: Record<string, string> = {
   "auth.mfa": "Completed MFA challenge",
   "auth.mfa_enable": "Enabled MFA",
   "auth.mfa_disable": "Disabled MFA",
+  "auth.password_change": "Changed account password",
   "auth.register": "Registered new business owner",
   "auth.register.individual": "Registered individual account",
   "auth.register.join": "Requested to join existing GSTIN",

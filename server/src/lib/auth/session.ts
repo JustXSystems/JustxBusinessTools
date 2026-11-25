@@ -127,6 +127,22 @@ export async function destroySession(token: string): Promise<void> {
   });
 }
 
+/** Drop every session for this user except the one that just changed the password. */
+export async function destroyOtherSessionsForUser(
+  userId: number,
+  keepToken: string | null | undefined,
+): Promise<number> {
+  if (!keepToken) {
+    const [result] = await pool.query(`DELETE FROM sessions WHERE user_id = :userId`, { userId });
+    return Number((result as { affectedRows?: number }).affectedRows ?? 0);
+  }
+  const [result] = await pool.query(
+    `DELETE FROM sessions WHERE user_id = :userId AND token_hash <> :hash`,
+    { userId, hash: hashToken(keepToken) },
+  );
+  return Number((result as { affectedRows?: number }).affectedRows ?? 0);
+}
+
 export async function resolveSession(token: string): Promise<RequestContext | null> {
   // Hot path: never ALTER here. Prefer the act_as column only after ensure succeeded.
   const includeActAs = actAsColumnAvailable;
