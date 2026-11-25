@@ -42,10 +42,19 @@ import { ClockDisplaySettingsPanel } from "@/components/profile/ClockDisplaySett
 import { FlashDisplaySettingsPanel } from "@/components/profile/FlashDisplaySettingsPanel";
 import { normalizeClockDisplaySettings } from "@/lib/clock-display";
 import { normalizeFlashDisplaySettings } from "@/lib/flash-display";
+import { GSTIN_RE } from "@/lib/register-gstin";
 
-type ProfileTab = "company" | "brand" | "send" | "delivery" | "tools" | "team" | "legal";
+type ProfileTab =
+  | "personal"
+  | "company"
+  | "brand"
+  | "send"
+  | "delivery"
+  | "tools"
+  | "team"
+  | "legal";
 
-const PROFILE_TABS: Array<{ id: ProfileTab; label: string; hint: string }> = [
+const BUSINESS_PROFILE_TABS: Array<{ id: ProfileTab; label: string; hint: string }> = [
   { id: "company", label: "Company", hint: "Identity, address, quote footer" },
   { id: "brand", label: "Brand & UI", hint: "Theme, clock, alerts" },
   { id: "send", label: "Send Via", hint: "WhatsApp, email & follow-ups" },
@@ -55,8 +64,15 @@ const PROFILE_TABS: Array<{ id: ProfileTab; label: string; hint: string }> = [
   { id: "legal", label: "Bank & terms", hint: "Banking & T&C" },
 ];
 
+/** Individual / no-GSTIN accounts: personal details + home tools only. */
+const PERSONAL_PROFILE_TABS: Array<{ id: ProfileTab; label: string; hint: string }> = [
+  { id: "personal", label: "Personal", hint: "Name, phone & email" },
+  { id: "tools", label: "Tools", hint: "Home screen" },
+];
+
 /** Tabs with more than one section render them collapsed by default. */
 const TAB_SECTIONS: Record<ProfileTab, string[]> = {
+  personal: ["personal"],
   company: ["identity", "address", "footer"],
   brand: ["theme", "clock", "flash"],
   send: ["sendDefaults", "followUp"],
@@ -66,12 +82,15 @@ const TAB_SECTIONS: Record<ProfileTab, string[]> = {
   legal: ["bank", "terms", "quoteTerms"],
 };
 
+function hasValidGstin(value: string | null | undefined): boolean {
+  return GSTIN_RE.test(String(value ?? "").trim().toUpperCase());
+}
+
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, refresh: refreshAuth } = useAuth();
   const canEdit = canEditBusinessProfile(user);
   const canManageTeam = canManageBusinessTeam(user);
   const { config, refresh: refreshConfig } = usePlatformConfig();
-  const visibleTabs = PROFILE_TABS.filter((tab) => tab.id !== "team" || canManageTeam);
   const platformTools = config?.tools ?? [];
   const catalogIds = useMemo(
     () => mergedHomeTools(platformTools).map((t) => t.id),
@@ -85,9 +104,26 @@ export default function ProfilePage() {
   const [webhookSecretDraft, setWebhookSecretDraft] = useState("");
   const [activeTab, setActiveTab] = useState<ProfileTab>("company");
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+
+  const branchGstin = user?.branches?.find((b) => b.id === user.businessProfileId)?.gstin;
+  const hasBusinessGstin = hasValidGstin(profile.gstin) || hasValidGstin(branchGstin);
+  const visibleTabs = useMemo(
+    () =>
+      (hasBusinessGstin ? BUSINESS_PROFILE_TABS : PERSONAL_PROFILE_TABS).filter(
+        (tab) => tab.id !== "team" || canManageTeam,
+      ),
+    [hasBusinessGstin, canManageTeam],
+  );
   const activeSections = TAB_SECTIONS[activeTab];
   const quoteTermsCustomCount = countCustomQuoteTerms(profile.quoteTerms);
   const allActiveOpen = activeSections.every((id) => openSections[id]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!visibleTabs.some((t) => t.id === activeTab)) {
+      setActiveTab(visibleTabs[0]?.id ?? (hasBusinessGstin ? "company" : "personal"));
+    }
+  }, [loading, visibleTabs, activeTab, hasBusinessGstin]);
 
   function sectionProps(id: string) {
     return {
@@ -167,7 +203,9 @@ export default function ProfilePage() {
 
   async function handleSave() {
     if (!canEdit) {
-      const msg = "Only the Business Owner or Admin can edit Business Profile details.";
+      const msg = hasBusinessGstin
+        ? "Only the Business Owner or Admin can edit Business Profile details."
+        : "You cannot edit these profile settings.";
       setError(msg);
       flashAppError(msg);
       return;
@@ -179,6 +217,8 @@ export default function ProfilePage() {
       const normalized = normalizeSendSettings(profile.sendSettings);
       const payload: BusinessProfile & { artifactWebhookSecret?: string } = {
         ...profile,
+        // Personal accounts keep GSTIN empty — never invent one from drafts.
+        gstin: hasBusinessGstin ? profile.gstin : "",
         documentAccentColor: normalizeDocumentAccentColor(profile.documentAccentColor),
         documentTextTone: normalizeDocumentTextTone(profile.documentTextTone),
         documentFooter: normalizeDocumentFooter(profile.documentFooter),
@@ -212,8 +252,12 @@ export default function ProfilePage() {
       setWebhookSecretDraft("");
       invalidateLiveData("config");
       await refreshConfig();
-      setMessage("Business profile saved. Theme and tools apply to this Business Profile.");
-      flashAppOk("Business profile saved. Theme and tools apply to this Business Profile.");
+      await refreshAuth();
+      const okMsg = hasBusinessGstin
+        ? "Business profile saved. Theme and tools apply to this Business Profile."
+        : "Profile saved. Personal details and home tools are up to date.";
+      setMessage(okMsg);
+      flashAppOk(okMsg);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Save failed";
       setError(msg);
@@ -250,10 +294,11 @@ export default function ProfilePage() {
           ←
         </Link>
         <div className="tool-header-text">
-          <div className="tool-header-title">Business Profile</div>
+          <div className="tool-header-title">{hasBusinessGstin ? "Business Profile" : "Profile"}</div>
           <div className="tool-header-sub">
-            Company settings, home tools, and — for Business Owners — team roles and access for this
-            profile.
+            {hasBusinessGstin
+              ? "Company settings, home tools, and — for Business Owners — team roles and access for this profile."
+              : "Your personal details and which tools appear on Home. Add a GSTIN later to unlock Business Profile settings."}
           </div>
         </div>
         {canEdit && activeTab !== "team" ? (
@@ -263,7 +308,7 @@ export default function ProfilePage() {
         ) : null}
       </div>
 
-      {!canEdit ? (
+      {!canEdit && hasBusinessGstin ? (
         <div className="panel" style={{ marginBottom: 14 }}>
           <p className="section-note" style={{ margin: 0 }}>
             {user?.role === "staff"
@@ -279,7 +324,10 @@ export default function ProfilePage() {
       {message ? <div className="panel profile-success">{message}</div> : null}
 
       <div className="profile-shell">
-        <nav className="profile-tabs-bar" aria-label="Business Profile sections">
+        <nav
+          className="profile-tabs-bar"
+          aria-label={hasBusinessGstin ? "Business Profile sections" : "Profile sections"}
+        >
           <div className="profile-tabs" role="tablist">
             {visibleTabs.map((tab) => (
               <button
@@ -310,7 +358,57 @@ export default function ProfilePage() {
             </div>
           ) : null}
 
-          {activeTab === "company" ? (
+          {activeTab === "personal" && !hasBusinessGstin ? (
+            <div className="panel profile-hero">
+              <h3 className="panel-title">Personal information</h3>
+              <p className="section-note">Name, phone and email for your account.</p>
+              <div className="field-row2">
+                <label className="field">
+                  <span className="label">Name</span>
+                  <input
+                    value={profile.businessName}
+                    disabled={!canEdit}
+                    onChange={(e) => setProfile({ ...profile, businessName: e.target.value })}
+                    placeholder="Your name"
+                    autoComplete="name"
+                  />
+                </label>
+                <label className="field">
+                  <span className="label">Sign-in email</span>
+                  <input type="email" value={user?.email ?? profile.email ?? ""} readOnly disabled />
+                </label>
+              </div>
+              <div className="field-row2">
+                <label className="field">
+                  <span className="label">Phone</span>
+                  <input
+                    value={profile.phone ?? ""}
+                    disabled={!canEdit}
+                    onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                    placeholder="Mobile number"
+                    autoComplete="tel"
+                  />
+                </label>
+                <label className="field">
+                  <span className="label">Contact email (optional)</span>
+                  <input
+                    type="email"
+                    value={profile.email ?? ""}
+                    disabled={!canEdit}
+                    onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                    placeholder={user?.email ?? "you@example.com"}
+                    autoComplete="email"
+                  />
+                </label>
+              </div>
+              <p className="section-note">
+                Business Profile settings (GSTIN, company, bank, Send Via, team) stay hidden until a
+                GSTIN is added.
+              </p>
+            </div>
+          ) : null}
+
+          {activeTab === "company" && hasBusinessGstin ? (
             <>
       <CollapsibleSection
         {...sectionProps("identity")}
@@ -568,7 +666,7 @@ export default function ProfilePage() {
             </>
           ) : null}
 
-          {activeTab === "brand" ? (
+          {activeTab === "brand" && hasBusinessGstin ? (
             <>
       <CollapsibleSection
         {...sectionProps("theme")}
@@ -694,7 +792,10 @@ export default function ProfilePage() {
         <h3 className="panel-title">Tools on home</h3>
         <p className="section-note">
           Only selected tools appear on Home after login. Subscription / billing always shows the full
-          catalog. Justxsystems admins assign commercial licenses in Admin → Access Fabric.
+          catalog
+          {hasBusinessGstin
+            ? ". Justxsystems admins assign commercial licenses in Admin → Access Fabric."
+            : "."}
         </p>
         <HomeToolPicker
           selectedIds={profile.homeToolIds ?? []}
@@ -708,9 +809,9 @@ export default function ProfilePage() {
       </div>
           ) : null}
 
-          {activeTab === "team" && canManageTeam ? <TeamMembersPanel /> : null}
+          {activeTab === "team" && hasBusinessGstin && canManageTeam ? <TeamMembersPanel /> : null}
 
-          {activeTab === "send" ? (
+          {activeTab === "send" && hasBusinessGstin ? (
             <>
       <CollapsibleSection
         {...sectionProps("sendDefaults")}
@@ -742,7 +843,7 @@ export default function ProfilePage() {
             </>
           ) : null}
 
-          {activeTab === "delivery" ? (
+          {activeTab === "delivery" && hasBusinessGstin ? (
       <Suspense fallback={<div className="panel"><p className="section-note">Loading delivery settings…</p></div>}>
         <DownloadFolderPanel
           canEdit={canEdit}
@@ -764,7 +865,7 @@ export default function ProfilePage() {
       </Suspense>
           ) : null}
 
-          {activeTab === "legal" ? (
+          {activeTab === "legal" && hasBusinessGstin ? (
             <>
       <CollapsibleSection
         {...sectionProps("bank")}
@@ -853,7 +954,7 @@ export default function ProfilePage() {
         {canEdit ? (
           <div className="profile-save-bar">
             <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : "Save Business Profile"}
+              {saving ? "Saving…" : hasBusinessGstin ? "Save Business Profile" : "Save profile"}
             </button>
           </div>
         ) : null}

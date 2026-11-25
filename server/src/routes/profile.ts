@@ -55,7 +55,7 @@ import {
   normalizeQuoteTerms,
   serializeQuoteTerms,
 } from "../lib/profile-terms.js";
-import { getActiveOrgId, getActiveProfileId } from "../lib/request-context.js";
+import { getActiveOrgId, getActiveProfileId, getActiveUserId } from "../lib/request-context.js";
 import { gstinTakenByOther, isValidGstin, normalizeGstin } from "../lib/gstin.js";
 import {
   canonicalizeStoredImageUrl,
@@ -528,6 +528,19 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
       ...(emailWebhookUrl !== undefined ? { emailWebhookUrl } : {}),
     },
   );
+
+  // Individual / no-GSTIN workspaces: keep the users row in sync with personal name/phone.
+  const userId = getActiveUserId();
+  if (!gstin && userId && businessName) {
+    await pool.query(
+      `UPDATE users SET name = :name, phone = COALESCE(:phone, phone) WHERE id = :userId`,
+      {
+        userId,
+        name: businessName,
+        phone: body.phone ? String(body.phone).trim() || null : null,
+      },
+    );
+  }
 
   const [rows] = await pool.query("SELECT * FROM business_profiles WHERE id = :id", {
     id: profileId,
