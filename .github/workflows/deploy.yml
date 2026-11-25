@@ -236,23 +236,33 @@ jobs:
           test -f jbt-release.tgz.sha256
 
       # Hostinger SSH sometimes drops the first dial from Actions (i/o timeout).
-      # Retry + longer connect timeout; the app build already succeeded above.
+      # Native scp + retries — do NOT wrap appleboy/scp in wretry (multiline
+      # DEPLOY_SSH_KEY breaks the nested YAML `with:` block).
       - name: Upload tarball to VPS
         if: ${{ env.DO_DEPLOY == 'true' }}
-        uses: Wandalen/wretry.action@v3.5.0
-        with:
-          attempt_limit: 3
-          attempt_delay: 20000
-          action: appleboy/scp-action@v0.1.7
-          with: |
-            host: ${{ secrets.DEPLOY_HOST }}
-            username: ${{ secrets.DEPLOY_USER }}
-            key: ${{ secrets.DEPLOY_SSH_KEY }}
-            source: jbt-release.tgz,jbt-release.tgz.sha256
-            target: /tmp
-            overwrite: true
-            timeout: 120s
-            command_timeout: 10m
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          KEY="$(mktemp)"
+          trap 'rm -f "$KEY"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$KEY"
+          chmod 600 "$KEY"
+          SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=60 -o ServerAliveInterval=15 -i "$KEY")
+          for i in 1 2 3; do
+            echo "==> SCP attempt $i/3 → ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/"
+            if scp "${SSH_OPTS[@]}" jbt-release.tgz jbt-release.tgz.sha256 \
+              "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/"; then
+              echo "SCP ok"
+              exit 0
+            fi
+            echo "SCP failed (attempt $i); sleeping 20s…"
+            sleep 20
+          done
+          echo "SCP failed after 3 attempts"
+          exit 1
 
       - name: Apply release over SSH
         if: ${{ env.DO_DEPLOY == 'true' }}
