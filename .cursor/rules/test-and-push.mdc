@@ -1,0 +1,16 @@
+---
+description: Always run tests then commit and push after completing work
+alwaysApply: true
+---
+
+# Test and push by default
+
+After finishing a meaningful code change in this repo:
+
+1. Run the relevant tests (at minimum the packages/areas you touched).
+2. Commit the change with a concise message focused on why.
+3. Push to the tracked remote branch (`git push` / `git push -u` when needed).
+
+Do this without waiting to be asked, unless the user explicitly says not to commit or not to push.
+
+Do not commit secrets, local screenshots, or unrelated junk files.

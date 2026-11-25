@@ -3,7 +3,7 @@
  * mobile/OEM flows stay testable without a browser. The React app owns clipboard / Intent side effects.
  */
 import { OEM_BRANDS, getOemBrand, resolveOemBrandId, type OemBrand } from "./oemHandoff";
-import { playStoreUrl } from "./types";
+import { formatCoordPair, isFiniteLatLng, playStoreUrl } from "./types";
 
 /** SEO-facing product name (titles, H1, catalog, WhatsApp). */
 export const PINWAY_PRODUCT_NAME = "Google Maps to Mappls";
@@ -207,6 +207,19 @@ export function recentPlaceLabel(opts: {
   if (opts.placeName?.trim()) return opts.placeName.trim().slice(0, 80);
   if (opts.pin) return `Pin ${opts.pin}`;
   return `${opts.lat.toFixed(5)}, ${opts.lng.toFixed(5)}`;
+}
+
+/**
+ * Query string used when re-opening a recent/saved place.
+ * Prefer the previously resolved lat,lng so we never re-expand a short
+ * maps.app.goo.gl link or re-geocode an ambiguous /place/Name path (which
+ * drifted Hosakerehalli ↔ Sapthagiri and similar pairs).
+ */
+export function recentResolveQuery(place: Pick<G2mRecentPlace, "input" | "lat" | "lng">): string {
+  if (isFiniteLatLng(place.lat, place.lng) && !(place.lat === 0 && place.lng === 0)) {
+    return formatCoordPair(place.lat, place.lng);
+  }
+  return (place.input || "").trim();
 }
 
 /** Empty-state walkthrough steps (copy for UI). */

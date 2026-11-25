@@ -174,11 +174,16 @@ export function mapplsNavigationUrl(
     : `https://www.mappls.com/navigation?${q}`;
 }
 
-export function geoPointUri(lat: number, lng: number, label?: string): string {
-  const q = label?.trim()
-    ? `?q=${roundCoord(lat)},${roundCoord(lng)}(${encodeURIComponent(label.trim().slice(0, 80))})`
-    : `?q=${roundCoord(lat)},${roundCoord(lng)}`;
-  return `geo:${roundCoord(lat)},${roundCoord(lng)}${q}`;
+/**
+ * Android geo: URI at an exact WGS-84 point.
+ * Always uses coords-only `q=lat,lng` — never a place-name label. OEM apps
+ * (Simple Connect, Chetak, …) that re-run the parenthetical label through
+ * Mappls Autosuggest jump to the wrong POI (e.g. "Saptagiri Layout").
+ */
+export function geoPointUri(lat: number, lng: number, _label?: string): string {
+  const la = roundCoord(lat);
+  const ln = roundCoord(lng);
+  return `geo:${la},${ln}?q=${la},${ln}`;
 }
 
 /** Simple Connect package id (Simple Energy companion app). */
@@ -192,32 +197,34 @@ export function playStoreUrl(packageId: string): string {
 }
 
 /**
- * WhatsApp-style geo URI — the format Simple Connect v2.4+ accepts via
- * “Share WhatsApp locations to Simple Connect for navigation”.
- * Example: geo:12.877073,77.613574?q=12.877073,77.613574(Zigma%20Technologies)
+ * WhatsApp / Simple Connect geo URI at an exact WGS-84 point.
+ * Coords-only `q=lat,lng` (no parenthetical place name). Labels caused OEMs to
+ * Autosuggest-search “Saptagiri Layout” etc. while Pinway’s map stayed correct.
+ * Example: geo:12.877073,77.613574?q=12.877073,77.613574
  */
 export function whatsappStyleGeoUri(
   lat: number,
   lng: number,
-  label?: string,
+  _label?: string,
 ): string {
   const la = roundCoord(lat);
   const ln = roundCoord(lng);
-  const name = (label?.trim() || "Destination").replace(/[()]/g, " ").slice(0, 80);
-  return `geo:${la},${ln}?q=${la},${ln}(${encodeURIComponent(name)})`;
+  return `geo:${la},${ln}?q=${la},${ln}`;
 }
 
 /**
  * Chrome/Android Intent that opens a specific OEM package with a WhatsApp-style
- * geo destination. Falls back to that app’s Play Store page if missing.
+ * geo destination (coords only). Falls back to that app’s Play Store page if missing.
+ * `label` is accepted for API compat but intentionally ignored — never embed
+ * place names in geo Intents (Autosuggest re-search → wrong pin).
  */
 export function oemPackageGeoIntentUrl(
   packageId: string,
   lat: number,
   lng: number,
-  label?: string,
+  _label?: string,
 ): string {
-  const geo = whatsappStyleGeoUri(lat, lng, label);
+  const geo = whatsappStyleGeoUri(lat, lng);
   const path = geo.replace(/^geo:/i, "");
   const fallback = encodeURIComponent(playStoreUrl(packageId));
   return `intent://${path}#Intent;scheme=geo;package=${packageId};S.browser_fallback_url=${fallback};end`;

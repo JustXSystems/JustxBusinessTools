@@ -23,7 +23,9 @@ describe("resolveGmap2Mappls sample mode", () => {
     expect(r.sampleMode).toBe(true);
     expect(r.mappls.formattedAddress.toLowerCase()).toMatch(/hulimavu|bannerghatta/);
     expect(r.paste.latLng).toBe("12.8804,77.5958");
-    expect(r.paste.geoUri).toContain("geo:12.8804,77.5958");
+    expect(r.paste.geoUri).toBe("geo:12.8804,77.5958?q=12.8804,77.5958");
+    expect(r.paste.geoUri).not.toMatch(/\(/);
+    expect(r.paste.simpleConnectIntentUrl).not.toMatch(/%28|\(/);
     expect(r.paste.mapplsUrl).toBe("https://www.mappls.com/@12.8804,77.5958");
     expect(r.paste.shareText).toContain("12.8804,77.5958");
     expect(r.paste.tip.toLowerCase()).toMatch(/simpleone|place name|geo|mappls/);

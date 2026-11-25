@@ -125,26 +125,40 @@ export function extractCoordsFromGoogleUrl(urlString: string): ParsedCoords | nu
 /**
  * Scrape coordinates from Google Maps HTML (APP state / embedded data blobs).
  * Used when short links land on /place/… pages that omit @lat,lng in the URL.
+ *
+ * Preference: dropped-pin !3d!4d (and multi-occurrence majority) over viewport @,
+ * which is often the map camera — not the saved place — on mobile share pages.
  */
 export function extractCoordsFromMapsHtml(html: string): ParsedCoords | null {
   if (!html) return null;
 
-  const bang = html.match(/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/);
-  if (bang) {
-    const pair = parsePair(bang[1], bang[2]);
-    if (pair) return { ...pair, source: "bang" };
+  // Collect all !3d!4d pins; prefer the most frequent India-ish pair (saved-place
+  // pages embed the true pin repeatedly, plus unrelated nearby markers).
+  const bangRe = /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/g;
+  const bangCounts = new Map<string, { lat: number; lng: number; n: number }>();
+  let bangMatch: RegExpExecArray | null;
+  while ((bangMatch = bangRe.exec(html)) !== null) {
+    const pair = parsePair(bangMatch[1], bangMatch[2]);
+    if (!pair) continue;
+    const key = `${pair.lat.toFixed(5)},${pair.lng.toFixed(5)}`;
+    const prev = bangCounts.get(key);
+    if (prev) prev.n += 1;
+    else bangCounts.set(key, { ...pair, n: 1 });
+  }
+  if (bangCounts.size > 0) {
+    let best: { lat: number; lng: number; n: number } | null = null;
+    for (const row of bangCounts.values()) {
+      if (!best || row.n > best.n) best = row;
+    }
+    if (best) return { lat: best.lat, lng: best.lng, source: "bang" };
   }
 
-  const at = html.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
-  if (at) {
-    const pair = parsePair(at[1], at[2]);
-    if (pair) return { ...pair, source: "at" };
-  }
-
-  // Common Maps JS blob: [null,null,lat,lng]
-  const blob = html.match(/\[null,null,(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)\]/);
-  if (blob) {
-    const pair = parsePair(blob[1], blob[2]);
+  // APP_INITIALIZATION_STATE / preview marker — often exact place when URL lacks @
+  const marker =
+    html.match(/\[null,null,(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)\]/) ||
+    html.match(/"marker(?:LatLng|Position)"\s*:\s*\{\s*"lat"\s*:\s*(-?\d{1,2}\.\d+)\s*,\s*"lng"\s*:\s*(-?\d{1,3}\.\d+)/i);
+  if (marker) {
+    const pair = parsePair(marker[1], marker[2]);
     if (pair) return { ...pair, source: "place" };
   }
 
@@ -152,6 +166,13 @@ export function extractCoordsFromMapsHtml(html: string): ParsedCoords | null {
   if (center) {
     const pair = parsePair(center[1], center[2]);
     if (pair) return { ...pair, source: "place" };
+  }
+
+  // Viewport @ last — camera center can be far from the saved pin on mobile HTML
+  const at = html.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (at) {
+    const pair = parsePair(at[1], at[2]);
+    if (pair) return { ...pair, source: "at" };
   }
 
   return null;

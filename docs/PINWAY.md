@@ -49,12 +49,15 @@ Almost every listed OEM reuses **Mappls Autosuggest / NCASE destination search**
 
 | Input | What the stack does | Result |
 |-------|---------------------|--------|
-| `12.877073,77.613574` / `geo:…` | Treated as **`query` text** | Wrong POI / city |
+| Raw `lat,lng` pasted into OEM **search** | Treated as **`query` text** | Wrong POI / city |
+| `geo:lat,lng?q=lat,lng(PlaceName)` | Some OEMs re-Autosuggest the **label** | Wrong suburb (e.g. Sapthagiri) while Pinway map stayed correct |
+| `geo:lat,lng?q=lat,lng` (coords only) | WhatsApp-style pin → Simple Connect / geo OEMs | Correct point on dash |
 | Mappls Pin e.g. `kcf7zj` on **mappls.com** | Resolved as **eLoc** | Correct (verified: Zigma) |
 | Same Pin in **SimpleOne search** | Often **no eLoc entitlement** → fuzzy text match | **Wrong place** (field-tested) |
 | **POI place name** e.g. `Zigma Technologies Nyanappanahalli` | Normal Autosuggest POI | Correct when listed |
-| Google / geo → **Share / Push to Simple Connect** | Official Push Navigation / WhatsApp-location path | Correct point on dash |
 | `mappls.com/navigation?places=lat,lng,Name&isNav=true` | Nav deep link (not Autosuggest) | Correct point |
+
+**Recents / saved places:** chips re-open via the stored lat,lng (not by re-expanding `maps.app.goo.gl`), so short-link geocode drift cannot move the destination.
 
 ## App flow
 

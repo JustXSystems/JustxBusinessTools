@@ -32,6 +32,8 @@ import {
   parseRecentPlaces,
   pushRecentPlace,
   recentPlaceLabel,
+  recentResolveQuery,
+  whatsappStyleGeoUri,
   G2M_WALKTHROUGH,
   emptyStateHint,
   G2M_RECENT_MAX,
@@ -54,6 +56,19 @@ describe("gmap2mappls parse", () => {
     expect(c?.lat).toBeCloseTo(12.8804, 4);
     expect(c?.lng).toBeCloseTo(77.5958, 4);
     expect(c?.source).toBe("bang");
+  });
+
+  it("HTML scrape prefers majority !3d!4d pin over viewport @", () => {
+    const html = `
+      <meta property="og:url" content="https://www.google.com/maps/place/Foo/@13.10,77.61,17z"/>
+      data=!3d12.930188!4d77.537833 more !3d12.930188!4d77.537833
+      and a stray marker !3d13.105528!4d77.610415
+      @13.10,77.61,14z
+    `;
+    const c = extractCoordsFromMapsHtml(html);
+    expect(c?.source).toBe("bang");
+    expect(c?.lat).toBeCloseTo(12.930188, 5);
+    expect(c?.lng).toBeCloseTo(77.537833, 5);
   });
 
   it("parses raw lat,lng", () => {
@@ -224,6 +239,11 @@ describe("gmap2mappls urls + samples", () => {
       mapplsPin: "kcf7zj",
     });
     expect(kit.geoUri.startsWith("geo:12.877073,77.613574")).toBe(true);
+    // Coords-only q= — never embed place names (OEM Autosuggest re-search bug)
+    expect(kit.geoUri).toBe("geo:12.877073,77.613574?q=12.877073,77.613574");
+    expect(kit.geoUri).not.toMatch(/Zigma|Saptagiri|Hosakerehalli|\(/i);
+    expect(kit.whatsappGeoUri).toBe(kit.geoUri);
+    expect(kit.simpleConnectIntentUrl).not.toMatch(/Zigma|Saptagiri|%28/i);
     expect(kit.searchQuery).toContain("Zigma Technologies");
     expect(kit.searchQuery).toContain("Nyanappanahalli");
     expect(kit.simpleConnectIntentUrl).toContain("package=com.sepl.android");
@@ -235,6 +255,34 @@ describe("gmap2mappls urls + samples", () => {
     expect(kit.mapplsNavBikingUrl).toContain("mode=biking");
     expect(kit.googleMapsUrl).toContain("12.877073,77.613574");
     expect(kit.tip.toLowerCase()).toMatch(/simple connect|simpleone/);
+  });
+
+  it("geo Intents ignore ambiguous layout labels (Hosakerehalli / Sapthagiri class)", () => {
+    const ambiguous =
+      "Hanumangiri, Saptagiri Layout, Hosakerehalli, Bengaluru, Karnataka 560061";
+    const geo = whatsappStyleGeoUri(12.930188, 77.537833, ambiguous);
+    expect(geo).toBe("geo:12.930188,77.537833?q=12.930188,77.537833");
+    expect(geo).not.toMatch(/Saptagiri|Hosakerehalli|Hanumangiri|\(/i);
+
+    const intent = oemPackageGeoIntentUrl("com.sepl.android", 12.930188, 77.537833, ambiguous);
+    expect(intent).toContain("12.930188,77.537833");
+    expect(intent).not.toMatch(/Saptagiri|Hosakerehalli|Hanumangiri|%28/i);
+
+    const paste = buildPasteKit(12.930188, 77.537833, {
+      placeName: ambiguous,
+      locality: "Hosakerehalli",
+      city: "Bengaluru",
+    });
+    const simple = buildBrandPlaybook("simple-energy", paste)!;
+    expect(simple.autoOpenUrl).toContain("12.930188,77.537833");
+    expect(simple.autoOpenUrl).not.toMatch(/Saptagiri|Hosakerehalli|%28/i);
+
+    // All geo-handoff brands must open with coords, not the searchable place string
+    for (const id of ["bajaj", "hero", "ampere", "tvs"] as const) {
+      const pb = buildBrandPlaybook(id, paste)!;
+      expect(pb.autoOpenUrl, id).toContain("12.930188,77.537833");
+      expect(pb.autoOpenUrl, id).not.toMatch(/Saptagiri|Hosakerehalli|%28/i);
+    }
   });
 
   it("covers listed 2W/4W OEMs in handoff matrix", () => {
@@ -654,6 +702,22 @@ describe("gmap2mappls UX helpers (mobile / OEM usability)", () => {
       "Zigma Technologies",
     );
     expect(recentPlaceLabel({ pin: "kcf7zj", lat: 1, lng: 2 })).toBe("Pin kcf7zj");
+
+    // Saved/recent places must re-open via stored coords, not the Google short link
+    expect(
+      recentResolveQuery({
+        input: "https://maps.app.goo.gl/HWzYiASacCnENGAT7?g_st=ac",
+        lat: 12.930188,
+        lng: 77.537833,
+      }),
+    ).toBe("12.930188,77.537833");
+    expect(
+      recentResolveQuery({
+        input: "https://maps.app.goo.gl/fallback",
+        lat: 0,
+        lng: 0,
+      }),
+    ).toBe("https://maps.app.goo.gl/fallback");
   });
 
   it("ships walkthrough + empty-state hints per OEM", () => {

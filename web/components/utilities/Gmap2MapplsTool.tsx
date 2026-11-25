@@ -28,6 +28,7 @@ import {
   PINWAY_PRODUCT_NAME,
   pushRecentPlace,
   recentPlaceLabel,
+  recentResolveQuery,
   resolveOemBrandId,
   type BrandSegmentFilter,
   type G2mRecentPlace,
@@ -509,7 +510,7 @@ export function Gmap2MapplsTool({
   }, []);
 
   const resolve = useCallback(
-    async (value: string) => {
+    async (value: string, opts?: { rememberInput?: string }) => {
       const q = value.trim();
       if (!q) {
         setError("Paste a Google Maps share link, an Indian address, or lat,lng.");
@@ -561,8 +562,10 @@ export function Gmap2MapplsTool({
           return;
         }
         setResult(data);
+        // Recents re-resolve via stored lat,lng — keep the original Google URL
+        // (or pasted text) as the chip's rememberInput for display / share.
         rememberPlace({
-          input: q,
+          input: (opts?.rememberInput || q).trim(),
           label: recentPlaceLabel({
             placeName: data.paste.searchQuery,
             pin: data.paste.mapplsPin,
@@ -1047,7 +1050,8 @@ export function Gmap2MapplsTool({
                       onClick={() => {
                         if (r.brandId !== brandId) onBrandChange(r.brandId);
                         setInput(r.input);
-                        void resolve(r.input);
+                        // Use stored lat,lng — do not re-expand/geocode the Google URL
+                        void resolve(recentResolveQuery(r), { rememberInput: r.input });
                       }}
                     >
                       {r.pin ? `${r.label} · ${r.pin}` : r.label}

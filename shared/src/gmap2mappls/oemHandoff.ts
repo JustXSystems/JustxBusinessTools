@@ -435,12 +435,16 @@ export function buildBrandPlaybook(
 
   // Preferred path: open the selected OEM companion app with this location
   if (app) {
+    // Geo / maps Intents must carry lat,lng only — never place/searchQuery.
+    // Embedding "Saptagiri Layout, Hosakerehalli…" made Simple Connect (and
+    // other Mappls-stack OEM apps) Autosuggest-search the label and open a
+    // different metro suburb while Pinway’s preview stayed on the true point.
     const openUrl =
       brand.id === "simple-energy" && paste.simpleConnectIntentUrl
         ? paste.simpleConnectIntentUrl
         : app.handoff === "maps"
           ? oemPackageGoogleMapsIntentUrl(app.packageId, lat, lng)
-          : oemPackageGeoIntentUrl(app.packageId, lat, lng, place);
+          : oemPackageGeoIntentUrl(app.packageId, lat, lng);
 
     const mapsBackup =
       brand.id === "simple-energy" && paste.simpleConnectMapsIntentUrl

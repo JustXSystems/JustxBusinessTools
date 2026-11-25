@@ -61,8 +61,11 @@ export async function expandGoogleShortLink(startUrl: string): Promise<{
         throw new Error("Short link redirected off Google — blocked for safety.");
       }
       current = next;
-      // Fast-path: redirect Location often already has @ / !3d or /place/Name
-      if (extractCoordsFromGoogleUrl(current)) break;
+      // Fast-path only for exact pin coords in the Location header.
+      // Viewport @ alone is the camera — keep following so we can read HTML
+      // !3d!4d / marker for the saved place (common on mobile share links).
+      const early = extractCoordsFromGoogleUrl(current);
+      if (early && early.source !== "at") break;
       continue;
     }
 
@@ -94,8 +97,20 @@ export async function expandGoogleShortLink(startUrl: string): Promise<{
   }
 
   let coords = extractCoordsFromGoogleUrl(current);
-  if (!coords && lastHtml) {
-    coords = extractCoordsFromMapsHtml(lastHtml);
+  // Prefer HTML dropped-pin (!3d!4d / marker) over URL viewport @ — mobile
+  // share pages often put the camera in the URL and the saved pin only in HTML.
+  if (lastHtml) {
+    const fromHtml = extractCoordsFromMapsHtml(lastHtml);
+    if (fromHtml) {
+      if (
+        !coords ||
+        fromHtml.source === "bang" ||
+        fromHtml.source === "place" ||
+        (coords.source === "at" && fromHtml.source !== "at")
+      ) {
+        coords = fromHtml;
+      }
+    }
   }
 
   const placeName =
