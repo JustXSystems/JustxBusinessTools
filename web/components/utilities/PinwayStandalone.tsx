@@ -8,7 +8,7 @@ import { Gmap2MapplsTool } from "@/components/utilities/Gmap2MapplsTool";
 
 const PHONE_CLASS = "g2m-force-phone";
 const VIEWPORT =
-  "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
+  "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content";
 
 function isPhoneDevice(): boolean {
   if (typeof window === "undefined") return false;
@@ -19,12 +19,24 @@ function isPhoneDevice(): boolean {
   return (coarse && noHover) || (sw > 0 && sw <= 900);
 }
 
+/** Keep the app shell inside the visible viewport when the soft keyboard opens. */
+function syncVisualViewport(): void {
+  const root = document.documentElement;
+  const vv = window.visualViewport;
+  if (!vv) {
+    root.style.setProperty("--g2m-vvh", `${window.innerHeight}px`);
+    root.style.setProperty("--g2m-vv-offset", "0px");
+    return;
+  }
+  root.style.setProperty("--g2m-vvh", `${Math.round(vv.height)}px`);
+  root.style.setProperty("--g2m-vv-offset", `${Math.round(vv.offsetTop)}px`);
+}
+
 function applyPhoneShell(): () => void {
   const html = document.documentElement;
   const body = document.body;
-  const phone = isPhoneDevice();
 
-  if (phone) html.classList.add(PHONE_CLASS);
+  if (isPhoneDevice()) html.classList.add(PHONE_CLASS);
 
   const prev = {
     htmlOverflow: html.style.overflow,
@@ -51,6 +63,12 @@ function applyPhoneShell(): () => void {
   const prevViewport = meta.getAttribute("content");
   meta.setAttribute("content", VIEWPORT);
 
+  syncVisualViewport();
+  const onVv = () => syncVisualViewport();
+  window.visualViewport?.addEventListener("resize", onVv);
+  window.visualViewport?.addEventListener("scroll", onVv);
+  window.addEventListener("resize", onVv);
+
   return () => {
     html.classList.remove(PHONE_CLASS);
     html.style.overflow = prev.htmlOverflow;
@@ -60,6 +78,11 @@ function applyPhoneShell(): () => void {
     body.style.width = prev.bodyWidth;
     body.style.maxWidth = prev.bodyMaxWidth;
     if (prevViewport != null) meta?.setAttribute("content", prevViewport);
+    window.visualViewport?.removeEventListener("resize", onVv);
+    window.visualViewport?.removeEventListener("scroll", onVv);
+    window.removeEventListener("resize", onVv);
+    html.style.removeProperty("--g2m-vvh");
+    html.style.removeProperty("--g2m-vv-offset");
   };
 }
 
@@ -67,9 +90,12 @@ function applyPhoneShell(): () => void {
 export function PinwayStandalone() {
   useEffect(() => {
     const cleanup = applyPhoneShell();
-    // Re-apply after paint — Android sometimes restores a wide layout viewport.
+    // Re-check phone class after paint — Android sometimes restores a wide layout viewport.
     const t = window.setTimeout(() => {
-      applyPhoneShell();
+      if (isPhoneDevice()) document.documentElement.classList.add(PHONE_CLASS);
+      const meta = document.querySelector('meta[name="viewport"]');
+      meta?.setAttribute("content", VIEWPORT);
+      syncVisualViewport();
     }, 50);
     return () => {
       window.clearTimeout(t);

@@ -975,7 +975,31 @@ export function Gmap2MapplsTool({
           ) : null}
         </div>
 
-        <details className="g2m-secondary">
+        <details
+          className="g2m-secondary"
+          onToggle={(e) => {
+            const el = e.currentTarget;
+            if (!el.open) return;
+            // Wait for details layout, then keep the block inside the scroll pane.
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                const pane = el.closest(".g2m");
+                if (!(pane instanceof HTMLElement)) {
+                  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                  return;
+                }
+                const pad = 20;
+                const elRect = el.getBoundingClientRect();
+                const paneRect = pane.getBoundingClientRect();
+                if (elRect.bottom > paneRect.bottom - pad) {
+                  pane.scrollBy({ top: elRect.bottom - paneRect.bottom + pad, behavior: "smooth" });
+                } else if (elRect.top < paneRect.top + pad) {
+                  pane.scrollBy({ top: elRect.top - paneRect.top - pad, behavior: "smooth" });
+                }
+              });
+            });
+          }}
+        >
           <summary>More options</summary>
           <div className="g2m-more">
             <div className="g2m-segment-row">

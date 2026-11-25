@@ -36,27 +36,29 @@ html:has(.pinway-route-root) body {
 
 .pinway-route-root {
   position: fixed;
-  inset: 0;
+  top: var(--g2m-vv-offset, 0px);
+  left: 0;
+  right: 0;
   width: 100%;
   max-width: none;
-  height: 100%;
-  height: 100dvh;
-  height: 100svh;
+  /* --g2m-vvh tracks visualViewport so the dock stays above the soft keyboard */
+  height: var(--g2m-vvh, 100dvh);
+  max-height: var(--g2m-vvh, 100dvh);
   margin: 0;
   padding: 0;
   overflow: hidden;
   overflow-x: clip;
-  contain: layout paint style;
+  /* no contain:paint — it breaks nested overflow scrolling on mobile WebKit */
   z-index: 1;
   box-sizing: border-box;
 }
 
 .pinway-standalone-shell {
-  position: absolute;
-  inset: 0;
+  position: relative;
   width: 100%;
   max-width: none;
   height: 100%;
+  max-height: 100%;
   margin: 0;
   padding: 0;
   display: flex;
@@ -64,12 +66,11 @@ html:has(.pinway-route-root) body {
   overflow: hidden;
   overflow-x: clip;
   overscroll-behavior: none;
-  contain: layout paint;
   box-sizing: border-box;
 }
 
 .pinway-standalone-shell > .bos.pinway-ims {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
   width: 100%;
@@ -109,10 +110,11 @@ html:has(.pinway-route-root) body {
   position: relative;
   display: flex !important;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
   height: 100%;
+  max-height: 100%;
   overflow: hidden !important;
   box-sizing: border-box;
 }
@@ -128,41 +130,50 @@ html:has(.pinway-route-root) body {
 .bos .g2m-app {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
   width: 100%;
   max-width: 100%;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .bos .g2m-app--embedded {
   max-width: 48rem;
   height: auto;
+  max-height: none;
   min-height: 0;
   margin-inline: auto;
+  overflow: visible;
 }
 
-/* Scroll pane only — nav & dock are siblings outside */
+/* Scroll pane only — nav & dock are siblings outside.
+   flex-basis: 0 keeps this pane bounded so overflow-y scrolls when
+   More options / results grow taller than the viewport. */
 .bos .g2m {
   position: relative;
   z-index: 1;
-  display: grid;
-  align-content: start;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   margin: 0;
-  padding: 12px var(--g2m-inset) 16px;
+  padding: 10px var(--g2m-inset) 12px;
   padding-left: max(var(--g2m-inset), env(safe-area-inset-left, 0px));
   padding-right: max(var(--g2m-inset), env(safe-area-inset-right, 0px));
   font-family: var(--bos-font-body);
   color: var(--bos-text);
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
+  max-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -443,7 +454,7 @@ html:has(.pinway-route-root) body {
   box-shadow: 0 1px 3px rgba(20, 30, 60, 0.12);
 }
 
-/* Grouped form surface */
+/* Grouped form surface — grows to fill leftover shell height on phone */
 .bos .g2m-command {
   display: grid;
   gap: 0;
@@ -452,6 +463,43 @@ html:has(.pinway-route-root) body {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+}
+
+.bos .g2m-app--standalone .g2m-beam,
+.bos .g2m-app--standalone .g2m-a2hs,
+.bos .g2m-app--standalone .g2m-tile.g2m-paywall {
+  flex: 0 0 auto;
+}
+
+.bos .g2m-app--standalone .g2m-tile.g2m-command {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  /* keep auto min-height so expanded More options is not crushed */
+}
+
+.bos .g2m-app--standalone .g2m-tile.g2m-command > :not(.g2m-spotlight) {
+  flex: 0 0 auto;
+}
+
+.bos .g2m-app--standalone .g2m-tile.g2m-command > .g2m-spotlight {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.bos .g2m-app--standalone .g2m-spotlight > .g2m-field-label,
+.bos .g2m-app--standalone .g2m-spotlight > .g2m-clip-banner {
+  flex: 0 0 auto;
+}
+
+.bos .g2m-app--standalone .g2m-spotlight textarea.bos-input {
+  flex: 1 1 auto;
+  /* Low floor so the field can shrink when the keyboard opens */
+  min-height: 96px;
+  height: auto !important;
+  resize: none;
 }
 
 .bos .g2m-command .bos-input,
@@ -480,8 +528,14 @@ html:has(.pinway-route-root) body {
   border: 1px solid color-mix(in srgb, var(--bos-ims-tile-border) 90%, transparent);
   background: color-mix(in srgb, var(--bos-ims-surface-solid) 94%, transparent);
   box-shadow: 0 1px 2px rgba(20, 30, 60, 0.06);
-  overflow: hidden;
-  animation: g2m-rise 0.4s var(--g2m-ease) both;
+  /* clip only for radius — height:auto still grows with More options */
+  overflow: clip;
+  /* backwards only — both would leave transform and break nested scroll */
+  animation: g2m-rise 0.4s var(--g2m-ease) backwards;
+}
+
+.bos .g2m-tile.g2m-command {
+  overflow: visible;
 }
 
 .bos .g2m-tile:nth-child(2) { animation-delay: 0.04s; }
@@ -877,6 +931,7 @@ html:has(.pinway-route-root) body {
   border: 0;
   background: transparent;
   padding: 0;
+  min-width: 0;
 }
 
 .bos .g2m-tile > .g2m-secondary {
@@ -895,12 +950,19 @@ html:has(.pinway-route-root) body {
 }
 
 .bos .g2m-secondary .g2m-more {
-  padding: 0 16px 14px;
+  padding: 0 16px 18px;
+  min-width: 0;
+  /* Keep expanded block in normal flow so the parent .g2m scroll pane grows */
+  overflow: visible;
 }
 
 .bos .g2m-secondary summary::-webkit-details-marker { display: none; }
 .bos .g2m-secondary summary::before { content: "▸ "; display: inline-block; transition: transform 0.15s ease; }
 .bos .g2m-secondary[open] summary::before { transform: rotate(90deg); }
+
+.bos .g2m-secondary[open] {
+  scroll-margin-block: 12px 28px;
+}
 
 .bos .g2m-qr { margin: 0; text-align: center; }
 .bos .g2m-qr img {
@@ -1096,9 +1158,9 @@ html:has(.pinway-route-root) body {
   }
 
   .bos .g2m--standalone {
-    gap: 12px;
-    padding-top: 12px;
-    padding-bottom: 14px;
+    gap: 10px;
+    padding-top: 8px;
+    padding-bottom: 10px;
     font-size: 16px;
   }
 
@@ -1138,7 +1200,7 @@ html:has(.pinway-route-root) body {
   }
 
   .bos .g2m-spotlight textarea.bos-input {
-    min-height: 104px;
+    min-height: 120px;
     font-size: 16px; /* avoid iOS focus zoom */
     line-height: 1.45;
   }
@@ -1169,33 +1231,49 @@ html:has(.pinway-route-root) body {
   }
 }
 
-/* Real touch phones: denser chrome, larger tap targets (DevTools desktop
-   resize keeps pointer:fine so it won't get this block). */
+/* Real touch phones: denser chrome like narrow desktop, larger tap targets. */
 @media (hover: none) and (pointer: coarse) {
   .bos .g2m-app--standalone {
     --g2m-inset: 12px;
   }
 
   .bos .g2m-nav {
-    padding-top: max(12px, env(safe-area-inset-top, 0px));
-    padding-bottom: 12px;
+    padding-top: max(8px, env(safe-area-inset-top, 0px));
+    padding-bottom: 8px;
   }
 
   .bos .g2m-logo {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
   }
 
   .bos .g2m-title {
-    font-size: 1.2rem;
+    font-size: 1.05rem;
+  }
+
+  .bos .g2m-eyebrow {
+    font-size: 11px;
   }
 
   .bos .g2m--standalone {
-    gap: 14px;
+    gap: 8px;
+  }
+
+  .bos .g2m-beam {
+    margin-bottom: 0;
+  }
+
+  .bos .g2m-beam-step {
+    min-height: 32px;
+    font-size: 12px;
   }
 
   .bos .g2m-island-bar {
-    padding-top: 12px;
+    padding-top: 8px;
+  }
+
+  .bos .g2m-app--standalone .g2m-spotlight textarea.bos-input {
+    min-height: 120px;
   }
 }
 
@@ -1238,15 +1316,49 @@ html.g2m-force-phone .bos .g2m-space {
 
 html.g2m-force-phone .bos .g2m--standalone {
   font-size: 16px;
+  gap: 8px;
+  padding-top: 8px;
+  padding-bottom: 10px;
+}
+
+html.g2m-force-phone .bos .g2m-nav {
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
+  padding-bottom: 8px;
+}
+
+html.g2m-force-phone .bos .g2m-logo {
+  width: 36px;
+  height: 36px;
 }
 
 html.g2m-force-phone .bos .g2m-title {
-  font-size: 1.2rem;
+  font-size: 1.05rem;
+}
+
+html.g2m-force-phone .bos .g2m-eyebrow {
+  font-size: 11px;
+}
+
+html.g2m-force-phone .bos .g2m-beam-step {
+  min-height: 32px;
+  font-size: 12px;
+}
+
+html.g2m-force-phone .bos .g2m-island-bar {
+  padding-top: 8px;
+}
+
+html.g2m-force-phone .bos .g2m-app--standalone .g2m-tile.g2m-command {
+  flex: 1 1 auto;
+}
+
+html.g2m-force-phone .bos .g2m-app--standalone .g2m-spotlight textarea.bos-input {
+  min-height: 120px;
 }
 
 html.g2m-force-phone .bos .g2m-island .bos-btn,
 html.g2m-force-phone .bos .g2m-island a.bos-btn {
-  min-height: 52px;
+  min-height: 48px;
   font-size: 16px;
 }
 
