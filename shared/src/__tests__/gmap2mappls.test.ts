@@ -351,6 +351,8 @@ describe("gmap2mappls urls + samples", () => {
       "bajaj",
       "hero",
       "ampere",
+      "ather",
+      "ultraviolette",
       "matter",
       "ola",
       "tork",
@@ -363,6 +365,8 @@ describe("gmap2mappls urls + samples", () => {
       "kia",
       "mg",
       "maruti",
+      "honda",
+      "byd",
     ]) {
       expect(ids.has(id)).toBe(true);
     }
@@ -370,9 +374,17 @@ describe("gmap2mappls urls + samples", () => {
     expect(resolveOemBrandId("me4u")).toBe("mahindra-me4u");
     expect(resolveOemBrandId("born-electric")).toBe("mahindra-me4u");
     expect(resolveOemBrandId("xuv700")).toBe("mahindra");
+    expect(resolveOemBrandId("rizta")).toBe("ather");
+    expect(resolveOemBrandId("f77")).toBe("ultraviolette");
+    expect(resolveOemBrandId("atto-3")).toBe("byd");
+    expect(resolveOemBrandId("e-vitara")).toBe("maruti");
+    expect(OEM_BRANDS.find((b) => b.id === "tvs")?.stack).toBe("mappls");
+    expect(OEM_BRANDS.find((b) => b.id === "ola")?.stack).toBe("ola_maps");
     const summary = buildOemHandoffSummary();
     expect(summary.rules.searchBoxRejects.join(" ")).toMatch(/lat,lng/);
-    expect(summary.brands.filter((b) => b.stack === "mappls").length).toBeGreaterThan(10);
+    expect(summary.brands.filter((b) => b.stack === "mappls").length).toBeGreaterThan(15);
+    expect(summary.brands.filter((b) => b.segment === "2W").length).toBeGreaterThanOrEqual(10);
+    expect(summary.brands.filter((b) => b.segment === "4W").length).toBeGreaterThanOrEqual(8);
   });
 
   it("builds a one-CTA playbook that opens each brand’s companion app", () => {

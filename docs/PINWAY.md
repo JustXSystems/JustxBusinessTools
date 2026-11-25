@@ -89,15 +89,27 @@ Pin-paste OEMs (`deferAutoOpen`): stay on **ready** until the primary CTA (copy 
 
 ## OEM coverage
 
-| Brand | Segment | What to use |
-|-------|---------|-------------|
-| Simple Energy / SimpleOne | 2W | **Open Simple Connect** via geo Intent |
-| Bajaj / Hero / Ampere / TVS | 2W | Companion geo Intent or Mappls Pin |
-| Ola Electric | 2W | Ola Electric app (Google Maps family) |
-| Mahindra ICE | 4W | **Adrenox** + Pin → Push to car |
-| Mahindra Born Electric | 4W | **Me4U** + Pin → Send to vehicle |
-| Tata / Hyundai / Kia / MG / Maruti | 4W | Companion + Pin → send / push to car |
-| Matter / Tork / Suzuki 2W | 2W | Mappls nav (no public companion package) |
+Verified from MapmyIndia NCASE go-lives (FY23–FY26) and about.mappls.com Auto OEM pages.
+
+| Brand | Segment | Mappls models / lines | What to use |
+|-------|---------|----------------------|-------------|
+| Simple Energy / SimpleOne | 2W | SimpleOne (Q3 FY25) | **Open Simple Connect** via geo Intent |
+| Bajaj | 2W | Chetak + ICE/EV (FY25) | Chetak geo Intent or Mappls Pin |
+| Hero MotoCorp | 2W | Hero Connect / OneApp (FY23–24) | Hero Connect geo Intent |
+| Ampere (Greaves) | 2W | Nexus (+ Mappls PIN last-mile) | Ampere Connect geo Intent |
+| Ather | 2W | Rizta (Q2 FY25) | Ather app send-to-scooter |
+| Ultraviolette | 2W | F77 / Mach 2 (Q1 FY25) | UV app Send It |
+| TVS | 2W | Apache RTR 160 (FY26) + cluster projection | TVS Connect geo Intent |
+| Matter / Tork / Suzuki 2W | 2W | Matter (Q3 FY25), Tork (FY23), Suzuki lines (FY25) | Mappls nav + Pin |
+| Ola Electric | 2W | Consumer = Ola Maps (FY23 Mappls cited historically) | Ola Electric app (maps family) |
+| Mahindra ICE | 4W | XUV700, Scorpio-N, XUV 3XO, Thar RoXX, … | **Adrenox** + Pin → Push to car |
+| Mahindra Born Electric | 4W | BE.05 / BE.06 / XEV 9e | **Me4U** + Pin → Send to vehicle |
+| Tata | 4W | Harrier, Safari, Sierra EV | iRA + Pin → Send to car |
+| Hyundai / Kia | 4W | Creta, Alcazar; Carnival, EV9 + connected lines | Bluelink / Kia Connect + Pin |
+| MG | 4W | Hector + i-SMART NCASE | iSMART + Pin → Push POI |
+| Maruti Suzuki | 4W | e-Vitara (FY26), Navimaps / Smartplay | Suzuki Connect + Pin in vehicle |
+| Honda Cars India | 4W | Honda Connect / Mappls connected lines | Honda Connect + Pin |
+| BYD | 4W | Atto 3, Seal (Mappls Auto NCASE) | Pin in vehicle Mappls (BYD AUTO is remote) |
 
 ## Local run
 
