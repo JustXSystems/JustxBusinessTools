@@ -3,6 +3,7 @@ import {
   classifyInput,
   extractCoordsFromGoogleUrl,
   extractCoordsFromMapsHtml,
+  extractGoogleFeatureId,
   extractPlaceNameFromGoogleUrl,
   extractNeighbourhoodTokens,
   pickBestCandidate,
@@ -69,6 +70,28 @@ describe("gmap2mappls parse", () => {
     expect(c?.source).toBe("bang");
     expect(c?.lat).toBeCloseTo(12.930188, 5);
     expect(c?.lng).toBeCloseTo(77.537833, 5);
+  });
+
+  it("HTML scrape prefers canonical !8m2!3d!4d over majority vote", () => {
+    const html = `
+      data=!8m2!3d12.9177946!4d77.5366781
+      !3d13.105528!4d77.610415 !3d13.105528!4d77.610415 !3d13.105528!4d77.610415
+      @13.10,77.61,14z
+    `;
+    const c = extractCoordsFromMapsHtml(html);
+    expect(c?.lat).toBeCloseTo(12.9177946, 6);
+    expect(c?.lng).toBeCloseTo(77.5366781, 6);
+  });
+
+  it("extracts Google feature id from place-id share URLs", () => {
+    expect(
+      extractGoogleFeatureId(
+        "https://www.google.com/maps/place/Foo/data=!4m2!3m1!1s0x3bae3fb518806a77:0xb632e3c78c9fcbd9",
+      ),
+    ).toBe("0x3bae3fb518806a77:0xb632e3c78c9fcbd9");
+    expect(
+      extractGoogleFeatureId("pb=!1m1!1s0x3bae3fb518806a77%3A0xb632e3c78c9fcbd9"),
+    ).toBe("0x3bae3fb518806a77:0xb632e3c78c9fcbd9");
   });
 
   it("parses raw lat,lng", () => {

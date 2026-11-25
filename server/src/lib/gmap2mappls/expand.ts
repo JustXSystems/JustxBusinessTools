@@ -1,19 +1,40 @@
 import {
   extractCoordsFromGoogleUrl,
   extractCoordsFromMapsHtml,
+  extractGoogleFeatureId,
   extractPlaceNameFromGoogleUrl,
   isAllowedGoogleHost,
   type ParsedCoords,
 } from "@jbt/shared";
+import { fetchGoogleFeatureCoords } from "./googlePlacePreview.js";
 
 /** Prefer a real browser UA — Maps short-link HTML is richer for some clients. */
 const UA =
-  "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+async function fetchGoogle(url: string, attempt = 0): Promise<Response> {
+  try {
+    return await fetch(url, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        "User-Agent": UA,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-IN,en;q=0.9",
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
+  } catch (err) {
+    if (attempt >= 2) throw err;
+    await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    return fetchGoogle(url, attempt + 1);
+  }
+}
 
 /**
  * Follow redirects for short Google Maps links, only onto Google hosts.
  * Many Share → Copy links expand to `/place/Name/data=!…!1s0x…` without @lat,lng;
- * we still return the place name so resolve can geocode it.
+ * we recover the exact Google pin via feature-id preview (not place-name geocode).
  */
 export async function expandGoogleShortLink(startUrl: string): Promise<{
   finalUrl: string;
@@ -35,16 +56,7 @@ export async function expandGoogleShortLink(startUrl: string): Promise<{
       throw new Error("Refusing to follow redirect off Google hosts.");
     }
 
-    const res = await fetch(current, {
-      method: "GET",
-      redirect: "manual",
-      headers: {
-        "User-Agent": UA,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-IN,en;q=0.9",
-      },
-      signal: AbortSignal.timeout(10_000),
-    });
+    const res = await fetchGoogle(current);
 
     const loc = res.headers.get("location");
     if (
@@ -63,7 +75,7 @@ export async function expandGoogleShortLink(startUrl: string): Promise<{
       current = next;
       // Fast-path only for exact pin coords in the Location header.
       // Viewport @ alone is the camera — keep following so we can read HTML
-      // !3d!4d / marker for the saved place (common on mobile share links).
+      // !3d!4d / marker / feature-id for the saved place.
       const early = extractCoordsFromGoogleUrl(current);
       if (early && early.source !== "at") break;
       continue;
@@ -110,6 +122,18 @@ export async function expandGoogleShortLink(startUrl: string): Promise<{
       ) {
         coords = fromHtml;
       }
+    }
+  }
+
+  // Place-id shares often have neither @ nor !3d!4d. Google's preview/place
+  // returns the same lat/lng the Maps pin shows — use that before any geocode.
+  if (!coords || coords.source === "at") {
+    const ftid =
+      extractGoogleFeatureId(current) ||
+      (lastHtml ? extractGoogleFeatureId(lastHtml) : null);
+    if (ftid) {
+      const fromFeature = await fetchGoogleFeatureCoords(ftid).catch(() => null);
+      if (fromFeature) coords = fromFeature;
     }
   }
 

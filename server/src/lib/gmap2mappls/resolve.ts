@@ -3,6 +3,7 @@ import {
   buildPasteKit,
   classifyInput,
   extractCoordsFromGoogleUrl,
+  extractGoogleFeatureId,
   extractPlaceNameFromGoogleUrl,
   formatCoordPair,
   googleMapsPointUrl,
@@ -16,6 +17,7 @@ import {
 } from "@jbt/shared";
 import { expandGoogleShortLink } from "./expand.js";
 import { geocodeIndiaAddress } from "./geocode.js";
+import { fetchGoogleFeatureCoords } from "./googlePlacePreview.js";
 import { getMapplsAccessToken, reverseGeocodeMappls } from "./mappls.js";
 
 function googleName(opts: {
@@ -106,7 +108,8 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
       if (expanded.coords) {
         lat = expanded.coords.lat;
         lng = expanded.coords.lng;
-        source = "short_link";
+        // Keep bang/place/at so callers know this is Google's pin — not a geocode guess.
+        source = expanded.coords.source || "short_link";
         label = expanded.coords.label;
         displayName = expanded.placeName ?? undefined;
       } else if (expanded.placeName) {
@@ -125,8 +128,16 @@ export async function resolveGmap2Mappls(rawInput: string): Promise<ResolveRespo
         };
       }
     } else if (classified.kind === "google_url") {
-      const coords = classified.coords ?? extractCoordsFromGoogleUrl(classified.url);
+      let coords = classified.coords ?? extractCoordsFromGoogleUrl(classified.url);
       const placeName = extractPlaceNameFromGoogleUrl(classified.url);
+      // Prefer Google's own place pin over viewport @ or name geocode.
+      if (!coords || coords.source === "at") {
+        const ftid = extractGoogleFeatureId(classified.url);
+        if (ftid) {
+          const fromFeature = await fetchGoogleFeatureCoords(ftid).catch(() => null);
+          if (fromFeature) coords = fromFeature;
+        }
+      }
       if (coords) {
         lat = coords.lat;
         lng = coords.lng;

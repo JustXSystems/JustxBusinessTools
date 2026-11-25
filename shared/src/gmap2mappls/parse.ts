@@ -71,6 +71,20 @@ export function extractPlaceNameFromGoogleUrl(urlString: string): string | null 
   }
 }
 
+/**
+ * Google feature / place id (`0x…:0x…`) from a Maps URL or HTML blob.
+ * Used with maps/preview/place to recover the exact pin when share links omit @ / !3d!4d.
+ */
+export function extractGoogleFeatureId(text: string): string | null {
+  if (!text) return null;
+  const decoded = text.replace(/%3A/gi, ":");
+  const m =
+    decoded.match(/!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i) ||
+    decoded.match(/[?&]ftid=(0x[0-9a-f]+:0x[0-9a-f]+)/i) ||
+    decoded.match(/\b(0x[0-9a-f]+:0x[0-9a-f]+)\b/i);
+  return m?.[1]?.toLowerCase() ?? null;
+}
+
 export function extractCoordsFromGoogleUrl(urlString: string): ParsedCoords | null {
   let url: URL;
   try {
@@ -83,7 +97,12 @@ export function extractCoordsFromGoogleUrl(urlString: string): ParsedCoords | nu
   const href = url.href;
   const path = decodeURIComponent(url.pathname + url.search + url.hash);
 
-  // data=!3dLAT!4dLNG (dropped pin) — prefer over viewport @ when both exist
+  // Canonical place pin (!8m2!3d!4d) then any dropped-pin !3d!4d — never viewport @ first
+  const exact = href.match(/!8m2!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+  if (exact) {
+    const pair = parsePair(exact[1], exact[2]);
+    if (pair) return { ...pair, source: "bang" };
+  }
   const bang = href.match(/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/);
   if (bang) {
     const pair = parsePair(bang[1], bang[2]);
@@ -131,6 +150,13 @@ export function extractCoordsFromGoogleUrl(urlString: string): ParsedCoords | nu
  */
 export function extractCoordsFromMapsHtml(html: string): ParsedCoords | null {
   if (!html) return null;
+
+  // Canonical Google place pin when present in the page / data blob
+  const exact = html.match(/!8m2!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+  if (exact) {
+    const pair = parsePair(exact[1], exact[2]);
+    if (pair) return { ...pair, source: "bang" };
+  }
 
   // Collect all !3d!4d pins; prefer the most frequent India-ish pair (saved-place
   // pages embed the true pin repeatedly, plus unrelated nearby markers).

@@ -55,16 +55,15 @@ describe("resolveGmap2Mappls sample mode", () => {
     expect(r.paste.mapplsNavDrivingUrl).toContain("mode=driving");
   }, 45_000);
 
-  it("place-id share short link (no @lat,lng) geocodes place name — Hanumangiri", async () => {
+  it("place-id share short link uses Google preview pin (not Photon geocode) — Hanumangiri", async () => {
     delete process.env.MAPPLS_ACCESS_TOKEN;
     const r = await resolveGmap2Mappls("https://maps.app.goo.gl/HWzYiASacCnENGAT7?g_st=ac");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    // Hosakerehalli / Banashankari west Bengaluru — not north Sapthagiri (~13.10)
-    expect(r.lat).toBeGreaterThan(12.88);
-    expect(r.lat).toBeLessThan(12.98);
-    expect(r.lng).toBeGreaterThan(77.50);
-    expect(r.lng).toBeLessThan(77.58);
+    // Exact Google Maps pin for this feature id (not locality geocode ~12.930)
+    expect(r.lat).toBeCloseTo(12.917795, 4);
+    expect(r.lng).toBeCloseTo(77.536678, 4);
+    expect(r.google.source).toBe("place");
     expect(r.google.lat).toBe(r.mappls.lat);
     expect(r.google.lng).toBe(r.mappls.lng);
     expect(`${r.google.name} ${r.mappls.formattedAddress}`.toLowerCase()).toMatch(
@@ -72,17 +71,16 @@ describe("resolveGmap2Mappls sample mode", () => {
     );
   }, 60_000);
 
-  it("full place URL without coords geocodes from /place/ path", async () => {
+  it("full place URL without @ uses Google feature preview for exact pin", async () => {
     delete process.env.MAPPLS_ACCESS_TOKEN;
     const r = await resolveGmap2Mappls(
       "https://www.google.com/maps/place/Hanumangiri,+Saptagiri+Layout,+Hosakerehalli,+Bengaluru,+Karnataka+560061/data=!4m2!3m1!1s0x3bae3fb518806a77:0xb632e3c78c9fcbd9",
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.lat).toBeGreaterThan(12.88);
-    expect(r.lat).toBeLessThan(12.98);
-    expect(r.lng).toBeGreaterThan(77.50);
-    expect(r.lng).toBeLessThan(77.58);
+    expect(r.lat).toBeCloseTo(12.917795, 4);
+    expect(r.lng).toBeCloseTo(77.536678, 4);
+    expect(r.google.source).toBe("place");
   }, 60_000);
 
   it("acceptance 2: Brindavan / Hulimavu address stays Bengaluru area", async () => {

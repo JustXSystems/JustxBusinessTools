@@ -34,10 +34,11 @@ Internal catalog / API id remains `gmap2mappls`.
 
 **One shared lat/lng for Google and Mappls.**
 
-1. Prefer coordinates from the Google Maps URL (`!3d!4d` pin, `/@lat,lng`, `q=lat,lng`, short `maps.app.goo.gl` expanded to Google hosts only).
-2. If only an address is given, geocode with Photon then Nominatim (India-biased) and validate neighbourhood tokens.
-3. Call **Mappls Reverse Geocode only** at that lat/lng (token API and/or Mappls web click-revg for Pin).
-4. **Never** use Mappls Text Search as the primary matcher for full addresses.
+1. Prefer coordinates from the Google Maps URL (`!8m2!3d!4d` / `!3d!4d` pin, never viewport `@` alone when a pin exists).
+2. For place-id share links (`0x…:0x…` with no pin in the URL), call Google `maps/preview/place` and use that exact pin — **do not** geocode the place-name string (Photon can be 1km+ off).
+3. If only a typed address is given, geocode with Photon then Nominatim (India-biased) and validate neighbourhood tokens.
+4. Call **Mappls Reverse Geocode only** at that lat/lng (token API and/or Mappls web click-revg for Pin). Echo the **same** lat/lng Google provided — never snap to Mappls’s nearest POI.
+5. **Never** use Mappls Text Search as the primary matcher for full addresses.
 
 ### Mappls open URL
 
