@@ -312,9 +312,9 @@ html:has(.pinway-route-root) body {
 }
 
 .bos .g2m-logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
   object-fit: cover;
   box-shadow: var(--bos-ims-glow);
   flex: 0 0 auto;
@@ -326,7 +326,7 @@ html:has(.pinway-route-root) body {
 
 .bos .g2m-eyebrow {
   margin: 2px 0 0;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
   text-transform: none;
@@ -339,7 +339,7 @@ html:has(.pinway-route-root) body {
 .bos .g2m-title {
   margin: 0;
   font-family: var(--bos-font-display);
-  font-size: 1.05rem;
+  font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.15;
@@ -425,10 +425,10 @@ html:has(.pinway-route-root) body {
   gap: 0;
   place-items: center;
   text-align: center;
-  min-height: 32px;
-  padding: 6px 4px;
+  min-height: 40px;
+  padding: 8px 6px;
   border-radius: 10px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.01em;
   text-transform: none;
@@ -607,7 +607,7 @@ html:has(.pinway-route-root) body {
 .bos .g2m-field-label {
   display: block;
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 650;
   color: var(--bos-text-muted);
   letter-spacing: -0.01em;
@@ -941,7 +941,7 @@ html:has(.pinway-route-root) body {
 .bos .g2m-secondary summary {
   cursor: pointer;
   list-style: none;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 650;
   color: var(--bos-blue);
   padding: 14px 16px;
@@ -1067,7 +1067,7 @@ html:has(.pinway-route-root) body {
   min-width: 0;
   padding: 0 14px;
   font-weight: 750;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.2;
   border-radius: 14px !important;
   text-align: center;
@@ -1140,7 +1140,7 @@ html:has(.pinway-route-root) body {
   color: var(--bos-text);
 }
 
-/* Phone / tablet: force full-bleed + readable density */
+/* Phone / tablet: full-bleed shell with desktop-like readable type */
 @media (max-width: 959px) {
   .bos .g2m-app--standalone,
   .bos.pinway-ims--standalone .g2m-app {
@@ -1154,60 +1154,77 @@ html:has(.pinway-route-root) body {
   }
 
   .bos .g2m-app--standalone {
-    --g2m-inset: 12px;
+    --g2m-inset: 14px;
+    /* Match desktop screenshot readability on small viewports */
+    --g2m-type: clamp(16px, 4.35vw, 18px);
+    font-size: var(--g2m-type);
   }
 
   .bos .g2m--standalone {
-    gap: 10px;
-    padding-top: 8px;
+    gap: 12px;
+    padding-top: 10px;
+    padding-bottom: 12px;
+    font-size: inherit;
+  }
+
+  .bos .g2m-nav {
+    padding-top: max(10px, env(safe-area-inset-top, 0px));
     padding-bottom: 10px;
-    font-size: 16px;
+  }
+
+  .bos .g2m-logo {
+    width: 42px;
+    height: 42px;
   }
 
   .bos .g2m-title {
-    font-size: 1.125rem;
+    font-size: clamp(1.2rem, 5.2vw, 1.4rem);
   }
 
   .bos .g2m-eyebrow {
-    font-size: 12px;
+    font-size: clamp(12px, 3.4vw, 14px);
   }
 
   .bos .g2m-tile {
-    border-radius: 14px;
+    border-radius: 16px;
   }
 
   .bos .g2m-tile > * {
-    padding: 14px 14px;
+    padding: 14px 16px;
   }
 
   .bos .g2m-field-label {
-    font-size: 14px;
+    font-size: clamp(15px, 4vw, 16px);
     margin-bottom: 8px;
   }
 
+  .bos .g2m-hint {
+    font-size: 14px;
+  }
+
   .bos .g2m-beam-step {
-    min-height: 36px;
-    font-size: 13px;
+    min-height: 42px;
+    font-size: clamp(14px, 3.8vw, 15px);
   }
 
   .bos .g2m-secondary summary {
-    padding: 14px;
-    font-size: 15px;
+    padding: 14px 16px;
+    font-size: clamp(15px, 4vw, 17px);
   }
 
   .bos .g2m-secondary .g2m-more {
-    padding: 0 14px 14px;
+    padding: 0 16px 16px;
   }
 
   .bos .g2m-spotlight textarea.bos-input {
-    min-height: 120px;
+    min-height: 140px;
     font-size: 16px; /* avoid iOS focus zoom */
     line-height: 1.45;
   }
 
   .bos.pinway-ims select.bos-input:not([multiple]):not([size]),
   .bos .g2m select.bos-input:not([multiple]):not([size]) {
-    min-height: 48px;
+    min-height: 52px;
     font-size: 16px;
   }
 
@@ -1215,11 +1232,15 @@ html:has(.pinway-route-root) body {
     min-height: 64px;
   }
 
+  .bos .g2m-island-bar {
+    padding-top: 12px;
+  }
+
   .bos .g2m-island .bos-btn,
   .bos .g2m-island a.bos-btn {
-    min-height: 52px;
-    font-size: 16px;
-    border-radius: 12px !important;
+    min-height: 54px;
+    font-size: 17px;
+    border-radius: 14px !important;
   }
 
   .bos .g2m-lock {
@@ -1227,53 +1248,66 @@ html:has(.pinway-route-root) body {
   }
 
   .bos .g2m-lock strong {
-    font-size: 1.15rem;
+    font-size: 1.2rem;
+  }
+
+  .bos .g2m-clip-banner {
+    font-size: 14px;
   }
 }
 
-/* Real touch phones: denser chrome like narrow desktop, larger tap targets. */
+/* Touch phones: same readable type as narrow desktop (do not shrink). */
 @media (hover: none) and (pointer: coarse) {
   .bos .g2m-app--standalone {
-    --g2m-inset: 12px;
+    --g2m-inset: 14px;
+    --g2m-type: clamp(16px, 4.5vw, 18px);
+    font-size: var(--g2m-type);
   }
 
   .bos .g2m-nav {
-    padding-top: max(8px, env(safe-area-inset-top, 0px));
-    padding-bottom: 8px;
+    padding-top: max(10px, env(safe-area-inset-top, 0px));
+    padding-bottom: 10px;
   }
 
   .bos .g2m-logo {
-    width: 36px;
-    height: 36px;
+    width: 42px;
+    height: 42px;
   }
 
   .bos .g2m-title {
-    font-size: 1.05rem;
+    font-size: clamp(1.22rem, 5.4vw, 1.45rem);
   }
 
   .bos .g2m-eyebrow {
-    font-size: 11px;
+    font-size: clamp(13px, 3.5vw, 14px);
   }
 
   .bos .g2m--standalone {
-    gap: 8px;
-  }
-
-  .bos .g2m-beam {
-    margin-bottom: 0;
+    gap: 12px;
   }
 
   .bos .g2m-beam-step {
-    min-height: 32px;
-    font-size: 12px;
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  .bos .g2m-field-label {
+    font-size: 16px;
   }
 
   .bos .g2m-island-bar {
-    padding-top: 8px;
+    padding-top: 12px;
+  }
+
+  .bos .g2m-island .bos-btn,
+  .bos .g2m-island a.bos-btn {
+    min-height: 54px;
+    font-size: 17px;
   }
 
   .bos .g2m-app--standalone .g2m-spotlight textarea.bos-input {
-    min-height: 120px;
+    min-height: 150px;
+    font-size: 16px;
   }
 }
 
@@ -1306,8 +1340,15 @@ html.g2m-force-phone .bos.pinway-ims--standalone.bos-canvas {
   margin-right: 0 !important;
 }
 
+html.g2m-force-phone {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 html.g2m-force-phone .bos .g2m-app--standalone {
-  --g2m-inset: 12px;
+  --g2m-inset: 14px;
+  --g2m-type: clamp(16px, 4.5vw, 18px);
+  font-size: var(--g2m-type) !important;
 }
 
 html.g2m-force-phone .bos .g2m-space {
@@ -1315,51 +1356,66 @@ html.g2m-force-phone .bos .g2m-space {
 }
 
 html.g2m-force-phone .bos .g2m--standalone {
-  font-size: 16px;
-  gap: 8px;
-  padding-top: 8px;
-  padding-bottom: 10px;
+  font-size: inherit;
+  gap: 12px;
+  padding-top: 10px;
+  padding-bottom: 12px;
 }
 
 html.g2m-force-phone .bos .g2m-nav {
-  padding-top: max(8px, env(safe-area-inset-top, 0px));
-  padding-bottom: 8px;
+  padding-top: max(10px, env(safe-area-inset-top, 0px));
+  padding-bottom: 10px;
 }
 
 html.g2m-force-phone .bos .g2m-logo {
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
 }
 
 html.g2m-force-phone .bos .g2m-title {
-  font-size: 1.05rem;
+  font-size: clamp(1.22rem, 5.4vw, 1.45rem) !important;
 }
 
 html.g2m-force-phone .bos .g2m-eyebrow {
-  font-size: 11px;
+  font-size: clamp(13px, 3.5vw, 14px) !important;
 }
 
 html.g2m-force-phone .bos .g2m-beam-step {
-  min-height: 32px;
-  font-size: 12px;
+  min-height: 44px;
+  font-size: 15px !important;
+}
+
+html.g2m-force-phone .bos .g2m-field-label {
+  font-size: 16px !important;
+}
+
+html.g2m-force-phone .bos .g2m-secondary summary {
+  font-size: 16px !important;
 }
 
 html.g2m-force-phone .bos .g2m-island-bar {
-  padding-top: 8px;
+  padding-top: 12px;
 }
 
 html.g2m-force-phone .bos .g2m-app--standalone .g2m-tile.g2m-command {
   flex: 1 1 auto;
 }
 
+html.g2m-force-phone .bos .g2m-app--standalone .g2m-spotlight textarea.bos-input,
+html.g2m-force-phone .bos .g2m select.bos-input:not([multiple]):not([size]),
+html.g2m-force-phone .bos.pinway-ims select.bos-input:not([multiple]):not([size]) {
+  min-height: 52px;
+  font-size: 16px !important;
+}
+
 html.g2m-force-phone .bos .g2m-app--standalone .g2m-spotlight textarea.bos-input {
-  min-height: 120px;
+  min-height: 150px;
 }
 
 html.g2m-force-phone .bos .g2m-island .bos-btn,
 html.g2m-force-phone .bos .g2m-island a.bos-btn {
-  min-height: 48px;
-  font-size: 16px;
+  min-height: 54px;
+  font-size: 17px !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
