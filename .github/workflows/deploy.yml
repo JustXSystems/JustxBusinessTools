@@ -235,16 +235,24 @@ jobs:
           ls -lh jbt-release.tgz
           test -f jbt-release.tgz.sha256
 
+      # Hostinger SSH sometimes drops the first dial from Actions (i/o timeout).
+      # Retry + longer connect timeout; the app build already succeeded above.
       - name: Upload tarball to VPS
         if: ${{ env.DO_DEPLOY == 'true' }}
-        uses: appleboy/scp-action@v0.1.7
+        uses: Wandalen/wretry.action@v3.5.0
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "jbt-release.tgz,jbt-release.tgz.sha256"
-          target: /tmp
-          overwrite: true
+          attempt_limit: 3
+          attempt_delay: 20000
+          action: appleboy/scp-action@v0.1.7
+          with: |
+            host: ${{ secrets.DEPLOY_HOST }}
+            username: ${{ secrets.DEPLOY_USER }}
+            key: ${{ secrets.DEPLOY_SSH_KEY }}
+            source: jbt-release.tgz,jbt-release.tgz.sha256
+            target: /tmp
+            overwrite: true
+            timeout: 120s
+            command_timeout: 10m
 
       - name: Apply release over SSH
         if: ${{ env.DO_DEPLOY == 'true' }}
@@ -265,6 +273,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script_stop: true
+          timeout: 120s
           command_timeout: 20m
           envs: RUN_MIGRATIONS,BACKUP_DB,SEED_TOOLS,PM2_MODE,POST_DEPLOY_TASK,HEALTH_CHECK,AUTO_ROLLBACK,KEEP_RELEASES,FORCE_NPM_CI,RELEASE_ID
           script: |
