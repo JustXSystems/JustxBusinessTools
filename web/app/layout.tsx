@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { IBM_Plex_Sans, IBM_Plex_Mono, Inter, Outfit, Space_Grotesk } from "next/font/google";
+import { buildForcePhoneInlineScript } from "@jbt/shared";
 import "./globals.css";
 import { ClientInit } from "@/components/ClientInit";
 import { AuthProvider } from "@/components/auth/AuthProvider";
@@ -65,8 +66,15 @@ export const viewport: Viewport = {
   themeColor: "#00dfff",
   width: "device-width",
   initialScale: 1,
+  minimumScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
+  interactiveWidget: "resizes-content",
 };
+
+/** Before paint: lock phone layout to real CSS width (fixes Android ~980px shrink). */
+const FORCE_PHONE_SCRIPT = buildForcePhoneInlineScript();
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -75,6 +83,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`h-full ${plexSans.variable} ${plexMono.variable} ${inter.variable} ${phSans.variable} ${phDisplay.variable}`}
     >
       <body className="min-h-full">
+        <script dangerouslySetInnerHTML={{ __html: FORCE_PHONE_SCRIPT }} />
         <ClientInit />
         <BrandingProvider>
           <DocumentIconSync />

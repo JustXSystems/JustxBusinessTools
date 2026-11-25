@@ -647,6 +647,8 @@
 
 /* ==========================================================================
    Responsive — tablet (≤900px), phone (≤560px), touch and no-hover devices
+   Also honor html.jbt-force-phone so a false ~980px layout width cannot
+   keep the desktop sidebar (Android shrink-to-fit trap).
    ========================================================================== */
 @media (max-width: 900px) {
   .bos .bos-wrap { padding: 0 var(--bos-s-4) var(--bos-s-16); }
@@ -865,4 +867,28 @@
   .bos .bos-table tbody tr.is-clickable:active { background: var(--bos-row-hover); }
   .bos .bos-kanban-move { display: flex; }
 }
+
+/* Forced phone layout width — same single-column shell as ≤900px */
+html.jbt-force-phone .bos .bos-shell {
+  grid-template-columns: minmax(0, 1fr) !important;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+html.jbt-force-phone .bos .bos-shell-fill {
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+}
+html.jbt-force-phone .bos .bos-nav-collapse { display: none; }
+html.jbt-force-phone .bos .bos-nav {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-right: none;
+  border-bottom: 1px solid var(--bos-border-soft);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+html.jbt-force-phone .bos .bos-shell-main { padding: var(--bos-s-3); }
 

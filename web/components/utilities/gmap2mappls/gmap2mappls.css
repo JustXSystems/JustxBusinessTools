@@ -1,12 +1,10 @@
 /* GoogleMaps2Mappls — native mobile app shell on IMS tokens */
 
 /*
-  Full-bleed app:
-  html/body locked → shell 100dvh → canvas 0 padding →
-  [nav | scroll | dock] stacked, each width 100%.
-
-  Critical for real phones: never let document width exceed the
-  layout viewport (blurred orbs / 100vw caused shrink-to-fit zoom-out).
+  Native mobile app shell:
+  html/body locked → fixed 100dvh root → [nav | scroll | dock].
+  Dock stays in the thumb zone; scroll pane holds form + howto + results.
+  Viewport width lock lives in root layout (jbt-force-phone) — never zoom.
 */
 html:has(.pinway-standalone-shell),
 html:has(.pinway-route-root),
@@ -14,14 +12,13 @@ html:has(.pinway-standalone-shell) body,
 html:has(.pinway-route-root) body {
   width: 100% !important;
   max-width: 100% !important;
-  min-height: 100%;
-  height: auto;
-  max-height: none;
+  height: 100% !important;
+  max-height: 100% !important;
   margin: 0 !important;
   padding: 0 !important;
+  overflow: hidden !important;
   overflow-x: clip !important;
-  overflow-y: auto !important;
-  overscroll-behavior-y: contain;
+  overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   touch-action: manipulation;
@@ -29,34 +26,27 @@ html:has(.pinway-route-root) body {
 
 html:has(.pinway-standalone-shell) body,
 html:has(.pinway-route-root) body {
-  min-height: 100dvh;
-  min-height: 100svh;
+  min-height: 0;
   min-width: 0;
   background: var(--bos-ims-canvas, var(--bg-0, #f4f6fb));
   position: relative;
 }
 
-/*
-  Flow shell (standalone phone): one scrolling column.
-  The old nav|scroll|dock flex left a huge empty middle with Convert
-  stranded at the bottom — that was the “still failed” screenshot.
-*/
 .pinway-route-root {
-  position: relative;
-  top: auto;
-  left: auto;
-  right: auto;
+  position: fixed;
+  inset: 0;
   width: 100%;
   max-width: none;
-  min-height: 100dvh;
-  min-height: 100svh;
-  height: auto;
-  max-height: none;
+  height: 100dvh;
+  height: 100svh;
+  max-height: 100dvh;
+  max-height: 100svh;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   overflow-x: clip;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   z-index: 1;
   box-sizing: border-box;
 }
@@ -65,25 +55,26 @@ html:has(.pinway-route-root) body {
   position: relative;
   width: 100%;
   max-width: none;
-  min-height: 100dvh;
-  min-height: 100svh;
-  height: auto;
-  max-height: none;
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
   margin: 0;
   padding: 0;
-  display: block;
-  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   overflow-x: clip;
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
   box-sizing: border-box;
 }
 
 .pinway-standalone-shell > .bos.pinway-ims {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
   width: 100%;
   max-width: 100%;
-  min-height: 100dvh;
-  min-height: 100svh;
-  height: auto;
+  height: 100%;
   margin: 0;
   padding: 0 !important;
 }
@@ -117,13 +108,14 @@ html:has(.pinway-route-root) body {
   background: var(--bos-ims-canvas) !important;
   color: var(--bos-text);
   position: relative;
-  display: block !important;
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 0;
   min-width: 0;
-  min-height: 100dvh;
-  min-height: 100svh;
-  height: auto;
-  max-height: none;
-  overflow: visible !important;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden !important;
   box-sizing: border-box;
 }
 
@@ -134,26 +126,26 @@ html:has(.pinway-route-root) body {
   padding: 0 !important;
 }
 
-/* App column — flow layout stacks nav + content (no stranded bottom dock) */
+/* Native app column: nav + scroll + thumb dock */
 .bos .g2m-app {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   width: 100%;
   max-width: 100%;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .bos .g2m-app--flow {
-  min-height: 100dvh;
-  min-height: 100svh;
-  height: auto;
-  max-height: none;
-  overflow: visible;
-  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  /* same as base — class kept for targeting */
 }
 
 .bos .g2m-app--embedded {
@@ -163,11 +155,9 @@ html:has(.pinway-route-root) body {
   min-height: 0;
   margin-inline: auto;
   overflow: visible;
-  display: flex;
-  flex-direction: column;
 }
 
-/* Content column — natural height, page scrolls (not an empty flex void) */
+/* Scroll pane between sticky nav and thumb dock */
 .bos .g2m {
   position: relative;
   z-index: 1;
@@ -184,14 +174,6 @@ html:has(.pinway-route-root) body {
   padding-right: max(var(--g2m-inset), env(safe-area-inset-right, 0px));
   font-family: var(--bos-font-body);
   color: var(--bos-text);
-  flex: 0 0 auto;
-  min-height: 0;
-  max-height: none;
-  overflow: visible;
-  touch-action: pan-y;
-}
-
-.bos .g2m-app--embedded .g2m {
   flex: 1 1 0%;
   min-height: 0;
   max-height: 100%;
@@ -199,6 +181,7 @@ html:has(.pinway-route-root) body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .bos .g2m.g2m--embedded {

@@ -930,55 +930,6 @@ export function Gmap2MapplsTool({
           ) : null}
         </div>
 
-        {variant === "standalone" ? (
-          <div className="g2m-inline-actions" aria-label="Primary actions">
-            {result && playbook?.primary.kind === "open" && playbook.primary.href ? (
-              <a
-                className="bos-btn bos-btn-primary g2m-cta"
-                href={playbook.primary.href}
-                onClick={(e) => {
-                  e.preventDefault();
-                  void runOpenPrimary(
-                    playbook.primary.href!,
-                    playbook.autoCopyText,
-                    result.paste.mapplsPin,
-                  );
-                }}
-              >
-                {playbook.primary.label}
-              </a>
-            ) : result && playbook ? (
-              <Button
-                variant="primary"
-                className="g2m-cta"
-                disabled={loading || pinwayLocked}
-                onClick={() => void runPrimary()}
-              >
-                {copied === "primary" && playbook.primary.kind === "copy"
-                  ? "Copied — paste in app"
-                  : playbook.primary.label}
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                className="g2m-cta"
-                disabled={loading || pinwayLocked}
-                onClick={() => void resolve(input)}
-              >
-                {loading ? "Matching…" : "Convert & open"}
-              </Button>
-            )}
-            <Button
-              variant="secondary"
-              className="g2m-cta-secondary"
-              disabled={loading || pinwayLocked}
-              onClick={() => void pasteAndFind()}
-            >
-              Paste
-            </Button>
-          </div>
-        ) : null}
-
         {variant === "standalone" && !result && !loading && !error ? (
           <ol className="g2m-howto" aria-label="How it works">
             {G2M_WALKTHROUGH.map((step, i) => (
@@ -1273,59 +1224,58 @@ export function Gmap2MapplsTool({
     </div>
   );
 
-  /* Embedded tool page keeps a bottom dock; standalone phone is one column. */
-  const island =
-    variant === "embedded" ? (
-      <div className="g2m-island-bar">
-        <div className="g2m-island" aria-label="Primary actions">
-          {result && playbook?.primary.kind === "open" && playbook.primary.href ? (
-            <a
-              className="bos-btn bos-btn-primary g2m-cta"
-              href={playbook.primary.href}
-              onClick={(e) => {
-                e.preventDefault();
-                void runOpenPrimary(
-                  playbook.primary.href!,
-                  playbook.autoCopyText,
-                  result.paste.mapplsPin,
-                );
-              }}
-            >
-              {playbook.primary.label}
-            </a>
-          ) : result && playbook ? (
-            <Button
-              variant="primary"
-              className="g2m-cta"
-              disabled={loading || pinwayLocked}
-              onClick={() => void runPrimary()}
-            >
-              {copied === "primary" && playbook.primary.kind === "copy"
-                ? "Copied — paste in app"
-                : playbook.primary.label}
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              className="g2m-cta"
-              disabled={loading || pinwayLocked}
-              onClick={() => void resolve(input)}
-            >
-              {loading ? "Matching…" : "Convert & open"}
-            </Button>
-          )}
-          <Button
-            variant="secondary"
-            className="g2m-cta-secondary"
-            disabled={loading || pinwayLocked}
-            onClick={() => void pasteAndFind()}
+  /* Native thumb-zone dock — always at the physical bottom of the shell */
+  const island = (
+    <div className="g2m-island-bar">
+      <div className="g2m-island" aria-label="Primary actions">
+        {result && playbook?.primary.kind === "open" && playbook.primary.href ? (
+          <a
+            className="bos-btn bos-btn-primary g2m-cta"
+            href={playbook.primary.href}
+            onClick={(e) => {
+              e.preventDefault();
+              void runOpenPrimary(
+                playbook.primary.href!,
+                playbook.autoCopyText,
+                result.paste.mapplsPin,
+              );
+            }}
           >
-            Paste
+            {playbook.primary.label}
+          </a>
+        ) : result && playbook ? (
+          <Button
+            variant="primary"
+            className="g2m-cta"
+            disabled={loading || pinwayLocked}
+            onClick={() => void runPrimary()}
+          >
+            {copied === "primary" && playbook.primary.kind === "copy"
+              ? "Copied — paste in app"
+              : playbook.primary.label}
           </Button>
-        </div>
-        <div className="g2m-home-indicator" aria-hidden />
+        ) : (
+          <Button
+            variant="primary"
+            className="g2m-cta"
+            disabled={loading || pinwayLocked}
+            onClick={() => void resolve(input)}
+          >
+            {loading ? "Matching…" : "Convert & open"}
+          </Button>
+        )}
+        <Button
+          variant="secondary"
+          className="g2m-cta-secondary"
+          disabled={loading || pinwayLocked}
+          onClick={() => void pasteAndFind()}
+        >
+          Paste
+        </Button>
       </div>
-    ) : null;
+      <div className="g2m-home-indicator" aria-hidden />
+    </div>
+  );
 
   return (
     <BosRoot

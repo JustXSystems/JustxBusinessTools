@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { buildForcePhoneInlineScript } from "@jbt/shared";
 import { getBasePath } from "@/lib/base-path";
 
 const base = getBasePath();
@@ -47,11 +48,8 @@ export const viewport: Viewport = {
   interactiveWidget: "resizes-content",
 };
 
-/**
- * Before paint: phone class + CSS-px viewport width (never physical px, never
- * document zoom — zoom left a dead band under the shell on Android).
- */
-const FORCE_PHONE_SCRIPT = `(function(){try{var dpr=window.devicePixelRatio||1;var sw=Math.min(screen.width||0,screen.height||0);var c=window.matchMedia("(pointer: coarse)").matches;var n=window.matchMedia("(hover: none)").matches;var edge=sw>700?sw/dpr:sw;var phone=(c&&n)||(edge>0&&edge<700);var root=document.documentElement;if(phone)root.classList.add("g2m-force-phone");var m=document.querySelector('meta[name="viewport"]');if(!m){m=document.createElement("meta");m.setAttribute("name","viewport");document.head.appendChild(m);}var vvW=window.visualViewport&&window.visualViewport.width;var iw=window.innerWidth;var w=390;if(vvW>=280&&vvW<=520)w=Math.round(vvW);else if(iw>=280&&iw<=520)w=Math.round(iw);else if(sw>=280&&sw<=520)w=Math.round(sw);else if(sw>520&&dpr>=1.5){var css=sw/dpr;if(css>=280&&css<=520)w=Math.round(css);}w=Math.max(320,Math.min(520,w));m.setAttribute("content",phone?("width="+w+", initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"):"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content");root.style.zoom="";root.style.removeProperty("zoom");delete root.dataset.g2mZoom;}catch(e){}})();`;
+/** Pinway reinforces the root phone lock before paint (native full-bleed shell). */
+const FORCE_PHONE_SCRIPT = buildForcePhoneInlineScript();
 
 export default function GoogleMaps2MapplsLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -23,6 +23,28 @@ body {
   letter-spacing: -0.008em;
 }
 
+/*
+  Phone viewport lock (root layout + PhoneViewportLock).
+  Android often ignores width=device-width (~980px layout → shrink-to-fit).
+  Never document-zoom — that left a dead band under every screen.
+*/
+html.jbt-force-phone {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: clip !important;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  zoom: normal !important;
+}
+
+html.jbt-force-phone body {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: clip !important;
+  min-height: 100dvh;
+  min-height: 100svh;
+}
+
 button,
 input,
 select,

@@ -46,6 +46,9 @@ import {
   phoneCssWidth,
   phoneViewportMetaContent,
   shrinkToFitZoom,
+  buildForcePhoneInlineScript,
+  JBT_FORCE_PHONE_CLASS,
+  G2M_FORCE_PHONE_CLASS,
 } from "../gmap2mappls/index";
 
 describe("gmap2mappls phone viewport", () => {
@@ -91,6 +94,15 @@ describe("gmap2mappls phone viewport", () => {
     expect(shrinkToFitZoom(360, 360)).toBe(1);
     expect(shrinkToFitZoom(980, 360)).toBe(1);
     expect(shrinkToFitZoom(1080, 360)).toBe(1);
+  });
+
+  it("builds a before-paint script that locks phone CSS width for all JBT routes", () => {
+    const script = buildForcePhoneInlineScript();
+    expect(script).toContain(JBT_FORCE_PHONE_CLASS);
+    expect(script).toContain(G2M_FORCE_PHONE_CLASS);
+    expect(script).toContain('meta[name="viewport"]');
+    expect(script).toContain("user-scalable=no");
+    expect(script).not.toContain("device-width\","); // phone branch uses numeric width=
   });
 });
 
