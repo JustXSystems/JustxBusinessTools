@@ -19,8 +19,8 @@ public class MainActivity extends BridgeActivity {
   }
 
   /**
-   * Prevent Chrome WebView "overview"/shrink-to-fit zoom that makes the Pinway
-   * UI look like a tiny desktop page on phones.
+   * Native phone layout: honor the page viewport meta at 1×. Overview mode
+   * shrink-to-fits a desktop width into the screen (tiny UI + dead space).
    */
   private void configureWebView() {
     if (getBridge() == null) return;
@@ -29,6 +29,10 @@ public class MainActivity extends BridgeActivity {
     WebSettings settings = webView.getSettings();
     settings.setLoadWithOverviewMode(false);
     settings.setUseWideViewPort(true);
+    settings.setSupportZoom(false);
+    settings.setBuiltInZoomControls(false);
+    settings.setDisplayZoomControls(false);
     settings.setTextZoom(100);
+    webView.setInitialScale(100);
   }
 }

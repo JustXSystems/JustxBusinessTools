@@ -46,8 +46,8 @@ import {
   Button,
   FilterChip,
   Segmented,
+  Input,
   Select,
-  Textarea,
   useBosTheme,
 } from "@/components/bos";
 import "./gmap2mappls/gmap2mappls.css";
@@ -181,7 +181,7 @@ export function Gmap2MapplsTool({
   const [showA2hs, setShowA2hs] = useState(false);
   const [pointer, setPointer] = useState({ x: 50, y: 28 });
   const brandIdRef = useRef(brandId);
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const appHelpTimerRef = useRef<number | null>(null);
   const autoTrialRef = useRef(false);
@@ -899,16 +899,21 @@ export function Gmap2MapplsTool({
           <label className="g2m-field-label" htmlFor="g2m-input">
             Google place
           </label>
-          <Textarea
+          <Input
             id="g2m-input"
             ref={inputRef}
+            type="text"
+            inputMode="url"
+            autoCapitalize="off"
+            autoCorrect="off"
+            enterKeyHint="go"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onFocus={() => void onInputFocus()}
-            placeholder="Paste Google Maps link, address, or lat,lng"
+            placeholder="Paste Maps link, address, or lat,lng"
             spellCheck={false}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              if (e.key === "Enter") {
                 e.preventDefault();
                 void resolve(input);
               }

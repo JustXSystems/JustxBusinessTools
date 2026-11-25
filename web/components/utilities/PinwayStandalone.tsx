@@ -5,7 +5,6 @@ import {
   isPhoneLikeDevice,
   phoneCssWidth,
   phoneViewportMetaContent,
-  shrinkToFitZoom,
 } from "@jbt/shared";
 import { ToastProvider } from "@/components/common/ToastProvider";
 import { ConfigProvider } from "@/components/config/ConfigProvider";
@@ -30,6 +29,7 @@ function currentPhoneCssWidth(): number {
     screenHeight: window.screen.height || 0,
     innerWidth: window.innerWidth,
     visualWidth: window.visualViewport?.width,
+    devicePixelRatio: window.devicePixelRatio || 1,
   });
 }
 
@@ -57,23 +57,13 @@ function ensureViewportMeta(content: string): HTMLMetaElement {
   return meta as HTMLMetaElement;
 }
 
-/**
- * If layout CSS width is still much wider than the phone screen, force a
- * corrective zoom so 16px text is actually readable (Chrome/Android WebView).
- */
-function correctShrinkToFit(): void {
+/** Clear any leftover document zoom from older Pinway builds. */
+function clearDocumentZoom(): void {
   const root = document.documentElement;
-  const target = currentPhoneCssWidth();
-  const layoutW = root.clientWidth || window.innerWidth || target;
-  const zoom = shrinkToFitZoom(layoutW, target);
-  if (zoom < 1) {
-    (root.style as CSSStyleDeclaration & { zoom?: string }).zoom = String(zoom);
-    root.dataset.g2mZoom = String(zoom);
-  } else {
-    (root.style as CSSStyleDeclaration & { zoom?: string }).zoom = "";
-    root.style.removeProperty("zoom");
-    delete root.dataset.g2mZoom;
-  }
+  const zoomStyle = root.style as CSSStyleDeclaration & { zoom?: string };
+  zoomStyle.zoom = "";
+  root.style.removeProperty("zoom");
+  delete root.dataset.g2mZoom;
 }
 
 function applyPhoneShell(): () => void {
@@ -90,7 +80,6 @@ function applyPhoneShell(): () => void {
     bodyOverflowX: body.style.overflowX,
     bodyWidth: body.style.width,
     bodyMaxWidth: body.style.maxWidth,
-    htmlZoom: (html.style as CSSStyleDeclaration & { zoom?: string }).zoom || "",
   };
 
   html.style.overflow = "hidden";
@@ -99,6 +88,7 @@ function applyPhoneShell(): () => void {
   body.style.overflowX = "clip";
   body.style.width = "100%";
   body.style.maxWidth = "100%";
+  clearDocumentZoom();
 
   const metaContent = phone
     ? phoneViewportMetaContent(currentPhoneCssWidth())
@@ -107,13 +97,13 @@ function applyPhoneShell(): () => void {
   const prevViewport = meta.getAttribute("content");
 
   syncVisualViewport();
-  if (phone) correctShrinkToFit();
 
   const onVv = () => {
     syncVisualViewport();
+    clearDocumentZoom();
     if (isPhoneDevice()) {
+      document.documentElement.classList.add(PHONE_CLASS);
       ensureViewportMeta(phoneViewportMetaContent(currentPhoneCssWidth()));
-      correctShrinkToFit();
     }
   };
   window.visualViewport?.addEventListener("resize", onVv);
@@ -129,13 +119,7 @@ function applyPhoneShell(): () => void {
     body.style.overflowX = prev.bodyOverflowX;
     body.style.width = prev.bodyWidth;
     body.style.maxWidth = prev.bodyMaxWidth;
-    const zoomStyle = html.style as CSSStyleDeclaration & { zoom?: string };
-    if (prev.htmlZoom) zoomStyle.zoom = prev.htmlZoom;
-    else {
-      zoomStyle.zoom = "";
-      html.style.removeProperty("zoom");
-    }
-    delete html.dataset.g2mZoom;
+    clearDocumentZoom();
     if (prevViewport != null) meta.setAttribute("content", prevViewport);
     window.visualViewport?.removeEventListener("resize", onVv);
     window.visualViewport?.removeEventListener("scroll", onVv);
@@ -153,10 +137,10 @@ export function PinwayStandalone() {
     // Re-lock after paint — Android WebView often restores a wide layout viewport.
     const timers = [50, 250, 800].map((ms) =>
       window.setTimeout(() => {
+        clearDocumentZoom();
         if (isPhoneDevice()) {
           document.documentElement.classList.add(PHONE_CLASS);
           ensureViewportMeta(phoneViewportMetaContent(currentPhoneCssWidth()));
-          correctShrinkToFit();
         }
         syncVisualViewport();
       }, ms),

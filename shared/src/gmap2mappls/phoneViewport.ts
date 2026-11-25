@@ -1,8 +1,10 @@
 /**
  * Phone viewport helpers for GoogleMaps2Mappls / Pinway.
- * Android WebView often ignores `width=device-width` and lays out ~980px then
- * shrink-to-fits — making the UI look like a tiny desktop page. We lock the
- * meta viewport to the real screen CSS width instead.
+ *
+ * Android WebView / Chrome sometimes reports a wide layout (~980 CSS px) or
+ * physical pixel screen sizes. We lock the viewport meta to a real phone CSS
+ * width (≈360–430). Never use document `zoom` — it leaves a dead band under
+ * the shell and makes the UI look like a shrunk desktop page.
  */
 
 export function isPhoneLikeDevice(opts: {
@@ -11,9 +13,15 @@ export function isPhoneLikeDevice(opts: {
   coarsePointer: boolean;
   noHover: boolean;
 }): boolean {
+  if (opts.coarsePointer && opts.noHover) return true;
   const sw = Math.min(opts.screenWidth || 0, opts.screenHeight || 0);
-  // Phones are typically ≤480 CSS px on the short edge; keep headroom for large phones.
-  return (opts.coarsePointer && opts.noHover) || (sw > 0 && sw < 700);
+  // CSS-px short edge (phones ≈360–430). Physical px without coarse pointer
+  // are treated as desktop — DPR conversion lives in phoneCssWidth only.
+  return sw > 0 && sw < 700;
+}
+
+function inPhoneCssRange(n: number): boolean {
+  return n >= 280 && n <= 520;
 }
 
 /** Portrait phone CSS width to put in the viewport meta `width=` attribute. */
@@ -22,26 +30,38 @@ export function phoneCssWidth(opts: {
   screenHeight: number;
   innerWidth?: number;
   visualWidth?: number;
+  devicePixelRatio?: number;
 }): number {
-  const sw = Math.min(opts.screenWidth || 0, opts.screenHeight || 0);
-  if (sw > 0 && sw < 700) return Math.round(sw);
-  const vv = opts.visualWidth ?? 0;
-  if (vv > 0 && vv < 700) return Math.round(vv);
-  return Math.round(Math.min(opts.innerWidth || 390, 430));
+  const dpr = opts.devicePixelRatio && opts.devicePixelRatio > 0 ? opts.devicePixelRatio : 1;
+  const prefer = [opts.visualWidth, opts.innerWidth];
+  for (const c of prefer) {
+    if (typeof c === "number" && inPhoneCssRange(c)) return Math.round(c);
+  }
+
+  const short = Math.min(opts.screenWidth || 0, opts.screenHeight || 0);
+  if (inPhoneCssRange(short)) return Math.round(short);
+
+  // Some WebViews expose physical px on screen.* — convert via DPR.
+  if (short > 520 && dpr >= 1.5) {
+    const css = short / dpr;
+    if (inPhoneCssRange(css)) return Math.round(css);
+  }
+
+  for (const c of prefer) {
+    if (typeof c === "number" && c > 0) return Math.round(Math.min(c, 430));
+  }
+  return 390;
 }
 
 export function phoneViewportMetaContent(cssWidth: number): string {
-  const w = Math.max(320, Math.round(cssWidth));
+  const w = Math.max(320, Math.min(520, Math.round(cssWidth)));
   return `width=${w}, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content`;
 }
 
 /**
- * Corrective zoom when layout clientWidth is still much wider than the phone
- * screen (Chrome/Android WebView shrink-to-fit). Returns 1 when no correction.
+ * @deprecated Do not apply document zoom. Kept for tests / callers that still
+ * import the symbol — always returns 1 so nothing scales the shell.
  */
-export function shrinkToFitZoom(layoutClientWidth: number, targetCssWidth: number): number {
-  if (!(targetCssWidth > 0) || !(layoutClientWidth > 0)) return 1;
-  if (layoutClientWidth <= targetCssWidth * 1.12) return 1;
-  const z = targetCssWidth / layoutClientWidth;
-  return Math.max(0.35, Math.min(1, Number(z.toFixed(4))));
+export function shrinkToFitZoom(_layoutClientWidth: number, _targetCssWidth: number): number {
+  return 1;
 }

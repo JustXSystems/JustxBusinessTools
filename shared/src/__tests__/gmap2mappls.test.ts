@@ -61,22 +61,36 @@ describe("gmap2mappls phone viewport", () => {
     ).toBe(false);
   });
 
-  it("locks viewport meta to real screen CSS width (not device-width)", () => {
-    // Android screen.* is CSS px (~360–430), not physical px.
+  it("locks viewport meta to real phone CSS width (not device-width / physical px)", () => {
     expect(phoneCssWidth({ screenWidth: 360, screenHeight: 800 })).toBe(360);
     expect(phoneCssWidth({ screenWidth: 412, screenHeight: 915 })).toBe(412);
-    // When layout width wrongly reports ~980 but screen is phone-sized:
-    expect(phoneCssWidth({ screenWidth: 412, screenHeight: 915, innerWidth: 980 })).toBe(412);
+    // Prefer visual/inner when in phone range over a wide layout width:
+    expect(
+      phoneCssWidth({
+        screenWidth: 412,
+        screenHeight: 915,
+        innerWidth: 980,
+        visualWidth: 412,
+      }),
+    ).toBe(412);
+    // Physical px screen.* (common WebView mistake) → convert via DPR:
+    expect(
+      phoneCssWidth({
+        screenWidth: 1080,
+        screenHeight: 2400,
+        devicePixelRatio: 3,
+      }),
+    ).toBe(360);
     const meta = phoneViewportMetaContent(412);
     expect(meta).toContain("width=412");
     expect(meta).not.toContain("device-width");
     expect(meta).toContain("initial-scale=1");
   });
 
-  it("computes shrink-to-fit corrective zoom for 980→360 layouts", () => {
+  it("never applies document zoom (dead-space bug on Android)", () => {
     expect(shrinkToFitZoom(360, 360)).toBe(1);
-    expect(shrinkToFitZoom(980, 360)).toBeCloseTo(360 / 980, 3);
-    expect(shrinkToFitZoom(400, 360)).toBe(1); // within 12% tolerance
+    expect(shrinkToFitZoom(980, 360)).toBe(1);
+    expect(shrinkToFitZoom(1080, 360)).toBe(1);
   });
 });
 
