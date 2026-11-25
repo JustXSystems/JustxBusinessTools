@@ -222,13 +222,6 @@ export function recentResolveQuery(place: Pick<G2mRecentPlace, "input" | "lat" |
   return (place.input || "").trim();
 }
 
-/** Empty-state walkthrough steps (copy for UI). */
-export const G2M_WALKTHROUGH = [
-  { id: "brand", title: "Pick your car brand", body: "SimpleOne, Adrenox, Me4U, Bluelink…" },
-  { id: "paste", title: "Drop a Google place", body: "Share link, address, or lat,lng" },
-  { id: "confirm", title: "Open in your app", body: "Push / send / start navigation" },
-] as const;
-
 export type PinwayStage = "brand" | "place" | "open";
 
 export function emptyStateHint(brandId: string | null | undefined): string {

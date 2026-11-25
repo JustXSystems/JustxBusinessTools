@@ -35,7 +35,6 @@ import {
   recentPlaceLabel,
   recentResolveQuery,
   whatsappStyleGeoUri,
-  G2M_WALKTHROUGH,
   emptyStateHint,
   G2M_RECENT_MAX,
   normalizePinwayAppPath,
@@ -817,8 +816,7 @@ describe("gmap2mappls UX helpers (mobile / OEM usability)", () => {
     ).toBe("https://maps.app.goo.gl/fallback");
   });
 
-  it("ships walkthrough + empty-state hints per OEM", () => {
-    expect(G2M_WALKTHROUGH).toHaveLength(3);
+  it("ships empty-state hints per OEM", () => {
     expect(emptyStateHint("mahindra")).toMatch(/Pin/i);
     expect(emptyStateHint("mahindra")).toMatch(/Push to car/i);
     expect(emptyStateHint("simple-energy")).toMatch(/Simple Connect/i);

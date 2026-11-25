@@ -20,7 +20,6 @@ import {
   formatCoordPair,
   G2M_BRAND_STORAGE_KEY,
   G2M_RECENT_STORAGE_KEY,
-  G2M_WALKTHROUGH,
   isMahindraFamily,
   looksLikeMapsInput,
   parseRecentPlaces,
@@ -929,22 +928,6 @@ export function Gmap2MapplsTool({
             </div>
           ) : null}
         </div>
-
-        {variant === "standalone" && !result && !loading && !error ? (
-          <ol className="g2m-howto" aria-label="How it works">
-            {G2M_WALKTHROUGH.map((step, i) => (
-              <li key={step.id}>
-                <span className="g2m-howto-num" aria-hidden>
-                  {i + 1}
-                </span>
-                <div>
-                  <strong>{step.title}</strong>
-                  <span>{step.body}</span>
-                </div>
-              </li>
-            ))}
-          </ol>
-        ) : null}
 
         <div aria-live="polite" className="g2m-live">
           {error ? <Alert tone="coral" title={error} /> : null}
