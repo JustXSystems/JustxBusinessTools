@@ -15,7 +15,9 @@ export type PromoCode = {
   billingCycle: PromoCycleScope;
   minAmountInr: number;
   maxRedemptions: number | null;
+  maxPerOrg: number | null;
   redemptionsCount: number;
+  totalDiscountInr: number;
   expiresAt: string | null;
   active: boolean;
 };
@@ -61,7 +63,9 @@ export async function ensurePromoCodeSchema(): Promise<void> {
           billing_cycle VARCHAR(12) NOT NULL DEFAULT 'all',
           min_amount_inr DECIMAL(12, 2) NOT NULL DEFAULT 0,
           max_redemptions INT NULL,
+          max_per_org INT NULL DEFAULT 1,
           redemptions_count INT NOT NULL DEFAULT 0,
+          total_discount_inr DECIMAL(12, 2) NOT NULL DEFAULT 0,
           expires_at TIMESTAMP NULL,
           active TINYINT(1) NOT NULL DEFAULT 1,
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -69,7 +73,30 @@ export async function ensurePromoCodeSchema(): Promise<void> {
           PRIMARY KEY (code)
         ) ${INNODB_UTF8MB4_UNICODE}
       `);
-      await ensureTablesUtf8mb4UnicodeCi(["promo_codes"]);
+      for (const ddl of [
+        `ALTER TABLE promo_codes ADD COLUMN max_per_org INT NULL DEFAULT 1`,
+        `ALTER TABLE promo_codes ADD COLUMN total_discount_inr DECIMAL(12, 2) NOT NULL DEFAULT 0`,
+      ]) {
+        try {
+          await pool.query(ddl);
+        } catch {
+          /* column already exists */
+        }
+      }
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS promo_redemptions (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+          code VARCHAR(40) NOT NULL,
+          organization_id BIGINT UNSIGNED NOT NULL,
+          discount_inr DECIMAL(12, 2) NOT NULL DEFAULT 0,
+          order_total_inr DECIMAL(12, 2) NOT NULL DEFAULT 0,
+          billing_cycle VARCHAR(12) NOT NULL DEFAULT 'month',
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          KEY idx_promo_redemptions_code_org (code, organization_id)
+        ) ${INNODB_UTF8MB4_UNICODE}
+      `);
+      await ensureTablesUtf8mb4UnicodeCi(["promo_codes", "promo_redemptions"]);
     })().catch((err: unknown) => {
       schemaReady = null;
       throw err;
@@ -92,7 +119,9 @@ function mapPromo(r: Record<string, unknown>): PromoCode {
     billingCycle: bc === "month" || bc === "year" ? bc : "all",
     minAmountInr: Math.max(0, Number(r.min_amount_inr ?? 0)),
     maxRedemptions: r.max_redemptions == null ? null : Math.max(1, Number(r.max_redemptions)),
+    maxPerOrg: r.max_per_org == null ? null : Math.max(1, Number(r.max_per_org)),
     redemptionsCount: Math.max(0, Number(r.redemptions_count ?? 0)),
+    totalDiscountInr: Math.max(0, Number(r.total_discount_inr ?? 0)),
     expiresAt: r.expires_at ? String(r.expires_at) : null,
     active: Boolean(r.active),
   };
@@ -105,6 +134,7 @@ export function evaluatePromoCode(
     subtotalInr: number;
     userCategory: UserCategory;
     billingCycle: BillingCycle;
+    orgRedemptionsCount?: number;
     now?: Date;
   },
 ): PromoEvaluation {
@@ -123,6 +153,19 @@ export function evaluatePromoCode(
   }
   if (promo.maxRedemptions != null && promo.redemptionsCount >= promo.maxRedemptions) {
     return { ok: false, error: `Promo code ${promo.code} has reached its redemption limit` };
+  }
+  if (
+    promo.maxPerOrg != null &&
+    ctx.orgRedemptionsCount != null &&
+    ctx.orgRedemptionsCount >= promo.maxPerOrg
+  ) {
+    return {
+      ok: false,
+      error:
+        promo.maxPerOrg === 1
+          ? `Promo code ${promo.code} has already been used by this workspace`
+          : `Promo code ${promo.code} reached the per-workspace limit (${promo.maxPerOrg})`,
+    };
   }
   if (promo.userCategory !== "all" && promo.userCategory !== ctx.userCategory) {
     const target =
@@ -198,6 +241,7 @@ export async function upsertPromoCode(input: {
   billingCycle?: PromoCycleScope;
   minAmountInr?: number;
   maxRedemptions?: number | null;
+  maxPerOrg?: number | null;
   expiresAt?: string | null;
   active?: boolean;
 }): Promise<PromoCode> {
@@ -222,15 +266,21 @@ export async function upsertPromoCode(input: {
     input.maxRedemptions == null || Number(input.maxRedemptions) <= 0
       ? null
       : Math.floor(Number(input.maxRedemptions));
+  const maxPerOrg =
+    input.maxPerOrg === undefined
+      ? 1
+      : input.maxPerOrg == null || Number(input.maxPerOrg) <= 0
+        ? null
+        : Math.floor(Number(input.maxPerOrg));
   const expiresAt = input.expiresAt?.trim() ? input.expiresAt.trim() : null;
   const active = input.active === false ? 0 : 1;
 
   await pool.query(
     `INSERT INTO promo_codes
        (code, description, discount_type, discount_value, user_category, billing_cycle,
-        min_amount_inr, max_redemptions, expires_at, active)
+        min_amount_inr, max_redemptions, max_per_org, expires_at, active)
      VALUES (:code, :description, :discountType, :discountValue, :userCategory, :billingCycle,
-        :minAmountInr, :maxRedemptions, :expiresAt, :active)
+        :minAmountInr, :maxRedemptions, :maxPerOrg, :expiresAt, :active)
      ON DUPLICATE KEY UPDATE
        description = VALUES(description),
        discount_type = VALUES(discount_type),
@@ -239,6 +289,7 @@ export async function upsertPromoCode(input: {
        billing_cycle = VALUES(billing_cycle),
        min_amount_inr = VALUES(min_amount_inr),
        max_redemptions = VALUES(max_redemptions),
+       max_per_org = VALUES(max_per_org),
        expires_at = VALUES(expires_at),
        active = VALUES(active)`,
     {
@@ -250,6 +301,7 @@ export async function upsertPromoCode(input: {
       billingCycle,
       minAmountInr,
       maxRedemptions,
+      maxPerOrg,
       expiresAt,
       active,
     },
@@ -264,6 +316,52 @@ export async function deletePromoCode(rawCode: string): Promise<void> {
   const code = normalizePromoCode(rawCode);
   if (!code) return;
   await pool.query(`DELETE FROM promo_codes WHERE code = :code`, { code });
+}
+
+export async function countOrgPromoRedemptions(rawCode: string, orgId: number): Promise<number> {
+  const code = normalizePromoCode(rawCode);
+  if (!code || !orgId) return 0;
+  try {
+    await ensurePromoCodeSchema();
+    const [rows] = await pool.query(
+      `SELECT COUNT(*) AS cnt FROM promo_redemptions WHERE code = :code AND organization_id = :orgId`,
+      { code, orgId },
+    );
+    const row = Array.isArray(rows) ? (rows[0] as { cnt?: number } | undefined) : undefined;
+    return Math.max(0, Number(row?.cnt ?? 0));
+  } catch {
+    return 0;
+  }
+}
+
+export async function recordPromoRedemption(opts: {
+  code: string;
+  orgId: number;
+  discountInr: number;
+  orderTotalInr: number;
+  billingCycle: BillingCycle;
+}): Promise<void> {
+  const code = normalizePromoCode(opts.code);
+  if (!code) return;
+  const discount = Math.max(0, Number(opts.discountInr) || 0);
+  const total = Math.max(0, Number(opts.orderTotalInr) || 0);
+  try {
+    await ensurePromoCodeSchema();
+    await pool.query(
+      `INSERT INTO promo_redemptions (code, organization_id, discount_inr, order_total_inr, billing_cycle)
+       VALUES (:code, :orgId, :discount, :total, :cycle)`,
+      { code, orgId: opts.orgId, discount, total, cycle: opts.billingCycle },
+    );
+    await pool.query(
+      `UPDATE promo_codes
+       SET redemptions_count = redemptions_count + 1,
+           total_discount_inr = total_discount_inr + :discount
+       WHERE code = :code`,
+      { code, discount },
+    );
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function incrementPromoRedemption(rawCode: string): Promise<void> {

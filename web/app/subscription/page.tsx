@@ -111,8 +111,17 @@ export default function SubscriptionPage() {
     const params = new URLSearchParams(window.location.search);
     const addParam = params.get("add");
     const cycleParam = params.get("cycle");
+    const promoParam = params.get("promo")?.trim().toUpperCase();
     if (cycleParam === "year" || cycleParam === "month") {
       setBillingCycle(writeBillingCycle(cycleParam));
+    }
+    if (promoParam) {
+      try {
+        sessionStorage.setItem("jbt_promo_code", promoParam);
+      } catch {
+        /* ignore */
+      }
+      showToast(`Promo code ${promoParam} ready — it will apply automatically at checkout`);
     }
     if (addParam) {
       setCart(addToToolCart(addParam));

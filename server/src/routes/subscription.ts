@@ -44,10 +44,11 @@ import {
   fetchProfileRecordCounts,
 } from "../lib/usage-summary.js";
 import {
+  countOrgPromoRedemptions,
   evaluatePromoCode,
   getPromoCode,
-  incrementPromoRedemption,
   normalizePromoCode,
+  recordPromoRedemption,
 } from "../lib/promo-codes.js";
 import {
   notifyCheckoutStarted,
@@ -484,11 +485,15 @@ router.get("/quote", async (req, res) => {
     let promoError: string | null = null;
 
     if (promoCodeRaw) {
-      const promoRow = await getPromoCode(promoCodeRaw);
+      const [promoRow, orgRedemptionsCount] = await Promise.all([
+        getPromoCode(promoCodeRaw),
+        countOrgPromoRedemptions(promoCodeRaw, orgId),
+      ]);
       const evalRes = evaluatePromoCode(promoRow, {
         subtotalInr,
         userCategory: profileMeta.userCategory,
         billingCycle,
+        orgRedemptionsCount,
       });
       if (evalRes.ok) {
         finalTotalInr = evalRes.finalTotalInr;
@@ -543,21 +548,25 @@ router.post("/upi-claims", async (req, res) => {
     );
     let finalTotalInr = quote.totalInr;
     let appliedPromoNote = "";
+    let appliedPromoDiscount = 0;
     if (promoCodeRaw) {
-      const [promoRow, profileMeta] = await Promise.all([
+      const [promoRow, profileMeta, orgRedemptionsCount] = await Promise.all([
         getPromoCode(promoCodeRaw),
         fetchProfileCategoryMeta(profileId, orgId),
+        countOrgPromoRedemptions(promoCodeRaw, orgId),
       ]);
       const evalRes = evaluatePromoCode(promoRow, {
         subtotalInr: quote.totalInr,
         userCategory: profileMeta.userCategory,
         billingCycle,
+        orgRedemptionsCount,
       });
       if (!evalRes.ok) {
         res.status(400).json({ error: evalRes.error });
         return;
       }
       finalTotalInr = evalRes.finalTotalInr;
+      appliedPromoDiscount = evalRes.discountInr;
       appliedPromoNote = `[Promo ${evalRes.code}: -₹${evalRes.discountInr}]`;
     }
     const payerEmail = String(req.body?.payerEmail ?? "").trim();
@@ -593,7 +602,13 @@ router.post("/upi-claims", async (req, res) => {
       orgName,
     });
     if (promoCodeRaw) {
-      await incrementPromoRedemption(promoCodeRaw);
+      await recordPromoRedemption({
+        code: promoCodeRaw,
+        orgId,
+        discountInr: appliedPromoDiscount,
+        orderTotalInr: finalTotalInr,
+        billingCycle,
+      });
     }
     res.status(201).json({
       claim,
@@ -621,21 +636,25 @@ router.post("/checkout", async (req, res) => {
       orgId,
     );
     let finalTotalInr = quote.totalInr;
+    let appliedPromoDiscount = 0;
     if (promoCodeRaw) {
-      const [promoRow, profileMeta] = await Promise.all([
+      const [promoRow, profileMeta, orgRedemptionsCount] = await Promise.all([
         getPromoCode(promoCodeRaw),
         fetchProfileCategoryMeta(profileId, orgId),
+        countOrgPromoRedemptions(promoCodeRaw, orgId),
       ]);
       const evalRes = evaluatePromoCode(promoRow, {
         subtotalInr: quote.totalInr,
         userCategory: profileMeta.userCategory,
         billingCycle,
+        orgRedemptionsCount,
       });
       if (!evalRes.ok) {
         res.status(400).json({ error: evalRes.error });
         return;
       }
       finalTotalInr = evalRes.finalTotalInr;
+      appliedPromoDiscount = evalRes.discountInr;
     }
     const gatewayId = Number(req.body?.gatewayId ?? 0);
     let providerName = getConfiguredProviderName();
@@ -676,7 +695,13 @@ router.post("/checkout", async (req, res) => {
       billingCycle,
     });
     if (promoCodeRaw) {
-      await incrementPromoRedemption(promoCodeRaw);
+      await recordPromoRedemption({
+        code: promoCodeRaw,
+        orgId,
+        discountInr: appliedPromoDiscount,
+        orderTotalInr: finalTotalInr,
+        billingCycle,
+      });
     }
 
     const autoComplete = process.env.PAYMENT_AUTO_COMPLETE === "true";

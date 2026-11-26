@@ -11,7 +11,9 @@ function makePromo(partial: Partial<PromoCode> = {}): PromoCode {
     billingCycle: "all",
     minAmountInr: 0,
     maxRedemptions: null,
+    maxPerOrg: 1,
     redemptionsCount: 0,
+    totalDiscountInr: 0,
     expiresAt: null,
     active: true,
     ...partial,
@@ -94,5 +96,26 @@ describe("promo-codes", () => {
       now,
     });
     expect(maxed.ok).toBe(false);
+
+    const orgReused = evaluatePromoCode(makePromo({ maxPerOrg: 1 }), {
+      subtotalInr: 1000,
+      userCategory: "business",
+      billingCycle: "month",
+      orgRedemptionsCount: 1,
+      now,
+    });
+    expect(orgReused.ok).toBe(false);
+    if (!orgReused.ok) {
+      expect(orgReused.error).toMatch(/already been used/i);
+    }
+
+    const orgAllowedMulti = evaluatePromoCode(makePromo({ maxPerOrg: 2 }), {
+      subtotalInr: 1000,
+      userCategory: "business",
+      billingCycle: "month",
+      orgRedemptionsCount: 1,
+      now,
+    });
+    expect(orgAllowedMulti.ok).toBe(true);
   });
 });

@@ -15,7 +15,9 @@ type PromoRow = {
   billingCycle: "all" | "month" | "year";
   minAmountInr: number;
   maxRedemptions: number | null;
+  maxPerOrg: number | null;
   redemptionsCount: number;
+  totalDiscountInr: number;
   expiresAt: string | null;
   active: boolean;
 };
@@ -29,6 +31,7 @@ const EMPTY_FORM = {
   billingCycle: "all" as "all" | "month" | "year",
   minAmountInr: "0",
   maxRedemptions: "",
+  maxPerOrg: "1",
   expiresAt: "",
   active: true,
 };
@@ -70,6 +73,7 @@ export function PromoCodesPanel({
           billingCycle: form.billingCycle,
           minAmountInr: Number(form.minAmountInr || 0),
           maxRedemptions: form.maxRedemptions.trim() ? Number(form.maxRedemptions) : null,
+          maxPerOrg: form.maxPerOrg.trim() ? Number(form.maxPerOrg) : null,
           expiresAt: form.expiresAt.trim() || null,
           active: form.active,
         }),
@@ -107,9 +111,21 @@ export function PromoCodesPanel({
       billingCycle: p.billingCycle,
       minAmountInr: String(p.minAmountInr),
       maxRedemptions: p.maxRedemptions == null ? "" : String(p.maxRedemptions),
+      maxPerOrg: p.maxPerOrg == null ? "" : String(p.maxPerOrg),
       expiresAt: p.expiresAt ? p.expiresAt.slice(0, 10) : "",
       active: p.active,
     });
+  }
+
+  async function copyShareLink(p: PromoRow) {
+    const cycleQuery = p.billingCycle !== "all" ? `&cycle=${p.billingCycle}` : "";
+    const url = `${window.location.origin}/subscription?promo=${encodeURIComponent(p.code)}${cycleQuery}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      onMessage(`Copied campaign link for ${p.code}`);
+    } catch {
+      onMessage(`Campaign URL: ${url}`);
+    }
   }
 
   const columns: ReadonlyArray<BosColumn<PromoRow>> = [
@@ -147,7 +163,24 @@ export function PromoCodesPanel({
       key: "uses",
       header: "Uses",
       mono: true,
-      cell: (p) => `${p.redemptionsCount}${p.maxRedemptions != null ? ` / ${p.maxRedemptions}` : ""}`,
+      cell: (p) => (
+        <div>
+          <div>
+            {p.redemptionsCount}
+            {p.maxRedemptions != null ? ` / ${p.maxRedemptions}` : ""}
+          </div>
+          <div className="admin-cc-cell-sub">
+            {p.maxPerOrg != null ? `${p.maxPerOrg}/org` : "unlimited/org"}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "saved",
+      header: "Total saved",
+      mono: true,
+      align: "right",
+      cell: (p) => `₹${Math.round(p.totalDiscountInr || 0).toLocaleString("en-IN")}`,
     },
     {
       key: "status",
@@ -164,6 +197,9 @@ export function PromoCodesPanel({
       align: "right",
       cell: (p) => (
         <div className="admin-cc-actions">
+          <Button variant="ghost" size="sm" onClick={() => void copyShareLink(p)}>
+            Copy link
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => edit(p)}>
             Edit
           </Button>
@@ -260,6 +296,14 @@ export function PromoCodesPanel({
               value={form.maxRedemptions}
               placeholder="Unlimited"
               onChange={(e) => setForm({ ...form, maxRedemptions: e.target.value })}
+            />
+            <TextField
+              label="Max uses per workspace"
+              type="number"
+              min={1}
+              value={form.maxPerOrg}
+              placeholder="Unlimited"
+              onChange={(e) => setForm({ ...form, maxPerOrg: e.target.value })}
             />
             <TextField
               label="Expires on (optional)"

@@ -433,6 +433,7 @@ router.post("/promos", async (req, res) => {
       billingCycle: req.body?.billingCycle,
       minAmountInr: req.body?.minAmountInr,
       maxRedemptions: req.body?.maxRedemptions,
+      maxPerOrg: req.body?.maxPerOrg,
       expiresAt: req.body?.expiresAt ?? null,
       active: req.body?.active,
     });

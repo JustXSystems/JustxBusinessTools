@@ -52,16 +52,19 @@ export function SubscriptionStatusStrip() {
           </span>
         </div>
         <div className="home-sub-strip-actions">
+          <Link
+            href={`/subscription/checkout?tool=${encodeURIComponent(expiringTool.toolId)}&cycle=year`}
+            className="btn btn-primary btn-sm"
+          >
+            {isTrial ? "Convert yearly (-17%)" : "Renew yearly (-17%)"}
+          </Link>
           <button
             type="button"
-            className="btn btn-primary btn-sm"
+            className="btn btn-ghost btn-sm"
             onClick={() => openUpgrade(expiringTool.toolId)}
           >
-            {isTrial ? "Convert to paid" : "Renew now"}
+            Monthly / store
           </button>
-          <Link href="/subscription?cycle=year" className="btn btn-ghost btn-sm">
-            Save 17% yearly
-          </Link>
         </div>
       </div>
     );
@@ -86,13 +89,12 @@ export function SubscriptionStatusStrip() {
         </div>
         <div className="home-sub-strip-actions">
           {firstAlert ? (
-            <button
-              type="button"
+            <Link
+              href={`/subscription/checkout?tool=${encodeURIComponent(firstAlert.toolId)}&cycle=year`}
               className="btn btn-primary btn-sm"
-              onClick={() => openUpgrade(firstAlert.toolId)}
             >
               Upgrade {firstAlert.name}
-            </button>
+            </Link>
           ) : null}
           <Link href="/subscription" className="btn btn-secondary btn-sm">
             View usage →

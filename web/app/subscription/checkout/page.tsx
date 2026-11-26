@@ -17,6 +17,7 @@ import {
   readToolCart,
   setPackCart,
   writeBillingCycle,
+  writeToolCart,
 } from "@/lib/tool-cart";
 import { formatInr } from "@/lib/subscription-store-helpers";
 import type { BillingCycle, CartQuote } from "@/lib/types/subscription";
@@ -37,6 +38,7 @@ export default function SubscriptionCheckoutPage() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("month");
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState("");
+  const [hydratedParams, setHydratedParams] = useState(false);
 
   const catalog = subscription?.catalog ?? [];
   const packs = subscription?.packs ?? [];
@@ -47,8 +49,47 @@ export default function SubscriptionCheckoutPage() {
     [catalog, packs],
   );
 
+  // Hydrate deep-link parameters (?tool=..., ?tools=a,b, ?pack=..., ?cycle=year|month, ?promo=CODE)
   useEffect(() => {
-    setBillingCycle(readBillingCycle());
+    const params = new URLSearchParams(window.location.search);
+    const cycleParam = params.get("cycle");
+    const initialCycle: BillingCycle =
+      cycleParam === "year" || cycleParam === "month"
+        ? writeBillingCycle(cycleParam)
+        : readBillingCycle();
+    setBillingCycle(initialCycle);
+
+    const singleTool = params.get("tool")?.trim();
+    const multiTools = params.get("tools")?.trim();
+    const packParam = params.get("pack")?.trim();
+    if (packParam) {
+      setPackCart(packParam, []);
+      setBundleId(packParam);
+    } else if (singleTool || multiTools) {
+      const ids = Array.from(
+        new Set(
+          [
+            ...(singleTool ? [singleTool] : []),
+            ...(multiTools ? multiTools.split(",") : []),
+          ]
+            .map((s) => s.trim())
+            .filter(Boolean),
+        ),
+      );
+      if (ids.length > 0) {
+        writeToolCart(ids);
+        setBundleId(null);
+      }
+    }
+
+    const promoParam =
+      params.get("promo")?.trim().toUpperCase() ||
+      (typeof window !== "undefined" ? sessionStorage.getItem("jbt_promo_code") || "" : "");
+    if (promoParam) {
+      setPromoInput(promoParam);
+      setAppliedPromo(promoParam);
+    }
+    setHydratedParams(true);
   }, []);
 
   const loadQuote = useCallback(async (cycleOverride?: BillingCycle, promoOverride?: string) => {
@@ -80,8 +121,9 @@ export default function SubscriptionCheckoutPage() {
   }, [refresh]);
 
   useEffect(() => {
+    if (!hydratedParams) return;
     void loadQuote(billingCycle, appliedPromo);
-  }, [loadQuote, priceFingerprint, billingCycle, appliedPromo]);
+  }, [hydratedParams, loadQuote, priceFingerprint, billingCycle, appliedPromo]);
 
   useEffect(() => {
     const onResolved = () => {
@@ -94,13 +136,13 @@ export default function SubscriptionCheckoutPage() {
   }, [refresh, router, showToast]);
 
   useEffect(() => {
-    if (loading || quoting) return;
+    if (!hydratedParams || loading || quoting) return;
     if (pending?.status === "pending") return;
     if (quote || quoteError) return;
-    if (readToolCart().length === 0) {
+    if (readToolCart().length === 0 && !readActivePack()) {
       router.replace("/subscription");
     }
-  }, [loading, quoting, pending, quote, quoteError, router]);
+  }, [hydratedParams, loading, quoting, pending, quote, quoteError, router]);
 
   function handleCycleSwitch(next: BillingCycle) {
     const saved = writeBillingCycle(next);
@@ -123,6 +165,11 @@ export default function SubscriptionCheckoutPage() {
 
   async function onPaid() {
     clearToolCart();
+    try {
+      sessionStorage.removeItem("jbt_promo_code");
+    } catch {
+      /* ignore */
+    }
     await refresh();
     router.push("/subscription");
   }
@@ -261,6 +308,11 @@ export default function SubscriptionCheckoutPage() {
                   onClick={() => {
                     setPromoInput("");
                     setAppliedPromo("");
+                    try {
+                      sessionStorage.removeItem("jbt_promo_code");
+                    } catch {
+                      /* ignore */
+                    }
                   }}
                 >
                   Clear
