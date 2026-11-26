@@ -121,6 +121,9 @@ type RenewalCandidate = {
   periodEnd: string;
   daysLeft: number;
   mrrInr: number;
+  toolId?: string | null;
+  toolName?: string | null;
+  isTrial?: boolean;
 };
 
 type Tab = "tenants" | "packs" | "promos" | "modes" | "renewals" | "notices";
@@ -582,9 +585,20 @@ export default function AdminSubscriptionsPage() {
       key: "days",
       header: "Due",
       cell: (c) => (
-        <Badge auto tone={c.daysLeft <= 3 ? "coral" : "amber"}>
-          {c.daysLeft}d
-        </Badge>
+        <div className="admin-cc-actions">
+          {c.isTrial ? (
+            <Badge auto tone="lavender">
+              Trial
+            </Badge>
+          ) : c.toolId ? (
+            <Badge auto tone="blue">
+              Tool
+            </Badge>
+          ) : null}
+          <Badge auto tone={c.daysLeft <= 3 ? "coral" : "amber"}>
+            {c.daysLeft}d
+          </Badge>
+        </div>
       ),
     },
     { key: "mrr", header: "MRR", align: "right", mono: true, cell: (c) => inr(c.mrrInr) },
@@ -1105,7 +1119,7 @@ export default function AdminSubscriptionsPage() {
                   caption="Renewals due within 14 days"
                   columns={renewalColumns}
                   rows={renewals}
-                  rowKey={(c) => String(c.organizationId)}
+                  rowKey={(c) => `${c.organizationId}:${c.planId}:${c.periodEnd}`}
                 />
               </div>
             )}
