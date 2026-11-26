@@ -332,6 +332,33 @@ export default function SubscriptionCheckoutPage() {
             </form>
           ) : null}
 
+          {pending?.status !== "pending" &&
+          quote?.availablePromos &&
+          quote.availablePromos.length > 0 ? (
+            <div className="co-promo-chips" aria-label="Eligible promo offers">
+              <span className="co-promo-chips-label">Eligible offers:</span>
+              {quote.availablePromos.map((offer) => {
+                const isApplied = quote.promo?.code === offer.code;
+                return (
+                  <button
+                    key={offer.code}
+                    type="button"
+                    className={`co-promo-chip${isApplied ? " is-applied" : ""}`}
+                    onClick={() => {
+                      setPromoInput(offer.code);
+                      setAppliedPromo(offer.code);
+                    }}
+                  >
+                    <strong>{offer.code}</strong>
+                    <span>
+                      {isApplied ? "Applied" : `Save ${formatInr(offer.discountInr)}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
           {quote?.promo ? (
             <>
               <div className="store-cart-subtotal">

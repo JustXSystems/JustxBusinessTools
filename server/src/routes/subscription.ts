@@ -47,6 +47,7 @@ import {
   countOrgPromoRedemptions,
   evaluatePromoCode,
   getPromoCode,
+  listEligiblePublicPromos,
   normalizePromoCode,
   recordPromoRedemption,
 } from "../lib/promo-codes.js";
@@ -508,6 +509,13 @@ router.get("/quote", async (req, res) => {
       }
     }
 
+    const availablePromos = await listEligiblePublicPromos({
+      orgId,
+      subtotalInr,
+      userCategory: profileMeta.userCategory,
+      billingCycle,
+    });
+
     const cycleSuffix = billingCycle === "year" ? " (1Y)" : "";
     const label = isBundleQuote(quote)
       ? `${BRAND_DEFAULTS.appName} ${quote.packName}${cycleSuffix}`.slice(0, 50)
@@ -518,6 +526,7 @@ router.get("/quote", async (req, res) => {
       totalInr: finalTotalInr,
       promo,
       promoError,
+      availablePromos,
       recommendedPack,
       upi: {
         ...publicPayee(payee),

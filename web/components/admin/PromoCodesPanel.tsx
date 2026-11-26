@@ -20,6 +20,7 @@ type PromoRow = {
   totalDiscountInr: number;
   expiresAt: string | null;
   active: boolean;
+  featured?: boolean;
 };
 
 const EMPTY_FORM = {
@@ -34,6 +35,7 @@ const EMPTY_FORM = {
   maxPerOrg: "1",
   expiresAt: "",
   active: true,
+  featured: true,
 };
 
 export function PromoCodesPanel({
@@ -76,6 +78,7 @@ export function PromoCodesPanel({
           maxPerOrg: form.maxPerOrg.trim() ? Number(form.maxPerOrg) : null,
           expiresAt: form.expiresAt.trim() || null,
           active: form.active,
+          featured: form.featured,
         }),
       });
       onMessage(`Promo code ${form.code.trim().toUpperCase()} saved.`);
@@ -114,6 +117,7 @@ export function PromoCodesPanel({
       maxPerOrg: p.maxPerOrg == null ? "" : String(p.maxPerOrg),
       expiresAt: p.expiresAt ? p.expiresAt.slice(0, 10) : "",
       active: p.active,
+      featured: p.featured !== false,
     });
   }
 
@@ -315,6 +319,11 @@ export function PromoCodesPanel({
               label="Active"
               checked={form.active}
               onChange={(active) => setForm({ ...form, active })}
+            />
+            <SwitchField
+              label="Show as 1-click offer in checkout"
+              checked={form.featured}
+              onChange={(featured) => setForm({ ...form, featured })}
             />
           </FormGrid>
         </form>

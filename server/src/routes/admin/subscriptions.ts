@@ -511,6 +511,7 @@ router.post("/promos", async (req, res) => {
       maxPerOrg: req.body?.maxPerOrg,
       expiresAt: req.body?.expiresAt ?? null,
       active: req.body?.active,
+      featured: req.body?.featured,
     });
     await logAudit("promo.upsert", "promo_code", promo.code, {
       discountType: promo.discountType,

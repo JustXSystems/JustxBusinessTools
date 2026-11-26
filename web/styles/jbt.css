@@ -14558,4 +14558,56 @@ html[data-scheme="light"] .field textarea {
   margin-bottom: 4px;
 }
 
+.co-promo-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.co-promo-chips-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-lo);
+  font-weight: 700;
+}
+
+.co-promo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px dashed rgba(16, 185, 129, 0.55);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--text-hi);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.co-promo-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(16, 185, 129, 0.9);
+  background: rgba(16, 185, 129, 0.18);
+}
+
+.co-promo-chip.is-applied {
+  border-style: solid;
+  border-color: rgba(16, 185, 129, 0.9);
+  background: rgba(16, 185, 129, 0.22);
+}
+
+.co-promo-chip strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.03em;
+}
+
+.co-promo-chip span {
+  color: #34d399;
+  font-weight: 600;
+}
+
 

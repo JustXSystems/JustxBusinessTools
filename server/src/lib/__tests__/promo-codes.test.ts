@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { evaluatePromoCode, normalizePromoCode, type PromoCode } from "../promo-codes.js";
+import {
+  evaluatePromoCode,
+  filterEligiblePublicPromos,
+  normalizePromoCode,
+  type PromoCode,
+} from "../promo-codes.js";
 
 function makePromo(partial: Partial<PromoCode> = {}): PromoCode {
   return {
@@ -16,6 +21,7 @@ function makePromo(partial: Partial<PromoCode> = {}): PromoCode {
     totalDiscountInr: 0,
     expiresAt: null,
     active: true,
+    featured: true,
     ...partial,
   };
 }
@@ -117,5 +123,23 @@ describe("promo-codes", () => {
       now,
     });
     expect(orgAllowedMulti.ok).toBe(true);
+  });
+
+  it("filters and ranks featured public promos by highest discount and excludes used/hidden promos", () => {
+    const promos: PromoCode[] = [
+      makePromo({ code: "SMALL10", discountType: "percent", discountValue: 10, featured: true }),
+      makePromo({ code: "BIG300", discountType: "flat_inr", discountValue: 300, featured: true }),
+      makePromo({ code: "SECRET50", discountType: "percent", discountValue: 50, featured: false }),
+      makePromo({ code: "USED25", discountType: "percent", discountValue: 25, maxPerOrg: 1, featured: true }),
+      makePromo({ code: "ENTONLY", discountType: "percent", discountValue: 40, userCategory: "enterprise", featured: true }),
+    ];
+    const offers = filterEligiblePublicPromos(promos, {
+      subtotalInr: 1000,
+      userCategory: "business",
+      billingCycle: "year",
+      orgRedemptionsByCode: new Map([["USED25", 1]]),
+    });
+    expect(offers.map((o) => o.code)).toEqual(["BIG300", "SMALL10"]);
+    expect(offers[0].discountInr).toBe(300);
   });
 });

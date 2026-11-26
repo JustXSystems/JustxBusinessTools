@@ -20,6 +20,17 @@ export type PromoCode = {
   totalDiscountInr: number;
   expiresAt: string | null;
   active: boolean;
+  featured: boolean;
+};
+
+export type EligiblePromoOffer = {
+  code: string;
+  description: string | null;
+  label: string;
+  discountInr: number;
+  finalTotalInr: number;
+  billingCycle: PromoCycleScope;
+  userCategory: PromoUserScope;
 };
 
 export type PromoEvaluationOk = {
@@ -68,6 +79,7 @@ export async function ensurePromoCodeSchema(): Promise<void> {
           total_discount_inr DECIMAL(12, 2) NOT NULL DEFAULT 0,
           expires_at TIMESTAMP NULL,
           active TINYINT(1) NOT NULL DEFAULT 1,
+          featured TINYINT(1) NOT NULL DEFAULT 1,
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (code)
@@ -76,6 +88,7 @@ export async function ensurePromoCodeSchema(): Promise<void> {
       for (const ddl of [
         `ALTER TABLE promo_codes ADD COLUMN max_per_org INT NULL DEFAULT 1`,
         `ALTER TABLE promo_codes ADD COLUMN total_discount_inr DECIMAL(12, 2) NOT NULL DEFAULT 0`,
+        `ALTER TABLE promo_codes ADD COLUMN featured TINYINT(1) NOT NULL DEFAULT 1`,
       ]) {
         try {
           await pool.query(ddl);
@@ -124,6 +137,7 @@ function mapPromo(r: Record<string, unknown>): PromoCode {
     totalDiscountInr: Math.max(0, Number(r.total_discount_inr ?? 0)),
     expiresAt: r.expires_at ? String(r.expires_at) : null,
     active: Boolean(r.active),
+    featured: r.featured == null ? true : Boolean(r.featured),
   };
 }
 
@@ -244,6 +258,7 @@ export async function upsertPromoCode(input: {
   maxPerOrg?: number | null;
   expiresAt?: string | null;
   active?: boolean;
+  featured?: boolean;
 }): Promise<PromoCode> {
   await ensurePromoCodeSchema();
   const code = normalizePromoCode(input.code);
@@ -274,13 +289,14 @@ export async function upsertPromoCode(input: {
         : Math.floor(Number(input.maxPerOrg));
   const expiresAt = input.expiresAt?.trim() ? input.expiresAt.trim() : null;
   const active = input.active === false ? 0 : 1;
+  const featured = input.featured === false ? 0 : 1;
 
   await pool.query(
     `INSERT INTO promo_codes
        (code, description, discount_type, discount_value, user_category, billing_cycle,
-        min_amount_inr, max_redemptions, max_per_org, expires_at, active)
+        min_amount_inr, max_redemptions, max_per_org, expires_at, active, featured)
      VALUES (:code, :description, :discountType, :discountValue, :userCategory, :billingCycle,
-        :minAmountInr, :maxRedemptions, :maxPerOrg, :expiresAt, :active)
+        :minAmountInr, :maxRedemptions, :maxPerOrg, :expiresAt, :active, :featured)
      ON DUPLICATE KEY UPDATE
        description = VALUES(description),
        discount_type = VALUES(discount_type),
@@ -291,7 +307,8 @@ export async function upsertPromoCode(input: {
        max_redemptions = VALUES(max_redemptions),
        max_per_org = VALUES(max_per_org),
        expires_at = VALUES(expires_at),
-       active = VALUES(active)`,
+       active = VALUES(active),
+       featured = VALUES(featured)`,
     {
       code,
       description: input.description?.trim()?.slice(0, 180) || null,
@@ -304,6 +321,7 @@ export async function upsertPromoCode(input: {
       maxPerOrg,
       expiresAt,
       active,
+      featured,
     },
   );
   const saved = await getPromoCode(code);
@@ -375,5 +393,76 @@ export async function incrementPromoRedemption(rawCode: string): Promise<void> {
     );
   } catch {
     /* ignore */
+  }
+}
+
+/** Pure filter + ranker returning featured promos applicable to a given checkout context, highest savings first. */
+export function filterEligiblePublicPromos(
+  promos: PromoCode[],
+  ctx: {
+    subtotalInr: number;
+    userCategory: UserCategory;
+    billingCycle: BillingCycle;
+    orgRedemptionsByCode?: Map<string, number>;
+    now?: Date;
+  },
+): EligiblePromoOffer[] {
+  const offers: EligiblePromoOffer[] = [];
+  for (const promo of promos) {
+    if (!promo.active || !promo.featured) continue;
+    const orgUsed = ctx.orgRedemptionsByCode?.get(promo.code) ?? 0;
+    const res = evaluatePromoCode(promo, {
+      subtotalInr: ctx.subtotalInr,
+      userCategory: ctx.userCategory,
+      billingCycle: ctx.billingCycle,
+      orgRedemptionsCount: orgUsed,
+      now: ctx.now,
+    });
+    if (res.ok && res.discountInr > 0) {
+      offers.push({
+        code: res.code,
+        description: res.description,
+        label: res.label,
+        discountInr: res.discountInr,
+        finalTotalInr: res.finalTotalInr,
+        billingCycle: promo.billingCycle,
+        userCategory: promo.userCategory,
+      });
+    }
+  }
+  return offers.sort((a, b) => b.discountInr - a.discountInr);
+}
+
+export async function listEligiblePublicPromos(ctx: {
+  orgId: number;
+  subtotalInr: number;
+  userCategory: UserCategory;
+  billingCycle: BillingCycle;
+}): Promise<EligiblePromoOffer[]> {
+  try {
+    await ensurePromoCodeSchema();
+    const [promos, redRowsRes] = await Promise.all([
+      listPromoCodes(),
+      pool.query(
+        `SELECT code, COUNT(*) AS cnt FROM promo_redemptions
+         WHERE organization_id = :orgId
+         GROUP BY code`,
+        { orgId: ctx.orgId },
+      ),
+    ]);
+    const orgRedemptionsByCode = new Map<string, number>();
+    const redRows = redRowsRes[0];
+    for (const row of Array.isArray(redRows) ? redRows : []) {
+      const r = row as { code?: string; cnt?: number };
+      if (r.code) orgRedemptionsByCode.set(String(r.code), Number(r.cnt ?? 0));
+    }
+    return filterEligiblePublicPromos(promos, {
+      subtotalInr: ctx.subtotalInr,
+      userCategory: ctx.userCategory,
+      billingCycle: ctx.billingCycle,
+      orgRedemptionsByCode,
+    }).slice(0, 4);
+  } catch {
+    return [];
   }
 }

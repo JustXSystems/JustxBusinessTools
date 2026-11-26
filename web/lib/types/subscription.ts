@@ -155,6 +155,15 @@ export type CartQuote = {
     label: string;
   } | null;
   promoError?: string | null;
+  availablePromos?: Array<{
+    code: string;
+    description: string | null;
+    label: string;
+    discountInr: number;
+    finalTotalInr: number;
+    billingCycle: "all" | BillingCycle;
+    userCategory: "all" | UserCategory;
+  }>;
   recommendedPack?: PackRecommendation | null;
   upi?: UpiPayInfo;
 };
