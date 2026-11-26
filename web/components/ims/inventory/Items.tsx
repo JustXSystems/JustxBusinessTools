@@ -23,7 +23,18 @@ import {
 } from "@/components/bos";
 import { errorText, ims, type ImsItem, type StockStatus } from "@/lib/ims/api";
 import { downloadCsv, downloadXlsx, inr, inrExact, qtyText, readSheet, stockBadge, todayLocal, type ExportColumn } from "@/lib/ims/format";
-import { IMPORT_FIELDS, autoMap, itemExportColumns, mapRows, nonBlankRows, type MappedRow } from "@/lib/ims/inventory-a";
+import {
+  IMPORT_FIELDS,
+  autoMap,
+  detectSerializedImport,
+  groupSerializedPreview,
+  itemExportColumns,
+  mapRows,
+  nonBlankRows,
+  type ImportMode,
+  type MappedRow,
+  type SerializedPreviewGroup,
+} from "@/lib/ims/inventory-a";
 import { Loaded, PageHeader, Stack, StatusBadge, useIms, useImsAction, useImsData } from "../core";
 import { ItemDialog, type ItemEditorState } from "./ItemDialog";
 import { ItemCell, ItemDetailDialog, useInventoryMeta } from "./ItemDetail";
@@ -74,12 +85,34 @@ const matches = (i: ImsItem, q: string) => {
 
 /* ---------- Import ---------- */
 
-type ImportResult = { created: number; updated: number; errors: string[] };
+type ImportResult = { created: number; updated: number; serialsAdded: number; errors: string[] };
 
 function downloadTemplate() {
   const sample: Record<string, string | number> = Object.fromEntries(IMPORT_FIELDS.map((f) => [f.key, f.sample]));
   const columns: ReadonlyArray<ExportColumn<Record<string, string | number>>> = IMPORT_FIELDS.map((f) => ({ header: f.label, value: (r) => r[f.key] }));
   void downloadXlsx("ims-items-import-template", "Items", [sample], columns);
+}
+
+function downloadSerializedTemplate() {
+  const rows: Array<Record<string, string | number>> = [
+    { name: "Hikvision 2MP Dome Camera", serialNo: "HK-2MP-0001", category: "CCTV", brand: "Hikvision", unit: "pcs", hsn: "8525", gstRate: 18, purchasePrice: 1200, sellingPrice: 1800, mrp: 2200, location: "Rack A1" },
+    { name: "Hikvision 2MP Dome Camera", serialNo: "HK-2MP-0002", category: "CCTV", brand: "Hikvision", unit: "pcs", hsn: "8525", gstRate: 18, purchasePrice: 1200, sellingPrice: 1800, mrp: 2200, location: "Rack A1" },
+    { name: "Hikvision 2MP Dome Camera", serialNo: "HK-2MP-0003", category: "CCTV", brand: "Hikvision", unit: "pcs", hsn: "8525", gstRate: 18, purchasePrice: 1350, sellingPrice: 1800, mrp: 2200, location: "Rack A1" },
+  ];
+  const cols: ReadonlyArray<ExportColumn<Record<string, string | number>>> = [
+    { header: "Item name", value: (r) => r.name },
+    { header: "Serial / Scan code", value: (r) => r.serialNo },
+    { header: "Category", value: (r) => r.category },
+    { header: "Brand", value: (r) => r.brand },
+    { header: "Unit", value: (r) => r.unit },
+    { header: "HSN / SAC", value: (r) => r.hsn },
+    { header: "GST %", value: (r) => r.gstRate },
+    { header: "Purchase price", value: (r) => r.purchasePrice },
+    { header: "Selling price", value: (r) => r.sellingPrice },
+    { header: "MRP", value: (r) => r.mrp },
+    { header: "Location", value: (r) => r.location },
+  ];
+  void downloadXlsx("ims-serialized-units-template", "Units", rows, cols);
 }
 
 function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -88,17 +121,23 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
   const [fileName, setFileName] = useState<string | null>(null);
   const [sheet, setSheet] = useState<{ headers: string[]; rows: Array<Record<string, unknown>> } | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [mode, setMode] = useState<ImportMode>("sku");
+  const [autoDetectedSerialized, setAutoDetectedSerialized] = useState(false);
   const [readError, setReadError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
 
-  const mapped: MappedRow[] = useMemo(() => (sheet ? mapRows(sheet.rows.slice(0, 5000), mapping) : []), [sheet, mapping]);
+  const mapped: MappedRow[] = useMemo(() => (sheet ? mapRows(sheet.rows.slice(0, 5000), mapping, mode) : []), [sheet, mapping, mode]);
   const ready = mapped.filter((r) => !r.issues.length);
   const bad = mapped.filter((r) => r.issues.length);
+  const serializedGroups: SerializedPreviewGroup[] = useMemo(() => (mode === "serialized" ? groupSerializedPreview(ready) : []), [mode, ready]);
+  const hasCodeCol = Boolean(mapping.serialNo || mapping.barcode || mapping.sku);
 
   const reset = () => {
     setFileName(null);
     setSheet(null);
     setMapping({});
+    setMode("sku");
+    setAutoDetectedSerialized(false);
     setReadError(null);
     setResult(null);
   };
@@ -118,9 +157,13 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
         return;
       }
       const headers = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((h) => !h.startsWith("__EMPTY"));
+      const auto = autoMap(headers);
+      const isSerialized = detectSerializedImport(rows, auto);
       setFileName(file.name);
       setSheet({ headers, rows });
-      setMapping(autoMap(headers));
+      setMapping(auto);
+      setMode(isSerialized ? "serialized" : "sku");
+      setAutoDetectedSerialized(isSerialized);
     } catch (err) {
       setReadError(`Couldn't read that file — ${errorText(err)}. Use .xlsx, .xls or .csv.`);
     }
@@ -137,12 +180,16 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
     const out = await run(
       "import",
       async () => {
-        const total: ImportResult = { created: 0, updated: 0, errors: [] };
+        const total: ImportResult = { created: 0, updated: 0, serialsAdded: 0, errors: [] };
         for (let start = 0; start < ready.length; start += 1000) {
           const chunk = ready.slice(start, start + 1000);
-          const r = await ims.importItems(chunk.map((c) => c.record));
+          const r = await ims.importItems(
+            chunk.map((c) => c.record),
+            mode,
+          );
           total.created += r.created;
           total.updated += r.updated;
+          total.serialsAdded += r.serialsAdded ?? 0;
           total.errors.push(
             ...r.errors.map((e) =>
               e.replace(/^Row (\d+)/, (_, n: string) => {
@@ -170,15 +217,44 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
     { key: "ok", header: "", cell: (r) => (r.issues.length ? <Badge tone="coral">CHECK</Badge> : <Badge tone="emerald">READY</Badge>) },
   ];
 
+  const serializedPreviewCols: BosColumn<SerializedPreviewGroup>[] = [
+    { key: "name", header: "Product", cell: (g) => <span className="ims-strong">{g.name}</span> },
+    { key: "category", header: "Category", cell: (g) => g.category ?? "—" },
+    { key: "brand", header: "Brand", cell: (g) => g.brand ?? "—" },
+    { key: "units", header: "Stock qty", align: "right", cell: (g) => <span className="ims-strong">{qtyText(g.units, g.unit)}</span> },
+    { key: "buy", header: "Avg buy", align: "right", cell: (g) => (g.avgPurchasePrice != null ? inrExact(g.avgPurchasePrice) : "—") },
+    { key: "sell", header: "Sell", align: "right", cell: (g) => (g.sellingPrice != null ? inrExact(g.sellingPrice) : "—") },
+    {
+      key: "codes",
+      header: "Scan codes",
+      cell: (g) => (
+        <span className="bos-code" style={{ fontSize: 11 }}>
+          {g.sampleCodes.join(", ")}
+          {g.units > g.sampleCodes.length ? ` +${g.units - g.sampleCodes.length} more` : ""}
+        </span>
+      ),
+    },
+  ];
+
   return (
     <Dialog
       open={open}
       onClose={close}
       dismissible={false}
       title="Import items from Excel / CSV"
-      description="Rows whose SKU already exists update that item; new rows are created (opening stock applies to new items only)."
+      description={
+        mode === "serialized"
+          ? "Each row is one physical unit with a unique scan code. Rows with the same Item name, Category & Brand are grouped into one product and counted automatically."
+          : "Rows whose SKU already exists update that item; new rows are created (opening stock applies to new items only)."
+      }
       icon={{ tone: "blue", name: "file" }}
-      actionsNote={sheet && !result ? `${ready.length} ready · ${bad.length} need fixing` : undefined}
+      actionsNote={
+        sheet && !result
+          ? mode === "serialized"
+            ? `${ready.length} unit${ready.length === 1 ? "" : "s"} → ${serializedGroups.length} product${serializedGroups.length === 1 ? "" : "s"} · ${bad.length} need fixing`
+            : `${ready.length} ready · ${bad.length} need fixing`
+          : undefined
+      }
       actions={
         result ? (
           <>
@@ -195,8 +271,12 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
               Cancel
             </Button>
             {sheet ? (
-              <Button variant="primary" onClick={submit} disabled={!ready.length || busy === "import" || !mapping.name}>
-                {busy === "import" ? "Importing…" : `Import ${ready.length} item${ready.length === 1 ? "" : "s"}`}
+              <Button variant="primary" onClick={submit} disabled={!ready.length || busy === "import" || !mapping.name || (mode === "serialized" && !hasCodeCol)}>
+                {busy === "import"
+                  ? "Importing…"
+                  : mode === "serialized"
+                    ? `Import ${ready.length} unit${ready.length === 1 ? "" : "s"} (${serializedGroups.length} product${serializedGroups.length === 1 ? "" : "s"})`
+                    : `Import ${ready.length} item${ready.length === 1 ? "" : "s"}`}
               </Button>
             ) : null}
           </>
@@ -208,16 +288,22 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
           <Stack gap={12}>
             <div className="ims-inv-tiles">
               <div className="ims-inv-tile">
-                <small>Created</small>
+                <small>{mode === "serialized" ? "Products created" : "Created"}</small>
                 <b className="ims-pos">{result.created}</b>
               </div>
               <div className="ims-inv-tile">
-                <small>Updated</small>
+                <small>{mode === "serialized" ? "Products updated" : "Updated"}</small>
                 <b>{result.updated}</b>
               </div>
+              {mode === "serialized" || result.serialsAdded > 0 ? (
+                <div className="ims-inv-tile">
+                  <small>Units / scan codes added</small>
+                  <b className="ims-pos">{result.serialsAdded}</b>
+                </div>
+              ) : null}
               <div className="ims-inv-tile">
                 <small>Skipped</small>
-                <b className={result.errors.length ? "ims-neg" : undefined}>{result.errors.length + bad.length}</b>
+                <b className={result.errors.length + bad.length ? "ims-neg" : undefined}>{result.errors.length + bad.length}</b>
               </div>
             </div>
             {result.errors.length || bad.length ? (
@@ -252,15 +338,20 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
                 📄
               </span>
               <b>Drop a spreadsheet here, or click to choose</b>
-              <span className="ims-faint">.xlsx, .xls or .csv · first row = headings · up to 5,000 rows</span>
+              <span className="ims-faint">.xlsx, .xls or .csv · supports both product-per-row and unique-scan-code unit-per-row sheets</span>
               <input type="file" accept=".xlsx,.xls,.csv,text/csv" hidden onChange={(e) => void load(e.target.files?.[0])} />
             </label>
             {readError ? <Alert tone="coral" title="Couldn't use that file">{readError}</Alert> : null}
             <div className="ims-between">
-              <span className="ims-faint">Not sure about the format? Start from the template — columns are matched automatically.</span>
-              <Button size="sm" icon="download" onClick={downloadTemplate}>
-                Download template
-              </Button>
+              <span className="ims-faint">Not sure about the format? Download a template — columns are matched automatically.</span>
+              <span className="ims-row" style={{ gap: 8 }}>
+                <Button size="sm" icon="download" onClick={downloadTemplate}>
+                  Product template
+                </Button>
+                <Button size="sm" icon="download" onClick={downloadSerializedTemplate}>
+                  Unit / serial template
+                </Button>
+              </span>
             </div>
           </Stack>
         ) : (
@@ -273,6 +364,25 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
                 Choose another file
               </Button>
             </div>
+            <div className="ims-between" style={{ gap: 10 }}>
+              <span className="ims-faint">How is your sheet structured?</span>
+              <Segmented
+                size="sm"
+                aria-label="Import mode"
+                value={mode}
+                onChange={(v) => setMode(v as ImportMode)}
+                options={[
+                  { value: "sku", label: "One row per product" },
+                  { value: "serialized", label: "One row per physical unit (unique scan code)" },
+                ]}
+              />
+            </div>
+            {autoDetectedSerialized && mode === "serialized" ? (
+              <Alert tone="blue" title="Grouped by product with unique scan codes">
+                Detected repeated product names with unique scan codes — {ready.length} unit{ready.length === 1 ? "" : "s"} will be grouped into{" "}
+                {serializedGroups.length} product{serializedGroups.length === 1 ? "" : "s"} (weighted average purchase price, duplicate scan codes blocked).
+              </Alert>
+            ) : null}
             {sheet.rows.length > 5000 ? <Alert tone="amber" title="Large file">Only the first 5,000 rows can be imported at once; split the rest into another file.</Alert> : null}
             <div>
               <div className="ims-inv-subhead" style={{ marginTop: 0 }}>
@@ -296,11 +406,16 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
               </div>
             </div>
             {!mapping.name ? <Alert tone="coral" title="Pick the column that holds the item name" /> : null}
+            {mode === "serialized" && !hasCodeCol ? <Alert tone="coral" title="Pick the column that holds the unique Serial / Scan code (or Barcode / SKU)" /> : null}
             <div>
               <div className="ims-inv-subhead" style={{ marginTop: 0 }}>
-                Preview
+                {mode === "serialized" ? `Grouped product preview (${serializedGroups.length} products from ${ready.length} units)` : "Preview"}
               </div>
-              <DataTable compact columns={previewCols} rows={[...bad.slice(0, 3), ...ready].slice(0, 8)} rowKey={(r) => String(r.index)} caption="Import preview" />
+              {mode === "serialized" ? (
+                <DataTable compact columns={serializedPreviewCols} rows={serializedGroups.slice(0, 12)} rowKey={(g) => g.key} caption="Grouped serialized import preview" />
+              ) : (
+                <DataTable compact columns={previewCols} rows={[...bad.slice(0, 3), ...ready].slice(0, 8)} rowKey={(r) => String(r.index)} caption="Import preview" />
+              )}
               {bad.length ? (
                 <ul className="ims-inv-errors">
                   {bad.slice(0, 6).map((r) => (

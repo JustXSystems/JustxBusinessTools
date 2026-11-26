@@ -28,6 +28,7 @@ import {
   type StockStatus,
 } from "./logic.js";
 import { inventItemFromBomLine } from "./item-invent.js";
+import { groupSerializedImportRows, type SerialStatus } from "./serials.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo, postMovement, type PostedMovement } from "./stock.js";
 
@@ -58,10 +59,12 @@ export type ItemRow = {
   excise_category: string | null;
   notes: string | null;
   active: number;
+  track_serials?: number;
   last_movement_at: string | null;
   created_at: string;
   updated_at: string;
   moved_30d?: string | null;
+  serial_in_stock?: string | number | null;
 };
 
 export type ImsItem = ReturnType<typeof mapItem>;
@@ -101,6 +104,8 @@ export function mapItem(r: ItemRow, today = todayISO(), agingBreaks?: ReadonlyAr
     exciseCategory: r.excise_category,
     notes: r.notes,
     active: Boolean(r.active),
+    trackSerials: Boolean(r.track_serials),
+    serialCount: Number(r.serial_in_stock ?? 0),
     status,
     stockValue: round2(Math.max(0, current) * purchasePrice),
     idleDays,
@@ -113,7 +118,8 @@ export function mapItem(r: ItemRow, today = todayISO(), agingBreaks?: ReadonlyAr
 }
 
 const ITEM_SELECT = `SELECT i.*, p.name AS supplier_name,
-  (SELECT SUM(m.qty) FROM ims_movements m WHERE m.tenant_id = i.tenant_id AND m.item_id = i.id AND m.type = 'OUT' AND m.movement_date >= :since30) AS moved_30d
+  (SELECT SUM(m.qty) FROM ims_movements m WHERE m.tenant_id = i.tenant_id AND m.item_id = i.id AND m.type = 'OUT' AND m.movement_date >= :since30) AS moved_30d,
+  (SELECT COUNT(*) FROM ims_item_serials s WHERE s.tenant_id = i.tenant_id AND s.item_id = i.id AND s.status = 'in_stock') AS serial_in_stock
   FROM ims_items i LEFT JOIN ims_parties p ON p.id = i.supplier_id AND p.tenant_id = i.tenant_id`;
 
 export async function getItem(deps: ImsDeps, tenantId: number, id: string) {
@@ -145,6 +151,7 @@ const ItemInput = z.object({
   exciseCategory: optText(40),
   notes: optText(2000),
   active: z.boolean().optional(),
+  trackSerials: z.boolean().optional(),
 });
 
 const ITEM_COLUMN: Record<string, string> = {
@@ -168,19 +175,44 @@ const ITEM_COLUMN: Record<string, string> = {
   exciseCategory: "excise_category",
   notes: "notes",
   active: "active",
+  trackSerials: "track_serials",
 };
 
 const blankToNull = (v: unknown) => (typeof v === "string" && !v.trim() ? null : v);
 
-async function insertItem(deps: ImsDeps, actor: ImsActor, input: z.infer<typeof ItemInput>, opening: { qty: number; date?: string } | null, allowNegative: boolean): Promise<string> {
+async function assertUniqueBarcode(deps: ImsDeps, tenantId: number, barcode: string | null | undefined, excludeItemId?: string) {
+  const code = typeof barcode === "string" ? barcode.trim() : "";
+  if (!code) return;
+  const dupItem = await one<{ id: string; name: string }>(
+    deps.db,
+    `SELECT id, name FROM ims_items WHERE tenant_id = :tenantId AND barcode = :code AND active = 1 ${excludeItemId ? "AND id <> :excludeItemId" : ""} LIMIT 1`,
+    { tenantId, code, excludeItemId },
+  );
+  if (dupItem) throw conflict(`Barcode "${code}" is already used by "${dupItem.name}". Each scan code can only belong to one item.`);
+  const dupSerial = await one<{ item_name: string }>(
+    deps.db,
+    `SELECT i.name AS item_name FROM ims_item_serials s JOIN ims_items i ON i.id = s.item_id WHERE s.tenant_id = :tenantId AND s.serial_no = :code LIMIT 1`,
+    { tenantId, code },
+  );
+  if (dupSerial) throw conflict(`Scan code "${code}" is already tracked as a unit serial on "${dupSerial.item_name}".`);
+}
+
+async function insertItem(
+  deps: ImsDeps,
+  actor: ImsActor,
+  input: z.infer<typeof ItemInput>,
+  opening: { qty: number; date?: string; refType?: "manual" | "import" } | null,
+  allowNegative: boolean,
+  serials?: ReadonlyArray<{ serialNo: string; purchasePrice: number; notes?: string | null }>,
+): Promise<string> {
   const id = randomUUID();
   await tx(deps.db, async (conn) => {
     await exec(
       conn,
       `INSERT INTO ims_items (id, tenant_id, name, sku, barcode, category, brand, unit, hsn, gst_rate, supplier_id, purchase_price, selling_price, mrp,
-                              min_stock, max_stock, reorder_qty, location, volume_ml, excise_category, notes, active, created_by)
+                              min_stock, max_stock, reorder_qty, location, volume_ml, excise_category, notes, active, track_serials, created_by)
        VALUES (:id, :tenantId, :name, :sku, :barcode, :category, :brand, :unit, :hsn, :gstRate, :supplierId, :purchasePrice, :sellingPrice, :mrp,
-               :minStock, :maxStock, :reorderQty, :location, :volumeMl, :exciseCategory, :notes, :active, :userId)`,
+               :minStock, :maxStock, :reorderQty, :location, :volumeMl, :exciseCategory, :notes, :active, :trackSerials, :userId)`,
       {
         id,
         tenantId: actor.tenantId,
@@ -204,11 +236,38 @@ async function insertItem(deps: ImsDeps, actor: ImsActor, input: z.infer<typeof 
         exciseCategory: blankToNull(input.exciseCategory) ?? null,
         notes: blankToNull(input.notes) ?? null,
         active: input.active === false ? 0 : 1,
+        trackSerials: input.trackSerials || (serials && serials.length > 0) ? 1 : 0,
         userId: actor.userId,
       },
     );
+    let openingMoveId: string | null = null;
     if (opening && opening.qty > 0) {
-      await postMovement(conn, actor, { itemId: id, type: "OPENING", qty: opening.qty, unitCost: input.purchasePrice, refType: "manual", reason: "Opening stock", date: opening.date }, { allowNegative });
+      const mv = await postMovement(
+        conn,
+        actor,
+        { itemId: id, type: "OPENING", qty: opening.qty, unitCost: input.purchasePrice, refType: opening.refType ?? "manual", reason: "Opening stock", date: opening.date },
+        { allowNegative },
+      );
+      openingMoveId = mv.id;
+    }
+    if (serials?.length) {
+      for (const s of serials) {
+        await exec(
+          conn,
+          `INSERT INTO ims_item_serials (id, tenant_id, item_id, serial_no, status, purchase_price, in_movement_id, notes, created_by)
+           VALUES (:sid, :tenantId, :itemId, :serialNo, 'in_stock', :purchasePrice, :inMoveId, :notes, :userId)`,
+          {
+            sid: randomUUID(),
+            tenantId: actor.tenantId,
+            itemId: id,
+            serialNo: s.serialNo,
+            purchasePrice: s.purchasePrice,
+            inMoveId: openingMoveId,
+            notes: s.notes ?? null,
+            userId: actor.userId,
+          },
+        );
+      }
     }
   });
   return id;
@@ -293,6 +352,7 @@ const MovementLine = z.object({
   unitPrice: z.coerce.number().min(0).max(1e10).nullable().optional(),
   exciseDuty: z.coerce.number().min(0).max(1e10).nullable().optional(),
   notes: optText(500),
+  serials: z.array(z.string().trim().min(1).max(100)).max(2000).optional(),
 });
 
 const MovementInput = z.object({
@@ -479,7 +539,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     const params: Record<string, unknown> = { tenantId: actor.tenantId, since30: addDays(today, -29) };
     const q = qstr(req.query.q);
     if (q) {
-      where.push("(i.name LIKE :q OR i.sku LIKE :q OR i.barcode = :exact OR i.brand LIKE :q OR i.hsn LIKE :q)");
+      where.push("(i.name LIKE :q OR i.sku LIKE :q OR i.barcode = :exact OR i.brand LIKE :q OR i.hsn LIKE :q OR EXISTS (SELECT 1 FROM ims_item_serials s WHERE s.tenant_id = i.tenant_id AND s.item_id = i.id AND s.serial_no = :exact))");
       params.q = likeOf(q);
       params.exact = q;
     }
@@ -527,10 +587,10 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     });
   });
 
-  /** Scanner / quick-entry lookup by exact barcode or SKU. */
+  /** Scanner / quick-entry lookup by exact barcode, SKU, item id, or tracked unit serial. */
   router.get("/items/lookup", async (req, res) => {
     const actor = actorOf(res);
-    const code = qstr(req.query.code, 64);
+    const code = qstr(req.query.code, 100);
     if (!code) throw new ImsError(400, "Scan or type a code");
     const today = todayISO();
     const settings = await getSettings(deps, actor.tenantId);
@@ -539,24 +599,87 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       code,
       since30: addDays(today, -29),
     });
-    res.json({ item: r ? mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor) : null });
+    if (r) {
+      res.json({ item: mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor), serial: null });
+      return;
+    }
+    const serialRow = await one<{ id: string; item_id: string; serial_no: string; status: SerialStatus; purchase_price: string | null }>(
+      deps.db,
+      `SELECT id, item_id, serial_no, status, purchase_price FROM ims_item_serials WHERE tenant_id = :tenantId AND serial_no = :code LIMIT 1`,
+      { tenantId: actor.tenantId, code },
+    );
+    if (!serialRow) {
+      res.json({ item: null, serial: null });
+      return;
+    }
+    const parent = await one<ItemRow>(deps.db, `${ITEM_SELECT} WHERE i.tenant_id = :tenantId AND i.id = :id LIMIT 1`, {
+      tenantId: actor.tenantId,
+      id: serialRow.item_id,
+      since30: addDays(today, -29),
+    });
+    res.json({
+      item: parent ? mapItem(parent, today, settings.agingBreaks, settings.reorderFallbackFactor) : null,
+      serial: {
+        id: serialRow.id,
+        serialNo: serialRow.serial_no,
+        status: serialRow.status,
+        purchasePrice: serialRow.purchase_price == null ? null : round2(money(serialRow.purchase_price)),
+      },
+    });
   });
 
   router.get("/items/:id", async (req, res) => {
     const actor = actorOf(res);
     const item = await getItem(deps, actor.tenantId, req.params.id);
     if (!item) throw notFound("Item");
-    const movements = await rows<MovementRow>(
-      deps.db,
-      `SELECT * FROM ims_movements WHERE tenant_id = :tenantId AND item_id = :id ORDER BY created_at DESC LIMIT 100`,
-      { tenantId: actor.tenantId, id: item.id },
-    );
-    const stats = await rows<{ type: string; qty: string; value: string }>(
-      deps.db,
-      `SELECT type, SUM(qty) AS qty, SUM(value) AS value FROM ims_movements WHERE tenant_id = :tenantId AND item_id = :id AND movement_date >= :since GROUP BY type`,
-      { tenantId: actor.tenantId, id: item.id, since: addDays(todayISO(), -89) },
-    );
-    res.json({ item, movements: movements.map(mapMovement), stats90d: Object.fromEntries(stats.map((s) => [s.type, { qty: round3(money(s.qty)), value: round2(money(s.value)) }])) });
+    const [movements, stats, serialRows, serialCountRows] = await Promise.all([
+      rows<MovementRow>(
+        deps.db,
+        `SELECT * FROM ims_movements WHERE tenant_id = :tenantId AND item_id = :id ORDER BY created_at DESC LIMIT 100`,
+        { tenantId: actor.tenantId, id: item.id },
+      ),
+      rows<{ type: string; qty: string; value: string }>(
+        deps.db,
+        `SELECT type, SUM(qty) AS qty, SUM(value) AS value FROM ims_movements WHERE tenant_id = :tenantId AND item_id = :id AND movement_date >= :since GROUP BY type`,
+        { tenantId: actor.tenantId, id: item.id, since: addDays(todayISO(), -89) },
+      ),
+      rows<{ id: string; serial_no: string; status: SerialStatus; purchase_price: string | null; notes: string | null; created_at: string; updated_at: string }>(
+        deps.db,
+        `SELECT id, serial_no, status, purchase_price, notes, created_at, updated_at
+         FROM ims_item_serials
+         WHERE tenant_id = :tenantId AND item_id = :id
+         ORDER BY FIELD(status, 'in_stock', 'damaged', 'returned', 'out'), created_at DESC
+         LIMIT 500`,
+        { tenantId: actor.tenantId, id: item.id },
+      ),
+      rows<{ status: SerialStatus; n: number }>(
+        deps.db,
+        `SELECT status, COUNT(*) AS n FROM ims_item_serials WHERE tenant_id = :tenantId AND item_id = :id GROUP BY status`,
+        { tenantId: actor.tenantId, id: item.id },
+      ),
+    ]);
+    const serialCounts = { inStock: 0, out: 0, damaged: 0, returned: 0 };
+    for (const c of serialCountRows) {
+      if (c.status === "in_stock") serialCounts.inStock = Number(c.n);
+      else if (c.status === "out") serialCounts.out = Number(c.n);
+      else if (c.status === "damaged") serialCounts.damaged = Number(c.n);
+      else if (c.status === "returned") serialCounts.returned = Number(c.n);
+    }
+    res.json({
+      item,
+      movements: movements.map(mapMovement),
+      stats90d: Object.fromEntries(stats.map((s) => [s.type, { qty: round3(money(s.qty)), value: round2(money(s.value)) }])),
+      serials: serialRows.map((s) => ({
+        id: s.id,
+        serialNo: s.serial_no,
+        status: s.status,
+        purchasePrice: s.purchase_price == null ? null : round2(money(s.purchase_price)),
+        notes: s.notes,
+        createdAt: tsOf(s.created_at),
+        updatedAt: tsOf(s.updated_at),
+      })),
+      serialCounts,
+    });
   });
 
   router.post("/items", async (req, res) => {
@@ -564,6 +687,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     requirePerm(res, "items");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const input = parse(ItemInput, body);
+    await assertUniqueBarcode(deps, actor.tenantId, input.barcode);
     const openingQty = Math.max(0, Number(body.openingStock) || 0);
     const settings = await getSettings(deps, actor.tenantId);
     const id = await insertItem(deps, actor, input, openingQty ? { qty: openingQty } : null, settings.allowNegativeStock);
@@ -751,15 +875,186 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     res.json({ created, linked, results });
   });
 
-  /** Bulk import (CSV / Excel parsed on the client). Upserts by SKU; new items may carry opening stock. */
+  /**
+   * Bulk import (CSV / Excel parsed on the client).
+   * - `mode: "sku"` (default): one row = one product master. Upserts by SKU; new items may carry opening stock.
+   * - `mode: "serialized"`: one row = one physical unit with a unique scan code / serial number.
+   *   Groups units by (name, category, brand), creates or adds stock to the parent product with weighted-average
+   *   purchase cost, and records every unique scan code in `ims_item_serials`.
+   */
   router.post("/items/bulk", async (req, res) => {
     const actor = actorOf(res);
     requirePerm(res, "items");
-    const body = parse(z.object({ items: z.array(z.record(z.string(), z.unknown())).min(1).max(2000) }), req.body);
+    const body = parse(
+      z.object({
+        mode: z.enum(["sku", "serialized"]).optional(),
+        items: z.array(z.record(z.string(), z.unknown())).min(1).max(2000),
+      }),
+      req.body,
+    );
     const settings = await getSettings(deps, actor.tenantId);
     let created = 0;
     let updated = 0;
+    let serialsAdded = 0;
     const errors: string[] = [];
+
+    if (body.mode === "serialized") {
+      const { groups, errors: groupErrors } = groupSerializedImportRows(body.items);
+      errors.push(...groupErrors);
+
+      // Batch-check existing scan codes in this tenant so duplicates are rejected cleanly.
+      const allSerials = groups.flatMap((g) => g.units.map((u) => u.serialNo));
+      const existingSerials = new Map<string, string>();
+      for (let start = 0; start < allSerials.length; start += 500) {
+        const chunk = allSerials.slice(start, start + 500);
+        const placeholders = chunk.map((_, i) => `:s${i}`).join(", ");
+        const params: Record<string, unknown> = { tenantId: actor.tenantId };
+        chunk.forEach((s, i) => {
+          params[`s${i}`] = s;
+        });
+        const hits = await rows<{ serial_no: string; item_name: string }>(
+          deps.db,
+          `SELECT s.serial_no, i.name AS item_name
+           FROM ims_item_serials s JOIN ims_items i ON i.id = s.item_id
+           WHERE s.tenant_id = :tenantId AND s.serial_no IN (${placeholders})`,
+          params,
+        );
+        for (const h of hits) existingSerials.set(h.serial_no.toLowerCase(), h.item_name);
+      }
+
+      for (const g of groups) {
+        const freshUnits = g.units.filter((u) => {
+          const hit = existingSerials.get(u.serialNo.toLowerCase());
+          if (hit) {
+            errors.push(`Row ${u.rowNumber}: Scan code "${u.serialNo}" already exists on "${hit}"`);
+            return false;
+          }
+          return true;
+        });
+        if (!freshUnits.length) continue;
+
+        const priced = freshUnits.filter((u) => u.purchasePrice > 0);
+        const batchAvgCost = priced.length ? round2(priced.reduce((s, u) => s + u.purchasePrice, 0) / priced.length) : g.purchasePrice;
+
+        // Match existing product by explicit SKU or normalized (name, category, brand).
+        let existing = g.sku
+          ? await one<{ id: string }>(deps.db, `SELECT id FROM ims_items WHERE tenant_id = :tenantId AND sku = :sku LIMIT 1`, { tenantId: actor.tenantId, sku: g.sku })
+          : null;
+        if (!existing) {
+          existing = await one<{ id: string }>(
+            deps.db,
+            `SELECT id FROM ims_items
+             WHERE tenant_id = :tenantId AND active = 1
+               AND LOWER(TRIM(name)) = LOWER(TRIM(:name))
+               AND LOWER(TRIM(COALESCE(category, ''))) = LOWER(TRIM(:category))
+               AND LOWER(TRIM(COALESCE(brand, ''))) = LOWER(TRIM(:brand))
+             LIMIT 1`,
+            { tenantId: actor.tenantId, name: g.name, category: g.category ?? "", brand: g.brand ?? "" },
+          );
+        }
+
+        try {
+          if (existing) {
+            await tx(deps.db, async (conn) => {
+              await exec(
+                conn,
+                `UPDATE ims_items
+                 SET track_serials = 1,
+                     selling_price = CASE WHEN :sellingPrice > 0 THEN :sellingPrice ELSE selling_price END,
+                     mrp = COALESCE(:mrp, mrp),
+                     hsn = COALESCE(:hsn, hsn),
+                     location = COALESCE(:location, location)
+                 WHERE tenant_id = :tenantId AND id = :id`,
+                {
+                  tenantId: actor.tenantId,
+                  id: existing.id,
+                  sellingPrice: g.sellingPrice,
+                  mrp: g.mrp,
+                  hsn: g.hsn,
+                  location: g.location,
+                },
+              );
+              const mv = await postMovement(
+                conn,
+                actor,
+                {
+                  itemId: existing.id,
+                  type: "IN",
+                  qty: freshUnits.length,
+                  unitCost: batchAvgCost > 0 ? batchAvgCost : null,
+                  refType: "import",
+                  reason: "Serialized import",
+                },
+                { allowNegative: settings.allowNegativeStock },
+              );
+              for (const u of freshUnits) {
+                await exec(
+                  conn,
+                  `INSERT INTO ims_item_serials (id, tenant_id, item_id, serial_no, status, purchase_price, in_movement_id, notes, created_by)
+                   VALUES (:sid, :tenantId, :itemId, :serialNo, 'in_stock', :purchasePrice, :inMoveId, :notes, :userId)`,
+                  {
+                    sid: randomUUID(),
+                    tenantId: actor.tenantId,
+                    itemId: existing.id,
+                    serialNo: u.serialNo,
+                    purchasePrice: u.purchasePrice,
+                    inMoveId: mv.id,
+                    notes: u.notes,
+                    userId: actor.userId,
+                  },
+                );
+              }
+            });
+            updated += 1;
+            serialsAdded += freshUnits.length;
+          } else {
+            await insertItem(
+              deps,
+              actor,
+              {
+                name: g.name,
+                sku: g.sku,
+                barcode: null,
+                category: g.category,
+                brand: g.brand,
+                unit: g.unit,
+                hsn: g.hsn,
+                gstRate: g.gstRate,
+                supplierId: null,
+                purchasePrice: batchAvgCost,
+                sellingPrice: g.sellingPrice,
+                mrp: g.mrp,
+                minStock: g.minStock,
+                maxStock: g.maxStock,
+                reorderQty: g.reorderQty,
+                location: g.location,
+                notes: g.notes,
+                active: true,
+                trackSerials: true,
+              },
+              { qty: freshUnits.length, refType: "import" },
+              settings.allowNegativeStock,
+              freshUnits,
+            );
+            created += 1;
+            serialsAdded += freshUnits.length;
+          }
+        } catch (err) {
+          const code = (err as { code?: string }).code;
+          errors.push(`Product "${g.name}": ${code === "ER_DUP_ENTRY" ? "duplicate SKU or scan code" : err instanceof Error ? err.message : "failed"}`);
+        }
+      }
+
+      await recordEvent(deps, actor, {
+        type: "item.imported",
+        entityType: "item",
+        entityId: "bulk-serialized",
+        summary: `Imported serialized stock: ${serialsAdded} unit${serialsAdded === 1 ? "" : "s"} across ${created} new & ${updated} existing product${created + updated === 1 ? "" : "s"}${errors.length ? `, ${errors.length} skipped` : ""}`,
+      });
+      res.json({ created, updated, serialsAdded, errors: errors.slice(0, 50) });
+      return;
+    }
+
     for (const [idx, raw] of body.items.entries()) {
       const result = ItemInput.safeParse(raw);
       if (!result.success) {
@@ -770,19 +1065,20 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       const sku = blankToNull(input.sku) as string | null | undefined;
       const existing = sku ? await one<{ id: string }>(deps.db, `SELECT id FROM ims_items WHERE tenant_id = :tenantId AND sku = :sku LIMIT 1`, { tenantId: actor.tenantId, sku }) : null;
       try {
+        await assertUniqueBarcode(deps, actor.tenantId, input.barcode, existing?.id);
         if (existing) {
           const sets: string[] = [];
           const params: Record<string, unknown> = { tenantId: actor.tenantId, id: existing.id };
           for (const [k, v] of Object.entries(input)) {
             if (v === undefined || !ITEM_COLUMN[k] || k === "active") continue;
             sets.push(`${ITEM_COLUMN[k]} = :${k}`);
-            params[k] = blankToNull(v);
+            params[k] = typeof v === "boolean" ? (v ? 1 : 0) : blankToNull(v);
           }
           if (sets.length) await exec(deps.db, `UPDATE ims_items SET ${sets.join(", ")} WHERE tenant_id = :tenantId AND id = :id`, params);
           updated += 1;
         } else {
           const openingQty = Math.max(0, Number(raw.openingStock ?? raw.currentStock) || 0);
-          await insertItem(deps, actor, input, openingQty ? { qty: openingQty } : null, settings.allowNegativeStock);
+          await insertItem(deps, actor, input, openingQty ? { qty: openingQty, refType: "import" } : null, settings.allowNegativeStock);
           created += 1;
         }
       } catch (err) {
@@ -790,7 +1086,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       }
     }
     await recordEvent(deps, actor, { type: "item.imported", entityType: "item", entityId: "bulk", summary: `Imported items: ${created} new, ${updated} updated${errors.length ? `, ${errors.length} skipped` : ""}` });
-    res.json({ created, updated, errors: errors.slice(0, 50) });
+    res.json({ created, updated, serialsAdded, errors: errors.slice(0, 50) });
   });
 
   router.patch("/items/:id", async (req, res) => {
@@ -799,6 +1095,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     const existing = await getItem(deps, actor.tenantId, req.params.id);
     if (!existing) throw notFound("Item");
     const patch = parsePatch(ItemInput, req.body) as Record<string, unknown>;
+    if ("barcode" in patch) await assertUniqueBarcode(deps, actor.tenantId, patch.barcode as string | null | undefined, existing.id);
     const sets: string[] = [];
     const params: Record<string, unknown> = { tenantId: actor.tenantId, id: existing.id };
     for (const [k, v] of Object.entries(patch)) {
@@ -849,30 +1146,90 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     const posted: PostedMovement[] = await tx(deps.db, async (conn) => {
       const out: PostedMovement[] = [];
       for (const line of input.lines) {
-        out.push(
-          await postMovement(
-            conn,
-            actor,
-            {
-              itemId: line.itemId,
-              type: input.type,
-              qty: line.qty,
-              damaged,
-              unitCost: line.unitCost ?? null,
-              unitPrice: line.unitPrice ?? null,
-              exciseDuty: line.exciseDuty ?? null,
-              refType: "manual",
-              refNo: input.refNo ?? null,
-              partyId: input.partyId ?? null,
-              partyName: input.partyName ?? null,
-              reason: input.reason ?? null,
-              refundStatus: input.refundStatus ?? null,
-              notes: line.notes ?? input.notes ?? null,
-              date: input.date,
-            },
-            { allowNegative: negativeAllowed(settings.allowNegativeStock, input.type, line.qty, damaged) },
-          ),
+        const uniqueSerials = line.serials?.length ? [...new Set(line.serials.map((s) => s.trim()).filter(Boolean))] : [];
+        if (uniqueSerials.length && uniqueSerials.length !== Math.round(Math.abs(line.qty))) {
+          throw new ImsError(400, `Quantity (${line.qty}) must match the number of scan codes provided (${uniqueSerials.length}).`);
+        }
+        const mv = await postMovement(
+          conn,
+          actor,
+          {
+            itemId: line.itemId,
+            type: input.type,
+            qty: line.qty,
+            damaged,
+            unitCost: line.unitCost ?? null,
+            unitPrice: line.unitPrice ?? null,
+            exciseDuty: line.exciseDuty ?? null,
+            refType: "manual",
+            refNo: input.refNo ?? null,
+            partyId: input.partyId ?? null,
+            partyName: input.partyName ?? null,
+            reason: input.reason ?? null,
+            refundStatus: input.refundStatus ?? null,
+            notes: line.notes ?? input.notes ?? null,
+            date: input.date,
+          },
+          { allowNegative: negativeAllowed(settings.allowNegativeStock, input.type, line.qty, damaged) },
         );
+        if (uniqueSerials.length) {
+          if (input.type === "IN" || input.type === "OPENING" || input.type === "RETURN_IN") {
+            const targetStatus: SerialStatus = input.type === "RETURN_IN" && damaged ? "damaged" : "in_stock";
+            for (const code of uniqueSerials) {
+              const found = await one<{ id: string; item_id: string; status: SerialStatus }>(
+                conn,
+                `SELECT id, item_id, status FROM ims_item_serials WHERE tenant_id = :tenantId AND serial_no = :code LIMIT 1 FOR UPDATE`,
+                { tenantId: actor.tenantId, code },
+              );
+              if (found) {
+                if (found.item_id !== line.itemId || found.status === "in_stock") {
+                  throw conflict(`Scan code "${code}" is already in stock or assigned to another item.`);
+                }
+                await exec(
+                  conn,
+                  `UPDATE ims_item_serials SET status = :status, in_movement_id = :mvId, out_movement_id = NULL, purchase_price = COALESCE(:unitCost, purchase_price) WHERE id = :id`,
+                  { id: found.id, status: targetStatus, mvId: mv.id, unitCost: line.unitCost ?? null },
+                );
+              } else {
+                await exec(
+                  conn,
+                  `INSERT INTO ims_item_serials (id, tenant_id, item_id, serial_no, status, purchase_price, in_movement_id, notes, created_by)
+                   VALUES (:sid, :tenantId, :itemId, :code, :status, :unitCost, :mvId, :notes, :userId)`,
+                  {
+                    sid: randomUUID(),
+                    tenantId: actor.tenantId,
+                    itemId: line.itemId,
+                    code,
+                    status: targetStatus,
+                    unitCost: line.unitCost ?? null,
+                    mvId: mv.id,
+                    notes: line.notes ?? input.notes ?? null,
+                    userId: actor.userId,
+                  },
+                );
+              }
+            }
+            await exec(conn, `UPDATE ims_items SET track_serials = 1 WHERE tenant_id = :tenantId AND id = :itemId`, { tenantId: actor.tenantId, itemId: line.itemId });
+          } else if (input.type === "OUT" || input.type === "RETURN_OUT" || input.type === "DAMAGE" || input.type === "WRITE_OFF") {
+            const targetStatus: SerialStatus = input.type === "DAMAGE" || input.type === "WRITE_OFF" ? "damaged" : input.type === "RETURN_OUT" ? "returned" : "out";
+            for (const code of uniqueSerials) {
+              const found = await one<{ id: string; status: SerialStatus }>(
+                conn,
+                `SELECT id, status FROM ims_item_serials WHERE tenant_id = :tenantId AND item_id = :itemId AND serial_no = :code LIMIT 1 FOR UPDATE`,
+                { tenantId: actor.tenantId, itemId: line.itemId, code },
+              );
+              if (!found || found.status !== "in_stock") {
+                throw conflict(`Scan code "${code}" is not currently in stock for this item.`);
+              }
+              await exec(
+                conn,
+                `UPDATE ims_item_serials SET status = :status, out_movement_id = :mvId WHERE id = :id`,
+                { id: found.id, status: targetStatus, mvId: mv.id },
+              );
+            }
+          }
+        }
+        out.push(mv);
       }
       return out;
     });

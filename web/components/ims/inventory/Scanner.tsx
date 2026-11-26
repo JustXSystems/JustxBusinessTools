@@ -5,14 +5,15 @@ import "./inventory-a.css";
 import jsQR from "jsqr";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, Badge, Button, Card, EmptyState, IconButton, Input, Segmented, useToast } from "@/components/bos";
-import { ImsApiError, errorText, ims, type ImsItem } from "@/lib/ims/api";
+import { ImsApiError, errorText, ims, type ImsItem, type SerialStatus } from "@/lib/ims/api";
 import { dateLabel, inr, num, qtyText, stockBadge, todayLocal } from "@/lib/ims/format";
 import { createBarcodeDetector, scanFeedback, type TorchCapabilities, type TorchConstraint } from "@/lib/ims/inventory-a";
 import { PageHeader, Stack, StatusBadge, useIms } from "../core";
 import { ItemAvatar } from "./ItemDetail";
 
 type Detector = Awaited<ReturnType<typeof createBarcodeDetector>>;
-type Found = { code: string; item: ImsItem | null };
+type FoundSerial = { id: string; serialNo: string; status: SerialStatus; purchasePrice: number | null };
+type Found = { code: string; item: ImsItem | null; serial?: FoundSerial | null };
 type SessionLine = { itemId: string; name: string; sku: string | null; unit: string; stock: number; qty: number };
 type Mode = "lookup" | "batch";
 
@@ -89,7 +90,7 @@ export function ScannerModule() {
   const pausedRef = useRef(false);
   const decodingRef = useRef(false);
   const lastRef = useRef<{ code: string; at: number }>({ code: "", at: 0 });
-  const cacheRef = useRef(new Map<string, ImsItem | null>());
+  const cacheRef = useRef(new Map<string, { item: ImsItem | null; serial?: FoundSerial | null }>());
   const handleRef = useRef<(code: string) => void>(() => undefined);
   const manualRef = useRef<HTMLInputElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
@@ -237,15 +238,17 @@ export function ScannerModule() {
     setLooking(true);
     setError(null);
     try {
-      let item = fresh ? undefined : cacheRef.current.get(code);
-      if (item === undefined) {
-        item = (await ims.lookupItem(code)).item;
-        cacheRef.current.set(code, item);
+      let hit = fresh ? undefined : cacheRef.current.get(code);
+      if (hit === undefined) {
+        const res = await ims.lookupItem(code);
+        hit = { item: res.item, serial: res.serial ?? null };
+        cacheRef.current.set(code, hit);
       }
+      const item = hit.item;
       scanFeedback(Boolean(item));
       setFlash({ ok: Boolean(item), n: Date.now() });
       setHistory((h) => [{ code, name: item?.name ?? null }, ...h.filter((x) => x.code !== code)].slice(0, 8));
-      setFound({ code, item });
+      setFound({ code, item, serial: hit.serial ?? null });
       setQty("1");
       if (mode === "batch" && item) {
         addToSession(item, 1);
@@ -298,7 +301,7 @@ export function ScannerModule() {
     }
   };
 
-  const post = async (type: "IN" | "OUT", lines: Array<{ itemId: string; qty: number }>, scope: "item" | "session") => {
+  const post = async (type: "IN" | "OUT", lines: Array<{ itemId: string; qty: number; serials?: string[] }>, scope: "item" | "session") => {
     setBusy(`${scope}:${type}`);
     setError(null);
     try {
@@ -309,7 +312,7 @@ export function ScannerModule() {
         title: `${type === "IN" ? "Stock in" : "Stock out"} posted`,
         description: r.movements.length === 1 ? `${r.movements[0].itemName}: ${type === "IN" ? "+" : "−"}${qtyText(units)} → ${qtyText(r.movements[0].after)} left` : `${r.movements.length} items · ${qtyText(units)} units`,
       });
-      for (const m of r.movements) for (const [code, it] of cacheRef.current) if (it?.id === m.itemId) cacheRef.current.delete(code);
+      for (const m of r.movements) for (const [code, hit] of cacheRef.current) if (hit.item?.id === m.itemId) cacheRef.current.delete(code);
       invalidate();
       return r;
     } catch (err) {
@@ -328,7 +331,8 @@ export function ScannerModule() {
       setError({ scope: "item", text: "Enter a quantity above zero." });
       return;
     }
-    const r = await post(type, [{ itemId: found.item.id, qty: n }], "item");
+    const serials = found.serial && n === 1 ? [found.serial.serialNo] : undefined;
+    const r = await post(type, [{ itemId: found.item.id, qty: n, ...(serials ? { serials } : {}) }], "item");
     if (r) await lookup(found.code, true);
   };
 
@@ -399,6 +403,11 @@ export function ScannerModule() {
             </span>
           </span>
           <span className="ims-row" style={{ gap: 6 }}>
+            {found.serial ? (
+              <Badge tone={found.serial.status === "in_stock" ? "emerald" : found.serial.status === "damaged" ? "coral" : "neutral"}>
+                UNIT {found.serial.serialNo} · {found.serial.status.replace("_", " ").toUpperCase()}
+              </Badge>
+            ) : null}
             <StatusBadge view={stockBadge(item.status)} />
             {item.active ? null : <Badge tone="neutral">ARCHIVED</Badge>}
           </span>

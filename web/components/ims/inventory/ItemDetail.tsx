@@ -4,7 +4,7 @@ import "./inventory-a.css";
 
 import { useState, type ReactNode } from "react";
 import { Alert, Badge, Button, DataTable, Dialog, KpiCard, Skeleton, useToast, type BosColumn, type BosKpi } from "@/components/bos";
-import { ims, type AgingKey, type ImsItem, type ImsMovement, type MovementType } from "@/lib/ims/api";
+import { ims, type AgingKey, type ImsItem, type ImsItemSerial, type ImsMovement, type MovementType, type SerialStatus } from "@/lib/ims/api";
 import { AGING_BUCKETS, buildAgingBuckets, MOVEMENT_LABEL, dateLabel, inr, inrExact, movementBadge, pct, qtyText, signedQty, stampLabel, stockBadge, timeAgo, toneFor } from "@/lib/ims/format";
 import { isEan13, scanCodeOf } from "@/lib/ims/inventory-a";
 import { ErrorBlock, StatusBadge, useIms, useImsAction, useImsData } from "../core";
@@ -324,6 +324,44 @@ export function ItemDetailDialog({
             ) : (
               <p className="ims-faint">No stock movement in the last 90 days.</p>
             )}
+
+            {data.serials && data.serials.length > 0 ? (
+              <>
+                <div className="ims-inv-subhead">
+                  Tracked scan codes ({data.serialCounts?.inStock ?? 0} in stock
+                  {data.serialCounts?.out ? ` · ${data.serialCounts.out} out` : ""}
+                  {data.serialCounts?.damaged ? ` · ${data.serialCounts.damaged} damaged` : ""}
+                  {data.serialCounts?.returned ? ` · ${data.serialCounts.returned} returned` : ""})
+                </div>
+                <div className="ims-inv-scroll">
+                  <DataTable<ImsItemSerial>
+                    compact
+                    columns={[
+                      { key: "serialNo", header: "Scan code / Serial", mono: true, cell: (s) => s.serialNo },
+                      {
+                        key: "status",
+                        header: "Status",
+                        cell: (s) => {
+                          const map: Record<SerialStatus, { text: string; tone: "emerald" | "neutral" | "coral" | "amber" }> = {
+                            in_stock: { text: "IN STOCK", tone: "emerald" },
+                            out: { text: "OUT", tone: "neutral" },
+                            damaged: { text: "DAMAGED", tone: "coral" },
+                            returned: { text: "RETURNED", tone: "amber" },
+                          };
+                          const v = map[s.status] ?? map.in_stock;
+                          return <Badge tone={v.tone}>{v.text}</Badge>;
+                        },
+                      },
+                      ...(canSeeCost ? [{ key: "cost", header: "Buy price", align: "right" as const, cell: (s: ImsItemSerial) => (s.purchasePrice != null ? inrExact(s.purchasePrice) : "—") }] : []),
+                      { key: "added", header: "Added", cell: (s) => stampLabel(s.createdAt) },
+                    ]}
+                    rows={data.serials}
+                    rowKey={(s) => s.id}
+                    caption={`Tracked scan codes for ${item.name}`}
+                  />
+                </div>
+              </>
+            ) : null}
 
             <div className="ims-inv-subhead">Movements {data.movements.length ? `(last ${data.movements.length})` : ""}</div>
             <div className="ims-inv-scroll">

@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactNode } from "react";
 import { BosRoot } from "@/components/bos";
 import { errorText, type ImsSession } from "@/lib/ims/api";
+import { detectSerializedImport, groupSerializedPreview, mapRows } from "@/lib/ims/inventory-a";
 import { ImsAppProvider, type ImsAppContextValue } from "../core";
 import { isChunkLoadError } from "../modules";
 import ItemsModule from "./Items";
@@ -123,5 +124,37 @@ describe("Items module", () => {
     expect(isChunkLoadError(new Error("Failed to fetch dynamically imported module"))).toBe(true);
     expect(isChunkLoadError(new Error("Network error"))).toBe(false);
     expect(isChunkLoadError("ChunkLoadError")).toBe(false);
+  });
+
+  it("auto-detects serialized 1-row-per-unit sheets, rejects duplicate scan codes, and groups stock counts", () => {
+    const rawRows = [
+      { "Item Name": "Hikvision 2MP Dome", Category: "CCTV", Brand: "Hikvision", Barcode: "SN-101", "Purchase Price": 1200, "Selling Price": 1800 },
+      { "Item Name": "Hikvision 2MP Dome", Category: "CCTV", Brand: "Hikvision", Barcode: "SN-102", "Purchase Price": 1500, "Selling Price": 1800 },
+      { "Item Name": "Hikvision 2MP Dome", Category: "CCTV", Brand: "Hikvision", Barcode: "SN-101", "Purchase Price": 1200, "Selling Price": 1800 },
+    ];
+    const mapping = {
+      name: "Item Name",
+      category: "Category",
+      brand: "Brand",
+      barcode: "Barcode",
+      purchasePrice: "Purchase Price",
+      sellingPrice: "Selling Price",
+    };
+
+    expect(detectSerializedImport(rawRows, mapping)).toBe(true);
+
+    const mapped = mapRows(rawRows, mapping, "serialized");
+    const ready = mapped.filter((r) => !r.issues.length);
+    const bad = mapped.filter((r) => r.issues.length);
+    expect(ready).toHaveLength(2);
+    expect(bad).toHaveLength(1);
+    expect(bad[0].issues[0]).toMatch(/Duplicate scan code/);
+
+    const groups = groupSerializedPreview(ready);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].name).toBe("Hikvision 2MP Dome");
+    expect(groups[0].units).toBe(2);
+    expect(groups[0].avgPurchasePrice).toBe(1350);
+    expect(groups[0].sampleCodes).toEqual(["SN-101", "SN-102"]);
   });
 });

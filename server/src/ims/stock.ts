@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { exec, money, nextSequence, one, type Queryable } from "./db.js";
 import { ImsError, notFound, type ImsActor } from "./host.js";
 import { formatDocNo, movementEffect, round2, round3, todayISO, type MovementType } from "./logic.js";
+import { movingWeightedAvgCost } from "./serials.js";
 
 export type MovementInput = {
   itemId: string;
@@ -65,15 +66,17 @@ export async function postMovement(conn: PoolConnection, actor: ImsActor, input:
     throw new ImsError(409, `Only ${damagedBefore} damaged ${item.name} in quarantine.`, undefined, "IMS_INSUFFICIENT_STOCK");
   }
   const qty = round3(Math.abs(input.qty));
-  const unitCost = input.unitCost ?? money(item.purchase_price);
+  const prevCost = money(item.purchase_price);
+  const unitCost = input.unitCost ?? prevCost;
   const unitPrice = input.unitPrice ?? (input.type === "OUT" ? money(item.selling_price) : null);
   const value = round2(qty * (input.type === "OUT" && unitPrice != null ? unitPrice : unitCost));
+  const nextPurchasePrice = input.type === "IN" && input.unitCost && input.unitCost > 0 ? movingWeightedAvgCost(before, prevCost, qty, input.unitCost) : null;
   await exec(
     conn,
     `UPDATE ims_items SET current_stock = :after, damaged_stock = :damagedAfter, last_movement_at = CURRENT_TIMESTAMP
-     ${input.type === "IN" && input.unitCost ? ", purchase_price = :unitCost" : ""}
+     ${nextPurchasePrice !== null ? ", purchase_price = :nextPurchasePrice" : ""}
      WHERE tenant_id = :tenantId AND id = :id`,
-    { tenantId: actor.tenantId, id: item.id, after, damagedAfter, unitCost },
+    { tenantId: actor.tenantId, id: item.id, after, damagedAfter, nextPurchasePrice },
   );
   const id = randomUUID();
   await exec(

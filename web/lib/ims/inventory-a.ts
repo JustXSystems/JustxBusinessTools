@@ -110,8 +110,9 @@ export type ImportField = {
 };
 
 export const IMPORT_FIELDS: ReadonlyArray<ImportField> = [
-  { key: "name", label: "Item name", aliases: ["name", "item", "itemname", "product", "productname", "description"], required: true, sample: "Kingfisher Premium 650ml" },
-  { key: "sku", label: "SKU / code", aliases: ["sku", "code", "itemcode", "productcode", "partno", "partnumber"], sample: "KF-650" },
+  { key: "name", label: "Item name", aliases: ["name", "item", "itemname", "product", "productname", "description"], required: true, sample: "Hikvision 2MP Dome Camera" },
+  { key: "serialNo", label: "Serial / Scan code", aliases: ["serial", "serialno", "serialnumber", "scancode", "imei", "unitcode", "assetcode", "tag", "sn"], sample: "HK-2MP-0001" },
+  { key: "sku", label: "SKU / code", aliases: ["sku", "code", "itemcode", "productcode", "partno", "partnumber"], sample: "HK-2MP" },
   { key: "barcode", label: "Barcode", aliases: ["barcode", "ean", "upc", "gtin", "qr"], sample: "8901234567890" },
   { key: "category", label: "Category", aliases: ["category", "group", "itemgroup", "type"], sample: "Beer" },
   { key: "brand", label: "Brand", aliases: ["brand", "make", "manufacturer", "company"], sample: "Kingfisher" },
@@ -153,8 +154,52 @@ const parseNumber = (v: unknown): number | null => {
 
 export type MappedRow = { index: number; record: Record<string, string | number>; issues: string[] };
 
+export type ImportMode = "sku" | "serialized";
+
+export type SerializedPreviewGroup = {
+  key: string;
+  name: string;
+  category: string | null;
+  brand: string | null;
+  unit: string;
+  units: number;
+  avgPurchasePrice: number | null;
+  sellingPrice: number | null;
+  sampleCodes: string[];
+};
+
+const normKeyPart = (v: unknown) =>
+  String(v ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+/**
+ * Heuristically detects a 1-row-per-physical-unit Excel sheet:
+ * repeated item names carrying distinct scan codes (serialNo / barcode / sku),
+ * or an explicitly mapped `serialNo` column.
+ */
+export function detectSerializedImport(rows: ReadonlyArray<Record<string, unknown>>, mapping: Record<string, string>): boolean {
+  if (mapping.serialNo) return true;
+  if (!mapping.name) return false;
+  const codeCol = mapping.barcode || mapping.sku;
+  if (!codeCol) return false;
+  const seenNames = new Map<string, Set<string>>();
+  for (const r of rows.slice(0, 500)) {
+    const name = normKeyPart(r[mapping.name]);
+    const code = normKeyPart(r[codeCol]);
+    if (!name || !code) continue;
+    const set = seenNames.get(name) ?? new Set<string>();
+    set.add(code);
+    seenNames.set(name, set);
+    if (set.size >= 2) return true;
+  }
+  return false;
+}
+
 /** Applies the column mapping; blanks are dropped so server defaults apply. */
-export function mapRows(rows: ReadonlyArray<Record<string, unknown>>, mapping: Record<string, string>): MappedRow[] {
+export function mapRows(rows: ReadonlyArray<Record<string, unknown>>, mapping: Record<string, string>, mode: ImportMode = "sku"): MappedRow[] {
+  const seenCodes = new Map<string, number>();
   return rows.map((raw, index) => {
     const record: Record<string, string | number> = {};
     const issues: string[] = [];
@@ -174,8 +219,68 @@ export function mapRows(rows: ReadonlyArray<Record<string, unknown>>, mapping: R
     }
     if (!record.name) issues.push("Item name is missing");
     if (typeof record.gstRate === "number" && record.gstRate > 100) issues.push("GST % must be 0–100");
+    if (mode === "serialized") {
+      const code = String(record.serialNo ?? record.barcode ?? record.sku ?? "").trim();
+      if (!code) {
+        issues.push("Scan code / serial number is missing");
+      } else {
+        record.serialNo = code;
+        const codeKey = code.toLowerCase();
+        const prev = seenCodes.get(codeKey);
+        if (prev !== undefined) {
+          issues.push(`Duplicate scan code “${code}” (same as sheet row ${prev})`);
+        } else {
+          seenCodes.set(codeKey, index + 2);
+        }
+      }
+    }
     return { index, record, issues };
   });
+}
+
+/** Groups valid serialized rows into products for the import preview table. */
+export function groupSerializedPreview(readyRows: ReadonlyArray<MappedRow>): SerializedPreviewGroup[] {
+  const byKey = new Map<
+    string,
+    {
+      name: string;
+      category: string | null;
+      brand: string | null;
+      unit: string;
+      prices: number[];
+      sellingPrice: number | null;
+      codes: string[];
+    }
+  >();
+  for (const r of readyRows) {
+    const name = String(r.record.name ?? "").trim();
+    const category = r.record.category ? String(r.record.category).trim() : null;
+    const brand = r.record.brand ? String(r.record.brand).trim() : null;
+    const unit = r.record.unit ? String(r.record.unit).trim() : "pcs";
+    const key = `${normKeyPart(name)}||${normKeyPart(category)}||${normKeyPart(brand)}`;
+    const code = String(r.record.serialNo ?? r.record.barcode ?? r.record.sku ?? "").trim();
+    const buy = typeof r.record.purchasePrice === "number" && r.record.purchasePrice > 0 ? r.record.purchasePrice : null;
+    const sell = typeof r.record.sellingPrice === "number" ? r.record.sellingPrice : null;
+    const g = byKey.get(key);
+    if (!g) {
+      byKey.set(key, { name, category, brand, unit, prices: buy != null ? [buy] : [], sellingPrice: sell, codes: code ? [code] : [] });
+    } else {
+      if (buy != null) g.prices.push(buy);
+      if (g.sellingPrice == null && sell != null) g.sellingPrice = sell;
+      if (code) g.codes.push(code);
+    }
+  }
+  return [...byKey.entries()].map(([key, g]) => ({
+    key,
+    name: g.name,
+    category: g.category,
+    brand: g.brand,
+    unit: g.unit,
+    units: g.codes.length,
+    avgPurchasePrice: g.prices.length ? Math.round((g.prices.reduce((s, p) => s + p, 0) / g.prices.length) * 100) / 100 : null,
+    sellingPrice: g.sellingPrice,
+    sampleCodes: g.codes.slice(0, 3),
+  }));
 }
 
 /** Skip fully blank spreadsheet rows (trailing formatting in Excel). */

@@ -480,7 +480,10 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
     const [items, parties, invoices, pos, bills, boms, packages, dcs, returns] = await Promise.all([
       rows<{ id: string; name: string; sku: string | null; current_stock: string; unit: string }>(
         deps.db,
-        `SELECT id, name, sku, current_stock, unit FROM ims_items WHERE tenant_id = :tenantId AND (name LIKE :q OR sku LIKE :q OR barcode = :exact) ORDER BY name LIMIT 8`,
+        `SELECT id, name, sku, current_stock, unit FROM ims_items
+         WHERE tenant_id = :tenantId
+           AND (name LIKE :q OR sku LIKE :q OR barcode = :exact OR EXISTS (SELECT 1 FROM ims_item_serials s WHERE s.tenant_id = ims_items.tenant_id AND s.item_id = ims_items.id AND s.serial_no = :exact))
+         ORDER BY name LIMIT 8`,
         params,
       ),
       rows<{ id: string; name: string; kind: string; mobile: string | null }>(

@@ -32,6 +32,7 @@ type Form = {
   exciseCategory: string;
   notes: string;
   active: boolean;
+  trackSerials: boolean;
 };
 
 const str = (v: number | string | null | undefined) => (v === null || v === undefined ? "" : String(v));
@@ -59,6 +60,7 @@ function formOf(item: ImsItem | null, defaults: { gstRate: number; barcode?: str
     exciseCategory: item?.exciseCategory ?? "",
     notes: item?.notes ?? "",
     active: item?.active ?? true,
+    trackSerials: item?.trackSerials ?? false,
   };
 }
 
@@ -105,6 +107,7 @@ function inputOf(f: Form, excise: boolean): ItemInput {
     notes: nullable(f.notes),
     ...(excise ? { volumeMl: f.volumeMl.trim() ? Math.round(num(f.volumeMl)) : null, exciseCategory: nullable(f.exciseCategory) } : {}),
     active: f.active,
+    trackSerials: f.trackSerials,
   };
 }
 
@@ -348,6 +351,10 @@ function ItemForm({
         <Field label="Notes" full>
           {({ id }) => <Textarea id={id} rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} maxLength={2000} placeholder="Pack size, storage, anything the team should know" />}
         </Field>
+        <div className="ims-row bos-form-grid-full">
+          <Switch checked={f.trackSerials} onChange={(v) => set("trackSerials", v)} aria-label="Track unique scan codes per unit" />
+          <span className="ims-muted">Track unique scan codes / serial numbers per physical unit</span>
+        </div>
         {item ? (
           <div className="ims-row bos-form-grid-full">
             <Switch checked={f.active} onChange={(v) => set("active", v)} aria-label="Item is active" />

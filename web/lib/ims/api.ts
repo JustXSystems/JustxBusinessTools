@@ -446,6 +446,8 @@ export type ImsItem = {
   exciseCategory: string | null;
   notes: string | null;
   active: boolean;
+  trackSerials?: boolean;
+  serialCount?: number;
   status: StockStatus;
   stockValue: number;
   idleDays: number;
@@ -477,7 +479,22 @@ export type ItemInput = {
   exciseCategory?: string | null;
   notes?: string | null;
   active?: boolean;
+  trackSerials?: boolean;
 };
+
+export type SerialStatus = "in_stock" | "out" | "damaged" | "returned";
+
+export type ImsItemSerial = {
+  id: string;
+  serialNo: string;
+  status: SerialStatus;
+  purchasePrice: number | null;
+  notes: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type SerialCounts = { inStock: number; out: number; damaged: number; returned: number };
 
 export type ItemList = {
   items: ImsItem[];
@@ -518,7 +535,7 @@ export type PostedMovement = { id: string; itemId: string; itemName: string; typ
 
 export type MovementInput = {
   type: MovementType;
-  lines: Array<{ itemId: string; qty: number; unitCost?: number | null; unitPrice?: number | null; exciseDuty?: number | null; notes?: string | null }>;
+  lines: Array<{ itemId: string; qty: number; unitCost?: number | null; unitPrice?: number | null; exciseDuty?: number | null; notes?: string | null; serials?: string[] }>;
   partyId?: string | null;
   partyName?: string | null;
   refNo?: string | null;
@@ -632,12 +649,24 @@ export const ims = {
     put<{ members: ImsMember[] }>(`/team/${userId}`, input),
 
   items: (params: { q?: string; category?: string; brand?: string; supplierId?: string; status?: StockStatus | "ATTENTION"; includeInactive?: boolean } = {}) => get<ItemList>("/items", params),
-  item: (id: string) => get<{ item: ImsItem; movements: ImsMovement[]; stats90d: Partial<Record<MovementType, { qty: number; value: number }>> }>(`/items/${id}`),
-  lookupItem: (code: string) => get<{ item: ImsItem | null }>("/items/lookup", { code }),
+  item: (id: string) =>
+    get<{
+      item: ImsItem;
+      movements: ImsMovement[];
+      stats90d: Partial<Record<MovementType, { qty: number; value: number }>>;
+      serials?: ImsItemSerial[];
+      serialCounts?: SerialCounts;
+    }>(`/items/${id}`),
+  lookupItem: (code: string) =>
+    get<{
+      item: ImsItem | null;
+      serial?: { id: string; serialNo: string; status: SerialStatus; purchasePrice: number | null } | null;
+    }>("/items/lookup", { code }),
   createItem: (input: ItemInput & { openingStock?: number }) => post<{ item: ImsItem }>("/items", input),
   updateItem: (id: string, input: Partial<ItemInput>) => patch<{ item: ImsItem }>(`/items/${id}`, input),
   deleteItem: (id: string) => del<{ archived?: boolean } | undefined>(`/items/${id}`),
-  importItems: (items: Array<Record<string, unknown>>) => post<{ created: number; updated: number; errors: string[] }>("/items/bulk", { items }),
+  importItems: (items: Array<Record<string, unknown>>, mode: "sku" | "serialized" = "sku") =>
+    post<{ created: number; updated: number; serialsAdded?: number; errors: string[] }>("/items/bulk", { mode, items }),
   /** Link existing catalogue rows or create missing ones (BOM + Items). */
   ensureItems: (input: {
     source?: string;
