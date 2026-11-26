@@ -465,7 +465,7 @@ async function loadCheck(deps: ImsDeps, tenantId: number, id: string): Promise<C
 
 /* ---------- Returns ---------- */
 
-type ReturnLine = { itemId: string | null; name: string; unit: string | null; qty: number; rate: number; amount: number };
+type ReturnLine = { itemId: string | null; name: string; unit: string | null; qty: number; rate: number; amount: number; serials?: string[] };
 
 type ReturnRow = {
   id: string;
@@ -516,7 +516,17 @@ const ReturnInput = z.object({
   refDocId: z.string().max(36).nullable().optional(),
   refDocNo: optText(64),
   date: isoDate.optional(),
-  lines: z.array(z.object({ itemId: z.string().uuid(), qty: z.coerce.number().positive().max(1e9), rate: z.coerce.number().min(0).max(1e10).optional() })).min(1).max(200),
+  lines: z
+    .array(
+      z.object({
+        itemId: z.string().uuid(),
+        qty: z.coerce.number().positive().max(1e9),
+        rate: z.coerce.number().min(0).max(1e10).optional(),
+        serials: z.array(z.string().trim().min(1).max(100)).max(500).optional(),
+      }),
+    )
+    .min(1)
+    .max(200),
   reason: optText(120),
   disposition: z.enum(["restock", "damaged"]).default("restock"),
   refundStatus: z.enum(["none", "pending", "refunded", "credit_note"]).default("none"),
@@ -1738,8 +1748,20 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
         });
         if (!item) throw notFound("Item");
         const rate = l.rate ?? (input.kind === "customer" ? money(item.selling_price) : money(item.purchase_price));
-        lines.push({ itemId: l.itemId, name: item.name, unit: item.unit, qty: round3(l.qty), rate: round2(rate), amount: round2(l.qty * rate) });
-        await postMovement(
+        const uniqueSerials = l.serials?.length ? [...new Set(l.serials.map((s) => s.trim()).filter(Boolean))] : [];
+        if (uniqueSerials.length && uniqueSerials.length !== Math.round(l.qty)) {
+          throw new ImsError(400, `Quantity (${l.qty}) must match the number of scan codes provided (${uniqueSerials.length}).`);
+        }
+        lines.push({
+          itemId: l.itemId,
+          name: item.name,
+          unit: item.unit,
+          qty: round3(l.qty),
+          rate: round2(rate),
+          amount: round2(l.qty * rate),
+          ...(uniqueSerials.length ? { serials: uniqueSerials } : {}),
+        } as ReturnLine);
+        const mv = await postMovement(
           conn,
           actor,
           {
@@ -1761,6 +1783,40 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
           },
           { allowNegative: negativeAllowed(settings.allowNegativeStock, input.kind === "customer" ? "RETURN_IN" : "RETURN_OUT", l.qty, input.disposition === "damaged") },
         );
+        if (uniqueSerials.length) {
+          for (const code of uniqueSerials) {
+            const found = await one<{ id: string; item_id: string; status: SerialStatus }>(
+              conn,
+              `SELECT id, item_id, status FROM ims_item_serials WHERE tenant_id = :tenantId AND serial_no = :code LIMIT 1 FOR UPDATE`,
+              { tenantId: actor.tenantId, code },
+            );
+            if (input.kind === "customer") {
+              const targetStatus: SerialStatus = input.disposition === "damaged" ? "damaged" : "in_stock";
+              if (found) {
+                if (found.item_id !== l.itemId) throw conflict(`Scan code "${code}" belongs to another item.`);
+                await exec(
+                  conn,
+                  `UPDATE ims_item_serials SET status = :status, in_movement_id = :mvId, out_movement_id = NULL WHERE id = :id`,
+                  { id: found.id, status: targetStatus, mvId: mv.id },
+                );
+              } else {
+                await exec(
+                  conn,
+                  `INSERT INTO ims_item_serials (id, tenant_id, item_id, serial_no, status, in_movement_id, notes, created_by)
+                   VALUES (:sid, :tenantId, :itemId, :code, :status, :mvId, :notes, :userId)`,
+                  { sid: randomUUID(), tenantId: actor.tenantId, itemId: l.itemId, code, status: targetStatus, mvId: mv.id, notes: input.notes ?? null, userId: actor.userId },
+                );
+              }
+            } else {
+              if (!found || found.item_id !== l.itemId) throw conflict(`Scan code "${code}" is not registered on this item.`);
+              await exec(
+                conn,
+                `UPDATE ims_item_serials SET status = 'returned', out_movement_id = :mvId WHERE id = :id`,
+                { id: found.id, mvId: mv.id },
+              );
+            }
+          }
+        }
       }
       const total = round2(lines.reduce((s, l) => s + l.amount, 0));
       await exec(
@@ -1849,6 +1905,16 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
           },
           { allowNegative: negativeAllowed(settings.allowNegativeStock, type, l.qty, damaged) },
         );
+        if (l.serials?.length) {
+          const revertStatus: SerialStatus = row.kind === "customer" ? "out" : damaged ? "damaged" : "in_stock";
+          for (const code of l.serials) {
+            await exec(
+              conn,
+              `UPDATE ims_item_serials SET status = :status WHERE tenant_id = :tenantId AND item_id = :itemId AND serial_no = :code`,
+              { status: revertStatus, tenantId: actor.tenantId, itemId: l.itemId, code },
+            );
+          }
+        }
       }
       await exec(conn, `UPDATE ims_returns SET status = 'cancelled' WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id: row.id });
     });

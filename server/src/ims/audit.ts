@@ -361,6 +361,37 @@ async function detectIssues(db: Queryable, tenantId: number, range: Range, today
     }),
   );
 
+  /* Serialized stock: track_serials items where current_stock != in_stock serial count */
+  const serialDrift = await rows<{ id: string; name: string; unit: string; current_stock: string; tracked: number }>(
+    db,
+    `SELECT i.id, i.name, i.unit, i.current_stock, COUNT(s.id) AS tracked
+     FROM ims_items i
+     LEFT JOIN ims_item_serials s ON s.tenant_id = i.tenant_id AND s.item_id = i.id AND s.status = 'in_stock'
+     WHERE i.tenant_id = :tenantId AND i.active = 1 AND i.track_serials = 1
+     GROUP BY i.id, i.name, i.unit, i.current_stock
+     HAVING ABS(i.current_stock - COUNT(s.id)) > 0.0005
+     LIMIT ${PER_CATEGORY_LIMIT}`,
+    { tenantId },
+  );
+  push(
+    serialDrift.map((s) => {
+      const cur = round3(money(s.current_stock));
+      const tracked = Number(s.tracked);
+      return {
+        key: `stock-serial:${s.id}`,
+        category: "stock" as const,
+        severity: "medium" as const,
+        title: `${s.name}: stock count doesn't match tracked scan codes`,
+        detail: `Item shows ${cur} ${s.unit} in stock, but ${tracked} tracked scan code${tracked === 1 ? "" : "s"} are currently marked in stock.`,
+        entityType: "item",
+        entityId: s.id,
+        entityLabel: s.name,
+        amount: null,
+        date: null,
+      };
+    }),
+  );
+
   /* Unusual entries */
   const unusual: AuditIssue[] = [];
   const moves = await rows<{ id: string; item_id: string; item_name: string; type: string; qty: string; delta: string; value: string; reason: string | null; movement_date: string; created_at: string; actor_name: string | null; ref_type: string }>(

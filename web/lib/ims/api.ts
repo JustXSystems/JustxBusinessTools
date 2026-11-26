@@ -579,7 +579,7 @@ export type ImsReturn = {
   refDocId: string | null;
   refDocNo: string | null;
   date: string;
-  lines: Array<{ itemId: string; name: string; unit: string | null; qty: number; rate: number; amount: number }>;
+  lines: Array<{ itemId: string; name: string; unit: string | null; qty: number; rate: number; amount: number; serials?: string[] }>;
   total: number;
   reason: string | null;
   disposition: "restock" | "damaged";
@@ -597,7 +597,7 @@ export type ReturnInput = {
   refDocId?: string | null;
   refDocNo?: string | null;
   date?: string;
-  lines: Array<{ itemId: string; qty: number; rate?: number }>;
+  lines: Array<{ itemId: string; qty: number; rate?: number; serials?: string[] }>;
   reason?: string | null;
   disposition?: "restock" | "damaged";
   refundStatus?: RefundStatus;

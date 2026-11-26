@@ -494,7 +494,7 @@ function ReturnDetailDialog({ ret, onClose }: { ret: ImsReturn; onClose: () => v
 
 /* ---------- New return ---------- */
 
-type RLine = { key: string; item: ImsItem; qty: string; rate: string };
+type RLine = { key: string; item: ImsItem; qty: string; rate: string; serials: string[] };
 let rlineSeq = 0;
 
 function NewReturnDialog({ kind, preset, onClose }: { kind: Kind; preset?: Creating["preset"]; onClose: () => void }) {
@@ -511,12 +511,15 @@ function NewReturnDialog({ kind, preset, onClose }: { kind: Kind; preset?: Creat
   const [reason, setReason] = useState("");
   const [disposition, setDisposition] = useState<Disposition>(preset?.disposition ?? "restock");
   const [lines, setLines] = useState<RLine[]>(() =>
-    preset ? [{ key: `r${++rlineSeq}`, item: preset.item, qty: String(preset.disposition === "damaged" ? preset.item.damagedStock : 1), rate: String(kind === "customer" ? preset.item.sellingPrice : preset.item.purchasePrice) }] : [],
+    preset ? [{ key: `r${++rlineSeq}`, item: preset.item, qty: String(preset.disposition === "damaged" ? preset.item.damagedStock : 1), rate: String(kind === "customer" ? preset.item.sellingPrice : preset.item.purchasePrice), serials: [] }] : [],
   );
   const [refund, setRefund] = useState<RefundStatus>(kind === "customer" ? "pending" : "none");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [touched, setTouched] = useState(false);
+  const [serialCode, setSerialCode] = useState("");
+  const [serialMsg, setSerialMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+  const [tracing, setTracing] = useState(false);
 
   const reasons = meta.data?.taxonomy.returnReasons ?? [];
   const reasonValue = reason || reasons[0] || "";
@@ -533,6 +536,7 @@ function NewReturnDialog({ kind, preset, onClose }: { kind: Kind; preset?: Creat
     let error: string | null = null;
     if (!Number.isFinite(qty) || qty <= 0) error = "Enter a quantity";
     else if (!Number.isFinite(rate) || rate < 0) error = "Enter a valid rate";
+    else if (l.serials.length && l.serials.length !== Math.round(qty)) error = `Quantity (${qty}) must match scanned codes (${l.serials.length})`;
     else if (kind === "supplier" && qty > available && (fromQuarantine || !allowNegative)) error = `Only ${qtyText(available, item.unit)} ${fromQuarantine ? "damaged" : "in stock"}`;
     return { l, item, qty, rate, amount: Number.isFinite(qty) && Number.isFinite(rate) ? round2(qty * rate) : 0, available, error };
   });
@@ -547,13 +551,61 @@ function NewReturnDialog({ kind, preset, onClose }: { kind: Kind; preset?: Creat
     isOther(reasonValue) && !notes.trim() ? "Add a note when the reason is “Other”" : null,
   ].filter((e): e is string => Boolean(e));
 
-  const add = (item: ImsItem) =>
-    setLines((ls) =>
-      ls.some((l) => l.item.id === item.id)
-        ? ls.map((l) => (l.item.id === item.id ? { ...l, qty: String(round3(num(l.qty, 0) + 1)) } : l))
-        : [...ls, { key: `r${++rlineSeq}`, item, qty: "1", rate: String(kind === "customer" ? item.sellingPrice : item.purchasePrice) }],
-    );
+  const add = (item: ImsItem, serial?: string) =>
+    setLines((ls) => {
+      const existing = ls.find((l) => l.item.id === item.id);
+      if (existing) {
+        if (serial && existing.serials.includes(serial)) return ls;
+        const nextSerials = serial ? [...existing.serials, serial] : existing.serials;
+        const nextQty = serial ? Math.max(num(existing.qty, 0) + 1, nextSerials.length) : round3(num(existing.qty, 0) + 1);
+        return ls.map((l) => (l.item.id === item.id ? { ...l, qty: String(nextQty), serials: nextSerials } : l));
+      }
+      return [
+        ...ls,
+        {
+          key: `r${++rlineSeq}`,
+          item,
+          qty: "1",
+          rate: String(kind === "customer" ? item.sellingPrice : item.purchasePrice),
+          serials: serial ? [serial] : [],
+        },
+      ];
+    });
   const patch = (key: string, p: Partial<RLine>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...p } : l)));
+
+  const traceAndAddSerial = async () => {
+    const code = serialCode.trim();
+    if (!code || tracing) return;
+    setTracing(true);
+    setSerialMsg(null);
+    try {
+      const res = await ims.traceSerial(code);
+      if (!res.serial || !res.item) {
+        setSerialMsg({ tone: "err", text: `No tracked unit found for scan code “${code}”.` });
+        return;
+      }
+      if (lines.some((l) => l.serials.includes(res.serial!.serialNo))) {
+        setSerialMsg({ tone: "err", text: `Scan code “${res.serial.serialNo}” is already in this return.` });
+        setSerialCode("");
+        return;
+      }
+      add(res.item, res.serial.serialNo);
+      const mv = kind === "customer" ? res.outMovement : res.inMovement;
+      if (mv) {
+        if (!party.name.trim() && mv.partyName) setParty({ id: mv.partyId ?? null, name: mv.partyName });
+        if (!refDocNo.trim() && mv.refNo) setRefDocNo(mv.refNo);
+      }
+      setSerialMsg({
+        tone: "ok",
+        text: `Added ${res.item.name} (${res.serial.serialNo})${mv?.partyName ? ` · traced to ${mv.partyName}` : ""}`,
+      });
+      setSerialCode("");
+    } catch {
+      setSerialMsg({ tone: "err", text: "Could not look up that scan code." });
+    } finally {
+      setTracing(false);
+    }
+  };
 
   const submit = async () => {
     setTouched(true);
@@ -567,7 +619,12 @@ function NewReturnDialog({ kind, preset, onClose }: { kind: Kind; preset?: Creat
           partyName: party.name.trim(),
           refDocNo: refDocNo.trim() || null,
           date,
-          lines: rows.map((r) => ({ itemId: r.item.id, qty: round3(r.qty), rate: round2(r.rate) })),
+          lines: rows.map((r) => ({
+            itemId: r.item.id,
+            qty: round3(r.qty),
+            rate: round2(r.rate),
+            ...(r.l.serials.length ? { serials: r.l.serials } : {}),
+          })),
           reason: reasonValue || null,
           disposition,
           refundStatus: refund,
@@ -639,9 +696,34 @@ function NewReturnDialog({ kind, preset, onClose }: { kind: Kind; preset?: Creat
 
         <div>
           <div className="bos-field-label" style={{ marginBottom: 8 }}>
+            Scan a unit serial code (optional — auto-fills item &amp; party)
+          </div>
+          <div className="ims-row" style={{ gap: 8, marginBottom: 10 }}>
+            <Input
+              size="sm"
+              placeholder="Scan or type unit serial / barcode and press Enter…"
+              value={serialCode}
+              onChange={(e) => setSerialCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void traceAndAddSerial();
+                }
+              }}
+            />
+            <Button size="sm" variant="secondary" icon="search" disabled={tracing || !serialCode.trim()} onClick={() => void traceAndAddSerial()}>
+              {tracing ? "Looking up…" : "Add unit"}
+            </Button>
+          </div>
+          {serialMsg ? (
+            <div style={{ fontSize: 12, marginBottom: 8, color: serialMsg.tone === "err" ? "var(--bos-coral)" : "var(--bos-teal)" }}>
+              {serialMsg.text}
+            </div>
+          ) : null}
+          <div className="bos-field-label" style={{ marginBottom: 8 }}>
             Items
           </div>
-          <ItemSearch onPick={add} price={kind === "customer" ? "selling" : "purchase"} exclude={exclude} placeholder={fromQuarantine ? "Search items with damaged stock…" : "Search or scan items…"} />
+          <ItemSearch onPick={(it) => add(it)} price={kind === "customer" ? "selling" : "purchase"} exclude={exclude} placeholder={fromQuarantine ? "Search items with damaged stock…" : "Search or scan items…"} />
         </div>
 
         {rows.length ? (
@@ -653,6 +735,15 @@ function NewReturnDialog({ kind, preset, onClose }: { kind: Kind; preset?: Creat
                   <small className={touched && r.error ? "ims-b-err" : undefined}>
                     {touched && r.error ? r.error : kind === "supplier" ? `${qtyText(r.available, r.item.unit)} ${fromQuarantine ? "damaged" : "in stock"}` : `${qtyText(r.item.currentStock, r.item.unit)} in stock`}
                   </small>
+                  {r.l.serials.length ? (
+                    <div className="ims-row" style={{ flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                      {r.l.serials.map((s) => (
+                        <span key={s} className="ims-mono" style={{ fontSize: 11, padding: "1px 6px", borderRadius: 4, background: "var(--bos-surface-alt, #f1f5f9)" }}>
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </span>
                 <QtyStepper value={r.l.qty} onChange={(qty) => patch(r.l.key, { qty })} label={`Quantity of ${r.item.name}`} min={0} invalid={touched && Boolean(r.error)} />
                 <Input size="sm" inputMode="decimal" aria-label={`Rate for ${r.item.name}`} value={r.l.rate} onChange={(e) => patch(r.l.key, { rate: e.target.value.replace(/[^\d.]/g, "") })} />
@@ -971,7 +1062,7 @@ function ReportDamageDialog({ onClose }: { onClose: () => void }) {
       <Stack gap={14}>
         <ItemSearch
           onPick={(item) =>
-            setLines((ls) => (ls.some((l) => l.item.id === item.id) ? ls.map((l) => (l.item.id === item.id ? { ...l, qty: String(round3(num(l.qty, 0) + 1)) } : l)) : [...ls, { key: `r${++rlineSeq}`, item, qty: "1", rate: "" }]))
+            setLines((ls) => (ls.some((l) => l.item.id === item.id) ? ls.map((l) => (l.item.id === item.id ? { ...l, qty: String(round3(num(l.qty, 0) + 1)) } : l)) : [...ls, { key: `r${++rlineSeq}`, item, qty: "1", rate: "", serials: [] }]))
           }
           price="purchase"
         />
