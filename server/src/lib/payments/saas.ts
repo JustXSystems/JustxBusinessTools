@@ -186,11 +186,12 @@ export async function recordSaasTransaction(
   }
 
   if (status === "success" && type === "subscription_charge") {
-    const mrr = Number.isFinite(Number(amountInr)) ? Math.max(0, Number(amountInr)) : 0;
-    await pool.query(
-      `UPDATE org_subscriptions SET mrr_inr = :mrr WHERE organization_id = :orgId`,
-      { orgId, mrr },
-    );
+    try {
+      const { refreshOrgMrr } = await import("../tool-licenses.js");
+      await refreshOrgMrr(orgId);
+    } catch {
+      /* fallback: keep existing org_subscriptions.mrr_inr */
+    }
   }
   return "inserted";
 }

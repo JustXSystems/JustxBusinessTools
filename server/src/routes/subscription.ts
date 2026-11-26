@@ -324,6 +324,114 @@ router.get("/", async (_req, res) => {
   }
 });
 
+router.get("/history", async (_req, res) => {
+  try {
+    const orgId = getActiveOrgId();
+    const profileId = getActiveProfileId();
+    const [profileMeta, skus] = await Promise.all([
+      fetchProfileCategoryMeta(profileId, orgId),
+      listToolSkus(),
+    ]);
+    const nameById = new Map(skus.map((s) => [s.toolId, s.name]));
+
+    const entries: Array<{
+      id: string;
+      kind: "upi_claim" | "gateway_txn";
+      reference: string;
+      status: string;
+      amountInr: number;
+      billingCycle: BillingCycle;
+      provider: string;
+      toolIds: string[];
+      toolNames: string[];
+      payerName: string | null;
+      payerEmail: string | null;
+      occurredAt: string;
+      reviewNote: string | null;
+    }> = [];
+
+    const seenUtrs = new Set<string>();
+    try {
+      const [claimRows] = await pool.query(
+        `SELECT id, utr, status, amount_inr, billing_cycle, tool_ids, payer_name, payer_email,
+                review_note, created_at
+         FROM upi_payment_claims
+         WHERE organization_id = :orgId
+         ORDER BY created_at DESC LIMIT 50`,
+        { orgId },
+      );
+      for (const row of Array.isArray(claimRows) ? claimRows : []) {
+        const r = row as Record<string, unknown>;
+        const toolIds = parseToolIds(r.tool_ids);
+        const ref = String(r.utr ?? "");
+        if (ref) seenUtrs.add(ref.toUpperCase());
+        entries.push({
+          id: `upi:${r.id}`,
+          kind: "upi_claim",
+          reference: ref,
+          status: String(r.status ?? "pending"),
+          amountInr: Number(r.amount_inr ?? 0),
+          billingCycle: normalizeBillingCycle(r.billing_cycle),
+          provider: "upi",
+          toolIds,
+          toolNames: toolIds.map((id) => nameById.get(id) ?? id),
+          payerName: r.payer_name ? String(r.payer_name) : null,
+          payerEmail: r.payer_email ? String(r.payer_email) : null,
+          occurredAt: String(r.created_at ?? ""),
+          reviewNote: r.review_note ? String(r.review_note) : null,
+        });
+      }
+    } catch {
+      /* table may not exist yet */
+    }
+
+    try {
+      const [txnRows] = await pool.query(
+        `SELECT id, provider, external_id, type, status, amount_inr, occurred_at
+         FROM payment_transactions
+         WHERE organization_id = :orgId AND type = 'subscription_charge'
+         ORDER BY occurred_at DESC LIMIT 50`,
+        { orgId },
+      );
+      for (const row of Array.isArray(txnRows) ? txnRows : []) {
+        const r = row as Record<string, unknown>;
+        const ref = String(r.external_id ?? `TXN-${r.id}`);
+        if (String(r.provider) === "upi" && seenUtrs.has(ref.toUpperCase())) continue;
+        entries.push({
+          id: `txn:${r.id}`,
+          kind: "gateway_txn",
+          reference: ref,
+          status: String(r.status ?? "success"),
+          amountInr: Number(r.amount_inr ?? 0),
+          billingCycle: "month",
+          provider: String(r.provider ?? "card"),
+          toolIds: [],
+          toolNames: [],
+          payerName: null,
+          payerEmail: null,
+          occurredAt: String(r.occurred_at ?? ""),
+          reviewNote: null,
+        });
+      }
+    } catch {
+      /* table may not exist yet */
+    }
+
+    entries.sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1));
+    res.json({
+      entries: entries.slice(0, 50),
+      account: {
+        businessName: profileMeta.businessName,
+        gstin: profileMeta.gstin,
+        hasGstin: profileMeta.hasGstin,
+        userCategory: profileMeta.userCategory,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Could not load billing history" });
+  }
+});
+
 router.get("/quote", async (req, res) => {
   try {
     const profileId = getActiveProfileId();

@@ -1,6 +1,12 @@
 import type { BusinessProfile } from "@/lib/types/business-profile";
 import type { SessionUser } from "@/lib/types/auth";
-import type { CartQuote, CheckoutResult, SubscriptionInfo, UpiClaimResult } from "@/lib/types/subscription";
+import type {
+  BillingHistoryPayload,
+  CartQuote,
+  CheckoutResult,
+  SubscriptionInfo,
+  UpiClaimResult,
+} from "@/lib/types/subscription";
 import type { NotificationsPayload } from "@/lib/types/notification";
 import type { ToolRecord, ToolUsage } from "@/lib/types/tool-record";
 import { apiUrl } from "@/lib/api-base";
@@ -198,6 +204,10 @@ export async function deleteDocument(toolId: string, id: string): Promise<void> 
 
 export async function fetchSubscription(): Promise<SubscriptionInfo> {
   return api<SubscriptionInfo>("/subscription");
+}
+
+export async function fetchBillingHistory(): Promise<BillingHistoryPayload> {
+  return api<BillingHistoryPayload>("/subscription/history");
 }
 
 export async function fetchCartQuote(

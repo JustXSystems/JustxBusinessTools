@@ -10,6 +10,7 @@ import {
   revokeToolLicensesForOrg,
 } from "./tool-licenses.js";
 import { getToolSku, listToolSkus } from "./tool-skus.js";
+import { computeRenewedPeriodEnd } from "./pricing-engine.js";
 import { notifyLicensesGranted } from "./notification-billing.js";
 import {
   listSubscriptionItems,
@@ -51,14 +52,52 @@ export async function activateToolCommerce(input: {
   }
 
   const existing = await listActiveLicenses(input.profileId);
+  const existingByTool = new Map(existing.map((l) => [l.toolId, l]));
   const have = new Set(existing.map((l) => l.toolId));
   const defaultDays = input.defaultDays ?? 30;
+  const now = new Date();
   const sharedEnd = input.periodEnd ?? daysFromNow(defaultDays);
+  const requestedDays = Math.max(
+    1,
+    Math.round((sharedEnd.getTime() - now.getTime()) / 86_400_000) || defaultDays,
+  );
+
+  // Detect active trials so trial->paid conversions start fresh while paid renewals stack remaining days.
+  const trialTools = new Set<string>();
+  if (input.source !== "trial") {
+    try {
+      const existingItems = await listSubscriptionItems(orgId);
+      for (const item of existingItems) {
+        if (item.source === "trial") trialTools.add(item.toolId);
+      }
+    } catch {
+      /* table may still be booting */
+    }
+  }
 
   // Prefer trial period end from SKU; keep billing line at ₹0 until paid activation.
   const usePerToolTrial = Boolean(input.preferTrial && !input.periodEnd);
   if (!usePerToolTrial) {
-    await grantToolLicenses(input.profileId, unique, sharedEnd, input.sourceClaimId);
+    const needsPerToolStack =
+      input.source !== "trial" &&
+      unique.some((tid) => {
+        const cur = existingByTool.get(tid);
+        return Boolean(cur?.periodEnd && !trialTools.has(tid) && new Date(cur.periodEnd) > now);
+      });
+    if (!needsPerToolStack) {
+      await grantToolLicenses(input.profileId, unique, sharedEnd, input.sourceClaimId);
+    } else {
+      for (const toolId of unique) {
+        const cur = existingByTool.get(toolId);
+        const stackedEnd = computeRenewedPeriodEnd({
+          existingPeriodEnd: cur?.periodEnd ?? null,
+          isTrial: trialTools.has(toolId),
+          durationDays: requestedDays,
+          now,
+        });
+        await grantToolLicenses(input.profileId, [toolId], stackedEnd, input.sourceClaimId);
+      }
+    }
   } else {
     let farthest = sharedEnd;
     for (const toolId of unique) {

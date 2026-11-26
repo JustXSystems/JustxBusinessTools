@@ -225,3 +225,29 @@ export type UpiClaimResult = {
   claim: { id: number; status: string; utr: string; billingCycle?: BillingCycle };
   message: string;
 };
+
+export type BillingHistoryEntry = {
+  id: string;
+  kind: "upi_claim" | "gateway_txn";
+  reference: string;
+  status: string;
+  amountInr: number;
+  billingCycle: BillingCycle;
+  provider: string;
+  toolIds: string[];
+  toolNames: string[];
+  payerName: string | null;
+  payerEmail: string | null;
+  occurredAt: string;
+  reviewNote: string | null;
+};
+
+export type BillingHistoryPayload = {
+  entries: BillingHistoryEntry[];
+  account: {
+    businessName: string | null;
+    gstin: string | null;
+    hasGstin: boolean;
+    userCategory: UserCategory;
+  };
+};

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeRenewedPeriodEnd,
   cycleDurationDays,
   evaluatePackPersonalCompatibility,
   isLicenseConvertibleOrRenewable,
@@ -240,5 +241,24 @@ describe("pricing-engine", () => {
         now,
       }),
     ).toBe(false);
+  });
+
+  it("stacks remaining days on early paid renewal while starting fresh for trial conversions", () => {
+    const now = new Date("2026-06-01T00:00:00.000Z");
+    const stacked = computeRenewedPeriodEnd({
+      existingPeriodEnd: "2026-06-06T00:00:00.000Z", // 5 remaining paid days
+      isTrial: false,
+      durationDays: 30,
+      now,
+    });
+    expect(stacked.toISOString()).toBe("2026-07-06T00:00:00.000Z");
+
+    const fromTrial = computeRenewedPeriodEnd({
+      existingPeriodEnd: "2026-06-10T00:00:00.000Z",
+      isTrial: true,
+      durationDays: 365,
+      now,
+    });
+    expect(fromTrial.toISOString()).toBe("2027-06-01T00:00:00.000Z");
   });
 });

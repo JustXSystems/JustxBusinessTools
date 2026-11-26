@@ -57,6 +57,30 @@ export function isLicenseConvertibleOrRenewable(input: {
   return daysLeft <= RENEWAL_WINDOW_DAYS;
 }
 
+/**
+ * Stack renewal duration onto existing active paid periodEnd so early renewals
+ * never forfeit remaining paid days. Trials and expired licenses start from `now`.
+ */
+export function computeRenewedPeriodEnd(input: {
+  existingPeriodEnd?: string | Date | null;
+  isTrial?: boolean;
+  durationDays: number;
+  now?: Date;
+}): Date {
+  const now = input.now ?? new Date();
+  const addMs = Math.max(1, input.durationDays) * 86_400_000;
+  if (!input.isTrial && input.existingPeriodEnd) {
+    const existing =
+      input.existingPeriodEnd instanceof Date
+        ? input.existingPeriodEnd
+        : new Date(input.existingPeriodEnd);
+    if (!Number.isNaN(existing.getTime()) && existing.getTime() > now.getTime()) {
+      return new Date(existing.getTime() + addMs);
+    }
+  }
+  return new Date(now.getTime() + addMs);
+}
+
 export function normalizeBillingCycle(raw: unknown): BillingCycle {
   const v = String(raw ?? "")
     .trim()

@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useToast } from "@/components/common/ToastProvider";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { BillingStepper } from "@/components/subscription/BillingStepper";
+import { BillingHistoryPanel } from "@/components/subscription/BillingHistoryPanel";
 import { StoreCartDock } from "@/components/subscription/StoreCartDock";
 import { useSubscription } from "@/hooks/useSubscription";
 import { cancelProSubscription, fetchCartQuote, startToolTrial } from "@/lib/api";
@@ -936,6 +937,8 @@ export default function SubscriptionPage() {
               )}
             </div>
           </div>
+
+          <BillingHistoryPanel refreshKey={subscription.serverTime} />
         </>
       ) : null}
     </div>
