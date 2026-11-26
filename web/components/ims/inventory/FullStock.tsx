@@ -63,7 +63,7 @@ export function FullStockModule() {
 
   const all = useMemo(() => list.data?.items ?? [], [list.data]);
   const tiers = useMemo(() => velocityTiers(all), [all]);
-  const stocked = useMemo(() => all.filter((i) => i.currentStock > 0), [all]);
+  const stocked = useMemo(() => all.filter((i) => i.currentStock > 0 || i.damagedStock > 0), [all]);
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();

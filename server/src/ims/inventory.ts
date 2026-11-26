@@ -9,6 +9,7 @@ import {
   RESTORE_REASON,
   addDaysISO as addDays,
   agingBucket,
+  compareRestockUrgency,
   daysBetween,
   honoursDamagedFlag,
   isFutureDate,
@@ -31,6 +32,7 @@ import { inventItemFromBomLine } from "./item-invent.js";
 import { groupSerializedImportRows, type SerialStatus } from "./serials.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo, postMovement, type PostedMovement } from "./stock.js";
+import { loadStockSignals, serialsAvgCost, syncSerializedItemCost } from "./stock-state.js";
 
 /* ---------- Items ---------- */
 
@@ -69,14 +71,26 @@ export type ItemRow = {
 
 export type ImsItem = ReturnType<typeof mapItem>;
 
-export function mapItem(r: ItemRow, today = todayISO(), agingBreaks?: ReadonlyArray<number>, reorderFallbackFactor?: number) {
+export function mapItem(
+  r: ItemRow,
+  today = todayISO(),
+  agingBreaks?: ReadonlyArray<number>,
+  reorderFallbackFactor?: number,
+  signals?: { reserved?: number; onOrder?: number },
+) {
   const current = round3(money(r.current_stock));
+  const damaged = round3(money(r.damaged_stock));
   const min = round3(money(r.min_stock));
   const max = r.max_stock == null ? null : round3(money(r.max_stock));
   const purchasePrice = round2(money(r.purchase_price));
+  const reservedStock = round3(Math.max(0, signals?.reserved ?? 0));
+  const availableStock = round3(Math.max(0, current - reservedStock));
+  const onOrderStock = round3(Math.max(0, signals?.onOrder ?? 0));
   const lastMove = r.last_movement_at ?? r.created_at;
   const idleDays = lastMove ? Math.max(0, daysBetween(isoOf(lastMove), today)) : 0;
-  const status: StockStatus = stockStatus(current, min, max);
+  const status: StockStatus = stockStatus(current, min, max, { reserved: reservedStock });
+  const trackSerials = Boolean(r.track_serials);
+  const serialCount = Number(r.serial_in_stock ?? 0);
   return {
     id: r.id,
     name: r.name,
@@ -93,21 +107,38 @@ export function mapItem(r: ItemRow, today = todayISO(), agingBreaks?: ReadonlyAr
     sellingPrice: round2(money(r.selling_price)),
     mrp: r.mrp == null ? null : round2(money(r.mrp)),
     currentStock: current,
-    damagedStock: round3(money(r.damaged_stock)),
+    damagedStock: damaged,
+    reservedStock,
+    availableStock,
+    onOrderStock,
     minStock: min,
     maxStock: max,
     reorderQty: r.reorder_qty == null ? null : round3(money(r.reorder_qty)),
     suggestedReorder:
-      status === "LOW" || status === "OUT_OF_STOCK" ? reorderQty({ current, min, max, reorderQty: r.reorder_qty == null ? null : money(r.reorder_qty) }, reorderFallbackFactor) : 0,
+      status === "LOW" || status === "OUT_OF_STOCK"
+        ? reorderQty(
+            {
+              current,
+              min,
+              max,
+              reorderQty: r.reorder_qty == null ? null : money(r.reorder_qty),
+              reserved: reservedStock,
+              onOrder: onOrderStock,
+            },
+            reorderFallbackFactor,
+          )
+        : 0,
     location: r.location,
     volumeMl: r.volume_ml == null ? null : Number(r.volume_ml),
     exciseCategory: r.excise_category,
     notes: r.notes,
     active: Boolean(r.active),
-    trackSerials: Boolean(r.track_serials),
-    serialCount: Number(r.serial_in_stock ?? 0),
+    trackSerials,
+    serialCount,
+    serialMismatch: Boolean(trackSerials && Math.abs(current - serialCount) > 0.0005),
     status,
     stockValue: round2(Math.max(0, current) * purchasePrice),
+    damagedValue: round2(Math.max(0, damaged) * purchasePrice),
     idleDays,
     agingBucket: agingBucket(idleDays, agingBreaks),
     movement30d: round3(money(r.moved_30d)),
@@ -124,11 +155,17 @@ const ITEM_SELECT = `SELECT i.*, p.name AS supplier_name,
 
 export async function getItem(deps: ImsDeps, tenantId: number, id: string) {
   const today = todayISO();
-  const [r, settings] = await Promise.all([
+  const [r, settings, signals] = await Promise.all([
     one<ItemRow>(deps.db, `${ITEM_SELECT} WHERE i.tenant_id = :tenantId AND i.id = :id LIMIT 1`, { tenantId, id, since30: addDays(today, -29) }),
     getSettings(deps, tenantId),
+    loadStockSignals(deps.db, tenantId),
   ]);
-  return r ? mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor) : null;
+  return r
+    ? mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor, {
+        reserved: signals.reserved.get(r.id) ?? 0,
+        onOrder: signals.onOrder.get(r.id) ?? 0,
+      })
+    : null;
 }
 const ItemInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(200),
@@ -569,8 +606,17 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       params.supplierId = supplierId;
     }
     if (req.query.includeInactive !== "1") where.push("i.active = 1");
-    const settings = await getSettings(deps, actor.tenantId);
-    const list = (await rows<ItemRow>(deps.db, `${ITEM_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.name LIMIT 5000`, params)).map((r) => mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor));
+    const [settings, signals, rawList] = await Promise.all([
+      getSettings(deps, actor.tenantId),
+      loadStockSignals(deps.db, actor.tenantId),
+      rows<ItemRow>(deps.db, `${ITEM_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.name LIMIT 5000`, params),
+    ]);
+    const list = rawList.map((r) =>
+      mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor, {
+        reserved: signals.reserved.get(r.id) ?? 0,
+        onOrder: signals.onOrder.get(r.id) ?? 0,
+      }),
+    );
     const status = qstr(req.query.status, 20).toUpperCase();
     const filtered = status === "ATTENTION" ? list.filter((i) => i.status === "LOW" || i.status === "OUT_OF_STOCK") : status ? list.filter((i) => i.status === status) : list;
     const facets = await rows<{ category: string | null; brand: string | null; unit: string }>(
@@ -786,9 +832,21 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const input = parse(ItemInput, body);
     await assertUniqueBarcode(deps, actor.tenantId, input.barcode);
-    const openingQty = Math.max(0, Number(body.openingStock) || 0);
+    const rawSerials = Array.isArray(body.serials) ? [...new Set(body.serials.map((s) => String(s ?? "").trim()).filter(Boolean))] : [];
+    const openingQty = rawSerials.length > 0 && !(Number(body.openingStock) > 0) ? rawSerials.length : Math.max(0, Number(body.openingStock) || 0);
+    if (rawSerials.length > 0 && rawSerials.length !== Math.round(openingQty)) {
+      throw new ImsError(400, `Opening stock (${openingQty}) must match the number of scan codes provided (${rawSerials.length}).`);
+    }
+    for (const code of rawSerials) await assertUniqueBarcode(deps, actor.tenantId, code);
     const settings = await getSettings(deps, actor.tenantId);
-    const id = await insertItem(deps, actor, input, openingQty ? { qty: openingQty } : null, settings.allowNegativeStock);
+    const id = await insertItem(
+      deps,
+      actor,
+      input,
+      openingQty ? { qty: openingQty } : null,
+      settings.allowNegativeStock,
+      rawSerials.length ? rawSerials.map((serialNo) => ({ serialNo, purchasePrice: input.purchasePrice })) : undefined,
+    );
     await recordEvent(deps, actor, { type: "item.created", entityType: "item", entityId: id, summary: `Added item ${input.name}${openingQty ? ` with ${openingQty} ${input.unit} opening stock` : ""}` });
     res.status(201).json({ item: await getItem(deps, actor.tenantId, id) });
   });
@@ -1248,6 +1306,10 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
         if (uniqueSerials.length && uniqueSerials.length !== Math.round(Math.abs(line.qty))) {
           throw new ImsError(400, `Quantity (${line.qty}) must match the number of scan codes provided (${uniqueSerials.length}).`);
         }
+        const specificCost =
+          uniqueSerials.length && (input.type === "OUT" || input.type === "RETURN_OUT" || input.type === "DAMAGE" || input.type === "WRITE_OFF")
+            ? await serialsAvgCost(conn, actor.tenantId, line.itemId, uniqueSerials)
+            : null;
         const mv = await postMovement(
           conn,
           actor,
@@ -1256,7 +1318,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
             type: input.type,
             qty: line.qty,
             damaged,
-            unitCost: line.unitCost ?? null,
+            unitCost: line.unitCost ?? specificCost ?? null,
             unitPrice: line.unitPrice ?? null,
             exciseDuty: line.exciseDuty ?? null,
             refType: "manual",
@@ -1326,6 +1388,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
               );
             }
           }
+          await syncSerializedItemCost(conn, actor.tenantId, line.itemId);
         }
         out.push(mv);
       }
@@ -1409,17 +1472,27 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     });
   });
 
-  /** Low stock & reorder suggestions grouped by supplier. */
+  /** Low stock & reorder suggestions grouped by supplier (accounts for reserved stock & open POs). */
   router.get("/low-stock", async (_req, res) => {
     const actor = actorOf(res);
     const today = todayISO();
-    const settings = await getSettings(deps, actor.tenantId);
-    const list = (
-      await rows<ItemRow>(deps.db, `${ITEM_SELECT} WHERE i.tenant_id = :tenantId AND i.active = 1 AND i.current_stock <= i.min_stock ORDER BY i.current_stock / NULLIF(i.min_stock, 0)`, {
+    const [settings, signals, rawList] = await Promise.all([
+      getSettings(deps, actor.tenantId),
+      loadStockSignals(deps.db, actor.tenantId),
+      rows<ItemRow>(deps.db, `${ITEM_SELECT} WHERE i.tenant_id = :tenantId AND i.active = 1 ORDER BY i.name LIMIT 5000`, {
         tenantId: actor.tenantId,
         since30: addDays(today, -29),
-      })
-    ).map((r) => mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor));
+      }),
+    ]);
+    const list = rawList
+      .map((r) =>
+        mapItem(r, today, settings.agingBreaks, settings.reorderFallbackFactor, {
+          reserved: signals.reserved.get(r.id) ?? 0,
+          onOrder: signals.onOrder.get(r.id) ?? 0,
+        }),
+      )
+      .filter((i) => i.status === "OUT_OF_STOCK" || i.status === "LOW")
+      .sort(compareRestockUrgency);
     const groups = new Map<string, { supplierId: string | null; supplierName: string; items: typeof list; value: number }>();
     for (const i of list) {
       const key = i.supplierId ?? "none";
@@ -1816,6 +1889,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
               );
             }
           }
+          await syncSerializedItemCost(conn, actor.tenantId, l.itemId);
         }
       }
       const total = round2(lines.reduce((s, l) => s + l.amount, 0));
@@ -1914,6 +1988,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
               { status: revertStatus, tenantId: actor.tenantId, itemId: l.itemId, code },
             );
           }
+          await syncSerializedItemCost(conn, actor.tenantId, l.itemId);
         }
       }
       await exec(conn, `UPDATE ims_returns SET status = 'cancelled' WHERE tenant_id = :tenantId AND id = :id`, { tenantId: actor.tenantId, id: row.id });

@@ -13,6 +13,7 @@ import {
   billBalance,
   billDisplayStatus,
   buildAgingBuckets,
+  compareRestockUrgency,
   daysBetween,
   daysOverdue,
   durationLabel,
@@ -45,6 +46,7 @@ import {
   type ReportType,
 } from "./logic.js";
 import { getSettings, listMembers, type ImsSettings } from "./settings.js";
+import { loadStockSignals } from "./stock-state.js";
 
 /* ---------- Result shape ---------- */
 
@@ -276,19 +278,22 @@ async function itemRows(deps: ImsDeps, ctx: RunCtx, extra = ""): Promise<ItemRow
 
 const STATUS_TEXT: Record<string, string> = { GOOD: "In stock", LOW: "Low", OUT_OF_STOCK: "Out of stock", OVERSTOCK: "Overstock" };
 
-function itemFacts(r: ItemRow, today: string) {
+function itemFacts(r: ItemRow, today: string, reserved = 0) {
   const current = round3(money(r.current_stock));
   const min = round3(money(r.min_stock));
   const max = r.max_stock == null ? null : round3(money(r.max_stock));
   const cost = round2(money(r.purchase_price));
   const lastMove = isoOf(r.last_movement_at ?? r.created_at);
+  const res = round3(Math.max(0, reserved));
   return {
     current,
+    reserved: res,
+    available: round3(Math.max(0, current - res)),
     min,
     max,
     cost,
     price: round2(money(r.selling_price)),
-    status: stockStatus(current, min, max),
+    status: stockStatus(current, min, max, { reserved: res }),
     value: round2(Math.max(0, current) * cost),
     lastMove,
     idleDays: lastMove ? Math.max(0, daysBetween(lastMove, today)) : 0,
@@ -296,7 +301,7 @@ function itemFacts(r: ItemRow, today: string) {
 }
 
 async function fullStock(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportResult, "type" | "title" | "asOf" | "generatedAt">> {
-  const list = await itemRows(deps, ctx);
+  const [list, signals] = await Promise.all([itemRows(deps, ctx), loadStockSignals(deps.db, ctx.tenantId)]);
   const byCat = new Map<string, number>();
   let units = 0;
   let value = 0;
@@ -304,7 +309,7 @@ async function fullStock(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportResult,
   let attention = 0;
   const out: ReportRow[] = [];
   for (const r of list) {
-    const f = itemFacts(r, ctx.today);
+    const f = itemFacts(r, ctx.today, signals.reserved.get(r.id) ?? 0);
     if (ctx.filters.status && f.status !== ctx.filters.status) continue;
     const retailValue = round2(Math.max(0, f.current) * f.price);
     units += Math.max(0, f.current);
@@ -344,21 +349,37 @@ async function fullStock(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportResult,
 }
 
 async function lowStock(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportResult, "type" | "title" | "asOf" | "generatedAt">> {
-  const list = await itemRows(deps, ctx, "AND i.current_stock <= i.min_stock");
+  const [list, signals] = await Promise.all([itemRows(deps, ctx), loadStockSignals(deps.db, ctx.tenantId)]);
   const bySupplier = new Map<string, number>();
   let reorderValue = 0;
   let out0 = 0;
   const suppliers = new Set<string>();
-  const out = list.map((r) => {
-    const f = itemFacts(r, ctx.today);
-    const suggested = reorderQty({ current: f.current, min: f.min, max: f.max, reorderQty: r.reorder_qty == null ? null : money(r.reorder_qty) }, ctx.settings.reorderFallbackFactor);
+  const matched = list
+    .map((r) => {
+      const reserved = signals.reserved.get(r.id) ?? 0;
+      const onOrder = signals.onOrder.get(r.id) ?? 0;
+      const f = itemFacts(r, ctx.today, reserved);
+      return { r, f, reserved, onOrder };
+    })
+    .filter(({ f }) => f.status === "OUT_OF_STOCK" || f.status === "LOW")
+    .sort((a, b) =>
+      compareRestockUrgency(
+        { status: a.f.status, currentStock: a.f.current, availableStock: a.f.available, minStock: a.f.min, name: a.r.name },
+        { status: b.f.status, currentStock: b.f.current, availableStock: b.f.available, minStock: b.f.min, name: b.r.name },
+      ),
+    );
+  const out = matched.map(({ r, f, reserved, onOrder }) => {
+    const suggested = reorderQty(
+      { current: f.current, min: f.min, max: f.max, reorderQty: r.reorder_qty == null ? null : money(r.reorder_qty), reserved, onOrder },
+      ctx.settings.reorderFallbackFactor,
+    );
     const v = round2(suggested * f.cost);
     reorderValue += v;
     if (f.status === "OUT_OF_STOCK") out0 += 1;
     const supplier = r.supplier_name || "No preferred supplier";
     suppliers.add(supplier);
     bump(bySupplier, supplier, v);
-    return { item: r.name, sku: r.sku, category: r.category, supplier, stock: f.current, min: f.min, suggested, unit: r.unit, cost: f.cost, value: v, status: STATUS_TEXT[f.status] };
+    return { item: r.name, sku: r.sku, category: r.category, supplier, stock: f.current, reserved, onOrder, min: f.min, suggested, unit: r.unit, cost: f.cost, value: v, status: STATUS_TEXT[f.status] };
   });
   return {
     range: null,
@@ -368,6 +389,8 @@ async function lowStock(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportResult, 
       { key: "category", label: "Category", kind: "text" },
       { key: "supplier", label: "Supplier", kind: "text" },
       { key: "stock", label: "In stock", kind: "qty" },
+      { key: "reserved", label: "Reserved", kind: "qty" },
+      { key: "onOrder", label: "On order", kind: "qty" },
       { key: "min", label: "Minimum", kind: "qty" },
       { key: "suggested", label: "Suggested order", kind: "qty", total: true },
       { key: "unit", label: "Unit", kind: "text" },
@@ -383,7 +406,7 @@ async function lowStock(deps: ImsDeps, ctx: RunCtx): Promise<Omit<ReportResult, 
       { label: "Suppliers", value: suppliers.size, kind: "number" },
     ],
     chart: { kind: "bar", title: "Reorder value by supplier", valueKind: "money", data: top(bySupplier) },
-    notes: ["Suggested quantity uses each item's reorder quantity, else enough to reach maximum stock (or twice the minimum)."],
+    notes: ["Suggested quantity accounts for reserved DC stock and subtracts open purchase orders to avoid double-ordering."],
   };
 }
 

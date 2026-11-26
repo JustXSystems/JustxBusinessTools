@@ -11,6 +11,7 @@ import {
   addDaysISO,
   applyPoReceipt,
   canMovePo,
+  compareRestockUrgency,
   computeTotals,
   dueDateFor,
   formatINR,
@@ -27,6 +28,7 @@ import {
   reorderQty,
   round2,
   round3,
+  stockStatus,
   todayISO,
   waNumber,
   type ImsLine,
@@ -37,6 +39,7 @@ import {
 import { loadParty, type ImsParty } from "./parties.js";
 import { getSettings, type ImsSettings } from "./settings.js";
 import { nextDocNo, postMovement, type PostedMovement } from "./stock.js";
+import { loadStockSignals, syncSerializedItemCost } from "./stock-state.js";
 
 /* ---------- Shapes ---------- */
 
@@ -480,42 +483,65 @@ export function registerPurchase(router: Router, deps: ImsDeps): void {
     const supplierId = qstr(req.query.supplierId, 36) || "none";
     const supplier = supplierId === "none" ? null : await loadParty(deps.db, actor.tenantId, supplierId);
     if (supplierId !== "none" && !supplier) throw notFound("Supplier");
-    const settings = await getSettings(deps, actor.tenantId);
-    const items = await rows<{
-      id: string;
-      name: string;
-      sku: string | null;
-      hsn: string | null;
-      unit: string;
-      gst_rate: string;
-      purchase_price: string;
-      current_stock: string;
-      min_stock: string;
-      max_stock: string | null;
-      reorder_qty: string | null;
-    }>(
-      deps.db,
-      `SELECT id, name, sku, hsn, unit, gst_rate, purchase_price, current_stock, min_stock, max_stock, reorder_qty
-       FROM ims_items WHERE tenant_id = :tenantId AND active = 1 AND current_stock <= min_stock AND ${supplier ? "supplier_id = :supplierId" : "supplier_id IS NULL"}
-       ORDER BY current_stock / NULLIF(min_stock, 0), name LIMIT 300`,
-      { tenantId: actor.tenantId, supplierId: supplier?.id ?? null },
-    );
-    const lines = items
+    const [settings, signals, items] = await Promise.all([
+      getSettings(deps, actor.tenantId),
+      loadStockSignals(deps.db, actor.tenantId),
+      rows<{
+        id: string;
+        name: string;
+        sku: string | null;
+        hsn: string | null;
+        unit: string;
+        gst_rate: string;
+        purchase_price: string;
+        current_stock: string;
+        min_stock: string;
+        max_stock: string | null;
+        reorder_qty: string | null;
+      }>(
+        deps.db,
+        `SELECT id, name, sku, hsn, unit, gst_rate, purchase_price, current_stock, min_stock, max_stock, reorder_qty
+         FROM ims_items WHERE tenant_id = :tenantId AND active = 1 AND ${supplier ? "supplier_id = :supplierId" : "supplier_id IS NULL"}
+         ORDER BY name LIMIT 1000`,
+        { tenantId: actor.tenantId, supplierId: supplier?.id ?? null },
+      ),
+    ]);
+    const lowItems = items
       .map((i) => {
         const current = round3(money(i.current_stock));
-        const qty = reorderQty({ current, min: money(i.min_stock), max: i.max_stock == null ? null : money(i.max_stock), reorderQty: i.reorder_qty == null ? null : money(i.reorder_qty) }, settings.reorderFallbackFactor);
+        const min = round3(money(i.min_stock));
+        const max = i.max_stock == null ? null : round3(money(i.max_stock));
+        const reserved = signals.reserved.get(i.id) ?? 0;
+        const onOrder = signals.onOrder.get(i.id) ?? 0;
+        const status = stockStatus(current, min, max, { reserved });
+        return { i, current, min, max, reserved, onOrder, status };
+      })
+      .filter((x) => x.status === "OUT_OF_STOCK" || x.status === "LOW")
+      .sort((a, b) =>
+        compareRestockUrgency(
+          { status: a.status, currentStock: a.current, availableStock: round3(Math.max(0, a.current - a.reserved)), minStock: a.min, name: a.i.name },
+          { status: b.status, currentStock: b.current, availableStock: round3(Math.max(0, b.current - b.reserved)), minStock: b.min, name: b.i.name },
+        ),
+      )
+      .slice(0, 300);
+    const lines = lowItems
+      .map(({ i, current, min, max, reserved, onOrder }) => {
+        const qty = reorderQty(
+          { current, min, max, reorderQty: i.reorder_qty == null ? null : money(i.reorder_qty), reserved, onOrder },
+          settings.reorderFallbackFactor,
+        );
         return {
           itemId: i.id,
           name: i.name,
           sku: i.sku,
           hsn: i.hsn,
           unit: i.unit,
-          qty: Math.max(1, Math.ceil(qty)),
+          qty: qty > 0 ? Math.max(1, Math.ceil(qty)) : 0,
           rate: round2(money(i.purchase_price)),
           discountPct: 0,
           gstRate: money(i.gst_rate),
           currentStock: current,
-          minStock: round3(money(i.min_stock)),
+          minStock: min,
         };
       })
       .filter((l) => l.qty > 0);
@@ -855,6 +881,7 @@ export function registerPurchase(router: Router, deps: ImsDeps): void {
             tenantId: actor.tenantId,
             itemId: line.itemId,
           });
+          await syncSerializedItemCost(conn, actor.tenantId, line.itemId);
         }
       }
 

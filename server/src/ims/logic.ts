@@ -249,10 +249,24 @@ export function hsnSummary(lines: ReadonlyArray<Pick<ImsLine, "hsn" | "unit" | "
 export const STOCK_STATUSES = ["GOOD", "LOW", "OUT_OF_STOCK", "OVERSTOCK"] as const;
 export type StockStatus = (typeof STOCK_STATUSES)[number];
 
-export function stockStatus(current: number, min: number, max?: number | null): StockStatus {
-  if (current <= 0) return "OUT_OF_STOCK";
-  if (current <= min) return "LOW";
-  if (max != null && max > 0 && current > max) return "OVERSTOCK";
+/**
+ * Derives an item's stock status from physical saleable stock (`current`), its min/max thresholds,
+ * and optional unposted commitments (`reserved` on live draft/verified DCs).
+ *
+ * - `OUT_OF_STOCK`: physical saleable stock is ≤ 0 (even if damaged/quarantined units exist).
+ * - `LOW`: available stock (`current − reserved`) is at or below `min` (when `min > 0`),
+ *   or commitments consume all physical stock (`reserved > 0 && available <= 0`).
+ * - `OVERSTOCK`: free available stock exceeds `max` (when `max > 0`).
+ * - `GOOD`: otherwise.
+ */
+export function stockStatus(current: number, min: number, max?: number | null, opts?: { reserved?: number }): StockStatus {
+  const cur = round3(current);
+  if (cur <= 0) return "OUT_OF_STOCK";
+  const reserved = round3(Math.max(0, opts?.reserved ?? 0));
+  const available = round3(cur - reserved);
+  const minVal = round3(Math.max(0, min));
+  if ((minVal > 0 && available <= minVal) || (reserved > 0 && available <= 0)) return "LOW";
+  if (max != null && max > 0 && available > round3(max)) return "OVERSTOCK";
   return "GOOD";
 }
 
@@ -269,14 +283,51 @@ export function normalizeReorderFallbackFactor(raw: unknown): number {
   return Math.round(Math.min(MAX_REORDER_FALLBACK_FACTOR, Math.max(MIN_REORDER_FALLBACK_FACTOR, n)) * 100) / 100;
 }
 
-/** Suggested reorder quantity: the item's reorder qty, else enough to reach max (or `fallbackFactor`× min — 2× by default). */
+/**
+ * Suggested reorder quantity: uses the item's fixed `reorderQty`, else enough to bring
+ * projected stock (`current − reserved + onOrder`) up to `max` (or `fallbackFactor × min`, default 2×).
+ * Subtracts open purchase orders (`onOrder`) so already-ordered stock is never double-ordered.
+ */
 export function reorderQty(
-  item: { current: number; min: number; max?: number | null; reorderQty?: number | null },
+  item: { current: number; min: number; max?: number | null; reorderQty?: number | null; reserved?: number; onOrder?: number },
   fallbackFactor: number = DEFAULT_REORDER_FALLBACK_FACTOR,
 ): number {
-  if (item.reorderQty && item.reorderQty > 0) return item.reorderQty;
+  const reserved = round3(Math.max(0, item.reserved ?? 0));
+  const onOrder = round3(Math.max(0, item.onOrder ?? 0));
+  const projected = round3(item.current - reserved + onOrder);
+  if (item.reorderQty && item.reorderQty > 0) {
+    if (onOrder > 0 && projected > Math.max(0, item.min)) return 0;
+    return item.reorderQty;
+  }
   const target = item.max && item.max > 0 ? item.max : Math.max(item.min * normalizeReorderFallbackFactor(fallbackFactor), 1);
-  return round3(Math.max(0, target - item.current));
+  return round3(Math.max(0, target - projected));
+}
+
+/**
+ * Urgency sort comparator for restock lists & alerts:
+ *  1. Out of stock with a configured minimum (`min > 0`) — highest priority
+ *  2. Out of stock with `min = 0`
+ *  3. Low stock sorted by lowest `available / min` ratio (most depleted first)
+ *  4. Alphabetical by name
+ */
+export function compareRestockUrgency(
+  a: { status: StockStatus; currentStock: number; availableStock?: number; minStock: number; name: string },
+  b: { status: StockStatus; currentStock: number; availableStock?: number; minStock: number; name: string },
+): number {
+  const tier = (x: typeof a) => {
+    if (x.status === "OUT_OF_STOCK") return x.minStock > 0 ? 0 : 1;
+    if (x.status === "LOW") return 2;
+    return 3;
+  };
+  const ta = tier(a);
+  const tb = tier(b);
+  if (ta !== tb) return ta - tb;
+  const availA = a.availableStock ?? a.currentStock;
+  const availB = b.availableStock ?? b.currentStock;
+  const ratioA = a.minStock > 0 ? availA / a.minStock : availA;
+  const ratioB = b.minStock > 0 ? availB / b.minStock : availB;
+  if (Math.abs(ratioA - ratioB) > 1e-6) return ratioA - ratioB;
+  return a.name.localeCompare(b.name);
 }
 
 export const MOVEMENT_TYPES = ["OPENING", "IN", "OUT", "DAMAGE", "ADJUSTMENT", "RETURN_IN", "RETURN_OUT", "WRITE_OFF"] as const;

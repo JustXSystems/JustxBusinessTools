@@ -495,6 +495,7 @@
   box-shadow: var(--bos-shadow-md);
   grid-template-columns: 256px minmax(0, 1fr);
   transition: grid-template-columns 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow: clip;
 }
 .bos[data-bos-skin="ims"] .bos-nav {
   background: var(--bos-ims-nav-bg);
@@ -507,6 +508,13 @@
 }
 /* Must beat the IMS 256px rail — otherwise icons hide but the panel stays wide. */
 @media (min-width: 901px) {
+  .bos[data-bos-skin="ims"] .bos-nav {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: calc(100dvh - 88px);
+    overflow-y: auto;
+  }
   .bos[data-bos-skin="ims"] .bos-shell.is-nav-collapsed {
     grid-template-columns: 56px minmax(0, 1fr);
   }

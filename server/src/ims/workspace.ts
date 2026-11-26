@@ -4,6 +4,7 @@ import { accessOf, actorOf, enabledModulesOf, qint, qstr, type ImsDeps } from ".
 import { isoOf, likeOf, money, rows, tsOf } from "./db.js";
 import { IMS_ROLE_LABELS, addDaysISO, agingBucket, buildAgingBuckets, daysBetween, monthStartISO, periodRange, round2, round3, stockStatus, todayISO, type AgingKey } from "./logic.js";
 import { getSettings } from "./settings.js";
+import { loadReservedQtyByItem } from "./stock-state.js";
 
 /** Web module keys — deep links are `?m=<module>&open=<id>`. Mirrors web/components/ims/modules.ts. */
 export type ImsModuleKey =
@@ -82,7 +83,7 @@ async function notifications(
     deps.db,
     `SELECT id, name, current_stock, min_stock, unit, updated_at FROM ims_items
      WHERE tenant_id = :tenantId AND active = 1 AND current_stock <= min_stock
-     ORDER BY (current_stock <= 0) DESC, current_stock / NULLIF(min_stock, 0) ASC LIMIT 8`,
+     ORDER BY (current_stock <= 0) DESC, (min_stock > 0) DESC, CASE WHEN min_stock > 0 THEN current_stock / min_stock ELSE 999999 END ASC, name ASC LIMIT 8`,
     { tenantId },
   );
   if (allow("lowstock")) for (const i of low) {
@@ -222,12 +223,15 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
     const today = todayISO();
     const range = periodRange(qstr(req.query.period) || "30d", today, settings.fiscalYearStart, { from: qstr(req.query.from), to: qstr(req.query.to) });
 
-    const items = await rows<ItemAgg>(
-      deps.db,
-      `SELECT id, name, sku, category, hsn, unit, current_stock, damaged_stock, min_stock, max_stock, purchase_price, selling_price, last_movement_at, created_at
-       FROM ims_items WHERE tenant_id = :tenantId AND active = 1`,
-      { tenantId },
-    );
+    const [items, reservedMap] = await Promise.all([
+      rows<ItemAgg>(
+        deps.db,
+        `SELECT id, name, sku, category, hsn, unit, current_stock, damaged_stock, min_stock, max_stock, purchase_price, selling_price, last_movement_at, created_at
+         FROM ims_items WHERE tenant_id = :tenantId AND active = 1`,
+        { tenantId },
+      ),
+      loadReservedQtyByItem(deps.db, tenantId),
+    ]);
     const moved30 = new Map(
       (
         await rows<{ item_id: string; qty: string }>(
@@ -256,7 +260,7 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       stockValue += value;
       retailValue += Math.max(0, cur) * money(i.selling_price);
       damagedUnits += money(i.damaged_stock);
-      statusCount[stockStatus(cur, money(i.min_stock), i.max_stock == null ? null : money(i.max_stock))] += 1;
+      statusCount[stockStatus(cur, money(i.min_stock), i.max_stock == null ? null : money(i.max_stock), { reserved: reservedMap.get(i.id) ?? 0 })] += 1;
       if (!i.hsn) missingHsn += 1;
       if (money(i.selling_price) <= 0) missingPrice += 1;
       if (cur > 0) {

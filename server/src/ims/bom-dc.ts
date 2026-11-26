@@ -15,6 +15,7 @@ import { round3, todayISO } from "./logic.js";
 import { assertDayOpen } from "./sales.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo, postMovement } from "./stock.js";
+import { syncSerializedItemCost } from "./stock-state.js";
 
 export const BOM_DC_STATUSES = ["draft", "verified", "approved", "cancelled"] as const;
 export type BomDcStatus = (typeof BOM_DC_STATUSES)[number];
@@ -257,23 +258,27 @@ async function syncDcLineSerials(
   const cleaned = remarks.replace(/\b(?:s\/n|sn|serials?)\s*[:#-]?\s*/gi, " ");
   const tokens = [...new Set(cleaned.split(/[\s,;|]+/).map((t) => t.trim()).filter((t) => t.length >= 2 && t.length <= 100))];
   if (!tokens.length) return;
+  let changed = 0;
   for (const code of tokens) {
     if (mode === "out") {
-      await exec(
+      const r = await exec(
         conn,
         `UPDATE ims_item_serials SET status = 'out', out_movement_id = :mvId
          WHERE tenant_id = :tenantId AND item_id = :itemId AND serial_no = :code AND status = 'in_stock'`,
         { tenantId, itemId, code, mvId },
       );
+      changed += r.affectedRows;
     } else {
-      await exec(
+      const r = await exec(
         conn,
         `UPDATE ims_item_serials SET status = 'in_stock', out_movement_id = NULL
          WHERE tenant_id = :tenantId AND item_id = :itemId AND serial_no = :code AND status = 'out'`,
         { tenantId, itemId, code },
       );
+      changed += r.affectedRows;
     }
   }
+  if (changed > 0) await syncSerializedItemCost(conn, tenantId, itemId);
 }
 
 async function loadDcLines(db: Queryable, tenantId: number, dcId: string): Promise<BomDcLine[]> {

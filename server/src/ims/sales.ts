@@ -47,6 +47,7 @@ import { GspError, buildIrnPayload, cancelIrn, pushIrn, type IrnResult } from ".
 import { loadGsp, logSync, noteGspOutcome } from "./integrations.js";
 import { getSettings, listMembers, type ImsSettings } from "./settings.js";
 import { nextDocNo, postMovement } from "./stock.js";
+import { serialsAvgCost, syncSerializedItemCost } from "./stock-state.js";
 import { allocateInvoicePlanPayment, cancelInvoicePlan, deallocateInvoicePlanPayment, lastDunningByCustomer } from "./wave6-db.js";
 import { resolveFx } from "./wave6-logic.js";
 
@@ -955,6 +956,7 @@ async function issueDraft(
         if (uniqueSerials.length && uniqueSerials.length !== Math.round(l.qty)) {
           throw badRequest(`${l.name}: quantity (${l.qty}) must match the number of scan codes selected (${uniqueSerials.length}).`);
         }
+        const specificCost = uniqueSerials.length ? await serialsAvgCost(conn, actor.tenantId, l.itemId, uniqueSerials) : null;
         const mv = await postMovement(
           conn,
           actor,
@@ -962,6 +964,7 @@ async function issueDraft(
             itemId: l.itemId,
             type: "OUT",
             qty: l.qty,
+            unitCost: specificCost,
             unitPrice: l.qty ? round2(l.taxable / l.qty) : l.rate,
             refType,
             refId: id,
@@ -983,6 +986,7 @@ async function issueDraft(
             if (found.status !== "in_stock") throw conflict(`Scan code "${code}" is already marked ${found.status.replace(/_/g, " ")}.`);
             await exec(conn, `UPDATE ims_item_serials SET status = 'out', out_movement_id = :mvId WHERE id = :id`, { id: found.id, mvId: mv.id });
           }
+          await syncSerializedItemCost(conn, actor.tenantId, l.itemId);
         }
       } catch (err) {
         if (err instanceof ImsError && err.status === 404) throw badRequest(`“${l.name}” is no longer in your items. Remove the line or pick the item again.`);
@@ -1110,6 +1114,7 @@ async function reverseInvoiceStock(conn: PoolConnection, actor: ImsActor, row: I
           { tenantId: actor.tenantId, itemId: l.itemId, code },
         );
       }
+      await syncSerializedItemCost(conn, actor.tenantId, l.itemId);
     }
   }
 }

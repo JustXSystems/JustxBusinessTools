@@ -242,7 +242,18 @@ export function ItemDetailDialog({
             </div>
 
             <div className="ims-inv-tiles">
-              <Tile label="In stock" value={qtyText(item.currentStock, item.unit)} tone={item.status === "OUT_OF_STOCK" ? "coral" : item.status === "LOW" ? "amber" : undefined} sub={`Min ${qtyText(item.minStock)}${item.maxStock != null ? ` · Max ${qtyText(item.maxStock)}` : ""}`} />
+              <Tile
+                label="In stock"
+                value={qtyText(item.currentStock, item.unit)}
+                tone={item.status === "OUT_OF_STOCK" ? "coral" : item.status === "LOW" ? "amber" : undefined}
+                sub={[
+                  item.reservedStock ? `${qtyText(item.availableStock ?? Math.max(0, item.currentStock - item.reservedStock))} free · ${qtyText(item.reservedStock)} reserved` : null,
+                  item.onOrderStock ? `${qtyText(item.onOrderStock)} on order` : null,
+                  `Min ${qtyText(item.minStock)}${item.maxStock != null ? ` · Max ${qtyText(item.maxStock)}` : ""}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              />
               <Tile label="Damaged" value={qtyText(item.damagedStock, item.unit)} tone={item.damagedStock > 0 ? "coral" : undefined} sub="Quarantined, not saleable" />
               <Tile label="Reorder" value={item.suggestedReorder > 0 ? qtyText(item.suggestedReorder, item.unit) : "—"} sub={item.reorderQty ? `Fixed lot ${qtyText(item.reorderQty)}` : "Suggested quantity"} />
               {canSeeCost ? <Tile label="Stock value" value={inr(item.stockValue)} sub={`At cost ${inrExact(item.purchasePrice)}`} /> : null}

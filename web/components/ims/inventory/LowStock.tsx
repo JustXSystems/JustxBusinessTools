@@ -19,6 +19,7 @@ const DEAD_DAYS = 90;
 
 export function LowStockModule() {
   const { session, can, navigate, takeIntent } = useIms();
+  const deadDays = session.settings.agingBreaks?.[session.settings.agingBreaks.length - 1] ?? DEAD_DAYS;
   const [highlight] = useState(() => {
     const i = takeIntent("lowstock");
     return i?.startsWith("open:") ? i.slice(5) : null;
@@ -179,12 +180,12 @@ export function LowStockModule() {
       {tab === "dead" ? (
         <Loaded state={dead}>
           {(data) => {
-            const rows = (data?.items ?? []).filter((i) => i.currentStock > 0 && i.idleDays >= DEAD_DAYS && matches(i)).sort((a, b) => b.idleDays - a.idleDays);
+            const rows = (data?.items ?? []).filter((i) => i.currentStock > 0 && i.idleDays >= deadDays && matches(i)).sort((a, b) => b.idleDays - a.idleDays);
             return (
               <Stack gap={14}>
                 <div className="ims-between">
                   <p className="ims-muted" style={{ margin: 0 }}>
-                    In-stock items with no movement for {DEAD_DAYS}+ days{canSeeCost && rows.length ? ` — ${inr(rows.reduce((s, i) => s + i.stockValue, 0))} tied up` : ""}.
+                    In-stock items with no movement for {deadDays}+ days{canSeeCost && rows.length ? ` — ${inr(rows.reduce((s, i) => s + i.stockValue, 0))} tied up` : ""}.
                   </p>
                   <SearchInput placeholder="Filter…" aria-label="Filter dead stock" value={q} onChange={(e) => setQ(e.target.value)} />
                 </div>
@@ -193,7 +194,7 @@ export function LowStockModule() {
                 ) : (
                   <Card interactive={false}>
                     <EmptyState glyph="✓" title="No dead stock">
-                      Everything in stock has moved in the last {DEAD_DAYS} days.
+                      Everything in stock has moved in the last {deadDays} days.
                     </EmptyState>
                   </Card>
                 )}
@@ -287,10 +288,12 @@ export function LowStockModule() {
                                 <Checkbox checked={isSelected(i.id)} onChange={() => toggle(i.id)} aria-label={`Include ${i.name}`} />
                                 <ItemCell item={i} />
                                 <span className="ims-cell-stack" style={{ gap: 4 }}>
-                                  <span className="ims-row" style={{ gap: 6 }}>
+                                  <span className="ims-row" style={{ gap: 6, flexWrap: "wrap" }}>
                                     <span className="ims-strong">{qtyText(i.currentStock)}</span>
                                     <span className="ims-faint">/ {qtyText(i.minStock, i.unit)}</span>
                                     <StatusBadge view={stockBadge(i.status)} auto />
+                                    {i.reservedStock ? <Badge tone="amber" auto>{qtyText(i.reservedStock)} reserved</Badge> : null}
+                                    {i.onOrderStock ? <Badge tone="blue" auto>{qtyText(i.onOrderStock)} on order</Badge> : null}
                                   </span>
                                   <ProgressBar value={fill} tone={i.status === "OUT_OF_STOCK" ? "coral" : "amber"} label={`${i.name} at ${Math.round(fill)}% of minimum`} />
                                 </span>

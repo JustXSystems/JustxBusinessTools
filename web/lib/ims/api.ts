@@ -437,6 +437,9 @@ export type ImsItem = {
   mrp: number | null;
   currentStock: number;
   damagedStock: number;
+  reservedStock?: number;
+  availableStock?: number;
+  onOrderStock?: number;
   minStock: number;
   maxStock: number | null;
   reorderQty: number | null;
@@ -448,8 +451,10 @@ export type ImsItem = {
   active: boolean;
   trackSerials?: boolean;
   serialCount?: number;
+  serialMismatch?: boolean;
   status: StockStatus;
   stockValue: number;
+  damagedValue?: number;
   idleDays: number;
   agingBucket: AgingKey;
   movement30d: number;
