@@ -40,10 +40,53 @@ export type ImsModuleDef = {
   component: ComponentType | LazyExoticComponent<ComponentType>;
 };
 
-/** Dynamic import with a hard check that `default` is actually callable. */
+const CHUNK_RELOAD_KEY = "ims:chunk-reload-ts";
+const CHUNK_RELOAD_WINDOW_MS = 30_000;
+
+export function isChunkLoadError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if (err.name === "ChunkLoadError") return true;
+  return /Loading chunk \S+ failed|Failed to fetch dynamically imported module|Importing a module script failed/i.test(err.message);
+}
+
+/**
+ * After a deployment replaces `_next/static/chunks/*`, an open browser tab may
+ * try to load an old chunk hash. Reload once automatically (guarded by a 30s
+ * sessionStorage window so offline tabs never loop).
+ */
+export function tryRecoverChunkError(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const prev = Number(window.sessionStorage.getItem(CHUNK_RELOAD_KEY) || "0");
+    const now = Date.now();
+    if (Number.isFinite(prev) && now - prev < CHUNK_RELOAD_WINDOW_MS) return false;
+    window.sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+  } catch {
+    // sessionStorage unavailable (private mode / quota) — skip auto-reload to avoid loops.
+    return false;
+  }
+  window.location.reload();
+  return true;
+}
+
+/** Dynamic import with stale-chunk recovery and a hard check that `default` is callable. */
 const screen = (name: string, load: () => Promise<{ default: ComponentType }>): LazyExoticComponent<ComponentType> =>
   lazy(async () => {
-    const mod = await load();
+    let mod: { default: ComponentType };
+    try {
+      mod = await load();
+    } catch (err) {
+      if (isChunkLoadError(err)) {
+        if (tryRecoverChunkError()) {
+          // Keep Suspense fallback mounted while the page reloads cleanly onto the new build.
+          return await new Promise<never>(() => {});
+        }
+        const wrapped = new Error("A newer version of IMS was deployed or your connection dropped. Click Retry to reload.");
+        wrapped.name = "ChunkLoadError";
+        throw wrapped;
+      }
+      throw err;
+    }
     const Comp = mod.default;
     if (typeof Comp !== "function") {
       throw new Error(`IMS screen "${name}" failed to load (default export is ${typeof Comp})`);

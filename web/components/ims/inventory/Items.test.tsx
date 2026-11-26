@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { BosRoot } from "@/components/bos";
 import { errorText, type ImsSession } from "@/lib/ims/api";
 import { ImsAppProvider, type ImsAppContextValue } from "../core";
+import { isChunkLoadError } from "../modules";
 import ItemsModule from "./Items";
 
 vi.mock("@/lib/ims/api", async (importOriginal) => {
@@ -112,5 +113,15 @@ describe("Items module", () => {
     expect(errorText("TypeError: x is undefined\n\n    at ItemForm")).toBe("TypeError: x is undefined\n\n    at ItemForm");
     expect(errorText(new Error("Boom"))).toBe("Boom");
     expect(errorText(null)).toBe("Something went wrong");
+  });
+
+  it("isChunkLoadError identifies Next.js stale-chunk errors", () => {
+    const chunkErr = new Error("Loading chunk 8650 failed.");
+    chunkErr.name = "ChunkLoadError";
+    expect(isChunkLoadError(chunkErr)).toBe(true);
+    expect(isChunkLoadError(new Error("Loading chunk 1234 failed."))).toBe(true);
+    expect(isChunkLoadError(new Error("Failed to fetch dynamically imported module"))).toBe(true);
+    expect(isChunkLoadError(new Error("Network error"))).toBe(false);
+    expect(isChunkLoadError("ChunkLoadError")).toBe(false);
   });
 });

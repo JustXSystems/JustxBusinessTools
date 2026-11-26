@@ -35,7 +35,7 @@ import { initialsOf, timeAgo } from "@/lib/ims/format";
 import { rememberModule } from "@/lib/ims/recent";
 import { PageAskAi } from "./AskAi";
 import { ErrorBlock, ImsAppProvider, LoadingBlock, type ImsAppContextValue, type ImsAppMode } from "./core";
-import { MODULE_KEYS, moduleDef, visibleModules } from "./modules";
+import { isChunkLoadError, MODULE_KEYS, moduleDef, visibleModules } from "./modules";
 
 export const IMS_LOGO = "/icons/justx-bos-mark.png";
 const NAV_COLLAPSE_KEY = "ims.nav.collapsed";
@@ -248,11 +248,22 @@ class ModuleBoundary extends Component<{ moduleKey: string; children: ReactNode 
 
   render() {
     if (this.state.error) {
-      const detail = this.state.stack ? `${errorText(this.state.error)}\n\n${this.state.stack.trim()}` : this.state.error;
+      const chunkErr = isChunkLoadError(this.state.error);
+      const detail = chunkErr
+        ? "A newer version of IMS was deployed or your connection dropped. Click Retry to reload the page."
+        : this.state.stack
+          ? `${errorText(this.state.error)}\n\n${this.state.stack.trim()}`
+          : this.state.error;
       return (
         <ErrorBlock
           error={detail}
-          onRetry={() => this.setState({ error: null, stack: null })}
+          onRetry={() => {
+            if (chunkErr && typeof window !== "undefined") {
+              window.location.reload();
+              return;
+            }
+            this.setState({ error: null, stack: null });
+          }}
         />
       );
     }
@@ -595,10 +606,24 @@ class ShellBoundary extends Component<{ children: ReactNode }, { error: Error | 
 
   render() {
     if (this.state.error) {
-      const detail = this.state.stack ? `${errorText(this.state.error)}\n\n${this.state.stack.trim()}` : this.state.error;
+      const chunkErr = isChunkLoadError(this.state.error);
+      const detail = chunkErr
+        ? "A newer version of IMS was deployed or your connection dropped. Click Retry to reload the page."
+        : this.state.stack
+          ? `${errorText(this.state.error)}\n\n${this.state.stack.trim()}`
+          : this.state.error;
       return (
         <div className="bos-wrap" style={{ paddingTop: 32, paddingBottom: 32 }}>
-          <ErrorBlock error={detail} onRetry={() => this.setState({ error: null, stack: null })} />
+          <ErrorBlock
+            error={detail}
+            onRetry={() => {
+              if (chunkErr && typeof window !== "undefined") {
+                window.location.reload();
+                return;
+              }
+              this.setState({ error: null, stack: null });
+            }}
+          />
         </div>
       );
     }
