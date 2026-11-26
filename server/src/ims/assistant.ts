@@ -2,7 +2,7 @@ import type { Router } from "express";
 import { z } from "zod";
 import { actorOf, can, parse, type ImsDeps } from "./context.js";
 import { isoOf, money, rows, type Queryable } from "./db.js";
-import { addDaysISO, AUDIT_CATEGORIES, AUDIT_SEVERITIES, daysBetween, DEFAULT_REORDER_FALLBACK_FACTOR, normalizeReorderFallbackFactor, round2, todayISO, type AuditCategory, type AuditIssue } from "./logic.js";
+import { addDaysISO, AUDIT_CATEGORIES, AUDIT_SEVERITIES, daysBetween, DEFAULT_REORDER_FALLBACK_FACTOR, normalizeReorderFallbackFactor, round2, stockStatus, todayISO, type AuditCategory, type AuditIssue } from "./logic.js";
 import { getSettings } from "./settings.js";
 
 /* ---------- Ask AI: built-in answers from the tenant's own data, plus a compact data summary for an optional LLM ---------- */
@@ -24,7 +24,7 @@ export const ASSISTANT_PAGES = {
 
 export type AssistantPage = keyof typeof ASSISTANT_PAGES;
 
-export type AssistantItem = { name: string; brand: string | null; category: string | null; unit: string; stock: number; min: number; max: number | null; reorderQty: number | null; cost: number; supplier: string | null; sold30: number };
+export type AssistantItem = { name: string; brand: string | null; category: string | null; unit: string; stock: number; min: number; max: number | null; reorderQty: number | null; reserved?: number; cost: number; supplier: string | null; sold30: number };
 export type AssistantMove = { date: string; type: string; item: string; qty: number; ref: string | null; by: string | null };
 export type AssistantDoc = { no: string; party: string; total: number; paid: number; balance: number; due: string; daysLate: number; status: string };
 export type AssistantPo = { no: string; supplier: string; status: string; date: string; total: number };
@@ -49,7 +49,10 @@ const bullets = <T>(list: ReadonlyArray<T>, f: (x: T) => string, n = 8) =>
     .map((x) => `- ${f(x)}`)
     .join("\n");
 const value = (i: AssistantItem) => Math.max(0, i.stock) * i.cost;
-const isLow = (i: AssistantItem) => i.stock <= i.min && (i.min > 0 || i.stock <= 0);
+const isLow = (i: AssistantItem) => {
+  const st = stockStatus(i.stock, i.min, i.max, { reserved: i.reserved ?? 0 });
+  return st === "OUT_OF_STOCK" || st === "LOW";
+};
 const reorderQty = (i: AssistantItem, factor: number = DEFAULT_REORDER_FALLBACK_FACTOR) =>
   Math.max(1, Math.ceil(i.reorderQty ?? (i.max ?? i.min * normalizeReorderFallbackFactor(factor)) - i.stock));
 const groupSum = <T>(list: ReadonlyArray<T>, key: (x: T) => string, amount: (x: T) => number) => {

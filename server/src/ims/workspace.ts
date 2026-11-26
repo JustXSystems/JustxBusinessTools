@@ -2,7 +2,7 @@ import type { Router } from "express";
 import { moduleAllowed } from "../lib/ims-profile-modules.js";
 import { accessOf, actorOf, enabledModulesOf, qint, qstr, type ImsDeps } from "./context.js";
 import { isoOf, likeOf, money, rows, tsOf } from "./db.js";
-import { IMS_ROLE_LABELS, addDaysISO, agingBucket, buildAgingBuckets, daysBetween, monthStartISO, periodRange, round2, round3, stockStatus, todayISO, type AgingKey } from "./logic.js";
+import { IMS_ROLE_LABELS, addDaysISO, agingBucket, buildAgingBuckets, compareRestockUrgency, daysBetween, monthStartISO, periodRange, round2, round3, stockStatus, todayISO, type AgingKey } from "./logic.js";
 import { getSettings } from "./settings.js";
 import { loadReservedQtyByItem } from "./stock-state.js";
 
@@ -79,20 +79,40 @@ async function notifications(
   const today = todayISO();
   const out: ImsNotification[] = [];
   const allow = (m: ImsModuleKey) => moduleAllowed(enabled, m);
-  const low = await rows<{ id: string; name: string; current_stock: string; min_stock: string; unit: string; updated_at: string }>(
-    deps.db,
-    `SELECT id, name, current_stock, min_stock, unit, updated_at FROM ims_items
-     WHERE tenant_id = :tenantId AND active = 1 AND current_stock <= min_stock
-     ORDER BY (current_stock <= 0) DESC, (min_stock > 0) DESC, CASE WHEN min_stock > 0 THEN current_stock / min_stock ELSE 999999 END ASC, name ASC LIMIT 8`,
-    { tenantId },
-  );
+  const [allActive, reservedMap] = await Promise.all([
+    rows<{ id: string; name: string; current_stock: string; min_stock: string; max_stock: string | null; unit: string; updated_at: string }>(
+      deps.db,
+      `SELECT id, name, current_stock, min_stock, max_stock, unit, updated_at FROM ims_items
+       WHERE tenant_id = :tenantId AND active = 1`,
+      { tenantId },
+    ),
+    loadReservedQtyByItem(deps.db, tenantId),
+  ]);
+  const low = allActive
+    .map((i) => {
+      const cur = round3(money(i.current_stock));
+      const min = round3(money(i.min_stock));
+      const max = i.max_stock == null ? null : round3(money(i.max_stock));
+      const reserved = reservedMap.get(i.id) ?? 0;
+      const available = round3(Math.max(0, cur - reserved));
+      const status = stockStatus(cur, min, max, { reserved });
+      return { ...i, cur, min, reserved, available, status };
+    })
+    .filter((i) => i.status === "OUT_OF_STOCK" || i.status === "LOW")
+    .sort((a, b) =>
+      compareRestockUrgency(
+        { status: a.status, currentStock: a.cur, availableStock: a.available, minStock: a.min, name: a.name },
+        { status: b.status, currentStock: b.cur, availableStock: b.available, minStock: b.min, name: b.name },
+      ),
+    )
+    .slice(0, 8);
   if (allow("lowstock")) for (const i of low) {
-    const out_ = money(i.current_stock) <= 0;
+    const out_ = i.status === "OUT_OF_STOCK";
     out.push({
       id: `low:${i.id}`,
       tone: out_ ? "coral" : "amber",
       title: out_ ? `${i.name} is out of stock` : `${i.name} is running low`,
-      body: `${round3(money(i.current_stock))} ${i.unit} left · minimum ${round3(money(i.min_stock))}`,
+      body: `${i.cur} ${i.unit} left${i.reserved > 0 ? ` (${i.available} free)` : ""} · minimum ${i.min}`,
       module: "lowstock",
       open: i.id,
       at: tsOf(i.updated_at),

@@ -624,6 +624,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       `SELECT DISTINCT category, brand, unit FROM ims_items WHERE tenant_id = :tenantId AND active = 1`,
       { tenantId: actor.tenantId },
     );
+    const activeList = list.filter((i) => i.active);
     res.json({
       items: filtered,
       facets: {
@@ -633,12 +634,14 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       },
       summary: {
         count: list.length,
-        value: round2(list.reduce((s, i) => s + i.stockValue, 0)),
-        units: round3(list.reduce((s, i) => s + Math.max(0, i.currentStock), 0)),
-        low: list.filter((i) => i.status === "LOW").length,
-        out: list.filter((i) => i.status === "OUT_OF_STOCK").length,
-        over: list.filter((i) => i.status === "OVERSTOCK").length,
-        damaged: round3(list.reduce((s, i) => s + i.damagedStock, 0)),
+        activeCount: activeList.length,
+        value: round2(activeList.reduce((s, i) => s + i.stockValue, 0)),
+        units: round3(activeList.reduce((s, i) => s + Math.max(0, i.currentStock), 0)),
+        good: activeList.filter((i) => i.status === "GOOD").length,
+        low: activeList.filter((i) => i.status === "LOW").length,
+        out: activeList.filter((i) => i.status === "OUT_OF_STOCK").length,
+        over: activeList.filter((i) => i.status === "OVERSTOCK").length,
+        damaged: round3(activeList.reduce((s, i) => s + i.damagedStock, 0)),
       },
     });
   });
@@ -1557,16 +1560,26 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       where.push("location = :location");
       params.location = input.location;
     }
-    if (input.lowOnly) where.push("current_stock <= min_stock");
     if (input.itemIds?.length) {
       where.push(`id IN (${input.itemIds.map((_, i) => `:id${i}`).join(", ")})`);
       input.itemIds.forEach((id, i) => (params[`id${i}`] = id));
     }
-    const items = await rows<{ id: string; name: string; sku: string | null; unit: string; category: string | null; location: string | null; current_stock: string; purchase_price: string }>(
-      deps.db,
-      `SELECT id, name, sku, unit, category, location, current_stock, purchase_price FROM ims_items WHERE ${where.join(" AND ")} ORDER BY category, name LIMIT 5000`,
-      params,
-    );
+    const [rawItems, signals] = await Promise.all([
+      rows<{ id: string; name: string; sku: string | null; unit: string; category: string | null; location: string | null; current_stock: string; min_stock: string; max_stock: string | null; purchase_price: string }>(
+        deps.db,
+        `SELECT id, name, sku, unit, category, location, current_stock, min_stock, max_stock, purchase_price FROM ims_items WHERE ${where.join(" AND ")} ORDER BY category, name LIMIT 5000`,
+        params,
+      ),
+      input.lowOnly ? loadStockSignals(deps.db, actor.tenantId) : Promise.resolve(null),
+    ]);
+    const items = input.lowOnly
+      ? rawItems.filter((i) => {
+          const st = stockStatus(money(i.current_stock), money(i.min_stock), i.max_stock == null ? null : money(i.max_stock), {
+            reserved: signals?.reserved.get(i.id) ?? 0,
+          });
+          return st === "OUT_OF_STOCK" || st === "LOW";
+        })
+      : rawItems;
     if (!items.length) throw new ImsError(400, "No items match that scope");
     const settings = await getSettings(deps, actor.tenantId);
     const lines: CheckLine[] = items.map((i) => ({

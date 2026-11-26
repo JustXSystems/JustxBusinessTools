@@ -466,15 +466,33 @@ export function ItemsModule() {
   const [confirmBulk, setConfirmBulk] = useState(false);
 
   const all = useMemo(() => list.data?.items ?? [], [list.data]);
-  const filtered = useMemo(
-    () => sortItems(all.filter((i) => matches(i, q) && (!category || (i.category ?? "") === category) && (!brand || (i.brand ?? "") === brand) && (status === "ALL" || i.status === status)), sort),
-    [all, q, category, brand, status, sort],
+  const baseFiltered = useMemo(
+    () => all.filter((i) => matches(i, q) && (!category || (i.category ?? "") === category) && (!brand || (i.brand ?? "") === brand)),
+    [all, q, category, brand],
   );
   const counts = useMemo(() => {
-    const c: Record<StatusFilter, number> = { ALL: all.length, GOOD: 0, LOW: 0, OUT_OF_STOCK: 0, OVERSTOCK: 0 };
-    for (const i of all) c[i.status] += 1;
+    const c: Record<StatusFilter, number> = { ALL: baseFiltered.length, GOOD: 0, LOW: 0, OUT_OF_STOCK: 0, OVERSTOCK: 0 };
+    for (const i of baseFiltered) {
+      if (i.active) c[i.status] += 1;
+    }
     return c;
-  }, [all]);
+  }, [baseFiltered]);
+  const filtered = useMemo(
+    () => sortItems(baseFiltered.filter((i) => status === "ALL" || (i.active && i.status === status)), sort),
+    [baseFiltered, status, sort],
+  );
+  const liveSummary = useMemo(() => {
+    const active = filtered.filter((i) => i.active);
+    return {
+      count: filtered.length,
+      units: active.reduce((s, i) => s + Math.max(0, i.currentStock), 0),
+      value: active.reduce((s, i) => s + i.stockValue, 0),
+      low: active.filter((i) => i.status === "LOW").length,
+      out: active.filter((i) => i.status === "OUT_OF_STOCK").length,
+      over: active.filter((i) => i.status === "OVERSTOCK").length,
+      damaged: active.reduce((s, i) => s + i.damagedStock, 0),
+    };
+  }, [filtered]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const current = Math.min(page, pageCount - 1);
@@ -529,7 +547,7 @@ export function ItemsModule() {
       cell: (i) => (
         <span className="ims-inv-stock">
           <span className="ims-strong">{qtyText(i.currentStock, i.unit)}</span>
-          <StatusBadge view={stockBadge(i.status)} />
+          {i.active ? <StatusBadge view={stockBadge(i.status)} /> : <Badge tone="neutral">Archived</Badge>}
         </span>
       ),
     },
@@ -598,28 +616,28 @@ export function ItemsModule() {
             <Stack gap={14}>
               <div className="ims-inv-strip" aria-label="Catalogue summary">
                 <span className="ims-inv-pill">
-                  Items <b>{(data.summary?.count ?? all.length).toLocaleString("en-IN")}</b>
+                  Items <b>{liveSummary.count.toLocaleString("en-IN")}</b>
                 </span>
                 <span className="ims-inv-pill">
-                  Units <b>{qtyText(data.summary?.units ?? 0)}</b>
+                  Units <b>{qtyText(liveSummary.units)}</b>
                 </span>
                 {canSeeCost ? (
                   <span className="ims-inv-pill">
-                    Value <b>{inr(data.summary?.value ?? 0)}</b>
+                    Value <b>{inr(liveSummary.value)}</b>
                   </span>
                 ) : null}
                 <span className="ims-inv-pill">
-                  Low <b style={{ color: "var(--bos-amber-600)" }}>{data.summary?.low ?? 0}</b>
+                  Low <b style={{ color: "var(--bos-amber-600)" }}>{liveSummary.low}</b>
                 </span>
                 <span className="ims-inv-pill">
-                  Out <b style={{ color: "var(--bos-coral-600)" }}>{data.summary?.out ?? 0}</b>
+                  Out <b style={{ color: "var(--bos-coral-600)" }}>{liveSummary.out}</b>
                 </span>
                 <span className="ims-inv-pill">
-                  Overstock <b>{data.summary?.over ?? 0}</b>
+                  Overstock <b>{liveSummary.over}</b>
                 </span>
-                {data.summary?.damaged ? (
+                {liveSummary.damaged ? (
                   <span className="ims-inv-pill">
-                    Damaged <b>{qtyText(data.summary.damaged)}</b>
+                    Damaged <b>{qtyText(liveSummary.damaged)}</b>
                   </span>
                 ) : null}
               </div>

@@ -238,7 +238,7 @@ function NewCheckDialog({ open, onClose, onCreated }: { open: boolean; onClose: 
         : scope === "location"
           ? items.filter((i) => i.location === location).length
           : scope === "low"
-            ? items.filter((i) => i.currentStock <= i.minStock).length
+            ? items.filter((i) => i.status === "LOW" || i.status === "OUT_OF_STOCK").length
             : picked.length;
   const error = !title.trim()
     ? "Give the check a title"

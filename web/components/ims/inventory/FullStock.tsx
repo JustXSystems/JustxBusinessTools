@@ -65,16 +65,25 @@ export function FullStockModule() {
   const tiers = useMemo(() => velocityTiers(all), [all]);
   const stocked = useMemo(() => all.filter((i) => i.currentStock > 0 || i.damagedStock > 0), [all]);
 
-  const filtered = useMemo(() => {
+  const baseFiltered = useMemo(() => {
     const t = q.trim().toLowerCase();
-    const out = all.filter(
+    return all.filter(
       (i) =>
         (!t || [i.name, i.sku, i.barcode, i.brand, i.category, i.location].some((v) => v && v.toLowerCase().includes(t))) &&
-        (status === "ALL" || i.status === status) &&
         (aging === "ALL" || (i.currentStock > 0 && i.agingBucket === aging)) &&
         (velocity === "ALL" || tiers.get(i.id) === velocity) &&
         (!category || (i.category || "Uncategorised") === category),
     );
+  }, [all, q, aging, velocity, category, tiers]);
+
+  const statusCounts = useMemo(() => {
+    const c: Record<StockStatus, number> = { GOOD: 0, LOW: 0, OUT_OF_STOCK: 0, OVERSTOCK: 0 };
+    for (const i of baseFiltered) c[i.status] += 1;
+    return c;
+  }, [baseFiltered]);
+
+  const filtered = useMemo(() => {
+    const out = baseFiltered.filter((i) => status === "ALL" || i.status === status);
     const by: Record<SortKey, (a: ImsItem, b: ImsItem) => number> = {
       value: (a, b) => b.stockValue - a.stockValue,
       name: (a, b) => a.name.localeCompare(b.name),
@@ -83,7 +92,7 @@ export function FullStockModule() {
       moved: (a, b) => b.movement30d - a.movement30d,
     };
     return out.sort(by[sort]);
-  }, [all, q, status, aging, velocity, category, sort, tiers]);
+  }, [baseFiltered, status, sort]);
 
   const totals = useMemo(() => {
     const cost = filtered.reduce((s, i) => s + i.stockValue, 0);
@@ -304,10 +313,10 @@ export function FullStockModule() {
                   ))}
                 </Select>
                 <Select size="sm" aria-label="Status" value={status} onChange={(e) => reset(setStatus)(e.target.value as "ALL" | StockStatus)} style={{ width: "auto" }}>
-                  <option value="ALL">All status</option>
+                  <option value="ALL">All status ({baseFiltered.length})</option>
                   {STATUSES.map((s) => (
                     <option key={s} value={s}>
-                      {STOCK_STATUS_LABEL[s]}
+                      {STOCK_STATUS_LABEL[s]} ({statusCounts[s]})
                     </option>
                   ))}
                 </Select>
