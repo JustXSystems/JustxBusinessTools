@@ -589,31 +589,42 @@ export function PhCtaSection({ section }: { section: CtaSection }) {
 export function PhFooterSection({ section }: { section: FooterSection }) {
   return (
     <SectionShell id={section.id} style={section.style} className="ph-shell ph-footer">
-      <div className="ph-footer-grid">
-        <div className="ph-footer-brand">
-          <div className="ph-brand">
-            {hasRenderableMedia(section.logo) ? <PhMedia media={section.logo} /> : null}
-            {section.logoText ? <span>{section.logoText}</span> : null}
-          </div>
-          {section.tagline ? <p>{section.tagline}</p> : null}
-        </div>
-        {section.columns.map((col) => (
-          <div key={col.id}>
-            <h4>{col.title}</h4>
-            <div className="ph-footer-links">
-              {col.links.map((link) => (
-                <PhNavLink
-                  key={link.id}
-                  href={link.href}
-                  label={link.label}
-                  openInNewTab={link.openInNewTab}
-                />
-              ))}
+      <div className="ph-footer-dock">
+        <div className="ph-footer-grid">
+          <div className="ph-footer-brand">
+            <div className="ph-brand">
+              {hasRenderableMedia(section.logo) ? <PhMedia media={section.logo} /> : null}
+              {section.logoText ? <span>{section.logoText}</span> : null}
             </div>
+            {section.tagline ? <p>{section.tagline}</p> : null}
           </div>
-        ))}
+          <div className="ph-footer-groups">
+            {section.columns.map((col) => (
+              <div key={col.id} className="ph-footer-group">
+                <h4>{col.title}</h4>
+                <div className="ph-footer-links">
+                  {col.links.map((link) => (
+                    <PhNavLink
+                      key={link.id}
+                      href={link.href}
+                      label={link.label}
+                      openInNewTab={link.openInNewTab}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {section.legalText ? (
+          <div className="ph-footer-legal">
+            <span>{section.legalText}</span>
+            <a href="#top" className="ph-footer-top-link" aria-label="Back to top">
+              ↑ Top
+            </a>
+          </div>
+        ) : null}
       </div>
-      {section.legalText ? <div className="ph-footer-legal">{section.legalText}</div> : null}
     </SectionShell>
   );
 }

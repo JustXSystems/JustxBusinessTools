@@ -1027,52 +1027,133 @@
 }
 
 .ph-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 1.75rem !important;
+  padding-bottom: 1.5rem !important;
+  background: radial-gradient(60% 100% at 50% 0%, rgba(56, 189, 248, 0.08), transparent 70%);
+}
+
+.ph-footer::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.55), rgba(168, 85, 247, 0.4), transparent);
+  pointer-events: none;
+}
+
+.ph-footer-dock {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1.25rem 1.4rem;
+  backdrop-filter: blur(12px);
 }
 
 .ph-footer-grid {
   display: grid;
-  gap: 2rem;
-  grid-template-columns: 1.3fr repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1.25rem 2rem;
+  grid-template-columns: minmax(200px, 0.9fr) minmax(0, 2.1fr);
+  align-items: start;
 }
 
 .ph-footer-brand p {
-  margin: 0.75rem 0 0;
+  margin: 0.45rem 0 0;
   color: var(--ph-muted);
-  max-width: 28ch;
-  line-height: 1.55;
+  max-width: 30ch;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.ph-footer-groups {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.ph-footer-group {
+  display: grid;
+  grid-template-columns: minmax(92px, 118px) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.5rem 0.9rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ph-footer-group:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .ph-footer h4 {
-  margin: 0 0 0.85rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #fff;
+  color: rgba(255, 255, 255, 0.72);
   font-family: var(--ph-font-mono);
+  white-space: nowrap;
 }
 
 .ph-footer-links {
-  display: grid;
-  gap: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.32rem 0.42rem;
 }
 
 .ph-footer-links a {
-  color: #8fa3c2;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.24rem 0.62rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #9cb2d3;
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  line-height: 1.25;
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
 }
 
 .ph-footer-links a:hover {
   color: #fff;
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.38);
+  transform: translateY(-1px);
 }
 
 .ph-footer-legal {
-  margin-top: 2.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
   color: #8fa3c2;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.ph-footer-top-link {
+  color: rgba(255, 255, 255, 0.72);
+  text-decoration: none;
+  font-family: var(--ph-font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+.ph-footer-top-link:hover {
+  color: #fff;
+  border-color: rgba(56, 189, 248, 0.45);
 }
 
 .ph-menu-toggle {
@@ -1154,7 +1235,12 @@
   }
 
   .ph-footer-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .ph-footer-brand p {
+    max-width: none;
   }
 }
 
@@ -1247,9 +1333,19 @@
     font-size: 0.68rem;
   }
 
-  .ph-footer-grid {
+  .ph-footer-dock {
+    padding: 1rem 1rem;
+    border-radius: 12px;
+  }
+
+  .ph-footer-group {
     grid-template-columns: 1fr;
-    gap: 1.5rem;
+    gap: 0.35rem;
+  }
+
+  .ph-footer-links a {
+    font-size: 0.76rem;
+    padding: 0.22rem 0.55rem;
   }
 
   .ph-brand-signal {
