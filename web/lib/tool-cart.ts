@@ -1,5 +1,8 @@
+import type { BillingCycle } from "@/lib/types/subscription";
+
 const KEY = "jbt.tool-cart";
 const PACK_KEY = "jbt.active-pack";
+const CYCLE_KEY = "jbt.billing-cycle";
 
 export function readToolCart(): string[] {
   if (typeof window === "undefined") return [];
@@ -18,6 +21,25 @@ export function writeToolCart(ids: string[]): void {
   if (typeof window === "undefined") return;
   sessionStorage.setItem(KEY, JSON.stringify([...new Set(ids)]));
   window.dispatchEvent(new Event("jbt-cart-change"));
+}
+
+export function readBillingCycle(): BillingCycle {
+  if (typeof window === "undefined") return "month";
+  try {
+    const raw = sessionStorage.getItem(CYCLE_KEY);
+    return raw === "year" ? "year" : "month";
+  } catch {
+    return "month";
+  }
+}
+
+export function writeBillingCycle(cycle: BillingCycle): BillingCycle {
+  const next: BillingCycle = cycle === "year" ? "year" : "month";
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem(CYCLE_KEY, next);
+    window.dispatchEvent(new Event("jbt-cart-change"));
+  }
+  return next;
 }
 
 export function addToToolCart(id: string): string[] {

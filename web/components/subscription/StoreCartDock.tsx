@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
+import type { BillingCycle, PackRecommendation } from "@/lib/types/subscription";
+import { formatInr } from "@/lib/subscription-store-helpers";
 
 export type StoreCartLine = {
   id: string;
@@ -12,8 +14,14 @@ export type StoreCartLine = {
 type Props = {
   itemCount: number;
   totalLabel: string;
+  billingCycle?: BillingCycle;
+  onBillingCycleChange?: (cycle: BillingCycle) => void;
   packLabel?: string | null;
   savingsLabel?: string | null;
+  annualSavingsLabel?: string | null;
+  coverageLabel?: string | null;
+  recommendedPack?: PackRecommendation | null;
+  onApplyRecommendedPack?: (packId: string) => void;
   lines: StoreCartLine[];
   quoteError?: string;
   canCheckout: boolean;
@@ -23,18 +31,24 @@ type Props = {
 };
 
 /**
- * Fixed top-right commerce cart — collapsed summary + expandable panel.
- * Corporate SaaS pattern (does not steal layout from the catalog).
+ * Fixed top-right futuristic commerce cart — collapsed summary + expandable panel
+ * with live Monthly/Yearly switcher and Auto-Save pack recommendations.
  */
 export function StoreCartDock({
   itemCount,
   totalLabel,
+  billingCycle = "month",
+  onBillingCycleChange,
   packLabel,
   savingsLabel,
+  annualSavingsLabel,
+  coverageLabel,
+  recommendedPack,
+  onApplyRecommendedPack,
   lines,
   quoteError,
   canCheckout,
-  emptyHint = "Select tools or a pack to build a monthly subscription.",
+  emptyHint = "Select tools or a pack to build your subscription.",
   onRemove,
   onClear,
 }: Props) {
@@ -64,6 +78,8 @@ export function StoreCartDock({
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  const cycleSuffix = billingCycle === "year" ? "/yr" : "/mo";
 
   return (
     <div
@@ -95,7 +111,7 @@ export function StoreCartDock({
           <em>
             {itemCount === 0
               ? "Empty"
-              : `${itemCount} item${itemCount === 1 ? "" : "s"} · ${totalLabel}`}
+              : `${itemCount} item${itemCount === 1 ? "" : "s"} · ${totalLabel}${cycleSuffix}`}
           </em>
         </span>
         {itemCount > 0 ? <span className="store-cart-fab-badge">{itemCount}</span> : null}
@@ -113,10 +129,34 @@ export function StoreCartDock({
             <p className="store-cart-panel-kicker">Order summary</p>
             <h2>Cart</h2>
           </div>
-          <button type="button" className="store-cart-panel-close" aria-label="Close cart" onClick={() => setOpen(false)}>
+          <button
+            type="button"
+            className="store-cart-panel-close"
+            aria-label="Close cart"
+            onClick={() => setOpen(false)}
+          >
             ×
           </button>
         </div>
+
+        {onBillingCycleChange ? (
+          <div className="store-cart-cycle-switch" role="group" aria-label="Cart billing cycle">
+            <button
+              type="button"
+              className={billingCycle === "month" ? "is-active" : ""}
+              onClick={() => onBillingCycleChange("month")}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              className={billingCycle === "year" ? "is-active" : ""}
+              onClick={() => onBillingCycleChange("year")}
+            >
+              Yearly <span>Save 17%</span>
+            </button>
+          </div>
+        ) : null}
 
         {packLabel ? <p className="store-cart-pack">{packLabel} pricing</p> : null}
 
@@ -130,7 +170,11 @@ export function StoreCartDock({
                 <span className="store-cart-line-meta">
                   <strong>{line.priceLabel}</strong>
                   {onRemove ? (
-                    <button type="button" className="store-cart-line-remove" onClick={() => onRemove(line.id)}>
+                    <button
+                      type="button"
+                      className="store-cart-line-remove"
+                      onClick={() => onRemove(line.id)}
+                    >
                       Remove
                     </button>
                   ) : null}
@@ -140,18 +184,47 @@ export function StoreCartDock({
           </ul>
         )}
 
+        {recommendedPack && onApplyRecommendedPack ? (
+          <div className="store-cart-autosave">
+            <p className="store-cart-autosave-kicker">Auto-Save Pack Detected</p>
+            <p className="store-cart-autosave-copy">
+              {recommendedPack.reason === "cheaper"
+                ? `Switch to ${recommendedPack.packName} and save ${formatInr(recommendedPack.savingsInr)}${cycleSuffix}`
+                : `Upgrade to ${recommendedPack.packName} for ${formatInr(recommendedPack.packPriceInr)}${cycleSuffix} (+${recommendedPack.extraToolCount} bonus tool${recommendedPack.extraToolCount === 1 ? "" : "s"})`}
+            </p>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => onApplyRecommendedPack(recommendedPack.packId)}
+            >
+              Switch to {recommendedPack.packName}
+            </button>
+          </div>
+        ) : null}
+
         {savingsLabel ? <p className="store-cart-savings">{savingsLabel}</p> : null}
+        {annualSavingsLabel ? <p className="store-cart-savings">{annualSavingsLabel}</p> : null}
 
         <div className="store-cart-total">
-          <span>Due now</span>
-          <strong>{totalLabel}</strong>
+          <div>
+            <span>Due now</span>
+            {coverageLabel ? <em className="store-cart-coverage">{coverageLabel}</em> : null}
+          </div>
+          <strong>
+            {totalLabel}
+            <small>{cycleSuffix}</small>
+          </strong>
         </div>
 
         {quoteError ? <p className="field-error">{quoteError}</p> : null}
 
         <div className="store-cart-panel-actions">
           {canCheckout ? (
-            <Link className="btn btn-primary" href="/subscription/checkout" onClick={() => setOpen(false)}>
+            <Link
+              className="btn btn-primary"
+              href="/subscription/checkout"
+              onClick={() => setOpen(false)}
+            >
               Proceed to checkout
             </Link>
           ) : (
