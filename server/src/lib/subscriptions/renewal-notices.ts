@@ -2,6 +2,7 @@ import { pool } from "../../db.js";
 import { orgEqualsSql, orgScopeParams, isPlatformAdmin } from "../platform-admin.js";
 import { publishNotificationAsync } from "../notification-publish.js";
 import { notifySubscriptionExpired } from "../notification-billing.js";
+import { getCommercePolicy } from "../config/commerce-policy.js";
 
 export type RenewalCandidate = {
   organizationId: number;
@@ -18,7 +19,10 @@ export type RenewalCandidate = {
 };
 
 /** Pure copy + deep-link builder for org-level and per-tool paid/trial renewal notices. */
-export function buildRenewalNotificationCopy(c: RenewalCandidate): {
+export function buildRenewalNotificationCopy(
+  c: RenewalCandidate,
+  opts?: { urgentWarningDays?: number; defaultCycle?: "month" | "year" },
+): {
   kind: "renewal" | "trial_ending";
   title: string;
   body: string;
@@ -28,10 +32,12 @@ export function buildRenewalNotificationCopy(c: RenewalCandidate): {
 } {
   const when = c.daysLeft <= 0 ? "today" : `in ${c.daysLeft} day(s)`;
   const orgLabel = c.organizationName || `Org ${c.organizationId}`;
-  const severity: "urgent" | "attention" = c.daysLeft <= 3 ? "urgent" : "attention";
+  const urgentDays = opts?.urgentWarningDays ?? 3;
+  const cycle = opts?.defaultCycle ?? "year";
+  const severity: "urgent" | "attention" = c.daysLeft <= urgentDays ? "urgent" : "attention";
   if (c.toolId) {
     const label = c.toolName || c.planName || c.toolId;
-    const href = `/subscription/checkout?tool=${encodeURIComponent(c.toolId)}&cycle=year`;
+    const href = `/subscription/checkout?tool=${encodeURIComponent(c.toolId)}&cycle=${cycle}`;
     if (c.isTrial) {
       return {
         kind: "trial_ending",
@@ -55,7 +61,7 @@ export function buildRenewalNotificationCopy(c: RenewalCandidate): {
     kind: "renewal",
     title: `Renewal due ${when}`,
     body: `${orgLabel} · ${c.planName} renews on ${c.periodEnd}. MRR ₹${Math.round(c.mrrInr)}.`,
-    href: "/subscription?cycle=year",
+    href: `/subscription?cycle=${cycle}`,
     severity,
     dedupeKey: `renewal:${c.organizationId}:${c.periodEnd}`,
   };
@@ -194,18 +200,23 @@ async function enqueueInAppOutbox(orgId: number, title: string, body: string): P
  * Create renewal notices + outbox rows for due subscriptions.
  * Idempotent per org + period end date.
  */
-export async function runRenewalNoticeJob(withinDays = 14): Promise<{
+export async function runRenewalNoticeJob(withinDays?: number): Promise<{
   scanned: number;
   created: number;
   skipped: number;
   candidates: RenewalCandidate[];
 }> {
-  const candidates = await listRenewalCandidates(withinDays);
+  const policy = await getCommercePolicy();
+  const effectiveWithin = withinDays ?? policy.renewalSweepDays;
+  const candidates = await listRenewalCandidates(effectiveWithin);
   let created = 0;
   let skipped = 0;
 
   for (const c of candidates) {
-    const copy = buildRenewalNotificationCopy(c);
+    const copy = buildRenewalNotificationCopy(c, {
+      urgentWarningDays: policy.urgentWarningDays,
+      defaultCycle: policy.defaultCheckoutCycleFromNudge,
+    });
     if (await existingNotice(c.organizationId, c.periodEnd, copy.kind, c.toolId ? copy.title : undefined)) {
       skipped += 1;
       continue;

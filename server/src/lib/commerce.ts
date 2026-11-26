@@ -11,6 +11,7 @@ import {
 } from "./tool-licenses.js";
 import { getToolSku, listToolSkus } from "./tool-skus.js";
 import { computeRenewedPeriodEnd } from "./pricing-engine.js";
+import { getCommercePolicy } from "./config/commerce-policy.js";
 import { notifyLicensesGranted } from "./notification-billing.js";
 import {
   listSubscriptionItems,
@@ -87,12 +88,14 @@ export async function activateToolCommerce(input: {
     if (!needsPerToolStack) {
       await grantToolLicenses(input.profileId, unique, sharedEnd, input.sourceClaimId);
     } else {
+      const policy = await getCommercePolicy();
       for (const toolId of unique) {
         const cur = existingByTool.get(toolId);
         const stackedEnd = computeRenewedPeriodEnd({
           existingPeriodEnd: cur?.periodEnd ?? null,
           isTrial: trialTools.has(toolId),
           durationDays: requestedDays,
+          stackDays: policy.stackEarlyRenewalDays,
           now,
         });
         await grantToolLicenses(input.profileId, [toolId], stackedEnd, input.sourceClaimId);

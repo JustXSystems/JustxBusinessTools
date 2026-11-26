@@ -46,6 +46,7 @@ export const RENEWAL_WINDOW_DAYS = 7;
 export function isLicenseConvertibleOrRenewable(input: {
   isTrial?: boolean;
   periodEnd?: string | null;
+  renewalWindowDays?: number;
   now?: Date;
 }): boolean {
   if (input.isTrial) return true;
@@ -54,7 +55,8 @@ export function isLicenseConvertibleOrRenewable(input: {
   if (Number.isNaN(end.getTime())) return false;
   const now = input.now ?? new Date();
   const daysLeft = Math.ceil((end.getTime() - now.getTime()) / 86_400_000);
-  return daysLeft <= RENEWAL_WINDOW_DAYS;
+  const windowDays = input.renewalWindowDays ?? RENEWAL_WINDOW_DAYS;
+  return daysLeft <= windowDays;
 }
 
 /**
@@ -65,11 +67,12 @@ export function computeRenewedPeriodEnd(input: {
   existingPeriodEnd?: string | Date | null;
   isTrial?: boolean;
   durationDays: number;
+  stackDays?: boolean;
   now?: Date;
 }): Date {
   const now = input.now ?? new Date();
   const addMs = Math.max(1, input.durationDays) * 86_400_000;
-  if (!input.isTrial && input.existingPeriodEnd) {
+  if (input.stackDays !== false && !input.isTrial && input.existingPeriodEnd) {
     const existing =
       input.existingPeriodEnd instanceof Date
         ? input.existingPeriodEnd
@@ -88,12 +91,19 @@ export function normalizeBillingCycle(raw: unknown): BillingCycle {
   return v === "year" || v === "yearly" || v === "annual" || v === "annually" ? "year" : "month";
 }
 
-export function cycleDurationDays(cycle: BillingCycle): number {
-  return cycle === "year" ? 365 : 30;
+export function cycleDurationDays(
+  cycle: BillingCycle,
+  opts?: { monthlyDurationDays?: number; annualDurationDays?: number },
+): number {
+  return cycle === "year" ? (opts?.annualDurationDays ?? 365) : (opts?.monthlyDurationDays ?? 30);
 }
 
-export function periodEndForCycle(cycle: BillingCycle, from: Date = new Date()): Date {
-  return new Date(from.getTime() + cycleDurationDays(cycle) * 24 * 60 * 60 * 1000);
+export function periodEndForCycle(
+  cycle: BillingCycle,
+  from: Date = new Date(),
+  opts?: { monthlyDurationDays?: number; annualDurationDays?: number },
+): Date {
+  return new Date(from.getTime() + cycleDurationDays(cycle, opts) * 24 * 60 * 60 * 1000);
 }
 
 /**
@@ -103,11 +113,13 @@ export function periodEndForCycle(cycle: BillingCycle, from: Date = new Date()):
 export function resolveUserCategory(input: {
   gstin?: string | null;
   branchCount?: number | null;
+  enterpriseMinBranches?: number;
 }): UserCategory {
   const gstin = normalizeGstin(input.gstin);
   if (!isValidGstin(gstin)) return "individual";
   const branches = Math.max(1, Number(input.branchCount ?? 1) || 1);
-  return branches >= 2 ? "enterprise" : "business";
+  const threshold = Math.max(2, Number(input.enterpriseMinBranches ?? 2) || 2);
+  return branches >= threshold ? "enterprise" : "business";
 }
 
 /**

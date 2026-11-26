@@ -25,6 +25,11 @@ import {
 import { activateToolCommerce } from "../../lib/commerce.js";
 import { refreshOrgMrr, revokeToolLicensesForOrg } from "../../lib/tool-licenses.js";
 import { getToolSku } from "../../lib/tool-skus.js";
+import {
+  getCommercePolicy,
+  resetCommercePolicy,
+  saveCommercePolicy,
+} from "../../lib/config/commerce-policy.js";
 
 const router = Router();
 
@@ -608,6 +613,31 @@ router.delete("/promos/:code", async (req, res) => {
   await deletePromoCode(req.params.code);
   await logAudit("promo.delete", "promo_code", req.params.code, undefined, req.ip);
   res.json({ ok: true });
+});
+
+router.get("/policy", async (_req, res) => {
+  res.json({ policy: await getCommercePolicy() });
+});
+
+router.put("/policy", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to edit commerce policy" });
+    return;
+  }
+  const before = await getCommercePolicy();
+  const policy = await saveCommercePolicy(req.body ?? {});
+  await logAudit("commerce_policy.update", "platform_config", "commerce_policy", { before, after: policy }, req.ip);
+  res.json({ ok: true, policy });
+});
+
+router.post("/policy/reset", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to reset commerce policy" });
+    return;
+  }
+  const policy = await resetCommercePolicy();
+  await logAudit("commerce_policy.reset", "platform_config", "commerce_policy", { after: policy }, req.ip);
+  res.json({ ok: true, policy });
 });
 
 export default router;

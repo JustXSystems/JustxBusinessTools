@@ -52,6 +52,11 @@ import {
   recordPromoRedemption,
 } from "../lib/promo-codes.js";
 import {
+  applyCategoryDiscountInr,
+  enforcePromoPolicyGuardrails,
+  getCommercePolicy,
+} from "../lib/config/commerce-policy.js";
+import {
   notifyCheckoutStarted,
   notifyPaymentOutcome,
   notifySubscriptionActivated,
@@ -258,6 +263,7 @@ router.get("/", async (_req, res) => {
     } catch {
       /* fallback empty */
     }
+    const commercePolicy = await getCommercePolicy();
 
     const usageTelemetry = buildWorkspaceUsageTelemetry({
       skus,
@@ -322,6 +328,7 @@ router.get("/", async (_req, res) => {
             }
           : null,
       gateways,
+      commercePolicy,
       serverTime: new Date().toISOString(),
     });
   } catch (err) {
@@ -444,8 +451,10 @@ router.get("/quote", async (req, res) => {
   try {
     const profileId = getActiveProfileId();
     const orgId = getActiveOrgId();
+    const commercePolicy = await getCommercePolicy();
     const bundleId = String(req.query.bundleId ?? req.query.pack ?? "").trim();
-    const billingCycle = normalizeBillingCycle(req.query.cycle ?? req.query.billingCycle);
+    const requestedCycle = normalizeBillingCycle(req.query.cycle ?? req.query.billingCycle);
+    const billingCycle = commercePolicy.annualEnabled ? requestedCycle : "month";
     const promoCodeRaw = normalizePromoCode(req.query.promo ?? req.query.promoCode);
     const toolIds = parseToolIds(req.query.tools ?? req.query.toolIds);
     const quote = await quoteForProfile(profileId, toolIds, bundleId || undefined, billingCycle, orgId);
@@ -463,7 +472,7 @@ router.get("/quote", async (req, res) => {
       /* fallback */
     }
     const recommendedPack =
-      !bundleId && toolIds.length > 0
+      commercePolicy.autoSavePackNudgeEnabled && !bundleId && toolIds.length > 0
         ? recommendPackForSelection({
             selectedToolIds: toolIds,
             licensedToolIds: blockedPaid,
@@ -475,7 +484,12 @@ router.get("/quote", async (req, res) => {
           })
         : null;
 
-    const subtotalInr = quote.totalInr;
+    const catDisc = applyCategoryDiscountInr(
+      quote.totalInr,
+      profileMeta.userCategory,
+      commercePolicy,
+    );
+    const subtotalInr = catDisc.finalInr;
     let finalTotalInr = subtotalInr;
     let promo: {
       code: string;
@@ -486,35 +500,60 @@ router.get("/quote", async (req, res) => {
     let promoError: string | null = null;
 
     if (promoCodeRaw) {
-      const [promoRow, orgRedemptionsCount] = await Promise.all([
-        getPromoCode(promoCodeRaw),
-        countOrgPromoRedemptions(promoCodeRaw, orgId),
-      ]);
-      const evalRes = evaluatePromoCode(promoRow, {
-        subtotalInr,
-        userCategory: profileMeta.userCategory,
-        billingCycle,
-        orgRedemptionsCount,
-      });
-      if (evalRes.ok) {
-        finalTotalInr = evalRes.finalTotalInr;
-        promo = {
-          code: evalRes.code,
-          description: evalRes.description,
-          discountInr: evalRes.discountInr,
-          label: evalRes.label,
-        };
+      if (!commercePolicy.promosEnabled) {
+        promoError = "Promo codes are currently disabled";
       } else {
-        promoError = evalRes.error;
+        const [promoRow, orgRedemptionsCount] = await Promise.all([
+          getPromoCode(promoCodeRaw),
+          countOrgPromoRedemptions(promoCodeRaw, orgId),
+        ]);
+        const evalRes = evaluatePromoCode(promoRow, {
+          subtotalInr,
+          userCategory: profileMeta.userCategory,
+          billingCycle,
+          orgRedemptionsCount,
+        });
+        if (evalRes.ok) {
+          const guard = enforcePromoPolicyGuardrails({
+            policy: commercePolicy,
+            isPack: Boolean(bundleId),
+            billingCycle,
+            subtotalInr,
+            baseListPriceInr: isBundleQuote(quote) ? quote.listPriceInr : quote.totalInr,
+            rawDiscountInr: evalRes.discountInr,
+          });
+          if (!guard.allowed) {
+            promoError = guard.error;
+          } else {
+            finalTotalInr = Math.max(0, subtotalInr - guard.discountInr);
+            promo = {
+              code: evalRes.code,
+              description: evalRes.description,
+              discountInr: guard.discountInr,
+              label: guard.capped ? `${evalRes.label} (capped)` : evalRes.label,
+            };
+          }
+        } else {
+          promoError = evalRes.error;
+        }
       }
     }
 
-    const availablePromos = await listEligiblePublicPromos({
-      orgId,
-      subtotalInr,
-      userCategory: profileMeta.userCategory,
-      billingCycle,
-    });
+    const availablePromos =
+      commercePolicy.promosEnabled &&
+      commercePolicy.showFeaturedPromoChips &&
+      commercePolicy.maxFeaturedPromoChips > 0 &&
+      (!bundleId || commercePolicy.allowPromoOnPacks) &&
+      (billingCycle !== "year" || commercePolicy.allowPromoOnAnnual)
+        ? (
+            await listEligiblePublicPromos({
+              orgId,
+              subtotalInr,
+              userCategory: profileMeta.userCategory,
+              billingCycle,
+            })
+          ).slice(0, commercePolicy.maxFeaturedPromoChips)
+        : [];
 
     const cycleSuffix = billingCycle === "year" ? " (1Y)" : "";
     const label = isBundleQuote(quote)
@@ -524,6 +563,8 @@ router.get("/quote", async (req, res) => {
       ...quote,
       subtotalInr,
       totalInr: finalTotalInr,
+      categoryDiscountInr: catDisc.discountInr,
+      categoryDiscountPct: catDisc.discountPct,
       promo,
       promoError,
       availablePromos,
@@ -544,28 +585,38 @@ router.post("/upi-claims", async (req, res) => {
   try {
     const profileId = getActiveProfileId();
     const orgId = getActiveOrgId();
+    const commercePolicy = await getCommercePolicy();
     const bundleId = String(req.body?.bundleId ?? req.body?.packId ?? "").trim();
-    const billingCycle = normalizeBillingCycle(req.body?.billingCycle ?? req.body?.cycle);
+    const requestedCycle = normalizeBillingCycle(req.body?.billingCycle ?? req.body?.cycle);
+    const billingCycle = commercePolicy.annualEnabled ? requestedCycle : "month";
     const promoCodeRaw = normalizePromoCode(req.body?.promoCode ?? req.body?.promo);
     const toolIds = parseToolIds(req.body?.toolIds ?? req.body?.tools);
-    const quote = await quoteForProfile(
-      profileId,
-      toolIds,
-      bundleId || undefined,
-      billingCycle,
-      orgId,
+    const [quote, profileMeta] = await Promise.all([
+      quoteForProfile(profileId, toolIds, bundleId || undefined, billingCycle, orgId),
+      fetchProfileCategoryMeta(profileId, orgId),
+    ]);
+    const catDisc = applyCategoryDiscountInr(
+      quote.totalInr,
+      profileMeta.userCategory,
+      commercePolicy,
     );
-    let finalTotalInr = quote.totalInr;
-    let appliedPromoNote = "";
+    let finalTotalInr = catDisc.finalInr;
+    let appliedPromoNote =
+      catDisc.discountInr > 0
+        ? `[${profileMeta.userCategory} -${catDisc.discountPct}%: -₹${catDisc.discountInr}]`
+        : "";
     let appliedPromoDiscount = 0;
     if (promoCodeRaw) {
-      const [promoRow, profileMeta, orgRedemptionsCount] = await Promise.all([
+      if (!commercePolicy.promosEnabled) {
+        res.status(400).json({ error: "Promo codes are currently disabled" });
+        return;
+      }
+      const [promoRow, orgRedemptionsCount] = await Promise.all([
         getPromoCode(promoCodeRaw),
-        fetchProfileCategoryMeta(profileId, orgId),
         countOrgPromoRedemptions(promoCodeRaw, orgId),
       ]);
       const evalRes = evaluatePromoCode(promoRow, {
-        subtotalInr: quote.totalInr,
+        subtotalInr: catDisc.finalInr,
         userCategory: profileMeta.userCategory,
         billingCycle,
         orgRedemptionsCount,
@@ -574,9 +625,23 @@ router.post("/upi-claims", async (req, res) => {
         res.status(400).json({ error: evalRes.error });
         return;
       }
-      finalTotalInr = evalRes.finalTotalInr;
-      appliedPromoDiscount = evalRes.discountInr;
-      appliedPromoNote = `[Promo ${evalRes.code}: -₹${evalRes.discountInr}]`;
+      const guard = enforcePromoPolicyGuardrails({
+        policy: commercePolicy,
+        isPack: Boolean(bundleId),
+        billingCycle,
+        subtotalInr: catDisc.finalInr,
+        baseListPriceInr: isBundleQuote(quote) ? quote.listPriceInr : quote.totalInr,
+        rawDiscountInr: evalRes.discountInr,
+      });
+      if (!guard.allowed) {
+        res.status(400).json({ error: guard.error });
+        return;
+      }
+      finalTotalInr = Math.max(0, catDisc.finalInr - guard.discountInr);
+      appliedPromoDiscount = guard.discountInr;
+      appliedPromoNote = [appliedPromoNote, `[Promo ${evalRes.code}: -₹${guard.discountInr}]`]
+        .filter(Boolean)
+        .join(" ");
     }
     const payerEmail = String(req.body?.payerEmail ?? "").trim();
     const payerName = String(req.body?.payerName ?? "").trim();
@@ -633,27 +698,34 @@ router.post("/checkout", async (req, res) => {
   try {
     const profileId = getActiveProfileId();
     const orgId = getActiveOrgId();
+    const commercePolicy = await getCommercePolicy();
     const bundleId = String(req.body?.bundleId ?? req.body?.packId ?? "").trim();
-    const billingCycle = normalizeBillingCycle(req.body?.billingCycle ?? req.body?.cycle);
+    const requestedCycle = normalizeBillingCycle(req.body?.billingCycle ?? req.body?.cycle);
+    const billingCycle = commercePolicy.annualEnabled ? requestedCycle : "month";
     const promoCodeRaw = normalizePromoCode(req.body?.promoCode ?? req.body?.promo);
     const toolIds = parseToolIds(req.body?.toolIds ?? req.body?.tools);
-    const quote = await quoteForProfile(
-      profileId,
-      toolIds,
-      bundleId || undefined,
-      billingCycle,
-      orgId,
+    const [quote, profileMeta] = await Promise.all([
+      quoteForProfile(profileId, toolIds, bundleId || undefined, billingCycle, orgId),
+      fetchProfileCategoryMeta(profileId, orgId),
+    ]);
+    const catDisc = applyCategoryDiscountInr(
+      quote.totalInr,
+      profileMeta.userCategory,
+      commercePolicy,
     );
-    let finalTotalInr = quote.totalInr;
+    let finalTotalInr = catDisc.finalInr;
     let appliedPromoDiscount = 0;
     if (promoCodeRaw) {
-      const [promoRow, profileMeta, orgRedemptionsCount] = await Promise.all([
+      if (!commercePolicy.promosEnabled) {
+        res.status(400).json({ error: "Promo codes are currently disabled" });
+        return;
+      }
+      const [promoRow, orgRedemptionsCount] = await Promise.all([
         getPromoCode(promoCodeRaw),
-        fetchProfileCategoryMeta(profileId, orgId),
         countOrgPromoRedemptions(promoCodeRaw, orgId),
       ]);
       const evalRes = evaluatePromoCode(promoRow, {
-        subtotalInr: quote.totalInr,
+        subtotalInr: catDisc.finalInr,
         userCategory: profileMeta.userCategory,
         billingCycle,
         orgRedemptionsCount,
@@ -662,8 +734,20 @@ router.post("/checkout", async (req, res) => {
         res.status(400).json({ error: evalRes.error });
         return;
       }
-      finalTotalInr = evalRes.finalTotalInr;
-      appliedPromoDiscount = evalRes.discountInr;
+      const guard = enforcePromoPolicyGuardrails({
+        policy: commercePolicy,
+        isPack: Boolean(bundleId),
+        billingCycle,
+        subtotalInr: catDisc.finalInr,
+        baseListPriceInr: isBundleQuote(quote) ? quote.listPriceInr : quote.totalInr,
+        rawDiscountInr: evalRes.discountInr,
+      });
+      if (!guard.allowed) {
+        res.status(400).json({ error: guard.error });
+        return;
+      }
+      finalTotalInr = Math.max(0, catDisc.finalInr - guard.discountInr);
+      appliedPromoDiscount = guard.discountInr;
     }
     const gatewayId = Number(req.body?.gatewayId ?? 0);
     let providerName = getConfiguredProviderName();
@@ -806,11 +890,30 @@ router.post("/trial", async (req, res) => {
       return;
     }
 
-    const [skus, licensed, trialConsumed] = await Promise.all([
+    const [skus, licensed, trialConsumed, commercePolicy, existingItems] = await Promise.all([
       listToolSkus(),
       licensedToolIdSet(profileId),
       trialConsumedToolIdSet(profileId),
+      getCommercePolicy(),
+      listSubscriptionItems(orgId).catch(() => []),
     ]);
+    const activeTrialCount = existingItems.filter((i) => i.source === "trial").length;
+    if (
+      commercePolicy.maxConcurrentTrialsPerOrg != null &&
+      activeTrialCount + toolIds.length > commercePolicy.maxConcurrentTrialsPerOrg
+    ) {
+      const remainingSlots = Math.max(
+        0,
+        commercePolicy.maxConcurrentTrialsPerOrg - activeTrialCount,
+      );
+      res.status(400).json({
+        error:
+          remainingSlots === 0
+            ? `Your workspace reached the maximum of ${commercePolicy.maxConcurrentTrialsPerOrg} concurrent free trial(s).`
+            : `You can start at most ${remainingSlots} more concurrent free trial(s) (limit: ${commercePolicy.maxConcurrentTrialsPerOrg}).`,
+      });
+      return;
+    }
     const byId = new Map(skus.map((s) => [s.toolId, s]));
     const eligible: string[] = [];
     const rejected: Array<{ toolId: string; reason: string }> = [];
