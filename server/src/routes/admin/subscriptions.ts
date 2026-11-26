@@ -23,7 +23,7 @@ import {
   upsertPromoCode,
 } from "../../lib/promo-codes.js";
 import { activateToolCommerce } from "../../lib/commerce.js";
-import { refreshOrgMrr } from "../../lib/tool-licenses.js";
+import { refreshOrgMrr, revokeToolLicensesForOrg } from "../../lib/tool-licenses.js";
 import { getToolSku } from "../../lib/tool-skus.js";
 
 const router = Router();
@@ -404,6 +404,80 @@ router.post("/grant-tool", async (req, res) => {
     periodEnd: latestEnd ? latestEnd.toISOString() : null,
     mrrInr,
   });
+});
+
+router.get("/tenants/:orgId/licenses", async (req, res) => {
+  const orgId = Number(req.params.orgId);
+  if (!orgId) {
+    res.status(400).json({ error: "Invalid organizationId" });
+    return;
+  }
+  const [rows] = await pool.query(
+    `SELECT l.tool_id,
+            COALESCE(sku.name, l.tool_id) AS tool_name,
+            COALESCE(sku.price_inr, 0) AS price_inr,
+            COUNT(DISTINCT l.business_profile_id) AS branch_count,
+            MIN(l.current_period_end) AS period_end,
+            MAX(CASE WHEN si.source = 'trial' AND si.status = 'active' THEN 1 ELSE 0 END) AS is_trial,
+            MAX(si.source) AS source
+     FROM profile_tool_licenses l
+     INNER JOIN business_profiles bp ON bp.id = l.business_profile_id
+     LEFT JOIN tool_skus sku ON sku.tool_id = l.tool_id
+     LEFT JOIN org_subscription_items si
+       ON si.organization_id = bp.organization_id AND si.tool_id = l.tool_id AND si.status = 'active'
+     WHERE bp.organization_id = :orgId
+       AND ${orgEqualsSql("bp.organization_id")}
+       AND l.status = 'active'
+       AND (l.current_period_end IS NULL OR l.current_period_end > NOW())
+     GROUP BY l.tool_id, sku.name, sku.price_inr
+     ORDER BY period_end ASC`,
+    { ...orgScopeParams(), orgId },
+  );
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const licenses = (Array.isArray(rows) ? rows : []).map((row) => {
+    const r = row as Record<string, unknown>;
+    const periodEnd = r.period_end ? String(r.period_end).slice(0, 10) : null;
+    return {
+      toolId: String(r.tool_id),
+      toolName: String(r.tool_name ?? r.tool_id),
+      priceInr: Number(r.price_inr ?? 0),
+      branchCount: Number(r.branch_count ?? 1),
+      periodEnd,
+      daysLeft: periodEnd ? daysBetween(today, new Date(periodEnd)) : null,
+      isTrial: Number(r.is_trial ?? 0) > 0,
+      source: r.source ? String(r.source) : "admin",
+    };
+  });
+  res.json({ organizationId: orgId, licenses });
+});
+
+router.post("/revoke-tool", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to revoke tool licenses" });
+    return;
+  }
+  const orgId = Number(req.body?.organizationId ?? 0);
+  const toolId = String(req.body?.toolId ?? "").trim();
+  if (!orgId || !toolId) {
+    res.status(400).json({ error: "organizationId and toolId are required" });
+    return;
+  }
+  await revokeToolLicensesForOrg(orgId, [toolId]);
+  await pool.query(
+    `UPDATE org_subscription_items SET status = 'cancelled'
+     WHERE organization_id = :orgId AND tool_id = :toolId AND status = 'active'`,
+    { orgId, toolId },
+  );
+  const mrrInr = await refreshOrgMrr(orgId);
+  await logAudit(
+    "subscription.revoke_tool",
+    "profile_tool_license",
+    `${orgId}:${toolId}`,
+    { orgId, toolId, mrrInr },
+    req.ip,
+  );
+  res.json({ ok: true, organizationId: orgId, toolId, mrrInr });
 });
 
 router.get("/renewals", async (req, res) => {

@@ -6,6 +6,7 @@ import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { ProductPacksPanel } from "@/components/admin/ProductPacksPanel";
 import { PromoCodesPanel } from "@/components/admin/PromoCodesPanel";
 import { QuickGrantToolCard } from "@/components/admin/QuickGrantToolCard";
+import { TenantLicenseInspector } from "@/components/admin/TenantLicenseInspector";
 import {
   AdminEmpty,
   AdminErrorState,
@@ -175,7 +176,9 @@ export default function AdminSubscriptionsPage() {
   const [noticeOrgId, setNoticeOrgId] = useState<number | null>(null);
   const [assignOrgId, setAssignOrgId] = useState<number | null>(null);
   const [grantOrgId, setGrantOrgId] = useState<number | null>(null);
+  const [inspectOrg, setInspectOrg] = useState<{ id: number; name: string } | null>(null);
   const grantRef = useRef<HTMLDivElement | null>(null);
+  const inspectRef = useRef<HTMLDivElement | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -538,6 +541,17 @@ export default function AdminSubscriptionsPage() {
       cell: (t) => (
         <div className="admin-cc-actions">
           <Button
+            variant={inspectOrg?.id === t.organizationId ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => {
+              setInspectOrg({ id: t.organizationId, name: t.organizationName });
+              setGrantOrgId(t.organizationId);
+              setTimeout(() => inspectRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 40);
+            }}
+          >
+            Inspect
+          </Button>
+          <Button
             variant="ghost"
             size="sm"
             onClick={() => {
@@ -878,6 +892,26 @@ export default function AdminSubscriptionsPage() {
             </div>
           )}
         </AdminSection>
+      ) : null}
+
+      {tab === "tenants" && inspectOrg ? (
+        <div ref={inspectRef}>
+          <TenantLicenseInspector
+            organizationId={inspectOrg.id}
+            organizationName={inspectOrg.name}
+            onClose={() => setInspectOrg(null)}
+            onChanged={async (msg) => {
+              setError("");
+              setMessage(msg);
+              await reload();
+              invalidateAdminData("admin-subscriptions");
+            }}
+            onError={(msg) => {
+              setMessage("");
+              setError(msg);
+            }}
+          />
+        </div>
       ) : null}
 
       {tab === "tenants" ? (

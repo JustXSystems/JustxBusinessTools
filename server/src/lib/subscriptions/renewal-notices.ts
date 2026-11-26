@@ -103,23 +103,27 @@ export async function listRenewalCandidates(withinDays = 14): Promise<RenewalCan
     };
   });
 
-  // Also scan per-tool paid licenses and active trials expiring soon
+  // Also scan per-tool paid licenses and active trials expiring soon (live profile_tool_licenses)
   let toolCandidates: RenewalCandidate[] = [];
   try {
     const [toolRows] = await pool.query(
-      `SELECT l.organization_id, o.name AS org_name, l.tool_id,
+      `SELECT bp.organization_id, o.name AS org_name, l.tool_id,
               COALESCE(sku.name, l.tool_id) AS tool_name,
               COALESCE(sku.price_inr, 0) AS price_inr,
-              l.status, MIN(l.period_end) AS period_end
-       FROM org_tool_licenses l
-       LEFT JOIN organizations o ON o.id = l.organization_id
+              MAX(CASE WHEN si.source = 'trial' AND si.status = 'active' THEN 1 ELSE 0 END) AS is_trial,
+              MIN(l.current_period_end) AS period_end
+       FROM profile_tool_licenses l
+       INNER JOIN business_profiles bp ON bp.id = l.business_profile_id
+       LEFT JOIN organizations o ON o.id = bp.organization_id
        LEFT JOIN tool_skus sku ON sku.tool_id = l.tool_id
-       WHERE l.status IN ('active', 'trial')
-         AND l.period_end IS NOT NULL
-         AND l.period_end <= DATE_ADD(CURDATE(), INTERVAL ${days} DAY)
-         AND l.period_end >= CURDATE()
-         AND ${orgEqualsSql("l.organization_id")}
-       GROUP BY l.organization_id, o.name, l.tool_id, sku.name, sku.price_inr, l.status
+       LEFT JOIN org_subscription_items si
+         ON si.organization_id = bp.organization_id AND si.tool_id = l.tool_id AND si.status = 'active'
+       WHERE l.status = 'active'
+         AND l.current_period_end IS NOT NULL
+         AND l.current_period_end <= DATE_ADD(CURDATE(), INTERVAL ${days} DAY)
+         AND l.current_period_end >= CURDATE()
+         AND ${orgEqualsSql("bp.organization_id")}
+       GROUP BY bp.organization_id, o.name, l.tool_id, sku.name, sku.price_inr
        ORDER BY period_end ASC
        LIMIT 200`,
       orgScopeParams(),
@@ -128,7 +132,7 @@ export async function listRenewalCandidates(withinDays = 14): Promise<RenewalCan
       const r = row as Record<string, unknown>;
       const toolId = String(r.tool_id);
       const toolName = String(r.tool_name ?? toolId);
-      const isTrial = String(r.status) === "trial";
+      const isTrial = Number(r.is_trial ?? 0) > 0;
       const end = new Date(String(r.period_end));
       return {
         organizationId: Number(r.organization_id),
@@ -145,7 +149,7 @@ export async function listRenewalCandidates(withinDays = 14): Promise<RenewalCan
       };
     });
   } catch {
-    /* org_tool_licenses table may not exist on minimal setups */
+    /* profile_tool_licenses table may not exist on minimal setups */
   }
 
   return [...orgCandidates, ...toolCandidates].sort((a, b) => a.daysLeft - b.daysLeft);
