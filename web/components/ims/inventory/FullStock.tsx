@@ -242,6 +242,16 @@ export function FullStockModule() {
             <Button size="sm" variant="ghost" icon="download" onClick={() => exportAs("xlsx")} disabled={!filtered.length}>
               Excel
             </Button>
+            {can("items") ? (
+              <Button size="sm" icon="file" onClick={() => navigate("items", "import")}>
+                Import
+              </Button>
+            ) : null}
+            {can("items") ? (
+              <Button size="sm" variant="primary" icon="plus" onClick={() => navigate("items", "new")}>
+                Add item
+              </Button>
+            ) : null}
           </>
         }
       />

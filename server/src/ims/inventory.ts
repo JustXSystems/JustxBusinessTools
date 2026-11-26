@@ -628,6 +628,94 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     });
   });
 
+  /** Full lifecycle trace for a tracked scan code / serial (returns, warranty, audit). */
+  router.get("/serials/trace", async (req, res) => {
+    const actor = actorOf(res);
+    const code = qstr(req.query.code, 100);
+    if (!code) throw new ImsError(400, "Enter or scan a serial / scan code");
+    const serialRow = await one<{
+      id: string;
+      item_id: string;
+      serial_no: string;
+      status: SerialStatus;
+      purchase_price: string | null;
+      in_movement_id: string | null;
+      out_movement_id: string | null;
+      notes: string | null;
+      created_at: string;
+      updated_at: string;
+    }>(
+      deps.db,
+      `SELECT id, item_id, serial_no, status, purchase_price, in_movement_id, out_movement_id, notes, created_at, updated_at
+       FROM ims_item_serials WHERE tenant_id = :tenantId AND serial_no = :code LIMIT 1`,
+      { tenantId: actor.tenantId, code },
+    );
+    if (!serialRow) {
+      res.json({ serial: null, item: null, inMovement: null, outMovement: null });
+      return;
+    }
+    const [item, inMv, outMv] = await Promise.all([
+      getItem(deps, actor.tenantId, serialRow.item_id),
+      serialRow.in_movement_id
+        ? one<MovementRow>(deps.db, `SELECT * FROM ims_movements WHERE tenant_id = :tenantId AND id = :id LIMIT 1`, { tenantId: actor.tenantId, id: serialRow.in_movement_id })
+        : Promise.resolve(null),
+      serialRow.out_movement_id
+        ? one<MovementRow>(deps.db, `SELECT * FROM ims_movements WHERE tenant_id = :tenantId AND id = :id LIMIT 1`, { tenantId: actor.tenantId, id: serialRow.out_movement_id })
+        : Promise.resolve(null),
+    ]);
+    res.json({
+      serial: {
+        id: serialRow.id,
+        serialNo: serialRow.serial_no,
+        status: serialRow.status,
+        purchasePrice: serialRow.purchase_price == null ? null : round2(money(serialRow.purchase_price)),
+        notes: serialRow.notes,
+        createdAt: tsOf(serialRow.created_at),
+        updatedAt: tsOf(serialRow.updated_at),
+      },
+      item,
+      inMovement: inMv ? mapMovement(inMv) : null,
+      outMovement: outMv ? mapMovement(outMv) : null,
+    });
+  });
+
+  /** List tracked scan codes / serials for a single item (used by Stock Out / Invoice / DC / Return pickers). */
+  router.get("/items/:id/serials", async (req, res) => {
+    const actor = actorOf(res);
+    const itemId = req.params.id;
+    const status = qstr(req.query.status, 16);
+    const q = qstr(req.query.q, 100);
+    const limit = qint(req.query.limit, 500, 1, 2000);
+    const where = ["tenant_id = :tenantId", "item_id = :itemId"];
+    const params: Record<string, unknown> = { tenantId: actor.tenantId, itemId, limit };
+    if (status && ["in_stock", "out", "damaged", "returned"].includes(status)) {
+      where.push("status = :status");
+      params.status = status;
+    }
+    if (q) {
+      where.push("serial_no LIKE :q");
+      params.q = likeOf(q);
+    }
+    const list = await rows<{ id: string; serial_no: string; status: SerialStatus; purchase_price: string | null; notes: string | null; created_at: string; updated_at: string }>(
+      deps.db,
+      `SELECT id, serial_no, status, purchase_price, notes, created_at, updated_at
+       FROM ims_item_serials WHERE ${where.join(" AND ")}
+       ORDER BY FIELD(status, 'in_stock', 'damaged', 'returned', 'out'), created_at DESC LIMIT :limit`,
+      params,
+    );
+    res.json({
+      serials: list.map((s) => ({
+        id: s.id,
+        serialNo: s.serial_no,
+        status: s.status,
+        purchasePrice: s.purchase_price == null ? null : round2(money(s.purchase_price)),
+        notes: s.notes,
+        createdAt: tsOf(s.created_at),
+        updatedAt: tsOf(s.updated_at),
+      })),
+    });
+  });
+
   router.get("/items/:id", async (req, res) => {
     const actor = actorOf(res);
     const item = await getItem(deps, actor.tenantId, req.params.id);

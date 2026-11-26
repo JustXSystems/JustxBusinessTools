@@ -1,10 +1,11 @@
 "use client";
 
 import "./inventory-b.css";
-import { useMemo, useState, type KeyboardEvent } from "react";
-import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, FormGrid, IconButton, Input, Segmented, Textarea, WidgetCard, cx, type BosColumn, type BosTone } from "@/components/bos";
-import { ImsApiError, ims, type ImsItem, type ImsModuleKey, type ImsPermission, type MovementInput, type PostedMovement } from "@/lib/ims/api";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, FilterChip, FormGrid, IconButton, Input, Segmented, Textarea, WidgetCard, cx, type BosColumn, type BosTone } from "@/components/bos";
+import { ImsApiError, ims, type ImsItem, type ImsItemSerial, type ImsModuleKey, type ImsPermission, type MovementInput, type PostedMovement } from "@/lib/ims/api";
 import { dateLabel, inr, num, qtyText, round2, round3, signedQty, timeAgo, todayLocal } from "@/lib/ims/format";
+import { parseSerialList } from "@/lib/ims/inventory-a";
 import { Loaded, NoAccess, PageHeader, Stack, SubTabs, useIms, useImsAction, useImsData } from "../core";
 import { ItemSearch, PartySelect, useItemCatalog } from "../shared/pickers";
 import { isOther, QtyStepper, ReasonChips, useInventoryMeta } from "./stock-shared";
@@ -68,7 +69,7 @@ function StockEntry({ module, initial }: { module: ImsModuleKey; initial: Mode }
 
 /* ---------- Entry form ---------- */
 
-type Line = { key: string; itemId: string; qty: string; rate: string; duty: string };
+type Line = { key: string; itemId: string; qty: string; rate: string; duty: string; serialText: string; serials: string[] };
 
 type Computed = {
   line: Line;
@@ -90,6 +91,8 @@ const newLine = (item: ImsItem, mode: Mode, adjustBy: "count" | "delta"): Line =
   qty: mode === "ADJUSTMENT" ? (adjustBy === "count" ? String(item.currentStock) : "0") : "1",
   rate: mode === "IN" ? String(item.purchasePrice) : mode === "OUT" ? String(item.sellingPrice) : "",
   duty: "",
+  serialText: "",
+  serials: [],
 });
 
 function compute(mode: Mode, line: Line, item: ImsItem, adjustBy: "count" | "delta", allowNegative: boolean): Computed {
@@ -120,6 +123,9 @@ function compute(mode: Mode, line: Line, item: ImsItem, adjustBy: "count" | "del
   }
   if (!error && !warn && delta > 0 && item.maxStock && after > item.maxStock) warn = `Above maximum (${qtyText(item.maxStock)})`;
   const qty = Math.abs(delta);
+  if (!error && mode !== "ADJUSTMENT" && line.serials.length > 0 && line.serials.length !== Math.round(qty)) {
+    error = `Quantity (${qty}) must match the ${line.serials.length} scan code${line.serials.length === 1 ? "" : "s"}`;
+  }
   const unit = rate !== null && Number.isFinite(rate) ? rate : mode === "OUT" ? item.sellingPrice : item.purchasePrice;
   return { line, item, qty, delta, before, after, rate: rate !== null && Number.isFinite(rate) ? rate : null, value: round2(qty * unit), error, warn };
 }
@@ -204,6 +210,7 @@ function EntryForm({ mode, presetItemId }: { mode: Mode; presetItemId: string | 
         unitCost: mode === "IN" && canSeeCost && c.rate !== null ? c.rate : undefined,
         unitPrice: mode === "OUT" && c.rate !== null ? c.rate : undefined,
         exciseDuty: showDuty && c.line.duty.trim() ? num(c.line.duty) : undefined,
+        ...(c.line.serials.length ? { serials: c.line.serials } : {}),
       })),
       partyId: hasParty ? party.id : null,
       partyName: hasParty ? party.name.trim() || null : null,
@@ -427,8 +434,40 @@ function CartLine({
   onRemove: () => void;
 }) {
   const { item } = c;
+  const [showSerials, setShowSerials] = useState(() => Boolean(item.trackSerials));
+  const [available, setAvailable] = useState<ImsItemSerial[] | null>(null);
+  const [serialSearch, setSerialSearch] = useState("");
+  const canSerial = mode === "IN" || mode === "OUT" || mode === "DAMAGE";
+  const isOutPick = mode === "OUT" || mode === "DAMAGE";
+
+  useEffect(() => {
+    if (!showSerials || !isOutPick || available !== null) return;
+    let alive = true;
+    ims
+      .itemSerials(item.id, { status: "in_stock", limit: 500 })
+      .then((r) => alive && setAvailable(r.serials))
+      .catch(() => alive && setAvailable([]));
+    return () => {
+      alive = false;
+    };
+  }, [showSerials, isOutPick, available, item.id]);
+
+  const toggleSerial = (code: string) => {
+    const exists = c.line.serials.includes(code);
+    const next = exists ? c.line.serials.filter((s) => s !== code) : [...c.line.serials, code];
+    onChange({ serials: next, qty: next.length ? String(next.length) : c.line.qty });
+  };
+
+  const onSerialText = (text: string) => {
+    const parsed = parseSerialList(text);
+    onChange({ serialText: text, serials: parsed, ...(parsed.length ? { qty: String(parsed.length) } : {}) });
+  };
+
   const liveError = c.error && (showErrors || c.after < 0) ? c.error : null;
   const qtyLabel = mode === "ADJUSTMENT" ? (adjustBy === "count" ? `Counted quantity of ${item.name}` : `Change in ${item.name}`) : `Quantity of ${item.name}`;
+  const sq = serialSearch.trim().toLowerCase();
+  const visibleAvailable = (available ?? []).filter((s) => !sq || s.serialNo.toLowerCase().includes(sq));
+
   return (
     <div className={cx("ims-b-cart-line", liveError && "is-error", !liveError && c.warn && "is-warn")}>
       <div className="ims-cell-stack">
@@ -437,6 +476,19 @@ function CartLine({
           {[item.sku, item.location].filter(Boolean).join(" · ") || item.category || "—"} · {qtyText(item.currentStock, item.unit)} in stock
           {mode === "DAMAGE" && item.damagedStock > 0 ? ` · ${qtyText(item.damagedStock)} damaged` : ""}
         </small>
+        {canSerial ? (
+          <div style={{ marginTop: 4 }}>
+            <Button size="sm" variant="ghost" onClick={() => setShowSerials((v) => !v)}>
+              {c.line.serials.length
+                ? `Scan codes (${c.line.serials.length} selected)`
+                : showSerials
+                  ? "Hide scan codes"
+                  : item.trackSerials
+                    ? "Add / pick scan codes"
+                    : "+ Track scan codes"}
+            </Button>
+          </div>
+        ) : null}
       </div>
       <div>
         <QtyStepper value={c.line.qty} onChange={(qty) => onChange({ qty })} label={qtyLabel} min={mode === "ADJUSTMENT" && adjustBy === "delta" ? null : 0} invalid={Boolean(liveError)} />
@@ -463,6 +515,61 @@ function CartLine({
         ) : null}
       </div>
       <IconButton icon="x" aria-label={`Remove ${item.name}`} onClick={onRemove} />
+      {canSerial && showSerials ? (
+        <div style={{ gridColumn: "1 / -1", paddingTop: 8, borderTop: "1px dashed var(--bos-border)" }}>
+          {mode === "IN" ? (
+            <div className="ims-cell-stack" style={{ gap: 6 }}>
+              <small className="ims-faint">Scan or paste unique unit scan codes (one per line or comma-separated) — quantity updates automatically.</small>
+              <Textarea
+                rows={2}
+                aria-label={`Scan codes for ${item.name}`}
+                placeholder="SN-001, SN-002, SN-003"
+                value={c.line.serialText}
+                onChange={(e) => onSerialText(e.target.value)}
+              />
+            </div>
+          ) : (
+            <div className="ims-cell-stack" style={{ gap: 8 }}>
+              <div className="ims-row" style={{ gap: 8 }}>
+                <Input
+                  size="sm"
+                  placeholder="Scan or filter in-stock codes (Enter to pick)…"
+                  aria-label={`Filter scan codes for ${item.name}`}
+                  value={serialSearch}
+                  onChange={(e) => setSerialSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && visibleAvailable.length > 0) {
+                      e.preventDefault();
+                      toggleSerial(visibleAvailable[0].serialNo);
+                      setSerialSearch("");
+                    }
+                  }}
+                  style={{ maxWidth: 300 }}
+                />
+                {c.line.serials.length ? (
+                  <Button size="sm" variant="ghost" onClick={() => onChange({ serials: [] })}>
+                    Clear ({c.line.serials.length})
+                  </Button>
+                ) : null}
+              </div>
+              {available === null ? (
+                <small className="ims-faint">Loading in-stock scan codes…</small>
+              ) : visibleAvailable.length ? (
+                <div className="ims-row" style={{ gap: 6, flexWrap: "wrap", maxHeight: 120, overflowY: "auto" }}>
+                  {visibleAvailable.slice(0, 60).map((s) => (
+                    <FilterChip key={s.id} active={c.line.serials.includes(s.serialNo)} onClick={() => toggleSerial(s.serialNo)}>
+                      {s.serialNo}
+                    </FilterChip>
+                  ))}
+                  {visibleAvailable.length > 60 ? <small className="ims-faint">+{visibleAvailable.length - 60} more — narrow search</small> : null}
+                </div>
+              ) : (
+                <small className="ims-faint">No tracked in-stock scan codes for this item.</small>
+              )}
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

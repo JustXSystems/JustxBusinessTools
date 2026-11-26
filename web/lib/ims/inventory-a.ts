@@ -286,6 +286,21 @@ export function groupSerializedPreview(readyRows: ReadonlyArray<MappedRow>): Ser
 /** Skip fully blank spreadsheet rows (trailing formatting in Excel). */
 export const nonBlankRows = (rows: ReadonlyArray<Record<string, unknown>>) => rows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim() !== ""));
 
+/** Parse newline / comma / semicolon / tab-separated scan codes into a unique, trimmed list. */
+export function parseSerialList(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(/[\r\n,;\t]+/)) {
+    const code = part.trim();
+    if (!code) continue;
+    const key = code.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(code.slice(0, 100));
+  }
+  return out;
+}
+
 /** Columns for item exports (also the import template headings). */
 export function itemExportColumns(withCost: boolean): ReadonlyArray<ExportColumn<ImsItem>> {
   const cols: Array<ExportColumn<ImsItem> | null> = [

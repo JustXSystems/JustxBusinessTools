@@ -662,6 +662,15 @@ export const ims = {
       item: ImsItem | null;
       serial?: { id: string; serialNo: string; status: SerialStatus; purchasePrice: number | null } | null;
     }>("/items/lookup", { code }),
+  itemSerials: (itemId: string, params: { status?: SerialStatus; q?: string; limit?: number } = {}) =>
+    get<{ serials: ImsItemSerial[] }>(`/items/${itemId}/serials`, params),
+  traceSerial: (code: string) =>
+    get<{
+      serial: ImsItemSerial | null;
+      item: ImsItem | null;
+      inMovement: ImsMovement | null;
+      outMovement: ImsMovement | null;
+    }>("/serials/trace", { code }),
   createItem: (input: ItemInput & { openingStock?: number }) => post<{ item: ImsItem }>("/items", input),
   updateItem: (id: string, input: Partial<ItemInput>) => patch<{ item: ImsItem }>(`/items/${id}`, input),
   deleteItem: (id: string) => del<{ archived?: boolean } | undefined>(`/items/${id}`),

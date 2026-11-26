@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactNode } from "react";
 import { BosRoot } from "@/components/bos";
 import { errorText, type ImsSession } from "@/lib/ims/api";
-import { detectSerializedImport, groupSerializedPreview, mapRows } from "@/lib/ims/inventory-a";
+import { detectSerializedImport, groupSerializedPreview, mapRows, parseSerialList } from "@/lib/ims/inventory-a";
 import { ImsAppProvider, type ImsAppContextValue } from "../core";
 import { isChunkLoadError } from "../modules";
 import ItemsModule from "./Items";
@@ -156,5 +156,10 @@ describe("Items module", () => {
     expect(groups[0].units).toBe(2);
     expect(groups[0].avgPurchasePrice).toBe(1350);
     expect(groups[0].sampleCodes).toEqual(["SN-101", "SN-102"]);
+  });
+
+  it("parseSerialList splits and deduplicates scan codes across separators", () => {
+    expect(parseSerialList("SN-001, SN-002\nSN-003; sn-001\t SN-004\n")).toEqual(["SN-001", "SN-002", "SN-003", "SN-004"]);
+    expect(parseSerialList("   \n , ; ")).toEqual([]);
   });
 });

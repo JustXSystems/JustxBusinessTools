@@ -14,7 +14,7 @@ import { ItemAvatar } from "./ItemDetail";
 type Detector = Awaited<ReturnType<typeof createBarcodeDetector>>;
 type FoundSerial = { id: string; serialNo: string; status: SerialStatus; purchasePrice: number | null };
 type Found = { code: string; item: ImsItem | null; serial?: FoundSerial | null };
-type SessionLine = { itemId: string; name: string; sku: string | null; unit: string; stock: number; qty: number };
+type SessionLine = { itemId: string; name: string; sku: string | null; unit: string; stock: number; qty: number; serials?: string[] };
 type Mode = "lookup" | "batch";
 
 const SESSION_KEY = "ims.scan.session";
@@ -225,12 +225,25 @@ export function ScannerModule() {
     if (camera === "off") manualRef.current?.focus();
   };
 
-  const addToSession = (item: ImsItem, by: number) =>
+  const addToSession = (item: ImsItem, by: number, serialNo?: string | null) => {
+    let dup = false;
     setSession((s) => {
       const hit = s.find((l) => l.itemId === item.id);
+      if (serialNo) {
+        const existing = hit?.serials ?? [];
+        if (existing.some((c) => c.toLowerCase() === serialNo.toLowerCase())) {
+          dup = true;
+          return s;
+        }
+        const nextSerials = [...existing, serialNo];
+        if (hit) return s.map((l) => (l.itemId === item.id ? { ...l, serials: nextSerials, qty: nextSerials.length, stock: item.currentStock } : l));
+        return [{ itemId: item.id, name: item.name, sku: item.sku, unit: item.unit, stock: item.currentStock, qty: 1, serials: [serialNo] }, ...s];
+      }
       if (hit) return s.map((l) => (l.itemId === item.id ? { ...l, qty: Math.max(0, l.qty + by), stock: item.currentStock } : l));
       return [{ itemId: item.id, name: item.name, sku: item.sku, unit: item.unit, stock: item.currentStock, qty: Math.max(0, by) }, ...s];
     });
+    if (dup) show({ tone: "amber", title: `Unit ${serialNo} already scanned in this batch` });
+  };
 
   const lookup = async (raw: string, fresh = false) => {
     const code = raw.trim();
@@ -251,7 +264,7 @@ export function ScannerModule() {
       setFound({ code, item, serial: hit.serial ?? null });
       setQty("1");
       if (mode === "batch" && item) {
-        addToSession(item, 1);
+        addToSession(item, 1, hit.serial?.serialNo ?? null);
         pausedRef.current = false;
         setPaused(false);
       }
@@ -337,7 +350,9 @@ export function ScannerModule() {
   };
 
   const postSession = async (type: "IN" | "OUT") => {
-    const lines = session.filter((l) => l.qty > 0).map((l) => ({ itemId: l.itemId, qty: l.qty }));
+    const lines = session
+      .filter((l) => l.qty > 0)
+      .map((l) => ({ itemId: l.itemId, qty: l.qty, ...(l.serials?.length === l.qty ? { serials: l.serials } : {}) }));
     if (!lines.length) return;
     const r = await post(type, lines, "session");
     if (r) setSession([]);
@@ -642,6 +657,7 @@ export function ScannerModule() {
                         <small>
                           {l.sku ? `${l.sku} · ` : ""}
                           {qtyText(l.stock, l.unit)} in stock
+                          {l.serials?.length ? ` · ${l.serials.length} scan code${l.serials.length === 1 ? "" : "s"}: ${l.serials.slice(0, 3).join(", ")}${l.serials.length > 3 ? ` +${l.serials.length - 3}` : ""}` : ""}
                         </small>
                       </span>
                       <Stepper value={String(l.qty)} min={0} onChange={(v) => setSession((s) => s.map((x) => (x.itemId === l.itemId ? { ...x, qty: Math.max(0, num(v)) } : x)))} label={`Quantity of ${l.name}`} />
