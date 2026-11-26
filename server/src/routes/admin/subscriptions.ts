@@ -22,6 +22,9 @@ import {
   listPromoCodes,
   upsertPromoCode,
 } from "../../lib/promo-codes.js";
+import { activateToolCommerce } from "../../lib/commerce.js";
+import { refreshOrgMrr } from "../../lib/tool-licenses.js";
+import { getToolSku } from "../../lib/tool-skus.js";
 
 const router = Router();
 
@@ -327,7 +330,79 @@ router.get("/active", async (_req, res) => {
       business: tenants.filter((t) => t.userCategory === "business").length,
       enterprise: tenants.filter((t) => t.userCategory === "enterprise").length,
       activeTrials: tenants.reduce((sum, t) => sum + t.activeTrials, 0),
+      mrrByCategory: {
+        individual: tenants
+          .filter((t) => t.userCategory === "individual")
+          .reduce((sum, t) => sum + t.mrrInr, 0),
+        business: tenants
+          .filter((t) => t.userCategory === "business")
+          .reduce((sum, t) => sum + t.mrrInr, 0),
+        enterprise: tenants
+          .filter((t) => t.userCategory === "enterprise")
+          .reduce((sum, t) => sum + t.mrrInr, 0),
+      },
     },
+  });
+});
+
+router.post("/grant-tool", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to grant tool licenses" });
+    return;
+  }
+  const orgId = Number(req.body?.organizationId ?? 0);
+  const toolId = String(req.body?.toolId ?? "").trim();
+  const mode = req.body?.mode === "trial" ? "trial" : "paid";
+  const days = Math.max(1, Math.min(730, Math.round(Number(req.body?.days ?? (mode === "trial" ? 14 : 30)))));
+  if (!orgId || !toolId) {
+    res.status(400).json({ error: "organizationId and toolId are required" });
+    return;
+  }
+  const sku = await getToolSku(toolId);
+  if (!sku) {
+    res.status(404).json({ error: `Tool SKU '${toolId}' not found` });
+    return;
+  }
+  const [profileRows] = await pool.query(
+    `SELECT id FROM business_profiles WHERE organization_id = :orgId ORDER BY id ASC`,
+    { orgId },
+  );
+  const profileIds = (Array.isArray(profileRows) ? profileRows : [])
+    .map((r) => Number((r as { id?: number }).id))
+    .filter((id) => id > 0);
+  if (profileIds.length === 0) {
+    res.status(404).json({ error: "No business profiles found for this organization" });
+    return;
+  }
+  let latestEnd: Date | null = null;
+  for (const profileId of profileIds) {
+    const out = await activateToolCommerce({
+      profileId,
+      orgId,
+      toolIds: [toolId],
+      source: mode === "trial" ? "trial" : "admin",
+      defaultDays: days,
+      preferTrial: mode === "trial",
+    });
+    latestEnd = out.periodEnd;
+  }
+  const mrrInr = await refreshOrgMrr(orgId);
+  await logAudit(
+    "subscription.grant_tool",
+    "org_tool_license",
+    `${orgId}:${toolId}`,
+    { orgId, toolId, mode, days, profileCount: profileIds.length, mrrInr },
+    req.ip,
+  );
+  res.json({
+    ok: true,
+    organizationId: orgId,
+    toolId,
+    mode,
+    days,
+    profileCount: profileIds.length,
+    periodEnd: latestEnd ? latestEnd.toISOString() : null,
+    mrrInr,
   });
 });
 

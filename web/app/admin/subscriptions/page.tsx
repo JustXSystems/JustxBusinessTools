@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { ProductPacksPanel } from "@/components/admin/ProductPacksPanel";
 import { PromoCodesPanel } from "@/components/admin/PromoCodesPanel";
+import { QuickGrantToolCard } from "@/components/admin/QuickGrantToolCard";
 import {
   AdminEmpty,
   AdminErrorState,
@@ -93,6 +94,11 @@ type TenantSummary = {
   business?: number;
   enterprise?: number;
   activeTrials?: number;
+  mrrByCategory?: {
+    individual: number;
+    business: number;
+    enterprise: number;
+  };
 };
 
 type TenantCategoryFilter = "all" | "individual" | "business" | "enterprise" | "trials";
@@ -165,6 +171,8 @@ export default function AdminSubscriptionsPage() {
   const [notice, setNotice] = useState({ title: "", body: "", kind: "renewal", dueAt: "" });
   const [noticeOrgId, setNoticeOrgId] = useState<number | null>(null);
   const [assignOrgId, setAssignOrgId] = useState<number | null>(null);
+  const [grantOrgId, setGrantOrgId] = useState<number | null>(null);
+  const grantRef = useRef<HTMLDivElement | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -529,6 +537,16 @@ export default function AdminSubscriptionsPage() {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => {
+              setGrantOrgId(t.organizationId);
+              grantRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+          >
+            + Tool
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={saving || t.planId === "free"}
             onClick={() => requestAssign("free", t.organizationId)}
           >
@@ -723,7 +741,11 @@ export default function AdminSubscriptionsPage() {
           label="Platform MRR"
           value={inr(tenantSummary.totalMrr || active?.mrrInr || 0)}
           chip={{ color: "mint", glyph: "₹" }}
-          delta={`Renews ${active?.periodEnd?.slice(0, 10) ?? "—"}`}
+          delta={
+            tenantSummary.mrrByCategory
+              ? `P ${inr(tenantSummary.mrrByCategory.individual)} · B ${inr(tenantSummary.mrrByCategory.business)} · E ${inr(tenantSummary.mrrByCategory.enterprise)}`
+              : `Renews ${active?.periodEnd?.slice(0, 10) ?? "—"}`
+          }
           deltaTone="muted"
         />
       </Grid>
@@ -769,6 +791,61 @@ export default function AdminSubscriptionsPage() {
                 placeholder="Filter tenants…"
                 aria-label="Filter tenants"
               />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const escCsv = (v: unknown) => {
+                    const s = String(v ?? "");
+                    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+                  };
+                  const header = [
+                    "Org ID",
+                    "Organization",
+                    "Category",
+                    "Branches",
+                    "Plan",
+                    "Status",
+                    "Active Licenses",
+                    "Active Trials",
+                    "Records",
+                    "MRR (INR)",
+                    "Period End",
+                    "Days Left",
+                  ];
+                  const lines = [
+                    header.join(","),
+                    ...visibleTenants.map((t) =>
+                      [
+                        t.organizationId,
+                        t.organizationName,
+                        t.userCategory ?? "business",
+                        t.branchCount ?? 1,
+                        t.planName,
+                        t.status,
+                        t.activeLicenses ?? 0,
+                        t.activeTrials ?? 0,
+                        t.totalRecords ?? 0,
+                        t.mrrInr,
+                        t.periodEnd ?? "",
+                        t.daysLeft ?? "",
+                      ]
+                        .map(escCsv)
+                        .join(","),
+                    ),
+                  ];
+                  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `tenants-subscriptions-${new Date().toISOString().slice(0, 10)}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  setMessage(`Exported ${visibleTenants.length} tenant(s) to CSV.`);
+                }}
+              >
+                Export CSV
+              </Button>
             </>
           }
         >
@@ -787,6 +864,25 @@ export default function AdminSubscriptionsPage() {
             </div>
           )}
         </AdminSection>
+      ) : null}
+
+      {tab === "tenants" ? (
+        <div ref={grantRef}>
+          <QuickGrantToolCard
+            organizationId={grantOrgId}
+            onOrganizationChange={setGrantOrgId}
+            onGranted={async (msg) => {
+              setError("");
+              setMessage(msg);
+              await reload();
+              invalidateAdminData("admin-subscriptions");
+            }}
+            onError={(msg) => {
+              setMessage("");
+              setError(msg);
+            }}
+          />
+        </div>
       ) : null}
 
       {tab === "packs" ? (
