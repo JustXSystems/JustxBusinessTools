@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PromoCodesPanel } from "../PromoCodesPanel";
 import { QuickGrantToolCard } from "../QuickGrantToolCard";
 import { TenantLicenseInspector } from "../TenantLicenseInspector";
+import { CommercePolicyPanel } from "../CommercePolicyPanel";
+import { DEFAULT_COMMERCE_POLICY } from "@/lib/types/subscription";
 
 const mockApi = vi.fn();
 vi.mock("@/lib/api", () => ({
@@ -33,7 +35,7 @@ vi.mock("@/components/admin/AdminOrgSelect", () => ({
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 describe("PromoCodesPanel", () => {
@@ -140,7 +142,20 @@ describe("TenantLicenseInspector", () => {
         ],
       })
       .mockResolvedValueOnce({ ok: true, mrrInr: 500 })
-      .mockResolvedValueOnce({ licenses: [] })
+      .mockResolvedValueOnce({
+        licenses: [
+          {
+            toolId: "invoice",
+            toolName: "Invoice & Billing",
+            priceInr: 500,
+            branchCount: 2,
+            periodEnd: "2027-01-01",
+            daysLeft: 35,
+            isTrial: false,
+            source: "admin",
+          },
+        ],
+      })
       .mockResolvedValueOnce({ ok: true, mrrInr: 0 })
       .mockResolvedValueOnce({ licenses: [] });
 
@@ -168,5 +183,55 @@ describe("TenantLicenseInspector", () => {
       ),
     );
     expect(onChanged).toHaveBeenCalledWith(expect.stringContaining("+30d"));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Revoke" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    await waitFor(() =>
+      expect(mockApi).toHaveBeenCalledWith(
+        "/admin/subscriptions/revoke-tool",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ organizationId: 12, toolId: "invoice" }),
+        }),
+      ),
+    );
+  });
+});
+
+describe("CommercePolicyPanel", () => {
+  it("loads policy, updates live simulator, saves via PUT /policy, and resets defaults", async () => {
+    mockApi
+      .mockResolvedValueOnce({
+        policy: { ...DEFAULT_COMMERCE_POLICY, categoryDiscountPct: { individual: 0, business: 10, enterprise: 20 } },
+      })
+      .mockResolvedValueOnce({
+        policy: { ...DEFAULT_COMMERCE_POLICY, categoryDiscountPct: { individual: 0, business: 10, enterprise: 20 } },
+      })
+      .mockResolvedValueOnce({ policy: DEFAULT_COMMERCE_POLICY });
+
+    const onMessage = vi.fn();
+    const onError = vi.fn();
+    render(<CommercePolicyPanel onMessage={onMessage} onError={onError} />);
+
+    await waitFor(() => expect(screen.getByText(/Live pricing, tax & discount simulator/i)).toBeTruthy());
+    expect(screen.getByText(/Category \(10%\)/i)).toBeTruthy();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Save policy/i })[0]);
+    await waitFor(() =>
+      expect(mockApi).toHaveBeenCalledWith(
+        "/admin/subscriptions/policy",
+        expect.objectContaining({ method: "PUT" }),
+      ),
+    );
+    expect(onMessage).toHaveBeenCalledWith(expect.stringContaining("Commerce policy saved"));
+
+    fireEvent.click(screen.getByRole("button", { name: /Reset defaults/i }));
+    await waitFor(() =>
+      expect(mockApi).toHaveBeenCalledWith(
+        "/admin/subscriptions/policy/reset",
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+    expect(onError).not.toHaveBeenCalled();
   });
 });

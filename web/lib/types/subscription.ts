@@ -165,7 +165,95 @@ export type CartQuote = {
     userCategory: "all" | UserCategory;
   }>;
   recommendedPack?: PackRecommendation | null;
+  categoryDiscountInr?: number;
+  categoryDiscountPct?: number;
   upi?: UpiPayInfo;
+};
+
+export type GstPricingMode = "inclusive" | "exclusive";
+
+export type CommercePolicy = {
+  annualEnabled: boolean;
+  defaultBillingCycle: BillingCycle;
+  defaultAnnualMonths: number;
+  monthlyDurationDays: number;
+  annualDurationDays: number;
+  autoSavePackNudgeEnabled: boolean;
+
+  enterpriseMinBranches: number;
+  categoryDiscountPct: {
+    individual: number;
+    business: number;
+    enterprise: number;
+  };
+  allowPersonalBusinessPreview: boolean;
+  showTierComparisonMatrix: boolean;
+
+  allowBatchStartAllTrials: boolean;
+  maxConcurrentTrialsPerOrg: number | null;
+  earlyRenewalWindowDays: number;
+  stackEarlyRenewalDays: boolean;
+  renewalSweepDays: number;
+  urgentWarningDays: number;
+
+  gstEnabled: boolean;
+  gstRatePct: number;
+  gstPricingMode: GstPricingMode;
+  sacCode: string;
+  sellerGstin: string | null;
+  proformaQuoteEnabled: boolean;
+  proformaValidityDays: number;
+  proformaFooterNote: string;
+
+  promosEnabled: boolean;
+  showFeaturedPromoChips: boolean;
+  maxFeaturedPromoChips: number;
+  defaultMaxPerOrg: number | null;
+  allowPromoOnPacks: boolean;
+  allowPromoOnAnnual: boolean;
+  maxCombinedDiscountPct: number;
+
+  nearLimitThresholdPct: number;
+  showHomeSubscriptionStrip: boolean;
+  defaultCheckoutCycleFromNudge: BillingCycle;
+};
+
+export const DEFAULT_COMMERCE_POLICY: CommercePolicy = {
+  annualEnabled: true,
+  defaultBillingCycle: "month",
+  defaultAnnualMonths: 10,
+  monthlyDurationDays: 30,
+  annualDurationDays: 365,
+  autoSavePackNudgeEnabled: true,
+  enterpriseMinBranches: 2,
+  categoryDiscountPct: { individual: 0, business: 0, enterprise: 0 },
+  allowPersonalBusinessPreview: true,
+  showTierComparisonMatrix: true,
+  allowBatchStartAllTrials: true,
+  maxConcurrentTrialsPerOrg: null,
+  earlyRenewalWindowDays: 7,
+  stackEarlyRenewalDays: true,
+  renewalSweepDays: 14,
+  urgentWarningDays: 3,
+  gstEnabled: true,
+  gstRatePct: 18,
+  gstPricingMode: "inclusive",
+  sacCode: "998314",
+  sellerGstin: null,
+  proformaQuoteEnabled: true,
+  proformaValidityDays: 7,
+  proformaFooterNote:
+    "Computer-generated proforma estimate. Licenses activate automatically on payment confirmation.",
+  promosEnabled: true,
+  showFeaturedPromoChips: true,
+  maxFeaturedPromoChips: 4,
+  defaultMaxPerOrg: 1,
+  allowPromoOnPacks: true,
+  allowPromoOnAnnual: true,
+  maxCombinedDiscountPct: 50,
+  nearLimitThresholdPct: 80,
+  showHomeSubscriptionStrip: true,
+  defaultCheckoutCycleFromNudge: "year",
 };
 
 export type UpiPayInfo = {
@@ -227,6 +315,7 @@ export type SubscriptionInfo = {
   /** Latest claim regardless of status (debug / status strip). */
   latestClaim?: PendingUpiClaim | null;
   gateways?: PayGatewayOption[];
+  commercePolicy?: CommercePolicy;
   serverTime?: string;
 };
 

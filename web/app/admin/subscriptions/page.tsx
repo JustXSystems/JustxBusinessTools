@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
+import { CommercePolicyPanel } from "@/components/admin/CommercePolicyPanel";
 import { ProductPacksPanel } from "@/components/admin/ProductPacksPanel";
 import { PromoCodesPanel } from "@/components/admin/PromoCodesPanel";
 import { QuickGrantToolCard } from "@/components/admin/QuickGrantToolCard";
@@ -127,9 +128,17 @@ type RenewalCandidate = {
   isTrial?: boolean;
 };
 
-type Tab = "tenants" | "packs" | "promos" | "modes" | "renewals" | "notices";
+type Tab = "tenants" | "packs" | "promos" | "policy" | "modes" | "renewals" | "notices";
 
-const TAB_VALUES: ReadonlyArray<Tab> = ["tenants", "packs", "promos", "modes", "renewals", "notices"];
+const TAB_VALUES: ReadonlyArray<Tab> = [
+  "tenants",
+  "packs",
+  "promos",
+  "policy",
+  "modes",
+  "renewals",
+  "notices",
+];
 
 /** Hash deep links: `#renewals` (dashboard KPI) plus the legacy `#plan-editor` anchor. */
 function tabFromHash(hash: string): Tab | null {
@@ -471,6 +480,7 @@ export default function AdminSubscriptionsPage() {
     { value: "tenants", label: `Tenants (${tenantSummary.total})` },
     { value: "packs", label: "Product packs" },
     { value: "promos", label: "Promo codes" },
+    { value: "policy", label: "Policy & controls" },
     { value: "modes", label: "Platform modes" },
     { value: "renewals", label: `Renewals (${renewals.length})` },
     { value: "notices", label: queuedNotices ? `Notices (${queuedNotices} queued)` : "Notices" },
@@ -951,6 +961,20 @@ export default function AdminSubscriptionsPage() {
           onMessage={(m) => {
             setError("");
             setMessage(m);
+          }}
+          onError={(m) => {
+            setMessage("");
+            setError(m);
+          }}
+        />
+      ) : null}
+
+      {tab === "policy" ? (
+        <CommercePolicyPanel
+          onMessage={(m) => {
+            setError("");
+            setMessage(m);
+            invalidateAdminData("admin-subscriptions");
           }}
           onError={(m) => {
             setMessage("");
