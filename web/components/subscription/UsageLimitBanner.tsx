@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useToast } from "@/components/common/ToastProvider";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -49,11 +50,17 @@ export function UsageLimitBanner({
   const sku = subscription?.catalog?.find((s) => s.toolId === usage.toolId);
   const trialEligible = Boolean(sku?.trialEligible && (sku.trialDays ?? 0) > 0);
   const priced = sku ? resolveClientSkuPrice(sku, "month") : null;
+  const pricedYearly = sku ? resolveClientSkuPrice(sku, "year") : null;
   const limit = usage.limit;
   const hardLocked = limit === 0;
   const pct = hardLocked ? 100 : Math.min(100, Math.round((usage.recordCount / Math.max(1, limit)) * 100));
   const priceHint =
     priced && priced.priceInr > 0 ? ` · ${formatInr(priced.priceInr)}/mo` : "";
+  const annualCheckoutHref = `/subscription/checkout?tool=${encodeURIComponent(usage.toolId)}&cycle=year`;
+  const yearlySaveHint =
+    pricedYearly && pricedYearly.annualSavingsInr > 0
+      ? `Yearly (${formatInr(pricedYearly.priceInr)}/yr · save ${formatInr(pricedYearly.annualSavingsInr)})`
+      : "Subscribe yearly (−17%)";
 
   async function onTrial() {
     setBusy(true);
@@ -102,18 +109,23 @@ export function UsageLimitBanner({
               >
                 Start {sku!.trialDays}-day trial
               </button>
+              <Link href={annualCheckoutHref} className="usage-banner-cta usage-banner-cta-secondary">
+                {yearlySaveHint}
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href={annualCheckoutHref} className="usage-banner-cta">
+                {yearlySaveHint}
+              </Link>
               <button
                 type="button"
                 className="usage-banner-cta usage-banner-cta-secondary"
                 onClick={() => openUpgrade(usage.toolId)}
               >
-                Subscribe{priceHint}
+                Monthly{priceHint}
               </button>
             </>
-          ) : (
-            <button type="button" className="usage-banner-cta" onClick={() => openUpgrade(usage.toolId)}>
-              Subscribe{priceHint}
-            </button>
           )}
         </div>
       </div>
@@ -142,8 +154,15 @@ export function UsageLimitBanner({
             Start {sku!.trialDays}-day trial
           </button>
         ) : null}
-        <button type="button" className="usage-banner-cta" onClick={() => openUpgrade(usage.toolId)}>
-          Subscribe{priceHint}
+        <Link href={annualCheckoutHref} className="usage-banner-cta">
+          {yearlySaveHint}
+        </Link>
+        <button
+          type="button"
+          className="usage-banner-cta usage-banner-cta-secondary"
+          onClick={() => openUpgrade(usage.toolId)}
+        >
+          Monthly{priceHint}
         </button>
       </div>
     </div>

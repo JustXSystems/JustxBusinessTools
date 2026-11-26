@@ -28,6 +28,8 @@ function openPrintableReceipt(
     entry.toolNames.length > 0
       ? entry.toolNames.map((n) => `<li>${escapeHtml(n)}</li>`).join("")
       : `<li>Workspace subscription charge</li>`;
+  const taxableValue = account.hasGstin ? Math.round((entry.amountInr / 1.18) * 100) / 100 : entry.amountInr;
+  const gstAmount = account.hasGstin ? Math.round((entry.amountInr - taxableValue) * 100) / 100 : 0;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -79,9 +81,18 @@ function openPrintableReceipt(
   </div>
 
   <div class="box">
-    <p class="label">Subscribed tools</p>
+    <p class="label">Subscribed tools${account.hasGstin ? " · SAC 998314" : ""}</p>
     <ul>${toolsHtml}</ul>
   </div>
+
+  ${
+    account.hasGstin
+      ? `<div class="box" style="margin-top:14px">
+           <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>Taxable Value (SAC 998314)</span><span>₹${taxableValue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+           <div style="display:flex;justify-content:space-between;font-size:13px"><span>GST @ 18% (Inclusive)</span><span>₹${gstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+         </div>`
+      : ""
+  }
 
   <div class="total">
     <span>Total Paid</span>
@@ -104,6 +115,7 @@ export function BillingHistoryPanel({ refreshKey }: { refreshKey?: string }) {
   const { appName, legalName } = useBrandCopy();
   const [data, setData] = useState<BillingHistoryPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "paid" | "pending">("all");
 
   useEffect(() => {
     let alive = true;
@@ -126,6 +138,16 @@ export function BillingHistoryPanel({ refreshKey }: { refreshKey?: string }) {
   const entries = data?.entries ?? [];
   if (!loading && entries.length === 0) return null;
 
+  const isPaid = (s: string) => s === "approved" || s === "success";
+  const totalPaidInr = entries
+    .filter((e) => isPaid(e.status))
+    .reduce((sum, e) => sum + Number(e.amountInr || 0), 0);
+  const visible = entries.filter((e) => {
+    if (filter === "paid") return isPaid(e.status);
+    if (filter === "pending") return !isPaid(e.status);
+    return true;
+  });
+
   return (
     <section className="billing-history card">
       <div className="sub-lines-head">
@@ -135,15 +157,40 @@ export function BillingHistoryPanel({ refreshKey }: { refreshKey?: string }) {
             {data?.account.hasGstin
               ? `Business billing ledger · GSTIN ${data.account.gstin}`
               : "Personal payment ledger · printable receipts available"}
+            {totalPaidInr > 0 ? ` · Total paid: ${formatInr(totalPaidInr)}` : ""}
           </p>
         </div>
+        {entries.length > 1 ? (
+          <div className="sub-filter-chips" role="tablist" aria-label="Filter billing history">
+            {(
+              [
+                ["all", `All (${entries.length})`],
+                ["paid", "Paid"],
+                ["pending", "Pending / Other"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={filter === id}
+                className={`sub-filter-chip${filter === id ? " is-active" : ""}`}
+                onClick={() => setFilter(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {loading ? (
         <p className="muted">Loading billing history…</p>
+      ) : visible.length === 0 ? (
+        <p className="muted">No billing records match this filter.</p>
       ) : (
         <ul className="sub-history-list">
-          {entries.map((entry) => {
+          {visible.map((entry) => {
             const approved = entry.status === "approved" || entry.status === "success";
             const rejected = entry.status === "rejected" || entry.status === "failed";
             return (
