@@ -197,6 +197,33 @@ export function detectSerializedImport(rows: ReadonlyArray<Record<string, unknow
   return false;
 }
 
+/**
+ * Detects when the mapped `Unit` column mostly holds numbers (e.g. `1`, `113`, `18`)
+ * while `Opening stock` is unmapped or blank — a common spreadsheet mistake where
+ * quantities were typed under "Unit" instead of "Current stock" / "Opening stock",
+ * which would otherwise import every item at 0 stock (OUT OF STOCK).
+ */
+export function detectNumericUnitColumn(rows: ReadonlyArray<Record<string, unknown>>, mapping: Record<string, string>): boolean {
+  const unitCol = mapping.unit;
+  if (!unitCol || rows.length === 0) return false;
+  const stockCol = mapping.openingStock;
+  const sample = rows.slice(0, 200);
+  let nonEmptyUnit = 0;
+  let numericUnit = 0;
+  let nonEmptyStock = 0;
+  for (const r of sample) {
+    const u = String(r[unitCol] ?? "").trim();
+    if (u) {
+      nonEmptyUnit += 1;
+      if (/^\d+(?:\.\d+)?$/.test(u)) numericUnit += 1;
+    }
+    if (stockCol && String(r[stockCol] ?? "").trim() !== "") {
+      nonEmptyStock += 1;
+    }
+  }
+  return nonEmptyUnit > 0 && numericUnit / nonEmptyUnit >= 0.6 && nonEmptyStock === 0;
+}
+
 /** Applies the column mapping; blanks are dropped so server defaults apply. */
 export function mapRows(rows: ReadonlyArray<Record<string, unknown>>, mapping: Record<string, string>, mode: ImportMode = "sku"): MappedRow[] {
   const seenCodes = new Map<string, number>();
@@ -221,8 +248,11 @@ export function mapRows(rows: ReadonlyArray<Record<string, unknown>>, mapping: R
     if (typeof record.gstRate === "number" && record.gstRate > 100) issues.push("GST % must be 0–100");
     if (mode === "serialized") {
       const code = String(record.serialNo ?? record.barcode ?? record.sku ?? "").trim();
+      const qty = typeof record.openingStock === "number" ? record.openingStock : 0;
       if (!code) {
-        issues.push("Scan code / serial number is missing");
+        if (qty <= 0) {
+          issues.push("Scan code / serial number is missing (or provide Opening stock for bulk items)");
+        }
       } else {
         record.serialNo = code;
         const codeKey = code.toLowerCase();
@@ -238,7 +268,7 @@ export function mapRows(rows: ReadonlyArray<Record<string, unknown>>, mapping: R
   });
 }
 
-/** Groups valid serialized rows into products for the import preview table. */
+/** Groups valid serialized (and mixed bulk) rows into products for the import preview table. */
 export function groupSerializedPreview(readyRows: ReadonlyArray<MappedRow>): SerializedPreviewGroup[] {
   const byKey = new Map<
     string,
@@ -250,24 +280,28 @@ export function groupSerializedPreview(readyRows: ReadonlyArray<MappedRow>): Ser
       prices: number[];
       sellingPrice: number | null;
       codes: string[];
+      bulkQty: number;
     }
   >();
   for (const r of readyRows) {
     const name = String(r.record.name ?? "").trim();
     const category = r.record.category ? String(r.record.category).trim() : null;
     const brand = r.record.brand ? String(r.record.brand).trim() : null;
-    const unit = r.record.unit ? String(r.record.unit).trim() : "pcs";
+    const rawUnit = r.record.unit ? String(r.record.unit).trim() : "";
+    const unit = !rawUnit || /^\d+(?:\.\d+)?$/.test(rawUnit) ? "pcs" : rawUnit;
     const key = `${normKeyPart(name)}||${normKeyPart(category)}||${normKeyPart(brand)}`;
     const code = String(r.record.serialNo ?? r.record.barcode ?? r.record.sku ?? "").trim();
+    const bulkQty = !code && typeof r.record.openingStock === "number" && r.record.openingStock > 0 ? r.record.openingStock : 0;
     const buy = typeof r.record.purchasePrice === "number" && r.record.purchasePrice > 0 ? r.record.purchasePrice : null;
     const sell = typeof r.record.sellingPrice === "number" ? r.record.sellingPrice : null;
     const g = byKey.get(key);
     if (!g) {
-      byKey.set(key, { name, category, brand, unit, prices: buy != null ? [buy] : [], sellingPrice: sell, codes: code ? [code] : [] });
+      byKey.set(key, { name, category, brand, unit, prices: buy != null ? [buy] : [], sellingPrice: sell, codes: code ? [code] : [], bulkQty });
     } else {
       if (buy != null) g.prices.push(buy);
       if (g.sellingPrice == null && sell != null) g.sellingPrice = sell;
       if (code) g.codes.push(code);
+      if (bulkQty > 0) g.bulkQty += bulkQty;
     }
   }
   return [...byKey.entries()].map(([key, g]) => ({
@@ -276,10 +310,10 @@ export function groupSerializedPreview(readyRows: ReadonlyArray<MappedRow>): Ser
     category: g.category,
     brand: g.brand,
     unit: g.unit,
-    units: g.codes.length,
+    units: g.codes.length + g.bulkQty,
     avgPurchasePrice: g.prices.length ? Math.round((g.prices.reduce((s, p) => s + p, 0) / g.prices.length) * 100) / 100 : null,
     sellingPrice: g.sellingPrice,
-    sampleCodes: g.codes.slice(0, 3),
+    sampleCodes: g.codes.length ? g.codes.slice(0, 3) : ["Bulk (no serial)"],
   }));
 }
 

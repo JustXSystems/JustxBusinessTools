@@ -61,4 +61,21 @@ describe("IMS serialized inventory & weighted-average cost", () => {
     expect(errors[0]).toMatch(/Duplicate scan code "dup-1"/);
     expect(errors[1]).toMatch(/Scan code \/ serial number is required/);
   });
+
+  it("supports mixed serialized + bulk non-serialized rows and normalizes numeric units", () => {
+    const { groups, bulkRows, errors } = groupSerializedImportRows([
+      { name: "3KVA(72V)3L", category: "UPS", brand: "KSTAR", barcode: "83122211507354", unit: "1" },
+      { name: "3KVA(72V)3L", category: "UPS", brand: "KSTAR", barcode: "83122211507355", unit: "1" },
+      { name: "42AH", category: "Battery", brand: "Exide", unit: "113", openingStock: 113 },
+      { name: "3KVA(42 AH 6 NO)", category: "Rack", unit: "18", openingStock: 18 },
+    ]);
+
+    expect(errors).toEqual([]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].unit).toBe("pcs");
+    expect(groups[0].units).toHaveLength(2);
+    expect(bulkRows).toHaveLength(2);
+    expect(bulkRows[0]).toMatchObject({ name: "42AH", category: "Battery", brand: "Exide", unit: "pcs", openingStock: 113 });
+    expect(bulkRows[1]).toMatchObject({ name: "3KVA(42 AH 6 NO)", category: "Rack", unit: "pcs", openingStock: 18 });
+  });
 });

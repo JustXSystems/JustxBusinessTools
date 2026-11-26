@@ -97,11 +97,35 @@ const optNonNeg = (v: unknown): number | null => {
  * - Rejects rows missing a name or scan code, and rejects duplicate scan codes within the batch.
  * - Groups units with the same `(name, category, brand)` into one product with weighted-average purchase price.
  */
+export type SerializedBulkRow = {
+  rowNumber: number;
+  name: string;
+  sku: string | null;
+  category: string | null;
+  brand: string | null;
+  unit: string;
+  hsn: string | null;
+  gstRate: number;
+  purchasePrice: number;
+  sellingPrice: number;
+  mrp: number | null;
+  minStock: number;
+  maxStock: number | null;
+  reorderQty: number | null;
+  location: string | null;
+  notes: string | null;
+  openingStock: number;
+};
+
+const isNumericUnit = (u: string | null) => Boolean(u && /^\d+(?:\.\d+)?$/.test(u.trim()));
+
 export function groupSerializedImportRows(rawRows: ReadonlyArray<Record<string, unknown>>): {
   groups: SerializedProductGroup[];
+  bulkRows: SerializedBulkRow[];
   errors: string[];
 } {
   const errors: string[] = [];
+  const bulkRows: SerializedBulkRow[] = [];
   const seenSerials = new Map<string, number>();
   const byProduct = new Map<string, { first: SerializedUnitRow; units: SerializedProductGroup["units"] }>();
 
@@ -118,7 +142,38 @@ export function groupSerializedImportRows(rawRows: ReadonlyArray<Record<string, 
     const barcode = optStr(raw.barcode, 100);
     const sku = optStr(raw.sku, 64);
     const serialNo = explicitSerial ?? barcode ?? sku;
+    const rawUnit = optStr(raw.unit, 20);
+    const safeUnit = !rawUnit || isNumericUnit(rawUnit) ? "pcs" : rawUnit;
+    const gstRate = nonNeg(raw.gstRate, 18);
+    if (gstRate > 100) {
+      errors.push(`Row ${rowNumber}: GST % must be 0–100`);
+      continue;
+    }
+
     if (!serialNo) {
+      const openingStock = nonNeg(raw.openingStock ?? raw.currentStock, 0);
+      if (openingStock > 0) {
+        bulkRows.push({
+          rowNumber,
+          name,
+          sku: null,
+          category: optStr(raw.category, 80),
+          brand: optStr(raw.brand, 80),
+          unit: safeUnit,
+          hsn: optStr(raw.hsn, 20),
+          gstRate,
+          purchasePrice: round2(nonNeg(raw.purchasePrice, 0)),
+          sellingPrice: round2(nonNeg(raw.sellingPrice, 0)),
+          mrp: optNonNeg(raw.mrp),
+          minStock: nonNeg(raw.minStock, 0),
+          maxStock: optNonNeg(raw.maxStock),
+          reorderQty: optNonNeg(raw.reorderQty),
+          location: optStr(raw.location, 80),
+          notes: optStr(raw.notes, 500),
+          openingStock,
+        });
+        continue;
+      }
       errors.push(`Row ${rowNumber}: Scan code / serial number is required in unit-per-row import`);
       continue;
     }
@@ -131,12 +186,6 @@ export function groupSerializedImportRows(rawRows: ReadonlyArray<Record<string, 
     }
     seenSerials.set(serialKey, rowNumber);
 
-    const gstRate = nonNeg(raw.gstRate, 18);
-    if (gstRate > 100) {
-      errors.push(`Row ${rowNumber}: GST % must be 0–100`);
-      continue;
-    }
-
     // Keep product SKU only if the user gave a separate SKU distinct from the unit's serial/scan code.
     const productSku = sku && sku.toLowerCase() !== serialKey ? sku : null;
 
@@ -147,7 +196,7 @@ export function groupSerializedImportRows(rawRows: ReadonlyArray<Record<string, 
       sku: productSku,
       category: optStr(raw.category, 80),
       brand: optStr(raw.brand, 80),
-      unit: optStr(raw.unit, 20) ?? "pcs",
+      unit: safeUnit,
       hsn: optStr(raw.hsn, 20),
       gstRate,
       purchasePrice: round2(nonNeg(raw.purchasePrice, 0)),
@@ -203,5 +252,5 @@ export function groupSerializedImportRows(rawRows: ReadonlyArray<Record<string, 
     });
   }
 
-  return { groups, errors };
+  return { groups, bulkRows, errors };
 }

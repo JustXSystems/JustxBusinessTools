@@ -26,6 +26,7 @@ import { downloadCsv, downloadXlsx, inr, inrExact, qtyText, readSheet, stockBadg
 import {
   IMPORT_FIELDS,
   autoMap,
+  detectNumericUnitColumn,
   detectSerializedImport,
   groupSerializedPreview,
   itemExportColumns,
@@ -131,6 +132,8 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
   const bad = mapped.filter((r) => r.issues.length);
   const serializedGroups: SerializedPreviewGroup[] = useMemo(() => (mode === "serialized" ? groupSerializedPreview(ready) : []), [mode, ready]);
   const hasCodeCol = Boolean(mapping.serialNo || mapping.barcode || mapping.sku);
+  const numericUnitWarning = useMemo(() => (sheet ? detectNumericUnitColumn(sheet.rows, mapping) : false), [sheet, mapping]);
+  const totalPreviewUnits = useMemo(() => serializedGroups.reduce((s, g) => s + g.units, 0), [serializedGroups]);
 
   const reset = () => {
     setFileName(null);
@@ -377,9 +380,31 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
                 ]}
               />
             </div>
+            {numericUnitWarning ? (
+              <Alert tone="amber" title={`“${mapping.unit}” looks like stock quantities, while Opening stock is blank`}>
+                <div className="ims-between" style={{ gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+                  <span>
+                    Importing as-is will leave items at <b>0 stock (Out of stock)</b> and set their unit to a number.
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      setMapping((m) => ({
+                        ...m,
+                        openingStock: m.unit ?? "",
+                        unit: "",
+                      }))
+                    }
+                  >
+                    Use “{mapping.unit}” as Opening stock
+                  </Button>
+                </div>
+              </Alert>
+            ) : null}
             {autoDetectedSerialized && mode === "serialized" ? (
               <Alert tone="blue" title="Grouped by product with unique scan codes">
-                Detected repeated product names with unique scan codes — {ready.length} unit{ready.length === 1 ? "" : "s"} will be grouped into{" "}
+                Detected repeated product names with unique scan codes — {totalPreviewUnits} unit{totalPreviewUnits === 1 ? "" : "s"} will be grouped into{" "}
                 {serializedGroups.length} product{serializedGroups.length === 1 ? "" : "s"} (weighted average purchase price, duplicate scan codes blocked).
               </Alert>
             ) : null}

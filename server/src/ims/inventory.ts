@@ -1058,7 +1058,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     const errors: string[] = [];
 
     if (body.mode === "serialized") {
-      const { groups, errors: groupErrors } = groupSerializedImportRows(body.items);
+      const { groups, bulkRows, errors: groupErrors } = groupSerializedImportRows(body.items);
       errors.push(...groupErrors);
 
       // Batch-check existing scan codes in this tenant so duplicates are rejected cleanly.
@@ -1204,6 +1204,72 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
         }
       }
 
+      for (const b of bulkRows) {
+        try {
+          const existing = await one<{ id: string }>(
+            deps.db,
+            `SELECT id FROM ims_items
+             WHERE tenant_id = :tenantId AND active = 1
+               AND LOWER(TRIM(name)) = LOWER(TRIM(:name))
+               AND LOWER(TRIM(COALESCE(category, ''))) = LOWER(TRIM(:category))
+               AND LOWER(TRIM(COALESCE(brand, ''))) = LOWER(TRIM(:brand))
+             LIMIT 1`,
+            { tenantId: actor.tenantId, name: b.name, category: b.category ?? "", brand: b.brand ?? "" },
+          );
+          if (existing) {
+            await tx(deps.db, async (conn) => {
+              await postMovement(
+                conn,
+                actor,
+                {
+                  itemId: existing.id,
+                  type: "IN",
+                  qty: b.openingStock,
+                  unitCost: b.purchasePrice > 0 ? b.purchasePrice : null,
+                  refType: "import",
+                  reason: "Bulk import",
+                },
+                { allowNegative: settings.allowNegativeStock },
+              );
+            });
+            updated += 1;
+          } else {
+            await insertItem(
+              deps,
+              actor,
+              {
+                name: b.name,
+                sku: b.sku,
+                barcode: null,
+                category: b.category,
+                brand: b.brand,
+                unit: b.unit,
+                hsn: b.hsn,
+                gstRate: b.gstRate,
+                supplierId: null,
+                purchasePrice: b.purchasePrice,
+                sellingPrice: b.sellingPrice,
+                mrp: b.mrp,
+                minStock: b.minStock,
+                maxStock: b.maxStock,
+                reorderQty: b.reorderQty,
+                location: b.location,
+                volumeMl: null,
+                exciseCategory: null,
+                notes: b.notes,
+                active: true,
+                trackSerials: false,
+              },
+              { qty: b.openingStock, refType: "import" },
+              settings.allowNegativeStock,
+            );
+            created += 1;
+          }
+        } catch (err) {
+          errors.push(`Row ${b.rowNumber} (${b.name}): ${err instanceof Error ? err.message : "failed"}`);
+        }
+      }
+
       await recordEvent(deps, actor, {
         type: "item.imported",
         entityType: "item",
@@ -1222,9 +1288,12 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
       }
       const input = result.data;
       const sku = blankToNull(input.sku) as string | null | undefined;
-      const existing = sku ? await one<{ id: string }>(deps.db, `SELECT id FROM ims_items WHERE tenant_id = :tenantId AND sku = :sku LIMIT 1`, { tenantId: actor.tenantId, sku }) : null;
+      const existing = sku
+        ? await one<{ id: string; current_stock: string }>(deps.db, `SELECT id, current_stock FROM ims_items WHERE tenant_id = :tenantId AND sku = :sku LIMIT 1`, { tenantId: actor.tenantId, sku })
+        : null;
       try {
         await assertUniqueBarcode(deps, actor.tenantId, input.barcode, existing?.id);
+        const openingQty = Math.max(0, Number(raw.openingStock ?? raw.currentStock) || 0);
         if (existing) {
           const sets: string[] = [];
           const params: Record<string, unknown> = { tenantId: actor.tenantId, id: existing.id };
@@ -1234,9 +1303,21 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
             params[k] = typeof v === "boolean" ? (v ? 1 : 0) : blankToNull(v);
           }
           if (sets.length) await exec(deps.db, `UPDATE ims_items SET ${sets.join(", ")} WHERE tenant_id = :tenantId AND id = :id`, params);
+          if (openingQty > 0 && round3(money(existing.current_stock)) === 0) {
+            const mvCnt = await one<{ n: number }>(deps.db, `SELECT COUNT(*) AS n FROM ims_movements WHERE tenant_id = :tenantId AND item_id = :id`, { tenantId: actor.tenantId, id: existing.id });
+            if (Number(mvCnt?.n ?? 0) === 0) {
+              await tx(deps.db, async (conn) => {
+                await postMovement(
+                  conn,
+                  actor,
+                  { itemId: existing.id, type: "OPENING", qty: openingQty, unitCost: input.purchasePrice, refType: "import", reason: "Opening stock" },
+                  { allowNegative: settings.allowNegativeStock },
+                );
+              });
+            }
+          }
           updated += 1;
         } else {
-          const openingQty = Math.max(0, Number(raw.openingStock ?? raw.currentStock) || 0);
           await insertItem(deps, actor, input, openingQty ? { qty: openingQty, refType: "import" } : null, settings.allowNegativeStock);
           created += 1;
         }
