@@ -8,8 +8,10 @@ import { BillingStepper } from "@/components/subscription/BillingStepper";
 import { CardPayMethod } from "@/components/subscription/CardPayMethod";
 import { UpiPayMethod } from "@/components/subscription/UpiPayMethod";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { fetchCartQuote } from "@/lib/api";
 import { catalogPriceFingerprint } from "@/lib/commerce-revision";
+import { openProformaQuotePrint } from "@/lib/proforma-quote";
 import {
   clearToolCart,
   readActivePack,
@@ -27,6 +29,7 @@ type PayMethod = "upi" | "debit" | "credit";
 
 export default function SubscriptionCheckoutPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const { appName, legalName } = useBrandCopy();
   const { subscription, loading, error, refresh } = useSubscription();
   const { showToast } = useToast();
@@ -372,6 +375,29 @@ export default function SubscriptionCheckoutPage() {
               <dd>{quote?.upi?.payeeName || subscription?.upi?.payeeName || legalName}</dd>
             </div>
           </dl>
+          {quote && lines.length > 0 ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ width: "100%", marginTop: 12 }}
+              onClick={() => {
+                const opened = openProformaQuotePrint({
+                  sellerAppName: appName,
+                  sellerLegalName: legalName,
+                  customerName:
+                    user?.organizationName || user?.name || user?.email || "Workspace Account",
+                  customerGstin: subscription?.gstin ?? null,
+                  userCategory: subscription?.userCategory,
+                  branchCount: subscription?.branchCount ?? user?.branches?.length ?? 1,
+                  billingCycle: effectiveCycle,
+                  quote,
+                });
+                if (!opened) showToast("Allow pop-ups to print or save the Proforma Quote PDF");
+              }}
+            >
+              Download Proforma Quote PDF
+            </button>
+          ) : null}
           <p className="muted co-tax-note">
             {subscription?.hasGstin
               ? "GSTIN is attached to this workspace for business billing records."

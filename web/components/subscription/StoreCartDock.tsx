@@ -26,6 +26,7 @@ type Props = {
   quoteError?: string;
   canCheckout: boolean;
   emptyHint?: string;
+  onDownloadProforma?: () => void;
   onRemove?: (id: string) => void;
   onClear?: () => void;
 };
@@ -49,6 +50,7 @@ export function StoreCartDock({
   quoteError,
   canCheckout,
   emptyHint = "Select tools or a pack to build your subscription.",
+  onDownloadProforma,
   onRemove,
   onClear,
 }: Props) {
@@ -232,6 +234,15 @@ export function StoreCartDock({
               Proceed to checkout
             </button>
           )}
+          {canCheckout && onDownloadProforma ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => onDownloadProforma()}
+            >
+              Proforma quote PDF
+            </button>
+          ) : null}
           {itemCount > 0 && onClear ? (
             <button type="button" className="btn btn-ghost btn-sm" onClick={onClear}>
               Clear cart

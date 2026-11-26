@@ -13,6 +13,7 @@ import { cancelProSubscription, fetchCartQuote, startToolTrial } from "@/lib/api
 import { catalogPriceFingerprint } from "@/lib/commerce-revision";
 import { groupItemsByKey } from "@/lib/group-items";
 import { isPersonalAccount } from "@/lib/personal-account";
+import { openProformaQuotePrint } from "@/lib/proforma-quote";
 import { SUBSCRIPTION_SYNCED_EVENT } from "@/lib/subscription-cache";
 import {
   describeToolUsage,
@@ -57,7 +58,7 @@ const FILTER_CHIPS: Array<{ id: StoreFilterChip; label: string }> = [
 export default function SubscriptionPage() {
   const { user } = useAuth();
   const { config } = usePlatformConfig();
-  const { appName } = useBrandCopy();
+  const { appName, legalName } = useBrandCopy();
   const groupProducts = config?.toolGrouping?.enabled !== false;
   const { subscription, loading, error, isToolLicensed, refresh } = useSubscription();
   const { showToast } = useToast();
@@ -376,6 +377,24 @@ export default function SubscriptionPage() {
         lines={cartLines}
         quoteError={quoteError}
         canCheckout={Boolean(quote && payableIds.length > 0)}
+        onDownloadProforma={
+          quote && payableIds.length > 0
+            ? () => {
+                const opened = openProformaQuotePrint({
+                  sellerAppName: appName,
+                  sellerLegalName: legalName,
+                  customerName:
+                    user?.organizationName || user?.name || user?.email || "Workspace Account",
+                  customerGstin: subscription?.gstin ?? null,
+                  userCategory,
+                  branchCount: subscription?.branchCount ?? user?.branches?.length ?? 1,
+                  billingCycle,
+                  quote,
+                });
+                if (!opened) showToast("Allow pop-ups to print or save the Proforma Quote PDF");
+              }
+            : undefined
+        }
         onRemove={(id) => {
           const next = removeFromToolCart(id);
           setCart(next);
