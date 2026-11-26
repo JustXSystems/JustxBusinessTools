@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Alert, Button, Dialog, Field, Input } from "@/components/bos";
 import { ims, type ImsSettings } from "@/lib/ims/api";
+import { bomQuotationStatusesSummary } from "@/lib/ims/bom-quotation-status";
 import { STOCK_STATUS_LABEL } from "@/lib/ims/format";
 import { purchase } from "@/lib/ims/purchase";
 import { downloadWorkbook, settingsApi, type SheetSpec } from "@/lib/ims/settings";
@@ -100,6 +101,7 @@ const settingsSheet = (s: ImsSettings): SheetSpec => ({
     ["BOM hide margin", s.bomHideMargin ? "Yes" : "No"],
     ["BOM confirm needs approval", s.bomConfirmNeedsApproval ? "Yes" : "No"],
     ["Quotation reference required", s.bomRequireQuotationRef ? "Yes" : "No"],
+    ["BOM quotation statuses", bomQuotationStatusesSummary(s.bomQuotationStatuses)],
     ["BOM schedule columns", s.bomScheduleColumns?.length ? s.bomScheduleColumns.join(", ") : "Pack defaults"],
     ["PO approval limit", s.poApprovalLimit],
     ["Invoice approval limit", s.invoiceApprovalLimit],

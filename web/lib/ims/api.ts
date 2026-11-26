@@ -3,6 +3,7 @@
  * (`purchase.ts`, `finance.ts`…) build on the request helpers exported here.
  */
 import { apiUrl } from "@/lib/api-base";
+import type { BomQuotationStatus } from "./bom-quotation-status";
 
 export class ImsApiError extends Error {
   status: number;
@@ -236,6 +237,8 @@ export type ImsSettings = {
   /** When true, confirming a BOM requires Approvals permission (owners always can). */
   bomConfirmNeedsApproval?: boolean;
   bomRequireQuotationRef?: boolean;
+  /** Quotation V1 statuses offered as BOM quotation-reference suggestions. Never empty. */
+  bomQuotationStatuses?: BomQuotationStatus[];
   /** Null/omitted = industry-pack column defaults. */
   bomScheduleColumns?: BomScheduleColumnId[] | null;
   poApprovalLimit: number;

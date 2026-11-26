@@ -168,6 +168,33 @@ export function normalizeBomScheduleColumnsSetting(v: unknown): BomScheduleColum
   return out.length ? out : null;
 }
 
+/** Quotation V1 statuses that BOM quotation-reference suggestions may include. */
+export const BOM_QUOTATION_STATUSES = ["submitted", "sent", "approved"] as const;
+export type BomQuotationStatus = (typeof BOM_QUOTATION_STATUSES)[number];
+export const BOM_QUOTATION_STATUS_DEFAULT: BomQuotationStatus[] = ["approved"];
+
+/** Parse tenant quotation-status preference; empty / invalid → default (approved only). */
+export function normalizeBomQuotationStatusesSetting(v: unknown): BomQuotationStatus[] {
+  const allowed = new Set<string>(BOM_QUOTATION_STATUSES);
+  let raw: unknown[] = [];
+  if (Array.isArray(v)) raw = v;
+  else if (typeof v === "string" && v.trim()) {
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) raw = parsed;
+    } catch {
+      raw = [];
+    }
+  }
+  const picked = new Set<BomQuotationStatus>();
+  for (const x of raw) {
+    const id = String(x ?? "").trim().toLowerCase();
+    if (allowed.has(id)) picked.add(id as BomQuotationStatus);
+  }
+  const out = BOM_QUOTATION_STATUSES.filter((s) => picked.has(s));
+  return out.length ? out : [...BOM_QUOTATION_STATUS_DEFAULT];
+}
+
 export type ImsSettings = {
   businessName: string;
   businessType: string;
@@ -213,6 +240,8 @@ export type ImsSettings = {
   bomConfirmNeedsApproval: boolean;
   /** When true, quotation reference is required before confirming a BOM. */
   bomRequireQuotationRef: boolean;
+  /** Quotation V1 statuses offered as BOM quotation-reference suggestions. Never empty. */
+  bomQuotationStatuses: BomQuotationStatus[];
   /** Null = use industry-pack column defaults. */
   bomScheduleColumns: BomScheduleColumnId[] | null;
   poApprovalLimit: number;
@@ -314,6 +343,7 @@ type SettingsRow = {
   bom_hide_margin?: number | boolean | null;
   bom_confirm_needs_approval?: number | boolean | null;
   bom_require_quotation_ref?: number | boolean | null;
+  bom_quotation_statuses_json?: unknown;
   bom_schedule_columns_json?: unknown;
   po_approval_limit: string | number;
   invoice_approval_limit?: string | number;
@@ -393,6 +423,7 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   bomHideMargin: Boolean(r.bom_hide_margin),
   bomConfirmNeedsApproval: Boolean(r.bom_confirm_needs_approval),
   bomRequireQuotationRef: Boolean(r.bom_require_quotation_ref),
+  bomQuotationStatuses: normalizeBomQuotationStatusesSetting(r.bom_quotation_statuses_json),
   bomScheduleColumns: normalizeBomScheduleColumnsSetting(r.bom_schedule_columns_json),
   poApprovalLimit: money(r.po_approval_limit),
   invoiceApprovalLimit: money(r.invoice_approval_limit ?? 0),
@@ -508,6 +539,7 @@ const SettingsInput = z.object({
   bomHideMargin: z.boolean().optional(),
   bomConfirmNeedsApproval: z.boolean().optional(),
   bomRequireQuotationRef: z.boolean().optional(),
+  bomQuotationStatuses: z.array(z.enum(BOM_QUOTATION_STATUSES)).min(1).max(3).optional(),
   bomScheduleColumns: z.array(z.enum(BOM_SCHEDULE_COLUMN_IDS)).max(16).nullable().optional(),
   poApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
   invoiceApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
@@ -628,6 +660,7 @@ const COLUMN: Record<string, string> = {
   bomHideMargin: "bom_hide_margin",
   bomConfirmNeedsApproval: "bom_confirm_needs_approval",
   bomRequireQuotationRef: "bom_require_quotation_ref",
+  bomQuotationStatuses: "bom_quotation_statuses_json",
   bomScheduleColumns: "bom_schedule_columns_json",
   poApprovalLimit: "po_approval_limit",
   invoiceApprovalLimit: "invoice_approval_limit",
@@ -718,6 +751,8 @@ export async function updateSettings(deps: ImsDeps, actor: ImsActor, body: unkno
     else if (key === "bomScheduleColumns") {
       const cols = normalizeBomScheduleColumnsSetting(value);
       v = cols ? JSON.stringify(cols) : null;
+    } else if (key === "bomQuotationStatuses") {
+      v = JSON.stringify(normalizeBomQuotationStatusesSetting(value));
     } else if (typeof value === "boolean") v = value ? 1 : 0;
     else if (typeof value === "string" && key.endsWith("Prefix")) v = value.toUpperCase();
     sets.push(`${COLUMN[key]} = :${key}`);

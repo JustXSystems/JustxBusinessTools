@@ -1790,6 +1790,8 @@ export function registerBom(router: Router, deps: ImsDeps): void {
       ref: string;
       docNo: string;
       date: string;
+      /** Quotation V1 status: submitted | sent | approved (or other connected-source status). */
+      status: string;
       amount: number;
       title: string;
       partyName: string;
@@ -1803,6 +1805,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
 
     const quotations: QuoteOption[] = [];
     const seen = new Set<string>();
+    const allowedStatuses = new Set<string>((await getSettings(deps, actor.tenantId)).bomQuotationStatuses);
 
     for (const source of deps.sources) {
       let records: Awaited<ReturnType<(typeof source)["list"]>> = [];
@@ -1817,7 +1820,8 @@ export function registerBom(router: Router, deps: ImsDeps): void {
         continue;
       }
       for (const r of records) {
-        if (String(r.status).toLowerCase() !== "approved") continue;
+        const status = String(r.status ?? "").toLowerCase();
+        if (!allowedStatuses.has(status)) continue;
         const docNo = String(r.docNo ?? "").trim();
         if (!docNo || seen.has(docNo)) continue;
         seen.add(docNo);
@@ -1826,6 +1830,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
           ref: r.ref,
           docNo,
           date: String(r.date ?? "").slice(0, 10),
+          status,
           amount: round2(Number(r.amount) || 0),
           title: String(r.title ?? "").trim() || source.label,
           partyName,

@@ -30,6 +30,11 @@ import {
   withCommercialSample,
   type BomScheduleColumn,
 } from "@/lib/ims/bom-paper";
+import {
+  BOM_QUOTATION_STATUSES,
+  BOM_QUOTATION_STATUS_LABEL,
+  normalizeBomQuotationStatuses,
+} from "@/lib/ims/bom-quotation-status";
 import { commonCurrenciesFor, methodLabel, PAY_METHODS, POS_PAY_METHODS } from "@/lib/ims/finance";
 import { gstRatesFor, inr } from "@/lib/ims/format";
 import { GST_STATES, MONTHS, PREFIX_FIELDS, docNoSample, fiscalYearLabel, gstinPlace } from "@/lib/ims/settings";
@@ -247,6 +252,7 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
   const tone = normalizeBomPaperTone(draft.bomPaperTone);
   const density = normalizeBomPaperDensity(draft.bomPaperDensity);
   const hideMargin = Boolean(draft.bomHideMargin);
+  const selectedQuoteStatuses = normalizeBomQuotationStatuses(draft.bomQuotationStatuses);
   const purposeMeta = bomPaperPurposeMeta(purpose);
   const packMeta = bomIndustryPackMeta(pack);
   const packDefaultCols = scheduleColumnsFor(purpose, pack);
@@ -400,6 +406,39 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
           onChange={(v) => set("bomRequireQuotationRef", v)}
           disabled={readOnly}
         />
+
+        <div className="ims-bom-col-config" aria-label="Quotation statuses for BOM">
+          <div className="ims-bom-col-config-head">
+            <div>
+              <div className="ims-bom-col-config-title">Quotation statuses for BOM</div>
+              <div className="ims-bom-col-config-desc">
+                Quotes in the selected statuses are suggested when you link a BOM to a quotation. At least one stays selected.
+              </div>
+            </div>
+          </div>
+          <div className="ims-bom-col-chips" role="group" aria-label="Quotation statuses">
+            {BOM_QUOTATION_STATUSES.map((status) => {
+              const on = selectedQuoteStatuses.includes(status);
+              const locked = on && selectedQuoteStatuses.length === 1;
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  className={`ims-bom-col-chip${on ? " is-on" : ""}${locked ? " is-locked" : ""}`}
+                  aria-pressed={on}
+                  disabled={readOnly || locked}
+                  title={locked ? "At least one status must stay selected" : BOM_QUOTATION_STATUS_LABEL[status]}
+                  onClick={() => {
+                    const next = on ? selectedQuoteStatuses.filter((s) => s !== status) : [...selectedQuoteStatuses, status];
+                    set("bomQuotationStatuses", normalizeBomQuotationStatuses(next));
+                  }}
+                >
+                  {BOM_QUOTATION_STATUS_LABEL[status]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <div className="ims-bom-col-config" aria-label="Schedule columns">
           <div className="ims-bom-col-config-head">

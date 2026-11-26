@@ -150,11 +150,12 @@ export type BomDocPaperOverride = {
 
 export type BomHealth = { score: number; flags: string[] };
 
-/** Approved Quotation V1 (or other connected) quote for BOM linking. */
+/** Quotation V1 (or other connected) quote offered for BOM linking — status is one of the IMS-configured statuses. */
 export type BomApprovedQuotation = {
   ref: string;
   docNo: string;
   date: string;
+  status?: string;
   amount: number;
   title: string;
   partyName: string;

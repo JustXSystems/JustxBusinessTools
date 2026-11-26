@@ -9,6 +9,7 @@ import {
   type BomDcSuggestField,
   type BomSuggestField,
 } from "@/lib/ims/bom";
+import { bomQuotationStatusLabel } from "@/lib/ims/bom-quotation-status";
 import { dateLabel, inr, inrExact, qtyText, stockBadge } from "@/lib/ims/format";
 import { useImsAction, useImsData } from "../core";
 import { SuggestInput, type SuggestOption } from "./SuggestInput";
@@ -297,7 +298,7 @@ export function QuotationSelect({
   onPick,
   id,
   required,
-  placeholder = "Quote no. or pick approved…",
+  placeholder = "Quote no. or pick from suggestions…",
 }: {
   value: string;
   onChange: (quotationRef: string) => void;
@@ -321,7 +322,7 @@ export function QuotationSelect({
         id: row.ref,
         value: row.docNo,
         label: row.docNo,
-        meta: [row.partyName, row.title, row.partyGstin].filter(Boolean).join(" · "),
+        meta: [row.status ? bomQuotationStatusLabel(row.status) : "", row.partyName, row.title, row.partyGstin].filter(Boolean).join(" · "),
         searchText: [row.partyName, row.title, row.partyGstin, row.partyPhone, row.partyCity, row.partyState]
           .filter(Boolean)
           .join(" "),
@@ -348,14 +349,14 @@ export function QuotationSelect({
         filterLocal={false}
         allowFreeText
         placeholder={placeholder}
-        emptyLabel="No approved quotes — type a reference"
+        emptyLabel="No matching quotes — type a reference"
         options={options}
         onChange={onChange}
         onPick={(opt) => {
           if (opt.data) onPick?.(opt.data);
         }}
       />
-      <p className="ims-suggest-hint">Approved Quotation V1 suggestions · free text still allowed</p>
+      <p className="ims-suggest-hint">Quotation V1 suggestions in the statuses set under IMS settings · free text still allowed</p>
     </div>
   );
 }
