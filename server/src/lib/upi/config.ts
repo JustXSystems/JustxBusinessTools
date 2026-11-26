@@ -76,6 +76,13 @@ export async function ensureUpiSchema(): Promise<void> {
       } catch {
         /* column already exists */
       }
+      try {
+        await pool.query(
+          `ALTER TABLE upi_payment_claims ADD COLUMN billing_cycle VARCHAR(12) NOT NULL DEFAULT 'month'`,
+        );
+      } catch {
+        /* column already exists */
+      }
       await pool.query(`
         CREATE TABLE IF NOT EXISTS notify_outbox (
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

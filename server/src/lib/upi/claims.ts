@@ -3,6 +3,11 @@ import { pool } from "../../db.js";
 import { jsonVal } from "../admin/approvals.js";
 import { logAudit } from "../audit.js";
 import { recordSaasTransaction } from "../payments/saas.js";
+import {
+  normalizeBillingCycle,
+  periodEndForCycle,
+  type BillingCycle,
+} from "../pricing-engine.js";
 import { parseToolIds } from "../tool-skus.js";
 import { ensureUpiSchema } from "./config.js";
 import { notifyClaimDecision, notifyClaimSubmitted } from "./notify.js";
@@ -17,6 +22,7 @@ export type UpiClaim = {
   profileId: number;
   planId: string;
   toolIds: string[];
+  billingCycle: BillingCycle;
   amountInr: number;
   status: string;
   payerName: string;
@@ -39,6 +45,7 @@ function mapClaim(r: Record<string, unknown>): UpiClaim {
     profileId: Number(r.business_profile_id),
     planId: String(r.plan_id),
     toolIds: parseToolIds(r.tool_ids ?? jsonVal(r.tool_ids)),
+    billingCycle: normalizeBillingCycle(r.billing_cycle),
     amountInr: Number(r.amount_inr),
     status: String(r.status),
     payerName: String(r.payer_name),
@@ -83,6 +90,7 @@ export async function createClaim(input: {
   profileId: number;
   planId: string;
   toolIds: string[];
+  billingCycle?: BillingCycle;
   amountInr: number;
   payerName: string;
   payerEmail: string;
@@ -94,6 +102,7 @@ export async function createClaim(input: {
   orgName?: string;
 }): Promise<UpiClaim> {
   await ensureUpiSchema();
+  const billingCycle = normalizeBillingCycle(input.billingCycle);
   const utr = input.utr.trim().toUpperCase();
   if (utr.length < 6) {
     throw Object.assign(new Error("Enter a valid UPI / UTR reference (min 6 characters)"), { status: 400 });
@@ -109,9 +118,9 @@ export async function createClaim(input: {
 
   const [result] = await pool.query(
     `INSERT INTO upi_payment_claims
-       (organization_id, user_id, business_profile_id, plan_id, tool_ids, amount_inr, status,
+       (organization_id, user_id, business_profile_id, plan_id, tool_ids, billing_cycle, amount_inr, status,
         payer_name, payer_email, payer_phone, payer_upi, utr, paid_at, notes)
-     VALUES (:orgId, :userId, :profileId, :planId, :toolIds, :amount, 'pending',
+     VALUES (:orgId, :userId, :profileId, :planId, :toolIds, :billingCycle, :amount, 'pending',
         :payerName, :payerEmail, :payerPhone, :payerUpi, :utr, :paidAt, :notes)`,
     {
       orgId: input.orgId,
@@ -119,6 +128,7 @@ export async function createClaim(input: {
       profileId: input.profileId,
       planId: input.planId,
       toolIds: JSON.stringify(input.toolIds),
+      billingCycle,
       amount: input.amountInr,
       payerName: input.payerName.trim(),
       payerEmail: input.payerEmail.trim().toLowerCase(),
@@ -202,7 +212,7 @@ export async function reviewClaim(
   );
 
   if (action === "approved") {
-    const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const periodEnd = periodEndForCycle(claim.billingCycle);
     const { activateToolCommerce, activateAllToolsPack } = await import("../commerce.js");
     if (claim.planId === "pack:all_tools" || claim.planId === "pro" || claim.toolIds.length === 0) {
       await activateAllToolsPack({

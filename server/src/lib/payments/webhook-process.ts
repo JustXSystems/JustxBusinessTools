@@ -11,6 +11,7 @@ import {
   activateToolCommerceForProfile,
 } from "../commerce.js";
 import { completeCheckoutIntent, getCheckoutIntent } from "../subscription-items.js";
+import { periodEndForCycle } from "../pricing-engine.js";
 import {
   notifyPaymentOutcome,
   notifySubscriptionActivated,
@@ -124,7 +125,7 @@ export async function applyWebhookEvent(
       (intent?.toolIds && intent.toolIds.length > 0 ? intent.toolIds : null) ??
       (event.toolIds && event.toolIds.length > 0 ? event.toolIds : null);
     const amountInr = intent?.amountInr ?? event.amountInr ?? PRO_PRICE_INR;
-    const periodEnd = event.periodEnd ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const periodEnd = event.periodEnd ?? periodEndForCycle(intent?.billingCycle ?? "month");
     const planId = event.planId ?? (toolIds ? "cart" : "pro");
 
     // Live providers should activate only against a known pending/completed intent.

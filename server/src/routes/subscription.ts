@@ -13,6 +13,7 @@ import {
   catalogPayload,
   licensedToolIdSet,
   listActiveLicenses,
+  listProfileEntitlements,
   trialConsumedToolIdSet,
 } from "../lib/tool-licenses.js";
 import { activateToolCommerce, deactivateToolCommerce } from "../lib/commerce.js";
@@ -28,6 +29,19 @@ import {
   type BundleCartQuote,
 } from "../lib/product-bundles.js";
 import { type CartQuote } from "../lib/tool-skus.js";
+import {
+  normalizeBillingCycle,
+  periodEndForCycle,
+  recommendPackForSelection,
+  resolveUserCategory,
+  type BillingCycle,
+} from "../lib/pricing-engine.js";
+import { isValidGstin, normalizeGstin } from "../lib/gstin.js";
+import { getToolPersonalUsageMap } from "../lib/config/tool-personal-usage.js";
+import {
+  buildWorkspaceUsageTelemetry,
+  fetchProfileRecordCounts,
+} from "../lib/usage-summary.js";
 import {
   notifyCheckoutStarted,
   notifyPaymentOutcome,
@@ -67,16 +81,54 @@ async function listEnabledGateways(orgId: number) {
   }
 }
 
+async function fetchProfileCategoryMeta(profileId: number, orgId: number) {
+  try {
+    const [profileRows] = await pool.query(
+      `SELECT gstin, business_name FROM business_profiles WHERE id = :id LIMIT 1`,
+      { id: profileId },
+    );
+    const [countRows] = await pool.query(
+      `SELECT COUNT(*) AS cnt FROM business_profiles WHERE organization_id = :orgId`,
+      { orgId },
+    );
+    const pRow = Array.isArray(profileRows)
+      ? (profileRows[0] as { gstin?: string | null; business_name?: string | null } | undefined)
+      : undefined;
+    const cRow = Array.isArray(countRows)
+      ? (countRows[0] as { cnt?: number } | undefined)
+      : undefined;
+    const rawGstin = normalizeGstin(pRow?.gstin);
+    const hasGstin = isValidGstin(rawGstin);
+    const branchCount = Math.max(1, Number(cRow?.cnt ?? 1) || 1);
+    return {
+      gstin: hasGstin ? rawGstin : null,
+      hasGstin,
+      branchCount,
+      businessName: pRow?.business_name ? String(pRow.business_name) : null,
+      userCategory: resolveUserCategory({ gstin: rawGstin, branchCount }),
+    };
+  } catch {
+    return {
+      gstin: null,
+      hasGstin: false,
+      branchCount: 1,
+      businessName: null,
+      userCategory: "business" as const,
+    };
+  }
+}
+
 async function quoteForProfile(
   profileId: number,
   toolIds: string[],
   bundleId?: string,
+  billingCycle: BillingCycle = "month",
 ): Promise<CartQuote | BundleCartQuote> {
   const licensed = await licensedToolIdSet(profileId);
   if (bundleId) {
-    return quoteBundleCart(bundleId, licensed);
+    return quoteBundleCart(bundleId, licensed, billingCycle);
   }
-  return quoteToolCart(toolIds, licensed);
+  return quoteToolCart(toolIds, licensed, billingCycle);
 }
 
 router.get("/", async (_req, res) => {
@@ -103,6 +155,9 @@ router.get("/", async (_req, res) => {
       listSubscriptionItems(orgId),
       listAvailableProductBundles(),
       trialConsumedToolIdSet(profileId),
+      listProfileEntitlements(profileId),
+      fetchProfileRecordCounts(profileId),
+      fetchProfileCategoryMeta(profileId, orgId),
     ]);
 
     const logRejected = (label: string, idx: number) => {
@@ -119,6 +174,9 @@ router.get("/", async (_req, res) => {
     logRejected("listSubscriptionItems", 7);
     logRejected("listAvailableProductBundles", 8);
     logRejected("trialConsumedToolIdSet", 9);
+    logRejected("listProfileEntitlements", 10);
+    logRejected("fetchProfileRecordCounts", 11);
+    logRejected("fetchProfileCategoryMeta", 12);
 
     const subscription =
       settled[0].status === "fulfilled"
@@ -161,6 +219,18 @@ router.get("/", async (_req, res) => {
     const packs = settled[8].status === "fulfilled" ? settled[8].value : [];
     const trialConsumed =
       settled[9].status === "fulfilled" ? settled[9].value : new Set<string>();
+    const entitlements = settled[10].status === "fulfilled" ? settled[10].value : [];
+    const recordCounts = settled[11].status === "fulfilled" ? settled[11].value : {};
+    const profileMeta =
+      settled[12].status === "fulfilled"
+        ? settled[12].value
+        : {
+            gstin: null,
+            hasGstin: false,
+            branchCount: 1,
+            businessName: null,
+            userCategory: "business" as const,
+          };
 
     if (settled[5].status === "rejected") {
       res.status(500).json({
@@ -172,6 +242,22 @@ router.get("/", async (_req, res) => {
       return;
     }
 
+    let personalUsageMap: Record<string, boolean> = {};
+    try {
+      personalUsageMap = await getToolPersonalUsageMap(skus.map((s) => s.toolId));
+    } catch {
+      /* fallback empty */
+    }
+
+    const usageTelemetry = buildWorkspaceUsageTelemetry({
+      skus,
+      licenses,
+      entitlements,
+      billingItems: items,
+      recordCounts,
+      freemiumRecordLimit: subscription.recordLimit ?? 28,
+    });
+
     const licensed = new Set(licenses.map((l) => l.toolId));
     const pendingClaim =
       claim && (claim.status === "pending" || claim.status === "rejected")
@@ -180,6 +266,7 @@ router.get("/", async (_req, res) => {
             status: claim.status,
             utr: claim.utr,
             amountInr: claim.amountInr,
+            billingCycle: claim.billingCycle,
             toolIds: claim.toolIds,
             createdAt: claim.createdAt,
             reviewNote: claim.reviewNote,
@@ -189,13 +276,22 @@ router.get("/", async (_req, res) => {
     res.json({
       ...subscription,
       provider: "upi",
+      userCategory: profileMeta.userCategory,
+      hasGstin: profileMeta.hasGstin,
+      gstin: profileMeta.gstin,
+      branchCount: profileMeta.branchCount,
       plans: plans.filter((p) => p.available).map(publicPlanPayload),
-      catalog: catalogPayload(skus, licensed, trialConsumed),
-      packs: packs.map(publicBundlePayload),
+      catalog: catalogPayload(skus, licensed, trialConsumed, {
+        personalUsageMap,
+        usageByTool: usageTelemetry.byTool,
+      }),
+      packs: packs.map((p) => publicBundlePayload(p, { skus, personalUsageMap })),
       licenses,
       licensedToolIds: [...licensed],
       billingItems: items,
       mrrInr: items.reduce((sum, i) => sum + i.unitPriceInr * (i.quantity || 1), 0),
+      usageSummary: usageTelemetry.summary,
+      usageByTool: usageTelemetry.byTool,
       upi: {
         ...publicPayee(payee),
         amountInr: 0,
@@ -209,6 +305,7 @@ router.get("/", async (_req, res) => {
               status: claim.status,
               utr: claim.utr,
               amountInr: claim.amountInr,
+              billingCycle: claim.billingCycle,
               toolIds: claim.toolIds,
               createdAt: claim.createdAt,
               reviewNote: claim.reviewNote,
@@ -227,16 +324,44 @@ router.get("/", async (_req, res) => {
 
 router.get("/quote", async (req, res) => {
   try {
+    const profileId = getActiveProfileId();
     const orgId = getActiveOrgId();
     const bundleId = String(req.query.bundleId ?? req.query.pack ?? "").trim();
+    const billingCycle = normalizeBillingCycle(req.query.cycle ?? req.query.billingCycle);
     const toolIds = parseToolIds(req.query.tools ?? req.query.toolIds);
-    const quote = await quoteForProfile(getActiveProfileId(), toolIds, bundleId || undefined);
-    const payee = await getUpiPayee();
+    const quote = await quoteForProfile(profileId, toolIds, bundleId || undefined, billingCycle);
+    const [payee, skus, packs, licensed, profileMeta] = await Promise.all([
+      getUpiPayee(),
+      listToolSkus(),
+      listAvailableProductBundles(),
+      licensedToolIdSet(profileId),
+      fetchProfileCategoryMeta(profileId, orgId),
+    ]);
+    let personalUsageMap: Record<string, boolean> = {};
+    try {
+      personalUsageMap = await getToolPersonalUsageMap(skus.map((s) => s.toolId));
+    } catch {
+      /* fallback */
+    }
+    const recommendedPack =
+      !bundleId && toolIds.length > 0
+        ? recommendPackForSelection({
+            selectedToolIds: toolIds,
+            licensedToolIds: licensed,
+            skus,
+            packs,
+            cycle: billingCycle,
+            userCategory: profileMeta.userCategory,
+            personalUsageMap,
+          })
+        : null;
+    const cycleSuffix = billingCycle === "year" ? " (1Y)" : "";
     const label = isBundleQuote(quote)
-      ? `${BRAND_DEFAULTS.appName} ${quote.packName}`.slice(0, 50)
-      : `${BRAND_DEFAULTS.appName} ${quote.lines.length} tool${quote.lines.length === 1 ? "" : "s"}`.slice(0, 50);
+      ? `${BRAND_DEFAULTS.appName} ${quote.packName}${cycleSuffix}`.slice(0, 50)
+      : `${BRAND_DEFAULTS.appName} ${quote.lines.length} tool${quote.lines.length === 1 ? "" : "s"}${cycleSuffix}`.slice(0, 50);
     res.json({
       ...quote,
+      recommendedPack,
       upi: {
         ...publicPayee(payee),
         amountInr: quote.totalInr,
@@ -252,8 +377,14 @@ router.get("/quote", async (req, res) => {
 router.post("/upi-claims", async (req, res) => {
   try {
     const bundleId = String(req.body?.bundleId ?? req.body?.packId ?? "").trim();
+    const billingCycle = normalizeBillingCycle(req.body?.billingCycle ?? req.body?.cycle);
     const toolIds = parseToolIds(req.body?.toolIds ?? req.body?.tools);
-    const quote = await quoteForProfile(getActiveProfileId(), toolIds, bundleId || undefined);
+    const quote = await quoteForProfile(
+      getActiveProfileId(),
+      toolIds,
+      bundleId || undefined,
+      billingCycle,
+    );
     const payerEmail = String(req.body?.payerEmail ?? "").trim();
     const payerName = String(req.body?.payerName ?? "").trim();
     const utr = String(req.body?.utr ?? "").trim();
@@ -273,6 +404,7 @@ router.post("/upi-claims", async (req, res) => {
       profileId: getActiveProfileId(),
       planId: bundleId ? `pack:${bundleId}` : "cart",
       toolIds: quote.lines.map((l) => l.toolId),
+      billingCycle,
       amountInr: quote.totalInr,
       payerName,
       payerEmail,
@@ -296,8 +428,14 @@ router.post("/upi-claims", async (req, res) => {
 router.post("/checkout", async (req, res) => {
   try {
     const bundleId = String(req.body?.bundleId ?? req.body?.packId ?? "").trim();
+    const billingCycle = normalizeBillingCycle(req.body?.billingCycle ?? req.body?.cycle);
     const toolIds = parseToolIds(req.body?.toolIds ?? req.body?.tools);
-    const quote = await quoteForProfile(getActiveProfileId(), toolIds, bundleId || undefined);
+    const quote = await quoteForProfile(
+      getActiveProfileId(),
+      toolIds,
+      bundleId || undefined,
+      billingCycle,
+    );
     const profileId = getActiveProfileId();
     const orgId = getActiveOrgId();
     const gatewayId = Number(req.body?.gatewayId ?? 0);
@@ -336,11 +474,12 @@ router.post("/checkout", async (req, res) => {
       toolIds: quote.lines.map((l) => l.toolId),
       amountInr: quote.totalInr,
       provider: provider.name,
+      billingCycle,
     });
 
     const autoComplete = process.env.PAYMENT_AUTO_COMPLETE === "true";
     if (autoComplete && provider.name === "mock") {
-      const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const periodEnd = periodEndForCycle(billingCycle);
       const tools = quote.lines.map((l) => l.toolId);
       if (bundleId === "all_tools") {
         const { activateAllToolsPack } = await import("../lib/commerce.js");
@@ -483,13 +622,31 @@ router.post("/trial", async (req, res) => {
     });
 
     const subscription = await getSubscription(profileId);
-    const [freshSkus, freshLicenses, freshConsumed, packs, items] = await Promise.all([
-      listToolSkus(),
-      listActiveLicenses(profileId),
-      trialConsumedToolIdSet(profileId),
-      listAvailableProductBundles(),
-      listSubscriptionItems(orgId),
-    ]);
+    const [freshSkus, freshLicenses, freshConsumed, packs, items, entitlements, recordCounts, profileMeta] =
+      await Promise.all([
+        listToolSkus(),
+        listActiveLicenses(profileId),
+        trialConsumedToolIdSet(profileId),
+        listAvailableProductBundles(),
+        listSubscriptionItems(orgId),
+        listProfileEntitlements(profileId),
+        fetchProfileRecordCounts(profileId),
+        fetchProfileCategoryMeta(profileId, orgId),
+      ]);
+    let personalUsageMap: Record<string, boolean> = {};
+    try {
+      personalUsageMap = await getToolPersonalUsageMap(freshSkus.map((s) => s.toolId));
+    } catch {
+      /* fallback */
+    }
+    const usageTelemetry = buildWorkspaceUsageTelemetry({
+      skus: freshSkus,
+      licenses: freshLicenses,
+      entitlements,
+      billingItems: items,
+      recordCounts,
+      freemiumRecordLimit: subscription.recordLimit ?? 28,
+    });
     const licensedSet = new Set(freshLicenses.map((l) => l.toolId));
 
     res.json({
@@ -498,12 +655,21 @@ router.post("/trial", async (req, res) => {
       rejected,
       subscription: {
         ...subscription,
-        catalog: catalogPayload(freshSkus, licensedSet, freshConsumed),
-        packs: packs.map(publicBundlePayload),
+        userCategory: profileMeta.userCategory,
+        hasGstin: profileMeta.hasGstin,
+        gstin: profileMeta.gstin,
+        branchCount: profileMeta.branchCount,
+        catalog: catalogPayload(freshSkus, licensedSet, freshConsumed, {
+          personalUsageMap,
+          usageByTool: usageTelemetry.byTool,
+        }),
+        packs: packs.map((p) => publicBundlePayload(p, { skus: freshSkus, personalUsageMap })),
         licenses: freshLicenses,
         licensedToolIds: [...licensedSet],
         billingItems: items,
         mrrInr: items.reduce((sum, i) => sum + i.unitPriceInr * (i.quantity || 1), 0),
+        usageSummary: usageTelemetry.summary,
+        usageByTool: usageTelemetry.byTool,
       },
     });
   } catch (err) {

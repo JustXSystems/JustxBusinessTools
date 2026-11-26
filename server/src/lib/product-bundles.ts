@@ -1,5 +1,14 @@
 import { pool } from "../db.js";
 import { ensureTablesUtf8mb4UnicodeCi, INNODB_UTF8MB4_UNICODE } from "./mysql-charset.js";
+import {
+  cycleDurationDays,
+  evaluatePackPersonalCompatibility,
+  normalizeBillingCycle,
+  periodEndForCycle,
+  resolveBundleCyclePricing,
+  resolveSkuPricing,
+  type BillingCycle,
+} from "./pricing-engine.js";
 import { listToolSkus, paidSkuIds, type ToolSku } from "./tool-skus.js";
 
 export type ProductBundle = {
@@ -256,7 +265,29 @@ export async function listAvailableProductBundles(): Promise<ProductBundle[]> {
   return all.filter((b) => b.available);
 }
 
-export function publicBundlePayload(bundle: ProductBundle) {
+export function publicBundlePayload(
+  bundle: ProductBundle,
+  opts?: { skus?: ToolSku[]; personalUsageMap?: Record<string, boolean> },
+) {
+  const skusById = opts?.skus ? new Map(opts.skus.map((s) => [s.toolId, s])) : null;
+  const annualPricing = skusById
+    ? resolveBundleCyclePricing({
+        toolIds: bundle.toolIds,
+        skusById,
+        discountPct: bundle.discountPct,
+        fixedPriceInr: bundle.fixedPriceInr,
+        cycle: "year",
+      })
+    : null;
+  const annualPriceInr = annualPricing ? annualPricing.totalInr : Math.round(bundle.priceInr * 10);
+  const annualListPriceInr = annualPricing
+    ? annualPricing.listPriceInr
+    : Math.round(bundle.listPriceInr * 12);
+  const annualSavingsInr = Math.max(0, bundle.priceInr * 12 - annualPriceInr);
+  const personalCompat = opts?.personalUsageMap
+    ? evaluatePackPersonalCompatibility(bundle.toolIds, opts.personalUsageMap)
+    : null;
+
   return {
     id: bundle.id,
     name: bundle.name,
@@ -265,10 +296,15 @@ export function publicBundlePayload(bundle: ProductBundle) {
     discountPct: bundle.discountPct,
     listPriceInr: bundle.listPriceInr,
     priceInr: bundle.priceInr,
+    annualListPriceInr,
+    annualPriceInr,
+    annualSavingsInr,
     highlighted: bundle.highlighted,
     toolIds: bundle.toolIds,
     toolCount: bundle.toolIds.length,
     savingsInr: Math.max(0, bundle.listPriceInr - bundle.priceInr),
+    personalCompatible: personalCompat ? personalCompat.personalCompatible : false,
+    personalToolCount: personalCompat ? personalCompat.personalToolIds.length : 0,
   };
 }
 
@@ -278,10 +314,16 @@ export type BundleCartQuote = {
     name: string;
     category: string;
     priceInr: number;
+    monthlyPriceInr?: number;
+    annualSavingsInr?: number;
     billingInterval: string;
   }>;
   totalInr: number;
   billingInterval: string;
+  billingCycle: BillingCycle;
+  durationDays: number;
+  annualSavingsInr: number;
+  periodEndPreview: string;
   bundleId: string;
   packName: string;
   listPriceInr: number;
@@ -290,12 +332,14 @@ export type BundleCartQuote = {
 
 /**
  * Quote unlicensed tools in a pack with pack discount / fixed price applied
- * only to the remaining (unlicensed) list price.
+ * only to the remaining (unlicensed) list price, honoring monthly or annual billing cycle.
  */
 export async function quoteBundleCart(
   bundleId: string,
   licensedIds: Set<string>,
+  billingCycle: BillingCycle = "month",
 ): Promise<BundleCartQuote> {
+  const cycle = normalizeBillingCycle(billingCycle);
   const bundle = await getProductBundle(bundleId);
   if (!bundle || !bundle.available) {
     throw Object.assign(new Error("This pack is not available"), { status: 404 });
@@ -315,43 +359,65 @@ export async function quoteBundleCart(
     });
   }
 
-  const listPriceInr = remaining.reduce((sum, id) => sum + (byId.get(id)?.priceInr ?? 0), 0);
-  let totalInr: number;
-  if (bundle.fixedPriceInr != null && bundle.fixedPriceInr >= 0) {
-    const fullList = Math.max(1, bundle.listPriceInr || listPriceInr);
-    totalInr = Math.round(bundle.fixedPriceInr * (listPriceInr / fullList));
-  } else {
-    const pct = Math.max(0, Math.min(100, bundle.discountPct));
-    totalInr = Math.round(listPriceInr * (1 - pct / 100));
-  }
+  const quoted = resolveBundleCyclePricing({
+    toolIds: bundle.toolIds,
+    skusById: byId,
+    discountPct: bundle.discountPct,
+    fixedPriceInr: bundle.fixedPriceInr,
+    cycle,
+    remainingToolIds: remaining,
+  });
+  const monthlyEquivalentQuote =
+    cycle === "year"
+      ? resolveBundleCyclePricing({
+          toolIds: bundle.toolIds,
+          skusById: byId,
+          discountPct: bundle.discountPct,
+          fixedPriceInr: bundle.fixedPriceInr,
+          cycle: "month",
+          remainingToolIds: remaining,
+        })
+      : null;
+
+  const { listPriceInr, totalInr } = quoted;
+  const annualSavingsInr = monthlyEquivalentQuote
+    ? Math.max(0, monthlyEquivalentQuote.totalInr * 12 - totalInr)
+    : 0;
 
   // Distribute payable total across lines so checkout UIs stay line-item based.
   const lines = remaining.map((id, index) => {
     const sku = byId.get(id)!;
+    const skuCycle = resolveSkuPricing(sku, cycle);
     let priceInr: number;
     if (index === remaining.length - 1) {
       const prior = remaining.slice(0, -1).reduce((sum, tid) => {
-        const list = byId.get(tid)?.priceInr ?? 0;
+        const list = resolveSkuPricing(byId.get(tid)!, cycle).unitPriceInr;
         return sum + (listPriceInr > 0 ? Math.floor((totalInr * list) / listPriceInr) : 0);
       }, 0);
       priceInr = Math.max(0, totalInr - prior);
     } else {
       priceInr =
-        listPriceInr > 0 ? Math.floor((totalInr * sku.priceInr) / listPriceInr) : 0;
+        listPriceInr > 0 ? Math.floor((totalInr * skuCycle.unitPriceInr) / listPriceInr) : 0;
     }
     return {
       toolId: sku.toolId,
       name: sku.name,
       category: sku.category,
       priceInr,
-      billingInterval: sku.billingInterval,
+      monthlyPriceInr: skuCycle.monthlyPriceInr,
+      annualSavingsInr: cycle === "year" ? skuCycle.annualSavingsInr : 0,
+      billingInterval: cycle,
     };
   });
 
   return {
     lines,
     totalInr,
-    billingInterval: lines[0]?.billingInterval ?? "month",
+    billingInterval: cycle,
+    billingCycle: cycle,
+    durationDays: cycleDurationDays(cycle),
+    annualSavingsInr,
+    periodEndPreview: periodEndForCycle(cycle).toISOString(),
     bundleId: bundle.id,
     packName: bundle.name,
     listPriceInr,

@@ -1,5 +1,6 @@
 import { pool } from "../db.js";
 import { ensureTablesUtf8mb4UnicodeCi, INNODB_UTF8MB4_UNICODE } from "./mysql-charset.js";
+import { normalizeBillingCycle, type BillingCycle } from "./pricing-engine.js";
 import { listToolSkus } from "./tool-skus.js";
 import { listActiveLicensesForOrg } from "./tool-licenses.js";
 
@@ -61,6 +62,13 @@ export async function ensureSubscriptionItemsSchema(): Promise<void> {
       try {
         await pool.query(
           `ALTER TABLE org_subscription_items ADD COLUMN quantity INT UNSIGNED NOT NULL DEFAULT 1`,
+        );
+      } catch {
+        /* column already exists */
+      }
+      try {
+        await pool.query(
+          `ALTER TABLE checkout_intents ADD COLUMN billing_cycle VARCHAR(12) NOT NULL DEFAULT 'month'`,
         );
       } catch {
         /* column already exists */
@@ -247,15 +255,18 @@ export async function createCheckoutIntent(input: {
   toolIds: string[];
   amountInr: number;
   provider: string;
+  billingCycle?: BillingCycle;
 }): Promise<void> {
   await ensureSubscriptionItemsSchema();
+  const billingCycle = normalizeBillingCycle(input.billingCycle);
   await pool.query(
     `INSERT INTO checkout_intents
-       (organization_id, profile_id, session_id, tool_ids, amount_inr, provider, status)
-     VALUES (:orgId, :profileId, :sessionId, :toolIds, :amount, :provider, 'pending')
+       (organization_id, profile_id, session_id, tool_ids, amount_inr, provider, billing_cycle, status)
+     VALUES (:orgId, :profileId, :sessionId, :toolIds, :amount, :provider, :billingCycle, 'pending')
      ON DUPLICATE KEY UPDATE
        tool_ids = VALUES(tool_ids),
        amount_inr = VALUES(amount_inr),
+       billing_cycle = VALUES(billing_cycle),
        status = 'pending',
        completed_at = NULL`,
     {
@@ -265,6 +276,7 @@ export async function createCheckoutIntent(input: {
       toolIds: JSON.stringify(input.toolIds),
       amount: input.amountInr,
       provider: input.provider,
+      billingCycle,
     },
   );
 }
@@ -290,11 +302,12 @@ export async function getCheckoutIntent(sessionId: string): Promise<{
   profileId: number;
   toolIds: string[];
   amountInr: number;
+  billingCycle: BillingCycle;
   status: string;
 } | null> {
   await ensureSubscriptionItemsSchema();
   const [rows] = await pool.query(
-    `SELECT organization_id, profile_id, tool_ids, amount_inr, status
+    `SELECT organization_id, profile_id, tool_ids, amount_inr, billing_cycle, status
      FROM checkout_intents WHERE session_id = :sessionId LIMIT 1`,
     { sessionId },
   );
@@ -305,6 +318,7 @@ export async function getCheckoutIntent(sessionId: string): Promise<{
     profileId: Number(row.profile_id),
     toolIds: parseToolIdsJson(row.tool_ids),
     amountInr: Number(row.amount_inr ?? 0),
+    billingCycle: normalizeBillingCycle(row.billing_cycle),
     status: String(row.status ?? ""),
   };
 }
@@ -314,6 +328,7 @@ export async function completeCheckoutIntent(sessionId: string): Promise<{
   profileId: number;
   toolIds: string[];
   amountInr: number;
+  billingCycle: BillingCycle;
 } | null> {
   const row = await getCheckoutIntent(sessionId);
   if (!row) return null;
@@ -329,5 +344,6 @@ export async function completeCheckoutIntent(sessionId: string): Promise<{
     profileId: row.profileId,
     toolIds: row.toolIds,
     amountInr: row.amountInr,
+    billingCycle: row.billingCycle,
   };
 }

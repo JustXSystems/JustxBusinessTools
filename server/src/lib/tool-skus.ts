@@ -1,6 +1,13 @@
 import { pool } from "../db.js";
 import { jsonVal } from "./admin/approvals.js";
 import { ensureTablesUtf8mb4UnicodeCi, INNODB_UTF8MB4_UNICODE } from "./mysql-charset.js";
+import {
+  cycleDurationDays,
+  normalizeBillingCycle,
+  periodEndForCycle,
+  resolveSkuPricing,
+  type BillingCycle,
+} from "./pricing-engine.js";
 
 export type AccessPolicy = "soft_cap" | "hard_lock";
 
@@ -456,6 +463,8 @@ export type CartLine = {
   name: string;
   category: string;
   priceInr: number;
+  monthlyPriceInr?: number;
+  annualSavingsInr?: number;
   billingInterval: string;
 };
 
@@ -463,6 +472,10 @@ export type CartQuote = {
   lines: CartLine[];
   totalInr: number;
   billingInterval: string;
+  billingCycle: BillingCycle;
+  durationDays: number;
+  annualSavingsInr: number;
+  periodEndPreview: string;
 };
 
 export function parseToolIds(raw: unknown): string[] {
@@ -482,10 +495,13 @@ export function parseToolIds(raw: unknown): string[] {
 export async function quoteToolCart(
   toolIds: string[],
   licensedIds: Set<string>,
+  billingCycle: BillingCycle = "month",
 ): Promise<CartQuote> {
+  const cycle = normalizeBillingCycle(billingCycle);
   const skus = await listToolSkus();
   const byId = new Map(skus.map((s) => [s.toolId, s]));
   const lines: CartLine[] = [];
+  let annualSavingsInr = 0;
   for (const id of parseToolIds(toolIds)) {
     const sku = byId.get(id);
     if (!sku || !sku.available) {
@@ -501,12 +517,18 @@ export async function quoteToolCart(
     if (licensedIds.has(id)) {
       throw Object.assign(new Error(`${sku.name} is already licensed`), { status: 400 });
     }
+    const priced = resolveSkuPricing(sku, cycle);
+    if (cycle === "year") {
+      annualSavingsInr += priced.annualSavingsInr;
+    }
     lines.push({
       toolId: sku.toolId,
       name: sku.name,
       category: sku.category,
-      priceInr: sku.priceInr,
-      billingInterval: sku.billingInterval,
+      priceInr: priced.unitPriceInr,
+      monthlyPriceInr: priced.monthlyPriceInr,
+      annualSavingsInr: cycle === "year" ? priced.annualSavingsInr : 0,
+      billingInterval: cycle,
     });
   }
   if (lines.length === 0) {
@@ -516,7 +538,11 @@ export async function quoteToolCart(
   return {
     lines,
     totalInr,
-    billingInterval: lines[0]?.billingInterval ?? "month",
+    billingInterval: cycle,
+    billingCycle: cycle,
+    durationDays: cycleDurationDays(cycle),
+    annualSavingsInr,
+    periodEndPreview: periodEndForCycle(cycle).toISOString(),
   };
 }
 

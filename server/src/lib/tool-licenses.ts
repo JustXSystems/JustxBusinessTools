@@ -5,6 +5,8 @@ import {
   paidSkuIds,
   type ToolSku,
 } from "./tool-skus.js";
+import { resolveSkuPricing } from "./pricing-engine.js";
+import type { ToolUsageTelemetry } from "./usage-summary.js";
 import { notifyLicensesGranted, notifyLicensesRevoked } from "./notification-billing.js";
 import { ensureTablesUtf8mb4UnicodeCi, INNODB_UTF8MB4_UNICODE } from "./mysql-charset.js";
 
@@ -514,12 +516,21 @@ export function catalogPayload(
   skus: ToolSku[],
   licensed: Set<string>,
   trialConsumed: Set<string> = new Set(),
+  opts?: {
+    personalUsageMap?: Record<string, boolean>;
+    usageByTool?: Record<string, ToolUsageTelemetry>;
+  },
 ) {
   return skus
     .filter((s) => s.available)
     .map((s) => {
       const includedFree = s.includedFree || s.priceInr <= 0;
       const isLicensed = licensed.has(s.toolId) || includedFree;
+      const annualPricing = resolveSkuPricing(s, "year");
+      const personalUsage = opts?.personalUsageMap
+        ? Boolean(opts.personalUsageMap[s.toolId])
+        : undefined;
+      const usage = opts?.usageByTool?.[s.toolId];
       return {
         toolId: s.toolId,
         name: s.name,
@@ -527,6 +538,9 @@ export function catalogPayload(
         tagline: s.tagline,
         priceInr: s.priceInr,
         annualPriceInr: s.annualPriceInr,
+        resolvedAnnualPriceInr: annualPricing.annualPriceInr,
+        annualSavingsInr: annualPricing.annualSavingsInr,
+        annualSavingsPct: annualPricing.annualSavingsPct,
         billingInterval: s.billingInterval,
         includedFree,
         accessPolicy: s.accessPolicy,
@@ -538,6 +552,8 @@ export function catalogPayload(
           !isLicensed &&
           s.trialDays > 0 &&
           !trialConsumed.has(s.toolId),
+        ...(personalUsage !== undefined ? { personalUsage } : {}),
+        ...(usage ? { usage } : {}),
       };
     });
 }
