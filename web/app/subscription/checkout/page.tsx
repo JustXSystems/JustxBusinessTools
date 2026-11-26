@@ -10,13 +10,17 @@ import { UpiPayMethod } from "@/components/subscription/UpiPayMethod";
 import { useSubscription } from "@/hooks/useSubscription";
 import { fetchCartQuote } from "@/lib/api";
 import { catalogPriceFingerprint } from "@/lib/commerce-revision";
-import { clearToolCart, readActivePack, readToolCart } from "@/lib/tool-cart";
-import type { CartQuote } from "@/lib/types/subscription";
+import {
+  clearToolCart,
+  readActivePack,
+  readBillingCycle,
+  readToolCart,
+  setPackCart,
+  writeBillingCycle,
+} from "@/lib/tool-cart";
+import { formatInr } from "@/lib/subscription-store-helpers";
+import type { BillingCycle, CartQuote } from "@/lib/types/subscription";
 import { useBrandCopy } from "@/lib/use-brand-copy";
-
-function inr(n: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
-}
 
 type PayMethod = "upi" | "debit" | "credit";
 
@@ -30,6 +34,7 @@ export default function SubscriptionCheckoutPage() {
   const [quoting, setQuoting] = useState(true);
   const [method, setMethod] = useState<PayMethod>("upi");
   const [bundleId, setBundleId] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("month");
 
   const catalog = subscription?.catalog ?? [];
   const packs = subscription?.packs ?? [];
@@ -40,9 +45,14 @@ export default function SubscriptionCheckoutPage() {
     [catalog, packs],
   );
 
-  const loadQuote = useCallback(async () => {
+  useEffect(() => {
+    setBillingCycle(readBillingCycle());
+  }, []);
+
+  const loadQuote = useCallback(async (cycleOverride?: BillingCycle) => {
     const ids = readToolCart();
     const packId = readActivePack();
+    const cycle = cycleOverride ?? readBillingCycle();
     setBundleId(packId);
     if (ids.length === 0 && !packId) {
       setQuote(null);
@@ -51,7 +61,7 @@ export default function SubscriptionCheckoutPage() {
     }
     setQuoting(true);
     try {
-      const data = await fetchCartQuote(ids, packId || undefined);
+      const data = await fetchCartQuote(ids, packId || undefined, cycle);
       setQuote(data);
       setQuoteError("");
     } catch (err) {
@@ -67,8 +77,8 @@ export default function SubscriptionCheckoutPage() {
   }, [refresh]);
 
   useEffect(() => {
-    void loadQuote();
-  }, [loadQuote, priceFingerprint]);
+    void loadQuote(billingCycle);
+  }, [loadQuote, priceFingerprint, billingCycle]);
 
   useEffect(() => {
     const onResolved = () => {
@@ -89,13 +99,33 @@ export default function SubscriptionCheckoutPage() {
     }
   }, [loading, quoting, pending, quote, quoteError, router]);
 
+  function handleCycleSwitch(next: BillingCycle) {
+    const saved = writeBillingCycle(next);
+    setBillingCycle(saved);
+  }
+
+  function applyRecommendedPack(packId: string) {
+    const pack = packs.find((p) => p.id === packId);
+    if (!pack) return;
+    const remaining = pack.toolIds.filter((id) => {
+      const sku = catalog.find((s) => s.toolId === id);
+      return sku && !sku.includedFree && !sku.licensed && sku.priceInr > 0;
+    });
+    if (remaining.length === 0) return;
+    setPackCart(pack.id, remaining);
+    setBundleId(pack.id);
+    showToast(`Switched order to ${pack.name}`);
+    void loadQuote(billingCycle);
+  }
+
   async function onPaid() {
     clearToolCart();
     await refresh();
     router.push("/subscription");
   }
 
-  // Payable amount always from live server quote (UPI QR / claim / card checkout).
+  const effectiveCycle: BillingCycle =
+    quote?.billingCycle ?? pending?.billingCycle ?? billingCycle;
   const amount = quote?.totalInr ?? pending?.amountInr ?? 0;
   const lines =
     quote?.lines ??
@@ -106,16 +136,12 @@ export default function SubscriptionCheckoutPage() {
         name: sku?.name ?? id,
         category: sku?.category ?? "",
         priceInr: sku?.priceInr ?? 0,
-        billingInterval: "month",
+        billingInterval: effectiveCycle,
       };
     });
-  const displayLines = lines.map((line) => {
-    if (bundleId || quote?.bundleId) return line;
-    const sku = catalog.find((s) => s.toolId === line.toolId);
-    return sku ? { ...line, priceInr: sku.priceInr } : line;
-  });
-  const toolIds = displayLines.map((l) => l.toolId);
+  const toolIds = lines.map((l) => l.toolId);
   const step: 2 | 3 = pending?.status === "pending" ? 3 : 2;
+  const durationDays = quote?.durationDays ?? (effectiveCycle === "year" ? 365 : 30);
 
   return (
     <div className="billing-page billing-checkout-page">
@@ -125,7 +151,9 @@ export default function SubscriptionCheckoutPage() {
         </Link>
         <div className="tool-header-text">
           <div className="tool-header-title">Checkout</div>
-          <div className="tool-header-sub">Secure payment to {appName} · UPI is the default settlement method</div>
+          <div className="tool-header-sub">
+            Secure settlement to {appName} · instant cycle control &amp; verified activation
+          </div>
         </div>
       </div>
 
@@ -138,39 +166,111 @@ export default function SubscriptionCheckoutPage() {
       <div className="co-layout">
         <aside className="co-summary card">
           <p className="card-label">Order summary</p>
-          <h2>{quote?.packName ? quote.packName : "Monthly subscription"}</h2>
-          {quote?.savingsInr && quote.savingsInr > 0 ? (
-            <p className="muted">Pack savings {inr(quote.savingsInr)}</p>
+          <h2>
+            {quote?.packName
+              ? quote.packName
+              : effectiveCycle === "year"
+                ? "Annual subscription"
+                : "Monthly subscription"}
+          </h2>
+
+          {pending?.status !== "pending" ? (
+            <div className="co-cycle-switch" role="group" aria-label="Checkout billing cycle">
+              <button
+                type="button"
+                className={billingCycle === "month" ? "is-active" : ""}
+                onClick={() => handleCycleSwitch("month")}
+              >
+                Monthly (30d)
+              </button>
+              <button
+                type="button"
+                className={billingCycle === "year" ? "is-active" : ""}
+                onClick={() => handleCycleSwitch("year")}
+              >
+                Yearly (365d) <span>Save 17%</span>
+              </button>
+            </div>
           ) : null}
-          {displayLines.length === 0 ? (
+
+          {quote?.savingsInr && quote.savingsInr > 0 ? (
+            <p className="store-cart-savings">Pack savings {formatInr(quote.savingsInr)}</p>
+          ) : null}
+          {effectiveCycle === "year" && quote?.annualSavingsInr && quote.annualSavingsInr > 0 ? (
+            <p className="store-cart-savings">
+              Annual savings {formatInr(quote.annualSavingsInr)} (2 months free)
+            </p>
+          ) : null}
+
+          {lines.length === 0 ? (
             <p className="muted">No tools in this order.</p>
           ) : (
             <ul className="billing-line-items">
-              {displayLines.map((line) => (
+              {lines.map((line) => (
                 <li key={line.toolId}>
                   <span>
                     {line.name}
                     {line.category ? <em>{line.category}</em> : null}
                   </span>
-                  <strong>{line.priceInr ? inr(line.priceInr) : "—"}</strong>
+                  <strong>{line.priceInr ? formatInr(line.priceInr) : "—"}</strong>
                 </li>
               ))}
             </ul>
           )}
+
+          {!bundleId && quote?.recommendedPack && pending?.status !== "pending" ? (
+            <div className="store-cart-autosave">
+              <p className="store-cart-autosave-kicker">Auto-Save Pack Available</p>
+              <p className="store-cart-autosave-copy">
+                {quote.recommendedPack.reason === "cheaper"
+                  ? `Switch to ${quote.recommendedPack.packName} and save ${formatInr(quote.recommendedPack.savingsInr)}`
+                  : `Switch to ${quote.recommendedPack.packName} for ${formatInr(quote.recommendedPack.packPriceInr)} (+${quote.recommendedPack.extraToolCount} extra tool${quote.recommendedPack.extraToolCount === 1 ? "" : "s"})`}
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => applyRecommendedPack(quote.recommendedPack!.packId)}
+              >
+                Switch to {quote.recommendedPack.packName}
+              </button>
+            </div>
+          ) : null}
+
           <div className="store-cart-total">
             <span>Amount payable</span>
-            <strong>{inr(amount)}</strong>
+            <strong>{formatInr(amount)}</strong>
           </div>
           <dl className="billing-dl">
             <div>
               <dt>Billing cycle</dt>
-              <dd>{quote?.billingInterval === "year" ? "Yearly" : "Monthly"}</dd>
+              <dd>
+                {effectiveCycle === "year" ? "Yearly" : "Monthly"} ({durationDays} days)
+              </dd>
+            </div>
+            {quote?.periodEndPreview ? (
+              <div>
+                <dt>Coverage until</dt>
+                <dd>{quote.periodEndPreview.slice(0, 10)}</dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>Account type</dt>
+              <dd>
+                {subscription?.hasGstin
+                  ? `Business · GSTIN ${subscription.gstin}`
+                  : "Personal workspace"}
+              </dd>
             </div>
             <div>
               <dt>Merchant</dt>
               <dd>{quote?.upi?.payeeName || subscription?.upi?.payeeName || legalName}</dd>
             </div>
           </dl>
+          <p className="muted co-tax-note">
+            {subscription?.hasGstin
+              ? "GSTIN is attached to this workspace for business billing records."
+              : "Personal subscription receipt. Need GST billing? Add GSTIN in Profile anytime."}
+          </p>
           <Link href="/subscription" className="btn btn-secondary btn-sm">
             ← Edit tools
           </Link>
@@ -216,6 +316,7 @@ export default function SubscriptionCheckoutPage() {
             <UpiPayMethod
               toolIds={toolIds}
               amountInr={amount}
+              billingCycle={effectiveCycle}
               bundleId={bundleId || quote?.bundleId}
               upi={quote?.upi ?? subscription?.upi}
               pendingClaim={pending}
@@ -227,6 +328,7 @@ export default function SubscriptionCheckoutPage() {
               kind={method}
               toolIds={toolIds}
               amountInr={amount}
+              billingCycle={effectiveCycle}
               bundleId={bundleId || quote?.bundleId}
               gateways={gateways}
               onDone={onPaid}

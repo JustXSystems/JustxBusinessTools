@@ -7,15 +7,8 @@ import { useToast } from "@/components/common/ToastProvider";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { useSubscription } from "@/hooks/useSubscription";
 import { withBasePath } from "@/lib/base-path";
+import { describeToolUsage, formatInr } from "@/lib/subscription-store-helpers";
 import { openStandaloneAppWindow, resolveToolLaunch } from "@/lib/tool-launch";
-
-function inr(n: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
 
 function ToolIcon({ icon }: { icon: string }) {
   if (icon.startsWith("/")) {
@@ -36,6 +29,7 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
   const licensed = isToolLicensed(tool.id);
   const paidOffer = sku && !sku.includedFree && sku.priceInr > 0;
   const trialEligible = Boolean(sku?.trialEligible && (sku.trialDays ?? 0) > 0);
+  const usageMeta = describeToolUsage(sku?.usage);
 
   const catalogRow = config?.catalog?.find((c) => c.id === tool.id);
   const launch = resolveToolLaunch(tool.id, catalogRow, tool.route);
@@ -74,7 +68,14 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
         ) : tool.desc ? (
           <div className="tool-card-tagline">{tool.desc}</div>
         ) : null}
-        <span className="tool-card-category">{tool.category}</span>
+        <div className="tool-card-meta-row">
+          <span className="tool-card-category">{tool.category}</span>
+          {usageMeta && (usageMeta.urgent || sku?.usage?.isTrial) ? (
+            <span className={`tool-card-usage-pill is-${usageMeta.tone}`}>
+              {usageMeta.label}
+            </span>
+          ) : null}
+        </div>
       </div>
     </>
   );
@@ -97,7 +98,15 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
       )}
       {paidOffer ? (
         licensed ? (
-          <div className="tool-card-sku is-licensed">Licensed</div>
+          <div
+            className={`tool-card-sku is-licensed${sku?.usage?.status === "expiring_soon" ? " is-expiring" : ""}`}
+          >
+            {sku?.usage?.isTrial
+              ? `Trial · ${sku.usage.daysLeft ?? 0}d left`
+              : sku?.usage?.status === "expiring_soon"
+                ? `Renew in ${sku.usage.daysLeft ?? 0}d`
+                : "Licensed"}
+          </div>
         ) : trialEligible ? (
           <div className="tool-card-cta-stack">
             <button
@@ -108,8 +117,12 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
             >
               Start {sku!.trialDays}-day trial
             </button>
-            <button type="button" className="tool-card-subscribe-secondary" onClick={() => openUpgrade(tool.id)}>
-              Subscribe · {inr(sku!.priceInr)}/mo
+            <button
+              type="button"
+              className="tool-card-subscribe-secondary"
+              onClick={() => openUpgrade(tool.id)}
+            >
+              Subscribe · {formatInr(sku!.priceInr)}/mo
             </button>
           </div>
         ) : (
@@ -118,7 +131,7 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
             className="tool-card-subscribe"
             onClick={() => openUpgrade(tool.id)}
           >
-            Subscribe · {inr(sku!.priceInr)}/mo
+            Subscribe · {formatInr(sku!.priceInr)}/mo
           </button>
         )
       ) : null}

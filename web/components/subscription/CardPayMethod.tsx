@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { startCheckout } from "@/lib/api";
-import type { PayGatewayOption } from "@/lib/types/subscription";
+import type { BillingCycle, PayGatewayOption } from "@/lib/types/subscription";
 import { useBrandCopy } from "@/lib/use-brand-copy";
 
 function formatInr(amount: number) {
@@ -18,6 +18,7 @@ export function CardPayMethod({
   kind,
   toolIds,
   amountInr,
+  billingCycle = "month",
   gateways,
   bundleId,
   onDone,
@@ -26,6 +27,7 @@ export function CardPayMethod({
   kind: "debit" | "credit";
   toolIds: string[];
   amountInr: number;
+  billingCycle?: BillingCycle;
   gateways: PayGatewayOption[];
   bundleId?: string | null;
   onDone: () => Promise<void>;
@@ -46,6 +48,7 @@ export function CardPayMethod({
       const result = await startCheckout(bundleId ? `pack:${bundleId}` : "cart", toolIds, {
         gatewayId: selected.id,
         method: kind,
+        billingCycle,
         ...(bundleId ? { bundleId } : {}),
       });
       if (result.activated) {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useToast } from "@/components/common/ToastProvider";
 import { useSubscription } from "@/hooks/useSubscription";
+import { formatInr, resolveClientSkuPrice } from "@/lib/subscription-store-helpers";
 import type { ToolUsage } from "@/lib/types/tool-record";
 import { useBrandCopy } from "@/lib/use-brand-copy";
 
@@ -20,9 +21,10 @@ export function ToolUsageCounter({
   if (usage.limit === 0) {
     return <span className="usage-counter">License required</span>;
   }
+  const pct = Math.min(100, Math.round((usage.recordCount / Math.max(1, usage.limit)) * 100));
   return (
-    <span className="usage-counter">
-      {usage.recordCount} / {usage.limit} records
+    <span className="usage-counter" title={`${pct}% of freemium quota used`}>
+      {usage.recordCount} / {usage.limit} records ({pct}%)
     </span>
   );
 }
@@ -46,8 +48,12 @@ export function UsageLimitBanner({
 
   const sku = subscription?.catalog?.find((s) => s.toolId === usage.toolId);
   const trialEligible = Boolean(sku?.trialEligible && (sku.trialDays ?? 0) > 0);
+  const priced = sku ? resolveClientSkuPrice(sku, "month") : null;
   const limit = usage.limit;
   const hardLocked = limit === 0;
+  const pct = hardLocked ? 100 : Math.min(100, Math.round((usage.recordCount / Math.max(1, limit)) * 100));
+  const priceHint =
+    priced && priced.priceInr > 0 ? ` · ${formatInr(priced.priceInr)}/mo` : "";
 
   async function onTrial() {
     setBusy(true);
@@ -64,16 +70,23 @@ export function UsageLimitBanner({
   if (atLimit) {
     return (
       <div className="usage-banner usage-banner-limit">
-        <span>
-          {hardLocked
-            ? "This tool requires a license before you can create records."
-            : `You have reached the limit of ${limit} records for this tool.`}
-          {subscription?.pendingClaim?.status === "pending"
-            ? ` Your UPI payment is waiting for ${appName} verification.`
-            : trialEligible
-              ? " Start a free trial or subscribe for unlimited records."
-              : " Delete a record or subscribe to this tool for unlimited records."}
-        </span>
+        <div className="usage-banner-copy">
+          <span>
+            {hardLocked
+              ? "This tool requires an active license or free trial before you can create records."
+              : `You have reached the freemium limit of ${limit} records for this tool (${pct}%).`}
+            {subscription?.pendingClaim?.status === "pending"
+              ? ` Your UPI payment is waiting for ${appName} verification.`
+              : trialEligible
+                ? ` Start a ${sku!.trialDays}-day free trial or subscribe${priceHint} (save 17% yearly).`
+                : ` Delete a record or subscribe${priceHint} for unlimited records.`}
+          </span>
+          {!hardLocked ? (
+            <div className="usage-banner-meter" aria-hidden>
+              <span style={{ width: `${pct}%` }} />
+            </div>
+          ) : null}
+        </div>
         <div className="usage-banner-actions">
           {subscription?.pendingClaim?.status === "pending" ? (
             <button type="button" className="usage-banner-cta" onClick={() => openUpgrade(usage.toolId)}>
@@ -89,13 +102,17 @@ export function UsageLimitBanner({
               >
                 Start {sku!.trialDays}-day trial
               </button>
-              <button type="button" className="usage-banner-cta usage-banner-cta-secondary" onClick={() => openUpgrade(usage.toolId)}>
-                Subscribe
+              <button
+                type="button"
+                className="usage-banner-cta usage-banner-cta-secondary"
+                onClick={() => openUpgrade(usage.toolId)}
+              >
+                Subscribe{priceHint}
               </button>
             </>
           ) : (
             <button type="button" className="usage-banner-cta" onClick={() => openUpgrade(usage.toolId)}>
-              Subscribe to this tool
+              Subscribe{priceHint}
             </button>
           )}
         </div>
@@ -105,10 +122,15 @@ export function UsageLimitBanner({
 
   return (
     <div className="usage-banner usage-banner-warn">
-      <span>
-        {usage.recordCount} of {limit} records used — only {limit - usage.recordCount} left until you
-        subscribe.
-      </span>
+      <div className="usage-banner-copy">
+        <span>
+          {usage.recordCount} of {limit} records used ({pct}%) — only {Math.max(0, limit - usage.recordCount)} left
+          before upgrade is needed.
+        </span>
+        <div className="usage-banner-meter" aria-hidden>
+          <span style={{ width: `${pct}%` }} />
+        </div>
+      </div>
       <div className="usage-banner-actions">
         {trialEligible ? (
           <button
@@ -121,7 +143,7 @@ export function UsageLimitBanner({
           </button>
         ) : null}
         <button type="button" className="usage-banner-cta" onClick={() => openUpgrade(usage.toolId)}>
-          Subscribe
+          Subscribe{priceHint}
         </button>
       </div>
     </div>

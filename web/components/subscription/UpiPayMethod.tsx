@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { submitUpiClaim } from "@/lib/api";
 import { invalidateLiveData } from "@/hooks/useLiveRefresh";
-import type { PendingUpiClaim, UpiPayInfo } from "@/lib/types/subscription";
+import type { BillingCycle, PendingUpiClaim, UpiPayInfo } from "@/lib/types/subscription";
 import { useBrandCopy } from "@/lib/use-brand-copy";
 
 function formatInr(amount: number) {
@@ -14,6 +14,7 @@ function formatInr(amount: number) {
 export function UpiPayMethod({
   toolIds,
   amountInr,
+  billingCycle = "month",
   upi,
   pendingClaim,
   bundleId,
@@ -22,6 +23,7 @@ export function UpiPayMethod({
 }: {
   toolIds: string[];
   amountInr: number;
+  billingCycle?: BillingCycle;
   upi?: UpiPayInfo;
   pendingClaim?: PendingUpiClaim | null;
   bundleId?: string | null;
@@ -32,7 +34,7 @@ export function UpiPayMethod({
   const { appName, legalName } = useBrandCopy();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"vpa" | "amount" | null>(null);
   const [form, setForm] = useState({
     payerName: user?.name ?? "",
     payerEmail: user?.email ?? "",
@@ -69,14 +71,14 @@ export function UpiPayMethod({
     };
   }, [upi?.intent]);
 
-  async function copyVpa() {
-    if (!upi?.vpa) return;
+  async function copyText(kind: "vpa" | "amount", text: string) {
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(upi.vpa);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      await navigator.clipboard.writeText(text);
+      setCopied(kind);
+      setTimeout(() => setCopied(null), 1600);
     } catch {
-      onToast(upi.vpa);
+      onToast(text);
     }
   }
 
@@ -86,6 +88,7 @@ export function UpiPayMethod({
     try {
       const result = await submitUpiClaim({
         toolIds,
+        billingCycle,
         ...(bundleId ? { bundleId } : {}),
         ...form,
       });
@@ -99,6 +102,9 @@ export function UpiPayMethod({
     }
   }
 
+  const trimmedUtr = form.utr.trim();
+  const utrValid = trimmedUtr.length >= 12;
+
   if (pendingClaim?.status === "pending") {
     return (
       <div className="billing-pending">
@@ -106,8 +112,9 @@ export function UpiPayMethod({
         <h3>Matching UTR {pendingClaim.utr}</h3>
         <p className="muted">
           Amount {formatInr(pendingClaim.amountInr)}
+          {pendingClaim.billingCycle === "year" ? " · Yearly (365d)" : " · Monthly (30d)"}
           {pendingClaim.toolIds?.length ? ` · ${pendingClaim.toolIds.length} tool(s)` : ""}.
-          Licensed access starts after {appName} approves this payment.
+          Licensed access starts automatically after {appName} approves this payment.
         </p>
       </div>
     );
@@ -135,8 +142,21 @@ export function UpiPayMethod({
           </p>
           <div className="admin-form-row">
             {upi?.vpa ? (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void copyVpa()}>
-                {copied ? "Copied" : "Copy UPI ID"}
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => void copyText("vpa", upi.vpa)}
+              >
+                {copied === "vpa" ? "Copied ID" : "Copy UPI ID"}
+              </button>
+            ) : null}
+            {amountInr > 0 ? (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => void copyText("amount", String(amountInr))}
+              >
+                {copied === "amount" ? "Copied ₹" : `Copy ${formatInr(amountInr)}`}
               </button>
             ) : null}
             {upi?.intent ? (
@@ -145,7 +165,9 @@ export function UpiPayMethod({
               </a>
             ) : null}
           </div>
-          <p className="muted billing-qr-hint">Pay exactly {formatInr(amountInr)}. Do not change the amount.</p>
+          <p className="muted billing-qr-hint">
+            Pay exactly {formatInr(amountInr)} ({billingCycle === "year" ? "365 days" : "30 days"}). Do not change the amount.
+          </p>
         </div>
 
         <form className="billing-confirm co-upi-form" onSubmit={submit}>
@@ -192,7 +214,14 @@ export function UpiPayMethod({
               />
             </label>
             <label className="field" htmlFor="billing-utr">
-              <span>UPI / UTR reference</span>
+              <span>
+                UPI / UTR reference{" "}
+                {trimmedUtr.length > 0 ? (
+                  <em className={utrValid ? "co-utr-ok" : "co-utr-hint"}>
+                    {utrValid ? "· Looks good" : `· ${trimmedUtr.length} chars`}
+                  </em>
+                ) : null}
+              </span>
               <input
                 id="billing-utr"
                 value={form.utr}
