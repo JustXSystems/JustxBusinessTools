@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { fetchBillingHistory } from "@/lib/api";
 import { formatInr } from "@/lib/subscription-store-helpers";
-import type { BillingHistoryEntry, BillingHistoryPayload } from "@/lib/types/subscription";
+import {
+  DEFAULT_COMMERCE_POLICY,
+  type BillingHistoryEntry,
+  type BillingHistoryPayload,
+  type CommercePolicy,
+} from "@/lib/types/subscription";
 import { useBrandCopy } from "@/lib/use-brand-copy";
 
 function escapeHtml(s: string): string {
@@ -18,18 +23,27 @@ function openPrintableReceipt(
   entry: BillingHistoryEntry,
   account: BillingHistoryPayload["account"],
   brand: { appName: string; legalName: string },
+  policyInput?: Partial<CommercePolicy>,
 ) {
+  const policy = { ...DEFAULT_COMMERCE_POLICY, ...(policyInput ?? {}) };
   const win = window.open("", "_blank", "noopener,noreferrer,width=760,height=840");
   if (!win) return;
   const dateStr = entry.occurredAt ? entry.occurredAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
-  const cycleLabel = entry.billingCycle === "year" ? "Annual (365 days)" : "Monthly (30 days)";
-  const title = account.hasGstin ? "Subscription Tax Receipt" : "Subscription Payment Receipt";
+  const cycleLabel =
+    entry.billingCycle === "year"
+      ? `Annual (${policy.annualDurationDays} days)`
+      : `Monthly (${policy.monthlyDurationDays} days)`;
+  const showGst = account.hasGstin && policy.gstEnabled && policy.gstRatePct > 0;
+  const title = showGst ? "Subscription Tax Receipt" : "Subscription Payment Receipt";
   const toolsHtml =
     entry.toolNames.length > 0
       ? entry.toolNames.map((n) => `<li>${escapeHtml(n)}</li>`).join("")
       : `<li>Workspace subscription charge</li>`;
-  const taxableValue = account.hasGstin ? Math.round((entry.amountInr / 1.18) * 100) / 100 : entry.amountInr;
-  const gstAmount = account.hasGstin ? Math.round((entry.amountInr - taxableValue) * 100) / 100 : 0;
+  const gstRate = policy.gstRatePct / 100;
+  const taxableValue = showGst
+    ? Math.round((entry.amountInr / (1 + gstRate)) * 100) / 100
+    : entry.amountInr;
+  const gstAmount = showGst ? Math.round((entry.amountInr - taxableValue) * 100) / 100 : 0;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -57,6 +71,7 @@ function openPrintableReceipt(
     <div>
       <h1>${escapeHtml(brand.appName)}</h1>
       <p class="sub">${escapeHtml(brand.legalName)}</p>
+      ${policy.sellerGstin ? `<p class="sub">Seller GSTIN: <code>${escapeHtml(policy.sellerGstin)}</code></p>` : ""}
     </div>
     <div style="text-align:right">
       <div class="badge">${escapeHtml(entry.status)}</div>
@@ -81,15 +96,15 @@ function openPrintableReceipt(
   </div>
 
   <div class="box">
-    <p class="label">Subscribed tools${account.hasGstin ? " · SAC 998314" : ""}</p>
+    <p class="label">Subscribed tools${showGst ? ` · SAC ${escapeHtml(policy.sacCode)}` : ""}</p>
     <ul>${toolsHtml}</ul>
   </div>
 
   ${
-    account.hasGstin
+    showGst
       ? `<div class="box" style="margin-top:14px">
-           <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>Taxable Value (SAC 998314)</span><span>₹${taxableValue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-           <div style="display:flex;justify-content:space-between;font-size:13px"><span>GST @ 18% (Inclusive)</span><span>₹${gstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+           <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>Taxable Value (SAC ${escapeHtml(policy.sacCode)})</span><span>₹${taxableValue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+           <div style="display:flex;justify-content:space-between;font-size:13px"><span>GST @ ${policy.gstRatePct}% (Inclusive)</span><span>₹${gstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
          </div>`
       : ""
   }
@@ -111,7 +126,13 @@ function openPrintableReceipt(
   win.document.close();
 }
 
-export function BillingHistoryPanel({ refreshKey }: { refreshKey?: string }) {
+export function BillingHistoryPanel({
+  refreshKey,
+  policy,
+}: {
+  refreshKey?: string;
+  policy?: CommercePolicy;
+}) {
   const { appName, legalName } = useBrandCopy();
   const [data, setData] = useState<BillingHistoryPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -221,7 +242,7 @@ export function BillingHistoryPanel({ refreshKey }: { refreshKey?: string }) {
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    onClick={() => openPrintableReceipt(entry, data.account, { appName, legalName })}
+                    onClick={() => openPrintableReceipt(entry, data.account, { appName, legalName }, policy)}
                   >
                     Receipt / PDF
                   </button>

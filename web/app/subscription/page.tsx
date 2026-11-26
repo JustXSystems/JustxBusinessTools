@@ -38,12 +38,13 @@ import {
   writeBillingCycle,
   writeToolCart,
 } from "@/lib/tool-cart";
-import type {
-  BillingCycle,
-  CartQuote,
-  ProductPack,
-  ToolCatalogSku,
-  UserCategory,
+import {
+  DEFAULT_COMMERCE_POLICY,
+  type BillingCycle,
+  type CartQuote,
+  type ProductPack,
+  type ToolCatalogSku,
+  type UserCategory,
 } from "@/lib/types/subscription";
 import { useBrandCopy } from "@/lib/use-brand-copy";
 
@@ -81,17 +82,26 @@ export default function SubscriptionPage() {
   const packs = subscription?.packs ?? [];
   const pending = subscription?.pendingClaim;
   const usageSummary = subscription?.usageSummary;
+  const policy = subscription?.commercePolicy ?? DEFAULT_COMMERCE_POLICY;
+  const effectiveBillingCycle: BillingCycle = policy.annualEnabled ? billingCycle : "month";
 
   const userCategory: UserCategory = useMemo(() => {
     if (subscription?.userCategory) return subscription.userCategory;
     if (isPersonalAccount(user, subscription?.gstin)) return "individual";
-    return (subscription?.branchCount ?? user?.branches?.length ?? 1) >= 2
+    return (subscription?.branchCount ?? user?.branches?.length ?? 1) >= policy.enterpriseMinBranches
       ? "enterprise"
       : "business";
-  }, [subscription?.userCategory, subscription?.gstin, subscription?.branchCount, user]);
+  }, [
+    subscription?.userCategory,
+    subscription?.gstin,
+    subscription?.branchCount,
+    user,
+    policy.enterpriseMinBranches,
+  ]);
 
   const isIndividual = userCategory === "individual";
-  const effectiveScope: CatalogScope = isIndividual ? scope : "all";
+  const effectiveScope: CatalogScope =
+    isIndividual ? (policy.allowPersonalBusinessPreview ? scope : "personal") : "all";
   const categoryMeta = useMemo(
     () => describeUserCategory(userCategory, subscription?.branchCount ?? user?.branches?.length ?? 1),
     [userCategory, subscription?.branchCount, user?.branches?.length],
@@ -359,8 +369,8 @@ export default function SubscriptionPage() {
       <StoreCartDock
         itemCount={payableIds.length}
         totalLabel={formatInr(dueNow)}
-        billingCycle={billingCycle}
-        onBillingCycleChange={handleCycleChange}
+        billingCycle={effectiveBillingCycle}
+        onBillingCycleChange={policy.annualEnabled ? handleCycleChange : undefined}
         packLabel={activePack && quote?.packName ? quote.packName : null}
         savingsLabel={
           quote?.savingsInr && quote.savingsInr > 0
@@ -368,18 +378,20 @@ export default function SubscriptionPage() {
             : null
         }
         annualSavingsLabel={
-          billingCycle === "year" && quote?.annualSavingsInr && quote.annualSavingsInr > 0
+          effectiveBillingCycle === "year" && quote?.annualSavingsInr && quote.annualSavingsInr > 0
             ? `Annual savings ${formatInr(quote.annualSavingsInr)} (2 months free)`
             : null
         }
         coverageLabel={coverageLabel}
-        recommendedPack={!activePack ? quote?.recommendedPack : null}
+        recommendedPack={
+          policy.autoSavePackNudgeEnabled && !activePack ? quote?.recommendedPack : null
+        }
         onApplyRecommendedPack={applyRecommendedPack}
         lines={cartLines}
         quoteError={quoteError}
         canCheckout={Boolean(quote && payableIds.length > 0)}
         onDownloadProforma={
-          quote && payableIds.length > 0
+          policy.proformaQuoteEnabled && quote && payableIds.length > 0
             ? () => {
                 const opened = openProformaQuotePrint({
                   sellerAppName: appName,
@@ -389,7 +401,8 @@ export default function SubscriptionPage() {
                   customerGstin: subscription?.gstin ?? null,
                   userCategory,
                   branchCount: subscription?.branchCount ?? user?.branches?.length ?? 1,
-                  billingCycle,
+                  billingCycle: effectiveBillingCycle,
+                  policy,
                   quote,
                 });
                 if (!opened) showToast("Allow pop-ups to print or save the Proforma Quote PDF");
@@ -772,7 +785,7 @@ export default function SubscriptionPage() {
                   </p>
                 </div>
                 <div className="sub-catalog-head-actions">
-                  {eligibleTrialTools.length >= 2 ? (
+                  {policy.allowBatchStartAllTrials && eligibleTrialTools.length >= 2 ? (
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
@@ -784,7 +797,7 @@ export default function SubscriptionPage() {
                         : `Start all ${eligibleTrialTools.length} free trials`}
                     </button>
                   ) : null}
-                  {isIndividual ? (
+                  {isIndividual && policy.allowPersonalBusinessPreview ? (
                     <div className="sub-scope-toggle" role="group" aria-label="Account catalog scope">
                       <button
                         type="button"
@@ -967,14 +980,16 @@ export default function SubscriptionPage() {
             </div>
           </div>
 
-          <CategoryTierComparison
-            currentCategory={userCategory}
-            branchCount={subscription.branchCount ?? user?.branches?.length ?? 1}
-            billingCycle={billingCycle}
-            onSelectCycle={handleCycleChange}
-          />
+          {policy.showTierComparisonMatrix ? (
+            <CategoryTierComparison
+              currentCategory={userCategory}
+              branchCount={subscription.branchCount ?? user?.branches?.length ?? 1}
+              billingCycle={effectiveBillingCycle}
+              onSelectCycle={handleCycleChange}
+            />
+          ) : null}
 
-          <BillingHistoryPanel refreshKey={subscription.serverTime} />
+          <BillingHistoryPanel refreshKey={subscription.serverTime} policy={policy} />
         </>
       ) : null}
     </div>

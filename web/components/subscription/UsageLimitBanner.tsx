@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useToast } from "@/components/common/ToastProvider";
 import { useSubscription } from "@/hooks/useSubscription";
 import { formatInr, resolveClientSkuPrice } from "@/lib/subscription-store-helpers";
+import { DEFAULT_COMMERCE_POLICY } from "@/lib/types/subscription";
 import type { ToolUsage } from "@/lib/types/tool-record";
 import { useBrandCopy } from "@/lib/use-brand-copy";
 
@@ -48,6 +49,8 @@ export function UsageLimitBanner({
   if (!atLimit && !nearLimit) return null;
 
   const sku = subscription?.catalog?.find((s) => s.toolId === usage.toolId);
+  const policy = subscription?.commercePolicy ?? DEFAULT_COMMERCE_POLICY;
+  const nudgeCycle = policy.annualEnabled ? policy.defaultCheckoutCycleFromNudge : "month";
   const trialEligible = Boolean(sku?.trialEligible && (sku.trialDays ?? 0) > 0);
   const priced = sku ? resolveClientSkuPrice(sku, "month") : null;
   const pricedYearly = sku ? resolveClientSkuPrice(sku, "year") : null;
@@ -56,11 +59,13 @@ export function UsageLimitBanner({
   const pct = hardLocked ? 100 : Math.min(100, Math.round((usage.recordCount / Math.max(1, limit)) * 100));
   const priceHint =
     priced && priced.priceInr > 0 ? ` · ${formatInr(priced.priceInr)}/mo` : "";
-  const annualCheckoutHref = `/subscription/checkout?tool=${encodeURIComponent(usage.toolId)}&cycle=year`;
+  const annualCheckoutHref = `/subscription/checkout?tool=${encodeURIComponent(usage.toolId)}&cycle=${nudgeCycle}`;
   const yearlySaveHint =
-    pricedYearly && pricedYearly.annualSavingsInr > 0
-      ? `Yearly (${formatInr(pricedYearly.priceInr)}/yr · save ${formatInr(pricedYearly.annualSavingsInr)})`
-      : "Subscribe yearly (−17%)";
+    nudgeCycle === "year"
+      ? pricedYearly && pricedYearly.annualSavingsInr > 0
+        ? `Yearly (${formatInr(pricedYearly.priceInr)}/yr · save ${formatInr(pricedYearly.annualSavingsInr)})`
+        : "Subscribe yearly (−17%)"
+      : `Subscribe${priceHint}`;
 
   async function onTrial() {
     setBusy(true);

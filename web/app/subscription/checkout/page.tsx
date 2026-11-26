@@ -22,7 +22,11 @@ import {
   writeToolCart,
 } from "@/lib/tool-cart";
 import { formatInr } from "@/lib/subscription-store-helpers";
-import type { BillingCycle, CartQuote } from "@/lib/types/subscription";
+import {
+  DEFAULT_COMMERCE_POLICY,
+  type BillingCycle,
+  type CartQuote,
+} from "@/lib/types/subscription";
 import { useBrandCopy } from "@/lib/use-brand-copy";
 
 type PayMethod = "upi" | "debit" | "credit";
@@ -47,6 +51,7 @@ export default function SubscriptionCheckoutPage() {
   const packs = subscription?.packs ?? [];
   const pending = subscription?.pendingClaim;
   const gateways = subscription?.gateways ?? [];
+  const policy = subscription?.commercePolicy ?? DEFAULT_COMMERCE_POLICY;
   const priceFingerprint = useMemo(
     () => catalogPriceFingerprint(catalog, packs),
     [catalog, packs],
@@ -227,7 +232,7 @@ export default function SubscriptionCheckoutPage() {
                 : "Monthly subscription"}
           </h2>
 
-          {pending?.status !== "pending" ? (
+          {policy.annualEnabled && pending?.status !== "pending" ? (
             <div className="co-cycle-switch" role="group" aria-label="Checkout billing cycle">
               <button
                 type="button"
@@ -271,7 +276,10 @@ export default function SubscriptionCheckoutPage() {
             </ul>
           )}
 
-          {!bundleId && quote?.recommendedPack && pending?.status !== "pending" ? (
+          {policy.autoSavePackNudgeEnabled &&
+          !bundleId &&
+          quote?.recommendedPack &&
+          pending?.status !== "pending" ? (
             <div className="store-cart-autosave">
               <p className="store-cart-autosave-kicker">Auto-Save Pack Available</p>
               <p className="store-cart-autosave-copy">
@@ -289,7 +297,7 @@ export default function SubscriptionCheckoutPage() {
             </div>
           ) : null}
 
-          {pending?.status !== "pending" ? (
+          {policy.promosEnabled && pending?.status !== "pending" ? (
             <form
               className="co-promo-box"
               onSubmit={(e) => {
@@ -332,7 +340,9 @@ export default function SubscriptionCheckoutPage() {
             </form>
           ) : null}
 
-          {pending?.status !== "pending" &&
+          {policy.promosEnabled &&
+          policy.showFeaturedPromoChips &&
+          pending?.status !== "pending" &&
           quote?.availablePromos &&
           quote.availablePromos.length > 0 ? (
             <div className="co-promo-chips" aria-label="Eligible promo offers">
@@ -359,6 +369,11 @@ export default function SubscriptionCheckoutPage() {
             </div>
           ) : null}
 
+          {quote?.categoryDiscountInr && quote.categoryDiscountInr > 0 ? (
+            <p className="store-cart-savings">
+              Tier discount ({quote.categoryDiscountPct}%): −{formatInr(quote.categoryDiscountInr)}
+            </p>
+          ) : null}
           {quote?.promo ? (
             <>
               <div className="store-cart-subtotal">
@@ -402,7 +417,7 @@ export default function SubscriptionCheckoutPage() {
               <dd>{quote?.upi?.payeeName || subscription?.upi?.payeeName || legalName}</dd>
             </div>
           </dl>
-          {quote && lines.length > 0 ? (
+          {policy.proformaQuoteEnabled && quote && lines.length > 0 ? (
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -417,6 +432,7 @@ export default function SubscriptionCheckoutPage() {
                   userCategory: subscription?.userCategory,
                   branchCount: subscription?.branchCount ?? user?.branches?.length ?? 1,
                   billingCycle: effectiveCycle,
+                  policy,
                   quote,
                 });
                 if (!opened) showToast("Allow pop-ups to print or save the Proforma Quote PDF");

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSubscription } from "@/hooks/useSubscription";
 import { formatInr } from "@/lib/subscription-store-helpers";
+import { DEFAULT_COMMERCE_POLICY } from "@/lib/types/subscription";
 
 /**
  * Proactive home telemetry ribbon: surfaces actionable subscription states
@@ -12,6 +13,9 @@ import { formatInr } from "@/lib/subscription-store-helpers";
 export function SubscriptionStatusStrip() {
   const { subscription, openUpgrade } = useSubscription();
   if (!subscription) return null;
+  const policy = subscription.commercePolicy ?? DEFAULT_COMMERCE_POLICY;
+  if (!policy.showHomeSubscriptionStrip) return null;
+  const nudgeCycle = policy.annualEnabled ? policy.defaultCheckoutCycleFromNudge : "month";
 
   const pending = subscription.pendingClaim;
   if (pending?.status === "pending") {
@@ -53,10 +57,16 @@ export function SubscriptionStatusStrip() {
         </div>
         <div className="home-sub-strip-actions">
           <Link
-            href={`/subscription/checkout?tool=${encodeURIComponent(expiringTool.toolId)}&cycle=year`}
+            href={`/subscription/checkout?tool=${encodeURIComponent(expiringTool.toolId)}&cycle=${nudgeCycle}`}
             className="btn btn-primary btn-sm"
           >
-            {isTrial ? "Convert yearly (-17%)" : "Renew yearly (-17%)"}
+            {nudgeCycle === "year"
+              ? isTrial
+                ? "Convert yearly (-17%)"
+                : "Renew yearly (-17%)"
+              : isTrial
+                ? "Convert to paid"
+                : "Renew now"}
           </Link>
           <button
             type="button"
@@ -90,7 +100,7 @@ export function SubscriptionStatusStrip() {
         <div className="home-sub-strip-actions">
           {firstAlert ? (
             <Link
-              href={`/subscription/checkout?tool=${encodeURIComponent(firstAlert.toolId)}&cycle=year`}
+              href={`/subscription/checkout?tool=${encodeURIComponent(firstAlert.toolId)}&cycle=${nudgeCycle}`}
               className="btn btn-primary btn-sm"
             >
               Upgrade {firstAlert.name}

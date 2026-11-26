@@ -1,10 +1,17 @@
-import type { BillingCycle, CartQuote, UserCategory } from "./types/subscription";
+import {
+  DEFAULT_COMMERCE_POLICY,
+  type BillingCycle,
+  type CartQuote,
+  type CommercePolicy,
+  type UserCategory,
+} from "./types/subscription";
 import { describeUserCategory, formatInr } from "./subscription-store-helpers";
 
 export type ProformaQuoteInput = {
   quoteNumber?: string;
   issuedAt?: Date;
   validDays?: number;
+  policy?: Partial<CommercePolicy>;
   sellerAppName: string;
   sellerLegalName: string;
   customerName: string;
@@ -46,8 +53,9 @@ function formatDateIso(d: Date): string {
  * - Personal accounts (no GSTIN): clean consumer estimate without GSTIN boilerplate.
  */
 export function buildProformaQuoteHtml(input: ProformaQuoteInput): string {
+  const policy = { ...DEFAULT_COMMERCE_POLICY, ...(input.policy ?? {}) };
   const issued = input.issuedAt ?? new Date();
-  const validDays = Math.max(1, input.validDays ?? 7);
+  const validDays = Math.max(1, input.validDays ?? policy.proformaValidityDays ?? 7);
   const validUntil = new Date(issued.getTime() + validDays * 86400000);
   const quoteNo =
     input.quoteNumber ||
@@ -56,9 +64,12 @@ export function buildProformaQuoteHtml(input: ProformaQuoteInput): string {
     ).padStart(2, "0")}-${String(issued.getTime()).slice(-4)}`;
 
   const hasGstin = Boolean(input.customerGstin && input.customerGstin.trim().length > 0);
+  const showGst = hasGstin && policy.gstEnabled && policy.gstRatePct > 0;
+  const sacCode = policy.sacCode || "998314";
   const category = describeUserCategory(input.userCategory, input.branchCount ?? 1);
   const durationDays =
-    input.quote.durationDays ?? (input.billingCycle === "year" ? 365 : 30);
+    input.quote.durationDays ??
+    (input.billingCycle === "year" ? policy.annualDurationDays : policy.monthlyDurationDays);
   const cycleLabel =
     input.billingCycle === "year"
       ? `Annual (${durationDays} days)`
@@ -69,9 +80,21 @@ export function buildProformaQuoteHtml(input: ProformaQuoteInput): string {
     totalInr,
     Number(input.quote.subtotalInr ?? totalInr + (input.quote.promo?.discountInr ?? 0)),
   );
-  // Prices are inclusive of 18% GST for B2B GSTIN workspaces (SAC 998314: IT/SaaS).
-  const taxableValue = hasGstin ? Math.round((totalInr / 1.18) * 100) / 100 : totalInr;
-  const gstAmount = hasGstin ? Math.round((totalInr - taxableValue) * 100) / 100 : 0;
+  const gstRate = policy.gstRatePct / 100;
+  const taxableValue = showGst
+    ? policy.gstPricingMode === "inclusive"
+      ? Math.round((totalInr / (1 + gstRate)) * 100) / 100
+      : totalInr
+    : totalInr;
+  const gstAmount = showGst
+    ? policy.gstPricingMode === "inclusive"
+      ? Math.round((totalInr - taxableValue) * 100) / 100
+      : Math.round(totalInr * gstRate * 100) / 100
+    : 0;
+  const payableTotal =
+    showGst && policy.gstPricingMode === "exclusive"
+      ? Math.round((totalInr + gstAmount) * 100) / 100
+      : totalInr;
 
   const lineRows = (input.quote.lines ?? [])
     .map(
@@ -82,7 +105,7 @@ export function buildProformaQuoteHtml(input: ProformaQuoteInput): string {
           <strong>${esc(line.name)}</strong>
           ${line.category ? `<div class="sub">${esc(line.category)}</div>` : ""}
         </td>
-        ${hasGstin ? `<td class="mono">998314</td>` : ""}
+        ${showGst ? `<td class="mono">${esc(sacCode)}</td>` : ""}
         <td>${esc(cycleLabel)}</td>
         <td class="num">${formatInr(line.priceInr || 0)}</td>
       </tr>`,
@@ -237,6 +260,7 @@ export function buildProformaQuoteHtml(input: ProformaQuoteInput): string {
       <div class="brand">
         <h1>${esc(input.sellerAppName)}</h1>
         <p>${esc(input.sellerLegalName)} · SaaS Workspace Subscriptions</p>
+        ${policy.sellerGstin ? `<p>Seller GSTIN: <span class="mono">${esc(policy.sellerGstin)}</span></p>` : ""}
         <span class="badge">${esc(category.badge)}</span>
       </div>
       <div class="meta">
@@ -275,7 +299,7 @@ export function buildProformaQuoteHtml(input: ProformaQuoteInput): string {
         <tr>
           <th style="width:40px">#</th>
           <th>Tool / Module</th>
-          ${hasGstin ? `<th style="width:85px">SAC</th>` : ""}
+          ${showGst ? `<th style="width:85px">SAC</th>` : ""}
           <th style="width:150px">Cycle</th>
           <th class="num" style="width:110px">Amount</th>
         </tr>
@@ -305,14 +329,14 @@ export function buildProformaQuoteHtml(input: ProformaQuoteInput): string {
           : ""
       }
       ${
-        hasGstin
-          ? `<div class="totals-row"><span>Taxable Value (SAC 998314)</span><span>₹${taxableValue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-             <div class="totals-row"><span>GST @ 18% (Inclusive)</span><span>₹${gstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>`
+        showGst
+          ? `<div class="totals-row"><span>Taxable Value (SAC ${esc(sacCode)})</span><span>₹${taxableValue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+             <div class="totals-row"><span>GST @ ${policy.gstRatePct}% (${policy.gstPricingMode === "exclusive" ? "Exclusive" : "Inclusive"})</span><span>₹${gstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>`
           : ""
       }
       <div class="totals-row grand">
         <span>Total Payable</span>
-        <span>${formatInr(totalInr)}</span>
+        <span>${formatInr(payableTotal)}</span>
       </div>
     </div>
 
@@ -326,8 +350,7 @@ export function buildProformaQuoteHtml(input: ProformaQuoteInput): string {
         }
       </div>
       <div style="text-align:right">
-        Computer-generated proforma estimate.<br />
-        Licenses activate automatically on payment confirmation.
+        ${esc(policy.proformaFooterNote)}
       </div>
     </div>
   </div>

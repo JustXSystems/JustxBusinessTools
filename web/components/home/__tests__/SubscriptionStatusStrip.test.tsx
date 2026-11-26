@@ -87,4 +87,35 @@ describe("SubscriptionStatusStrip", () => {
     const { container } = render(<SubscriptionStatusStrip />);
     expect(container.firstChild).toBeNull();
   });
+
+  it("respects admin commercePolicy showHomeSubscriptionStrip=false and nudge cycle=month", () => {
+    mockSub = {
+      pendingClaim: null,
+      commercePolicy: { showHomeSubscriptionStrip: false, annualEnabled: true, defaultCheckoutCycleFromNudge: "year" },
+      catalog: [
+        {
+          toolId: "invoice",
+          name: "Invoice & Billing",
+          usage: { status: "expiring_soon", isTrial: true, daysLeft: 1 },
+        },
+      ],
+    };
+    const { container, rerender } = render(<SubscriptionStatusStrip />);
+    expect(container.firstChild).toBeNull();
+
+    mockSub = {
+      pendingClaim: null,
+      commercePolicy: { showHomeSubscriptionStrip: true, annualEnabled: true, defaultCheckoutCycleFromNudge: "month" },
+      catalog: [
+        {
+          toolId: "invoice",
+          name: "Invoice & Billing",
+          usage: { status: "expiring_soon", isTrial: true, daysLeft: 1 },
+        },
+      ],
+    };
+    rerender(<SubscriptionStatusStrip />);
+    const link = screen.getByRole("link", { name: /Convert to paid/i });
+    expect(link.getAttribute("href")).toBe("/subscription/checkout?tool=invoice&cycle=month");
+  });
 });
