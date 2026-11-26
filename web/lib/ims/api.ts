@@ -54,7 +54,11 @@ export async function imsApi<T>(path: string, init?: { method?: string; body?: u
   return data as T;
 }
 
-export const errorText = (err: unknown): string => (err instanceof Error ? err.message : "Something went wrong");
+export const errorText = (err: unknown): string => {
+  if (err instanceof Error) return err.message || "Something went wrong";
+  if (typeof err === "string" && err.trim()) return err;
+  return "Something went wrong";
+};
 
 export type QueryValue = string | number | boolean | null | undefined;
 export const qs = (params: Record<string, QueryValue>): string => {

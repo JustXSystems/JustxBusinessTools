@@ -129,26 +129,32 @@ function ItemForm({
   const { session } = useIms();
   const { run, busy } = useImsAction();
   const listId = useId().replace(/:/g, "");
-  const [f, setF] = useState<Form>(() => formOf(item, { gstRate: session.settings.defaultGstRate, barcode: initialBarcode }));
+  const defaultGstRate = Number.isFinite(Number(session.settings?.defaultGstRate)) ? Number(session.settings.defaultGstRate) : 18;
+  const [f, setF] = useState<Form>(() => formOf(item, { gstRate: defaultGstRate, barcode: initialBarcode }));
   const [touched, setTouched] = useState(false);
   const [catHint, setCatHint] = useState<string | null>(null);
-  const excise = session.settings.exciseActive;
-  const taxonomy = meta?.taxonomy ?? session.settings.taxonomy;
+  const excise = Boolean(session.settings?.exciseActive);
+  const taxonomy = meta?.taxonomy ?? session.settings?.taxonomy;
   const canSeeCost = meta?.canSeeCost ?? true;
 
   const errors = useMemo(() => validate(f), [f]);
   const shown = touched ? errors : {};
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((s) => ({ ...s, [k]: v }));
 
-  const uniq = (list: ReadonlyArray<string | null | undefined>) => [...new Set(list.filter((x): x is string => Boolean(x && x.trim())))].sort((a, b) => a.localeCompare(b));
-  const categories = uniq([...taxonomy.categories.map((c) => c.name), ...(facets?.categories ?? [])]);
-  const brands = uniq([...taxonomy.brands, ...(facets?.brands ?? [])]);
-  const units = uniq([...taxonomy.units, ...(facets?.units ?? []), "pcs"]);
-  const locations = uniq(taxonomy.locations);
-  const suppliers = meta?.suppliers ?? [];
+  const uniq = (list: ReadonlyArray<unknown>) =>
+    [...new Set(list.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim()))].sort((a, b) => a.localeCompare(b));
+  const rawCategories = Array.isArray(taxonomy?.categories) ? taxonomy.categories : [];
+  const categories = uniq([
+    ...rawCategories.map((c) => (typeof c === "string" ? c : c && typeof c === "object" ? c.name : null)),
+    ...(Array.isArray(facets?.categories) ? facets.categories : []),
+  ]);
+  const brands = uniq([...(Array.isArray(taxonomy?.brands) ? taxonomy.brands : []), ...(Array.isArray(facets?.brands) ? facets.brands : [])]);
+  const units = uniq([...(Array.isArray(taxonomy?.units) ? taxonomy.units : []), ...(Array.isArray(facets?.units) ? facets.units : []), "pcs"]);
+  const locations = uniq(Array.isArray(taxonomy?.locations) ? taxonomy.locations : []);
+  const suppliers = Array.isArray(meta?.suppliers) ? meta.suppliers : [];
 
   const onCategory = (value: string) => {
-    const hit = taxonomy.categories.find((c) => c.name.toLowerCase() === value.trim().toLowerCase());
+    const hit = rawCategories.find((c) => c && typeof c === "object" && typeof c.name === "string" && c.name.toLowerCase() === value.trim().toLowerCase());
     setF((s) => ({
       ...s,
       category: value,
@@ -174,7 +180,7 @@ function ItemForm({
     if (!out) return;
     onSaved?.(out.item);
     if (again && !item) {
-      const fresh = formOf(null, { gstRate: session.settings.defaultGstRate });
+      const fresh = formOf(null, { gstRate: defaultGstRate });
       for (const k of STICKY) (fresh as Record<keyof Form, unknown>)[k] = f[k];
       setF(fresh);
       setTouched(false);

@@ -458,7 +458,7 @@ export function ItemsModule() {
 
       <Loaded state={list} rows={3}>
         {(data) =>
-          data.summary.count === 0 && !showArchived ? (
+          (data.summary?.count ?? all.length) === 0 && !showArchived ? (
             <Card interactive={false}>
               <EmptyState
                 glyph="📦"
@@ -483,26 +483,26 @@ export function ItemsModule() {
             <Stack gap={14}>
               <div className="ims-inv-strip" aria-label="Catalogue summary">
                 <span className="ims-inv-pill">
-                  Items <b>{data.summary.count.toLocaleString("en-IN")}</b>
+                  Items <b>{(data.summary?.count ?? all.length).toLocaleString("en-IN")}</b>
                 </span>
                 <span className="ims-inv-pill">
-                  Units <b>{qtyText(data.summary.units)}</b>
+                  Units <b>{qtyText(data.summary?.units ?? 0)}</b>
                 </span>
                 {canSeeCost ? (
                   <span className="ims-inv-pill">
-                    Value <b>{inr(data.summary.value)}</b>
+                    Value <b>{inr(data.summary?.value ?? 0)}</b>
                   </span>
                 ) : null}
                 <span className="ims-inv-pill">
-                  Low <b style={{ color: "var(--bos-amber-600)" }}>{data.summary.low}</b>
+                  Low <b style={{ color: "var(--bos-amber-600)" }}>{data.summary?.low ?? 0}</b>
                 </span>
                 <span className="ims-inv-pill">
-                  Out <b style={{ color: "var(--bos-coral-600)" }}>{data.summary.out}</b>
+                  Out <b style={{ color: "var(--bos-coral-600)" }}>{data.summary?.out ?? 0}</b>
                 </span>
                 <span className="ims-inv-pill">
-                  Overstock <b>{data.summary.over}</b>
+                  Overstock <b>{data.summary?.over ?? 0}</b>
                 </span>
-                {data.summary.damaged ? (
+                {data.summary?.damaged ? (
                   <span className="ims-inv-pill">
                     Damaged <b>{qtyText(data.summary.damaged)}</b>
                   </span>
@@ -519,7 +519,7 @@ export function ItemsModule() {
                 />
                 <Select size="sm" aria-label="Category" value={category} onChange={(e) => resetPage(setCategory)(e.target.value)} style={{ width: "auto" }}>
                   <option value="">All categories</option>
-                  {data.facets.categories.map((c) => (
+                  {(data.facets?.categories ?? []).map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
@@ -527,7 +527,7 @@ export function ItemsModule() {
                 </Select>
                 <Select size="sm" aria-label="Brand" value={brand} onChange={(e) => resetPage(setBrand)(e.target.value)} style={{ width: "auto" }}>
                   <option value="">All brands</option>
-                  {data.facets.brands.map((c) => (
+                  {(data.facets?.brands ?? []).map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>

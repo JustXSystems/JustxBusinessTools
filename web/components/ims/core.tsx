@@ -165,6 +165,7 @@ export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () =>
       </Alert>
     );
   }
+  const text = errorText(error);
   return (
     <Alert
       tone="coral"
@@ -177,7 +178,7 @@ export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () =>
         ) : undefined
       }
     >
-      {errorText(error)}
+      <span style={{ whiteSpace: text.includes("\n") ? "pre-wrap" : undefined }}>{text}</span>
     </Alert>
   );
 }
