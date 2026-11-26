@@ -77,6 +77,8 @@ export type ToolCatalogSku = {
   featured?: boolean;
   trialDays?: number;
   licensed: boolean;
+  /** True when actively trialing or expiring within 7 days — eligible for paid conversion / early renewal. */
+  canConvertOrRenew?: boolean;
   /** True when SKU has trialDays and this org has never held a license row for the tool. */
   trialEligible?: boolean;
   /** True when tool is enabled for Personal (no-GSTIN) accounts. */

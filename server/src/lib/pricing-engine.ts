@@ -40,6 +40,23 @@ export type PackRecommendation = {
 /** Default annual multiplier when an explicit annualPriceInr is not configured (2 months free). */
 export const DEFAULT_ANNUAL_MONTHS = 10;
 
+/** Paid licenses within this many days of expiry may be renewed early in self-serve checkout. */
+export const RENEWAL_WINDOW_DAYS = 7;
+
+export function isLicenseConvertibleOrRenewable(input: {
+  isTrial?: boolean;
+  periodEnd?: string | null;
+  now?: Date;
+}): boolean {
+  if (input.isTrial) return true;
+  if (!input.periodEnd) return false;
+  const end = new Date(input.periodEnd);
+  if (Number.isNaN(end.getTime())) return false;
+  const now = input.now ?? new Date();
+  const daysLeft = Math.ceil((end.getTime() - now.getTime()) / 86_400_000);
+  return daysLeft <= RENEWAL_WINDOW_DAYS;
+}
+
 export function normalizeBillingCycle(raw: unknown): BillingCycle {
   const v = String(raw ?? "")
     .trim()

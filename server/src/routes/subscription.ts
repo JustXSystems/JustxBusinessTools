@@ -14,6 +14,7 @@ import {
   licensedToolIdSet,
   listActiveLicenses,
   listProfileEntitlements,
+  paidNonExpiringToolIdSet,
   trialConsumedToolIdSet,
 } from "../lib/tool-licenses.js";
 import { activateToolCommerce, deactivateToolCommerce } from "../lib/commerce.js";
@@ -123,12 +124,13 @@ async function quoteForProfile(
   toolIds: string[],
   bundleId?: string,
   billingCycle: BillingCycle = "month",
+  orgId?: number,
 ): Promise<CartQuote | BundleCartQuote> {
-  const licensed = await licensedToolIdSet(profileId);
+  const blocked = await paidNonExpiringToolIdSet(profileId, orgId);
   if (bundleId) {
-    return quoteBundleCart(bundleId, licensed, billingCycle);
+    return quoteBundleCart(bundleId, blocked, billingCycle);
   }
-  return quoteToolCart(toolIds, licensed, billingCycle);
+  return quoteToolCart(toolIds, blocked, billingCycle);
 }
 
 router.get("/", async (_req, res) => {
@@ -329,12 +331,12 @@ router.get("/quote", async (req, res) => {
     const bundleId = String(req.query.bundleId ?? req.query.pack ?? "").trim();
     const billingCycle = normalizeBillingCycle(req.query.cycle ?? req.query.billingCycle);
     const toolIds = parseToolIds(req.query.tools ?? req.query.toolIds);
-    const quote = await quoteForProfile(profileId, toolIds, bundleId || undefined, billingCycle);
-    const [payee, skus, packs, licensed, profileMeta] = await Promise.all([
+    const quote = await quoteForProfile(profileId, toolIds, bundleId || undefined, billingCycle, orgId);
+    const [payee, skus, packs, blockedPaid, profileMeta] = await Promise.all([
       getUpiPayee(),
       listToolSkus(),
       listAvailableProductBundles(),
-      licensedToolIdSet(profileId),
+      paidNonExpiringToolIdSet(profileId, orgId),
       fetchProfileCategoryMeta(profileId, orgId),
     ]);
     let personalUsageMap: Record<string, boolean> = {};
@@ -347,7 +349,7 @@ router.get("/quote", async (req, res) => {
       !bundleId && toolIds.length > 0
         ? recommendPackForSelection({
             selectedToolIds: toolIds,
-            licensedToolIds: licensed,
+            licensedToolIds: blockedPaid,
             skus,
             packs,
             cycle: billingCycle,

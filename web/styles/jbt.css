@@ -13991,6 +13991,14 @@ html[data-scheme="light"] .field textarea {
   margin-top: 22px;
 }
 
+.sub-catalog-head-actions,
+.sub-active-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .sub-scope-toggle {
   display: inline-flex;
   padding: 3px;

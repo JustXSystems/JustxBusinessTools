@@ -147,7 +147,9 @@ export default function SubscriptionPage() {
   const payableIds = useMemo(() => {
     if (catalog.length === 0) return cart;
     const allowed = new Set(
-      catalog.filter((s) => !s.includedFree && !s.licensed && s.priceInr > 0).map((s) => s.toolId),
+      catalog
+        .filter((s) => !s.includedFree && s.priceInr > 0 && (!s.licensed || s.canConvertOrRenew))
+        .map((s) => s.toolId),
     );
     return cart.filter((id) => allowed.has(id));
   }, [cart, catalog]);
@@ -217,7 +219,7 @@ export default function SubscriptionPage() {
   }
 
   function toggle(sku: ToolCatalogSku) {
-    if (sku.licensed || sku.includedFree) return;
+    if (sku.includedFree || (sku.licensed && !sku.canConvertOrRenew)) return;
     if (isIndividual && sku.personalUsage === false) {
       showToast("Add a Business GSTIN in Profile to subscribe to business-only tools");
       return;
@@ -230,7 +232,7 @@ export default function SubscriptionPage() {
   function addPack(pack: ProductPack) {
     const remaining = pack.toolIds.filter((id) => {
       const sku = catalog.find((s) => s.toolId === id);
-      return sku && !sku.includedFree && !sku.licensed && sku.priceInr > 0;
+      return sku && !sku.includedFree && sku.priceInr > 0 && (!sku.licensed || sku.canConvertOrRenew);
     });
     if (remaining.length === 0) {
       showToast("Every tool in this pack is already licensed");
@@ -256,6 +258,30 @@ export default function SubscriptionPage() {
       await refresh();
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Could not start trial");
+    } finally {
+      setTrialBusy(null);
+    }
+  }
+
+  const eligibleTrialTools = useMemo(
+    () =>
+      filteredCatalog.filter(
+        (s) => s.trialEligible && !(isIndividual && s.personalUsage === false),
+      ),
+    [filteredCatalog, isIndividual],
+  );
+
+  async function handleStartAllTrials() {
+    if (eligibleTrialTools.length === 0) return;
+    setTrialBusy("__all__");
+    try {
+      const res = await startToolTrial(eligibleTrialTools.map((s) => s.toolId));
+      showToast(
+        `Started free trials for ${res.granted.length} tool${res.granted.length === 1 ? "" : "s"}`,
+      );
+      await refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Could not start trials");
     } finally {
       setTrialBusy(null);
     }
@@ -561,6 +587,26 @@ export default function SubscriptionPage() {
                           </span>
                         </div>
                         <div className="sub-active-actions">
+                          {isTrial || expiring ? (
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => {
+                                const sku = catalog.find((s) => s.toolId === item.toolId);
+                                if (sku) {
+                                  if (!cart.includes(sku.toolId)) {
+                                    setCart(addToToolCart(sku.toolId));
+                                    setActivePack(null);
+                                  }
+                                  showToast(
+                                    `${sku.name} added to cart for ${isTrial ? "paid conversion" : "early renewal"}`,
+                                  );
+                                }
+                              }}
+                            >
+                              {isTrial ? "Convert to paid" : "Renew now"}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="btn btn-ghost btn-sm"
@@ -695,24 +741,38 @@ export default function SubscriptionPage() {
                     Pick individual tools à la carte, start a free trial, or track real-time record usage.
                   </p>
                 </div>
-                {isIndividual ? (
-                  <div className="sub-scope-toggle" role="group" aria-label="Account catalog scope">
+                <div className="sub-catalog-head-actions">
+                  {eligibleTrialTools.length >= 2 ? (
                     <button
                       type="button"
-                      className={scope === "personal" ? "is-active" : ""}
-                      onClick={() => setScope("personal")}
+                      className="btn btn-secondary btn-sm"
+                      disabled={trialBusy === "__all__"}
+                      onClick={() => void handleStartAllTrials()}
                     >
-                      Personal tools
+                      {trialBusy === "__all__"
+                        ? "Starting trials…"
+                        : `Start all ${eligibleTrialTools.length} free trials`}
                     </button>
-                    <button
-                      type="button"
-                      className={scope === "all" ? "is-active" : ""}
-                      onClick={() => setScope("all")}
-                    >
-                      Preview business suite
-                    </button>
-                  </div>
-                ) : null}
+                  ) : null}
+                  {isIndividual ? (
+                    <div className="sub-scope-toggle" role="group" aria-label="Account catalog scope">
+                      <button
+                        type="button"
+                        className={scope === "personal" ? "is-active" : ""}
+                        onClick={() => setScope("personal")}
+                      >
+                        Personal tools
+                      </button>
+                      <button
+                        type="button"
+                        className={scope === "all" ? "is-active" : ""}
+                        onClick={() => setScope("all")}
+                      >
+                        Preview business suite
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               <div className="sub-controls-bar">
@@ -824,9 +884,9 @@ export default function SubscriptionPage() {
                                   Add GSTIN to unlock
                                 </Link>
                               </div>
-                            ) : !sku.includedFree && !sku.licensed ? (
+                            ) : !sku.includedFree && (!sku.licensed || sku.canConvertOrRenew) ? (
                               <div className="store-sku-actions">
-                                {sku.trialEligible ? (
+                                {!sku.licensed && sku.trialEligible ? (
                                   <button
                                     type="button"
                                     className="btn btn-primary btn-sm"
@@ -841,11 +901,21 @@ export default function SubscriptionPage() {
                                 <button
                                   type="button"
                                   className={
-                                    inCart ? "btn btn-destructive btn-sm" : "btn btn-secondary btn-sm"
+                                    inCart
+                                      ? "btn btn-destructive btn-sm"
+                                      : sku.canConvertOrRenew
+                                        ? "btn btn-primary btn-sm"
+                                        : "btn btn-secondary btn-sm"
                                   }
                                   onClick={() => toggle(sku)}
                                 >
-                                  {inCart ? "Remove" : "Add to cart"}
+                                  {inCart
+                                    ? "Remove"
+                                    : sku.canConvertOrRenew
+                                      ? sku.usage?.isTrial
+                                        ? `Convert · ${formatInr(priced.priceInr)}${priced.periodSuffix}`
+                                        : `Renew · ${formatInr(priced.priceInr)}${priced.periodSuffix}`
+                                      : "Add to cart"}
                                 </button>
                               </div>
                             ) : (

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cycleDurationDays,
   evaluatePackPersonalCompatibility,
+  isLicenseConvertibleOrRenewable,
   normalizeBillingCycle,
   periodEndForCycle,
   recommendPackForSelection,
@@ -207,5 +208,37 @@ describe("pricing-engine", () => {
       personalUsageMap: personalMap,
     });
     expect(rec).toBeNull();
+  });
+
+  it("allows converting active trials and early-renewing licenses within 7 days", () => {
+    const now = new Date("2026-06-01T00:00:00.000Z");
+    expect(
+      isLicenseConvertibleOrRenewable({
+        isTrial: true,
+        periodEnd: "2026-06-15T00:00:00.000Z",
+        now,
+      }),
+    ).toBe(true);
+    expect(
+      isLicenseConvertibleOrRenewable({
+        isTrial: false,
+        periodEnd: "2026-06-06T00:00:00.000Z", // 5 days left -> renewable
+        now,
+      }),
+    ).toBe(true);
+    expect(
+      isLicenseConvertibleOrRenewable({
+        isTrial: false,
+        periodEnd: "2026-06-25T00:00:00.000Z", // 24 days left -> not yet
+        now,
+      }),
+    ).toBe(false);
+    expect(
+      isLicenseConvertibleOrRenewable({
+        isTrial: false,
+        periodEnd: null, // lifetime / no expiry
+        now,
+      }),
+    ).toBe(false);
   });
 });

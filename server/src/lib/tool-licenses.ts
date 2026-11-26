@@ -5,7 +5,10 @@ import {
   paidSkuIds,
   type ToolSku,
 } from "./tool-skus.js";
-import { resolveSkuPricing } from "./pricing-engine.js";
+import {
+  isLicenseConvertibleOrRenewable,
+  resolveSkuPricing,
+} from "./pricing-engine.js";
 import type { ToolUsageTelemetry } from "./usage-summary.js";
 import { notifyLicensesGranted, notifyLicensesRevoked } from "./notification-billing.js";
 import { ensureTablesUtf8mb4UnicodeCi, INNODB_UTF8MB4_UNICODE } from "./mysql-charset.js";
@@ -179,6 +182,42 @@ export async function getProfileToolEntitlement(
 export async function licensedToolIdSet(profileId: number): Promise<Set<string>> {
   const rows = await listActiveLicenses(profileId);
   return new Set(rows.map((r) => r.toolId));
+}
+
+/**
+ * Tool IDs that are already actively paid and outside the 7-day early renewal window.
+ * Tools currently in a free trial or expiring within 7 days are excluded so users can
+ * convert trials to paid or renew early without losing access first.
+ */
+export async function paidNonExpiringToolIdSet(
+  profileId: number,
+  orgId?: number | null,
+): Promise<Set<string>> {
+  const rows = await listActiveLicenses(profileId);
+  const trialTools = new Set<string>();
+  const resolvedOrgId = orgId ?? (await orgIdForProfile(profileId));
+  if (resolvedOrgId) {
+    try {
+      const [itemRows] = await pool.query(
+        `SELECT tool_id FROM org_subscription_items
+         WHERE organization_id = :orgId AND status = 'active' AND source = 'trial'`,
+        { orgId: resolvedOrgId },
+      );
+      for (const r of Array.isArray(itemRows) ? itemRows : []) {
+        trialTools.add(String((r as { tool_id: string }).tool_id));
+      }
+    } catch {
+      /* org_subscription_items may not exist on fresh boot */
+    }
+  }
+  const blocked = new Set<string>();
+  for (const lic of rows) {
+    const isTrial = trialTools.has(lic.toolId);
+    if (!isLicenseConvertibleOrRenewable({ isTrial, periodEnd: lic.periodEnd })) {
+      blocked.add(lic.toolId);
+    }
+  }
+  return blocked;
 }
 
 export async function isToolLicensed(profileId: number, toolId: string): Promise<boolean> {
@@ -531,6 +570,16 @@ export function catalogPayload(
         ? Boolean(opts.personalUsageMap[s.toolId])
         : undefined;
       const usage = opts?.usageByTool?.[s.toolId];
+      const canConvertOrRenew =
+        !includedFree &&
+        licensed.has(s.toolId) &&
+        Boolean(
+          usage &&
+            isLicenseConvertibleOrRenewable({
+              isTrial: usage.isTrial,
+              periodEnd: usage.periodEnd,
+            }),
+        );
       return {
         toolId: s.toolId,
         name: s.name,
@@ -547,6 +596,7 @@ export function catalogPayload(
         featured: s.featured,
         trialDays: s.trialDays,
         licensed: isLicensed,
+        canConvertOrRenew,
         trialEligible:
           !includedFree &&
           !isLicensed &&
