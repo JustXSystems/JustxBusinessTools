@@ -176,6 +176,11 @@ export function DocumentPaper({
                 <td style={{ whiteSpace: "normal" }}>
                   {l.name}
                   {l.sku ? <small>{l.sku}</small> : null}
+                  {l.serials?.length ? (
+                    <small style={{ display: "block", fontFamily: "var(--bos-mono, monospace)", fontSize: 11 }}>
+                      S/N: {l.serials.join(", ")}
+                    </small>
+                  ) : null}
                 </td>
                 <td>{l.hsn || "—"}</td>
                 <td>{qtyText(l.qty, l.unit)}</td>

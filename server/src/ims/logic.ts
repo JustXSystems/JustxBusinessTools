@@ -157,6 +157,8 @@ export type ImsLineInput = {
   gstRate: number;
   /** Purchase orders: how much has arrived so far. */
   receivedQty?: number;
+  /** Optional unit-level serial / barcode scan codes attached to this line. */
+  serials?: string[];
 };
 
 export type ImsLine = Required<Pick<ImsLineInput, "name" | "qty" | "rate" | "gstRate">> &
@@ -207,6 +209,7 @@ export function computeTotals(input: ReadonlyArray<ImsLineInput>, intraState: bo
       discountPct,
       gstRate,
       ...(l.receivedQty !== undefined ? { receivedQty: round3(Math.max(0, num(l.receivedQty))) } : {}),
+      ...(l.serials?.length ? { serials: [...new Set(l.serials.map((s) => String(s).trim()).filter(Boolean))] } : {}),
       gross,
       discount,
       taxable,

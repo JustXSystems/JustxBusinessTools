@@ -192,6 +192,7 @@ const ReceiveInput = z.object({
         itemId: z.string().uuid().optional(),
         qty: z.coerce.number().min(0).max(1e9),
         unitCost: z.coerce.number().min(0).max(1e10).nullable().optional(),
+        serials: z.array(z.string().trim().min(1).max(100)).max(500).optional(),
       }),
     )
     .min(1, "Enter what arrived")
@@ -802,26 +803,59 @@ export function registerPurchase(router: Router, deps: ImsDeps): void {
       for (const r of receipts) {
         const line = po.lines[r.lineIndex];
         if (!line.itemId) continue;
-        movements.push(
-          await postMovement(
-            conn,
-            actor,
-            {
-              itemId: line.itemId,
-              type: "IN",
-              qty: r.qty,
-              unitCost: r.unitCost ?? netUnitCost(line),
-              refType: "po",
-              refId: po.id,
-              refNo: po.poNo,
-              partyId: po.supplierId,
-              partyName: po.supplierName,
-              notes: [input.supplierBillNo ? `Supplier bill ${input.supplierBillNo}` : null, input.notes].filter(Boolean).join(" · ") || null,
-              date,
-            },
-            { allowNegative: settings.allowNegativeStock },
-          ),
+        const unitCost = r.unitCost ?? netUnitCost(line);
+        const uniqueSerials = r.serials?.length ? [...new Set(r.serials.map((s) => s.trim()).filter(Boolean))] : [];
+        if (uniqueSerials.length && uniqueSerials.length !== Math.round(r.qty)) {
+          throw new ImsError(400, `${line.name}: received quantity (${r.qty}) must match the number of scan codes (${uniqueSerials.length}).`);
+        }
+        const mv = await postMovement(
+          conn,
+          actor,
+          {
+            itemId: line.itemId,
+            type: "IN",
+            qty: r.qty,
+            unitCost,
+            refType: "po",
+            refId: po.id,
+            refNo: po.poNo,
+            partyId: po.supplierId,
+            partyName: po.supplierName,
+            notes: [input.supplierBillNo ? `Supplier bill ${input.supplierBillNo}` : null, input.notes].filter(Boolean).join(" · ") || null,
+            date,
+          },
+          { allowNegative: settings.allowNegativeStock },
         );
+        movements.push(mv);
+        if (uniqueSerials.length) {
+          for (const code of uniqueSerials) {
+            const exists = await one<{ id: string }>(
+              conn,
+              `SELECT id FROM ims_item_serials WHERE tenant_id = :tenantId AND serial_no = :code LIMIT 1`,
+              { tenantId: actor.tenantId, code },
+            );
+            if (exists) throw conflict(`Scan code "${code}" is already registered in stock.`);
+            await exec(
+              conn,
+              `INSERT INTO ims_item_serials (id, tenant_id, item_id, serial_no, status, purchase_price, in_movement_id, notes, created_by)
+               VALUES (:sid, :tenantId, :itemId, :code, 'in_stock', :cost, :mvId, :notes, :userId)`,
+              {
+                sid: randomUUID(),
+                tenantId: actor.tenantId,
+                itemId: line.itemId,
+                code,
+                cost: unitCost,
+                mvId: mv.id,
+                notes: [po.poNo, input.supplierBillNo ? `Bill ${input.supplierBillNo}` : null].filter(Boolean).join(" · ") || null,
+                userId: actor.userId,
+              },
+            );
+          }
+          await exec(conn, `UPDATE ims_items SET track_serials = 1 WHERE tenant_id = :tenantId AND id = :itemId`, {
+            tenantId: actor.tenantId,
+            itemId: line.itemId,
+          });
+        }
       }
 
       const nextStatus = poReceiptStatus(applied.lines);
@@ -864,8 +898,11 @@ export function registerPurchase(router: Router, deps: ImsDeps): void {
 }
 
 /** Maps `{lineIndex | itemId, qty}` to concrete line indexes (an item id picks its first line with quantity still open). */
-function resolveReceipts(lines: ReadonlyArray<PoLine>, input: ReadonlyArray<{ lineIndex?: number; itemId?: string; qty: number; unitCost?: number | null }>): PoReceipt[] {
-  const out: PoReceipt[] = [];
+function resolveReceipts(
+  lines: ReadonlyArray<PoLine>,
+  input: ReadonlyArray<{ lineIndex?: number; itemId?: string; qty: number; unitCost?: number | null; serials?: string[] }>,
+): Array<PoReceipt & { serials?: string[] }> {
+  const out: Array<PoReceipt & { serials?: string[] }> = [];
   for (const r of input) {
     if (!(r.qty > 0)) continue;
     let idx = r.lineIndex;
@@ -874,7 +911,7 @@ function resolveReceipts(lines: ReadonlyArray<PoLine>, input: ReadonlyArray<{ li
       if (idx < 0) idx = lines.findIndex((l) => l.itemId === r.itemId);
     }
     if (idx === undefined || idx < 0) throw badRequest("Each received line needs a line number or an item on this purchase order");
-    out.push({ lineIndex: idx, qty: round3(r.qty), unitCost: r.unitCost ?? null });
+    out.push({ lineIndex: idx, qty: round3(r.qty), unitCost: r.unitCost ?? null, ...(r.serials?.length ? { serials: r.serials } : {}) });
   }
   return out;
 }

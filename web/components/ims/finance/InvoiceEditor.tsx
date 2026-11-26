@@ -66,7 +66,7 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
   const [termsDays, setTermsDays] = useState<number | null>(inv ? null : settings.paymentTermsDays);
   const [dueDate, setDueDate] = useState(inv?.dueDate ?? addDaysISO(today, settings.paymentTermsDays));
   const [lines, setLines] = useState<EditableLine[]>(() =>
-    inv?.lines?.length ? inv.lines.map((l) => ({ key: lineKey(), itemId: l.itemId ?? null, name: l.name, sku: l.sku ?? null, hsn: l.hsn ?? null, unit: l.unit ?? null, qty: l.qty, rate: l.rate, discountPct: l.discountPct, gstRate: l.gstRate })) : [],
+    inv?.lines?.length ? inv.lines.map((l) => ({ key: lineKey(), itemId: l.itemId ?? null, name: l.name, sku: l.sku ?? null, hsn: l.hsn ?? null, unit: l.unit ?? null, qty: l.qty, rate: l.rate, discountPct: l.discountPct, gstRate: l.gstRate, ...(l.serials?.length ? { serials: l.serials } : {}) })) : [],
   );
   const [shippingCharges, setShippingCharges] = useState(String(inv?.shippingCharges ? inv.shippingCharges : ""));
   const [shippingGstRate, setShippingGstRate] = useState(String(inv?.shippingGstRate ?? settings.defaultGstRate));
@@ -522,6 +522,7 @@ function EditorForm({ draft, onClose }: { draft: InvoiceDetail | null; onClose: 
             onChange={setLines}
             intraState={intraState}
             price="selling"
+            allowSerials
             roundToRupee={roundToRupee}
             readOnly={stockViaDc}
             currencyCode={currencyCode || baseCurrency}

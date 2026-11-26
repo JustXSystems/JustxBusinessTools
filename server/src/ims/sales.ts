@@ -532,6 +532,7 @@ export const LineInput = z.object({
   rate: z.coerce.number().min(0).max(1e10),
   discountPct: z.coerce.number().min(0).max(100).optional(),
   gstRate: z.coerce.number().min(0).max(100),
+  serials: z.array(z.string().trim().min(1).max(100)).max(500).optional(),
 });
 
 const InvoiceInput = z.object({
@@ -950,7 +951,11 @@ async function issueDraft(
     for (const l of lines) {
       if (!l.itemId || !(l.qty > 0)) continue;
       try {
-        await postMovement(
+        const uniqueSerials = l.serials?.length ? [...new Set(l.serials.map((s) => s.trim()).filter(Boolean))] : [];
+        if (uniqueSerials.length && uniqueSerials.length !== Math.round(l.qty)) {
+          throw badRequest(`${l.name}: quantity (${l.qty}) must match the number of scan codes selected (${uniqueSerials.length}).`);
+        }
+        const mv = await postMovement(
           conn,
           actor,
           {
@@ -967,6 +972,18 @@ async function issueDraft(
           },
           { allowNegative: settings.allowNegativeStock },
         );
+        if (uniqueSerials.length) {
+          for (const code of uniqueSerials) {
+            const found = await one<{ id: string; item_id: string; status: string }>(
+              conn,
+              `SELECT id, item_id, status FROM ims_item_serials WHERE tenant_id = :tenantId AND serial_no = :code LIMIT 1 FOR UPDATE`,
+              { tenantId: actor.tenantId, code },
+            );
+            if (!found || found.item_id !== l.itemId) throw conflict(`Scan code "${code}" is not registered on ${l.name}.`);
+            if (found.status !== "in_stock") throw conflict(`Scan code "${code}" is already marked ${found.status.replace(/_/g, " ")}.`);
+            await exec(conn, `UPDATE ims_item_serials SET status = 'out', out_movement_id = :mvId WHERE id = :id`, { id: found.id, mvId: mv.id });
+          }
+        }
       } catch (err) {
         if (err instanceof ImsError && err.status === 404) throw badRequest(`“${l.name}” is no longer in your items. Remove the line or pick the item again.`);
         throw err;
@@ -1085,6 +1102,15 @@ async function reverseInvoiceStock(conn: PoolConnection, actor: ImsActor, row: I
       },
       { allowNegative: true },
     );
+    if (l.serials?.length) {
+      for (const code of l.serials) {
+        await exec(
+          conn,
+          `UPDATE ims_item_serials SET status = 'in_stock', out_movement_id = NULL WHERE tenant_id = :tenantId AND item_id = :itemId AND serial_no = :code`,
+          { tenantId: actor.tenantId, itemId: l.itemId, code },
+        );
+      }
+    }
   }
 }
 

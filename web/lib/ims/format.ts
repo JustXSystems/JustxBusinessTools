@@ -168,6 +168,7 @@ export type ImsLineInput = {
   discountPct?: number;
   gstRate: number;
   receivedQty?: number;
+  serials?: string[];
 };
 
 export type ImsLine = ImsLineInput & { discountPct: number; gross: number; discount: number; taxable: number; tax: number; amount: number };

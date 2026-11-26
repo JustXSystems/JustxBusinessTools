@@ -188,7 +188,7 @@ export type PoInput = {
 };
 
 export type ReceiveInput = {
-  lines: Array<{ lineIndex: number; qty: number; unitCost?: number | null }>;
+  lines: Array<{ lineIndex: number; qty: number; unitCost?: number | null; serials?: string[] }>;
   date?: string;
   supplierBillNo?: string | null;
   supplierBillDate?: string | null;

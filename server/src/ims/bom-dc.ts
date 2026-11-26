@@ -245,6 +245,37 @@ async function loadDcInvoiceLink(
   };
 }
 
+async function syncDcLineSerials(
+  conn: PoolConnection,
+  tenantId: number,
+  itemId: string,
+  remarks: string | null | undefined,
+  mode: "out" | "in_stock",
+  mvId: string,
+): Promise<void> {
+  if (!remarks?.trim()) return;
+  const cleaned = remarks.replace(/\b(?:s\/n|sn|serials?)\s*[:#-]?\s*/gi, " ");
+  const tokens = [...new Set(cleaned.split(/[\s,;|]+/).map((t) => t.trim()).filter((t) => t.length >= 2 && t.length <= 100))];
+  if (!tokens.length) return;
+  for (const code of tokens) {
+    if (mode === "out") {
+      await exec(
+        conn,
+        `UPDATE ims_item_serials SET status = 'out', out_movement_id = :mvId
+         WHERE tenant_id = :tenantId AND item_id = :itemId AND serial_no = :code AND status = 'in_stock'`,
+        { tenantId, itemId, code, mvId },
+      );
+    } else {
+      await exec(
+        conn,
+        `UPDATE ims_item_serials SET status = 'in_stock', out_movement_id = NULL
+         WHERE tenant_id = :tenantId AND item_id = :itemId AND serial_no = :code AND status = 'out'`,
+        { tenantId, itemId, code },
+      );
+    }
+  }
+}
+
 async function loadDcLines(db: Queryable, tenantId: number, dcId: string): Promise<BomDcLine[]> {
   const list = await rows<DcLineRow>(
     db,
@@ -1332,26 +1363,26 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
       const movements = [];
       for (const line of lines) {
         if (!line.itemId || !(line.qty > 0)) continue;
-        movements.push(
-          await postMovement(
-            conn,
-            actor,
-            {
-              itemId: line.itemId,
-              type: "OUT",
-              qty: line.qty,
-              refType: "dc",
-              refId: id,
-              refNo: locked.doc_no,
-              partyId: freshBom.partyId ?? null,
-              partyName: freshBom.customerName,
-              reason: "Delivery challan (BOM)",
-              notes: freshBom.title || freshBom.capacityLabel || null,
-              date,
-            },
-            { allowNegative: settings.allowNegativeStock },
-          ),
+        const mv = await postMovement(
+          conn,
+          actor,
+          {
+            itemId: line.itemId,
+            type: "OUT",
+            qty: line.qty,
+            refType: "dc",
+            refId: id,
+            refNo: locked.doc_no,
+            partyId: freshBom.partyId ?? null,
+            partyName: freshBom.customerName,
+            reason: "Delivery challan (BOM)",
+            notes: freshBom.title || freshBom.capacityLabel || null,
+            date,
+          },
+          { allowNegative: settings.allowNegativeStock },
         );
+        movements.push(mv);
+        await syncDcLineSerials(conn, actor.tenantId, line.itemId, line.remarks, "out", mv.id);
       }
       if (!movements.length) throw conflict("No stock lines to post");
 
@@ -1573,26 +1604,26 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
         if (!bumped.affectedRows) {
           throw conflict(`Could not return ${p.qty} ${p.line.unit} for “${p.line.description}” — exceed delivered qty or concurrent return`);
         }
-        movements.push(
-          await postMovement(
-            conn,
-            actor,
-            {
-              itemId: p.line.itemId!,
-              type: "RETURN_IN",
-              qty: p.qty,
-              refType: "dc",
-              refId: id,
-              refNo: locked.doc_no,
-              partyId: freshBom?.partyId ?? null,
-              partyName: freshBom?.customerName ?? null,
-              reason: "Delivery challan return (unused)",
-              notes: `Return ${returnNo} · ${p.remarks || p.line.description}`,
-              date: returnDate,
-            },
-            { allowNegative: settings.allowNegativeStock },
-          ),
+        const mv = await postMovement(
+          conn,
+          actor,
+          {
+            itemId: p.line.itemId!,
+            type: "RETURN_IN",
+            qty: p.qty,
+            refType: "dc",
+            refId: id,
+            refNo: locked.doc_no,
+            partyId: freshBom?.partyId ?? null,
+            partyName: freshBom?.customerName ?? null,
+            reason: "Delivery challan return (unused)",
+            notes: `Return ${returnNo} · ${p.remarks || p.line.description}`,
+            date: returnDate,
+          },
+          { allowNegative: settings.allowNegativeStock },
         );
+        movements.push(mv);
+        await syncDcLineSerials(conn, actor.tenantId, p.line.itemId!, p.remarks || p.line.remarks, "in_stock", mv.id);
       }
 
       await syncBomIssuedFromDcs(conn, actor.tenantId, locked.bom_doc_id, stockLinesOf(freshBom!));
@@ -1855,25 +1886,25 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
       for (const line of lines) {
         // Only return what is still out (qty already returned via partial returns stays as history).
         if (!line.itemId || !(line.netQty > 0)) continue;
-        movements.push(
-          await postMovement(
-            conn,
-            actor,
-            {
-              itemId: line.itemId,
-              type: "RETURN_IN",
-              qty: line.netQty,
-              refType: "dc",
-              refId: id,
-              refNo: locked.doc_no,
-              partyId: freshBom?.partyId ?? null,
-              partyName: freshBom?.customerName ?? null,
-              reason: line.returnedQty > 0 ? "Delivery challan reverse (remaining after returns)" : "Delivery challan reverse",
-              date,
-            },
-            { allowNegative: settings.allowNegativeStock },
-          ),
+        const mv = await postMovement(
+          conn,
+          actor,
+          {
+            itemId: line.itemId,
+            type: "RETURN_IN",
+            qty: line.netQty,
+            refType: "dc",
+            refId: id,
+            refNo: locked.doc_no,
+            partyId: freshBom?.partyId ?? null,
+            partyName: freshBom?.customerName ?? null,
+            reason: line.returnedQty > 0 ? "Delivery challan reverse (remaining after returns)" : "Delivery challan reverse",
+            date,
+          },
+          { allowNegative: settings.allowNegativeStock },
         );
+        movements.push(mv);
+        await syncDcLineSerials(conn, actor.tenantId, line.itemId, line.remarks, "in_stock", mv.id);
       }
       await exec(
         conn,

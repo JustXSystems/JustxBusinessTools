@@ -4,10 +4,11 @@ import "./purchase.css";
 import { useMemo, useState } from "react";
 import { Alert, Button, Dialog, Field, FormGrid, Input, Switch, Textarea } from "@/components/bos";
 import { computeTotals, dateLabel, inrExact, num, qtyText, round2, round3, todayLocal } from "@/lib/ims/format";
+import { parseSerialList } from "@/lib/ims/inventory-a";
 import { purchase, type PoBill, type PurchaseOrder } from "@/lib/ims/purchase";
 import { useIms, useImsAction } from "../core";
 
-type Draft = { qty: string; cost: string };
+type Draft = { qty: string; cost: string; serialsText: string; showSerials: boolean };
 
 const remainingOf = (l: { qty: number; receivedQty: number }) => round3(Math.max(0, l.qty - l.receivedQty));
 const netCost = (l: { rate: number; discountPct: number }) => round2(l.rate * (1 - (l.discountPct || 0) / 100));
@@ -28,7 +29,7 @@ function ReceiveBody({ order, onClose }: { order: PurchaseOrder; onClose: () => 
   const { navigate, can } = useIms();
   const { run, busy } = useImsAction();
   const today = todayLocal();
-  const [drafts, setDrafts] = useState<Draft[]>(() => order.lines.map((l) => ({ qty: String(remainingOf(l) || ""), cost: String(netCost(l)) })));
+  const [drafts, setDrafts] = useState<Draft[]>(() => order.lines.map((l) => ({ qty: String(remainingOf(l) || ""), cost: String(netCost(l)), serialsText: "", showSerials: false })));
   const [date, setDate] = useState(today);
   const [billNo, setBillNo] = useState("");
   const [billDate, setBillDate] = useState("");
@@ -39,12 +40,22 @@ function ReceiveBody({ order, onClose }: { order: PurchaseOrder; onClose: () => 
 
   const errors = order.lines.map((l, i) => {
     const q = num(drafts[i]?.qty);
+    const serials = parseSerialList(drafts[i]?.serialsText ?? "");
     if (drafts[i]?.qty.trim() && (!(q >= 0) || Number.isNaN(Number(drafts[i].qty)))) return "Enter a number";
     if (q > remainingOf(l) + 0.0005) return `Max ${qtyText(remainingOf(l))}`;
     if (drafts[i]?.cost.trim() && !(num(drafts[i].cost) >= 0)) return "Invalid cost";
+    if (serials.length && serials.length !== Math.round(q)) return `Qty (${q}) must match scan codes (${serials.length})`;
     return null;
   });
-  const receiving = order.lines.map((l, i) => ({ l, i, qty: round3(num(drafts[i]?.qty)), cost: drafts[i]?.cost.trim() ? round2(num(drafts[i].cost)) : netCost(l) })).filter((r) => r.qty > 0);
+  const receiving = order.lines
+    .map((l, i) => ({
+      l,
+      i,
+      qty: round3(num(drafts[i]?.qty)),
+      cost: drafts[i]?.cost.trim() ? round2(num(drafts[i].cost)) : netCost(l),
+      serials: parseSerialList(drafts[i]?.serialsText ?? ""),
+    }))
+    .filter((r) => r.qty > 0);
   const dateError = date > today ? "Can't be in the future" : !date ? "Pick a date" : null;
   const billTotal = useMemo(
     () => computeTotals(receiving.map((r) => ({ name: r.l.name, qty: r.qty, rate: r.cost, gstRate: r.l.gstRate })), order.intraState).grandTotal,
@@ -100,7 +111,12 @@ function ReceiveBody({ order, onClose }: { order: PurchaseOrder; onClose: () => 
       "receive",
       () =>
         purchase.receiveOrder(order.id, {
-          lines: receiving.map((r) => ({ lineIndex: r.i, qty: r.qty, unitCost: r.cost === netCost(r.l) ? null : r.cost })),
+          lines: receiving.map((r) => ({
+            lineIndex: r.i,
+            qty: r.qty,
+            unitCost: r.cost === netCost(r.l) ? null : r.cost,
+            ...(r.serials.length ? { serials: r.serials } : {}),
+          })),
           date,
           supplierBillNo: billNo.trim() || null,
           supplierBillDate: billDate || null,
@@ -115,10 +131,10 @@ function ReceiveBody({ order, onClose }: { order: PurchaseOrder; onClose: () => 
   return (
     <div className="ims-xl">
       <div className="ims-row" style={{ marginBottom: 10 }}>
-        <Button size="sm" onClick={() => setDrafts(order.lines.map((l) => ({ qty: String(remainingOf(l) || ""), cost: String(netCost(l)) })))}>
+        <Button size="sm" onClick={() => setDrafts((d) => order.lines.map((l, i) => ({ ...d[i], qty: String(remainingOf(l) || ""), cost: String(netCost(l)) })))}>
           Fill remaining
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setDrafts((d) => d.map((x) => ({ ...x, qty: "" })))}>
+        <Button size="sm" variant="ghost" onClick={() => setDrafts((d) => d.map((x) => ({ ...x, qty: "", serialsText: "" })))}>
           Clear quantities
         </Button>
       </div>
@@ -137,12 +153,41 @@ function ReceiveBody({ order, onClose }: { order: PurchaseOrder; onClose: () => 
           <tbody>
             {order.lines.map((l, i) => {
               const left = remainingOf(l);
+              const d = drafts[i];
+              const serialCount = parseSerialList(d?.serialsText ?? "").length;
               return (
                 <tr key={`${l.itemId ?? l.name}-${i}`}>
                   <td>
                     <span className="ims-cell-stack">
                       <span className="ims-strong">{l.name}</span>
                       <small>{l.itemId ? [l.sku, l.unit].filter(Boolean).join(" · ") || "Stock item" : "Not a stock item — billed only"}</small>
+                      {l.itemId && left > 0 ? (
+                        <div style={{ marginTop: 4 }}>
+                          <button
+                            type="button"
+                            className="ims-link"
+                            style={{ fontSize: 12 }}
+                            onClick={() => setRow(i, { showSerials: !d?.showSerials })}
+                          >
+                            {d?.showSerials ? "Hide scan codes" : serialCount ? `Scan codes (${serialCount})` : "+ Scan unit serials"}
+                          </button>
+                          {d?.showSerials ? (
+                            <div style={{ marginTop: 6 }}>
+                              <Textarea
+                                rows={2}
+                                value={d.serialsText}
+                                placeholder="Scan or paste unit serials (one per line or comma-separated)…"
+                                onChange={(e) => {
+                                  const next = e.target.value;
+                                  const parsed = parseSerialList(next);
+                                  setRow(i, { serialsText: next, ...(parsed.length ? { qty: String(parsed.length) } : {}) });
+                                }}
+                              />
+                              <small style={{ color: "var(--bos-ink-3)" }}>{serialCount} unique code{serialCount === 1 ? "" : "s"} entered</small>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </span>
                   </td>
                   <td className="is-num">{qtyText(l.qty, l.unit)}</td>

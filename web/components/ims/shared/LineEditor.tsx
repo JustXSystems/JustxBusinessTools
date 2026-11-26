@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { BosIcon, Button, Input, Select, Segmented } from "@/components/bos";
-import type { ImsItem } from "@/lib/ims/api";
+import { useEffect, useMemo, useState } from "react";
+import { BosIcon, Button, Dialog, Input, Select, Segmented } from "@/components/bos";
+import { ims, type ImsItem, type ImsItemSerial } from "@/lib/ims/api";
 import { computeTotals, gstRatesFor, moneyFmt, num, type ImsLineInput, type ImsTotals } from "@/lib/ims/format";
 import { useIms } from "../core";
 import { ItemPickerDialog } from "./pickers";
@@ -48,6 +48,7 @@ export function LineEditor({
   intraState,
   price,
   allowFreeText = true,
+  allowSerials = false,
   roundToRupee = false,
   readOnly = false,
   currencyCode,
@@ -58,6 +59,7 @@ export function LineEditor({
   intraState: boolean;
   price: "selling" | "purchase";
   allowFreeText?: boolean;
+  allowSerials?: boolean;
   roundToRupee?: boolean;
   readOnly?: boolean;
   /** Document currency; amounts show the ISO code when it is not INR. */
@@ -69,6 +71,7 @@ export function LineEditor({
   const { session } = useIms();
   const gstOptions = useMemo(() => gstRatesFor(session.settings), [session.settings]);
   const [picking, setPicking] = useState(false);
+  const [serialLineKey, setSerialLineKey] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [scope, setScope] = useState<Scope>("all");
   const [bulkGst, setBulkGst] = useState("");
@@ -219,6 +222,21 @@ export function LineEditor({
                           <>
                             <span className="ims-strong">{l.name || "—"}</span>
                             <small>{[l.sku, l.hsn ? `HSN ${l.hsn}` : null, l.unit].filter(Boolean).join(" · ")}</small>
+                            {l.serials?.length ? (
+                              <small className="ims-mono" style={{ fontSize: 11 }}>
+                                S/N: {l.serials.join(", ")}
+                              </small>
+                            ) : null}
+                            {allowSerials && l.itemId && !readOnly ? (
+                              <button
+                                type="button"
+                                className="ims-link"
+                                style={{ fontSize: 11.5, textAlign: "left", marginTop: 2 }}
+                                onClick={() => setSerialLineKey(l.key)}
+                              >
+                                {l.serials?.length ? `Edit serials (${l.serials.length})` : "+ Pick unit serials"}
+                              </button>
+                            ) : null}
                           </>
                         ) : (
                           <Input
@@ -321,7 +339,130 @@ export function LineEditor({
       )}
       <TotalsBlock totals={totals} intraState={intraState} currencyCode={currencyCode} baseEquivalent={baseEquivalent} />
       <ItemPickerDialog open={picking} onClose={() => setPicking(false)} onPick={addItem} price={price} />
+      {allowSerials && serialLineKey ? (
+        <LineSerialPickerDialog
+          line={lines.find((l) => l.key === serialLineKey) ?? null}
+          onClose={() => setSerialLineKey(null)}
+          onSave={(serials) => {
+            update(serialLineKey, { serials: serials.length ? serials : undefined, ...(serials.length ? { qty: serials.length } : {}) });
+            setSerialLineKey(null);
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function LineSerialPickerDialog({
+  line,
+  onClose,
+  onSave,
+}: {
+  line: EditableLine | null;
+  onClose: () => void;
+  onSave: (serials: string[]) => void;
+}) {
+  const [avail, setAvail] = useState<ImsItemSerial[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [q, setQ] = useState("");
+  const [selected, setSelected] = useState<string[]>(() => line?.serials ?? []);
+
+  useEffect(() => {
+    if (!line?.itemId) return;
+    let alive = true;
+    setLoading(true);
+    ims
+      .itemSerials(line.itemId, { status: "in_stock", limit: 200 })
+      .then((res) => {
+        if (alive) setAvail(res.serials ?? []);
+      })
+      .catch(() => {
+        if (alive) setAvail([]);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [line?.itemId]);
+
+  if (!line) return null;
+  const query = q.trim().toLowerCase();
+  const filtered = query ? avail.filter((s) => s.serialNo.toLowerCase().includes(query)) : avail;
+  const toggle = (code: string) => setSelected((cur) => (cur.includes(code) ? cur.filter((x) => x !== code) : [...cur, code]));
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={`Unit serials — ${line.name}`}
+      description="Pick in-stock scan codes for this line. Selected serials are printed on the document and marked out when issued."
+      actions={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={() => onSave(selected)}>
+            Apply ({selected.length})
+          </Button>
+        </>
+      }
+    >
+      <div className="bos-stack" style={{ gap: 12 }}>
+        <Input
+          size="sm"
+          placeholder="Filter or scan a code and press Enter…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && q.trim()) {
+              e.preventDefault();
+              const exact = avail.find((s) => s.serialNo.toLowerCase() === q.trim().toLowerCase());
+              if (exact) {
+                if (!selected.includes(exact.serialNo)) setSelected((cur) => [...cur, exact.serialNo]);
+                setQ("");
+              }
+            }
+          }}
+        />
+        {loading ? (
+          <p className="ims-muted" style={{ fontSize: 13 }}>
+            Loading in-stock scan codes…
+          </p>
+        ) : !avail.length ? (
+          <p className="ims-muted" style={{ fontSize: 13 }}>
+            No in-stock scan codes are registered for this item yet.
+          </p>
+        ) : (
+          <div className="ims-row" style={{ flexWrap: "wrap", gap: 6, maxHeight: 240, overflowY: "auto" }}>
+            {filtered.map((s) => {
+              const active = selected.includes(s.serialNo);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggle(s.serialNo)}
+                  className="ims-mono"
+                  style={{
+                    fontSize: 12,
+                    padding: "4px 9px",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    border: active ? "1px solid var(--bos-teal)" : "1px solid var(--bos-border)",
+                    background: active ? "var(--bos-teal-soft, #ccfbf1)" : "var(--bos-surface)",
+                    color: active ? "var(--bos-teal-ink, #115e59)" : "var(--bos-ink)",
+                  }}
+                >
+                  {active ? "✓ " : ""}
+                  {s.serialNo}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Dialog>
   );
 }
 
