@@ -75,6 +75,11 @@ type TenantSub = {
   accessMode?: string;
   recordLimit?: number | null;
   provider?: string | null;
+  userCategory?: "individual" | "business" | "enterprise";
+  branchCount?: number;
+  activeLicenses?: number;
+  activeTrials?: number;
+  totalRecords?: number;
 };
 
 type TenantSummary = {
@@ -83,7 +88,13 @@ type TenantSummary = {
   limited: number;
   renewingSoon: number;
   totalMrr: number;
+  personal?: number;
+  business?: number;
+  enterprise?: number;
+  activeTrials?: number;
 };
+
+type TenantCategoryFilter = "all" | "individual" | "business" | "enterprise" | "trials";
 
 type Notice = {
   id: number;
@@ -134,6 +145,7 @@ export default function AdminSubscriptionsPage() {
     totalMrr: 0,
   });
   const [tenantQuery, setTenantQuery] = useState("");
+  const [tenantCategoryFilter, setTenantCategoryFilter] = useState<TenantCategoryFilter>("all");
   const [notices, setNotices] = useState<Notice[]>([]);
   const [renewals, setRenewals] = useState<RenewalCandidate[]>([]);
   const [editingId, setEditingId] = useState<string | null>("free");
@@ -424,9 +436,19 @@ export default function AdminSubscriptionsPage() {
 
   const unlimitedEdit = editing?.accessMode === "unlimited" || editingId === "pro";
   const visibleTenants = tenants.filter((t) => {
+    if (tenantCategoryFilter === "trials" && !(t.activeTrials && t.activeTrials > 0)) return false;
+    if (
+      tenantCategoryFilter !== "all" &&
+      tenantCategoryFilter !== "trials" &&
+      t.userCategory !== tenantCategoryFilter
+    ) {
+      return false;
+    }
     const q = tenantQuery.trim().toLowerCase();
     if (!q) return true;
-    return `${t.organizationName} ${t.planName} ${t.status} ${t.organizationId}`.toLowerCase().includes(q);
+    return `${t.organizationName} ${t.planName} ${t.status} ${t.organizationId} ${t.userCategory ?? ""}`
+      .toLowerCase()
+      .includes(q);
   });
   const queuedNotices = notices.filter((n) => !n.sentAt).length;
 
@@ -450,6 +472,39 @@ export default function AdminSubscriptionsPage() {
             {t.periodEnd ? ` · ends ${t.periodEnd}` : ""}
             {t.daysLeft != null ? ` · ${t.daysLeft}d left` : ""}
           </div>
+        </div>
+      ),
+    },
+    {
+      key: "category",
+      header: "Category",
+      cell: (t) => (
+        <Badge
+          auto
+          tone={
+            t.userCategory === "enterprise"
+              ? "blue"
+              : t.userCategory === "individual"
+                ? "neutral"
+                : "emerald"
+          }
+        >
+          {t.userCategory === "enterprise"
+            ? `Enterprise (${t.branchCount ?? 2})`
+            : t.userCategory === "individual"
+              ? "Personal"
+              : "Business"}
+        </Badge>
+      ),
+    },
+    {
+      key: "usage",
+      header: "Licenses & Usage",
+      cell: (t) => (
+        <div className="admin-cc-cell-sub">
+          {t.activeLicenses ?? 0} licensed
+          {(t.activeTrials ?? 0) > 0 ? ` · ${t.activeTrials} trial` : ""}
+          {` · ${t.totalRecords ?? 0} rec`}
         </div>
       ),
     },
@@ -677,14 +732,42 @@ export default function AdminSubscriptionsPage() {
       {tab === "tenants" ? (
         <AdminSection
           title="Tenant subscriptions"
-          description="All orgs in scope with plan, period, and quick assign."
+          description={`All orgs in scope with user category, license/usage telemetry, and quick assign.${
+            tenantSummary.personal != null
+              ? ` Personal: ${tenantSummary.personal} · Business: ${tenantSummary.business ?? 0} · Enterprise: ${tenantSummary.enterprise ?? 0}${
+                  tenantSummary.activeTrials ? ` · Active trials: ${tenantSummary.activeTrials}` : ""
+                }`
+              : ""
+          }`}
           actions={
-            <SearchInput
-              value={tenantQuery}
-              onChange={(e) => setTenantQuery(e.target.value)}
-              placeholder="Filter tenants…"
-              aria-label="Filter tenants"
-            />
+            <>
+              <div className="admin-cc-actions" role="group" aria-label="Filter by user category">
+                {(
+                  [
+                    ["all", "All"],
+                    ["individual", `Personal (${tenantSummary.personal ?? 0})`],
+                    ["business", `Business (${tenantSummary.business ?? 0})`],
+                    ["enterprise", `Enterprise (${tenantSummary.enterprise ?? 0})`],
+                    ["trials", `Trials (${tenantSummary.activeTrials ?? 0})`],
+                  ] as const
+                ).map(([val, label]) => (
+                  <Button
+                    key={val}
+                    variant={tenantCategoryFilter === val ? "primary" : "ghost"}
+                    size="sm"
+                    onClick={() => setTenantCategoryFilter(val)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              <SearchInput
+                value={tenantQuery}
+                onChange={(e) => setTenantQuery(e.target.value)}
+                placeholder="Filter tenants…"
+                aria-label="Filter tenants"
+              />
+            </>
           }
         >
           {visibleTenants.length === 0 ? (

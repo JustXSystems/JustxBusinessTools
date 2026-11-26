@@ -15,6 +15,8 @@ import {
   runExpiredSubscriptionJob,
 } from "../../lib/subscriptions/renewal-notices.js";
 import { notifySubscriptionAssigned } from "../../lib/notification-billing.js";
+import { resolveUserCategory } from "../../lib/pricing-engine.js";
+import { isValidGstin, normalizeGstin } from "../../lib/gstin.js";
 
 const router = Router();
 
@@ -165,18 +167,114 @@ router.get("/active", async (_req, res) => {
     orgScopeParams(),
   );
   const list = Array.isArray(rows) ? rows : [];
+
+  // Enrich each org with user category (GSTIN + branch count), active licenses/trials, and record usage.
+  const orgCategoryMeta = new Map<
+    number,
+    { branchCount: number; hasValidGstin: boolean; activeLicenses: number; activeTrials: number; totalRecords: number }
+  >();
+  const ensureMeta = (orgId: number) => {
+    let cur = orgCategoryMeta.get(orgId);
+    if (!cur) {
+      cur = { branchCount: 0, hasValidGstin: false, activeLicenses: 0, activeTrials: 0, totalRecords: 0 };
+      orgCategoryMeta.set(orgId, cur);
+    }
+    return cur;
+  };
+
+  try {
+    const [bpRows] = await pool.query(
+      `SELECT organization_id, gstin FROM business_profiles WHERE ${orgEqualsSql("organization_id")}`,
+      orgScopeParams(),
+    );
+    for (const row of Array.isArray(bpRows) ? bpRows : []) {
+      const r = row as { organization_id?: number; gstin?: string | null };
+      const orgId = Number(r.organization_id);
+      if (!orgId) continue;
+      const m = ensureMeta(orgId);
+      m.branchCount += 1;
+      if (isValidGstin(normalizeGstin(r.gstin))) m.hasValidGstin = true;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const [licRows] = await pool.query(
+      `SELECT bp.organization_id, COUNT(*) AS cnt
+       FROM profile_tool_licenses l
+       INNER JOIN business_profiles bp ON bp.id = l.business_profile_id
+       WHERE ${orgEqualsSql("bp.organization_id")}
+         AND l.status = 'active'
+         AND (l.current_period_end IS NULL OR l.current_period_end > NOW())
+       GROUP BY bp.organization_id`,
+      orgScopeParams(),
+    );
+    for (const row of Array.isArray(licRows) ? licRows : []) {
+      const r = row as { organization_id?: number; cnt?: number };
+      const orgId = Number(r.organization_id);
+      if (orgId) ensureMeta(orgId).activeLicenses = Number(r.cnt) || 0;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const [trialRows] = await pool.query(
+      `SELECT organization_id, COUNT(*) AS cnt
+       FROM org_subscription_items
+       WHERE ${orgEqualsSql("organization_id")}
+         AND status = 'active'
+         AND source = 'trial'
+       GROUP BY organization_id`,
+      orgScopeParams(),
+    );
+    for (const row of Array.isArray(trialRows) ? trialRows : []) {
+      const r = row as { organization_id?: number; cnt?: number };
+      const orgId = Number(r.organization_id);
+      if (orgId) ensureMeta(orgId).activeTrials = Number(r.cnt) || 0;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const [usageRows] = await pool.query(
+      `SELECT bp.organization_id, COALESCE(SUM(u.record_count), 0) AS total_records
+       FROM tool_usage u
+       INNER JOIN business_profiles bp ON bp.id = u.business_profile_id
+       WHERE ${orgEqualsSql("bp.organization_id")}
+       GROUP BY bp.organization_id`,
+      orgScopeParams(),
+    );
+    for (const row of Array.isArray(usageRows) ? usageRows : []) {
+      const r = row as { organization_id?: number; total_records?: number };
+      const orgId = Number(r.organization_id);
+      if (orgId) ensureMeta(orgId).totalRecords = Number(r.total_records) || 0;
+    }
+  } catch {
+    /* ignore */
+  }
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const tenants = list.map((item) => {
     const r = item as Record<string, unknown>;
+    const orgId = Number(r.organization_id);
     const periodEnd = r.current_period_end ? String(r.current_period_end) : null;
     let daysLeft: number | null = null;
     if (periodEnd) {
       daysLeft = daysBetween(today, new Date(periodEnd));
     }
+    const meta = orgCategoryMeta.get(orgId);
+    const branchCount = Math.max(1, meta?.branchCount ?? 1);
+    const userCategory = resolveUserCategory({
+      gstin: meta?.hasValidGstin ? "27ABCDE1234F1Z5" : null,
+      branchCount,
+    });
     return {
-      organizationId: Number(r.organization_id),
+      organizationId: orgId,
       organizationName: String(r.org_name ?? ""),
       planId: String(r.plan_id),
       planName: r.plan_name ? String(r.plan_name) : String(r.plan_id),
@@ -188,6 +286,11 @@ router.get("/active", async (_req, res) => {
       accessMode: String(r.access_mode ?? (r.plan_id === "pro" ? "unlimited" : "limited")),
       recordLimit: r.record_limit == null ? null : Number(r.record_limit),
       provider: (r.payment_provider as string | null) ?? null,
+      userCategory,
+      branchCount,
+      activeLicenses: meta?.activeLicenses ?? 0,
+      activeTrials: meta?.activeTrials ?? 0,
+      totalRecords: meta?.totalRecords ?? 0,
     };
   });
 
@@ -215,6 +318,10 @@ router.get("/active", async (_req, res) => {
       limited: tenants.filter((t) => t.accessMode !== "unlimited" && t.planId !== "pro").length,
       renewingSoon: tenants.filter((t) => t.daysLeft != null && t.daysLeft >= 0 && t.daysLeft <= 14).length,
       totalMrr: tenants.reduce((sum, t) => sum + t.mrrInr, 0),
+      personal: tenants.filter((t) => t.userCategory === "individual").length,
+      business: tenants.filter((t) => t.userCategory === "business").length,
+      enterprise: tenants.filter((t) => t.userCategory === "enterprise").length,
+      activeTrials: tenants.reduce((sum, t) => sum + t.activeTrials, 0),
     },
   });
 });

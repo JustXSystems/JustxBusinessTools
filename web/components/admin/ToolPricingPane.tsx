@@ -138,6 +138,8 @@ export const ToolPricingPane = forwardRef<
   const [profileLimit, setProfileLimit] = useState(
     recordLimitOverride == null ? "" : String(recordLimitOverride),
   );
+  const [personalUsage, setPersonalUsage] = useState<boolean | null>(null);
+  const [personalBusy, setPersonalBusy] = useState(false);
   const savedSnap = useRef("");
 
   useEffect(() => {
@@ -145,6 +147,76 @@ export const ToolPricingPane = forwardRef<
     setForm(next);
     savedSnap.current = JSON.stringify(next);
   }, [sku, toolId, toolName, toolCategory]);
+
+  useEffect(() => {
+    let alive = true;
+    void api<{ toolPersonalUsage?: Record<string, boolean> }>("/admin/config/tool-personal-usage")
+      .then((res) => {
+        if (alive) setPersonalUsage(Boolean(res.toolPersonalUsage?.[toolId]));
+      })
+      .catch(() => {
+        if (alive) setPersonalUsage(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [toolId]);
+
+  async function togglePersonalEligibility(next: boolean) {
+    setPersonalBusy(true);
+    try {
+      await api("/admin/config/tool-personal-usage", {
+        method: "PUT",
+        body: JSON.stringify({ toolId, personalUsage: next }),
+      });
+      setPersonalUsage(next);
+      bumpCommerceRevision();
+      onMessage(
+        next
+          ? `${toolName} enabled for Personal (no-GSTIN) & Business accounts.`
+          : `${toolName} restricted to Business (GSTIN) accounts.`,
+      );
+    } catch (err) {
+      onMessage(err instanceof Error ? err.message : "Failed to update category access", "error");
+    } finally {
+      setPersonalBusy(false);
+    }
+  }
+
+  function applyAnnualPreset(multiplierOrDiscount: "10x" | "15pct" | "20pct" | "clear") {
+    const monthly = Math.max(0, Number(form.priceInr || 0));
+    if (multiplierOrDiscount === "clear" || monthly <= 0) {
+      setForm((f) => ({ ...f, annualPriceInr: "" }));
+      return;
+    }
+    const annual =
+      multiplierOrDiscount === "10x"
+        ? Math.round(monthly * 10)
+        : multiplierOrDiscount === "15pct"
+          ? Math.round(monthly * 12 * 0.85)
+          : Math.round(monthly * 12 * 0.8);
+    setForm((f) => ({ ...f, annualPriceInr: String(annual) }));
+  }
+
+  const annualPreview = useMemo(() => {
+    const monthly = Math.max(0, Number(form.priceInr || 0));
+    if (form.includedFree || monthly <= 0 || form.billingInterval === "year") return null;
+    const annual =
+      form.annualPriceInr.trim() !== ""
+        ? Math.max(0, Number(form.annualPriceInr))
+        : Math.round(monthly * 10);
+    const fullYear = monthly * 12;
+    const savings = Math.max(0, fullYear - annual);
+    const pct = fullYear > 0 ? Math.round((savings / fullYear) * 100) : 0;
+    const effectiveMo = Math.round(annual / 12);
+    return {
+      annual,
+      savings,
+      pct,
+      effectiveMo,
+      isDerived: form.annualPriceInr.trim() === "",
+    };
+  }, [form.priceInr, form.annualPriceInr, form.includedFree, form.billingInterval]);
 
   useEffect(() => {
     setProfileLimit(recordLimitOverride == null ? "" : String(recordLimitOverride));
@@ -426,7 +498,44 @@ export const ToolPricingPane = forwardRef<
               <option value="0">No</option>
               <option value="1">Yes</option>
             </SelectField>
+            {personalUsage !== null ? (
+              <SelectField
+                label="User category eligibility"
+                value={personalUsage ? "1" : "0"}
+                disabled={personalBusy}
+                onChange={(e) => void togglePersonalEligibility(e.target.value === "1")}
+              >
+                <option value="0">Business (GSTIN) &amp; Enterprise only</option>
+                <option value="1">Personal (no-GSTIN) + Business + Enterprise</option>
+              </SelectField>
+            ) : null}
           </FormGrid>
+
+          {annualPreview ? (
+            <div className="admin-cc-actions" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+              <span className="admin-cc-note-text" style={{ margin: 0 }}>
+                Annual preview ({annualPreview.isDerived ? "auto 10× default" : "custom"}):{" "}
+                <strong>{inr(annualPreview.annual)}/yr</strong> (~{inr(annualPreview.effectiveMo)}/mo · Save{" "}
+                {inr(annualPreview.savings)} / {annualPreview.pct}%)
+              </span>
+              <div className="admin-cc-actions">
+                <Button type="button" variant="ghost" size="sm" onClick={() => applyAnnualPreset("10x")}>
+                  10× mo (2m free)
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => applyAnnualPreset("15pct")}>
+                  15% off
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => applyAnnualPreset("20pct")}>
+                  20% off
+                </Button>
+                {form.annualPriceInr.trim() !== "" ? (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => applyAnnualPreset("clear")}>
+                    Auto
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
 
           <BlockLabel>Entitlement controls</BlockLabel>
           <FormGrid>
