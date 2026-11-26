@@ -14610,4 +14610,104 @@ html[data-scheme="light"] .field textarea {
   font-weight: 600;
 }
 
+.sub-tier-matrix {
+  margin-top: 24px;
+  padding: 20px;
+}
+
+.sub-tier-matrix-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.sub-tier-matrix-head h2 {
+  margin: 4px 0 4px;
+  font-size: 19px;
+}
+
+.sub-tier-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .sub-tier-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sub-tier-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border-hair);
+  background: var(--glass-1);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sub-tier-card.is-current {
+  border-color: rgba(56, 189, 248, 0.7);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.22), 0 10px 28px rgba(14, 165, 233, 0.12);
+}
+
+.sub-tier-card.is-current.is-emerald {
+  border-color: rgba(16, 185, 129, 0.75);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.24), 0 10px 28px rgba(16, 185, 129, 0.12);
+}
+
+.sub-tier-card.is-current.is-violet {
+  border-color: rgba(167, 139, 250, 0.75);
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.24), 0 10px 28px rgba(139, 92, 246, 0.14);
+}
+
+.sub-tier-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.sub-tier-current-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #34d399;
+}
+
+.sub-tier-card h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.sub-tier-audience {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.sub-tier-list {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-med);
+  flex: 1 1 auto;
+}
+
+.sub-tier-foot {
+  padding-top: 10px;
+  border-top: 1px solid var(--border-hair);
+  font-size: 12px;
+}
+
 
