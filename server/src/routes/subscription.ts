@@ -44,6 +44,12 @@ import {
   fetchProfileRecordCounts,
 } from "../lib/usage-summary.js";
 import {
+  evaluatePromoCode,
+  getPromoCode,
+  incrementPromoRedemption,
+  normalizePromoCode,
+} from "../lib/promo-codes.js";
+import {
   notifyCheckoutStarted,
   notifyPaymentOutcome,
   notifySubscriptionActivated,
@@ -438,6 +444,7 @@ router.get("/quote", async (req, res) => {
     const orgId = getActiveOrgId();
     const bundleId = String(req.query.bundleId ?? req.query.pack ?? "").trim();
     const billingCycle = normalizeBillingCycle(req.query.cycle ?? req.query.billingCycle);
+    const promoCodeRaw = normalizePromoCode(req.query.promo ?? req.query.promoCode);
     const toolIds = parseToolIds(req.query.tools ?? req.query.toolIds);
     const quote = await quoteForProfile(profileId, toolIds, bundleId || undefined, billingCycle, orgId);
     const [payee, skus, packs, blockedPaid, profileMeta] = await Promise.all([
@@ -465,17 +472,52 @@ router.get("/quote", async (req, res) => {
             personalUsageMap,
           })
         : null;
+
+    const subtotalInr = quote.totalInr;
+    let finalTotalInr = subtotalInr;
+    let promo: {
+      code: string;
+      description: string | null;
+      discountInr: number;
+      label: string;
+    } | null = null;
+    let promoError: string | null = null;
+
+    if (promoCodeRaw) {
+      const promoRow = await getPromoCode(promoCodeRaw);
+      const evalRes = evaluatePromoCode(promoRow, {
+        subtotalInr,
+        userCategory: profileMeta.userCategory,
+        billingCycle,
+      });
+      if (evalRes.ok) {
+        finalTotalInr = evalRes.finalTotalInr;
+        promo = {
+          code: evalRes.code,
+          description: evalRes.description,
+          discountInr: evalRes.discountInr,
+          label: evalRes.label,
+        };
+      } else {
+        promoError = evalRes.error;
+      }
+    }
+
     const cycleSuffix = billingCycle === "year" ? " (1Y)" : "";
     const label = isBundleQuote(quote)
       ? `${BRAND_DEFAULTS.appName} ${quote.packName}${cycleSuffix}`.slice(0, 50)
       : `${BRAND_DEFAULTS.appName} ${quote.lines.length} tool${quote.lines.length === 1 ? "" : "s"}${cycleSuffix}`.slice(0, 50);
     res.json({
       ...quote,
+      subtotalInr,
+      totalInr: finalTotalInr,
+      promo,
+      promoError,
       recommendedPack,
       upi: {
         ...publicPayee(payee),
-        amountInr: quote.totalInr,
-        intent: payee.enabled && payee.vpa ? buildUpiIntent(payee, quote.totalInr, label) : null,
+        amountInr: finalTotalInr,
+        intent: payee.enabled && payee.vpa ? buildUpiIntent(payee, finalTotalInr, label) : null,
       },
     });
   } catch (err) {
@@ -486,15 +528,38 @@ router.get("/quote", async (req, res) => {
 
 router.post("/upi-claims", async (req, res) => {
   try {
+    const profileId = getActiveProfileId();
+    const orgId = getActiveOrgId();
     const bundleId = String(req.body?.bundleId ?? req.body?.packId ?? "").trim();
     const billingCycle = normalizeBillingCycle(req.body?.billingCycle ?? req.body?.cycle);
+    const promoCodeRaw = normalizePromoCode(req.body?.promoCode ?? req.body?.promo);
     const toolIds = parseToolIds(req.body?.toolIds ?? req.body?.tools);
     const quote = await quoteForProfile(
-      getActiveProfileId(),
+      profileId,
       toolIds,
       bundleId || undefined,
       billingCycle,
+      orgId,
     );
+    let finalTotalInr = quote.totalInr;
+    let appliedPromoNote = "";
+    if (promoCodeRaw) {
+      const [promoRow, profileMeta] = await Promise.all([
+        getPromoCode(promoCodeRaw),
+        fetchProfileCategoryMeta(profileId, orgId),
+      ]);
+      const evalRes = evaluatePromoCode(promoRow, {
+        subtotalInr: quote.totalInr,
+        userCategory: profileMeta.userCategory,
+        billingCycle,
+      });
+      if (!evalRes.ok) {
+        res.status(400).json({ error: evalRes.error });
+        return;
+      }
+      finalTotalInr = evalRes.finalTotalInr;
+      appliedPromoNote = `[Promo ${evalRes.code}: -₹${evalRes.discountInr}]`;
+    }
     const payerEmail = String(req.body?.payerEmail ?? "").trim();
     const payerName = String(req.body?.payerName ?? "").trim();
     const utr = String(req.body?.utr ?? "").trim();
@@ -503,28 +568,33 @@ router.post("/upi-claims", async (req, res) => {
       return;
     }
     const [orgRows] = await pool.query(`SELECT name FROM organizations WHERE id = :id`, {
-      id: getActiveOrgId(),
+      id: orgId,
     });
     const orgName = Array.isArray(orgRows)
       ? String((orgRows[0] as { name?: string } | undefined)?.name ?? "")
       : "";
+    const rawNotes = req.body?.notes ? String(req.body.notes).trim() : "";
+    const combinedNotes = [appliedPromoNote, rawNotes].filter(Boolean).join(" ") || null;
     const claim = await createClaim({
-      orgId: getActiveOrgId(),
+      orgId,
       userId: getActiveUserId(),
-      profileId: getActiveProfileId(),
+      profileId,
       planId: bundleId ? `pack:${bundleId}` : "cart",
       toolIds: quote.lines.map((l) => l.toolId),
       billingCycle,
-      amountInr: quote.totalInr,
+      amountInr: finalTotalInr,
       payerName,
       payerEmail,
       payerPhone: req.body?.payerPhone ?? null,
       payerUpi: req.body?.payerUpi ?? null,
       utr,
       paidAt: req.body?.paidAt ?? null,
-      notes: req.body?.notes ?? null,
+      notes: combinedNotes,
       orgName,
     });
+    if (promoCodeRaw) {
+      await incrementPromoRedemption(promoCodeRaw);
+    }
     res.status(201).json({
       claim,
       message: `Submitted. ${BRAND_DEFAULTS.appName} will verify this UPI payment and notify you.`,
@@ -537,17 +607,36 @@ router.post("/upi-claims", async (req, res) => {
 
 router.post("/checkout", async (req, res) => {
   try {
+    const profileId = getActiveProfileId();
+    const orgId = getActiveOrgId();
     const bundleId = String(req.body?.bundleId ?? req.body?.packId ?? "").trim();
     const billingCycle = normalizeBillingCycle(req.body?.billingCycle ?? req.body?.cycle);
+    const promoCodeRaw = normalizePromoCode(req.body?.promoCode ?? req.body?.promo);
     const toolIds = parseToolIds(req.body?.toolIds ?? req.body?.tools);
     const quote = await quoteForProfile(
-      getActiveProfileId(),
+      profileId,
       toolIds,
       bundleId || undefined,
       billingCycle,
+      orgId,
     );
-    const profileId = getActiveProfileId();
-    const orgId = getActiveOrgId();
+    let finalTotalInr = quote.totalInr;
+    if (promoCodeRaw) {
+      const [promoRow, profileMeta] = await Promise.all([
+        getPromoCode(promoCodeRaw),
+        fetchProfileCategoryMeta(profileId, orgId),
+      ]);
+      const evalRes = evaluatePromoCode(promoRow, {
+        subtotalInr: quote.totalInr,
+        userCategory: profileMeta.userCategory,
+        billingCycle,
+      });
+      if (!evalRes.ok) {
+        res.status(400).json({ error: evalRes.error });
+        return;
+      }
+      finalTotalInr = evalRes.finalTotalInr;
+    }
     const gatewayId = Number(req.body?.gatewayId ?? 0);
     let providerName = getConfiguredProviderName();
     if (gatewayId) {
@@ -573,7 +662,7 @@ router.post("/checkout", async (req, res) => {
     const session = await provider.createCheckoutSession({
       profileId,
       planId,
-      amountInr: quote.totalInr,
+      amountInr: finalTotalInr,
       toolIds: quote.lines.map((l) => l.toolId),
     });
 
@@ -582,10 +671,13 @@ router.post("/checkout", async (req, res) => {
       profileId,
       sessionId: session.sessionId,
       toolIds: quote.lines.map((l) => l.toolId),
-      amountInr: quote.totalInr,
+      amountInr: finalTotalInr,
       provider: provider.name,
       billingCycle,
     });
+    if (promoCodeRaw) {
+      await incrementPromoRedemption(promoCodeRaw);
+    }
 
     const autoComplete = process.env.PAYMENT_AUTO_COMPLETE === "true";
     if (autoComplete && provider.name === "mock") {
@@ -615,14 +707,14 @@ router.post("/checkout", async (req, res) => {
         orgId,
         "subscription_charge",
         "success",
-        quote.totalInr,
+        finalTotalInr,
         provider.name,
         session.sessionId,
       );
       notifyPaymentOutcome({
         organizationId: orgId,
         success: true,
-        amountInr: quote.totalInr,
+        amountInr: finalTotalInr,
         provider: provider.name,
         reference: session.sessionId,
       });
@@ -640,14 +732,14 @@ router.post("/checkout", async (req, res) => {
         ...session,
         activated: true,
         subscription,
-        quote,
+        quote: { ...quote, totalInr: finalTotalInr },
       });
       return;
     }
 
     notifyCheckoutStarted({
       organizationId: orgId,
-      amountInr: quote.totalInr,
+      amountInr: finalTotalInr,
       toolIds: quote.lines.map((l) => l.toolId),
       provider: provider.name,
     });

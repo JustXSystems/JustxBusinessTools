@@ -15,6 +15,7 @@ export function UpiPayMethod({
   toolIds,
   amountInr,
   billingCycle = "month",
+  promoCode,
   upi,
   pendingClaim,
   bundleId,
@@ -24,6 +25,7 @@ export function UpiPayMethod({
   toolIds: string[];
   amountInr: number;
   billingCycle?: BillingCycle;
+  promoCode?: string;
   upi?: UpiPayInfo;
   pendingClaim?: PendingUpiClaim | null;
   bundleId?: string | null;
@@ -89,6 +91,7 @@ export function UpiPayMethod({
       const result = await submitUpiClaim({
         toolIds,
         billingCycle,
+        ...(promoCode ? { promoCode } : {}),
         ...(bundleId ? { bundleId } : {}),
         ...form,
       });

@@ -14531,4 +14531,31 @@ html[data-scheme="light"] .field textarea {
   min-width: 0;
 }
 
+.co-promo-box {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+
+.co-promo-box input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--border-hair);
+  background: var(--glass-1);
+  color: var(--text-hi);
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.04em;
+}
+
+.store-cart-subtotal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
 

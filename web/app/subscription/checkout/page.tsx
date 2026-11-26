@@ -35,6 +35,8 @@ export default function SubscriptionCheckoutPage() {
   const [method, setMethod] = useState<PayMethod>("upi");
   const [bundleId, setBundleId] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("month");
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState("");
 
   const catalog = subscription?.catalog ?? [];
   const packs = subscription?.packs ?? [];
@@ -49,10 +51,11 @@ export default function SubscriptionCheckoutPage() {
     setBillingCycle(readBillingCycle());
   }, []);
 
-  const loadQuote = useCallback(async (cycleOverride?: BillingCycle) => {
+  const loadQuote = useCallback(async (cycleOverride?: BillingCycle, promoOverride?: string) => {
     const ids = readToolCart();
     const packId = readActivePack();
     const cycle = cycleOverride ?? readBillingCycle();
+    const promo = promoOverride ?? appliedPromo;
     setBundleId(packId);
     if (ids.length === 0 && !packId) {
       setQuote(null);
@@ -61,7 +64,7 @@ export default function SubscriptionCheckoutPage() {
     }
     setQuoting(true);
     try {
-      const data = await fetchCartQuote(ids, packId || undefined, cycle);
+      const data = await fetchCartQuote(ids, packId || undefined, cycle, promo || undefined);
       setQuote(data);
       setQuoteError("");
     } catch (err) {
@@ -70,15 +73,15 @@ export default function SubscriptionCheckoutPage() {
     } finally {
       setQuoting(false);
     }
-  }, []);
+  }, [appliedPromo]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   useEffect(() => {
-    void loadQuote(billingCycle);
-  }, [loadQuote, priceFingerprint, billingCycle]);
+    void loadQuote(billingCycle, appliedPromo);
+  }, [loadQuote, priceFingerprint, billingCycle, appliedPromo]);
 
   useEffect(() => {
     const onResolved = () => {
@@ -236,6 +239,57 @@ export default function SubscriptionCheckoutPage() {
             </div>
           ) : null}
 
+          {pending?.status !== "pending" ? (
+            <form
+              className="co-promo-box"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const code = promoInput.trim().toUpperCase();
+                setAppliedPromo(code);
+              }}
+            >
+              <input
+                value={promoInput}
+                onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                placeholder="Promo code (e.g. ANNUAL20)"
+                aria-label="Promo code"
+              />
+              {appliedPromo ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setPromoInput("");
+                    setAppliedPromo("");
+                  }}
+                >
+                  Clear
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className="btn btn-secondary btn-sm"
+                  disabled={!promoInput.trim()}
+                >
+                  Apply
+                </button>
+              )}
+            </form>
+          ) : null}
+
+          {quote?.promo ? (
+            <>
+              <div className="store-cart-subtotal">
+                <span className="muted">Subtotal</span>
+                <span>{formatInr(quote.subtotalInr ?? amount + quote.promo.discountInr)}</span>
+              </div>
+              <p className="store-cart-savings">
+                Promo {quote.promo.code} ({quote.promo.label}): −{formatInr(quote.promo.discountInr)}
+              </p>
+            </>
+          ) : null}
+          {quote?.promoError ? <p className="field-error">{quote.promoError}</p> : null}
+
           <div className="store-cart-total">
             <span>Amount payable</span>
             <strong>{formatInr(amount)}</strong>
@@ -317,6 +371,7 @@ export default function SubscriptionCheckoutPage() {
               toolIds={toolIds}
               amountInr={amount}
               billingCycle={effectiveCycle}
+              promoCode={quote?.promo?.code}
               bundleId={bundleId || quote?.bundleId}
               upi={quote?.upi ?? subscription?.upi}
               pendingClaim={pending}
@@ -329,6 +384,7 @@ export default function SubscriptionCheckoutPage() {
               toolIds={toolIds}
               amountInr={amount}
               billingCycle={effectiveCycle}
+              promoCode={quote?.promo?.code}
               bundleId={bundleId || quote?.bundleId}
               gateways={gateways}
               onDone={onPaid}

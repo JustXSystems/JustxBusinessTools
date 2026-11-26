@@ -17,6 +17,11 @@ import {
 import { notifySubscriptionAssigned } from "../../lib/notification-billing.js";
 import { resolveUserCategory } from "../../lib/pricing-engine.js";
 import { isValidGstin, normalizeGstin } from "../../lib/gstin.js";
+import {
+  deletePromoCode,
+  listPromoCodes,
+  upsertPromoCode,
+} from "../../lib/promo-codes.js";
 
 const router = Router();
 
@@ -406,6 +411,51 @@ router.post("/notices/:id/send", async (req, res) => {
     { id: Number(req.params.id), ...orgScopeParams() },
   );
   await logAudit("subscription.notice.send", "subscription_notice", req.params.id, undefined, req.ip);
+  res.json({ ok: true });
+});
+
+router.get("/promos", async (_req, res) => {
+  res.json({ promos: await listPromoCodes() });
+});
+
+router.post("/promos", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to manage promo codes" });
+    return;
+  }
+  try {
+    const promo = await upsertPromoCode({
+      code: String(req.body?.code ?? ""),
+      description: req.body?.description ?? null,
+      discountType: req.body?.discountType,
+      discountValue: Number(req.body?.discountValue ?? 0),
+      userCategory: req.body?.userCategory,
+      billingCycle: req.body?.billingCycle,
+      minAmountInr: req.body?.minAmountInr,
+      maxRedemptions: req.body?.maxRedemptions,
+      expiresAt: req.body?.expiresAt ?? null,
+      active: req.body?.active,
+    });
+    await logAudit("promo.upsert", "promo_code", promo.code, {
+      discountType: promo.discountType,
+      discountValue: promo.discountValue,
+      userCategory: promo.userCategory,
+      billingCycle: promo.billingCycle,
+    }, req.ip);
+    res.status(201).json({ promo });
+  } catch (err) {
+    const status = Number((err as { status?: number }).status) || 400;
+    res.status(status).json({ error: err instanceof Error ? err.message : "Could not save promo code" });
+  }
+});
+
+router.delete("/promos/:code", async (req, res) => {
+  if (!isPlatformAdmin()) {
+    res.status(403).json({ error: "Platform admin required to manage promo codes" });
+    return;
+  }
+  await deletePromoCode(req.params.code);
+  await logAudit("promo.delete", "promo_code", req.params.code, undefined, req.ip);
   res.json({ ok: true });
 });
 

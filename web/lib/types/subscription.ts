@@ -138,6 +138,7 @@ export type CartQuote = {
     billingInterval: string;
   }>;
   totalInr: number;
+  subtotalInr?: number;
   billingInterval: string;
   billingCycle?: BillingCycle;
   durationDays?: number;
@@ -147,6 +148,13 @@ export type CartQuote = {
   packName?: string;
   listPriceInr?: number;
   savingsInr?: number;
+  promo?: {
+    code: string;
+    description: string | null;
+    discountInr: number;
+    label: string;
+  } | null;
+  promoError?: string | null;
   recommendedPack?: PackRecommendation | null;
   upi?: UpiPayInfo;
 };

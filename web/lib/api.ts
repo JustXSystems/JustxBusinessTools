@@ -214,18 +214,26 @@ export async function fetchCartQuote(
   toolIds: string[],
   bundleId?: string,
   billingCycle: "month" | "year" = "month",
+  promoCode?: string,
 ): Promise<CartQuote> {
   const params = new URLSearchParams();
   if (bundleId) params.set("bundleId", bundleId);
   else params.set("tools", toolIds.join(","));
   params.set("cycle", billingCycle);
+  if (promoCode?.trim()) params.set("promo", promoCode.trim().toUpperCase());
   return api<CartQuote>(`/subscription/quote?${params.toString()}`);
 }
 
 export async function startCheckout(
   planId: string,
   toolIds?: string[],
-  extra?: { gatewayId?: number; method?: string; bundleId?: string; billingCycle?: "month" | "year" },
+  extra?: {
+    gatewayId?: number;
+    method?: string;
+    bundleId?: string;
+    billingCycle?: "month" | "year";
+    promoCode?: string;
+  },
 ): Promise<CheckoutResult> {
   return api<CheckoutResult>("/subscription/checkout", {
     method: "POST",
@@ -236,6 +244,7 @@ export async function startCheckout(
       ...(extra?.method ? { method: extra.method } : {}),
       ...(extra?.bundleId ? { bundleId: extra.bundleId } : {}),
       ...(extra?.billingCycle ? { billingCycle: extra.billingCycle } : {}),
+      ...(extra?.promoCode ? { promoCode: extra.promoCode } : {}),
     }),
   });
 }
@@ -251,6 +260,7 @@ export async function submitUpiClaim(body: {
   notes?: string;
   bundleId?: string;
   billingCycle?: "month" | "year";
+  promoCode?: string;
 }): Promise<UpiClaimResult> {
   return api<UpiClaimResult>("/subscription/upi-claims", {
     method: "POST",

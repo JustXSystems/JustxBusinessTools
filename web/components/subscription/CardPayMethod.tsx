@@ -19,6 +19,7 @@ export function CardPayMethod({
   toolIds,
   amountInr,
   billingCycle = "month",
+  promoCode,
   gateways,
   bundleId,
   onDone,
@@ -28,6 +29,7 @@ export function CardPayMethod({
   toolIds: string[];
   amountInr: number;
   billingCycle?: BillingCycle;
+  promoCode?: string;
   gateways: PayGatewayOption[];
   bundleId?: string | null;
   onDone: () => Promise<void>;
@@ -49,6 +51,7 @@ export function CardPayMethod({
         gatewayId: selected.id,
         method: kind,
         billingCycle,
+        ...(promoCode ? { promoCode } : {}),
         ...(bundleId ? { bundleId } : {}),
       });
       if (result.activated) {

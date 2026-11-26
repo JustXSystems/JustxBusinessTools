@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdminOrgSelect } from "@/components/admin/AdminOrgSelect";
 import { ProductPacksPanel } from "@/components/admin/ProductPacksPanel";
+import { PromoCodesPanel } from "@/components/admin/PromoCodesPanel";
 import {
   AdminEmpty,
   AdminErrorState,
@@ -116,9 +117,9 @@ type RenewalCandidate = {
   mrrInr: number;
 };
 
-type Tab = "tenants" | "packs" | "modes" | "renewals" | "notices";
+type Tab = "tenants" | "packs" | "promos" | "modes" | "renewals" | "notices";
 
-const TAB_VALUES: ReadonlyArray<Tab> = ["tenants", "packs", "modes", "renewals", "notices"];
+const TAB_VALUES: ReadonlyArray<Tab> = ["tenants", "packs", "promos", "modes", "renewals", "notices"];
 
 /** Hash deep links: `#renewals` (dashboard KPI) plus the legacy `#plan-editor` anchor. */
 function tabFromHash(hash: string): Tab | null {
@@ -455,6 +456,7 @@ export default function AdminSubscriptionsPage() {
   const tabOptions: ReadonlyArray<{ value: Tab; label: string }> = [
     { value: "tenants", label: `Tenants (${tenantSummary.total})` },
     { value: "packs", label: "Product packs" },
+    { value: "promos", label: "Promo codes" },
     { value: "modes", label: "Platform modes" },
     { value: "renewals", label: `Renewals (${renewals.length})` },
     { value: "notices", label: queuedNotices ? `Notices (${queuedNotices} queued)` : "Notices" },
@@ -789,6 +791,19 @@ export default function AdminSubscriptionsPage() {
 
       {tab === "packs" ? (
         <ProductPacksPanel
+          onMessage={(m) => {
+            setError("");
+            setMessage(m);
+          }}
+          onError={(m) => {
+            setMessage("");
+            setError(m);
+          }}
+        />
+      ) : null}
+
+      {tab === "promos" ? (
+        <PromoCodesPanel
           onMessage={(m) => {
             setError("");
             setMessage(m);
