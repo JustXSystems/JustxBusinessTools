@@ -3,6 +3,11 @@ import { z } from "zod";
 import { isPlatformAdmin } from "../lib/platform-admin.js";
 import { accessOf, actorOf, optText, parse, recordEvent, requirePerm, type ImsAccess, type ImsDeps } from "./context.js";
 import { exec, json, money, one, tx, type Queryable } from "./db.js";
+import {
+  DOC_REQUIRED_FIELD_SPEC,
+  normalizeDocRequiredFieldsSetting,
+  type DocRequiredFieldMap,
+} from "./doc-required-fields.js";
 import { badRequest, forbidden, type ImsActor } from "./host.js";
 import {
   BUSINESS_TYPES,
@@ -238,10 +243,12 @@ export type ImsSettings = {
   bomHideMargin: boolean;
   /** When true, confirming a BOM requires the Approvals permission (owners always can). */
   bomConfirmNeedsApproval: boolean;
-  /** When true, quotation reference is required before confirming a BOM. */
+  /** When true, quotation reference is required before confirming a BOM (derived from docRequiredFields.bom). */
   bomRequireQuotationRef: boolean;
   /** Quotation V1 statuses offered as BOM quotation-reference suggestions. Never empty. */
   bomQuotationStatuses: BomQuotationStatus[];
+  /** Configurable required fields enforced at the final step of each IMS document. */
+  docRequiredFields: DocRequiredFieldMap;
   /** Null = use industry-pack column defaults. */
   bomScheduleColumns: BomScheduleColumnId[] | null;
   poApprovalLimit: number;
@@ -344,6 +351,7 @@ type SettingsRow = {
   bom_confirm_needs_approval?: number | boolean | null;
   bom_require_quotation_ref?: number | boolean | null;
   bom_quotation_statuses_json?: unknown;
+  doc_required_fields_json?: unknown;
   bom_schedule_columns_json?: unknown;
   po_approval_limit: string | number;
   invoice_approval_limit?: string | number;
@@ -422,8 +430,9 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   bomPaperDensity: normalizeBomPaperDensity(r.bom_paper_density),
   bomHideMargin: Boolean(r.bom_hide_margin),
   bomConfirmNeedsApproval: Boolean(r.bom_confirm_needs_approval),
-  bomRequireQuotationRef: Boolean(r.bom_require_quotation_ref),
+  bomRequireQuotationRef: normalizeDocRequiredFieldsSetting(r.doc_required_fields_json, Boolean(r.bom_require_quotation_ref)).bom.includes("quotationRef"),
   bomQuotationStatuses: normalizeBomQuotationStatusesSetting(r.bom_quotation_statuses_json),
+  docRequiredFields: normalizeDocRequiredFieldsSetting(r.doc_required_fields_json, Boolean(r.bom_require_quotation_ref)),
   bomScheduleColumns: normalizeBomScheduleColumnsSetting(r.bom_schedule_columns_json),
   poApprovalLimit: money(r.po_approval_limit),
   invoiceApprovalLimit: money(r.invoice_approval_limit ?? 0),
@@ -540,6 +549,15 @@ const SettingsInput = z.object({
   bomConfirmNeedsApproval: z.boolean().optional(),
   bomRequireQuotationRef: z.boolean().optional(),
   bomQuotationStatuses: z.array(z.enum(BOM_QUOTATION_STATUSES)).min(1).max(3).optional(),
+  docRequiredFields: z
+    .object({
+      bom: z.array(z.enum(DOC_REQUIRED_FIELD_SPEC.bom.fields)).max(12).optional(),
+      dc: z.array(z.enum(DOC_REQUIRED_FIELD_SPEC.dc.fields)).max(12).optional(),
+      returns: z.array(z.enum(DOC_REQUIRED_FIELD_SPEC.returns.fields)).max(12).optional(),
+      po: z.array(z.enum(DOC_REQUIRED_FIELD_SPEC.po.fields)).max(12).optional(),
+      invoice: z.array(z.enum(DOC_REQUIRED_FIELD_SPEC.invoice.fields)).max(12).optional(),
+    })
+    .optional(),
   bomScheduleColumns: z.array(z.enum(BOM_SCHEDULE_COLUMN_IDS)).max(16).nullable().optional(),
   poApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
   invoiceApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
@@ -661,6 +679,7 @@ const COLUMN: Record<string, string> = {
   bomConfirmNeedsApproval: "bom_confirm_needs_approval",
   bomRequireQuotationRef: "bom_require_quotation_ref",
   bomQuotationStatuses: "bom_quotation_statuses_json",
+  docRequiredFields: "doc_required_fields_json",
   bomScheduleColumns: "bom_schedule_columns_json",
   poApprovalLimit: "po_approval_limit",
   invoiceApprovalLimit: "invoice_approval_limit",
@@ -753,6 +772,13 @@ export async function updateSettings(deps: ImsDeps, actor: ImsActor, body: unkno
       v = cols ? JSON.stringify(cols) : null;
     } else if (key === "bomQuotationStatuses") {
       v = JSON.stringify(normalizeBomQuotationStatusesSetting(value));
+    } else if (key === "docRequiredFields") {
+      const normalized = normalizeDocRequiredFieldsSetting(value);
+      v = JSON.stringify(normalized);
+      if (input.bomRequireQuotationRef === undefined) {
+        sets.push("bom_require_quotation_ref = :bomRequireQuotationRefSync");
+        params.bomRequireQuotationRefSync = normalized.bom.includes("quotationRef") ? 1 : 0;
+      }
     } else if (typeof value === "boolean") v = value ? 1 : 0;
     else if (typeof value === "string" && key.endsWith("Prefix")) v = value.toUpperCase();
     sets.push(`${COLUMN[key]} = :${key}`);

@@ -26,6 +26,7 @@ import {
   syncBomIssuedFromDcs,
 } from "./bom-dc.js";
 import { createLinkedInvoice } from "./sales.js";
+import { assertDocRequiredFields } from "./doc-required-fields.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo, postMovement } from "./stock.js";
 
@@ -1596,9 +1597,7 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const existing = await loadDoc(deps.db, actor.tenantId, id);
     if (!existing) throw notFound("BOM document not found");
     if (existing.status !== "draft") throw conflict("Only drafts can be confirmed");
-    if (settings.bomRequireQuotationRef && !String(existing.quotationRef ?? "").trim()) {
-      throw conflict("Quotation reference is required before confirming this BOM (Business Profile → IMS settings).");
-    }
+    assertDocRequiredFields("bom", settings.docRequiredFields, existing, "confirming this BOM");
     try {
       const result = await confirmBomDoc(
         deps,

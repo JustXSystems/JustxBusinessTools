@@ -35,6 +35,13 @@ import {
   BOM_QUOTATION_STATUS_LABEL,
   normalizeBomQuotationStatuses,
 } from "@/lib/ims/bom-quotation-status";
+import {
+  DOC_REQUIRED_FIELD_LABELS,
+  DOC_REQUIRED_FIELD_SPEC,
+  DOC_REQUIRED_TYPES,
+  normalizeDocRequiredFields,
+  type DocRequiredType,
+} from "@/lib/ims/doc-required-fields";
 import { commonCurrenciesFor, methodLabel, PAY_METHODS, POS_PAY_METHODS } from "@/lib/ims/finance";
 import { gstRatesFor, inr } from "@/lib/ims/format";
 import { GST_STATES, MONTHS, PREFIX_FIELDS, docNoSample, fiscalYearLabel, gstinPlace } from "@/lib/ims/settings";
@@ -253,6 +260,15 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
   const density = normalizeBomPaperDensity(draft.bomPaperDensity);
   const hideMargin = Boolean(draft.bomHideMargin);
   const selectedQuoteStatuses = normalizeBomQuotationStatuses(draft.bomQuotationStatuses);
+  const requiredFields = normalizeDocRequiredFields(draft.docRequiredFields, Boolean(draft.bomRequireQuotationRef));
+  const toggleRequiredField = (docType: DocRequiredType, field: string) => {
+    const cur = requiredFields[docType] as readonly string[];
+    const nextList = cur.includes(field) ? cur.filter((f) => f !== field) : [...cur, field];
+    set(
+      "docRequiredFields",
+      normalizeDocRequiredFields({ ...requiredFields, [docType]: nextList }),
+    );
+  };
   const purposeMeta = bomPaperPurposeMeta(purpose);
   const packMeta = bomIndustryPackMeta(pack);
   const packDefaultCols = scheduleColumnsFor(purpose, pack);
@@ -399,14 +415,6 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
           disabled={readOnly}
         />
 
-        <ToggleRow
-          label="Quotation reference required"
-          desc="BOM confirm is blocked until a quotation reference is entered — use the quotation field on the BOM composer"
-          checked={Boolean(draft.bomRequireQuotationRef)}
-          onChange={(v) => set("bomRequireQuotationRef", v)}
-          disabled={readOnly}
-        />
-
         <div className="ims-bom-col-config" aria-label="Quotation statuses for BOM">
           <div className="ims-bom-col-config-head">
             <div>
@@ -486,6 +494,43 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
             <BomPaper model={previewModel} />
           </div>
         </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Required fields before finalising"
+        desc="Drafts can always be saved incomplete. Selected fields below are enforced at each document’s final step (BOM confirm, DC approve, Return record, PO submit/send, Invoice issue)."
+      >
+        {DOC_REQUIRED_TYPES.map((docType) => {
+          const spec = DOC_REQUIRED_FIELD_SPEC[docType];
+          const picked = requiredFields[docType] as readonly string[];
+          return (
+            <div key={docType} className="ims-bom-col-config" aria-label={`${spec.label} required fields`}>
+              <div className="ims-bom-col-config-head">
+                <div>
+                  <div className="ims-bom-col-config-title">{spec.label}</div>
+                  <div className="ims-bom-col-config-desc">Enforced on {spec.stage}</div>
+                </div>
+              </div>
+              <div className="ims-bom-col-chips" role="group" aria-label={`${spec.label} required fields`}>
+                {spec.fields.map((field) => {
+                  const on = picked.includes(field);
+                  return (
+                    <button
+                      key={field}
+                      type="button"
+                      className={`ims-bom-col-chip${on ? " is-on" : ""}`}
+                      aria-pressed={on}
+                      disabled={readOnly}
+                      onClick={() => toggleRequiredField(docType, field)}
+                    >
+                      {DOC_REQUIRED_FIELD_LABELS[field] ?? field}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </SectionCard>
 
       <SectionCard title="Document numbering" desc="Format matches Quotation V1: CompanyCode-DOCTYPE-YYYY/MM-XXXX. Sequence restarts each calendar month. DOC TYPE uses letters, digits and dashes only (up to 12).">

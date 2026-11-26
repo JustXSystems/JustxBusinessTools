@@ -45,6 +45,7 @@ import {
 } from "./logic.js";
 import { GspError, buildIrnPayload, cancelIrn, pushIrn, type IrnResult } from "./einvoice/gsp.js";
 import { loadGsp, logSync, noteGspOutcome } from "./integrations.js";
+import { assertDocRequiredFields } from "./doc-required-fields.js";
 import { getSettings, listMembers, type ImsSettings } from "./settings.js";
 import { nextDocNo, postMovement } from "./stock.js";
 import { serialsAvgCost, syncSerializedItemCost } from "./stock-state.js";
@@ -784,6 +785,18 @@ async function issueDraft(
   const docKind = (row.doc_kind || "tax_invoice") as InvoiceDocKind;
   if (docKind === "credit_note" && !row.against_invoice_id) {
     throw badRequest("A credit note must be linked to the original tax invoice");
+  }
+  if (refType !== "pos") {
+    assertDocRequiredFields(
+      "invoice",
+      settings.docRequiredFields,
+      {
+        customerPoNo: row.customer_po_no,
+        placeOfSupply: row.place_of_supply,
+        shipToAddress: row.ship_to_address,
+      },
+      "issuing this invoice",
+    );
   }
 
   // Gate tax invoices / debit notes / retainers over the approval limit (POS never queues).

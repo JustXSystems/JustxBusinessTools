@@ -30,6 +30,7 @@ import {
 } from "./logic.js";
 import { inventItemFromBomLine } from "./item-invent.js";
 import { groupSerializedImportRows, type SerialStatus } from "./serials.js";
+import { assertDocRequiredFields } from "./doc-required-fields.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo, postMovement, type PostedMovement } from "./stock.js";
 import { loadStockSignals, serialsAvgCost, syncSerializedItemCost } from "./stock-state.js";
@@ -1903,6 +1904,7 @@ export function registerInventory(router: Router, deps: ImsDeps): void {
     const input = parse(ReturnInput, req.body);
     assertNotFuture(input.date);
     const settings = await getSettings(deps, actor.tenantId);
+    assertDocRequiredFields("returns", settings.docRequiredFields, input, "recording this return");
     const date = input.date ?? todayISO();
     const id = randomUUID();
     const result = await tx(deps.db, async (conn) => {

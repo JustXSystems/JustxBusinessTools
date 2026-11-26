@@ -37,6 +37,7 @@ import {
   type PoStatus,
 } from "./logic.js";
 import { loadParty, type ImsParty } from "./parties.js";
+import { assertDocRequiredFields } from "./doc-required-fields.js";
 import { getSettings, type ImsSettings } from "./settings.js";
 import { nextDocNo, postMovement, type PostedMovement } from "./stock.js";
 import { loadStockSignals, syncSerializedItemCost } from "./stock-state.js";
@@ -590,6 +591,9 @@ export function registerPurchase(router: Router, deps: ImsDeps): void {
     const input = parse(PoInput, req.body);
     const settings = await getSettings(deps, actor.tenantId);
     const built = await buildPo(deps, actor, input, settings);
+    if (input.action !== "draft") {
+      assertDocRequiredFields("po", settings.docRequiredFields, built, "submitting this purchase order");
+    }
     const id = randomUUID();
     const poNo = await nextDocNo(deps.db, actor.tenantId, "po", settings.poPrefix, built.orderDate, settings.businessName);
     const outcome = input.action === "draft" ? null : submitOutcome(built.totals.grandTotal, settings);
@@ -637,6 +641,9 @@ export function registerPurchase(router: Router, deps: ImsDeps): void {
     const input = parse(PoInput, req.body);
     const settings = await getSettings(deps, actor.tenantId);
     const built = await buildPo(deps, actor, input, settings);
+    if (input.action !== "draft") {
+      assertDocRequiredFields("po", settings.docRequiredFields, built, "submitting this purchase order");
+    }
     const outcome = input.action === "draft" ? null : submitOutcome(built.totals.grandTotal, settings);
     const status: PoStatus = !outcome ? "draft" : outcome.status === "approved" && input.action === "send" ? "sent" : outcome.status;
     const res2 = await exec(
@@ -678,6 +685,17 @@ export function registerPurchase(router: Router, deps: ImsDeps): void {
     const row = await loadPoRow(deps.db, actor.tenantId, req.params.id);
     if (row.status !== "draft" && row.status !== "rejected") throw conflict("Only drafts and rejected purchase orders can be submitted");
     const settings = await getSettings(deps, actor.tenantId);
+    assertDocRequiredFields(
+      "po",
+      settings.docRequiredFields,
+      {
+        expectedDate: row.expected_date,
+        deliveryAddress: row.delivery_address,
+        paymentTermsDays: row.payment_terms_days,
+        terms: row.terms,
+      },
+      "submitting this purchase order",
+    );
     const outcome = submitOutcome(money(row.grand_total), settings);
     if (row.status === "rejected") await move(deps.db, actor.tenantId, row.id, "rejected", "draft");
     await move(deps.db, actor.tenantId, row.id, "draft", outcome.status, [

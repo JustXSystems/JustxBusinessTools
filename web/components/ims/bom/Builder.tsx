@@ -24,6 +24,7 @@ import {
   type BomLineKind,
   type BomPackage,
 } from "@/lib/ims/bom";
+import { DOC_REQUIRED_FIELD_LABELS, isDocFieldRequired, normalizeDocRequiredFields } from "@/lib/ims/doc-required-fields";
 import type { ImsItem } from "@/lib/ims/api";
 import { inr, inrExact, stampLabel } from "@/lib/ims/format";
 import { formatCatalogEnsureSummary, exportBomExcel } from "@/lib/ims/bom-excel";
@@ -283,9 +284,14 @@ function BomViewer({
                   <Button
                     disabled={Boolean(busy)}
                     onClick={async () => {
-                      if (session.settings.bomRequireQuotationRef && !String(doc.quotationRef ?? "").trim()) {
+                      const reqBom = normalizeDocRequiredFields(
+                        session.settings.docRequiredFields,
+                        Boolean(session.settings.bomRequireQuotationRef),
+                      ).bom;
+                      const missingBom = reqBom.filter((f) => !String((doc as Record<string, unknown>)[f] ?? "").trim());
+                      if (missingBom.length) {
                         window.alert(
-                          "Quotation reference is required before confirming this BOM (Business Profile → IMS settings). Edit the BOM and enter a quotation reference.",
+                          `Required before confirming this BOM: ${missingBom.map((f) => DOC_REQUIRED_FIELD_LABELS[f] ?? f).join(", ")} (Settings → Documents). Edit the BOM to fill them in.`,
                         );
                         return;
                       }
@@ -1427,16 +1433,16 @@ function BomEditorForm({
               <Field
                 label="Quotation reference"
                 hint={
-                  session.settings.bomRequireQuotationRef
-                    ? "Required before confirm — type or pick an approved quote"
-                    : "Type a ref or pick from approved Quotation V1"
+                  isDocFieldRequired(session.settings, "bom", "quotationRef")
+                    ? "Required before confirm — type or pick from Quotation V1"
+                    : "Type a ref or pick from Quotation V1"
                 }
               >
                 {({ id }) => (
                   <QuotationSelect
                     id={id}
                     value={quotationRef}
-                    required={Boolean(session.settings.bomRequireQuotationRef)}
+                    required={isDocFieldRequired(session.settings, "bom", "quotationRef")}
                     onChange={setQuotationRef}
                     onPick={(quotation) => {
                       setQuotationRef(quotation.docNo);

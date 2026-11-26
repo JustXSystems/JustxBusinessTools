@@ -4,6 +4,7 @@
  */
 import { apiUrl } from "@/lib/api-base";
 import type { BomQuotationStatus } from "./bom-quotation-status";
+import type { DocRequiredFieldMap } from "./doc-required-fields";
 
 export class ImsApiError extends Error {
   status: number;
@@ -239,6 +240,8 @@ export type ImsSettings = {
   bomRequireQuotationRef?: boolean;
   /** Quotation V1 statuses offered as BOM quotation-reference suggestions. Never empty. */
   bomQuotationStatuses?: BomQuotationStatus[];
+  /** Configurable required fields enforced at the final step of each IMS document. */
+  docRequiredFields?: DocRequiredFieldMap;
   /** Null/omitted = industry-pack column defaults. */
   bomScheduleColumns?: BomScheduleColumnId[] | null;
   poApprovalLimit: number;

@@ -13,6 +13,7 @@ import { exec, isoOf, money, one, rows, tsOf, tx, type Queryable } from "./db.js
 import { badRequest, conflict, forbidden, notFound } from "./host.js";
 import { round3, todayISO } from "./logic.js";
 import { assertDayOpen } from "./sales.js";
+import { assertDocRequiredFields } from "./doc-required-fields.js";
 import { getSettings } from "./settings.js";
 import { nextDocNo, postMovement } from "./stock.js";
 import { syncSerializedItemCost } from "./stock-state.js";
@@ -1339,6 +1340,7 @@ export function registerBomDc(router: Router, deps: ImsDeps, loaders: BomDcLoade
     if (!doc || doc.status !== "confirmed") throw conflict("BOM must be confirmed");
 
     const settings = await getSettings(deps, actor.tenantId);
+    assertDocRequiredFields("dc", settings.docRequiredFields, existing, "approving this delivery challan");
     const date = body.date ?? todayISO();
     if (date > todayISO()) throw badRequest("Stock date can’t be in the future");
     await assertDayOpen(deps.db, actor.tenantId, date);
