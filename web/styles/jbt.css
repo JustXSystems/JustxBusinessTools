@@ -14439,4 +14439,64 @@ html[data-scheme="light"] .field textarea {
   background: rgba(255, 255, 255, 0.04);
 }
 
+/* Home Dashboard Proactive Subscription & Usage Ribbon */
+.home-sub-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  margin: 0 0 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background:
+    linear-gradient(125deg, rgba(var(--accent-rgb), 0.12), transparent 65%),
+    var(--glass-1);
+}
+
+.home-sub-strip.is-amber {
+  border-color: rgba(245, 158, 11, 0.45);
+  background:
+    linear-gradient(125deg, rgba(245, 158, 11, 0.13), transparent 65%),
+    var(--glass-1);
+}
+
+.home-sub-strip-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  font-size: 13px;
+  color: var(--text-mid);
+  flex: 1 1 320px;
+}
+
+.home-sub-strip-copy strong {
+  color: var(--text-hi);
+}
+
+.home-sub-strip-badge {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.18);
+  color: var(--accent);
+}
+
+.home-sub-strip.is-amber .home-sub-strip-badge {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.home-sub-strip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 

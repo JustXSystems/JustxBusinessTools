@@ -29,6 +29,7 @@ type Claim = {
   payerUpi: string | null;
   utr: string;
   amountInr: number;
+  billingCycle?: "month" | "year";
   toolIds?: string[];
   paidAt: string | null;
   notes: string | null;
@@ -362,6 +363,9 @@ export const UpiPaymentsPanel = forwardRef<
                       </div>
                     </div>
                     <div className="admin-cc-row-badges">
+                      <Badge auto tone={c.billingCycle === "year" ? "blue" : "neutral"}>
+                        {c.billingCycle === "year" ? "365d" : "30d"}
+                      </Badge>
                       <Badge auto tone={statusTone(c.status)}>
                         {c.status}
                       </Badge>
@@ -418,6 +422,12 @@ export const UpiPaymentsPanel = forwardRef<
                 <strong>{inr(selected.amountInr)}</strong>
               </li>
               <li>
+                <span>Billing cycle</span>
+                <strong>
+                  {selected.billingCycle === "year" ? "Yearly (365 days)" : "Monthly (30 days)"}
+                </strong>
+              </li>
+              <li>
                 <span>Tools</span>
                 <strong>{selected.toolIds?.length ? selected.toolIds.join(", ") : "—"}</strong>
               </li>
@@ -437,7 +447,7 @@ export const UpiPaymentsPanel = forwardRef<
                 />
                 <div className="admin-cc-form-actions">
                   <Button variant="primary" disabled={busy} onClick={() => void review("approve")}>
-                    Approve &amp; license
+                    Approve &amp; license ({selected.billingCycle === "year" ? "365d" : "30d"})
                   </Button>
                   <Button variant="destructive" disabled={busy} onClick={() => void review("reject")}>
                     Reject

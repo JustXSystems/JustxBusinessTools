@@ -3,6 +3,7 @@
 import { useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { fetchProfile, greeting } from "@/lib/api";
+import { SubscriptionStatusStrip } from "@/components/home/SubscriptionStatusStrip";
 import { ToolCard } from "@/components/home/ToolCard";
 import { useDebounce } from "@/hooks/useDebounce";
 import { usePlatformConfig } from "@/components/config/ConfigProvider";
@@ -146,6 +147,8 @@ export function HomeDashboard() {
         ) : null}
         </div>
       </div>
+
+      <SubscriptionStatusStrip />
 
       {isSearching ? (
         <>
