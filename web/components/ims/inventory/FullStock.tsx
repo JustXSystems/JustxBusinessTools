@@ -164,12 +164,22 @@ export function FullStockModule() {
       key: "stock",
       header: "Stock",
       align: "right",
-      cell: (i) => (
-        <span className="ims-inv-stock">
-          <span className="ims-strong">{qtyText(i.currentStock, i.unit)}</span>
-          <StatusBadge view={stockBadge(i.status)} />
-        </span>
-      ),
+      cell: (i) => {
+        const hints = [
+          i.reservedStock ? `${qtyText(i.reservedStock)} res.` : null,
+          i.onOrderStock ? `${qtyText(i.onOrderStock)} on order` : null,
+          i.damagedStock ? `${qtyText(i.damagedStock)} dmg` : null,
+        ].filter(Boolean);
+        return (
+          <span className="ims-cell-stack" style={{ alignItems: "flex-end" }}>
+            <span className="ims-inv-stock">
+              <span className="ims-strong">{qtyText(i.currentStock, i.unit)}</span>
+              <StatusBadge view={stockBadge(i.status)} />
+            </span>
+            {hints.length ? <small className="ims-faint">{hints.join(" · ")}</small> : null}
+          </span>
+        );
+      },
     },
     ...(canSeeCost
       ? [

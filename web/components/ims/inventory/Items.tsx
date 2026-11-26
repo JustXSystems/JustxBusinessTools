@@ -483,16 +483,17 @@ export function ItemsModule() {
   );
   const liveSummary = useMemo(() => {
     const active = filtered.filter((i) => i.active);
+    const activeBase = baseFiltered.filter((i) => i.active);
     return {
       count: filtered.length,
       units: active.reduce((s, i) => s + Math.max(0, i.currentStock), 0),
       value: active.reduce((s, i) => s + i.stockValue, 0),
-      low: active.filter((i) => i.status === "LOW").length,
-      out: active.filter((i) => i.status === "OUT_OF_STOCK").length,
-      over: active.filter((i) => i.status === "OVERSTOCK").length,
+      low: activeBase.filter((i) => i.status === "LOW").length,
+      out: activeBase.filter((i) => i.status === "OUT_OF_STOCK").length,
+      over: activeBase.filter((i) => i.status === "OVERSTOCK").length,
       damaged: active.reduce((s, i) => s + i.damagedStock, 0),
     };
-  }, [filtered]);
+  }, [filtered, baseFiltered]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const current = Math.min(page, pageCount - 1);
@@ -544,12 +545,23 @@ export function ItemsModule() {
       key: "stock",
       header: "Stock",
       align: "right",
-      cell: (i) => (
-        <span className="ims-inv-stock">
-          <span className="ims-strong">{qtyText(i.currentStock, i.unit)}</span>
-          {i.active ? <StatusBadge view={stockBadge(i.status)} /> : <Badge tone="neutral">Archived</Badge>}
-        </span>
-      ),
+      cell: (i) => {
+        const hints = [
+          i.reservedStock ? `${qtyText(i.reservedStock)} res.` : null,
+          i.onOrderStock ? `${qtyText(i.onOrderStock)} on order` : null,
+          i.damagedStock ? `${qtyText(i.damagedStock)} dmg` : null,
+          i.serialMismatch ? `⚠ ${i.serialCount ?? 0} codes` : i.trackSerials && (i.serialCount ?? 0) > 0 ? `${i.serialCount} codes` : null,
+        ].filter(Boolean);
+        return (
+          <span className="ims-cell-stack" style={{ alignItems: "flex-end" }}>
+            <span className="ims-inv-stock">
+              <span className="ims-strong">{qtyText(i.currentStock, i.unit)}</span>
+              {i.active ? <StatusBadge view={stockBadge(i.status)} /> : <Badge tone="neutral">Archived</Badge>}
+            </span>
+            {hints.length ? <small className={i.serialMismatch ? "ims-neg" : "ims-faint"}>{hints.join(" · ")}</small> : null}
+          </span>
+        );
+      },
     },
     { key: "minmax", header: "Min / Max", align: "right", cell: (i) => <span className="ims-muted">{`${qtyText(i.minStock)} / ${i.maxStock != null ? qtyText(i.maxStock) : "—"}`}</span> },
     ...(canSeeCost ? [{ key: "buy", header: "Buy", align: "right" as const, cell: (i: ImsItem) => inrExact(i.purchasePrice) }] : []),

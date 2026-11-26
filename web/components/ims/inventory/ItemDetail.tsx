@@ -203,8 +203,7 @@ export function ItemDetailDialog({
                 <ItemAvatar item={item} size={44} />
                 <span className="ims-cell-stack">
                   <span className="ims-row" style={{ gap: 6 }}>
-                    <StatusBadge view={stockBadge(item.status)} />
-                    {item.active ? null : <Badge tone="neutral">ARCHIVED</Badge>}
+                    {item.active ? <StatusBadge view={stockBadge(item.status)} /> : <Badge tone="neutral">ARCHIVED</Badge>}
                   </span>
                   <small>
                     {item.sku ? `SKU ${item.sku}` : "No SKU"}
@@ -240,6 +239,12 @@ export function ItemDetailDialog({
                 ) : null}
               </div>
             </div>
+
+            {item.serialMismatch ? (
+              <Alert tone="amber" title="Stock count doesn't match tracked scan codes">
+                Stock ledger shows {qtyText(item.currentStock, item.unit)} in stock, while {data.serialCounts?.inStock ?? item.serialCount ?? 0} tracked scan code{(data.serialCounts?.inStock ?? item.serialCount ?? 0) === 1 ? " is" : "s are"} marked in stock. Use Stock Adjustment or Stock In/Out with scan codes to reconcile.
+              </Alert>
+            ) : null}
 
             <div className="ims-inv-tiles">
               <Tile
@@ -372,11 +377,25 @@ export function ItemDetailDialog({
                   </div>
                   <div className="ims-row" style={{ gap: 8, marginBottom: 8 }}>
                     <Input size="sm" placeholder="Filter scan code…" aria-label="Filter scan codes" value={serialQ} onChange={(e) => setSerialQ(e.target.value)} style={{ maxWidth: 220 }} />
-                    {(["all", "in_stock", "out", "damaged", "returned"] as const).map((st) => (
-                      <FilterChip key={st} active={serialStatus === st} onClick={() => setSerialStatus(st)}>
-                        {st === "all" ? "All" : st === "in_stock" ? "In stock" : st[0].toUpperCase() + st.slice(1)}
-                      </FilterChip>
-                    ))}
+                    {(["all", "in_stock", "out", "damaged", "returned"] as const).map((st) => {
+                      const sc = data.serialCounts;
+                      const cnt =
+                        st === "all"
+                          ? (sc ? sc.inStock + sc.out + sc.damaged + sc.returned : data.serials?.length ?? 0)
+                          : st === "in_stock"
+                            ? (sc?.inStock ?? 0)
+                            : st === "out"
+                              ? (sc?.out ?? 0)
+                              : st === "damaged"
+                                ? (sc?.damaged ?? 0)
+                                : (sc?.returned ?? 0);
+                      return (
+                        <FilterChip key={st} active={serialStatus === st} onClick={() => setSerialStatus(st)}>
+                          {st === "all" ? "All" : st === "in_stock" ? "In stock" : st[0].toUpperCase() + st.slice(1)}{" "}
+                          <span className="ims-faint">{cnt}</span>
+                        </FilterChip>
+                      );
+                    })}
                   </div>
                   <div className="ims-inv-scroll">
                     <DataTable<ImsItemSerial>
