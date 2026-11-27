@@ -9,7 +9,8 @@
 /* Standalone (/ims) — use admin-configured viewport share (default 90%), not the 1180px kit cap */
 .bos.ims-standalone { min-height: 100dvh; padding-top: 16px; }
 .bos.ims-standalone .ims-wrap,
-.bos.ims-standalone .bos-wrap {
+.bos.ims-standalone .bos-wrap,
+.bos.ims-standalone .ims-topbar-slot .bos-topbar-inner {
   max-width: none;
   width: var(--ims-content-width, 90%);
   margin-inline: auto;
@@ -27,6 +28,57 @@
 .bos .ims-page-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 /* Topbar — Justxsystems product chrome; autohide while scrolled for max workspace */
+.bos .ims-topbar-slot .bos-topbar-inner {
+  max-width: none;
+  padding: 10px 20px;
+  flex-wrap: nowrap;
+  gap: 16px;
+}
+.bos.ims-standalone .ims-topbar-slot .bos-topbar-inner {
+  padding-inline: 0;
+}
+.bos .ims-topbar-slot .bos-brand {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.bos .ims-topbar-slot .bos-brand > div {
+  min-width: 0;
+  overflow: hidden;
+}
+.bos .ims-topbar-slot .bos-brand-name,
+.bos .ims-topbar-slot .bos-brand-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bos .ims-topbar-slot .bos-topbar-actions {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+.bos .ims-topbar-slot .bos-topbar .bos-search {
+  min-width: 180px;
+  width: clamp(180px, 20vw, 280px);
+}
+@media (max-width: 900px) {
+  .bos .ims-topbar-slot .bos-topbar-inner {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .bos.ims-standalone .ims-topbar-slot .bos-topbar-inner {
+    padding-inline: 0;
+  }
+  .bos .ims-topbar-slot .bos-topbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .bos .ims-topbar-slot .bos-topbar .bos-search {
+    flex: 1 1 160px;
+    min-width: 120px;
+    width: auto;
+  }
+}
 .bos .ims-topbar-label { margin-left: 4px; }
 .bos .ims-topbar-hotzone {
   position: fixed;
