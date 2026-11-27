@@ -15,6 +15,7 @@ const SCREENS: ReadonlyArray<{ key: string; load: () => Promise<{ default: unkno
   { key: "parties", load: () => import("./purchase/Parties") },
   { key: "purchase", load: () => import("./purchase/PurchaseOrders") },
   { key: "approvals", load: () => import("./purchase/Approvals") },
+  { key: "quotations", load: () => import("./quotations/QuotationsModule") },
   { key: "salesOrders", load: () => import("./finance/SalesOrders") },
   { key: "sales", load: () => import("./finance/Sales") },
   { key: "bomPackages", load: () => import("./bom/Packages") },

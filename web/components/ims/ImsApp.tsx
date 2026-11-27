@@ -174,6 +174,7 @@ function SearchDialog({ open, onClose, onPick }: { open: boolean; onClose: () =>
   const KIND: Record<ImsSearchResult["kind"], string> = {
     item: "📦",
     party: "👤",
+    quotation: "📋",
     invoice: "🧾",
     po: "🛒",
     bill: "📤",
@@ -185,7 +186,7 @@ function SearchDialog({ open, onClose, onPick }: { open: boolean; onClose: () =>
   const shown = q.trim().length >= 2 ? results : null;
 
   return (
-    <Dialog open={open} onClose={close} title="Search IMS" description="Items, SKUs, barcodes, parties, invoices, POs, bills and BOMs." initialFocus={inputRef}>
+    <Dialog open={open} onClose={close} title="Search IMS" description="Items, SKUs, barcodes, parties, quotations, invoices, POs, bills and BOMs." initialFocus={inputRef}>
       <Input ref={inputRef} placeholder="Type at least 2 characters…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
       <div className="ims-pick" style={{ marginTop: 12 }}>
         {shown === null ? null : shown.length ? (
