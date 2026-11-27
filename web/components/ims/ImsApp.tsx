@@ -26,7 +26,8 @@ import {
   useCommandHotkey,
   type BosCommand,
 } from "@/components/bos";
-import { useOptionalPlatformConfig, useToolIconConfig, useToolName } from "@/components/config/ConfigProvider";
+import { useOptionalPlatformConfig, useToolIconConfig, useToolName, useToolTagline } from "@/components/config/ConfigProvider";
+import { getToolDefinition } from "@/config/tools.config";
 import { isImageIcon, resolveIconAssetUrl, resolveToolIconSource } from "@/lib/tool-icons";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import { errorText, ims, ImsApiError, type ImsModuleKey, type ImsNotification, type ImsSearchResult, type ImsSession, type ImsSettings } from "@/lib/ims/api";
@@ -295,6 +296,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
   const resolvedIcon = resolveToolIconSource(iconCfg, IMS_LOGO, { theme, size: "md" });
   const logoSrc = isImageIcon(resolvedIcon) ? resolveIconAssetUrl(resolvedIcon) : publicAssetUrl(IMS_LOGO);
   const productName = useToolName("imsdealer", "Justxsystems IMS");
+  const productTagline = useToolTagline("imsdealer", getToolDefinition("imsdealer")?.desc);
   useEffect(() => {
     if (mode === "standalone") document.title = productName;
   }, [mode, productName]);
@@ -454,7 +456,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
           onBlurCapture={topbar.onBlurCapture}
         >
           <Topbar sticky="desktop">
-            <Brand logoSrc={logoSrc} name={productName} sub={mode === "tool" ? "in Justxsystems Business Tools" : "Dealer"} />
+            <Brand logoSrc={logoSrc} name={productName} sub={productTagline} />
             <div className="bos-topbar-actions">
               <SearchInput
                 readOnly

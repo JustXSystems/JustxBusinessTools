@@ -86,6 +86,8 @@ export type EffectiveConfig = {
   toolPersonalUsage?: Record<string, boolean>;
   /** Platform map of toolId → admin-configured product name (from tool_skus). */
   toolNames?: Record<string, string>;
+  /** Platform map of toolId → admin-configured tagline (from tool_skus). */
+  toolTaglines?: Record<string, string>;
   /** Platform map of toolId → admin-configured icon variants (light/dark/favicon/sizes). */
   toolIcons?: ToolIconsMap;
 };
@@ -119,6 +121,7 @@ const DEFAULT_CONFIG: EffectiveConfig = {
   },
   toolPersonalUsage: {},
   toolNames: {},
+  toolTaglines: {},
   toolIcons: {},
 };
 
@@ -143,6 +146,7 @@ function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefi
     features: normalizeFeatures(data?.features),
     toolPersonalUsage: normalizeToolPersonalUsage(data?.toolPersonalUsage),
     toolNames: normalizeToolNames(data?.toolNames),
+    toolTaglines: normalizeToolNames(data?.toolTaglines),
     toolIcons: normalizeToolIconsMap(data?.toolIcons),
   };
 }
@@ -260,6 +264,13 @@ export function useToolName(toolId: string, fallback?: string): string {
   const ctx = useContext(ConfigContext);
   const override = ctx?.config?.toolNames?.[toolId]?.trim();
   return override || fallback || toolId;
+}
+
+/** Admin-configured tagline for a tool (from tool_skus), falling back to caller default. */
+export function useToolTagline(toolId: string, fallback?: string): string | undefined {
+  const ctx = useContext(ConfigContext);
+  const override = ctx?.config?.toolTaglines?.[toolId]?.trim();
+  return override || fallback || undefined;
 }
 
 /** Admin-configured icon variants for a tool (light/dark/favicon/sizes), merged over built-in defaults. */

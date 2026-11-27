@@ -84,8 +84,10 @@ export async function getEffectiveConfig(): Promise<{
   features: FeatureSwitchState;
   /** Platform map of toolId → allowed for personal (no-GSTIN) users. */
   toolPersonalUsage: ToolPersonalUsageMap;
-  /** Platform map of toolId → admin-configured product name from tool_skus. */
+  /** Admin-configured product name and tagline (from tool_skus). */
   toolNames: Record<string, string>;
+  /** Platform map of toolId → admin-configured tagline (from tool_skus). */
+  toolTaglines: Record<string, string>;
   /** Platform map of toolId → admin-configured icon variants (light/dark/favicon/sizes). */
   toolIcons: ToolIconsMap;
 }> {
@@ -137,9 +139,12 @@ export async function getEffectiveConfig(): Promise<{
     getToolIconsMap().catch(() => ({})),
   ]);
   const toolNames: Record<string, string> = {};
+  const toolTaglines: Record<string, string> = {};
   for (const sku of skus) {
     const trimmed = sku.name?.trim();
     if (sku.toolId && trimmed) toolNames[sku.toolId] = trimmed;
+    const tagline = sku.tagline?.trim();
+    if (sku.toolId && tagline) toolTaglines[sku.toolId] = tagline;
   }
   const personalUsageIds = [
     ...DEFAULT_PERSONAL_USAGE_TOOL_IDS,
@@ -179,6 +184,7 @@ export async function getEffectiveConfig(): Promise<{
     features,
     toolPersonalUsage,
     toolNames,
+    toolTaglines,
     toolIcons,
   };
 }
