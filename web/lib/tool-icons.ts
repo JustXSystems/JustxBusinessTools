@@ -28,6 +28,35 @@ export type ToolIconConfig = {
 
 export type ToolIconsMap = Record<string, ToolIconConfig>;
 
+/**
+ * Built-in static icon variants shipped in `web/public/icons/`.
+ * Admin overrides saved via Admin → Tools → Icons take precedence field-by-field.
+ */
+export const BUILTIN_TOOL_ICON_DEFAULTS: ToolIconsMap = {
+  bos: {
+    light: "/icons/BOS/svg/bos-app-light.svg",
+    dark: "/icons/BOS/svg/bos-app-dark.svg",
+    favicon: "/icons/BOS/web/bos-favicon.svg",
+    appleTouch: "/icons/BOS/web/apple-touch-icon.png",
+    size192: "/icons/BOS/web/android-chrome-192x192.png",
+    size512: "/icons/BOS/web/android-chrome-512x512.png",
+    size1024: "/icons/BOS/png/app-light/bos-app-light-1024.png",
+  },
+  bosdesign: {
+    light: "/icons/BOS/svg/bos-mark-light.svg",
+    dark: "/icons/BOS/svg/bos-mark-dark.svg",
+    favicon: "/icons/BOS/web/favicon-mark.ico",
+    appleTouch: "/icons/BOS/web/apple-touch-icon.png",
+  },
+  imsdealer: {
+    light: "/icons/IMS/justx-invoice-icon.svg",
+    favicon: "/icons/IMS/favicon.ico",
+    appleTouch: "/icons/IMS/justx-invoice-icon-512.png",
+    size512: "/icons/IMS/justx-invoice-icon-512.png",
+    size1024: "/icons/IMS/justx-invoice-icon-1024.png",
+  },
+};
+
 export type ToolIconSizeHint = "sm" | "md" | "lg" | "xl" | "favicon" | "apple";
 
 export function isImageIcon(value: string | null | undefined): boolean {

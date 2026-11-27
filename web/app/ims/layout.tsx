@@ -2,10 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { getBasePath } from "@/lib/base-path";
 
 const base = getBasePath();
-const svgIconPath = `${base}/IMS/icons/justx-invoice-icon.svg`;
-const faviconPath = `${base}/IMS/icons/favicon.ico`;
-const icon512Path = `${base}/IMS/icons/justx-invoice-icon-512.png`;
-const icon1024Path = `${base}/IMS/icons/justx-invoice-icon-1024.png`;
+const svgIconPath = `${base}/icons/IMS/justx-invoice-icon.svg`;
+const faviconPath = `${base}/icons/IMS/favicon.ico`;
+const icon512Path = `${base}/icons/IMS/justx-invoice-icon-512.png`;
+const icon1024Path = `${base}/icons/IMS/justx-invoice-icon-1024.png`;
 const manifestPath = `${base}/ims/manifest`;
 
 export const metadata: Metadata = {

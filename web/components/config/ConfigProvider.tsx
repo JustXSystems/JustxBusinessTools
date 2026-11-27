@@ -36,7 +36,7 @@ import {
   type FlashDisplaySettings,
 } from "@/lib/flash-display";
 import { configureAppFlashDurations } from "@/lib/app-flash";
-import { normalizeToolIconsMap, type ToolIconConfig, type ToolIconsMap } from "@/lib/tool-icons";
+import { BUILTIN_TOOL_ICON_DEFAULTS, normalizeToolIconsMap, type ToolIconConfig, type ToolIconsMap } from "@/lib/tool-icons";
 
 function clampImsContentWidthPct(raw: unknown): number {
   const n = typeof raw === "number" ? raw : Number(raw);
@@ -262,8 +262,12 @@ export function useToolName(toolId: string, fallback?: string): string {
   return override || fallback || toolId;
 }
 
-/** Admin-configured icon variants for a tool (light/dark/favicon/sizes). Safe outside provider. */
+/** Admin-configured icon variants for a tool (light/dark/favicon/sizes), merged over built-in defaults. */
 export function useToolIconConfig(toolId: string): ToolIconConfig | undefined {
   const ctx = useContext(ConfigContext);
-  return ctx?.config?.toolIcons?.[toolId];
+  const builtin = BUILTIN_TOOL_ICON_DEFAULTS[toolId];
+  const override = ctx?.config?.toolIcons?.[toolId];
+  if (!builtin) return override;
+  if (!override) return builtin;
+  return { ...builtin, ...override };
 }

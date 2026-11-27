@@ -25,11 +25,12 @@ import { HrmView } from "./views/HrmView";
 import { InvoiceView } from "./views/InvoiceView";
 import { LaunchView } from "./views/LaunchView";
 
-const LOGO = "/icons/justx-bos-mark.png";
+const LOGO_LIGHT = "/icons/BOS/svg/bos-mark-light.svg";
+const LOGO_DARK = "/icons/BOS/svg/bos-mark-dark.svg";
 
 function Workbench() {
-  const logoSrc = publicAssetUrl(LOGO);
   const { theme, setTheme, toggleTheme } = useBosTheme();
+  const logoSrc = publicAssetUrl(theme === "dark" ? LOGO_DARK : LOGO_LIGHT);
   const { show } = useToast();
   const [workspace, setWorkspace] = useState<WorkspaceKey>("design");
   const [paletteOpen, setPaletteOpen] = useState(false);

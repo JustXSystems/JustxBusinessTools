@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BUILTIN_TOOL_ICON_DEFAULTS,
   isImageIcon,
   normalizeToolIconsMap,
   resolveToolIconSource,
@@ -9,13 +10,13 @@ import {
 
 describe("tool-icons", () => {
   const cfg: ToolIconConfig = {
-    light: "/IMS/icons/justx-invoice-icon.svg",
-    dark: "/IMS/icons/justx-invoice-icon-dark.svg",
-    favicon: "/IMS/icons/favicon.ico",
-    appleTouch: "/IMS/icons/justx-invoice-icon-512.png",
-    size192: "/IMS/icons/justx-invoice-icon-192.png",
-    size512: "/IMS/icons/justx-invoice-icon-512.png",
-    size1024: "/IMS/icons/justx-invoice-icon-1024.png",
+    light: "/icons/IMS/justx-invoice-icon.svg",
+    dark: "/icons/IMS/justx-invoice-icon-dark.svg",
+    favicon: "/icons/IMS/favicon.ico",
+    appleTouch: "/icons/IMS/justx-invoice-icon-512.png",
+    size192: "/icons/IMS/justx-invoice-icon-192.png",
+    size512: "/icons/IMS/justx-invoice-icon-512.png",
+    size1024: "/icons/IMS/justx-invoice-icon-1024.png",
     bg: "#091758",
     shape: "circle",
     paddingPx: 4,
@@ -34,6 +35,21 @@ describe("tool-icons", () => {
     expect(resolveToolIconSource(undefined, "📦", { size: "md" })).toBe("📦");
   });
 
+  it("provides built-in light/dark defaults for BOS and IMS", () => {
+    expect(resolveToolIconSource(BUILTIN_TOOL_ICON_DEFAULTS.bos, "🏢", { theme: "light" })).toBe(
+      "/icons/BOS/svg/bos-app-light.svg",
+    );
+    expect(resolveToolIconSource(BUILTIN_TOOL_ICON_DEFAULTS.bos, "🏢", { theme: "dark" })).toBe(
+      "/icons/BOS/svg/bos-app-dark.svg",
+    );
+    expect(resolveToolIconSource(BUILTIN_TOOL_ICON_DEFAULTS.bos, "🏢", { size: "favicon" })).toBe(
+      "/icons/BOS/web/bos-favicon.svg",
+    );
+    expect(resolveToolIconSource(BUILTIN_TOOL_ICON_DEFAULTS.imsdealer, "📦", { size: "favicon" })).toBe(
+      "/icons/IMS/favicon.ico",
+    );
+  });
+
   it("computes tile styles from bg, shape, and padding", () => {
     expect(toolIconTileStyle(cfg)).toEqual({
       background: "#091758",
@@ -44,14 +60,14 @@ describe("tool-icons", () => {
   });
 
   it("detects image icons vs emojis and normalizes map payloads", () => {
-    expect(isImageIcon("/IMS/icons/justx-invoice-icon.svg")).toBe(true);
+    expect(isImageIcon("/icons/IMS/justx-invoice-icon.svg")).toBe(true);
     expect(isImageIcon("https://cdn.example.com/icon.png")).toBe(true);
     expect(isImageIcon("data:image/png;base64,abc")).toBe(true);
     expect(isImageIcon("📦")).toBe(false);
 
     const normalized = normalizeToolIconsMap({
       imsdealer: {
-        light: "  /IMS/icons/justx-invoice-icon.svg  ",
+        light: "  /icons/IMS/justx-invoice-icon.svg  ",
         shape: "rounded",
         paddingPx: 20,
       },
@@ -59,7 +75,7 @@ describe("tool-icons", () => {
     });
     expect(normalized).toEqual({
       imsdealer: {
-        light: "/IMS/icons/justx-invoice-icon.svg",
+        light: "/icons/IMS/justx-invoice-icon.svg",
         shape: "rounded",
         paddingPx: 12,
       },

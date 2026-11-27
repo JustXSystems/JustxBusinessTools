@@ -97,9 +97,9 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
     icon: "/icons/googlemaps2mappls-icon.png",
     desc: "GoogleMaps2Mappls · Google link → Mappls Pin → car app · 14-day free trial, then ₹100/mo or ₹1000/yr",
   },
-  { id: "bosdesign", name: "Justxsystems BOS Design", category: "Utilities", icon: "🧩", desc: "Standard UI/UX system with live HR, Finance & Invoice samples" },
-  { id: "bos", name: "Justxsystems BOS", category: "Utilities", icon: "🏢", desc: "Business Operating System — Finance, GST invoicing, HR & projects, synced with your tools" },
-  { id: "imsdealer", name: "Justxsystems IMS — Dealer", category: "Utilities", icon: "/IMS/icons/justx-invoice-icon.svg", desc: "Inventory, purchasing, GST sales, receivables & field ops for dealers and distributors" },
+  { id: "bosdesign", name: "Justxsystems BOS Design", category: "Utilities", icon: "/icons/BOS/svg/bos-mark-light.svg", desc: "Standard UI/UX system with live HR, Finance & Invoice samples" },
+  { id: "bos", name: "Justxsystems BOS", category: "Utilities", icon: "/icons/BOS/svg/bos-app-light.svg", desc: "Business Operating System — Finance, GST invoicing, HR & projects, synced with your tools" },
+  { id: "imsdealer", name: "Justxsystems IMS — Dealer", category: "Utilities", icon: "/icons/IMS/justx-invoice-icon.svg", desc: "Inventory, purchasing, GST sales, receivables & field ops for dealers and distributors" },
   {
     id: "seo-meridian",
     name: "Meridian SEO",

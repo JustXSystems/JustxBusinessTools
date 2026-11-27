@@ -5,7 +5,9 @@ import "./bos-app.css";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { BosIcon, BosRoot, Button, Field, Footnote, Input, Segmented } from "@/components/bos";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { usePlatformConfig } from "@/components/config/ConfigProvider";
+import { usePlatformConfig, useToolIconConfig } from "@/components/config/ConfigProvider";
+import { useActiveColorMode, useDynamicToolFavicon } from "@/components/common/ToolIconMark";
+import { resolveIconAssetUrl, resolveToolIconSource } from "@/lib/tool-icons";
 import { ImpersonationBanner } from "@/components/layout/ImpersonationBanner";
 import { api, requestPhoneOtp } from "@/lib/api";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
@@ -226,7 +228,10 @@ export function BosStandalone() {
   const { config, refresh: refreshConfig } = usePlatformConfig();
   const [stage, setStage] = useState<"splash" | "login">("splash");
   const [configFor, setConfigFor] = useState<string | null>(null);
-  const logoSrc = publicAssetUrl(BOS_LOGO);
+  const bosIconCfg = useToolIconConfig("bos");
+  const colorMode = useActiveColorMode();
+  useDynamicToolFavicon("bos", "/icons/BOS/web/favicon.ico");
+  const logoSrc = resolveIconAssetUrl(resolveToolIconSource(bosIconCfg, BOS_LOGO, { theme: colorMode, size: "lg" }));
   const userKey = user ? `${user.id}:${user.businessProfileId}` : null;
 
   /* The org catalog decides whether BOS is enabled; re-read it for the signed-in tenant. */

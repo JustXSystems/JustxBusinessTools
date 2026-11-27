@@ -36,7 +36,7 @@ export function ImsStandalone() {
   const colorMode = useActiveColorMode();
   const resolvedIcon = resolveToolIconSource(iconCfg, IMS_LOGO, { theme: colorMode, size: "lg" });
   const logoSrc = isImageIcon(resolvedIcon) ? resolveIconAssetUrl(resolvedIcon) : publicAssetUrl(IMS_LOGO);
-  useDynamicToolFavicon("imsdealer", "/IMS/icons/favicon.ico");
+  useDynamicToolFavicon("imsdealer", "/icons/IMS/favicon.ico");
 
   useEffect(() => {
     document.title = productName;

@@ -17,19 +17,19 @@ export function GET() {
     theme_color: "#0A33FF",
     icons: [
       {
-        src: `${base}/IMS/icons/justx-invoice-icon.svg`,
+        src: `${base}/icons/IMS/justx-invoice-icon.svg`,
         sizes: "any",
         type: "image/svg+xml",
         purpose: "any",
       },
       {
-        src: `${base}/IMS/icons/justx-invoice-icon-512.png`,
+        src: `${base}/icons/IMS/justx-invoice-icon-512.png`,
         sizes: "512x512",
         type: "image/png",
         purpose: "any maskable",
       },
       {
-        src: `${base}/IMS/icons/justx-invoice-icon-1024.png`,
+        src: `${base}/icons/IMS/justx-invoice-icon-1024.png`,
         sizes: "1024x1024",
         type: "image/png",
         purpose: "any",

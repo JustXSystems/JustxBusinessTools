@@ -316,7 +316,7 @@ export const ToolIconsPane = forwardRef<
             label="Favicon (.ico / .svg / .png)"
             hint="Applied to the browser tab when this tool or its standalone app is open."
             value={form.favicon}
-            placeholder="/IMS/icons/favicon.ico"
+            placeholder="/icons/IMS/favicon.ico"
             onChange={(v) => setForm((f) => ({ ...f, favicon: v }))}
             onError={(m) => onSaved(m, "error")}
           />
@@ -324,7 +324,7 @@ export const ToolIconsPane = forwardRef<
             label="Apple Touch Icon (iOS)"
             hint="Used when users Add to Home Screen on iOS / iPadOS (180–512px PNG)."
             value={form.appleTouch}
-            placeholder="/IMS/icons/justx-invoice-icon-512.png"
+            placeholder="/icons/IMS/justx-invoice-icon-512.png"
             onChange={(v) => setForm((f) => ({ ...f, appleTouch: v }))}
             onError={(m) => onSaved(m, "error")}
           />

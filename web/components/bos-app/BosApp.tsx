@@ -33,7 +33,10 @@ const HrWorkspace = lazy(() => import("./hr/HrWorkspace").then((m) => ({ default
 const ProjectsWorkspace = lazy(() => import("./projects/ProjectsWorkspace").then((m) => ({ default: m.ProjectsWorkspace })));
 const SettingsWorkspace = lazy(() => import("./settings/SettingsWorkspace").then((m) => ({ default: m.SettingsWorkspace })));
 
-export const BOS_LOGO = "/icons/justx-bos-mark.png";
+import { resolveIconAssetUrl, resolveToolIconSource } from "@/lib/tool-icons";
+import { useToolIconConfig } from "@/components/config/ConfigProvider";
+
+export const BOS_LOGO = "/icons/BOS/svg/bos-app-light.svg";
 const WS_KEYS = new Set<string>(WORKSPACES.map((w) => w.value));
 
 export type BosAppMode = "tool" | "standalone";
@@ -72,8 +75,9 @@ function writeUrl(ws: WorkspaceKey, module: string | undefined) {
 }
 
 function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mode: BosAppMode; onSignOut?: () => void }) {
-  const productLogo = publicAssetUrl(BOS_LOGO);
   const { theme, setTheme, toggleTheme } = useBosTheme();
+  const bosIconCfg = useToolIconConfig("bos");
+  const productLogo = resolveIconAssetUrl(resolveToolIconSource(bosIconCfg, BOS_LOGO, { theme, size: "md" }));
   const { show } = useToast();
   const [session, setSession] = useState(initial);
   const companyLogo = session.brand?.logoUrl ? publicAssetUrl(session.brand.logoUrl) : null;
