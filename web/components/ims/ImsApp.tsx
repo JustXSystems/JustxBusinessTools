@@ -27,6 +27,7 @@ import {
   type BosCommand,
 } from "@/components/bos";
 import { useOptionalPlatformConfig, useToolIconConfig, useToolName, useToolTagline } from "@/components/config/ConfigProvider";
+import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { getToolDefinition } from "@/config/tools.config";
 import { isImageIcon, resolveIconAssetUrl, resolveToolIconSource } from "@/lib/tool-icons";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
@@ -540,6 +541,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
 
         {/* Tool + standalone: curated floating dock (AppShell mobileNav is off for IMS). */}
         <MobileNav available={moduleKeys} active={current.key} onSelect={(k) => navigate(k)} />
+        {mode === "standalone" ? <PoweredByFooter variant="bar" /> : null}
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} placeholder="Type a command or module…" />
         {askPage ? <PageAskAi key={askPage} page={askPage} open={askOpen} onClose={() => setAskOpen(false)} /> : null}
         <SearchDialog

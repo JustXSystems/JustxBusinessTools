@@ -3,6 +3,7 @@
 import "./settings.css";
 import { useState } from "react";
 import { Alert, Button, useToast } from "@/components/bos";
+import { FooterClockSettingsCard } from "@/components/layout/FooterClockSettingsCard";
 import type { ImsSettings, ImsSettingsMeta } from "@/lib/ims/api";
 import { withBomPaperSettingsDefaults } from "@/lib/ims/bom-paper";
 import { PREFIX_FIELDS, PREFIX_RE, diffSettings, isValidGstin, settingsApi, unknownPlaceholders, withOpsSettingsDefaults, type SettingsPatch } from "@/lib/ims/settings";
@@ -15,7 +16,7 @@ import type { SetDraft, SettingsErrors } from "./parts";
 import { RemindersTab } from "./RemindersTab";
 import { TeamTab } from "./TeamTab";
 
-type Tab = "business" | "documents" | "team" | "permissions" | "catalog" | "reminders" | "map" | "data";
+type Tab = "business" | "documents" | "team" | "permissions" | "catalog" | "reminders" | "map" | "footer" | "data";
 
 const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: "business", label: "Business" },
@@ -25,6 +26,7 @@ const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: "catalog", label: "Catalog lists" },
   { value: "reminders", label: "Reminders" },
   { value: "map", label: "Field map" },
+  { value: "footer", label: "Footer & Clock" },
   { value: "data", label: "Data" },
 ];
 
@@ -306,6 +308,8 @@ function SettingsEditor({ meta, initialTab }: { meta: ImsSettingsMeta; initialTa
           <RemindersTab {...tabProps} />
         ) : tab === "map" ? (
           <MapTab />
+        ) : tab === "footer" ? (
+          <FooterClockSettingsCard disabled={readOnly} />
         ) : (
           <DataTab />
         )}

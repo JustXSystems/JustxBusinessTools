@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Alert, Button, Card, Field, FilterChip, FormGrid, Input, Select, Switch, Textarea, WidgetCard, WidgetRow } from "@/components/bos";
+import { FooterClockSettingsCard } from "@/components/layout/FooterClockSettingsCard";
 import { bos, type BosSettings, type LeaveType } from "@/lib/bos-app/api";
 import { LEAVE_LABEL } from "@/lib/bos-app/format";
 import { ActivityLog } from "../ActivityLog";
@@ -181,6 +182,7 @@ const MODULES: ReadonlyArray<LiveModule> = [
   { key: "invoicing", label: "Invoicing", icon: "🧾", title: "Invoicing & Terms", sub: "Numbering, financial year, default GST rate, payment terms and notes", render: () => <InvoicingSettings /> },
   { key: "hrpolicy", label: "HR Policy", icon: "🗓️", title: "HR Policy", sub: "Leave allowances, weekly off and employee numbering", render: () => <HrSettings /> },
   { key: "integrations", label: "Integrations", icon: "🔗", title: "Integrations", sub: "JBT tool sync, notifications and deployment details", render: () => <IntegrationSettings /> },
+  { key: "footer", label: "Footer & Clock", icon: "🕒", title: "Footer & Clock", sub: "Show or hide the JBT status footer and live clock format", render: () => <FooterClockSettingsCard /> },
   { key: "audit", label: "Audit Log", icon: "🔍", title: "Audit Log", sub: "Append-only trail of every action in BOS — who, what and when", render: () => <ActivityLog /> },
 ];
 

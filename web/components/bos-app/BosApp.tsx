@@ -35,6 +35,7 @@ const SettingsWorkspace = lazy(() => import("./settings/SettingsWorkspace").then
 
 import { resolveIconAssetUrl, resolveToolIconSource } from "@/lib/tool-icons";
 import { useToolIconConfig, useToolName, useToolTagline } from "@/components/config/ConfigProvider";
+import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { getToolDefinition } from "@/config/tools.config";
 
 export const BOS_LOGO = "/icons/BOS/svg/bos-app-light.svg";
@@ -250,6 +251,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mod
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} placeholder="Type a command or search…" />
+      {mode === "standalone" ? <PoweredByFooter variant="bar" /> : null}
     </BosAppProvider>
   );
 }

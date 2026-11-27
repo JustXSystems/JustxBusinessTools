@@ -568,4 +568,23 @@ router.put("/", requireWriteAccess, requireBusinessProfileOwner, async (req, res
   res.json(toApi(row, cfg ? await publicDeliveryConfig(cfg) : null, { orgThemes, organizationTheme }));
 });
 
+router.patch("/clock-display", async (req, res) => {
+  const profileId = getActiveProfileId();
+  const next = normalizeClockDisplaySettings(req.body ?? {});
+  await pool.query(
+    `UPDATE business_profiles
+     SET clock_display_visible = :visible,
+         clock_display_format = :format,
+         config_version = config_version + 1
+     WHERE id = :id`,
+    {
+      id: profileId,
+      visible: next.visible ? 1 : 0,
+      format: next.format,
+    },
+  );
+  await logAudit("profile.clock_display_update", "business_profile", String(profileId), undefined, req.ip);
+  res.json({ clockDisplay: next });
+});
+
 export default router;
