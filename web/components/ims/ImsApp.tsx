@@ -37,7 +37,7 @@ import { PageAskAi } from "./AskAi";
 import { ErrorBlock, ImsAppProvider, LoadingBlock, type ImsAppContextValue, type ImsAppMode } from "./core";
 import { isChunkLoadError, MODULE_KEYS, moduleDef, visibleModules } from "./modules";
 
-export const IMS_LOGO = "/icons/justx-bos-mark.png";
+export const IMS_LOGO = "/IMS/icons/justx-invoice-icon.svg";
 const NAV_COLLAPSE_KEY = "ims.nav.collapsed";
 
 function readNavCollapsed(): boolean {

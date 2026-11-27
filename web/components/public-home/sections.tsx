@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TOOL_CATALOG } from "@/config/tools.config";
+import { withBasePath } from "@/lib/base-path";
 import { sectionInlineStyle, hasRenderableMedia } from "@/lib/public-home/style";
 import type {
   CtaSection,
@@ -418,7 +419,21 @@ export function PhMarqueeSection({ section }: { section: MarqueeSection }) {
       >
         {loop.map((item, i) => (
           <span key={`${item.id}-${i}`} className="ph-marquee-item">
-            {item.icon ? <span aria-hidden>{item.icon}</span> : null}
+            {item.icon ? (
+              item.icon.startsWith("/") || item.icon.startsWith("http") || item.icon.startsWith("data:") ? (
+                // eslint-disable-next-line @next/next/no-img-element -- static public icon asset
+                <img
+                  src={item.icon.startsWith("/") ? withBasePath(item.icon) : item.icon}
+                  alt=""
+                  width={20}
+                  height={20}
+                  style={{ width: 20, height: 20, objectFit: "contain" }}
+                  aria-hidden
+                />
+              ) : (
+                <span aria-hidden>{item.icon}</span>
+              )
+            ) : null}
             {hasRenderableMedia(item.media) ? (
               <PhMedia media={item.media} className="ph-media" />
             ) : null}
@@ -475,7 +490,22 @@ export function PhToolsShowcaseSection({ section }: { section: ToolsShowcaseSect
                 <PhMedia media={tool.screenshot} />
               </div>
             ) : null}
-            {tool.icon ? <div className="ph-tool-icon">{tool.icon}</div> : null}
+            {tool.icon ? (
+              <div className="ph-tool-icon">
+                {tool.icon.startsWith("/") || tool.icon.startsWith("http") || tool.icon.startsWith("data:") ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- static public icon asset
+                  <img
+                    src={tool.icon.startsWith("/") ? withBasePath(tool.icon) : tool.icon}
+                    alt=""
+                    width={32}
+                    height={32}
+                    style={{ width: 32, height: 32, objectFit: "contain" }}
+                  />
+                ) : (
+                  tool.icon
+                )}
+              </div>
+            ) : null}
             <h3>{tool.name}</h3>
             <p>{tool.description}</p>
             {tool.features?.length ? (

@@ -99,7 +99,7 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
   },
   { id: "bosdesign", name: "Justxsystems BOS Design", category: "Utilities", icon: "🧩", desc: "Standard UI/UX system with live HR, Finance & Invoice samples" },
   { id: "bos", name: "Justxsystems BOS", category: "Utilities", icon: "🏢", desc: "Business Operating System — Finance, GST invoicing, HR & projects, synced with your tools" },
-  { id: "imsdealer", name: "Justxsystems IMS — Dealer", category: "Utilities", icon: "📦", desc: "Inventory, purchasing, GST sales, receivables & field ops for dealers and distributors" },
+  { id: "imsdealer", name: "Justxsystems IMS — Dealer", category: "Utilities", icon: "/IMS/icons/justx-invoice-icon.svg", desc: "Inventory, purchasing, GST sales, receivables & field ops for dealers and distributors" },
   {
     id: "seo-meridian",
     name: "Meridian SEO",
