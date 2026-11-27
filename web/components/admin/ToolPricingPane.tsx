@@ -141,11 +141,30 @@ export const ToolPricingPane = forwardRef<
   const [personalUsage, setPersonalUsage] = useState<boolean | null>(null);
   const [personalBusy, setPersonalBusy] = useState(false);
   const savedSnap = useRef("");
+  const syncedToolIdRef = useRef(toolId);
+  const formRef = useRef(form);
+  formRef.current = form;
+  const savedLimitRef = useRef(recordLimitOverride == null ? "" : String(recordLimitOverride));
+  const limitKeyRef = useRef(`${toolId}:${businessProfileId ?? ""}`);
+  const profileLimitRef = useRef(profileLimit);
+  profileLimitRef.current = profileLimit;
 
   useEffect(() => {
     const next = formFromSku(sku, toolName, toolCategory);
-    setForm(next);
-    savedSnap.current = JSON.stringify(next);
+    const nextSnap = JSON.stringify(next);
+    const toolChanged = syncedToolIdRef.current !== toolId;
+    if (toolChanged) {
+      syncedToolIdRef.current = toolId;
+      savedSnap.current = nextSnap;
+      setForm(next);
+      return;
+    }
+    const isDirty = savedSnap.current !== "" && JSON.stringify(formRef.current) !== savedSnap.current;
+    if (isDirty) return;
+    if (nextSnap !== savedSnap.current) {
+      savedSnap.current = nextSnap;
+      setForm(next);
+    }
   }, [sku, toolId, toolName, toolCategory]);
 
   useEffect(() => {
@@ -219,7 +238,20 @@ export const ToolPricingPane = forwardRef<
   }, [form.priceInr, form.annualPriceInr, form.includedFree, form.billingInterval]);
 
   useEffect(() => {
-    setProfileLimit(recordLimitOverride == null ? "" : String(recordLimitOverride));
+    const next = recordLimitOverride == null ? "" : String(recordLimitOverride);
+    const nextKey = `${toolId}:${businessProfileId ?? ""}`;
+    if (limitKeyRef.current !== nextKey) {
+      limitKeyRef.current = nextKey;
+      savedLimitRef.current = next;
+      setProfileLimit(next);
+      return;
+    }
+    const isDirty = profileLimitRef.current !== savedLimitRef.current;
+    if (isDirty) return;
+    if (next !== savedLimitRef.current) {
+      savedLimitRef.current = next;
+      setProfileLimit(next);
+    }
   }, [recordLimitOverride, toolId, businessProfileId]);
 
   const dirty = JSON.stringify(form) !== savedSnap.current;
@@ -316,6 +348,7 @@ export const ToolPricingPane = forwardRef<
           method: "POST",
           body: JSON.stringify({ businessProfileId: profileId, toolId, recordLimit }),
         });
+        savedLimitRef.current = recordLimit == null ? "" : String(recordLimit);
       },
     );
   }

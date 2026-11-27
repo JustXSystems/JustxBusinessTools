@@ -300,16 +300,39 @@ export default function AdminToolsPage() {
   };
   useLiveRefresh(loadAll, { intervalMs: 60_000, deps: [businessProfileId] });
 
+  const placementKeyRef = useRef("");
+  const placementSavedRef = useRef({ groupName: "", available: true, openStandalone: true });
+  const placementLiveRef = useRef({ groupName, available, openStandalone });
+  placementLiveRef.current = { groupName, available, openStandalone };
+
   useEffect(() => {
     if (!selected) return;
     if (!selectedId) setSelectedId(selected.id);
-    setGroupName(selected.catalog?.groupName || selected.groupName);
-    setAvailable(selected.catalog?.available ?? true);
-    setOpenStandalone(
+    const nextGroup = selected.catalog?.groupName || selected.groupName;
+    const nextAvailable = selected.catalog?.available ?? true;
+    const nextStandalone =
       selected.catalog?.openStandalone ??
-        (selected.id === "bos" || selected.id === "imsdealer"),
-    );
-  }, [selected, selectedId]);
+      (selected.id === "bos" || selected.id === "imsdealer");
+    const key = `${selected.id}:${businessProfileId ?? ""}`;
+    const keyChanged = placementKeyRef.current !== key;
+    const saved = placementSavedRef.current;
+    const live = placementLiveRef.current;
+    const isDirty =
+      placementKeyRef.current !== "" &&
+      (live.groupName !== saved.groupName ||
+        live.available !== saved.available ||
+        live.openStandalone !== saved.openStandalone);
+    if (!keyChanged && isDirty) return;
+    placementKeyRef.current = key;
+    placementSavedRef.current = {
+      groupName: nextGroup,
+      available: nextAvailable,
+      openStandalone: nextStandalone,
+    };
+    setGroupName(nextGroup);
+    setAvailable(nextAvailable);
+    setOpenStandalone(nextStandalone);
+  }, [selected, selectedId, businessProfileId]);
 
   // "New tool" (toolbar or directory) opens the create form — bring it into view and focus the first field.
   const focusCreateForm = useCallback(() => {
@@ -832,6 +855,9 @@ export default function AdminToolsPage() {
                   onAvailable={setAvailable}
                   onOpenStandalone={setOpenStandalone}
                   onSaved={async (msg, tone) => {
+                    if (tone !== "error") {
+                      placementSavedRef.current = { groupName, available, openStandalone };
+                    }
                     say(msg, tone ?? "success");
                     await reload();
                     invalidateAdminData("admin-tools");

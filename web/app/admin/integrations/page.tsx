@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useState, type ReactNode } from "react";
+import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Alert,
@@ -217,12 +217,16 @@ export default function AdminIntegrationsPage() {
   });
   const [errorForm, setErrorForm] = useState({ enabled: false, url: "" });
 
-  const load = useCallback(async () => {
+  const seededFormsRef = useRef(false);
+
+  const load = useCallback(async (forceSeed = false) => {
     if (!isPlatform) return;
     try {
       const next = await api<HubResponse>("/admin/integrations");
       setData(next);
       setError("");
+      if (!forceSeed && seededFormsRef.current) return;
+      seededFormsRef.current = true;
       const byId = Object.fromEntries(next.integrations.map((i) => [i.id, i]));
 
       const g = byId.google_oauth;
@@ -284,7 +288,7 @@ export default function AdminIntegrationsPage() {
         body: JSON.stringify(body),
       });
       setMsg(res.warning || okMsg);
-      await load();
+      await load(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {

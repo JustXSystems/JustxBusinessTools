@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Badge, Button, Field, FormGrid, Switch } from "@/components/bos";
 import { AdminSection } from "@/components/admin/ui";
 import { SelectField, TextField } from "@/components/admin/ui/AdminFields";
@@ -50,15 +50,28 @@ export const ToolPlacementPane = forwardRef<
   const [contentWidthPct, setContentWidthPct] = useState(90);
   const staticDef = getToolDefinition(toolId);
   const defaultPersonal = defaultPersonalUsage(toolId, staticDef?.type);
-  const [personalUsage, setPersonalUsage] = useState(
-    () => config?.toolPersonalUsage?.[toolId] ?? defaultPersonal,
-  );
+  const serverPersonalUsage = config?.toolPersonalUsage?.[toolId] ?? defaultPersonal;
+  const [personalUsage, setPersonalUsage] = useState(serverPersonalUsage);
+  const personalToolIdRef = useRef(toolId);
+  const savedPersonalRef = useRef(serverPersonalUsage);
+  const livePersonalRef = useRef(personalUsage);
+  livePersonalRef.current = personalUsage;
   const canStandalone = supportsStandaloneApp(toolId);
   const isIms = toolId === "imsdealer";
 
   useEffect(() => {
-    setPersonalUsage(config?.toolPersonalUsage?.[toolId] ?? defaultPersonal);
-  }, [toolId, config?.toolPersonalUsage, defaultPersonal]);
+    if (personalToolIdRef.current !== toolId) {
+      personalToolIdRef.current = toolId;
+      savedPersonalRef.current = serverPersonalUsage;
+      setPersonalUsage(serverPersonalUsage);
+      return;
+    }
+    if (livePersonalRef.current !== savedPersonalRef.current) return;
+    if (serverPersonalUsage !== savedPersonalRef.current) {
+      savedPersonalRef.current = serverPersonalUsage;
+      setPersonalUsage(serverPersonalUsage);
+    }
+  }, [toolId, serverPersonalUsage]);
 
   useEffect(() => {
     if (!isIms) return;
@@ -81,6 +94,7 @@ export const ToolPlacementPane = forwardRef<
         method: "PUT",
         body: JSON.stringify({ toolId, personalUsage }),
       });
+      savedPersonalRef.current = personalUsage;
 
       if (businessProfileId == null) {
         await refreshConfig().catch(() => undefined);

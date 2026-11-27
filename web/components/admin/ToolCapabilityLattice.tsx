@@ -92,15 +92,17 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
     }, [businessProfileId]);
 
     const loadDetail = useCallback(
-      async (toolId: string) => {
+      async (toolId: string, opts?: { preserveSearch?: boolean }) => {
         const data = await api<CapabilityDetail>(
           `/admin/tool-capabilities/${encodeURIComponent(toolId)}?businessProfileId=${businessProfileId}`,
         );
         setDetail(data);
         setUnrestricted(data.unrestricted);
         setEnabled(new Set(data.enabled));
-        setModuleQuery("");
-        setModuleFilter("all");
+        if (!opts?.preserveSearch) {
+          setModuleQuery("");
+          setModuleFilter("all");
+        }
         return data;
       },
       [businessProfileId],
@@ -110,7 +112,7 @@ export const ToolCapabilityLattice = forwardRef<ToolCapabilityLatticeHandle, Pro
       setError("");
       try {
         await reloadSummary();
-        if (selectedToolId) await loadDetail(selectedToolId);
+        if (selectedToolId) await loadDetail(selectedToolId, { preserveSearch: true });
         else setDetail(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load capabilities");

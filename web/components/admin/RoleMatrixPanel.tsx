@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Alert, Button, Checkbox, DataTable, Skeleton, type BosColumn } from "@/components/bos";
 import { AdminSection } from "@/components/admin/ui";
 import { api } from "@/lib/api";
@@ -40,10 +40,13 @@ export function RoleMatrixPanel() {
   const [messageTone, setMessageTone] = useState<"emerald" | "coral">("emerald");
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
+  const dirtyRef = useRef(false);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (force = false) => {
     const data = await api<{ matrix: Matrix; labels: Record<string, string> }>("/admin/team/roles/matrix");
-    setMatrix(data.matrix);
+    if (force || !dirtyRef.current) {
+      setMatrix(data.matrix);
+    }
     setLabels(data.labels);
   }, []);
 
@@ -60,6 +63,7 @@ export function RoleMatrixPanel() {
     if (!matrix) return;
     // Locked capabilities / roles.
     if (isLocked(role, cap)) return;
+    dirtyRef.current = true;
     setMatrix({
       ...matrix,
       [role]: { ...matrix[role], [cap]: !matrix[role][cap] },
@@ -75,6 +79,7 @@ export function RoleMatrixPanel() {
         method: "PUT",
         body: JSON.stringify({ matrix }),
       });
+      dirtyRef.current = false;
       setMatrix(data.matrix);
       setMessageTone("emerald");
       setMessage("Role matrix saved. Write access is enforced on the next API call.");
