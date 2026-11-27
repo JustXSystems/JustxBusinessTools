@@ -10,6 +10,9 @@ const ALLOWED = new Map([
   ["image/jpg", "jpg"],
   ["image/webp", "webp"],
   ["image/gif", "gif"],
+  ["image/svg+xml", "svg"],
+  ["image/x-icon", "ico"],
+  ["image/vnd.microsoft.icon", "ico"],
 ]);
 
 /** Default signed URL lifetime for logos returned to browsers (7 days). */

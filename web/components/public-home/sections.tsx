@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TOOL_CATALOG } from "@/config/tools.config";
 import { useOptionalPlatformConfig } from "@/components/config/ConfigProvider";
+import { ToolIconMark } from "@/components/common/ToolIconMark";
 import { withBasePath } from "@/lib/base-path";
 import { sectionInlineStyle, hasRenderableMedia } from "@/lib/public-home/style";
 import type {
@@ -495,18 +496,7 @@ export function PhToolsShowcaseSection({ section }: { section: ToolsShowcaseSect
             ) : null}
             {tool.icon ? (
               <div className="ph-tool-icon">
-                {tool.icon.startsWith("/") || tool.icon.startsWith("http") || tool.icon.startsWith("data:") ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- static public icon asset
-                  <img
-                    src={tool.icon.startsWith("/") ? withBasePath(tool.icon) : tool.icon}
-                    alt=""
-                    width={32}
-                    height={32}
-                    style={{ width: 32, height: 32, objectFit: "contain" }}
-                  />
-                ) : (
-                  tool.icon
-                )}
+                <ToolIconMark toolId={tool.toolId || tool.id} fallback={tool.icon} size={32} />
               </div>
             ) : null}
             <h3>{tool.name}</h3>

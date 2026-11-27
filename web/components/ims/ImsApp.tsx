@@ -26,7 +26,8 @@ import {
   useCommandHotkey,
   type BosCommand,
 } from "@/components/bos";
-import { useOptionalPlatformConfig, useToolName } from "@/components/config/ConfigProvider";
+import { useOptionalPlatformConfig, useToolIconConfig, useToolName } from "@/components/config/ConfigProvider";
+import { isImageIcon, resolveIconAssetUrl, resolveToolIconSource } from "@/lib/tool-icons";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import { errorText, ims, ImsApiError, type ImsModuleKey, type ImsNotification, type ImsSearchResult, type ImsSession, type ImsSettings } from "@/lib/ims/api";
 import { isAssistantPage } from "@/lib/ims/assistant";
@@ -289,12 +290,14 @@ function MobileNav({ available, active, onSelect }: { available: ReadonlySet<Ims
 }
 
 function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mode: ImsAppMode; onSignOut?: () => void }) {
-  const logoSrc = publicAssetUrl(IMS_LOGO);
+  const { theme, setTheme, toggleTheme } = useBosTheme();
+  const iconCfg = useToolIconConfig("imsdealer");
+  const resolvedIcon = resolveToolIconSource(iconCfg, IMS_LOGO, { theme, size: "md" });
+  const logoSrc = isImageIcon(resolvedIcon) ? resolveIconAssetUrl(resolvedIcon) : publicAssetUrl(IMS_LOGO);
   const productName = useToolName("imsdealer", "Justxsystems IMS");
   useEffect(() => {
     if (mode === "standalone") document.title = productName;
   }, [mode, productName]);
-  const { theme, setTheme, toggleTheme } = useBosTheme();
   const [session, setSession] = useState(initial);
   const [nav, setNav] = useState<NavState>(navFromUrl);
   const [version, setVersion] = useState(0);

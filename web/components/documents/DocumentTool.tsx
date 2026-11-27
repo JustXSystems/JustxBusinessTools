@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmModal, Modal } from "@/components/common/Modal";
 import { useToast } from "@/components/common/ToastProvider";
+import { ToolIconMark } from "@/components/common/ToolIconMark";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
 import { DocumentPreview } from "@/components/documents/DocumentPreview";
@@ -247,7 +248,9 @@ export function DocumentTool({ tool }: Props) {
       <div className="tool-header">
         <Link href="/" className="back-btn" aria-label="Back">←</Link>
         <div className="tool-header-text">
-          <div className="tool-header-title">{tool.icon} {tool.name}</div>
+          <div className="tool-header-title" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <ToolIconMark toolId={tool.id} fallback={tool.icon} size={24} sizeHint="sm" /> {tool.name}
+          </div>
           <div className="tool-header-sub">{config.subtitle}</div>
         </div>
         <ToolUsageCounter usage={usage} />

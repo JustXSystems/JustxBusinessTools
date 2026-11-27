@@ -17,6 +17,7 @@ import { withBasePath } from "@/lib/base-path";
 import { openStandaloneAppWindow, resolveToolLaunch, toStandaloneHref } from "@/lib/tool-launch";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { isPersonalAccount } from "@/lib/personal-account";
+import { ToolIconMark, useDynamicToolFavicon } from "@/components/common/ToolIconMark";
 
 const QrGeneratorTool = dynamic(
   () => import("@/components/utilities/QrGeneratorTool").then((m) => m.QrGeneratorTool),
@@ -115,6 +116,7 @@ export function ToolView({ toolId }: { toolId: string }) {
   const launch = resolveToolLaunch(toolId, catalogRow);
   const personal = isPersonalAccount(user);
   const personalAllowed = isPersonalUsageTool(toolId, tool, config?.toolPersonalUsage);
+  useDynamicToolFavicon(toolId);
 
   if (loading && !tool) {
     return (
@@ -216,7 +218,11 @@ export function ToolView({ toolId }: { toolId: string }) {
         eyebrow={tool.category}
         title={tool.name}
         subtitle={tool.desc}
-        meta={<span className="tool-shell-chip">{tool.icon}</span>}
+        meta={
+          <span className="tool-shell-chip">
+            <ToolIconMark toolId={tool.id} fallback={tool.icon} size={22} sizeHint="sm" />
+          </span>
+        }
       />
       <div className="panel">
         <p className="section-note mt-0">This tool is not available yet.</p>

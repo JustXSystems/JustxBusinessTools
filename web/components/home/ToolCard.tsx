@@ -9,16 +9,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { withBasePath } from "@/lib/base-path";
 import { describeToolUsage, formatInr } from "@/lib/subscription-store-helpers";
 import { openStandaloneAppWindow, resolveToolLaunch } from "@/lib/tool-launch";
-
-function ToolIcon({ icon }: { icon: string }) {
-  if (icon.startsWith("/")) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element -- static public icon asset
-      <img className="tool-icon-img" src={withBasePath(icon)} alt="" width={40} height={40} />
-    );
-  }
-  return <>{icon}</>;
-}
+import { ToolIconMark } from "@/components/common/ToolIconMark";
 
 export function ToolCard({ tool }: { tool: ToolDefinition }) {
   const { subscription, isToolLicensed, openUpgrade, startTrial } = useSubscription();
@@ -60,7 +51,7 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
   const mainBody = (
     <>
       <div className="tool-icon" aria-hidden>
-        <ToolIcon icon={tool.icon} />
+        <ToolIconMark toolId={tool.id} fallback={tool.icon} size={40} className="tool-icon-img" />
       </div>
       <div className="tool-card-copy">
         <div className="tool-name">{displayName}</div>

@@ -5,7 +5,9 @@ import "./ims-app.css";
 import { useEffect, type ReactNode } from "react";
 import { BosRoot, Footnote } from "@/components/bos";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { useToolName } from "@/components/config/ConfigProvider";
+import { useToolIconConfig, useToolName } from "@/components/config/ConfigProvider";
+import { useActiveColorMode, useDynamicToolFavicon } from "@/components/common/ToolIconMark";
+import { isImageIcon, resolveIconAssetUrl, resolveToolIconSource } from "@/lib/tool-icons";
 import { ImpersonationBanner } from "@/components/layout/ImpersonationBanner";
 import { api } from "@/lib/api";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
@@ -13,12 +15,12 @@ import { clearSubscriptionSnapshot } from "@/lib/subscription-cache";
 import { clearToolCart } from "@/lib/tool-cart";
 import { IMS_LOGO, ImsApp } from "./ImsApp";
 
-function Gate({ children, productName }: { children: ReactNode; productName: string }) {
+function Gate({ children, productName, logoSrc }: { children: ReactNode; productName: string; logoSrc: string }) {
   return (
     <BosRoot skin="ims" canvas className="ims-standalone">
       <main className="ims-gate">
         {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset under the app base path */}
-        <img className="ims-gate-logo" src={publicAssetUrl(IMS_LOGO)} alt={productName} />
+        <img className="ims-gate-logo" src={logoSrc} alt={productName} />
         {children}
         <Footnote>{productName} · © 2026 Justxsystems. All Rights Reserved.</Footnote>
       </main>
@@ -30,6 +32,11 @@ function Gate({ children, productName }: { children: ReactNode; productName: str
 export function ImsStandalone() {
   const { user, loading, refresh } = useAuth();
   const productName = useToolName("imsdealer", "Justxsystems IMS");
+  const iconCfg = useToolIconConfig("imsdealer");
+  const colorMode = useActiveColorMode();
+  const resolvedIcon = resolveToolIconSource(iconCfg, IMS_LOGO, { theme: colorMode, size: "lg" });
+  const logoSrc = isImageIcon(resolvedIcon) ? resolveIconAssetUrl(resolvedIcon) : publicAssetUrl(IMS_LOGO);
+  useDynamicToolFavicon("imsdealer", "/IMS/icons/favicon.ico");
 
   useEffect(() => {
     document.title = productName;
@@ -47,7 +54,7 @@ export function ImsStandalone() {
 
   if (loading) {
     return (
-      <Gate productName={productName}>
+      <Gate productName={productName} logoSrc={logoSrc}>
         <p className="bos-text-muted">Setting up your workspace…</p>
       </Gate>
     );
@@ -55,7 +62,7 @@ export function ImsStandalone() {
 
   if (!user) {
     return (
-      <Gate productName={productName}>
+      <Gate productName={productName} logoSrc={logoSrc}>
         <div className="ims-gate-card">
           <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 600 }}>
             Welcome to {productName}

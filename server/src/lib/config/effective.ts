@@ -27,6 +27,7 @@ import {
   type ToolPersonalUsageMap,
 } from "./tool-personal-usage.js";
 import { listToolSkus } from "../tool-skus.js";
+import { getToolIconsMap, type ToolIconsMap } from "./tool-icons.js";
 
 async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
   await pool.query(
@@ -85,6 +86,8 @@ export async function getEffectiveConfig(): Promise<{
   toolPersonalUsage: ToolPersonalUsageMap;
   /** Platform map of toolId → admin-configured product name from tool_skus. */
   toolNames: Record<string, string>;
+  /** Platform map of toolId → admin-configured icon variants (light/dark/favicon/sizes). */
+  toolIcons: ToolIconsMap;
 }> {
   const orgId = getActiveOrgId();
   const profileId = getActiveProfileId();
@@ -126,11 +129,12 @@ export async function getEffectiveConfig(): Promise<{
   });
 
   await ensureBuiltinCatalogRows(orgId);
-  const [tools, catalog, features, skus] = await Promise.all([
+  const [tools, catalog, features, skus, toolIcons] = await Promise.all([
     listToolDefinitions(),
     listOrgCatalog(orgId),
     getOrgFeatureSwitches(orgId),
     listToolSkus().catch(() => []),
+    getToolIconsMap().catch(() => ({})),
   ]);
   const toolNames: Record<string, string> = {};
   for (const sku of skus) {
@@ -175,6 +179,7 @@ export async function getEffectiveConfig(): Promise<{
     features,
     toolPersonalUsage,
     toolNames,
+    toolIcons,
   };
 }
 

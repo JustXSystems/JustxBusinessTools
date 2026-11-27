@@ -29,6 +29,7 @@ import {
   type SkuState,
 } from "@/components/admin/ToolPricingPane";
 import { ToolSchemaPane } from "@/components/admin/ToolSchemaPane";
+import { ToolIconsPane } from "@/components/admin/ToolIconsPane";
 import type { ToolsSaveHandle } from "@/components/admin/tools-actions";
 import { getToolDefinition, uniqueTools } from "@/config/tools.config";
 import { api } from "@/lib/api";
@@ -59,7 +60,7 @@ type License = {
 
 type ToolDef = { id: string; toolType: string; definition: Record<string, unknown> };
 
-type Tab = "placement" | "pricing" | "schema";
+type Tab = "placement" | "pricing" | "icons" | "schema";
 type DirFilter = "all" | "live" | "hidden" | "paid" | "licensed";
 
 type DirectoryItem = {
@@ -78,6 +79,7 @@ type DirectoryItem = {
 
 function tabFromSearch(raw: string | null): Tab {
   if (raw === "pricing" || raw === "skus" || raw === "licenses") return "pricing";
+  if (raw === "icons" || raw === "icon" || raw === "branding") return "icons";
   if (raw === "schema" || raw === "config" || raw === "fields") return "schema";
   return "placement";
 }
@@ -126,6 +128,7 @@ export default function AdminToolsPage() {
 
   const placementRef = useRef<ToolsSaveHandle>(null);
   const pricingRef = useRef<ToolsSaveHandle>(null);
+  const iconsRef = useRef<ToolsSaveHandle>(null);
   const schemaRef = useRef<ToolsSaveHandle>(null);
   const createFormRef = useRef<HTMLFormElement>(null);
 
@@ -370,7 +373,9 @@ export default function AdminToolsPage() {
         ? placementRef.current
         : tab === "pricing"
           ? pricingRef.current
-          : schemaRef.current;
+          : tab === "icons"
+            ? iconsRef.current
+            : schemaRef.current;
     if (!handle) return;
     setSaving(true);
     try {
@@ -389,7 +394,9 @@ export default function AdminToolsPage() {
         ? selected?.sku
           ? "Save product"
           : "Publish product"
-        : "Publish revision";
+        : tab === "icons"
+          ? "Save icons"
+          : "Publish revision";
 
   async function move(id: string, dir: -1 | 1) {
     const idx = catalog.findIndex((t) => t.id === id);
@@ -511,6 +518,7 @@ export default function AdminToolsPage() {
   const tabOptions: ReadonlyArray<{ value: Tab; label: string }> = [
     { value: "placement", label: "Placement" },
     { value: "pricing", label: "Product" },
+    { value: "icons", label: "Icons" },
     { value: "schema", label: "Schema" },
   ];
 
@@ -892,6 +900,20 @@ export default function AdminToolsPage() {
                     invalidateAdminData("admin-tools");
                   }}
                   onMessage={(msg, tone) => say(msg, tone ?? "success")}
+                />
+              </div>
+
+              <div hidden={tab !== "icons"}>
+                <ToolIconsPane
+                  ref={iconsRef}
+                  toolId={selected.id}
+                  toolName={selected.name}
+                  onSaved={async (msg, tone) => {
+                    say(msg, tone ?? "success");
+                    if (tone !== "error") {
+                      invalidateAdminData("admin-tools");
+                    }
+                  }}
                 />
               </div>
 

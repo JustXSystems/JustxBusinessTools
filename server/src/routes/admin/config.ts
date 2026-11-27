@@ -11,6 +11,7 @@ import {
   getToolPersonalUsageMap,
   setToolPersonalUsage,
 } from "../../lib/config/tool-personal-usage.js";
+import { getToolIconsMap, saveToolIconConfig } from "../../lib/config/tool-icons.js";
 import {
   getPublicHome,
   parsePublicHome,
@@ -105,6 +106,28 @@ router.get("/tool-personal-usage", async (_req, res) => {
   const tools = await listToolDefinitions();
   const toolPersonalUsage = await getToolPersonalUsageMap(tools.map((t) => t.id));
   res.json({ toolPersonalUsage });
+});
+
+router.get("/tool-icons", async (_req, res) => {
+  res.json({ toolIcons: await getToolIconsMap() });
+});
+
+router.put("/tool-icons/:toolId", async (req, res) => {
+  try {
+    const result = await saveToolIconConfig(req.params.toolId, req.body ?? {});
+    res.json({ toolId: req.params.toolId, ...result });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Save failed" });
+  }
+});
+
+router.delete("/tool-icons/:toolId", async (req, res) => {
+  try {
+    const result = await saveToolIconConfig(req.params.toolId, { reset: true });
+    res.json({ toolId: req.params.toolId, ...result });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Reset failed" });
+  }
 });
 
 router.put("/tool-personal-usage", async (req, res) => {

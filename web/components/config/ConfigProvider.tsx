@@ -36,6 +36,7 @@ import {
   type FlashDisplaySettings,
 } from "@/lib/flash-display";
 import { configureAppFlashDurations } from "@/lib/app-flash";
+import { normalizeToolIconsMap, type ToolIconConfig, type ToolIconsMap } from "@/lib/tool-icons";
 
 function clampImsContentWidthPct(raw: unknown): number {
   const n = typeof raw === "number" ? raw : Number(raw);
@@ -85,6 +86,8 @@ export type EffectiveConfig = {
   toolPersonalUsage?: Record<string, boolean>;
   /** Platform map of toolId → admin-configured product name (from tool_skus). */
   toolNames?: Record<string, string>;
+  /** Platform map of toolId → admin-configured icon variants (light/dark/favicon/sizes). */
+  toolIcons?: ToolIconsMap;
 };
 
 type ConfigContextValue = {
@@ -116,6 +119,7 @@ const DEFAULT_CONFIG: EffectiveConfig = {
   },
   toolPersonalUsage: {},
   toolNames: {},
+  toolIcons: {},
 };
 
 function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefined): EffectiveConfig {
@@ -139,6 +143,7 @@ function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefi
     features: normalizeFeatures(data?.features),
     toolPersonalUsage: normalizeToolPersonalUsage(data?.toolPersonalUsage),
     toolNames: normalizeToolNames(data?.toolNames),
+    toolIcons: normalizeToolIconsMap(data?.toolIcons),
   };
 }
 
@@ -255,4 +260,10 @@ export function useToolName(toolId: string, fallback?: string): string {
   const ctx = useContext(ConfigContext);
   const override = ctx?.config?.toolNames?.[toolId]?.trim();
   return override || fallback || toolId;
+}
+
+/** Admin-configured icon variants for a tool (light/dark/favicon/sizes). Safe outside provider. */
+export function useToolIconConfig(toolId: string): ToolIconConfig | undefined {
+  const ctx = useContext(ConfigContext);
+  return ctx?.config?.toolIcons?.[toolId];
 }

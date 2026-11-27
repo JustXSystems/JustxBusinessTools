@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import type { ToolDefinition } from "@/config/tools.config";
 import { useToast } from "@/components/common/ToastProvider";
+import { ToolIconMark } from "@/components/common/ToolIconMark";
 import { ToolUsageCounter, UsageLimitBanner } from "@/components/subscription/UsageLimitBanner";
 import { useSubscription } from "@/hooks/useSubscription";
 import type { ToolUsage } from "@/lib/types/tool-record";
@@ -67,8 +68,8 @@ export function ToolLayout({
           ←
         </Link>
         <div className="tool-header-text">
-          <div className="tool-header-title">
-            {tool.icon} {tool.name}
+          <div className="tool-header-title" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <ToolIconMark toolId={tool.id} fallback={tool.icon} size={24} sizeHint="sm" /> {tool.name}
           </div>
           <div className="tool-header-sub">{tool.desc}</div>
         </div>
