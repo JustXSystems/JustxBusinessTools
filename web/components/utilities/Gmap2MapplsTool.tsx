@@ -737,7 +737,7 @@ export function Gmap2MapplsTool({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           className="g2m-logo"
-          src={withBasePath("/icons/googlemaps2mappls-icon.png")}
+          src={withBasePath("/icons/Google2MapplsMap/justx-mappls-india-icon.svg")}
           alt=""
           width={36}
           height={36}

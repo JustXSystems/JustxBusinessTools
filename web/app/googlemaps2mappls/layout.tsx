@@ -3,7 +3,14 @@ import { buildForcePhoneInlineScript } from "@jbt/shared";
 import { getBasePath } from "@/lib/base-path";
 
 const base = getBasePath();
-const iconPath = `${base}/icons/googlemaps2mappls-icon.png`;
+const svgIconPath = `${base}/icons/Google2MapplsMap/justx-mappls-india-icon.svg`;
+const faviconPath = `${base}/icons/Google2MapplsMap/favicon.ico`;
+const icon32Path = `${base}/icons/Google2MapplsMap/justx-mappls-india-icon-32.png`;
+const icon64Path = `${base}/icons/Google2MapplsMap/justx-mappls-india-icon-64.png`;
+const icon128Path = `${base}/icons/Google2MapplsMap/justx-mappls-india-icon-128.png`;
+const icon256Path = `${base}/icons/Google2MapplsMap/justx-mappls-india-icon-256.png`;
+const icon512Path = `${base}/icons/Google2MapplsMap/justx-mappls-india-icon-512.png`;
+const icon1024Path = `${base}/icons/Google2MapplsMap/justx-mappls-india-icon-1024.png`;
 const manifestPath = `${base}/googlemaps2mappls/manifest`;
 
 export const metadata: Metadata = {
@@ -28,11 +35,20 @@ export const metadata: Metadata = {
     title: "Google Maps to Mappls",
     description: "Convert a Google Maps link to a Mappls Pin and open your car app.",
     siteName: "GoogleMaps2Mappls",
-    images: [{ url: iconPath, width: 512, height: 512, alt: "GoogleMaps2Mappls" }],
+    images: [{ url: icon1024Path, width: 1024, height: 1024, alt: "GoogleMaps2Mappls" }],
   },
   icons: {
-    icon: [{ url: iconPath, type: "image/png", sizes: "512x512" }],
-    apple: iconPath,
+    icon: [
+      { url: svgIconPath, type: "image/svg+xml" },
+      { url: faviconPath, sizes: "any" },
+      { url: icon32Path, type: "image/png", sizes: "32x32" },
+      { url: icon64Path, type: "image/png", sizes: "64x64" },
+      { url: icon128Path, type: "image/png", sizes: "128x128" },
+      { url: icon256Path, type: "image/png", sizes: "256x256" },
+      { url: icon512Path, type: "image/png", sizes: "512x512" },
+    ],
+    shortcut: faviconPath,
+    apple: [{ url: icon512Path, sizes: "512x512", type: "image/png" }],
   },
   manifest: manifestPath,
 };

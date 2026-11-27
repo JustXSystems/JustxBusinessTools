@@ -10,10 +10,34 @@
   "theme_color": "#4854EB",
   "icons": [
     {
-      "src": "/icons/googlemaps2mappls-icon.png",
+      "src": "/icons/Google2MapplsMap/justx-mappls-india-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/Google2MapplsMap/justx-mappls-india-icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/Google2MapplsMap/justx-mappls-india-icon-256.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/Google2MapplsMap/justx-mappls-india-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/Google2MapplsMap/justx-mappls-india-icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

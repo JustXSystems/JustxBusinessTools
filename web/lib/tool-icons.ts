@@ -63,6 +63,14 @@ export const BUILTIN_TOOL_ICON_DEFAULTS: ToolIconsMap = {
     size512: "/icons/IMS/justx-invoice-icon-512.png",
     size1024: "/icons/IMS/justx-invoice-icon-1024.png",
   },
+  gmap2mappls: {
+    light: "/icons/Google2MapplsMap/justx-mappls-india-icon.svg",
+    favicon: "/icons/Google2MapplsMap/favicon.ico",
+    appleTouch: "/icons/Google2MapplsMap/justx-mappls-india-icon-512.png",
+    size192: "/icons/Google2MapplsMap/justx-mappls-india-icon-256.png",
+    size512: "/icons/Google2MapplsMap/justx-mappls-india-icon-512.png",
+    size1024: "/icons/Google2MapplsMap/justx-mappls-india-icon-1024.png",
+  },
 };
 
 export type ToolIconSizeHint = "sm" | "md" | "lg" | "xl" | "favicon" | "apple";

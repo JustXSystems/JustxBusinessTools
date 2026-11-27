@@ -49,6 +49,15 @@ describe("tool-icons", () => {
     expect(resolveToolIconSource(BUILTIN_TOOL_ICON_DEFAULTS.imsdealer, "📦", { size: "favicon" })).toBe(
       "/icons/IMS/favicon.ico",
     );
+    expect(resolveToolIconSource(BUILTIN_TOOL_ICON_DEFAULTS.gmap2mappls, "🗺️", { theme: "light" })).toBe(
+      "/icons/Google2MapplsMap/justx-mappls-india-icon.svg",
+    );
+    expect(resolveToolIconSource(BUILTIN_TOOL_ICON_DEFAULTS.gmap2mappls, "🗺️", { size: "favicon" })).toBe(
+      "/icons/Google2MapplsMap/favicon.ico",
+    );
+    expect(resolveToolIconSource(BUILTIN_TOOL_ICON_DEFAULTS.gmap2mappls, "🗺️", { size: "xl" })).toBe(
+      "/icons/Google2MapplsMap/justx-mappls-india-icon-1024.png",
+    );
   });
 
   it("computes tile styles from bg, shape, and padding", () => {

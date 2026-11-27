@@ -94,7 +94,7 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
     id: "gmap2mappls",
     name: "Google Maps to Mappls",
     category: "Utilities",
-    icon: "/icons/googlemaps2mappls-icon.png",
+    icon: "/icons/Google2MapplsMap/justx-mappls-india-icon.svg",
     desc: "GoogleMaps2Mappls · Google link → Mappls Pin → car app · 14-day free trial, then ₹100/mo or ₹1000/yr",
   },
   { id: "bosdesign", name: "Justxsystems BOS Design", category: "Utilities", icon: "/icons/BOS/svg/bos-mark-light.svg", desc: "Standard UI/UX system with live HR, Finance & Invoice samples" },
