@@ -24,6 +24,8 @@ export type ToolIconConfig = {
   shape?: ToolIconShape;
   /** Inner padding in px (0..12). */
   paddingPx?: number;
+  /** Icon display size scale percentage (50..180, default 100). */
+  scale?: number;
 };
 
 export type ToolIconsMap = Record<string, ToolIconConfig>;
@@ -113,6 +115,14 @@ export function resolveToolIconSource(
   return themed || cfg?.size192 || cfg?.size512 || fallback;
 }
 
+/** Compute effective rendered icon size in px applying any configured scale percentage. */
+export function resolveToolIconSize(baseSize: number, cfg: ToolIconConfig | null | undefined): number {
+  const scale = cfg?.scale;
+  if (typeof scale !== "number" || !Number.isFinite(scale) || scale === 100) return baseSize;
+  const clamped = Math.min(180, Math.max(50, Math.round(scale)));
+  return Math.max(12, Math.round((baseSize * clamped) / 100));
+}
+
 export function toolIconTileStyle(cfg: ToolIconConfig | null | undefined): CSSProperties | undefined {
   if (!cfg) return undefined;
   const style: CSSProperties = {};
@@ -140,6 +150,9 @@ export function normalizeToolIconsMap(raw: unknown): ToolIconsMap {
     }
     if (typeof obj.paddingPx === "number" && Number.isFinite(obj.paddingPx)) {
       cfg.paddingPx = Math.min(12, Math.max(0, Math.round(obj.paddingPx)));
+    }
+    if (typeof obj.scale === "number" && Number.isFinite(obj.scale)) {
+      cfg.scale = Math.min(180, Math.max(50, Math.round(obj.scale)));
     }
     if (Object.keys(cfg).length > 0) out[id] = cfg;
   }

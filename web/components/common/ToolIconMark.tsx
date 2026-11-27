@@ -5,6 +5,7 @@ import { useToolIconConfig } from "@/components/config/ConfigProvider";
 import {
   isImageIcon,
   resolveIconAssetUrl,
+  resolveToolIconSize,
   resolveToolIconSource,
   toolIconTileStyle,
   type ToolIconConfig,
@@ -77,6 +78,7 @@ export function ToolIconMark({
   const theme = themeOverride ?? detectedTheme;
   const raw = resolveToolIconSource(cfg, fallback, { theme, size: sizeHint });
   const tileStyle = toolIconTileStyle(cfg);
+  const effectiveSize = sizeHint === "favicon" ? size : resolveToolIconSize(size, cfg);
 
   if (isImageIcon(raw)) {
     const src = resolveIconAssetUrl(raw);
@@ -86,11 +88,11 @@ export function ToolIconMark({
         className={className}
         src={src}
         alt=""
-        width={size}
-        height={size}
+        width={effectiveSize}
+        height={effectiveSize}
         style={{
-          width: size,
-          height: size,
+          width: effectiveSize,
+          height: effectiveSize,
           objectFit: "contain",
           boxSizing: "border-box",
           ...tileStyle,
@@ -107,9 +109,9 @@ export function ToolIconMark({
         style={{
           display: "inline-grid",
           placeItems: "center",
-          width: size,
-          height: size,
-          fontSize: Math.round(size * 0.6),
+          width: effectiveSize,
+          height: effectiveSize,
+          fontSize: Math.round(effectiveSize * 0.6),
           lineHeight: 1,
           boxSizing: "border-box",
           ...tileStyle,

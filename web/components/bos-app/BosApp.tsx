@@ -34,7 +34,7 @@ const ProjectsWorkspace = lazy(() => import("./projects/ProjectsWorkspace").then
 const SettingsWorkspace = lazy(() => import("./settings/SettingsWorkspace").then((m) => ({ default: m.SettingsWorkspace })));
 
 import { resolveIconAssetUrl, resolveToolIconSource } from "@/lib/tool-icons";
-import { useToolIconConfig } from "@/components/config/ConfigProvider";
+import { useToolIconConfig, useToolName } from "@/components/config/ConfigProvider";
 
 export const BOS_LOGO = "/icons/BOS/svg/bos-app-light.svg";
 const WS_KEYS = new Set<string>(WORKSPACES.map((w) => w.value));
@@ -188,12 +188,12 @@ function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mod
   ];
 
   const actorName = session.actor.name ?? session.actor.email ?? "You";
-  const companyName = session.brand?.name || session.settings.companyName || "Justxsystems BOS";
+  const productName = useToolName("bos", "Justxsystems BOS");
 
   return (
     <BosAppProvider value={ctx}>
       <Topbar sticky="desktop">
-        <Brand logoSrc={logoSrc} name={companyName} sub={`Justxsystems BOS · ${mode === "tool" ? "in JBT" : "Business OS"}`} />
+        <Brand logoSrc={productLogo} name={productName} sub={mode === "tool" ? "in Justxsystems Business Tools" : "Business OS"} />
         <div className="bos-topbar-actions">
           <SearchInput
             readOnly

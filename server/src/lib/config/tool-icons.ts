@@ -26,6 +26,8 @@ export type ToolIconConfig = {
   shape?: ToolIconShape;
   /** Inner padding in px (0..12). */
   paddingPx?: number;
+  /** Icon display size scale percentage (50..180, default 100). */
+  scale?: number;
 };
 
 export type ToolIconsMap = Record<string, ToolIconConfig>;
@@ -57,6 +59,13 @@ function parsePadding(raw: unknown): number | undefined {
   return Math.min(12, Math.max(0, Math.round(n)));
 }
 
+function parseScale(raw: unknown): number | undefined {
+  if (raw === "" || raw == null) return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(180, Math.max(50, Math.round(n)));
+}
+
 function sanitizeSlotValue(raw: unknown, allowEmoji: boolean): string | undefined {
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
@@ -79,11 +88,12 @@ function signConfig(cfg: ToolIconConfig): ToolIconConfig {
   for (const slot of URL_SLOTS) {
     const val = cfg[slot];
     if (!val) continue;
-    out[slot] = val.startsWith("/") || val.startsWith("http") ? withFileAccessToken(val) : val;
+    out[slot] = val.startsWith("/") || val.startsWith("http") ? (withFileAccessToken(val) ?? val) : val;
   }
   if (cfg.bg) out.bg = cfg.bg;
   if (cfg.shape) out.shape = cfg.shape;
   if (cfg.paddingPx != null) out.paddingPx = cfg.paddingPx;
+  if (cfg.scale != null) out.scale = cfg.scale;
   return out;
 }
 
@@ -101,6 +111,8 @@ function parseConfigEntry(raw: unknown): ToolIconConfig | null {
   if (shape) cfg.shape = shape;
   const paddingPx = parsePadding(obj.paddingPx);
   if (paddingPx != null) cfg.paddingPx = paddingPx;
+  const scale = parseScale(obj.scale);
+  if (scale != null) cfg.scale = scale;
   return Object.keys(cfg).length > 0 ? cfg : null;
 }
 
@@ -211,6 +223,12 @@ export async function saveToolIconConfig(
     const pad = parsePadding(input.paddingPx);
     if (pad != null && pad > 0) next.paddingPx = pad;
     else delete next.paddingPx;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, "scale")) {
+    const scale = parseScale(input.scale);
+    if (scale != null && scale !== 100) next.scale = scale;
+    else delete next.scale;
   }
 
   if (Object.keys(next).length === 0) {

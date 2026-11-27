@@ -9,7 +9,7 @@ import { usePlatformConfig } from "@/components/config/ConfigProvider";
 import { ToolIconMark } from "@/components/common/ToolIconMark";
 import { api } from "@/lib/api";
 import { getToolDefinition } from "@/config/tools.config";
-import type { ToolIconConfig, ToolIconShape } from "@/lib/tool-icons";
+import { BUILTIN_TOOL_ICON_DEFAULTS, resolveToolIconSize, type ToolIconConfig, type ToolIconShape } from "@/lib/tool-icons";
 
 type IconFormState = {
   light: string;
@@ -22,6 +22,7 @@ type IconFormState = {
   bg: string;
   shape: "" | ToolIconShape;
   paddingPx: string;
+  scale: string;
 };
 
 function formFromConfig(cfg: ToolIconConfig | undefined): IconFormState {
@@ -36,22 +37,27 @@ function formFromConfig(cfg: ToolIconConfig | undefined): IconFormState {
     bg: cfg?.bg ?? "",
     shape: cfg?.shape ?? "",
     paddingPx: cfg?.paddingPx != null ? String(cfg.paddingPx) : "",
+    scale: cfg?.scale != null ? String(cfg.scale) : "100",
   };
 }
 
-function previewConfigFromForm(f: IconFormState): ToolIconConfig {
+function previewConfigFromForm(f: IconFormState, builtin?: ToolIconConfig): ToolIconConfig {
   const pad = f.paddingPx.trim() === "" ? undefined : Math.min(12, Math.max(0, Math.round(Number(f.paddingPx) || 0)));
+  const scaleRaw = Number(f.scale);
+  const scale = Number.isFinite(scaleRaw) ? Math.min(180, Math.max(50, Math.round(scaleRaw))) : 100;
   return {
-    light: f.light.trim() || undefined,
-    dark: f.dark.trim() || undefined,
-    favicon: f.favicon.trim() || undefined,
-    appleTouch: f.appleTouch.trim() || undefined,
-    size192: f.size192.trim() || undefined,
-    size512: f.size512.trim() || undefined,
-    size1024: f.size1024.trim() || undefined,
+    ...(builtin ?? {}),
+    light: f.light.trim() || builtin?.light || undefined,
+    dark: f.dark.trim() || builtin?.dark || undefined,
+    favicon: f.favicon.trim() || builtin?.favicon || undefined,
+    appleTouch: f.appleTouch.trim() || builtin?.appleTouch || undefined,
+    size192: f.size192.trim() || builtin?.size192 || undefined,
+    size512: f.size512.trim() || builtin?.size512 || undefined,
+    size1024: f.size1024.trim() || builtin?.size1024 || undefined,
     bg: f.bg.trim() || undefined,
     shape: f.shape || undefined,
     paddingPx: pad,
+    scale: scale !== 100 ? scale : undefined,
   };
 }
 
@@ -159,7 +165,7 @@ export const ToolIconsPane = forwardRef<
   }, [toolId, serverCfg]);
 
   const dirty = JSON.stringify(form) !== savedSnapRef.current;
-  const previewCfg = previewConfigFromForm(form);
+  const previewCfg = previewConfigFromForm(form, BUILTIN_TOOL_ICON_DEFAULTS[toolId]);
 
   async function save() {
     setBusy(true);
@@ -175,6 +181,7 @@ export const ToolIconsPane = forwardRef<
         bg: form.bg.trim(),
         shape: form.shape || "",
         paddingPx: form.paddingPx.trim() === "" ? "" : Number(form.paddingPx),
+        scale: form.scale.trim() === "" ? 100 : Number(form.scale),
       };
       const res = await api<{ icon: ToolIconConfig | null }>(
         `/admin/config/tool-icons/${encodeURIComponent(toolId)}`,
@@ -263,28 +270,33 @@ export const ToolIconsPane = forwardRef<
                 {mode === "light" ? "Light mode" : "Dark mode"}
               </div>
               <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
-                {previewSizes.map((s) => (
-                  <div key={s.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                    <div
-                      style={{
-                        display: "grid",
-                        placeItems: "center",
-                        minWidth: s.px,
-                        minHeight: s.px,
-                      }}
-                    >
-                      <ToolIconMark
-                        toolId={toolId}
-                        fallback={builtinIcon}
-                        size={s.px}
-                        sizeHint={s.hint}
-                        override={previewCfg}
-                        themeOverride={mode}
-                      />
+                {previewSizes.map((s) => {
+                  const renderedPx = s.hint === "favicon" ? s.px : resolveToolIconSize(s.px, previewCfg);
+                  return (
+                    <div key={s.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                      <div
+                        style={{
+                          display: "grid",
+                          placeItems: "center",
+                          minWidth: Math.max(s.px, renderedPx),
+                          minHeight: Math.max(s.px, renderedPx),
+                        }}
+                      >
+                        <ToolIconMark
+                          toolId={toolId}
+                          fallback={builtinIcon}
+                          size={s.px}
+                          sizeHint={s.hint}
+                          override={previewCfg}
+                          themeOverride={mode}
+                        />
+                      </div>
+                      <span style={{ fontSize: 10.5, opacity: 0.7 }}>
+                        {renderedPx !== s.px ? `${s.label} (${renderedPx}px)` : s.label}
+                      </span>
                     </div>
-                    <span style={{ fontSize: 10.5, opacity: 0.7 }}>{s.label}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -404,6 +416,43 @@ export const ToolIconsPane = forwardRef<
             placeholder="0"
             onChange={(e) => setForm((f) => ({ ...f, paddingPx: e.target.value }))}
           />
+          <Field
+            label={`Icon display size (${Number(form.scale) || 100}%)`}
+            hint="Scale the icon from 50% to 180% so it is clearly visible on cards, headers, and pickers."
+          >
+            {({ id }) => (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <input
+                    id={id}
+                    type="range"
+                    min={50}
+                    max={180}
+                    step={5}
+                    value={Number(form.scale) || 100}
+                    onChange={(e) => setForm((f) => ({ ...f, scale: e.target.value }))}
+                    style={{ flex: 1, cursor: "pointer" }}
+                  />
+                  <span style={{ minWidth: 44, textAlign: "right", fontSize: 12, fontWeight: 600 }}>
+                    {Number(form.scale) || 100}%
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {[75, 100, 125, 150].map((pct) => (
+                    <Button
+                      key={pct}
+                      size="sm"
+                      variant={Number(form.scale || 100) === pct ? "primary" : "ghost"}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, scale: String(pct) }))}
+                    >
+                      {pct}%
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Field>
         </FormGrid>
       </div>
     </AdminSection>

@@ -3,6 +3,7 @@ import {
   BUILTIN_TOOL_ICON_DEFAULTS,
   isImageIcon,
   normalizeToolIconsMap,
+  resolveToolIconSize,
   resolveToolIconSource,
   toolIconTileStyle,
   type ToolIconConfig,
@@ -57,6 +58,15 @@ describe("tool-icons", () => {
       padding: 4,
     });
     expect(toolIconTileStyle({ bg: "transparent" })).toBeUndefined();
+  });
+
+  it("computes scaled icon display sizes and clamps bounds", () => {
+    expect(resolveToolIconSize(40, undefined)).toBe(40);
+    expect(resolveToolIconSize(40, { scale: 100 })).toBe(40);
+    expect(resolveToolIconSize(40, { scale: 125 })).toBe(50);
+    expect(resolveToolIconSize(40, { scale: 75 })).toBe(30);
+    expect(resolveToolIconSize(40, { scale: 300 })).toBe(72);
+    expect(resolveToolIconSize(40, { scale: 10 })).toBe(20);
   });
 
   it("detects image icons vs emojis and normalizes map payloads", () => {
