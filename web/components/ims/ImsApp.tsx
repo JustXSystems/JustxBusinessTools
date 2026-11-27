@@ -650,7 +650,7 @@ class ShellBoundary extends Component<{ children: ReactNode }, { error: Error | 
  */
 export function ImsApp({ mode, onSignOut }: { mode: ImsAppMode; onSignOut?: () => void }) {
   const { config } = useOptionalPlatformConfig() ?? { config: null };
-  const widthPct = config?.imsLayout?.contentWidthPct ?? 90;
+  const widthPct = config?.toolContentWidths?.imsdealer ?? config?.imsLayout?.contentWidthPct ?? 90;
   const rootStyle = {
     ...(mode === "tool" ? HOST_GUTTER : null),
     "--ims-content-width": `${widthPct}%`,

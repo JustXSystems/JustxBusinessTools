@@ -47,7 +47,15 @@ export const ToolPlacementPane = forwardRef<
   const { config, refresh: refreshConfig } = usePlatformConfig();
   const [busy, setBusy] = useState(false);
   const [syncHome, setSyncHome] = useState(true);
-  const [contentWidthPct, setContentWidthPct] = useState(90);
+  const serverContentWidth =
+    config?.toolContentWidths?.[toolId] ??
+    (isIms ? config?.imsLayout?.contentWidthPct : undefined) ??
+    90;
+  const [contentWidthPct, setContentWidthPct] = useState(clampWidthPct(serverContentWidth));
+
+  useEffect(() => {
+    setContentWidthPct(clampWidthPct(serverContentWidth));
+  }, [toolId, serverContentWidth]);
   const staticDef = getToolDefinition(toolId);
   const defaultPersonal = defaultPersonalUsage(toolId, staticDef?.type);
   const serverPersonalUsage = config?.toolPersonalUsage?.[toolId] ?? defaultPersonal;
@@ -89,24 +97,26 @@ export const ToolPlacementPane = forwardRef<
   async function save() {
     setBusy(true);
     try {
-      // Platform-wide flag — does not need a Business Profile.
+      const width = clampWidthPct(contentWidthPct);
+      // Platform-wide settings — do not need a Business Profile.
       await api("/admin/config/tool-personal-usage", {
         method: "PUT",
         body: JSON.stringify({ toolId, personalUsage }),
       });
       savedPersonalRef.current = personalUsage;
+      await api("/admin/config/tool-content-widths", {
+        method: "PUT",
+        body: JSON.stringify({ toolId, contentWidthPct: width }),
+      });
 
       if (businessProfileId == null) {
         await refreshConfig().catch(() => undefined);
         onSaved(
-          personalUsage
-            ? "Personal usage enabled (platform-wide). Select a Business Profile to edit Live/Hidden placement."
-            : "Personal usage disabled (platform-wide). Select a Business Profile to edit Live/Hidden placement.",
+          `Saved platform settings (content width ${width}%). Select a Business Profile to edit Live/Hidden placement.`,
         );
         return;
       }
 
-      const width = clampWidthPct(contentWidthPct);
       await api(`/admin/catalog/${toolId}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -120,20 +130,13 @@ export const ToolPlacementPane = forwardRef<
         if (available) await ensureToolsOnHome(businessProfileId, [toolId]);
         else await removeToolsFromHome(businessProfileId, [toolId]);
       }
-      if (isIms) {
-        const layout = await api<{ imsLayout: { contentWidthPct: number } }>("/admin/config/ims-layout", {
-          method: "PUT",
-          body: JSON.stringify({ contentWidthPct: width }),
-        });
-        setContentWidthPct(clampWidthPct(layout.imsLayout.contentWidthPct));
-      }
       await refreshConfig().catch(() => undefined);
       onSaved(
         canStandalone
           ? isIms
-            ? `Placement saved · IMS content width ${width}%. Module ceilings live on Access Fabric.`
-            : "Placement saved. Standalone apps open without the Justxsystems menu; refresh home to see the change."
-          : "Placement saved. Live tools are added to branch home lists; refresh home to see them.",
+            ? `Placement saved · content width ${width}%. Module ceilings live on Access Fabric.`
+            : `Placement saved · content width ${width}%. Standalone apps open without the Justxsystems menu.`
+          : `Placement saved · content width ${width}%. Live tools are added to branch home lists.`,
       );
     } catch (err) {
       onSaved(err instanceof Error ? err.message : "Save failed", "error");
@@ -228,29 +231,27 @@ export const ToolPlacementPane = forwardRef<
               <option value="embedded">Inside Justxsystems Business Tools</option>
             </SelectField>
           ) : null}
-          {isIms ? (
-            <Field
-              full
-              label={`Full-screen content width (${contentWidthPct}% of window)`}
-              hint="Org-wide chrome for `/ims` (not per profile). Default 90%."
-            >
-              {({ id, describedBy }) => (
-                <input
-                  id={id}
-                  aria-describedby={describedBy}
-                  type="range"
-                  min={50}
-                  max={100}
-                  step={1}
-                  value={contentWidthPct}
-                  disabled={busy}
-                  style={{ width: "100%" }}
-                  onChange={(e) => setContentWidthPct(clampWidthPct(e.target.value))}
-                  aria-label="IMS full-screen content width percent"
-                />
-              )}
-            </Field>
-          ) : null}
+          <Field
+            full
+            label={`Full-screen content width (${contentWidthPct}% of window)`}
+            hint="Org-wide content width for this tool (not per profile). Default 90%."
+          >
+            {({ id, describedBy }) => (
+              <input
+                id={id}
+                aria-describedby={describedBy}
+                type="range"
+                min={50}
+                max={100}
+                step={1}
+                value={contentWidthPct}
+                disabled={busy}
+                style={{ width: "100%" }}
+                onChange={(e) => setContentWidthPct(clampWidthPct(e.target.value))}
+                aria-label="Full-screen content width percent"
+              />
+            )}
+          </Field>
         </FormGrid>
         <div className="admin-cc-actions" style={{ justifyContent: "flex-start" }}>
           <span className="admin-cc-switch-row" style={{ paddingBottom: 0 }}>

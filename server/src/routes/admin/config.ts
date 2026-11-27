@@ -6,6 +6,7 @@ import {
   saveRegistrationCopy,
 } from "../../lib/config/registration-copy.js";
 import { getImsLayout, saveImsLayout } from "../../lib/config/ims-layout.js";
+import { getToolContentWidths, setToolContentWidth } from "../../lib/config/tool-layout.js";
 import { getToolGrouping, saveToolGrouping } from "../../lib/config/tool-grouping.js";
 import {
   getToolPersonalUsageMap,
@@ -158,6 +159,28 @@ router.put("/ims-layout", async (req, res) => {
       contentWidthPct: req.body?.contentWidthPct == null ? undefined : Number(req.body.contentWidthPct),
     });
     res.json({ imsLayout });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Save failed" });
+  }
+});
+
+router.get("/tool-content-widths", async (_req, res) => {
+  res.json({ toolContentWidths: await getToolContentWidths() });
+});
+
+router.put("/tool-content-widths", async (req, res) => {
+  try {
+    const toolId = String(req.body?.toolId ?? "").trim();
+    if (!toolId) {
+      res.status(400).json({ error: "toolId required" });
+      return;
+    }
+    if (req.body?.contentWidthPct == null) {
+      res.status(400).json({ error: "contentWidthPct required" });
+      return;
+    }
+    const toolContentWidths = await setToolContentWidth(toolId, Number(req.body.contentWidthPct));
+    res.json({ toolContentWidths });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : "Save failed" });
   }

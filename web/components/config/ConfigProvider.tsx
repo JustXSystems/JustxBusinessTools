@@ -44,6 +44,18 @@ function clampImsContentWidthPct(raw: unknown): number {
   return Math.min(100, Math.max(50, Math.round(n)));
 }
 
+function normalizeToolContentWidths(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const id = k.trim();
+    if (!id) continue;
+    const n = typeof v === "number" ? v : Number(v);
+    if (Number.isFinite(n)) out[id] = clampImsContentWidthPct(n);
+  }
+  return out;
+}
+
 export type PlatformToolDefinition = {
   id: string;
   toolType: string;
@@ -65,6 +77,8 @@ export type EffectiveConfig = {
   toolGrouping?: { enabled: boolean };
   /** Full-screen IMS (`/ims`) content width as % of the viewport. */
   imsLayout?: { contentWidthPct: number };
+  /** Platform map of toolId → full-screen content width as % of the viewport (50–100). */
+  toolContentWidths?: Record<string, number>;
   configVersion: number;
   tools: PlatformToolDefinition[];
   catalog?: PlatformCatalogTool[];
@@ -108,6 +122,7 @@ const DEFAULT_CONFIG: EffectiveConfig = {
   branding: DEFAULT_BRANDING,
   toolGrouping: { enabled: true },
   imsLayout: { contentWidthPct: 90 },
+  toolContentWidths: {},
   configVersion: 1,
   tools: [],
   catalog: [],
@@ -135,6 +150,7 @@ function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefi
     imsLayout: {
       contentWidthPct: clampImsContentWidthPct(data?.imsLayout?.contentWidthPct),
     },
+    toolContentWidths: normalizeToolContentWidths(data?.toolContentWidths),
     configVersion: Number(data?.configVersion) || 1,
     tools: Array.isArray(data?.tools) ? data.tools : [],
     catalog: Array.isArray(data?.catalog) ? data.catalog : [],
