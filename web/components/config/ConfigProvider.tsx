@@ -83,6 +83,8 @@ export type EffectiveConfig = {
    * Personal accounts may only use tools marked true.
    */
   toolPersonalUsage?: Record<string, boolean>;
+  /** Platform map of toolId → admin-configured product name (from tool_skus). */
+  toolNames?: Record<string, string>;
 };
 
 type ConfigContextValue = {
@@ -113,6 +115,7 @@ const DEFAULT_CONFIG: EffectiveConfig = {
     okSeconds: DEFAULT_FLASH_OK_SECONDS,
   },
   toolPersonalUsage: {},
+  toolNames: {},
 };
 
 function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefined): EffectiveConfig {
@@ -135,7 +138,17 @@ function normalizeEffectiveConfig(data: Partial<EffectiveConfig> | null | undefi
     flashDisplay: normalizeFlashDisplaySettings(data?.flashDisplay),
     features: normalizeFeatures(data?.features),
     toolPersonalUsage: normalizeToolPersonalUsage(data?.toolPersonalUsage),
+    toolNames: normalizeToolNames(data?.toolNames),
   };
+}
+
+function normalizeToolNames(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [id, name] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof name === "string" && name.trim()) out[id] = name.trim();
+  }
+  return out;
 }
 
 function normalizeFeatures(raw: unknown): Record<string, boolean> {
@@ -235,4 +248,11 @@ export function useFlashDisplaySettings(): FlashDisplaySettings {
 export function useFeatureSwitch(key: string): boolean {
   const ctx = useContext(ConfigContext);
   return ctx?.config?.features?.[key] === true;
+}
+
+/** Admin-configured product name for a tool (from tool_skus), falling back to caller default. */
+export function useToolName(toolId: string, fallback?: string): string {
+  const ctx = useContext(ConfigContext);
+  const override = ctx?.config?.toolNames?.[toolId]?.trim();
+  return override || fallback || toolId;
 }

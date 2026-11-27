@@ -34,6 +34,7 @@ import {
 } from "@/components/admin/AnalyticsRangePills";
 import { LiveActivityStream } from "@/components/admin/LiveActivityStream";
 import { uniqueTools } from "@/config/tools.config";
+import { useOptionalPlatformConfig } from "@/components/config/ConfigProvider";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -115,9 +116,9 @@ type Insight = {
 
 type SortKey = "activity" | "opens" | "creates" | "exports" | "conversion";
 
-function toolName(id: string) {
+function toolName(id: string, toolNames?: Record<string, string>) {
   if (id === "_app") return "App (no tool)";
-  return uniqueTools().find((t) => t.id === id)?.name ?? id;
+  return toolNames?.[id]?.trim() || uniqueTools().find((t) => t.id === id)?.name || id;
 }
 
 function pct(part: number, whole: number) {
@@ -175,6 +176,7 @@ export default function AdminAnalyticsPage() {
 }
 
 function AdminAnalyticsInner() {
+  const toolNames = useOptionalPlatformConfig()?.config?.toolNames;
   const search = useSearchParams();
   const focusLimitBlocks = search.get("focus") === "limit_blocks";
   const [days, setDays] = useState(30);
@@ -213,7 +215,7 @@ function AdminAnalyticsInner() {
     if (!overview) return [];
     const q = query.trim().toLowerCase();
     const rows = overview.byTool.filter((t) => {
-      const name = toolName(t.toolId).toLowerCase();
+      const name = toolName(t.toolId, toolNames).toLowerCase();
       return !q || name.includes(q) || t.toolId.toLowerCase().includes(q);
     });
     const score = (t: ToolRow) => {
@@ -283,7 +285,7 @@ function AdminAnalyticsInner() {
       header: "Tool",
       cell: (row) => (
         <div>
-          <div className="admin-cc-cell-title">{toolName(row.toolId)}</div>
+          <div className="admin-cc-cell-title">{toolName(row.toolId, toolNames)}</div>
           <div className="admin-cc-cell-sub">
             {row.toolId} · {row.uniqueUsers} people
           </div>
@@ -291,7 +293,7 @@ function AdminAnalyticsInner() {
             <ProgressBar
               value={((row.opens + row.creates) / maxToolActivity) * 100}
               tone="blue"
-              label={`${toolName(row.toolId)} activity`}
+              label={`${toolName(row.toolId, toolNames)} activity`}
             />
           </div>
         </div>

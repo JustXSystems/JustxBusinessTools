@@ -26,7 +26,7 @@ import {
   useCommandHotkey,
   type BosCommand,
 } from "@/components/bos";
-import { useOptionalPlatformConfig } from "@/components/config/ConfigProvider";
+import { useOptionalPlatformConfig, useToolName } from "@/components/config/ConfigProvider";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import { errorText, ims, ImsApiError, type ImsModuleKey, type ImsNotification, type ImsSearchResult, type ImsSession, type ImsSettings } from "@/lib/ims/api";
 import { isAssistantPage } from "@/lib/ims/assistant";
@@ -290,6 +290,10 @@ function MobileNav({ available, active, onSelect }: { available: ReadonlySet<Ims
 
 function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mode: ImsAppMode; onSignOut?: () => void }) {
   const logoSrc = publicAssetUrl(IMS_LOGO);
+  const productName = useToolName("imsdealer", "Justxsystems IMS");
+  useEffect(() => {
+    if (mode === "standalone") document.title = productName;
+  }, [mode, productName]);
   const { theme, setTheme, toggleTheme } = useBosTheme();
   const [session, setSession] = useState(initial);
   const [nav, setNav] = useState<NavState>(navFromUrl);
@@ -447,7 +451,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
           onBlurCapture={topbar.onBlurCapture}
         >
           <Topbar sticky="desktop">
-            <Brand logoSrc={logoSrc} name="Justxsystems IMS" sub={mode === "tool" ? "in Justxsystems Business Tools" : "Dealer"} />
+            <Brand logoSrc={logoSrc} name={productName} sub={mode === "tool" ? "in Justxsystems Business Tools" : "Dealer"} />
             <div className="bos-topbar-actions">
               <SearchInput
                 readOnly
@@ -520,7 +524,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
 
           <div className="ims-foot">
             <Footnote>
-              Justxsystems IMS™ — Dealer · part of{" "}
+              {productName} · part of{" "}
               <a href={withBasePath("/")} target={mode === "tool" ? undefined : "_blank"} rel="noopener noreferrer">
                 Justxsystems Business Tools
               </a>{" "}

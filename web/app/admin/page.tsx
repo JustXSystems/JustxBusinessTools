@@ -22,6 +22,7 @@ import {
 } from "@/components/admin/ui";
 import { formatAnalyticsBucket } from "@/components/admin/AnalyticsRangePills";
 import { uniqueTools } from "@/config/tools.config";
+import { useOptionalPlatformConfig } from "@/components/config/ConfigProvider";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -74,9 +75,9 @@ function inr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 }
 
-function toolName(id: string) {
+function toolName(id: string, toolNames?: Record<string, string>) {
   if (id === "_app") return "App";
-  return uniqueTools().find((t) => t.id === id)?.name ?? id;
+  return toolNames?.[id]?.trim() || uniqueTools().find((t) => t.id === id)?.name || id;
 }
 
 function pct(part: number, whole: number) {
@@ -91,6 +92,7 @@ function severityTone(sev: AttentionItem["severity"]): "coral" | "amber" | "blue
 }
 
 export default function AdminDashboardPage() {
+  const toolNames = useOptionalPlatformConfig()?.config?.toolNames;
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState("");
 
@@ -427,13 +429,13 @@ export default function AdminDashboardPage() {
                 <Card key={row.toolId} flat style={{ padding: "12px 14px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <div style={{ flex: 1, minWidth: 160 }}>
-                      <strong>{toolName(row.toolId)}</strong>
+                      <strong>{toolName(row.toolId, toolNames)}</strong>
                       <div className="bos-text-caption">
                         {row.toolId}
                         {row.uniqueUsers != null ? ` · ${row.uniqueUsers} people` : ""}
                       </div>
                       <div style={{ marginTop: 6 }}>
-                        <ProgressBar value={(activity / topMax) * 100} tone="blue" label={`${toolName(row.toolId)} activity`} />
+                        <ProgressBar value={(activity / topMax) * 100} tone="blue" label={`${toolName(row.toolId, toolNames)} activity`} />
                       </div>
                     </div>
                     <span className="bos-text-caption">{row.opens} opens</span>

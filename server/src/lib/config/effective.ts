@@ -26,6 +26,7 @@ import {
   getToolPersonalUsageMap,
   type ToolPersonalUsageMap,
 } from "./tool-personal-usage.js";
+import { listToolSkus } from "../tool-skus.js";
 
 async function ensureBuiltinCatalogRows(orgId: number): Promise<void> {
   await pool.query(
@@ -82,6 +83,8 @@ export async function getEffectiveConfig(): Promise<{
   features: FeatureSwitchState;
   /** Platform map of toolId → allowed for personal (no-GSTIN) users. */
   toolPersonalUsage: ToolPersonalUsageMap;
+  /** Platform map of toolId → admin-configured product name from tool_skus. */
+  toolNames: Record<string, string>;
 }> {
   const orgId = getActiveOrgId();
   const profileId = getActiveProfileId();
@@ -123,11 +126,17 @@ export async function getEffectiveConfig(): Promise<{
   });
 
   await ensureBuiltinCatalogRows(orgId);
-  const [tools, catalog, features] = await Promise.all([
+  const [tools, catalog, features, skus] = await Promise.all([
     listToolDefinitions(),
     listOrgCatalog(orgId),
     getOrgFeatureSwitches(orgId),
+    listToolSkus().catch(() => []),
   ]);
+  const toolNames: Record<string, string> = {};
+  for (const sku of skus) {
+    const trimmed = sku.name?.trim();
+    if (sku.toolId && trimmed) toolNames[sku.toolId] = trimmed;
+  }
   const personalUsageIds = [
     ...DEFAULT_PERSONAL_USAGE_TOOL_IDS,
     ...tools.map((t) => t.id),
@@ -165,6 +174,7 @@ export async function getEffectiveConfig(): Promise<{
     flashDisplay,
     features,
     toolPersonalUsage,
+    toolNames,
   };
 }
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TOOL_CATALOG } from "@/config/tools.config";
+import { useOptionalPlatformConfig } from "@/components/config/ConfigProvider";
 import { withBasePath } from "@/lib/base-path";
 import { sectionInlineStyle, hasRenderableMedia } from "@/lib/public-home/style";
 import type {
@@ -382,6 +383,7 @@ export function PhPillarsSection({ section }: { section: PillarsSection }) {
 }
 
 export function PhMarqueeSection({ section }: { section: MarqueeSection }) {
+  const toolNames = useOptionalPlatformConfig()?.config?.toolNames;
   const items = useMemo(() => {
     if (section.source === "custom" && section.items.length) {
       return section.items;
@@ -395,12 +397,12 @@ export function PhMarqueeSection({ section }: { section: MarqueeSection }) {
       .filter(Boolean)
       .map((t) => ({
         id: t!.id,
-        label: t!.name,
+        label: toolNames?.[t!.id]?.trim() || t!.name,
         icon: t!.icon,
         href: "",
         media: { kind: "none" as const, url: "", alt: "", objectFit: "cover" as const, posterUrl: "" },
       }));
-  }, [section]);
+  }, [section, toolNames]);
 
   const loop = [...items, ...items];
 
@@ -446,6 +448,7 @@ export function PhMarqueeSection({ section }: { section: MarqueeSection }) {
 }
 
 export function PhToolsShowcaseSection({ section }: { section: ToolsShowcaseSection }) {
+  const toolNames = useOptionalPlatformConfig()?.config?.toolNames;
   const tools = useMemo(() => {
     if (section.source === "custom" && section.tools.length) return section.tools;
     const byId = new Map(TOOL_CATALOG.map((t) => [t.id, t]));
@@ -458,7 +461,7 @@ export function PhToolsShowcaseSection({ section }: { section: ToolsShowcaseSect
       .map((t) => ({
         id: t!.id,
         toolId: t!.id,
-        name: t!.name,
+        name: toolNames?.[t!.id]?.trim() || t!.name,
         description: t!.desc,
         icon: t!.icon,
         screenshot: {
@@ -473,7 +476,7 @@ export function PhToolsShowcaseSection({ section }: { section: ToolsShowcaseSect
         href: "/register",
         ctaLabel: "Explore",
       }));
-  }, [section]);
+  }, [section, toolNames]);
 
   return (
     <SectionShell id={section.id} style={section.style} className="ph-shell">

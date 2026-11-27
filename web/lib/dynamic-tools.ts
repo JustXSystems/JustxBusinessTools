@@ -163,19 +163,51 @@ export function filterHomeToolsByPersonalAccount(
   return tools.filter((t) => isPersonalUsageTool(t.id, t, overrides));
 }
 
+/** Resolve admin-configured product name (from tool_skus) with fallback to static catalog / id. */
+export function resolveToolName(
+  toolId: string,
+  toolNames?: Record<string, string> | null,
+  fallback?: string,
+): string {
+  const override = toolNames?.[toolId]?.trim();
+  if (override) return override;
+  if (fallback) return fallback;
+  return getToolDefinition(toolId)?.name ?? toolId;
+}
+
+/** Apply admin-configured product names onto resolved tool definitions. */
+export function applyToolNameOverrides(
+  tools: ToolDefinition[],
+  toolNames?: Record<string, string> | null,
+): ToolDefinition[] {
+  if (!toolNames || !Object.keys(toolNames).length) return tools;
+  return tools.map((t) => {
+    const override = toolNames[t.id]?.trim();
+    return override && override !== t.name ? { ...t, name: override } : t;
+  });
+}
+
 export function resolveToolDefinition(
   toolId: string,
   platformTools: PlatformToolDefinition[],
+  toolNames?: Record<string, string> | null,
 ): ToolDefinition | undefined {
   const staticDef = getToolDefinition(toolId);
-  if (staticDef) return staticDef;
-
-  const platform = platformTools.find((t) => t.id === toolId);
-  if (!platform) return undefined;
-  return buildToolFromPlatform(platform);
+  const base = staticDef
+    ? staticDef
+    : (() => {
+        const platform = platformTools.find((t) => t.id === toolId);
+        return platform ? buildToolFromPlatform(platform) : undefined;
+      })();
+  if (!base) return undefined;
+  const override = toolNames?.[base.id]?.trim();
+  return override && override !== base.name ? { ...base, name: override } : base;
 }
 
-export function mergedHomeTools(platformTools: PlatformToolDefinition[]): ToolDefinition[] {
+export function mergedHomeTools(
+  platformTools: PlatformToolDefinition[],
+  toolNames?: Record<string, string> | null,
+): ToolDefinition[] {
   const seen = new Set<string>();
   const out: ToolDefinition[] = [];
 
@@ -194,7 +226,7 @@ export function mergedHomeTools(platformTools: PlatformToolDefinition[]): ToolDe
     out.push(def);
   }
 
-  return out;
+  return applyToolNameOverrides(out, toolNames);
 }
 
 /** Filter home tools by business-profile selection. null/undefined = show all (legacy). */
@@ -224,6 +256,7 @@ export function filterHomeToolsByCatalog(
 /** Opt-in tools an admin has explicitly enabled; missing catalog rows never qualify. */
 export function catalogEnabledOptInTools(
   catalog: Array<{ id: string; available: boolean }> | null | undefined,
+  toolNames?: Record<string, string> | null,
 ): ToolDefinition[] {
   const out: ToolDefinition[] = [];
   for (const row of catalog ?? []) {
@@ -231,7 +264,7 @@ export function catalogEnabledOptInTools(
     const def = getToolDefinition(row.id);
     if (def && !out.some((t) => t.id === def.id)) out.push({ ...def, showOnHome: true });
   }
-  return out;
+  return applyToolNameOverrides(out, toolNames);
 }
 
 export function homeToolsByCategory(

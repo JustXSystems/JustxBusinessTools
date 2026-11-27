@@ -14,6 +14,7 @@ import {
 } from "@/components/bos";
 import { AdminEmpty, AdminSection, AdminTabs } from "@/components/admin/ui";
 import { uniqueTools } from "@/config/tools.config";
+import { useOptionalPlatformConfig } from "@/components/config/ConfigProvider";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 
 export type LiveEvent = {
@@ -121,9 +122,9 @@ const EVENT_META: Record<string, { label: string; tone: Tone; aspect: Aspect; hi
   },
 };
 
-function toolName(id: string | null) {
+function toolName(id: string | null, toolNames?: Record<string, string>) {
   if (!id || id === "_app") return "App";
-  return uniqueTools().find((t) => t.id === id)?.name ?? id;
+  return toolNames?.[id]?.trim() || uniqueTools().find((t) => t.id === id)?.name || id;
 }
 
 function metaFor(type: string) {
@@ -229,6 +230,7 @@ export function LiveActivityStream({
   events: LiveEvent[];
   stream?: LiveStreamStats | null;
 }) {
+  const toolNames = useOptionalPlatformConfig()?.config?.toolNames;
   const [aspect, setAspect] = useState<Aspect>("all");
   const [query, setQuery] = useState("");
   const [toolFilter, setToolFilter] = useState("all");
@@ -239,10 +241,10 @@ export function LiveActivityStream({
   const tools = useMemo(() => {
     const set = new Map<string, string>();
     for (const ev of events) {
-      if (ev.toolId) set.set(ev.toolId, toolName(ev.toolId));
+      if (ev.toolId) set.set(ev.toolId, toolName(ev.toolId, toolNames));
     }
     return [...set.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [events]);
+  }, [events, toolNames]);
 
   const devices = useMemo(() => {
     const set = new Set<string>();
@@ -274,7 +276,7 @@ export function LiveActivityStream({
         ev.eventType,
         metaFor(ev.eventType).label,
         ev.toolId,
-        toolName(ev.toolId),
+        toolName(ev.toolId, toolNames),
         ev.actor,
         ev.actorEmail,
         ev.device,
@@ -482,7 +484,7 @@ export function LiveActivityStream({
                             <span className="admin-cc-live-sub">
                               <span>{ev.actor || "Anonymous"}</span>
                               <span>·</span>
-                              <span>{toolName(ev.toolId)}</span>
+                              <span>{toolName(ev.toolId, toolNames)}</span>
                               {ev.toolId ? (
                                 <>
                                   <span>·</span>
@@ -521,7 +523,7 @@ export function LiveActivityStream({
                               <li>
                                 <span>Tool</span>
                                 <strong>
-                                  {toolName(ev.toolId)}
+                                  {toolName(ev.toolId, toolNames)}
                                   {ev.toolId ? ` (${ev.toolId})` : ""}
                                 </strong>
                               </li>

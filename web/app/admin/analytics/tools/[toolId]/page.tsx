@@ -27,6 +27,7 @@ import {
   formatAnalyticsBucket,
 } from "@/components/admin/AnalyticsRangePills";
 import { uniqueTools } from "@/config/tools.config";
+import { useOptionalPlatformConfig } from "@/components/config/ConfigProvider";
 import { adminDeepLink } from "@/lib/admin-deep-links";
 import { api } from "@/lib/api";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
@@ -46,15 +47,16 @@ type SeriesRow = {
 
 type Grain = "day" | "week" | "month";
 
-function toolTitle(toolId: string) {
+function toolTitle(toolId: string, toolNames?: Record<string, string>) {
   if (toolId === "_app") return "App-wide activity";
-  return uniqueTools().find((t) => t.id === toolId)?.name ?? toolId;
+  return toolNames?.[toolId]?.trim() || uniqueTools().find((t) => t.id === toolId)?.name || toolId;
 }
 
 export default function AdminToolAnalyticsPage() {
+  const toolNames = useOptionalPlatformConfig()?.config?.toolNames;
   const params = useParams();
   const toolId = String(params.toolId ?? "");
-  const name = toolTitle(toolId);
+  const name = toolTitle(toolId, toolNames);
 
   const [days, setDays] = useState(30);
   const [grain, setGrain] = useState<Grain>("day");

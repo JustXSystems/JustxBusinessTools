@@ -2,9 +2,10 @@
 
 import "./ims-app.css";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { BosRoot, Footnote } from "@/components/bos";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useToolName } from "@/components/config/ConfigProvider";
 import { ImpersonationBanner } from "@/components/layout/ImpersonationBanner";
 import { api } from "@/lib/api";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
@@ -12,14 +13,14 @@ import { clearSubscriptionSnapshot } from "@/lib/subscription-cache";
 import { clearToolCart } from "@/lib/tool-cart";
 import { IMS_LOGO, ImsApp } from "./ImsApp";
 
-function Gate({ children }: { children: ReactNode }) {
+function Gate({ children, productName }: { children: ReactNode; productName: string }) {
   return (
     <BosRoot skin="ims" canvas className="ims-standalone">
       <main className="ims-gate">
         {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset under the app base path */}
-        <img className="ims-gate-logo" src={publicAssetUrl(IMS_LOGO)} alt="Justxsystems" />
+        <img className="ims-gate-logo" src={publicAssetUrl(IMS_LOGO)} alt={productName} />
         {children}
-        <Footnote>Justxsystems IMS — Dealer · © 2026 Justxsystems. All Rights Reserved.</Footnote>
+        <Footnote>{productName} · © 2026 Justxsystems. All Rights Reserved.</Footnote>
       </main>
     </BosRoot>
   );
@@ -28,6 +29,11 @@ function Gate({ children }: { children: ReactNode }) {
 /** `/ims` — Justxsystems IMS-Dealer as a full-screen app. Sign-in is the shared JBT login; access is enforced by `/api/ims`. */
 export function ImsStandalone() {
   const { user, loading, refresh } = useAuth();
+  const productName = useToolName("imsdealer", "Justxsystems IMS");
+
+  useEffect(() => {
+    document.title = productName;
+  }, [productName]);
 
   const signOut = async () => {
     try {
@@ -41,7 +47,7 @@ export function ImsStandalone() {
 
   if (loading) {
     return (
-      <Gate>
+      <Gate productName={productName}>
         <p className="bos-text-muted">Setting up your workspace…</p>
       </Gate>
     );
@@ -49,10 +55,10 @@ export function ImsStandalone() {
 
   if (!user) {
     return (
-      <Gate>
+      <Gate productName={productName}>
         <div className="ims-gate-card">
           <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 600 }}>
-            Welcome to Justxsystems IMS
+            Welcome to {productName}
           </h2>
           <p className="bos-text-muted" style={{ margin: "0 0 18px" }}>
             Inventory, purchasing, GST sales and collections for dealers. Sign in with your Justxsystems Business Tools account.

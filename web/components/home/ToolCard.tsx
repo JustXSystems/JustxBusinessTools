@@ -26,6 +26,7 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
   const sku = subscription?.catalog?.find((s) => s.toolId === tool.id);
+  const displayName = sku?.name?.trim() || tool.name;
   const licensed = isToolLicensed(tool.id);
   const paidOffer = sku && !sku.includedFree && sku.priceInr > 0;
   const trialEligible = Boolean(sku?.trialEligible && (sku.trialDays ?? 0) > 0);
@@ -38,7 +39,7 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
     setBusy(true);
     try {
       await startTrial(tool.id);
-      showToast(`${sku?.trialDays ?? 14}-day trial started for ${tool.name}`);
+      showToast(`${sku?.trialDays ?? 14}-day trial started for ${displayName}`);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Could not start trial");
     } finally {
@@ -62,7 +63,7 @@ export function ToolCard({ tool }: { tool: ToolDefinition }) {
         <ToolIcon icon={tool.icon} />
       </div>
       <div className="tool-card-copy">
-        <div className="tool-name">{tool.name}</div>
+        <div className="tool-name">{displayName}</div>
         {sku?.tagline ? (
           <div className="tool-card-tagline">{sku.tagline}</div>
         ) : tool.desc ? (

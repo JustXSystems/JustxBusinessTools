@@ -8,6 +8,7 @@ import {
   isPersonalUsageTool,
   mergedHomeTools,
   resolveToolDefinition,
+  resolveToolName,
 } from "@/lib/dynamic-tools";
 
 function homeIds(catalog: Array<{ id: string; available: boolean }>, selection: string[] | null): string[] {
@@ -72,5 +73,21 @@ describe("personalUsage tools", () => {
   it("honors platform overrides", () => {
     expect(isPersonalUsageTool("invoice", getToolDefinition("invoice"), { invoice: true })).toBe(true);
     expect(isPersonalUsageTool("gstcalc", getToolDefinition("gstcalc"), { gstcalc: false })).toBe(false);
+  });
+});
+
+describe("toolNames overrides", () => {
+  it("applies admin-configured product names across home, opt-in, and direct tool resolution", () => {
+    const names = {
+      imsdealer: "Justx Invoice Pro",
+      invoice: "GST Tax Invoice Studio",
+    };
+    expect(resolveToolName("imsdealer", names)).toBe("Justx Invoice Pro");
+    expect(resolveToolName("gstcalc", names)).toBe("GST Calculator");
+    expect(resolveToolDefinition("imsdealer", [], names)?.name).toBe("Justx Invoice Pro");
+    expect(mergedHomeTools([], names).find((t) => t.id === "invoice")?.name).toBe("GST Tax Invoice Studio");
+    expect(
+      catalogEnabledOptInTools([{ id: "imsdealer", available: true }], names).find((t) => t.id === "imsdealer")?.name,
+    ).toBe("Justx Invoice Pro");
   });
 });

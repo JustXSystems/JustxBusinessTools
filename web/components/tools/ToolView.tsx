@@ -110,7 +110,7 @@ export function ToolView({ toolId }: { toolId: string }) {
   const { user } = useAuth();
   const { config, loading } = usePlatformConfig();
   const platformTools = config?.tools ?? [];
-  const tool = resolveToolDefinition(toolId, platformTools);
+  const tool = resolveToolDefinition(toolId, platformTools, config?.toolNames);
   const catalogRow = config?.catalog?.find((c) => c.id === toolId);
   const launch = resolveToolLaunch(toolId, catalogRow);
   const personal = isPersonalAccount(user);

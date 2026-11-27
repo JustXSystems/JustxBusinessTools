@@ -44,10 +44,11 @@ export function HomeToolPicker({
   const configCtx = useOptionalPlatformConfig();
   const groupTools = configCtx?.config?.toolGrouping?.enabled !== false;
   const personalUsage = configCtx?.config?.toolPersonalUsage ?? {};
+  const toolNames = configCtx?.config?.toolNames ?? {};
   const allTools = useMemo(() => {
-    const merged = applyPersonalUsageOverrides(mergedHomeTools(platformTools), personalUsage);
+    const merged = applyPersonalUsageOverrides(mergedHomeTools(platformTools, toolNames), personalUsage);
     return filterHomeToolsByPersonalAccount(merged, personalOnly, personalUsage);
-  }, [platformTools, personalOnly, personalUsage]);
+  }, [platformTools, personalOnly, personalUsage, toolNames]);
   const groups = useMemo(
     () => homeToolsByCategory(allTools, { group: groupTools }),
     [allTools, groupTools],

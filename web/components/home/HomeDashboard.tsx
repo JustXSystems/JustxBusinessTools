@@ -38,6 +38,7 @@ export function HomeDashboard() {
   const platformTools = config?.tools ?? [];
   const catalog = config?.catalog ?? [];
   const personalUsage = config?.toolPersonalUsage ?? {};
+  const toolNames = config?.toolNames ?? {};
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 200);
   const [businessName, setBusinessName] = useState("");
@@ -62,14 +63,14 @@ export function HomeDashboard() {
   useLiveRefresh(loadProfile, { intervalMs: 90_000, enabled: Boolean(config), deps: [Boolean(config)] });
 
   const allTools = useMemo(() => {
-    const merged = applyPersonalUsageOverrides(mergedHomeTools(platformTools), personalUsage);
+    const merged = applyPersonalUsageOverrides(mergedHomeTools(platformTools, toolNames), personalUsage);
     const byCatalog = filterHomeToolsByCatalog(merged, catalog);
     const selected = [
       ...filterHomeToolsBySelection(byCatalog, homeToolIds),
-      ...applyPersonalUsageOverrides(catalogEnabledOptInTools(catalog), personalUsage),
+      ...applyPersonalUsageOverrides(catalogEnabledOptInTools(catalog, toolNames), personalUsage),
     ];
     return filterHomeToolsByPersonalAccount(selected, personal, personalUsage);
-  }, [platformTools, catalog, homeToolIds, personal, personalUsage]);
+  }, [platformTools, catalog, homeToolIds, personal, personalUsage, toolNames]);
   const groupTools = config?.toolGrouping?.enabled !== false;
   const filtered = useMemo(() => filterMergedTools(debouncedSearch, allTools), [debouncedSearch, allTools]);
   const categorized = useMemo(

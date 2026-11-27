@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type DependencyList, type ReactNode } from "react";
 import { Alert, Avatar, Badge, Button, Card, Grid, Segmented, Skeleton, useToast, type BosTone } from "@/components/bos";
+import { useToolName } from "@/components/config/ConfigProvider";
 import { ImsApiError, errorText, type ImsModuleKey, type ImsNotification, type ImsPermission, type ImsSession, type ImsSettings, type Period } from "@/lib/ims/api";
 import { initialsOf, PERIOD_OPTIONS, toneFor, type BadgeView } from "@/lib/ims/format";
 
@@ -144,17 +145,18 @@ export function LoadingBlock({ rows = 2 }: { rows?: number }) {
 }
 
 export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+  const productName = useToolName("imsdealer", "Justxsystems IMS");
   if (error instanceof ImsApiError && error.schemaPending) {
     return (
-      <Alert tone="amber" title="Justxsystems IMS is being set up">
+      <Alert tone="amber" title={`${productName} is being set up`}>
         The IMS database tables haven&apos;t been created yet. Restart the API once so migration <span className="bos-code">028_ims_core.sql</span> runs, then reload.
       </Alert>
     );
   }
   if (error instanceof ImsApiError && error.notEnabled) {
     return (
-      <Alert tone="blue" title="Justxsystems IMS — Dealer isn't enabled yet">
-        An administrator can turn it on in Admin → Tools (Justxsystems IMS — Dealer → Visible on home → Live, then Save placement).
+      <Alert tone="blue" title={`${productName} isn't enabled yet`}>
+        An administrator can turn it on in Admin → Tools ({productName} → Visible on home → Live, then Save placement).
       </Alert>
     );
   }
