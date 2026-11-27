@@ -60,13 +60,14 @@ describe("tool-icons", () => {
     expect(toolIconTileStyle({ bg: "transparent" })).toBeUndefined();
   });
 
-  it("computes scaled icon display sizes and clamps bounds", () => {
-    expect(resolveToolIconSize(40, undefined)).toBe(40);
-    expect(resolveToolIconSize(40, { scale: 100 })).toBe(40);
-    expect(resolveToolIconSize(40, { scale: 125 })).toBe(50);
-    expect(resolveToolIconSize(40, { scale: 75 })).toBe(30);
-    expect(resolveToolIconSize(40, { scale: 300 })).toBe(72);
-    expect(resolveToolIconSize(40, { scale: 10 })).toBe(20);
+  it("computes per-surface scaled icon display sizes and clamps bounds", () => {
+    expect(resolveToolIconSize(40, undefined, "md")).toBe(40);
+    expect(resolveToolIconSize(40, { scaleMd: 125 }, "md")).toBe(50);
+    expect(resolveToolIconSize(24, { scaleSm: 150, scaleMd: 125 }, "sm")).toBe(36);
+    expect(resolveToolIconSize(64, { scaleLg: 75 }, "lg")).toBe(48);
+    expect(resolveToolIconSize(16, { scaleSm: 150, scale: 150 }, "favicon")).toBe(16);
+    expect(resolveToolIconSize(40, { scaleMd: 300 }, "md")).toBe(80);
+    expect(resolveToolIconSize(40, { scaleMd: 10 }, "md")).toBe(20);
   });
 
   it("detects image icons vs emojis and normalizes map payloads", () => {

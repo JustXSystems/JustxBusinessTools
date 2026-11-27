@@ -22,10 +22,13 @@ type IconFormState = {
   bg: string;
   shape: "" | ToolIconShape;
   paddingPx: string;
-  scale: string;
+  scaleSm: string;
+  scaleMd: string;
+  scaleLg: string;
 };
 
 function formFromConfig(cfg: ToolIconConfig | undefined): IconFormState {
+  const fallbackScale = cfg?.scale != null ? String(cfg.scale) : "100";
   return {
     light: cfg?.light ?? "",
     dark: cfg?.dark ?? "",
@@ -37,14 +40,21 @@ function formFromConfig(cfg: ToolIconConfig | undefined): IconFormState {
     bg: cfg?.bg ?? "",
     shape: cfg?.shape ?? "",
     paddingPx: cfg?.paddingPx != null ? String(cfg.paddingPx) : "",
-    scale: cfg?.scale != null ? String(cfg.scale) : "100",
+    scaleSm: cfg?.scaleSm != null ? String(cfg.scaleSm) : fallbackScale,
+    scaleMd: cfg?.scaleMd != null ? String(cfg.scaleMd) : fallbackScale,
+    scaleLg: cfg?.scaleLg != null ? String(cfg.scaleLg) : fallbackScale,
   };
+}
+
+function parseFormScale(raw: string): number | undefined {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return undefined;
+  const clamped = Math.min(200, Math.max(50, Math.round(n)));
+  return clamped !== 100 ? clamped : undefined;
 }
 
 function previewConfigFromForm(f: IconFormState, builtin?: ToolIconConfig): ToolIconConfig {
   const pad = f.paddingPx.trim() === "" ? undefined : Math.min(12, Math.max(0, Math.round(Number(f.paddingPx) || 0)));
-  const scaleRaw = Number(f.scale);
-  const scale = Number.isFinite(scaleRaw) ? Math.min(180, Math.max(50, Math.round(scaleRaw))) : 100;
   return {
     ...(builtin ?? {}),
     light: f.light.trim() || builtin?.light || undefined,
@@ -57,7 +67,9 @@ function previewConfigFromForm(f: IconFormState, builtin?: ToolIconConfig): Tool
     bg: f.bg.trim() || undefined,
     shape: f.shape || undefined,
     paddingPx: pad,
-    scale: scale !== 100 ? scale : undefined,
+    scaleSm: parseFormScale(f.scaleSm),
+    scaleMd: parseFormScale(f.scaleMd),
+    scaleLg: parseFormScale(f.scaleLg),
   };
 }
 
@@ -181,7 +193,10 @@ export const ToolIconsPane = forwardRef<
         bg: form.bg.trim(),
         shape: form.shape || "",
         paddingPx: form.paddingPx.trim() === "" ? "" : Number(form.paddingPx),
-        scale: form.scale.trim() === "" ? 100 : Number(form.scale),
+        scale: 100,
+        scaleSm: form.scaleSm.trim() === "" ? 100 : Number(form.scaleSm),
+        scaleMd: form.scaleMd.trim() === "" ? 100 : Number(form.scaleMd),
+        scaleLg: form.scaleLg.trim() === "" ? 100 : Number(form.scaleLg),
       };
       const res = await api<{ icon: ToolIconConfig | null }>(
         `/admin/config/tool-icons/${encodeURIComponent(toolId)}`,
@@ -271,7 +286,7 @@ export const ToolIconsPane = forwardRef<
               </div>
               <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
                 {previewSizes.map((s) => {
-                  const renderedPx = s.hint === "favicon" ? s.px : resolveToolIconSize(s.px, previewCfg);
+                  const renderedPx = resolveToolIconSize(s.px, previewCfg, s.hint);
                   return (
                     <div key={s.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                       <div
@@ -416,43 +431,67 @@ export const ToolIconsPane = forwardRef<
             placeholder="0"
             onChange={(e) => setForm((f) => ({ ...f, paddingPx: e.target.value }))}
           />
-          <Field
-            label={`Icon display size (${Number(form.scale) || 100}%)`}
-            hint="Scale the icon from 50% to 180% so it is clearly visible on cards, headers, and pickers."
-          >
-            {({ id }) => (
-              <div style={{ display: "grid", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <input
-                    id={id}
-                    type="range"
-                    min={50}
-                    max={180}
-                    step={5}
-                    value={Number(form.scale) || 100}
-                    onChange={(e) => setForm((f) => ({ ...f, scale: e.target.value }))}
-                    style={{ flex: 1, cursor: "pointer" }}
-                  />
-                  <span style={{ minWidth: 44, textAlign: "right", fontSize: 12, fontWeight: 600 }}>
-                    {Number(form.scale) || 100}%
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {[75, 100, 125, 150].map((pct) => (
-                    <Button
-                      key={pct}
-                      size="sm"
-                      variant={Number(form.scale || 100) === pct ? "primary" : "ghost"}
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, scale: String(pct) }))}
-                    >
-                      {pct}%
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Field>
+        </FormGrid>
+
+        <BlockLabel>Icon display size by surface</BlockLabel>
+        <FormGrid>
+          {(
+            [
+              {
+                key: "scaleSm",
+                label: "Chip & Header icon (24px base)",
+                hint: "Tool headers, compact chips, and navigation pickers.",
+              },
+              {
+                key: "scaleMd",
+                label: "Home & Tool Card icon (40px base)",
+                hint: "Tool cards on the Home page and catalog grids.",
+              },
+              {
+                key: "scaleLg",
+                label: "App & Large icon (64px base)",
+                hint: "App launchers, splash screens, and large showcases.",
+              },
+            ] as const
+          ).map(({ key, label, hint }) => {
+            const pct = Number(form[key]) || 100;
+            return (
+              <Field key={key} label={`${label} — ${pct}%`} hint={hint}>
+                {({ id }) => (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <input
+                        id={id}
+                        type="range"
+                        min={50}
+                        max={200}
+                        step={5}
+                        value={pct}
+                        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                        style={{ flex: 1, cursor: "pointer" }}
+                      />
+                      <span style={{ minWidth: 44, textAlign: "right", fontSize: 12, fontWeight: 600 }}>
+                        {pct}%
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {[75, 100, 125, 150].map((preset) => (
+                        <Button
+                          key={preset}
+                          size="sm"
+                          variant={pct === preset ? "primary" : "ghost"}
+                          type="button"
+                          onClick={() => setForm((f) => ({ ...f, [key]: String(preset) }))}
+                        >
+                          {preset}%
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Field>
+            );
+          })}
         </FormGrid>
       </div>
     </AdminSection>

@@ -26,8 +26,14 @@ export type ToolIconConfig = {
   shape?: ToolIconShape;
   /** Inner padding in px (0..12). */
   paddingPx?: number;
-  /** Icon display size scale percentage (50..180, default 100). */
+  /** Legacy fallback display size scale percentage (50..200, default 100). */
   scale?: number;
+  /** Chip / Header icon size scale percentage (50..200, default 100). */
+  scaleSm?: number;
+  /** Home / Tool Card icon size scale percentage (50..200, default 100). */
+  scaleMd?: number;
+  /** Large / App icon size scale percentage (50..200, default 100). */
+  scaleLg?: number;
 };
 
 export type ToolIconsMap = Record<string, ToolIconConfig>;
@@ -63,7 +69,7 @@ function parseScale(raw: unknown): number | undefined {
   if (raw === "" || raw == null) return undefined;
   const n = Number(raw);
   if (!Number.isFinite(n)) return undefined;
-  return Math.min(180, Math.max(50, Math.round(n)));
+  return Math.min(200, Math.max(50, Math.round(n)));
 }
 
 function sanitizeSlotValue(raw: unknown, allowEmoji: boolean): string | undefined {
@@ -94,6 +100,9 @@ function signConfig(cfg: ToolIconConfig): ToolIconConfig {
   if (cfg.shape) out.shape = cfg.shape;
   if (cfg.paddingPx != null) out.paddingPx = cfg.paddingPx;
   if (cfg.scale != null) out.scale = cfg.scale;
+  if (cfg.scaleSm != null) out.scaleSm = cfg.scaleSm;
+  if (cfg.scaleMd != null) out.scaleMd = cfg.scaleMd;
+  if (cfg.scaleLg != null) out.scaleLg = cfg.scaleLg;
   return out;
 }
 
@@ -113,6 +122,12 @@ function parseConfigEntry(raw: unknown): ToolIconConfig | null {
   if (paddingPx != null) cfg.paddingPx = paddingPx;
   const scale = parseScale(obj.scale);
   if (scale != null) cfg.scale = scale;
+  const scaleSm = parseScale(obj.scaleSm);
+  if (scaleSm != null) cfg.scaleSm = scaleSm;
+  const scaleMd = parseScale(obj.scaleMd);
+  if (scaleMd != null) cfg.scaleMd = scaleMd;
+  const scaleLg = parseScale(obj.scaleLg);
+  if (scaleLg != null) cfg.scaleLg = scaleLg;
   return Object.keys(cfg).length > 0 ? cfg : null;
 }
 
@@ -225,10 +240,11 @@ export async function saveToolIconConfig(
     else delete next.paddingPx;
   }
 
-  if (Object.prototype.hasOwnProperty.call(input, "scale")) {
-    const scale = parseScale(input.scale);
-    if (scale != null && scale !== 100) next.scale = scale;
-    else delete next.scale;
+  for (const key of ["scale", "scaleSm", "scaleMd", "scaleLg"] as const) {
+    if (!Object.prototype.hasOwnProperty.call(input, key)) continue;
+    const val = parseScale(input[key]);
+    if (val != null && val !== 100) next[key] = val;
+    else delete next[key];
   }
 
   if (Object.keys(next).length === 0) {

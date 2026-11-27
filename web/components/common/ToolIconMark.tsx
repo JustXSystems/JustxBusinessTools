@@ -78,7 +78,7 @@ export function ToolIconMark({
   const theme = themeOverride ?? detectedTheme;
   const raw = resolveToolIconSource(cfg, fallback, { theme, size: sizeHint });
   const tileStyle = toolIconTileStyle(cfg);
-  const effectiveSize = sizeHint === "favicon" ? size : resolveToolIconSize(size, cfg);
+  const effectiveSize = resolveToolIconSize(size, cfg, sizeHint);
 
   if (isImageIcon(raw)) {
     const src = resolveIconAssetUrl(raw);

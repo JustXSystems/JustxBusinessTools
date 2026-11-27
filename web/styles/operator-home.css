@@ -153,8 +153,10 @@
 }
 
 .home-dashboard .tool-icon {
-  width: 48px;
-  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  width: fit-content;
+  height: fit-content;
   border-radius: 14px;
   font-size: 22px;
   flex-shrink: 0;

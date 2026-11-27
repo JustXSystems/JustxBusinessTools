@@ -24,8 +24,14 @@ export type ToolIconConfig = {
   shape?: ToolIconShape;
   /** Inner padding in px (0..12). */
   paddingPx?: number;
-  /** Icon display size scale percentage (50..180, default 100). */
+  /** Legacy fallback display size scale percentage (50..200, default 100). */
   scale?: number;
+  /** Chip / Header icon size scale percentage (50..200, default 100). */
+  scaleSm?: number;
+  /** Home / Tool Card icon size scale percentage (50..200, default 100). */
+  scaleMd?: number;
+  /** Large / App icon size scale percentage (50..200, default 100). */
+  scaleLg?: number;
 };
 
 export type ToolIconsMap = Record<string, ToolIconConfig>;
@@ -115,11 +121,22 @@ export function resolveToolIconSource(
   return themed || cfg?.size192 || cfg?.size512 || fallback;
 }
 
-/** Compute effective rendered icon size in px applying any configured scale percentage. */
-export function resolveToolIconSize(baseSize: number, cfg: ToolIconConfig | null | undefined): number {
-  const scale = cfg?.scale;
+/** Compute effective rendered icon size in px applying per-surface or fallback scale percentage. */
+export function resolveToolIconSize(
+  baseSize: number,
+  cfg: ToolIconConfig | null | undefined,
+  sizeHint: ToolIconSizeHint = "md",
+): number {
+  if (sizeHint === "favicon") return baseSize;
+  const perSurface =
+    sizeHint === "sm"
+      ? cfg?.scaleSm
+      : sizeHint === "md"
+        ? cfg?.scaleMd
+        : cfg?.scaleLg;
+  const scale = perSurface ?? cfg?.scale;
   if (typeof scale !== "number" || !Number.isFinite(scale) || scale === 100) return baseSize;
-  const clamped = Math.min(180, Math.max(50, Math.round(scale)));
+  const clamped = Math.min(200, Math.max(50, Math.round(scale)));
   return Math.max(12, Math.round((baseSize * clamped) / 100));
 }
 
@@ -151,8 +168,10 @@ export function normalizeToolIconsMap(raw: unknown): ToolIconsMap {
     if (typeof obj.paddingPx === "number" && Number.isFinite(obj.paddingPx)) {
       cfg.paddingPx = Math.min(12, Math.max(0, Math.round(obj.paddingPx)));
     }
-    if (typeof obj.scale === "number" && Number.isFinite(obj.scale)) {
-      cfg.scale = Math.min(180, Math.max(50, Math.round(obj.scale)));
+    for (const k of ["scale", "scaleSm", "scaleMd", "scaleLg"] as const) {
+      if (typeof obj[k] === "number" && Number.isFinite(obj[k])) {
+        cfg[k] = Math.min(200, Math.max(50, Math.round(obj[k] as number)));
+      }
     }
     if (Object.keys(cfg).length > 0) out[id] = cfg;
   }
