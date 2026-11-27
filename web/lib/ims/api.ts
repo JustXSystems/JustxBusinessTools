@@ -87,6 +87,7 @@ export type ImsPermission =
   | "suppliers"
   | "po"
   | "approvals"
+  | "quotations"
   | "sales"
   | "bom"
   | "bomPackages"
@@ -195,6 +196,24 @@ export type BomScheduleColumnId =
 export type DunningTone = "friendly" | "firm" | "final";
 export type DunningLevel = { key: string; label: string; minDaysOverdue: number; tone: DunningTone };
 
+export type QuoteNumberingMode = "v1_category" | "ims_fy";
+export type ImsQuoteSettings = {
+  quotePrefix: string;
+  numberingMode: QuoteNumberingMode;
+  defaultValidityDays: number;
+  tagline: string;
+  landline: string;
+  website: string;
+  place: string;
+  salesEmail: string;
+  managerEmail: string;
+  defaultShowGstColumns: boolean;
+  defaultGstNote: string;
+  defaultBuybackLabel: string;
+  termsByEngagement: Record<string, string>;
+  defaultEmailTemplateId: string;
+};
+
 export type ImsSettings = {
   businessName: string;
   businessType: string;
@@ -242,6 +261,8 @@ export type ImsSettings = {
   bomQuotationStatuses?: BomQuotationStatus[];
   /** Configurable required fields enforced at the final step of each IMS document. */
   docRequiredFields?: DocRequiredFieldMap;
+  /** IMS Quotation settings (V1 parity). */
+  quoteSettings?: ImsQuoteSettings;
   /** Null/omitted = industry-pack column defaults. */
   bomScheduleColumns?: BomScheduleColumnId[] | null;
   poApprovalLimit: number;
@@ -317,6 +338,7 @@ export type ImsModuleKey =
   | "parties"
   | "purchase"
   | "approvals"
+  | "quotations"
   | "salesOrders"
   | "sales"
   | "bom"

@@ -18,6 +18,7 @@ import {
 } from "@/lib/ims/settings";
 import { useIms } from "../core";
 import { SectionCard, ToggleRow, type TabProps } from "./parts";
+import { QuotationRemindersCard } from "./QuotationSettingsCard";
 
 type Channel = ReminderTemplate["channel"];
 const CHANNEL_LABEL: Record<Channel, string> = { whatsapp: "WhatsApp", sms: "SMS", email: "Email" };
@@ -385,6 +386,7 @@ export function RemindersTab({ draft, set, errors, readOnly }: TabProps) {
           ))}
         </div>
       </SectionCard>
+      <QuotationRemindersCard readOnly={readOnly} />
     </fieldset>
   );
 }

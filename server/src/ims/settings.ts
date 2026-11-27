@@ -8,6 +8,12 @@ import {
   normalizeDocRequiredFieldsSetting,
   type DocRequiredFieldMap,
 } from "./doc-required-fields.js";
+import {
+  normalizeImsQuoteSettings,
+  QUOTE_ENGAGEMENTS,
+  QUOTE_NUMBERING_MODES,
+  type ImsQuoteSettings,
+} from "./quote-logic.js";
 import { badRequest, forbidden, type ImsActor } from "./host.js";
 import {
   BUSINESS_TYPES,
@@ -249,6 +255,8 @@ export type ImsSettings = {
   bomQuotationStatuses: BomQuotationStatus[];
   /** Configurable required fields enforced at the final step of each IMS document. */
   docRequiredFields: DocRequiredFieldMap;
+  /** IMS Quotation settings (V1 parity: prefix, numbering, letterhead extras, per-engagement terms, defaults). */
+  quoteSettings: ImsQuoteSettings;
   /** Null = use industry-pack column defaults. */
   bomScheduleColumns: BomScheduleColumnId[] | null;
   poApprovalLimit: number;
@@ -352,6 +360,7 @@ type SettingsRow = {
   bom_require_quotation_ref?: number | boolean | null;
   bom_quotation_statuses_json?: unknown;
   doc_required_fields_json?: unknown;
+  quote_settings_json?: unknown;
   bom_schedule_columns_json?: unknown;
   po_approval_limit: string | number;
   invoice_approval_limit?: string | number;
@@ -433,6 +442,7 @@ const mapSettings = (r: SettingsRow): ImsSettings => ({
   bomRequireQuotationRef: normalizeDocRequiredFieldsSetting(r.doc_required_fields_json, Boolean(r.bom_require_quotation_ref)).bom.includes("quotationRef"),
   bomQuotationStatuses: normalizeBomQuotationStatusesSetting(r.bom_quotation_statuses_json),
   docRequiredFields: normalizeDocRequiredFieldsSetting(r.doc_required_fields_json, Boolean(r.bom_require_quotation_ref)),
+  quoteSettings: normalizeImsQuoteSettings(r.quote_settings_json),
   bomScheduleColumns: normalizeBomScheduleColumnsSetting(r.bom_schedule_columns_json),
   poApprovalLimit: money(r.po_approval_limit),
   invoiceApprovalLimit: money(r.invoice_approval_limit ?? 0),
@@ -558,6 +568,24 @@ const SettingsInput = z.object({
       invoice: z.array(z.enum(DOC_REQUIRED_FIELD_SPEC.invoice.fields)).max(12).optional(),
     })
     .optional(),
+  quoteSettings: z
+    .object({
+      quotePrefix: z.string().trim().max(12).optional(),
+      numberingMode: z.enum(QUOTE_NUMBERING_MODES).optional(),
+      defaultValidityDays: z.coerce.number().int().min(0).max(365).optional(),
+      tagline: z.string().trim().max(160).optional(),
+      landline: z.string().trim().max(40).optional(),
+      website: z.string().trim().max(160).optional(),
+      place: z.string().trim().max(80).optional(),
+      salesEmail: z.string().trim().max(180).optional(),
+      managerEmail: z.string().trim().max(180).optional(),
+      defaultShowGstColumns: z.boolean().optional(),
+      defaultGstNote: z.string().trim().max(300).optional(),
+      defaultBuybackLabel: z.string().trim().max(120).optional(),
+      termsByEngagement: z.record(z.enum(QUOTE_ENGAGEMENTS), z.string().max(6000)).optional(),
+      defaultEmailTemplateId: z.string().trim().max(40).optional(),
+    })
+    .optional(),
   bomScheduleColumns: z.array(z.enum(BOM_SCHEDULE_COLUMN_IDS)).max(16).nullable().optional(),
   poApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
   invoiceApprovalLimit: z.coerce.number().min(0).max(1e12).optional(),
@@ -680,6 +708,7 @@ const COLUMN: Record<string, string> = {
   bomRequireQuotationRef: "bom_require_quotation_ref",
   bomQuotationStatuses: "bom_quotation_statuses_json",
   docRequiredFields: "doc_required_fields_json",
+  quoteSettings: "quote_settings_json",
   bomScheduleColumns: "bom_schedule_columns_json",
   poApprovalLimit: "po_approval_limit",
   invoiceApprovalLimit: "invoice_approval_limit",
@@ -779,6 +808,8 @@ export async function updateSettings(deps: ImsDeps, actor: ImsActor, body: unkno
         sets.push("bom_require_quotation_ref = :bomRequireQuotationRefSync");
         params.bomRequireQuotationRefSync = normalized.bom.includes("quotationRef") ? 1 : 0;
       }
+    } else if (key === "quoteSettings") {
+      v = JSON.stringify(normalizeImsQuoteSettings(value));
     } else if (typeof value === "boolean") v = value ? 1 : 0;
     else if (typeof value === "string" && key.endsWith("Prefix")) v = value.toUpperCase();
     sets.push(`${COLUMN[key]} = :${key}`);

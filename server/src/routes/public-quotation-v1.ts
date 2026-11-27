@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "node:crypto";
 import { pool } from "../db.js";
 import { publishNotificationAsync } from "../lib/notification-publish.js";
 import { withFileAccessToken } from "../lib/storage.js";
@@ -108,12 +109,89 @@ function mapQuotation(row: Record<string, unknown>, data: Record<string, unknown
   };
 }
 
+function parseJsonVal<T>(raw: unknown, fallback: T): T {
+  if (raw == null) return fallback;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return raw as T;
+}
+
+function mapImsQuotationToPublic(row: Record<string, unknown>) {
+  const display = parseJsonVal<Record<string, unknown>>(row.display_json, {});
+  return {
+    id: String(row.id),
+    quoteNo: String(row.quote_no ?? ""),
+    category: String(row.category ?? "other"),
+    engagement: String(row.engagement ?? "sale"),
+    categoryCustomLabel: String(row.category_custom_label ?? ""),
+    status: String(row.status ?? "draft"),
+    date: row.quote_date ? String(row.quote_date).slice(0, 10) : "",
+    validTill: row.valid_until ? String(row.valid_until).slice(0, 10) : "",
+    followUpDate: row.follow_up_date ? String(row.follow_up_date).slice(0, 10) : "",
+    preparedBy: String(row.prepared_by ?? ""),
+    preparedByPhone: String(row.prepared_by_phone ?? ""),
+    preparedByEmail: String(row.prepared_by_email ?? ""),
+    customer: {
+      name: String(row.customer_name ?? ""),
+      company: String(row.customer_company ?? ""),
+      address: String(row.customer_address ?? ""),
+      city: String(row.customer_city ?? ""),
+      state: String(row.customer_state ?? ""),
+      gstin: String(row.customer_gstin ?? ""),
+      phone: String(row.customer_phone ?? ""),
+      email: String(row.customer_email ?? ""),
+    },
+    items: parseJsonVal<unknown[]>(row.lines_json, []),
+    extraCharge: parseJsonVal<Record<string, unknown>>(row.extra_charge_json, { label: "", amount: "", gst: 18 }),
+    gstOverride: parseJsonVal<Record<string, unknown>>(row.gst_override_json, { mode: "auto", cgst: null, sgst: null, igst: null }),
+    showGstColumns: typeof display.showGstColumns === "boolean" ? display.showGstColumns : true,
+    gstNote: typeof display.gstNote === "string" ? display.gstNote : undefined,
+    buybackLabel: typeof display.buybackLabel === "string" ? display.buybackLabel : undefined,
+    notes: String(row.notes ?? ""),
+    history: parseJsonVal<unknown[]>(row.history_json, []),
+    approvalToken: String(row.approval_token ?? ""),
+    financeSent: Boolean(row.finance_sent),
+    approvedAt: row.approved_at ? String(row.approved_at) : undefined,
+    approvedBy: row.approved_by ? String(row.approved_by) : undefined,
+    rejectedAt: row.rejected_at ? String(row.rejected_at) : undefined,
+    rejectedBy: row.rejected_by ? String(row.rejected_by) : undefined,
+    companySnapshot: parseJsonVal<Record<string, unknown> | null>(row.company_snapshot_json, null) ?? undefined,
+  };
+}
+
 router.get("/:token", async (req, res) => {
   const token = String(req.params.token ?? "").trim();
   if (!token) {
     res.status(400).json({ error: "token required" });
     return;
   }
+
+  // 1. Check native IMS Quotations first.
+  try {
+    const [imsRows] = await pool.query(
+      `SELECT * FROM ims_quotations WHERE approval_token = :token LIMIT 1`,
+      { token },
+    );
+    const imsRow = Array.isArray(imsRows) ? (imsRows[0] as Record<string, unknown> | undefined) : undefined;
+    if (imsRow) {
+      const q = mapImsQuotationToPublic(imsRow);
+      const company = await companyForRecord(
+        { companySnapshot: q.companySnapshot },
+        imsRow.tenant_id != null ? Number(imsRow.tenant_id) : null,
+      );
+      res.json({ quotation: q, company });
+      return;
+    }
+  } catch {
+    /* ims_quotations table optional before migration 067 */
+  }
+
+  // 2. Fallback to standalone Quotation V1 (document_records).
   const [rows] = await pool.query(
     `SELECT id, doc_no, status, data, doc_date, extra_date, party_name, grand_total, business_profile_id
      FROM document_records
@@ -154,6 +232,107 @@ router.post("/:token/decide", async (req, res) => {
     res.status(400).json({ error: "Approver name is too long" });
     return;
   }
+
+  // 1. Check native IMS Quotations first.
+  try {
+    const [imsRows] = await pool.query(
+      `SELECT * FROM ims_quotations WHERE approval_token = :token LIMIT 1`,
+      { token },
+    );
+    const imsRow = Array.isArray(imsRows) ? (imsRows[0] as Record<string, unknown> | undefined) : undefined;
+    if (imsRow) {
+      if (String(imsRow.status) !== "sent") {
+        res.status(400).json({ error: `Quotation is already ${imsRow.status}` });
+        return;
+      }
+      const now = new Date().toISOString();
+      const history = parseJsonVal<Array<{ ts: string; event: string }>>(imsRow.history_json, []);
+      history.push({
+        ts: now,
+        event: decision === "approved" ? `Approved by ${approverName}` : `Rejected by ${approverName}`,
+      });
+      const imsId = String(imsRow.id ?? "");
+      await pool.query(
+        `UPDATE ims_quotations SET
+           status = :status,
+           history_json = :history,
+           approved_at = IF(:status = 'approved', CURRENT_TIMESTAMP, approved_at),
+           approved_by = IF(:status = 'approved', :approverName, approved_by),
+           rejected_at = IF(:status = 'rejected', CURRENT_TIMESTAMP, rejected_at),
+           rejected_by = IF(:status = 'rejected', :approverName, rejected_by)
+         WHERE id = :id`,
+        { id: imsId, status: decision, history: JSON.stringify(history), approverName },
+      );
+
+      const tenantId = Number(imsRow.tenant_id);
+      const quoteNo = String(imsRow.quote_no ?? "");
+      const party = String(imsRow.customer_company || imsRow.customer_name || imsId);
+      await pool
+        .query(
+          `INSERT INTO ims_quotation_alerts (id, tenant_id, quotation_id, message, is_read)
+           VALUES (:id, :tenantId, :qid, :msg, 0)`,
+          {
+            id: randomUUID(),
+            tenantId,
+            qid: imsId,
+            msg: `${quoteNo} ${decision} by ${approverName} (${party})`,
+          },
+        )
+        .catch(() => undefined);
+      await pool
+        .query(
+          `INSERT INTO ims_events (tenant_id, actor_user_id, actor_name, event_type, entity_type, entity_id, summary, payload)
+           VALUES (:tenantId, NULL, :actorName, :type, 'quotation', :qid, :summary, CAST(:payload AS JSON))`,
+          {
+            tenantId,
+            actorName: approverName,
+            type: decision === "approved" ? "quotation.approved" : "quotation.rejected",
+            qid: imsId,
+            summary: `${quoteNo} ${decision} by ${approverName}`.slice(0, 255),
+            payload: JSON.stringify({ quoteNo, customerName: party, status: decision, action: `status:${decision}` }),
+          },
+        )
+        .catch(() => undefined);
+
+      let orgId: number | undefined;
+      try {
+        const [orgRows] = await pool.query(`SELECT organization_id FROM business_profiles WHERE id = :id LIMIT 1`, { id: tenantId });
+        const orgRow = Array.isArray(orgRows) ? (orgRows[0] as { organization_id: number } | undefined) : undefined;
+        if (orgRow) orgId = Number(orgRow.organization_id);
+      } catch {
+        /* best-effort */
+      }
+      if (orgId != null) {
+        publishNotificationAsync({
+          eventType: decision === "approved" ? "document.quotation_approved" : "document.quotation_rejected",
+          title: decision === "approved" ? "Quotation approved by customer" : "Quotation rejected by customer",
+          body: `${quoteNo ? `${quoteNo} · ` : ""}${approverName} ${decision} the quotation${party ? ` (${party})` : ""}.`,
+          organizationId: orgId,
+          businessProfileId: tenantId,
+          href: `/ims?m=quotations&open=${imsRow.id}`,
+          entityType: "quotation",
+          entityId: String(imsRow.id),
+          dedupeKey: `ims-quote-decide:${imsRow.id}:${decision}`,
+          severity: decision === "rejected" ? "urgent" : "attention",
+          meta: { decision, quoteNo, approverName, decidedAt: now },
+          expiresInHours: 336,
+        });
+      }
+
+      const mapped = mapImsQuotationToPublic({
+        ...imsRow,
+        status: decision,
+        history_json: history,
+        ...(decision === "approved" ? { approved_at: now, approved_by: approverName } : { rejected_at: now, rejected_by: approverName }),
+      });
+      const company = await companyForRecord({ companySnapshot: mapped.companySnapshot }, tenantId);
+      res.json({ quotation: mapped, company });
+      return;
+    }
+  } catch {
+    /* ims_quotations table optional before migration 067 */
+  }
+
   const [rows] = await pool.query(
     `SELECT id, status, data, business_profile_id FROM document_records
      WHERE tool_id = :toolId

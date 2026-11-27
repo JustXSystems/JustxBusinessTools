@@ -21,6 +21,7 @@ export type ImsModuleKey =
   | "parties"
   | "purchase"
   | "approvals"
+  | "quotations"
   | "salesOrders"
   | "sales"
   | "bom"
@@ -501,7 +502,7 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
       return;
     }
     const params = { tenantId: actor.tenantId, q: likeOf(q), exact: q };
-    const [items, parties, invoices, pos, bills, boms, packages, dcs, returns] = await Promise.all([
+    const [items, parties, invoices, pos, bills, boms, packages, dcs, returns, quotes] = await Promise.all([
       rows<{ id: string; name: string; sku: string | null; current_stock: string; unit: string }>(
         deps.db,
         `SELECT id, name, sku, current_stock, unit FROM ims_items
@@ -563,6 +564,13 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
          ORDER BY r.return_date DESC LIMIT 5`,
         params,
       ).catch(() => [] as Array<{ id: string; return_no: string; dc_doc_no: string; bom_doc_no: string; customer_name: string | null }>),
+      rows<{ id: string; quote_no: string; customer_name: string; customer_company: string | null; status: string; grand_total: string }>(
+        deps.db,
+        `SELECT id, quote_no, customer_name, customer_company, status, grand_total FROM ims_quotations
+         WHERE tenant_id = :tenantId AND (quote_no LIKE :q OR customer_name LIKE :q OR IFNULL(customer_company,'') LIKE :q OR IFNULL(customer_city,'') LIKE :q)
+         ORDER BY updated_at DESC LIMIT 5`,
+        params,
+      ).catch(() => [] as Array<{ id: string; quote_no: string; customer_name: string; customer_company: string | null; status: string; grand_total: string }>),
     ]);
     res.json({
       results: [
@@ -602,6 +610,14 @@ export function registerWorkspace(router: Router, deps: ImsDeps): void {
           sub: `${r.customer_name || "No customer"} · DC ${r.dc_doc_no} · BOM ${r.bom_doc_no}`,
           module: "bomDc" as const,
           open: `return:${r.id}`,
+        })),
+        ...quotes.map((qt) => ({
+          kind: "quotation",
+          id: qt.id,
+          title: qt.quote_no,
+          sub: `${qt.customer_company || qt.customer_name} · ${qt.status} · ₹${round2(money(qt.grand_total)).toLocaleString("en-IN")}`,
+          module: "quotations" as const,
+          open: qt.id,
         })),
       ],
     });

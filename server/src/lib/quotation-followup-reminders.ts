@@ -300,6 +300,54 @@ async function loadProfile(profileId: number): Promise<ProfileRow | null> {
 }
 
 async function listDueQuotations(profileId: number, today: string): Promise<QuoteRow[]> {
+  const out: QuoteRow[] = [];
+  const seen = new Set<string>();
+
+  // 1. Native IMS Quotations due today.
+  try {
+    const [imsRows] = await pool.query(
+      `SELECT id, quote_no, quote_date, valid_until, customer_name, customer_company, customer_phone, customer_email,
+              grand_total, status, prepared_by, prepared_by_email, created_by_user_id, follow_up_date, category, engagement
+       FROM ims_quotations
+       WHERE tenant_id = :profileId
+         AND status NOT IN ('approved', 'rejected', 'cancelled')
+         AND follow_up_date = :today`,
+      { profileId, today },
+    );
+    for (const r of (Array.isArray(imsRows) ? imsRows : []) as Array<Record<string, unknown>>) {
+      const id = String(r.id);
+      seen.add(id);
+      out.push({
+        id,
+        doc_no: String(r.quote_no ?? ""),
+        doc_date: r.quote_date,
+        extra_date: r.valid_until,
+        party_name: String(r.customer_company || r.customer_name || ""),
+        grand_total: Number(r.grand_total ?? 0),
+        status: String(r.status ?? "draft"),
+        data: {
+          id,
+          quoteNo: r.quote_no,
+          followUpDate: r.follow_up_date,
+          preparedBy: r.prepared_by ?? "",
+          preparedByEmail: r.prepared_by_email ?? "",
+          createdByUserId: r.created_by_user_id ?? undefined,
+          category: r.category,
+          engagement: r.engagement,
+          customer: {
+            name: r.customer_name ?? "",
+            company: r.customer_company ?? "",
+            phone: r.customer_phone ?? "",
+            email: r.customer_email ?? "",
+          },
+        },
+      });
+    }
+  } catch {
+    /* ims_quotations table optional before migration 067 */
+  }
+
+  // 2. Standalone Quotation V1 records due today (deduped by id).
   const [rows] = await pool.query(
     `SELECT id, doc_no, doc_date, extra_date, party_name, grand_total, status, data
      FROM document_records
@@ -314,7 +362,10 @@ async function listDueQuotations(profileId: number, today: string): Promise<Quot
       ...Object.fromEntries(CLOSED_STATUSES.map((s, i) => [`closed${i}`, s])),
     },
   );
-  return (Array.isArray(rows) ? rows : []) as QuoteRow[];
+  for (const r of (Array.isArray(rows) ? rows : []) as QuoteRow[]) {
+    if (!seen.has(String(r.id))) out.push(r);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

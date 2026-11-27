@@ -16,6 +16,7 @@ import { registerLedger } from "./ledger.js";
 import { registerParties } from "./parties.js";
 import { registerPayables } from "./payables.js";
 import { registerPurchase } from "./purchase.js";
+import { registerQuotations } from "./quotations.js";
 import { registerRecurring } from "./recurring.js";
 import { registerReports } from "./reports.js";
 import { registerSales } from "./sales.js";
@@ -100,6 +101,7 @@ export function createImsRouter({ db, host, sources = [], catalogs = [] }: Creat
   registerInventory(router, deps);
   registerParties(router, deps);
   registerPurchase(router, deps);
+  registerQuotations(router, deps);
   registerSales(router, deps);
   registerSalesOrders(router, deps);
   registerSalesWave6(router, deps);

@@ -1806,6 +1806,59 @@ export function registerBom(router: Router, deps: ImsDeps): void {
     const seen = new Set<string>();
     const allowedStatuses = new Set<string>((await getSettings(deps, actor.tenantId)).bomQuotationStatuses);
 
+    // 1. Native IMS Quotations (preferred when present).
+    try {
+      const imsQuotes = await rows<{
+        id: string;
+        quote_no: string;
+        quote_date: unknown;
+        status: string;
+        grand_total: string;
+        category: string;
+        engagement: string;
+        category_custom_label: string | null;
+        customer_name: string;
+        customer_company: string | null;
+        customer_phone: string | null;
+        customer_gstin: string | null;
+        customer_state: string | null;
+        customer_city: string | null;
+      }>(
+        deps.db,
+        `SELECT id, quote_no, quote_date, status, grand_total, category, engagement, category_custom_label,
+                customer_name, customer_company, customer_phone, customer_gstin, customer_state, customer_city
+         FROM ims_quotations
+         WHERE tenant_id = :tenantId
+         ORDER BY quote_date DESC, updated_at DESC LIMIT 500`,
+        { tenantId: actor.tenantId },
+      );
+      for (const r of imsQuotes) {
+        const status = String(r.status ?? "").toLowerCase();
+        if (!allowedStatuses.has(status)) continue;
+        const docNo = String(r.quote_no ?? "").trim();
+        if (!docNo || seen.has(docNo)) continue;
+        seen.add(docNo);
+        const partyName = String(r.customer_company || r.customer_name || "").trim() || "Customer";
+        quotations.push({
+          ref: r.id,
+          docNo,
+          date: isoOf(r.quote_date),
+          status,
+          amount: round2(money(r.grand_total)),
+          title: [r.category_custom_label || r.category, r.engagement].filter(Boolean).join(" · ") || "IMS Quotation",
+          partyName,
+          partyPhone: r.customer_phone,
+          partyGstin: r.customer_gstin,
+          partyState: r.customer_state,
+          partyCity: r.customer_city,
+          sourceId: "ims_quotation",
+          sourceLabel: "IMS Quotation",
+        });
+      }
+    } catch {
+      /* ims_quotations table optional before migration 067 */
+    }
+
     for (const source of deps.sources) {
       let records: Awaited<ReturnType<(typeof source)["list"]>> = [];
       try {

@@ -677,6 +677,7 @@ export const IMS_PERMISSIONS = [
   { key: "suppliers", label: "Suppliers & customers" },
   { key: "po", label: "Purchase orders" },
   { key: "approvals", label: "Approvals (PO, bills, stock checks, BOM confirm, DC approve)" },
+  { key: "quotations", label: "Quotations" },
   { key: "sales", label: "Sales invoices" },
   { key: "bom", label: "Bill of materials (BOM)" },
   { key: "bomPackages", label: "BOM package templates" },
@@ -700,8 +701,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
   // bomPackages stays owner-only by default (platform owners/admins are IMS owners).
   manager: grant(ALL_PERMS.filter((k) => k !== "settings" && k !== "integrations" && k !== "bomPackages")),
   incharge: grant(["stockIn", "stockOut", "damage", "stockCheck", "po", "field", "bom"]),
-  staff: grant(["stockIn", "stockOut", "damage", "stockCheck", "po", "sales", "bom"]),
-  accountant: grant(["sales", "bom", "receivables", "payables", "closing", "reports", "suppliers"]),
+  staff: grant(["stockIn", "stockOut", "damage", "stockCheck", "po", "quotations", "sales", "bom"]),
+  accountant: grant(["quotations", "sales", "bom", "receivables", "payables", "closing", "reports", "suppliers"]),
   auditor: grant(["reports", "audit"]),
   field: grant(["field"]),
   viewer: grant(["reports"]),

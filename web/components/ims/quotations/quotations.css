@@ -1,0 +1,114 @@
+/* Native IMS Quotations layout — pairs BOS/IMS chrome with exact V1 QuoteSheet preview */
+
+.ims-q-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1180px) {
+  .ims-q-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ims-q-preview-sticky {
+  position: sticky;
+  top: 12px;
+  background: var(--bos-surface-2, #f8fafc);
+  border: 1px solid var(--bos-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.ims-q-line-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ims-q-line-table th {
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--bos-muted, #64748b);
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--bos-border, #e2e8f0);
+  white-space: nowrap;
+}
+
+.ims-q-line-table td {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--bos-border, #f1f5f9);
+  vertical-align: top;
+}
+
+.ims-q-stock-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-top: 3px;
+  font-weight: 500;
+}
+
+.ims-q-stock-ok {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.ims-q-stock-low {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.ims-q-stock-out {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.ims-q-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.ims-q-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.ims-q-totals-box {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  padding: 10px 12px;
+  background: var(--bos-surface-2, #f8fafc);
+  border-radius: 8px;
+  border: 1px solid var(--bos-border, #e2e8f0);
+}
+
+.ims-q-totals-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ims-q-totals-grand {
+  font-size: 15px;
+  font-weight: 700;
+  padding-top: 6px;
+  border-top: 1px solid var(--bos-border, #cbd5e1);
+}
+
+@media print {
+  .ims-q-no-print {
+    display: none !important;
+  }
+}

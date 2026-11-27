@@ -1,6 +1,7 @@
 "use client";
 
 import { Alert, Button, Field, FormGrid, Input, Select, Textarea } from "@/components/bos";
+import { QuotationSettingsCard } from "./QuotationSettingsCard";
 import type {
   BomIndustryPackId,
   BomPaperDensity,
@@ -714,6 +715,8 @@ export function DocumentsTab({ draft, set, errors, readOnly }: TabProps) {
           </Field>
         </FormGrid>
       </SectionCard>
+
+      <QuotationSettingsCard draft={draft} set={set} errors={errors} readOnly={readOnly} />
 
       <SectionCard title="Print & attachments" desc="Batch printing and file upload limits used across Sales, Bills and Audit.">
         <FormGrid>
