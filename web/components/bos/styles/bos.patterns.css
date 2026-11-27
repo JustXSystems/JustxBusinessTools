@@ -15,16 +15,18 @@
 .bos .bos-topbar-inner {
   max-width: 1180px;
   margin: 0 auto;
-  padding: var(--bos-s-3) var(--bos-s-8);
+  padding: 10px var(--bos-s-8);
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--bos-s-4);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
-.bos .bos-topbar .bos-search { min-width: 220px; }
-.bos .bos-topbar-actions { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.bos .bos-brand { display: flex; align-items: center; gap: var(--bos-s-3); min-width: 0; }
+.bos .bos-topbar .bos-search { min-width: 180px; width: clamp(180px, 20vw, 280px); }
+.bos .bos-topbar-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; min-width: 0; }
+.bos .bos-brand { display: flex; align-items: center; gap: var(--bos-s-3); flex: 1 1 auto; min-width: 0; }
+.bos .bos-brand > div { min-width: 0; overflow: hidden; }
 .bos .bos-brand-mark {
   width: 28px;
   height: 28px;
@@ -42,8 +44,8 @@
   position: relative;
   z-index: 2;
 }
-.bos .bos-brand-name { font-family: var(--bos-font-display); font-weight: 600; font-size: 14.5px; letter-spacing: -0.005em; }
-.bos .bos-brand-sub { font-family: var(--bos-font-mono); font-size: 10px; color: var(--bos-text-faint); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 1px; }
+.bos .bos-brand-name { font-family: var(--bos-font-display); font-weight: 600; font-size: 14.5px; letter-spacing: -0.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bos .bos-brand-sub { font-family: var(--bos-font-mono); font-size: 10px; color: var(--bos-text-faint); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- Hero & section scaffolding (documentation / landing surfaces) ---------- */
 .bos .bos-hero { padding: var(--bos-s-16) 0 var(--bos-s-10); border-bottom: 1px solid var(--bos-hairline); }
@@ -692,8 +694,9 @@
    ========================================================================== */
 @media (max-width: 900px) {
   .bos .bos-wrap { padding: 0 var(--bos-s-4) var(--bos-s-16); }
-  .bos .bos-topbar-inner { padding: var(--bos-s-3) var(--bos-s-4); }
-  .bos .bos-topbar .bos-search { min-width: 0; flex: 1; }
+  .bos .bos-topbar-inner { padding: 10px var(--bos-s-4); flex-wrap: wrap; gap: 10px; }
+  .bos .bos-topbar-actions { width: 100%; flex-wrap: wrap; justify-content: flex-end; }
+  .bos .bos-topbar .bos-search { min-width: 120px; width: auto; flex: 1 1 160px; }
   .bos .bos-topbar-sticky-desktop { position: relative; }
   .bos .bos-hero { padding: var(--bos-s-10) 0 var(--bos-s-8); }
   .bos .bos-display { font-size: 30px; }
