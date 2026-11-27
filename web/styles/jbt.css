@@ -1249,6 +1249,22 @@ body:has(.mobile-menu) .float-dock {
   letter-spacing: -0.015em;
 }
 
+.tool-header-icon {
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+.tool-header-icon:hover,
+.tool-header-icon:active {
+  transform: scale(1.5);
+  position: relative;
+  z-index: 2;
+}
+
 .tool-header-sub {
   font-size: 12px;
   color: var(--text-low);

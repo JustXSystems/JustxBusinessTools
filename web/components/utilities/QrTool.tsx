@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ensureNativeCameraPermission } from "@/components/capacitor/CapacitorInit";
 import { useToast } from "@/components/common/ToastProvider";
+import { ToolIconMark } from "@/components/common/ToolIconMark";
 import { fetchProfile } from "@/lib/api";
 
 type QrMode = "generate" | "scan";
@@ -218,7 +219,9 @@ export function QrTool() {
       <div className="tool-header">
         <Link href="/" className="back-btn" aria-label="Back">←</Link>
         <div className="tool-header-text">
-          <div className="tool-header-title">🔳 QR Code Scanner</div>
+          <div className="tool-header-title" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <ToolIconMark toolId="qrscanner" fallback="🔳" size={24} sizeHint="sm" className="tool-header-icon" /> QR Code Scanner
+          </div>
           <div className="tool-header-sub">
             Generate a QR code, or scan one with your camera or an image.
           </div>

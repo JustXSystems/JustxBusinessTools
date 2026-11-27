@@ -124,6 +124,24 @@ export function ToolIconMark({
     );
   }
 
+  if (className || style) {
+    return (
+      <span
+        className={className}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          lineHeight: 1,
+          ...style,
+        }}
+        aria-hidden
+      >
+        {raw}
+      </span>
+    );
+  }
+
   return <>{raw}</>;
 }
 

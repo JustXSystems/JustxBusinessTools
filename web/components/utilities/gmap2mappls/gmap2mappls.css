@@ -321,6 +321,18 @@ html:has(.pinway-route-root) body {
   object-fit: cover;
   box-shadow: var(--bos-ims-glow);
   flex: 0 0 auto;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+.bos .g2m-logo:hover,
+.bos .g2m-logo:active {
+  transform: scale(1.5);
+  position: relative;
+  z-index: 2;
 }
 
 .bos .g2m-brandmark-copy {

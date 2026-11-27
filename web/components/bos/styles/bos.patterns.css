@@ -25,7 +25,23 @@
 .bos .bos-topbar .bos-search { min-width: 220px; }
 .bos .bos-topbar-actions { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .bos .bos-brand { display: flex; align-items: center; gap: var(--bos-s-3); min-width: 0; }
-.bos .bos-brand-mark { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
+.bos .bos-brand-mark {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+.bos .bos-brand-mark:hover,
+.bos .bos-brand-mark:active {
+  transform: scale(1.5);
+  position: relative;
+  z-index: 2;
+}
 .bos .bos-brand-name { font-family: var(--bos-font-display); font-weight: 600; font-size: 14.5px; letter-spacing: -0.005em; }
 .bos .bos-brand-sub { font-family: var(--bos-font-mono); font-size: 10px; color: var(--bos-text-faint); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 1px; }
 

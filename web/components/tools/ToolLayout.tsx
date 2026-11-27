@@ -69,7 +69,7 @@ export function ToolLayout({
         </Link>
         <div className="tool-header-text">
           <div className="tool-header-title" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <ToolIconMark toolId={tool.id} fallback={tool.icon} size={24} sizeHint="sm" /> {tool.name}
+            <ToolIconMark toolId={tool.id} fallback={tool.icon} size={24} sizeHint="sm" className="tool-header-icon" /> {tool.name}
           </div>
           <div className="tool-header-sub">{tool.desc}</div>
         </div>
