@@ -13,11 +13,16 @@ export function Topbar({ children, sticky = "always" }: { children: ReactNode; s
   );
 }
 
-export function Brand({ logoSrc, name, sub }: { logoSrc: string; name: ReactNode; sub?: ReactNode }) {
+export function Brand({ logoSrc, name, sub, logoSize }: { logoSrc: string; name: ReactNode; sub?: ReactNode; logoSize?: number }) {
   return (
     <div className="bos-brand">
       {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset under the app base path */}
-      <img className="bos-brand-mark" src={logoSrc} alt="" />
+      <img
+        className="bos-brand-mark"
+        src={logoSrc}
+        alt=""
+        style={logoSize ? { width: logoSize, height: logoSize } : undefined}
+      />
       <div>
         <div className="bos-brand-name">{name}</div>
         {sub ? <div className="bos-brand-sub">{sub}</div> : null}

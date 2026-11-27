@@ -33,7 +33,7 @@ const HrWorkspace = lazy(() => import("./hr/HrWorkspace").then((m) => ({ default
 const ProjectsWorkspace = lazy(() => import("./projects/ProjectsWorkspace").then((m) => ({ default: m.ProjectsWorkspace })));
 const SettingsWorkspace = lazy(() => import("./settings/SettingsWorkspace").then((m) => ({ default: m.SettingsWorkspace })));
 
-import { resolveIconAssetUrl, resolveToolIconSource } from "@/lib/tool-icons";
+import { resolveIconAssetUrl, resolveToolIconSize, resolveToolIconSource } from "@/lib/tool-icons";
 import { useToolIconConfig, useToolName, useToolTagline } from "@/components/config/ConfigProvider";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { getToolDefinition } from "@/config/tools.config";
@@ -196,7 +196,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: BosSession; mod
   return (
     <BosAppProvider value={ctx}>
       <Topbar sticky="desktop">
-        <Brand logoSrc={productLogo} name={productName} sub={productTagline} />
+        <Brand logoSrc={productLogo} logoSize={resolveToolIconSize(28, bosIconCfg, "sm")} name={productName} sub={productTagline} />
         <div className="bos-topbar-actions">
           <SearchInput
             readOnly

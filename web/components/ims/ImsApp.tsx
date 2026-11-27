@@ -29,7 +29,7 @@ import {
 import { useOptionalPlatformConfig, useToolIconConfig, useToolName, useToolTagline } from "@/components/config/ConfigProvider";
 import { PoweredByFooter } from "@/components/layout/PoweredByFooter";
 import { getToolDefinition } from "@/config/tools.config";
-import { isImageIcon, resolveIconAssetUrl, resolveToolIconSource } from "@/lib/tool-icons";
+import { isImageIcon, resolveIconAssetUrl, resolveToolIconSize, resolveToolIconSource } from "@/lib/tool-icons";
 import { publicAssetUrl, withBasePath } from "@/lib/base-path";
 import { errorText, ims, ImsApiError, type ImsModuleKey, type ImsNotification, type ImsSearchResult, type ImsSession, type ImsSettings } from "@/lib/ims/api";
 import { isAssistantPage } from "@/lib/ims/assistant";
@@ -457,7 +457,7 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
           onBlurCapture={topbar.onBlurCapture}
         >
           <Topbar sticky="desktop">
-            <Brand logoSrc={logoSrc} name={productName} sub={productTagline} />
+            <Brand logoSrc={logoSrc} logoSize={resolveToolIconSize(28, iconCfg, "sm")} name={productName} sub={productTagline} />
             <div className="bos-topbar-actions">
               <SearchInput
                 readOnly
