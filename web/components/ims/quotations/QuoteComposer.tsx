@@ -175,37 +175,44 @@ export function QuoteComposer({
   // Query shared Party Registry when typing customer name
   useEffect(() => {
     const q = quote.customer.name.trim();
-    if (q.length < 2) {
-      setPartySuggestions([]);
-      return;
-    }
+    if (q.length < 2) return;
+    let cancelled = false;
     const timer = setTimeout(() => {
-      void api<{ parties?: Array<Record<string, unknown>> }>(`/api/parties/suggest?q=${encodeURIComponent(q)}&kind=customer`)
+      void api<{
+        suggestions?: Array<SuggestedCustomer & { id?: string }>;
+      }>(`/parties/suggest?kind=customer&q=${encodeURIComponent(q)}`)
         .then((res) => {
-          const list: SuggestedCustomer[] = (res.parties ?? []).map((p) => ({
-            key: String(p.id ?? p.name ?? Math.random()),
+          if (cancelled) return;
+          const list: SuggestedCustomer[] = (res.suggestions ?? []).map((s) => ({
+            key: s.id || s.key || s.phone || s.name,
             sourceQuoteId: "",
-            partyId: p.id ? String(p.id) : undefined,
-            name: String(p.contact_person || p.name || ""),
-            company: String(p.name || ""),
-            phone: String(p.mobile || ""),
-            email: String(p.email || ""),
-            gstin: String(p.gstin || ""),
-            address: String(p.address || ""),
-            city: String(p.city || ""),
-            state: String(p.state || ""),
+            partyId: s.id || s.partyId,
+            name: s.name,
+            company: s.company ?? "",
+            phone: s.phone ?? "",
+            email: s.email ?? "",
+            gstin: s.gstin ?? "",
+            address: s.address ?? "",
+            city: s.city ?? "",
+            state: s.state ?? "",
             source: "party",
           }));
           setPartySuggestions(list);
         })
-        .catch(() => setPartySuggestions([]));
+        .catch(() => {
+          if (!cancelled) setPartySuggestions([]);
+        });
     }, 180);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [quote.customer.name]);
 
   const customerSuggestions = useMemo(() => {
+    const activeParty = quote.customer.name.trim().length >= 2 ? partySuggestions : [];
     const fromQuotes = suggestCustomersFromQuotations(allQuotations, quote.customer.name);
-    return mergeCustomerSuggestions(partySuggestions, fromQuotes);
+    return mergeCustomerSuggestions(activeParty, fromQuotes);
   }, [allQuotations, quote.customer.name, partySuggestions]);
 
   const setField = <K extends keyof ImsQuotation>(key: K, value: ImsQuotation[K]) => {

@@ -65,15 +65,20 @@ export default function QuotationsModule() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [importingLegacy, setImportingLegacy] = useState(false);
 
+  const fetchAll = useCallback(async () => {
+    const [c, listRes, alertRes, actRes] = await Promise.all([
+      imsQuotations.config(),
+      imsQuotations.list(),
+      imsQuotations.alerts(),
+      imsQuotations.activity(),
+    ]);
+    return { c, listRes, alertRes, actRes };
+  }, []);
+
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [c, listRes, alertRes, actRes] = await Promise.all([
-        imsQuotations.config(),
-        imsQuotations.list(),
-        imsQuotations.alerts(),
-        imsQuotations.activity(),
-      ]);
+      const { c, listRes, alertRes, actRes } = await fetchAll();
       setCfg(c);
       setQuotations(listRes.quotations);
       setAlerts(alertRes.notifications);
@@ -97,11 +102,44 @@ export default function QuotationsModule() {
     } finally {
       setLoading(false);
     }
-  }, [openIntent, session.actor, toast]);
+  }, [fetchAll, openIntent, session.actor, toast]);
 
   useEffect(() => {
-    void loadAll();
-  }, [loadAll]);
+    let cancelled = false;
+    void fetchAll()
+      .then(async ({ c, listRes, alertRes, actRes }) => {
+        if (cancelled) return;
+        setCfg(c);
+        setQuotations(listRes.quotations);
+        setAlerts(alertRes.notifications);
+        setHistory(actRes.history);
+
+        if (openIntent) {
+          const found = listRes.quotations.find((x) => x.id === openIntent);
+          if (found) {
+            const detail = await imsQuotations.get(found.id).catch(() => null);
+            if (cancelled) return;
+            setActiveQuote(detail?.quotation ?? found);
+            setStockByItem(detail?.stockByItem ?? {});
+            setTab("compose");
+          } else {
+            setActiveQuote(freshDraftFor(c, session.actor));
+          }
+        } else {
+          setActiveQuote((prev) => prev ?? freshDraftFor(c, session.actor));
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        toast.show({ tone: "coral", title: err instanceof Error ? err.message : "Failed to load IMS Quotations" });
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchAll, openIntent, session.actor, toast]);
 
   const openQuote = async (q: ImsQuotation) => {
     setActiveQuote(q);

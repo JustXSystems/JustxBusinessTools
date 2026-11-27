@@ -314,7 +314,8 @@ function Shell({ session: initial, mode, onSignOut }: { session: ImsSession; mod
   const [navCollapsed, setNavCollapsed] = useState(false);
 
   useEffect(() => {
-    setNavCollapsed(readNavCollapsed());
+    const id = requestAnimationFrame(() => setNavCollapsed(readNavCollapsed()));
+    return () => cancelAnimationFrame(id);
   }, []);
 
   useCommandHotkey(() => setPaletteOpen(true));

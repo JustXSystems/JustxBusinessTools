@@ -266,8 +266,12 @@ export function QuotationGeneratorV1() {
     [list, current.customer.name],
   );
   const customerSuggestions = useMemo(
-    () => mergeCustomerSuggestions(registryCustomerSuggestions, quoteCustomerSuggestions),
-    [registryCustomerSuggestions, quoteCustomerSuggestions],
+    () =>
+      mergeCustomerSuggestions(
+        current.customer.name.trim().length >= CUSTOMER_SUGGEST_MIN_CHARS ? registryCustomerSuggestions : [],
+        quoteCustomerSuggestions,
+      ),
+    [current.customer.name, registryCustomerSuggestions, quoteCustomerSuggestions],
   );
   const reverseItem = useMemo(
     () => (reverseItemId ? current.items.find((x) => x.id === reverseItemId) ?? null : null),
@@ -276,10 +280,7 @@ export function QuotationGeneratorV1() {
 
   useEffect(() => {
     const q = current.customer.name.trim();
-    if (q.length < CUSTOMER_SUGGEST_MIN_CHARS) {
-      setRegistryCustomerSuggestions([]);
-      return;
-    }
+    if (q.length < CUSTOMER_SUGGEST_MIN_CHARS) return;
     let cancelled = false;
     const t = window.setTimeout(() => {
       void api<{
@@ -1039,7 +1040,9 @@ export function QuotationGeneratorV1() {
   ];
 
   useEffect(() => {
-    if (route === "history" && history.length === 0) setRoute("list");
+    if (route !== "history" || history.length > 0) return;
+    const t = window.setTimeout(() => setRoute("list"), 0);
+    return () => window.clearTimeout(t);
   }, [route, history.length]);
 
   function openQuotationById(quotationId: string) {
