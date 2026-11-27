@@ -29,13 +29,10 @@
 
 /* Topbar — Justxsystems product chrome; autohide while scrolled for max workspace */
 .bos .ims-topbar-slot .bos-topbar-inner {
-  max-width: none;
-  padding: 10px 20px;
+  padding: 10px var(--bos-s-8);
+  box-sizing: border-box;
   flex-wrap: nowrap;
   gap: 16px;
-}
-.bos.ims-standalone .ims-topbar-slot .bos-topbar-inner {
-  padding-inline: 0;
 }
 .bos .ims-topbar-slot .bos-brand {
   flex: 1 1 auto;
@@ -63,10 +60,7 @@
   .bos .ims-topbar-slot .bos-topbar-inner {
     flex-wrap: wrap;
     gap: 10px;
-    padding: 10px 14px;
-  }
-  .bos.ims-standalone .ims-topbar-slot .bos-topbar-inner {
-    padding-inline: 0;
+    padding: 10px var(--bos-s-4);
   }
   .bos .ims-topbar-slot .bos-topbar-actions {
     width: 100%;
@@ -77,6 +71,11 @@
     flex: 1 1 160px;
     min-width: 120px;
     width: auto;
+  }
+}
+@media (max-width: 560px) {
+  .bos .ims-topbar-slot .bos-topbar-inner {
+    padding: 8px var(--bos-s-3);
   }
 }
 .bos .ims-topbar-label { margin-left: 4px; }
